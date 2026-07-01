@@ -1,0 +1,64 @@
+body {
+    background: #f5f7fb;
+    color: #1f2937;
+}
+
+.auth-page {
+    display: grid;
+    min-height: calc(100vh - 76px);
+    place-items: center;
+}
+
+.auth-panel,
+.content-panel,
+.passport-card,
+.metric {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+}
+
+.auth-panel {
+    width: min(420px, 92vw);
+    padding: 28px;
+}
+
+.content-panel {
+    padding: 20px;
+}
+
+.metric {
+    padding: 18px;
+}
+
+.metric span {
+    display: block;
+    color: #64748b;
+    font-size: 0.9rem;
+}
+
+.metric strong {
+    display: block;
+    font-size: 2rem;
+}
+
+.passport-page {
+    display: grid;
+    place-items: center;
+    min-height: calc(100vh - 76px);
+}
+
+.passport-card {
+    width: min(720px, 94vw);
+    padding: 28px;
+}
+
+.passport-banner {
+    margin: -28px -28px 24px;
+    padding: 14px 28px;
+    border-radius: 8px 8px 0 0;
+    background: #b91c1c;
+    color: white;
+    font-weight: 700;
+}
