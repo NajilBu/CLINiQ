@@ -1,64 +1,60 @@
-body {
-    background: #f5f7fb;
-    color: #1f2937;
+.material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
 }
 
-.auth-page {
-    display: grid;
-    min-height: calc(100vh - 76px);
-    place-items: center;
+.text-decoration-none {
+    text-decoration: none;
 }
 
-.auth-panel,
-.content-panel,
-.passport-card,
-.metric {
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
-    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
-}
-
-.auth-panel {
-    width: min(420px, 92vw);
-    padding: 28px;
-}
-
-.content-panel {
-    padding: 20px;
-}
-
-.metric {
-    padding: 18px;
-}
-
-.metric span {
-    display: block;
+.text-secondary {
     color: #64748b;
-    font-size: 0.9rem;
-}
-
-.metric strong {
-    display: block;
-    font-size: 2rem;
+    font-weight: 700;
 }
 
 .passport-page {
+    min-height: calc(100vh - 10rem);
     display: grid;
     place-items: center;
-    min-height: calc(100vh - 76px);
 }
 
-.passport-card {
-    width: min(720px, 94vw);
-    padding: 28px;
-}
-
-.passport-banner {
-    margin: -28px -28px 24px;
-    padding: 14px 28px;
-    border-radius: 8px 8px 0 0;
-    background: #b91c1c;
-    color: white;
+.clinic-input,
+.clinic-select,
+.clinic-textarea {
+    width: 100%;
+    min-height: 3rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 1rem;
+    background: #f8fafc;
+    color: #1e293b;
     font-weight: 700;
+    font-size: 0.875rem;
+}
+
+.clinic-textarea {
+    min-height: 7rem;
+}
+
+.clinic-input:focus,
+.clinic-select:focus,
+.clinic-textarea:focus {
+    outline: none;
+    border-color: rgba(0, 71, 141, 0.35);
+    box-shadow: 0 0 0 3px rgba(0, 71, 141, 0.15);
+    background: #ffffff;
+}
+
+.clinic-label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: #94a3b8;
+    font-size: 0.625rem;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.clinic-card {
+    background: #ffffff;
+    border: 1px solid rgba(194, 198, 212, 0.2);
+    border-radius: 2rem;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.03);
 }

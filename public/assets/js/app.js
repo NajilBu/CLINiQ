@@ -18,10 +18,10 @@ async function refreshAlerts() {
     }
 
     feed.innerHTML = data.alerts.map((alert) => `
-        <div class="border rounded p-3 mb-2 bg-light">
-            <div class="d-flex justify-content-between">
-                <strong>${escapeHtml(alert.concern)}</strong>
-                <span class="badge text-bg-danger">${escapeHtml(alert.status)}</span>
+        <div class="p-4 rounded-2xl bg-red-50 border border-red-100 mb-3">
+            <div class="flex items-start justify-between gap-3">
+                <strong class="text-sm text-red-900">${escapeHtml(alert.concern)}</strong>
+                <span class="px-2 py-1 rounded-full bg-red-100 text-red-700 text-[10px] font-black">${escapeHtml(alert.status)}</span>
             </div>
             <div class="text-secondary small">${escapeHtml(alert.location)} · ${escapeHtml(alert.reporter_name)} · ${escapeHtml(alert.created_at)}</div>
         </div>
