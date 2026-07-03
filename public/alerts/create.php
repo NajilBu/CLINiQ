@@ -20,32 +20,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 render_header('Submit Alert');
 ?>
-<h1 class="h3 mb-4">Submit Emergency Alert</h1>
-<form class="content-panel" method="post">
-    <div class="row g-3">
-        <div class="col-md-6">
-            <label class="form-label">Reporter Name</label>
-            <input class="form-control" name="reporter_name" required>
+<div>
+    <h1 class="font-headline text-3xl md:text-4xl font-extrabold text-[#1c2a59]">Submit Emergency Alert</h1>
+    <p class="text-sm font-bold text-slate-500 mt-1">Send an urgent concern to the clinic dashboard.</p>
+</div>
+<form class="clinic-card p-6 md:p-8" method="post">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div>
+            <label class="clinic-label">Reporter Name</label>
+            <input class="clinic-input" name="reporter_name" required>
         </div>
-        <div class="col-md-6">
-            <label class="form-label">Reporter Role</label>
-            <input class="form-control" name="reporter_role" placeholder="Student, Teacher, Staff">
+        <div>
+            <label class="clinic-label">Reporter Role</label>
+            <input class="clinic-input" name="reporter_role" placeholder="Student, Teacher, Staff">
         </div>
-        <div class="col-md-6">
-            <label class="form-label">Location</label>
-            <input class="form-control" name="location" required>
+        <div>
+            <label class="clinic-label">Location</label>
+            <input class="clinic-input" name="location" required>
         </div>
-        <div class="col-md-6">
-            <label class="form-label">Concern</label>
-            <input class="form-control" name="concern" required>
+        <div>
+            <label class="clinic-label">Concern</label>
+            <input class="clinic-input" name="concern" required>
         </div>
-        <div class="col-12">
-            <label class="form-label">Details</label>
-            <textarea class="form-control" name="details" rows="4"></textarea>
+        <div class="md:col-span-2">
+            <label class="clinic-label">Details</label>
+            <textarea class="clinic-textarea" name="details" rows="4"></textarea>
         </div>
     </div>
-    <div class="mt-4">
-        <button class="btn btn-danger">Send Alert</button>
+    <div class="mt-6">
+        <button class="px-5 py-3 bg-red-600 text-white rounded-2xl text-sm font-bold shadow-lg hover:bg-red-700">Send Alert</button>
     </div>
 </form>
 <?php render_footer(); ?>

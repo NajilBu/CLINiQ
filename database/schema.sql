@@ -76,6 +76,22 @@ CREATE TABLE nurse_alerts (
   FOREIGN KEY (patient_id) REFERENCES patients(id)
 );
 
+CREATE TABLE incident_reports (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  patient_id INT NOT NULL,
+  emergency_token CHAR(64) NOT NULL,
+  reporter_name VARCHAR(120) NULL,
+  reporter_contact VARCHAR(80) NULL,
+  location VARCHAR(160) NOT NULL,
+  notes TEXT NULL,
+  ip_address VARCHAR(45) NULL,
+  user_agent VARCHAR(255) NULL,
+  status ENUM('New','Acknowledged','Responding','Resolved','False Report') NOT NULL DEFAULT 'New',
+  reported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  acknowledged_at DATETIME NULL,
+  FOREIGN KEY (patient_id) REFERENCES patients(id)
+);
+
 CREATE TABLE inventory_items (
   id INT AUTO_INCREMENT PRIMARY KEY,
   item_name VARCHAR(160) NOT NULL,

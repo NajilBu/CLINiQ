@@ -31,45 +31,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 render_header('Record Visit');
 ?>
-<h1 class="h3 mb-4">Record Clinic Visit</h1>
-<form class="content-panel" method="post">
-    <div class="row g-3">
-        <div class="col-md-6">
-            <label class="form-label">Patient</label>
-            <select class="form-select" name="patient_id" required>
+<div>
+    <h1 class="font-headline text-3xl md:text-4xl font-extrabold text-[#1c2a59]">Record Clinic Visit</h1>
+    <p class="text-sm font-bold text-slate-500 mt-1">Add triage notes and apply rule-based risk classification.</p>
+</div>
+<form class="clinic-card p-6 md:p-8" method="post">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div>
+            <label class="clinic-label">Patient</label>
+            <select class="clinic-select" name="patient_id" required>
                 <option value="">Select patient</option>
                 <?php foreach ($patients as $patient): ?>
                     <option value="<?= (int) $patient['id'] ?>"><?= e($patient['last_name'] . ', ' . $patient['first_name'] . ' - ' . $patient['student_number']) ?></option>
                 <?php endforeach; ?>
             </select>
         </div>
-        <div class="col-md-6">
-            <label class="form-label">Chief Complaint</label>
-            <input class="form-control" name="chief_complaint" required>
+        <div>
+            <label class="clinic-label">Chief Complaint</label>
+            <input class="clinic-input" name="chief_complaint" required>
         </div>
-        <div class="col-12">
-            <label class="form-label">Symptoms</label>
-            <textarea class="form-control" name="symptoms" rows="3" placeholder="Example: fever, chest pain, difficulty breathing"></textarea>
+        <div class="md:col-span-2">
+            <label class="clinic-label">Symptoms</label>
+            <textarea class="clinic-textarea" name="symptoms" rows="3" placeholder="Example: fever, chest pain, difficulty breathing"></textarea>
         </div>
-        <div class="col-md-4">
-            <label class="form-label">Temperature</label>
-            <input class="form-control" name="temperature" type="number" step="0.1">
+        <div>
+            <label class="clinic-label">Temperature</label>
+            <input class="clinic-input" name="temperature" type="number" step="0.1">
         </div>
-        <div class="col-md-4">
-            <label class="form-label">Blood Pressure</label>
-            <input class="form-control" name="blood_pressure">
+        <div>
+            <label class="clinic-label">Blood Pressure</label>
+            <input class="clinic-input" name="blood_pressure">
         </div>
-        <div class="col-md-4">
-            <label class="form-label">Pulse Rate</label>
-            <input class="form-control" name="pulse_rate" type="number">
+        <div>
+            <label class="clinic-label">Pulse Rate</label>
+            <input class="clinic-input" name="pulse_rate" type="number">
         </div>
-        <div class="col-12">
-            <label class="form-label">Action Taken</label>
-            <textarea class="form-control" name="action_taken" rows="3"></textarea>
+        <div class="md:col-span-2">
+            <label class="clinic-label">Action Taken</label>
+            <textarea class="clinic-textarea" name="action_taken" rows="3"></textarea>
         </div>
     </div>
-    <div class="mt-4">
-        <button class="btn btn-primary">Save Visit</button>
+    <div class="mt-6">
+        <button class="px-5 py-3 bg-primary text-white rounded-2xl text-sm font-bold shadow-lg shadow-primary/20">Save Visit</button>
     </div>
 </form>
 <?php render_footer(); ?>
