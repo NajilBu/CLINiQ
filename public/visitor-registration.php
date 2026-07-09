@@ -128,7 +128,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         };
     </script>
-    <link href="<?= app_url('assets/css/app.css?v=system-green-2') ?>" rel="stylesheet">
+    <link href="<?= app_url('assets/css/app.css?v=system-ui-2') ?>" rel="stylesheet">
     <style>
         body {
             min-height: 100vh;
@@ -242,18 +242,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <div class="inline-flex items-center justify-center w-14 h-14 bg-emerald-50 text-emerald-600 rounded-xl mb-4">
                         <span class="material-symbols-outlined text-[2rem]">check_circle</span>
                     </div>
-                    <h2 class="font-headline text-2xl font-extrabold text-[#17261d] mb-2">Visit registered</h2>
-                    <p class="text-sm font-bold text-slate-500 mb-6">
-                        <?= e($success['name']) ?>, your clinic visit was logged at <?= e($success['time']) ?>.
+                    <h2 class="font-headline text-2xl font-extrabold text-[#17261d] mb-2">Visit log recorded</h2>
+                    <p class="text-sm text-slate-500 mb-4 max-w-xl mx-auto leading-relaxed">
+                        Thank you, <?= e($success['name']) ?>. Your clinic visit was recorded at <?= e($success['time']) ?>.
+                        Please wait nearby and listen for your name to be called by the clinic staff.
                     </p>
                     <div class="inline-flex items-center gap-2 rounded-xl bg-slate-50 border border-slate-100 px-4 py-3 text-xs font-black text-slate-500 uppercase tracking-widest">
                         <span class="material-symbols-outlined text-primary text-[16px]">badge</span>
                         <?= e($success['identifier']) ?>
                     </div>
+                    <p class="text-xs text-slate-400 mt-5 mb-0">
+                        Returning to the clinic visit log form in <span id="redirectCountdown" class="font-semibold text-primary">5</span> seconds.
+                    </p>
                     <div class="mt-7 flex flex-col sm:flex-row items-center justify-center gap-3">
                         <a href="<?= app_url('visitor-registration.php') ?>" class="btn btn-primary text-decoration-none">
-                            <span class="material-symbols-outlined text-[18px]">add</span>
-                            Register another visit
+                            <span class="material-symbols-outlined text-[18px]">arrow_back</span>
+                            Back to form now
                         </a>
                         <a href="<?= app_url('index.php') ?>" class="btn btn-ghost text-decoration-none">Return to first page</a>
                     </div>
@@ -399,6 +403,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     category?.addEventListener('change', syncYearLevel);
     syncYearLevel();
+
+    <?php if ($success): ?>
+    const redirectTarget = '<?= app_url('visitor-registration.php') ?>';
+    const countdown = document.getElementById('redirectCountdown');
+    let secondsRemaining = 5;
+
+    const redirectTimer = window.setInterval(() => {
+        secondsRemaining -= 1;
+        if (countdown) {
+            countdown.textContent = String(Math.max(secondsRemaining, 0));
+        }
+
+        if (secondsRemaining <= 0) {
+            window.clearInterval(redirectTimer);
+            window.location.href = redirectTarget;
+        }
+    }, 1000);
+    <?php endif; ?>
 </script>
 </body>
 </html>

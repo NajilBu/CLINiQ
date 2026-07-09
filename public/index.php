@@ -45,7 +45,7 @@ $staffLoginUrl = app_url('login.php');
             }
         };
     </script>
-    <link href="<?= app_url('assets/css/app.css?v=system-green-2') ?>" rel="stylesheet">
+    <link href="<?= app_url('assets/css/app.css?v=system-ui-2') ?>" rel="stylesheet">
     <style>
         body {
             background:

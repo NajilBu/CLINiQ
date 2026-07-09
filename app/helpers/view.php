@@ -139,7 +139,7 @@ function render_header(string $title): void
         <link rel="stylesheet" href="<?= app_url('assets/vendor/ag-grid/ag-grid.css?v=31') ?>">
         <link rel="stylesheet" href="<?= app_url('assets/vendor/ag-grid/ag-theme-quartz.css?v=31') ?>">
         <script src="<?= app_url('assets/vendor/ag-grid/ag-grid-community.min.js?v=31') ?>"></script>
-        <link href="<?= app_url('assets/css/app.css?v=system-green-2') ?>" rel="stylesheet">
+        <link href="<?= app_url('assets/css/app.css?v=system-ui-2') ?>" rel="stylesheet">
     </head>
     <body class="bg-surface font-body text-on-surface min-h-screen overflow-x-hidden">
     <?php if ($user): ?>
@@ -178,6 +178,9 @@ function render_header(string $title): void
                         $searchPlaceholder = 'Search APE records...';
                     }
                     ?>
+                    <button class="app-sidebar-toggle" type="button" id="sidebarToggle" aria-label="Collapse sidebar" aria-expanded="true">
+                        <span class="material-symbols-outlined" aria-hidden="true">left_panel_close</span>
+                    </button>
                     <form class="app-search" action="<?= $searchAction ?>" method="get">
                         <span class="material-symbols-outlined">search</span>
                         <input name="q" placeholder="<?= $searchPlaceholder ?>" autocomplete="off" value="<?= isset($_GET['q']) ? e($_GET['q']) : '' ?>">
@@ -210,7 +213,7 @@ function render_footer(): void
         </div>
         <?php endif; ?>
     <?php render_flash_toasts(); ?>
-    <script src="<?= app_url('assets/js/app.js') ?>"></script>
+    <script src="<?= app_url('assets/js/app.js?v=sidebar-1') ?>"></script>
     <script src="<?= app_url('assets/js/ag-grid-tables.js?v=3') ?>"></script>
     </body>
     </html>

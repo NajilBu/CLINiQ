@@ -152,21 +152,21 @@ render_header('APE Work Queues');
             <p class="text-xs font-bold text-slate-500 mb-0">Click a queue to focus the page. Each student shows one next clinic action.</p>
         </div>
     </div>
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <a href="?<?= $search !== '' ? 'q=' . urlencode($search) : '' ?>" class="rounded-2xl border <?= $activeQueue === 'all' ? 'border-primary bg-primary-fixed' : 'border-outline-variant bg-white' ?> p-4 text-decoration-none transition-colors">
+    <div class="ape-queue-map-grid">
+        <a href="?<?= $search !== '' ? 'q=' . urlencode($search) : '' ?>" class="ape-queue-map-card rounded-2xl border <?= $activeQueue === 'all' ? 'border-primary bg-primary-fixed' : 'border-outline-variant bg-white' ?> p-4 text-decoration-none transition-colors">
             <div class="flex items-center justify-between gap-2">
                 <span class="w-8 h-8 rounded-xl bg-white text-primary border border-outline-variant flex items-center justify-center material-symbols-outlined text-[16px]">view_list</span>
                 <strong class="font-headline text-xl text-[#17261d]"><?= count($allRecords) ?></strong>
             </div>
-            <p class="text-[10px] font-black uppercase tracking-widest text-slate-500 mt-3 mb-0">All Queues</p>
+            <p class="ape-queue-map-label">All Queues</p>
         </a>
         <?php foreach ($queues as $key => $queue): ?>
-            <a href="?queue=<?= urlencode($key) ?><?= $search !== '' ? '&q=' . urlencode($search) : '' ?>" class="rounded-2xl border <?= $activeQueue === $key ? 'border-primary bg-primary-fixed' : 'border-outline-variant bg-white' ?> p-4 text-decoration-none hover:bg-primary-fixed transition-colors">
+            <a href="?queue=<?= urlencode($key) ?><?= $search !== '' ? '&q=' . urlencode($search) : '' ?>" class="ape-queue-map-card rounded-2xl border <?= $activeQueue === $key ? 'border-primary bg-primary-fixed' : 'border-outline-variant bg-white' ?> p-4 text-decoration-none hover:bg-primary-fixed transition-colors">
                 <div class="flex items-center justify-between gap-2">
                     <span class="w-8 h-8 rounded-xl bg-white text-primary border border-outline-variant flex items-center justify-center material-symbols-outlined text-[16px]"><?= e($queue['icon']) ?></span>
                     <strong class="font-headline text-xl text-[#17261d]"><?= count($recordsByQueue[$key]) ?></strong>
                 </div>
-                <p class="text-[10px] font-black uppercase tracking-widest text-slate-500 mt-3 mb-0"><?= e($queue['short_title'] ?? $queue['title']) ?></p>
+                <p class="ape-queue-map-label"><?= e($queue['short_title'] ?? $queue['title']) ?></p>
             </a>
         <?php endforeach; ?>
     </div>

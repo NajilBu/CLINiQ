@@ -107,11 +107,13 @@ h6,
     background: #ffffff;
     border-right: 1px solid oklch(92% .01 230 / .72);
     box-shadow: 1px 0 2px oklch(22% .03 250 / .03);
+    transition: width 0.18s ease;
 }
 
 .app-main {
     min-height: 100vh;
     padding-left: 4.75rem;
+    transition: padding-left 0.18s ease;
 }
 
 .app-topbar {
@@ -132,6 +134,32 @@ h6,
 .app-search {
     position: relative;
     width: min(100%, 26rem);
+}
+
+.app-sidebar-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 2.5rem;
+    height: 2.5rem;
+    border: 1px solid oklch(92% .01 230 / .82);
+    border-radius: 0.625rem;
+    background: #ffffff;
+    color: #506157;
+    cursor: pointer;
+    box-shadow: 0 1px 2px oklch(22% .03 250 / .03);
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.app-sidebar-toggle:hover {
+    background: #edf8f0;
+    border-color: #cfe6d6;
+    color: var(--cliniq-primary-hover);
+}
+
+.app-sidebar-toggle .material-symbols-outlined {
+    font-size: 1.2rem;
 }
 
 .app-search .material-symbols-outlined {
@@ -531,6 +559,36 @@ h6,
 
     .app-mobile-nav {
         display: none;
+    }
+
+    .app-shell.sidebar-collapsed .app-sidebar {
+        width: 4.75rem;
+    }
+
+    .app-shell.sidebar-collapsed .app-main {
+        padding-left: 4.75rem;
+    }
+
+    .app-shell.sidebar-collapsed .app-brand {
+        justify-content: center;
+        padding: 1.1rem 0.7rem;
+    }
+
+    .app-shell.sidebar-collapsed .app-brand-copy,
+    .app-shell.sidebar-collapsed .app-nav-label,
+    .app-shell.sidebar-collapsed .app-sidebar-footer {
+        display: none;
+    }
+
+    .app-shell.sidebar-collapsed .app-nav {
+        align-items: center;
+    }
+
+    .app-shell.sidebar-collapsed .app-nav-link {
+        justify-content: center;
+        width: 2.75rem;
+        min-height: 2.75rem;
+        padding: 0.55rem;
     }
 }
 
@@ -1222,6 +1280,30 @@ textarea:focus {
 
 .dashboard-visitor-grid-wrap .ag-body-horizontal-scroll {
     display: none;
+}
+
+.ape-queue-map-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+    gap: 0.75rem;
+}
+
+.ape-queue-map-card {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-width: 0;
+    min-height: 5.75rem;
+}
+
+.ape-queue-map-label {
+    margin: 0.85rem 0 0;
+    color: #64748b;
+    font-size: 0.64rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    line-height: 1.25;
+    text-transform: uppercase;
 }
 
 @media (min-width: 1280px) {

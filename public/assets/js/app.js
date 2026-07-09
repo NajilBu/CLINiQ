@@ -304,6 +304,32 @@ function getInitials(name) {
 // UTILITY FUNCTIONS
 // ============================================================
 
+function initSidebarToggle() {
+    const shell = document.querySelector('.app-shell');
+    const toggle = document.getElementById('sidebarToggle');
+    if (!shell || !toggle) return;
+
+    const icon = toggle.querySelector('.material-symbols-outlined');
+    const storageKey = 'cliniq_sidebar_collapsed';
+
+    function syncToggleState(collapsed) {
+        shell.classList.toggle('sidebar-collapsed', collapsed);
+        toggle.setAttribute('aria-expanded', String(!collapsed));
+        toggle.setAttribute('aria-label', collapsed ? 'Open sidebar' : 'Collapse sidebar');
+        if (icon) {
+            icon.textContent = collapsed ? 'left_panel_open' : 'left_panel_close';
+        }
+    }
+
+    syncToggleState(localStorage.getItem(storageKey) === 'true');
+
+    toggle.addEventListener('click', () => {
+        const collapsed = !shell.classList.contains('sidebar-collapsed');
+        localStorage.setItem(storageKey, String(collapsed));
+        syncToggleState(collapsed);
+    });
+}
+
 /**
  * Escape HTML entities to prevent XSS.
  */
@@ -384,6 +410,9 @@ async function refreshAlerts() {
 // ============================================================
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Sidebar open/close control
+    initSidebarToggle();
+
     // Initialize tabs from URL
     initTabsFromURL();
 

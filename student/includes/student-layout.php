@@ -76,8 +76,8 @@ function render_student_header(string $title, string $active = ''): void
                 }
             };
         </script>
-        <link href="../public/assets/css/app.css?v=system-green-2" rel="stylesheet">
-        <link href="assets/css/student.css?v=student-green-1" rel="stylesheet">
+        <link href="../public/assets/css/app.css?v=system-ui-2" rel="stylesheet">
+        <link href="assets/css/student.css?v=student-type-1" rel="stylesheet">
     </head>
     <body class="student-body">
         <div class="student-shell">
@@ -165,8 +165,8 @@ function render_student_auth_header(string $title): void
                 }
             };
         </script>
-        <link href="../public/assets/css/app.css?v=system-green-2" rel="stylesheet">
-        <link href="assets/css/student.css?v=student-green-1" rel="stylesheet">
+        <link href="../public/assets/css/app.css?v=system-ui-2" rel="stylesheet">
+        <link href="assets/css/student.css?v=student-type-1" rel="stylesheet">
     </head>
     <body class="student-body student-auth-page">
     <?php
