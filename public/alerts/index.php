@@ -5,14 +5,17 @@ require_once __DIR__ . '/../../app/services/AlertWorkflow.php';
 require_login();
 ensure_alert_workflow_schema();
 
-$filterStatus = $_GET['status'] ?? 'all';
+$allowedStatuses = [
+    'pending' => 'Pending',
+    'in progress' => 'In Progress',
+    'resolved' => 'Resolved',
+    'cancelled' => 'Cancelled',
+];
+$filterKey = strtolower(trim($_GET['status'] ?? 'pending'));
+$filterStatus = $allowedStatuses[$filterKey] ?? 'Pending';
 
-$where = '1=1';
-$params = [];
-if ($filterStatus !== 'all') {
-    $where = 'a.status = ?';
-    $params[] = $filterStatus;
-}
+$where = 'a.status = ?';
+$params = [$filterStatus];
 
 $alerts = db()->prepare("SELECT a.*, p.first_name, p.last_name FROM nurse_alerts a LEFT JOIN patients p ON p.id = a.patient_id WHERE {$where} ORDER BY a.created_at DESC LIMIT 100");
 $alerts->execute($params);
@@ -20,10 +23,9 @@ $alerts = $alerts->fetchAll();
 
 // Status counts
 $statusCountQuery = db()->query("SELECT status, COUNT(*) AS cnt FROM nurse_alerts GROUP BY status");
-$statusCounts = ['all' => 0];
+$statusCounts = [];
 foreach ($statusCountQuery->fetchAll() as $sc) {
     $statusCounts[strtolower($sc['status'])] = (int)$sc['cnt'];
-    $statusCounts['all'] += (int)$sc['cnt'];
 }
 
 $alertColumns = [
@@ -41,7 +43,6 @@ foreach ($alerts as $alert) {
     $actions = '';
     if ($alert['status'] === 'Pending') {
         $actions = '<div class="flex justify-end gap-2">'
-            . '<a href="view.php?id=' . (int)$alert['id'] . '" class="btn btn-sm btn-ghost text-decoration-none"><span class="material-symbols-outlined text-[14px]">visibility</span> View</a>'
             . '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$alert['id'] . '"><input type="hidden" name="status" value="In Progress"><button type="submit" class="btn btn-sm btn-outline" title="Acknowledge" data-confirm-submit data-confirm-type="primary" data-confirm-title="Acknowledge this alert?" data-confirm-message="This will move the alert to In Progress so staff can handle it." data-confirm-toast="Acknowledging alert..."><span class="material-symbols-outlined text-[14px]">play_arrow</span> Ack</button></form>'
             . '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$alert['id'] . '"><input type="hidden" name="status" value="Cancelled"><button type="submit" class="btn btn-sm btn-ghost btn-cancel-icon" title="Cancel alert" aria-label="Cancel alert" data-confirm-submit data-confirm-type="danger" data-confirm-title="Cancel this alert?" data-confirm-message="This will mark the alert as Cancelled and remove it from the active queue." data-confirm-toast="Cancelling alert..."><span class="material-symbols-outlined text-[14px]">cancel</span></button></form>'
             . '</div>';
@@ -51,10 +52,11 @@ foreach ($alerts as $alert) {
             . '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$alert['id'] . '"><input type="hidden" name="status" value="Cancelled"><button type="submit" class="btn btn-sm btn-ghost btn-cancel-icon" title="Cancel alert" aria-label="Cancel alert" data-confirm-submit data-confirm-type="danger" data-confirm-title="Cancel this alert?" data-confirm-message="This will mark the alert as Cancelled and remove it from the active queue." data-confirm-toast="Cancelling alert..."><span class="material-symbols-outlined text-[14px]">cancel</span></button></form>'
             . '</div>';
     } else {
-        $actions = '<div class="flex justify-end"><a href="view.php?id=' . (int)$alert['id'] . '" class="btn btn-sm btn-ghost text-decoration-none"><span class="material-symbols-outlined text-[14px]">visibility</span> View</a></div>';
+        $actions = '';
     }
 
     $alertRows[] = [
+        'rowUrl' => 'view.php?id=' . (int)$alert['id'],
         'statusHtml' => '<span class="badge ' . e(status_badge_class($alert['status'])) . '">' . e($alert['status']) . '</span>',
         'patient' => $patientName !== '' ? $patientName : 'Unlisted',
         'reporterHtml' => '<p class="text-sm font-bold text-slate-600 mb-0">' . e($alert['reporter_name']) . '</p>' . ($alert['reporter_role'] ? '<p class="text-xs font-bold text-slate-400 mb-0">' . e($alert['reporter_role']) . '</p>' : ''),
@@ -95,16 +97,15 @@ render_header('Nurse Alerts');
         <div class="flex items-center gap-2 mt-4 border-t border-slate-100 pt-4 overflow-x-auto scrollbar-hide">
             <?php
             $statusTabs = [
-                'all' => 'All Alerts',
                 'pending' => 'Pending',
                 'in progress' => 'In Progress',
                 'resolved' => 'Resolved',
                 'cancelled' => 'Cancelled',
             ];
             foreach ($statusTabs as $key => $label):
-                $isActive = $filterStatus === $key;
+                $isActive = strtolower($filterStatus) === $key;
                 $count = $statusCounts[$key] ?? 0;
-                $href = $key === 'all' ? '?' : '?status=' . urlencode($key);
+                $href = $key === 'pending' ? '?' : '?status=' . urlencode($key);
             ?>
                 <a href="<?= $href ?>" class="status-tab <?= $isActive ? 'active' : '' ?> text-decoration-none">
                     <?= $label ?>
@@ -117,7 +118,7 @@ render_header('Nurse Alerts');
     <?php render_ag_grid('alertsGrid', $alertColumns, $alertRows, [
         'searchInput' => 'alertsGridSearch',
         'emptyTitle' => 'No alerts found',
-        'emptyText' => $filterStatus !== 'all' ? 'No alerts with this status.' : 'No alerts have been submitted yet.',
+        'emptyText' => 'No alerts with this status.',
     ]); ?>
 </section>
 <?php render_footer(); ?>

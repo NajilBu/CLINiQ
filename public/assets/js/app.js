@@ -327,7 +327,18 @@ document.addEventListener('submit', (event) => {
         }
 
         form.dataset.confirmed = '1';
-        form.submit();
+        try {
+            if (typeof form.requestSubmit === 'function') {
+                form.requestSubmit();
+            } else {
+                form.submit();
+            }
+        } catch (error) {
+            form.submit();
+        }
+        setTimeout(() => {
+            delete form.dataset.confirmed;
+        }, 0);
     }, type);
 });
 
@@ -467,6 +478,234 @@ async function refreshAlerts() {
 
 
 // ============================================================
+// SAME-PAGE AJAX NAVIGATION
+// ============================================================
+
+function cliniqIsSameOrigin(url) {
+    return url.origin === window.location.origin;
+}
+
+function cliniqIsSamePage(url) {
+    return cliniqIsSameOrigin(url) && url.pathname === window.location.pathname;
+}
+
+function cliniqShowFetchedFlashes(doc) {
+    doc.querySelectorAll('#flash-toasts [data-flash]').forEach((flash) => {
+        showToast(flash.dataset.message || '', flash.dataset.flash || 'info');
+    });
+}
+
+function cliniqReplaceTopbarState(doc) {
+    const nextMeta = doc.querySelector('.app-topbar-meta');
+    const currentMeta = document.querySelector('.app-topbar-meta');
+    if (nextMeta && currentMeta) {
+        currentMeta.replaceWith(nextMeta);
+    }
+
+    const nextNav = doc.querySelector('.app-nav');
+    const currentNav = document.querySelector('.app-nav');
+    if (nextNav && currentNav) {
+        currentNav.replaceWith(nextNav);
+    }
+}
+
+function cliniqCloseOpenModals() {
+    document.querySelectorAll('.modal-backdrop.show').forEach((modal) => {
+        if (modal.id && typeof closeModal === 'function') {
+            closeModal(modal.id);
+        } else {
+            modal.classList.remove('show');
+            modal.style.display = 'none';
+        }
+    });
+}
+
+function cliniqAfterContentSwap(root) {
+    if (typeof window.cliniqInitAgGrids === 'function') {
+        window.cliniqInitAgGrids(root || document);
+    }
+    initStudentIdFormatting(root || document);
+    initTabsFromURL();
+    refreshAlerts();
+    document.dispatchEvent(new CustomEvent('cliniq:page-content-replaced', {
+        detail: { root: root || document }
+    }));
+}
+
+function cliniqRenderFetchedPage(html, finalUrl, options = {}) {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const nextContent = doc.querySelector('[data-cliniq-page-content]');
+    const currentContent = document.querySelector('[data-cliniq-page-content]');
+
+    if (!nextContent || !currentContent) {
+        window.location.assign(finalUrl);
+        return;
+    }
+
+    currentContent.replaceWith(nextContent);
+    cliniqReplaceTopbarState(doc);
+    cliniqShowFetchedFlashes(doc);
+    cliniqCloseOpenModals();
+
+    const title = doc.querySelector('title');
+    if (title) {
+        document.title = title.textContent;
+    }
+
+    if (options.pushHistory) {
+        window.history.pushState({ cliniqAjax: true }, '', finalUrl);
+    } else {
+        window.history.replaceState({ cliniqAjax: true }, '', finalUrl);
+    }
+
+    cliniqAfterContentSwap(nextContent);
+}
+
+async function cliniqFetchPage(url, options = {}) {
+    const response = await fetch(url, {
+        credentials: 'same-origin',
+        headers: { 'X-Requested-With': 'fetch' }
+    });
+    const html = await response.text();
+    cliniqRenderFetchedPage(html, response.url || url, options);
+}
+
+function cliniqFormData(form, submitter) {
+    try {
+        return submitter ? new FormData(form, submitter) : new FormData(form);
+    } catch (error) {
+        const formData = new FormData(form);
+        if (submitter && submitter.name && !submitter.disabled) {
+            formData.append(submitter.name, submitter.value || '');
+        }
+        return formData;
+    }
+}
+
+async function cliniqSubmitFormAjax(form, submitter) {
+    const method = (form.method || 'GET').toUpperCase();
+    let url = new URL(form.action || window.location.href, window.location.href);
+    const formData = cliniqFormData(form, submitter);
+    const fetchOptions = {
+        method,
+        credentials: 'same-origin',
+        headers: { 'X-Requested-With': 'fetch' }
+    };
+
+    if (method === 'GET') {
+        const params = new URLSearchParams(formData);
+        url.search = params.toString();
+    } else {
+        fetchOptions.body = formData;
+    }
+
+    const response = await fetch(url, fetchOptions);
+    const finalUrl = new URL(response.url || url.href, window.location.href);
+
+    if (!cliniqIsSamePage(finalUrl)) {
+        window.location.assign(finalUrl.href);
+        return;
+    }
+
+    cliniqRenderFetchedPage(await response.text(), finalUrl.href, { pushHistory: method === 'GET' });
+}
+
+function initSamePageAjax() {
+    if (document.documentElement.dataset.cliniqSamePageAjax === 'ready') return;
+    document.documentElement.dataset.cliniqSamePageAjax = 'ready';
+
+    document.addEventListener('click', (event) => {
+        if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+
+        const link = event.target.closest('a[href]');
+        if (!link || link.target || link.hasAttribute('download') || link.dataset.noAjax === 'true') return;
+
+        const url = new URL(link.href, window.location.href);
+        if (!cliniqIsSamePage(url) || url.hash) return;
+
+        event.preventDefault();
+        cliniqFetchPage(url.href, { pushHistory: true }).catch(() => {
+            window.location.assign(url.href);
+        });
+    });
+
+    document.addEventListener('submit', (event) => {
+        const form = event.target;
+        if (!(form instanceof HTMLFormElement) || event.defaultPrevented || form.dataset.noAjax === 'true' || form.target) return;
+        if (!document.querySelector('[data-cliniq-page-content]') || !form.closest('.app-main')) return;
+
+        event.preventDefault();
+        cliniqSubmitFormAjax(form, event.submitter).catch(() => {
+            form.submit();
+        });
+    });
+
+    window.addEventListener('popstate', () => {
+        cliniqFetchPage(window.location.href, { pushHistory: false }).catch(() => window.location.reload());
+    });
+}
+
+function formatStudentId(value) {
+    const digits = String(value || '').replace(/\D/g, '').slice(0, 7);
+    if (digits.length <= 2) {
+        return digits;
+    }
+    return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+}
+
+function studentIdFormatIsActive(input) {
+    const sourceId = input.dataset.studentCategorySource;
+    if (!sourceId) {
+        return true;
+    }
+
+    const source = document.getElementById(sourceId);
+    return !source || source.value === 'Student';
+}
+
+function initStudentIdFormatting(root = document) {
+    const scope = root.querySelectorAll ? root : document;
+    scope.querySelectorAll('[data-student-id-format], #student-id').forEach((input) => {
+        if (!(input instanceof HTMLInputElement) || input.dataset.studentIdFormatterReady === '1') {
+            return;
+        }
+
+        input.dataset.studentIdFormatterReady = '1';
+        input.dataset.originalMaxLength = input.getAttribute('maxlength') || '';
+        input.inputMode = 'numeric';
+        input.placeholder = input.placeholder || '00-00000';
+
+        const syncPattern = () => {
+            const active = studentIdFormatIsActive(input);
+            input.pattern = active ? '\\d{2}-\\d{5}' : '';
+            input.title = active ? 'Use the format 00-00000.' : '';
+            input.inputMode = active ? 'numeric' : 'text';
+            if (active) {
+                input.maxLength = 8;
+            } else if (input.dataset.originalMaxLength) {
+                input.maxLength = Number(input.dataset.originalMaxLength);
+            } else {
+                input.removeAttribute('maxlength');
+            }
+        };
+
+        input.addEventListener('input', () => {
+            if (studentIdFormatIsActive(input)) {
+                input.value = formatStudentId(input.value);
+            }
+        });
+
+        const sourceId = input.dataset.studentCategorySource;
+        if (sourceId) {
+            document.getElementById(sourceId)?.addEventListener('change', syncPattern);
+        }
+
+        syncPattern();
+    });
+}
+
+
+// ============================================================
 // AUTO-INITIALIZATION
 // ============================================================
 
@@ -476,6 +715,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialize tabs from URL
     initTabsFromURL();
+
+    // Same-page links/forms update content without a full browser reload
+    initSamePageAjax();
+
+    // Student IDs use 00-00000 format.
+    initStudentIdFormatting();
 
     // Start alert polling
     refreshAlerts();

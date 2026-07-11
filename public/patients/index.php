@@ -35,18 +35,19 @@ $patientColumns = [
     ['headerName' => 'Name', 'field' => 'nameHtml', 'cellRenderer' => 'html', 'minWidth' => 240],
     ['headerName' => 'Course/Section', 'field' => 'courseSection', 'minWidth' => 190],
     ['headerName' => 'Guardian Contact', 'field' => 'guardianContact', 'minWidth' => 180],
-    ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 180],
+    ['headerName' => 'QR', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 120],
 ];
 $patientRows = [];
 foreach ($patients as $patient) {
     $fullName = trim($patient['last_name'] . ', ' . $patient['first_name']);
     $displayName = trim($patient['first_name'] . ' ' . $patient['last_name']);
     $patientRows[] = [
+        'rowUrl' => 'view.php?id=' . (int)$patient['id'],
         'studentNumber' => $patient['student_number'],
         'nameHtml' => '<div class="flex items-center gap-3"><div class="avatar ' . e(avatar_color($displayName)) . '">' . e(initials($displayName)) . '</div><strong class="text-sm text-slate-800">' . e($fullName) . '</strong></div>',
         'courseSection' => $patient['course_section'],
         'guardianContact' => $patient['guardian_contact'] ?: '-',
-        'actionsHtml' => '<div class="flex flex-wrap gap-2"><a class="btn btn-sm btn-ghost text-decoration-none" href="view.php?id=' . (int)$patient['id'] . '"><span class="material-symbols-outlined text-[14px]">visibility</span> View</a><a class="btn btn-sm btn-outline text-decoration-none" href="' . e(app_url('emergency.php?token=' . $patient['emergency_token'])) . '" target="_blank"><span class="material-symbols-outlined text-[14px]">qr_code_2</span> QR</a></div>',
+        'actionsHtml' => '<a class="btn btn-sm btn-outline text-decoration-none" href="' . e(app_url('emergency.php?token=' . $patient['emergency_token'])) . '" target="_blank"><span class="material-symbols-outlined text-[14px]">qr_code_2</span> QR</a>',
     ];
 }
 

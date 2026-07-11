@@ -40,6 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
+set_page_back_link('view.php?id=' . $id, 'Profile');
 render_header('Edit Patient');
 ?>
 <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
@@ -47,9 +48,6 @@ render_header('Edit Patient');
         <h1 class="font-headline text-3xl md:text-4xl font-extrabold text-[#1c2a59]">Edit Patient</h1>
         <p class="text-sm font-bold text-slate-500 mt-1">Update the profile for <?= e($patient['first_name'] . ' ' . $patient['last_name']) ?>.</p>
     </div>
-    <a class="btn btn-ghost text-decoration-none" href="view.php?id=<?= $id ?>">
-        <span class="material-symbols-outlined text-[18px]">arrow_back</span> Back to Profile
-    </a>
 </div>
 
 <form class="clinic-card p-6 md:p-8" method="post">

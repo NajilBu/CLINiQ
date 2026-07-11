@@ -3,8 +3,10 @@
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/RiskClassifier.php';
 require_once __DIR__ . '/../../app/services/VisitWorkflow.php';
+require_once __DIR__ . '/../../app/services/InventoryWorkflow.php';
 require_login();
 ensure_visit_workflow_schema();
+ensure_inventory_workflow_schema();
 
 $id = (int) ($_GET['id'] ?? 0);
 $entryPoint = $_GET['from'] ?? 'logbook';
@@ -88,120 +90,146 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'pulse_rate' => $_POST['pulse_rate'] ?: null,
         ];
         $risk = classify_patient_risk($assessment);
+        $riskReasons = risk_reasons_text($risk);
         $newStatus = 'Active';
         $purpose = normalize_visit_purpose($_POST['visit_purpose'] ?? null);
         $actionTaken = trim($_POST['action_taken'] ?? '');
 
-        $update = db()->prepare("
-            UPDATE clinic_visits
-            SET symptoms = ?, temperature = ?, blood_pressure = ?, pulse_rate = ?,
-                risk_level = ?, risk_score = ?, status = ?, visit_purpose = ?,
-                action_taken = ?, recorded_by = ?, attended_by = ?
-            WHERE id = ?
-        ");
-        $update->execute([
-            $assessment['symptoms'] ?: null,
-            $assessment['temperature'],
-            $assessment['blood_pressure'],
-            $assessment['pulse_rate'],
-            $risk['level'],
-            $risk['score'],
-            $newStatus,
-            $purpose,
-            $actionTaken ?: null,
-            current_user()['id'],
-            current_user()['id'],
-            $id,
-        ]);
+        $db = db();
+        try {
+            $dispensingRequest = visit_dispensing_request($_POST);
+            $db->beginTransaction();
 
-        $referralType = trim($_POST['referral_type'] ?? '');
-        if ($referralType === 'None') {
-            $referralType = '';
-        }
-        $remarks = trim($_POST['remarks'] ?? '');
-        $dispensedItem = trim($_POST['dispensed_item'] ?? '');
-        $dispensedQuantity = trim($_POST['dispensed_quantity'] ?? '');
-        if ($dispensedItem !== '' || $dispensedQuantity !== '') {
-            $dispensingNote = 'Dispensed: ' . ($dispensedItem !== '' ? $dispensedItem : 'Unspecified item');
-            if ($dispensedQuantity !== '') {
-                $dispensingNote .= ' - Qty: ' . $dispensedQuantity;
-            }
-            $remarks = trim($remarks . "\n" . $dispensingNote);
-        }
-        $entry = [
-            'symptoms_note' => trim($_POST['follow_up_note'] ?? '') ?: $postedSymptoms,
-            'diagnosis' => trim($_POST['diagnosis'] ?? ''),
-            'management_treatment' => $actionTaken,
-            'referral_type' => $referralType,
-            'remarks' => $remarks,
-        ];
-
-        if (treatment_entry_has_content($entry)) {
-            $insert = db()->prepare(
-                'INSERT INTO visit_treatment_entries (visit_id, symptoms_note, diagnosis, management_treatment, referral_type, remarks, created_by)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)'
-            );
-            $insert->execute([
-                $id,
-                $entry['symptoms_note'] ?: null,
-                $entry['diagnosis'] ?: null,
-                $entry['management_treatment'] ?: null,
-                $entry['referral_type'] ?: null,
-                $entry['remarks'] ?: null,
+            $update = $db->prepare("
+                UPDATE clinic_visits
+                SET symptoms = ?, temperature = ?, blood_pressure = ?, pulse_rate = ?,
+                    risk_level = ?, risk_score = ?, risk_reasons = ?, status = ?, visit_purpose = ?,
+                    action_taken = ?, recorded_by = ?, attended_by = ?
+                WHERE id = ?
+            ");
+            $update->execute([
+                $assessment['symptoms'] ?: null,
+                $assessment['temperature'],
+                $assessment['blood_pressure'],
+                $assessment['pulse_rate'],
+                $risk['level'],
+                $risk['score'],
+                $riskReasons,
+                $newStatus,
+                $purpose,
+                $actionTaken ?: null,
                 current_user()['id'],
+                current_user()['id'],
+                $id,
             ]);
-        }
+            escalate_major_risk_visit($db, $id, (int) $existingVisit['patient_id'], $risk['level'], (int) $risk['score'], $riskReasons);
 
-        flash_message('success', 'Visit addressed from the nurse station.');
+            $borrower = visit_patient_borrower($db, (int) $existingVisit['patient_id']);
+            $dispensed = process_visit_inventory_request($db, $dispensingRequest, $borrower['name'], $borrower['identifier']);
+            $referralType = trim($_POST['referral_type'] ?? '');
+            if ($referralType === 'None') {
+                $referralType = '';
+            }
+            $remarks = trim($_POST['remarks'] ?? '');
+            $dispensingNote = visit_dispensing_note($dispensed);
+            if ($dispensingNote !== '') {
+                $remarks = trim($remarks . "\n" . $dispensingNote);
+            }
+            $entry = [
+                'symptoms_note' => trim($_POST['follow_up_note'] ?? '') ?: $postedSymptoms,
+                'diagnosis' => trim($_POST['diagnosis'] ?? ''),
+                'management_treatment' => $actionTaken,
+                'referral_type' => $referralType,
+                'remarks' => $remarks,
+            ];
+
+            if (treatment_entry_has_content($entry)) {
+                $insert = $db->prepare(
+                    'INSERT INTO visit_treatment_entries (visit_id, symptoms_note, diagnosis, management_treatment, referral_type, remarks, dispensed_inventory_item_id, dispensed_quantity, created_by)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                );
+                $insert->execute([
+                    $id,
+                    $entry['symptoms_note'] ?: null,
+                    $entry['diagnosis'] ?: null,
+                    $entry['management_treatment'] ?: null,
+                    $entry['referral_type'] ?: null,
+                    $entry['remarks'] ?: null,
+                    $dispensed['item_id'] ?? null,
+                    $dispensed['quantity'] ?? null,
+                    current_user()['id'],
+                ]);
+            }
+
+            $db->commit();
+            flash_message('success', $dispensed ? 'Visit addressed and medicine stock deducted.' : 'Visit addressed from the nurse station.');
+        } catch (Throwable $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $e->getMessage());
+        }
     } elseif ($existingVisit && $mode === 'append' && $returnFrom === 'profile') {
         $referralType = trim($_POST['referral_type'] ?? '');
         if ($referralType === 'None') {
             $referralType = '';
         }
 
-        $entry = [
-            'symptoms_note' => trim($_POST['symptoms_note'] ?? ''),
-            'diagnosis' => trim($_POST['diagnosis'] ?? ''),
-            'management_treatment' => trim($_POST['management_treatment'] ?? ''),
-            'referral_type' => $referralType,
-            'remarks' => trim($_POST['remarks'] ?? ''),
-            'amendment_reason' => trim($_POST['amendment_reason'] ?? ''),
-        ];
-        $dispensedItem = trim($_POST['dispensed_item'] ?? '');
-        $dispensedQuantity = trim($_POST['dispensed_quantity'] ?? '');
-        if ($dispensedItem !== '' || $dispensedQuantity !== '') {
-            $dispensingNote = 'Dispensed: ' . ($dispensedItem !== '' ? $dispensedItem : 'Unspecified item');
-            if ($dispensedQuantity !== '') {
-                $dispensingNote .= ' - Qty: ' . $dispensedQuantity;
+        try {
+            $dispensingRequest = visit_dispensing_request($_POST);
+            $hasDispensing = !empty($dispensingRequest);
+            $entry = [
+                'symptoms_note' => trim($_POST['symptoms_note'] ?? ''),
+                'diagnosis' => trim($_POST['diagnosis'] ?? ''),
+                'management_treatment' => trim($_POST['management_treatment'] ?? ''),
+                'referral_type' => $referralType,
+                'remarks' => trim($_POST['remarks'] ?? ''),
+                'amendment_reason' => trim($_POST['amendment_reason'] ?? ''),
+            ];
+            $newStatus = normalize_visit_status($_POST['status'] ?? null, $existingVisit['status'] ?: 'Active');
+            $statusChanged = $newStatus !== ($existingVisit['status'] ?: 'Unaddressed');
+
+            if ((treatment_entry_has_content($entry) || $statusChanged || $hasDispensing) && $entry['amendment_reason'] === '') {
+                flash_message('warning', 'Enter the reason for the amendment before saving.');
+            } elseif (treatment_entry_has_content($entry) || $statusChanged || $hasDispensing) {
+                $db = db();
+                $db->beginTransaction();
+                $borrower = visit_patient_borrower($db, (int) $existingVisit['patient_id']);
+                $dispensed = process_visit_inventory_request($db, $dispensingRequest, $borrower['name'], $borrower['identifier']);
+                $dispensingNote = visit_dispensing_note($dispensed);
+                if ($dispensingNote !== '') {
+                    $entry['remarks'] = trim($entry['remarks'] . "\n" . $dispensingNote);
+                }
+
+                $insert = $db->prepare(
+                    'INSERT INTO visit_treatment_entries (visit_id, symptoms_note, diagnosis, management_treatment, referral_type, remarks, amendment_reason, dispensed_inventory_item_id, dispensed_quantity, created_by)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                );
+                $insert->execute([
+                    $id,
+                    $entry['symptoms_note'] ?: null,
+                    $entry['diagnosis'] ?: null,
+                    $entry['management_treatment'] ?: null,
+                    $entry['referral_type'] ?: null,
+                    $entry['remarks'] ?: null,
+                    $entry['amendment_reason'] ?: null,
+                    $dispensed['item_id'] ?? null,
+                    $dispensed['quantity'] ?? null,
+                    current_user()['id'],
+                ]);
+
+                $update = $db->prepare('UPDATE clinic_visits SET status = ?, attended_by = COALESCE(attended_by, ?) WHERE id = ?');
+                $update->execute([$newStatus, current_user()['id'], $id]);
+                $db->commit();
+                flash_message('success', $dispensed ? 'Treatment information appended and medicine stock deducted.' : (treatment_entry_has_content($entry) ? 'Treatment information appended.' : 'Visit status updated with amendment reason.'));
+            } else {
+                flash_message('warning', 'Add treatment details, dispense medicine, or change the visit status before saving.');
             }
-            $entry['remarks'] = trim($entry['remarks'] . "\n" . $dispensingNote);
-        }
-        $newStatus = normalize_visit_status($_POST['status'] ?? null, $existingVisit['status'] ?: 'Active');
-        $statusChanged = $newStatus !== ($existingVisit['status'] ?: 'Unaddressed');
-
-        if ((treatment_entry_has_content($entry) || $statusChanged) && $entry['amendment_reason'] === '') {
-            flash_message('warning', 'Enter the reason for the amendment before saving.');
-        } elseif (treatment_entry_has_content($entry) || $statusChanged) {
-            $insert = db()->prepare(
-                'INSERT INTO visit_treatment_entries (visit_id, symptoms_note, diagnosis, management_treatment, referral_type, remarks, amendment_reason, created_by)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-            );
-            $insert->execute([
-                $id,
-                $entry['symptoms_note'] ?: null,
-                $entry['diagnosis'] ?: null,
-                $entry['management_treatment'] ?: null,
-                $entry['referral_type'] ?: null,
-                $entry['remarks'] ?: null,
-                $entry['amendment_reason'] ?: null,
-                current_user()['id'],
-            ]);
-
-            $update = db()->prepare('UPDATE clinic_visits SET status = ?, attended_by = COALESCE(attended_by, ?) WHERE id = ?');
-            $update->execute([$newStatus, current_user()['id'], $id]);
-            flash_message('success', treatment_entry_has_content($entry) ? 'Treatment information appended.' : 'Visit status updated with amendment reason.');
-        } else {
-            flash_message('warning', 'Add treatment details or change the visit status before saving.');
+        } catch (Throwable $e) {
+            if (isset($db) && $db instanceof PDO && $db->inTransaction()) {
+                $db->rollBack();
+            }
+            flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $e->getMessage());
         }
     } else {
         flash_message('error', 'This action is not available for the current visit status.');
@@ -252,6 +280,8 @@ $entriesStmt = db()->prepare("
 ");
 $entriesStmt->execute([$id]);
 $entries = $entriesStmt->fetchAll();
+$medicineInventory = visit_medicine_inventory_options();
+$equipmentInventory = visit_equipment_inventory_options();
 
 $fullName = trim($visit['first_name'] . ' ' . $visit['last_name']);
 $status = $visit['status'] ?: 'Unaddressed';
@@ -272,6 +302,8 @@ $sheetDiagnosis = trim((string) ($latestEntry['diagnosis'] ?? '')) ?: '';
 $sheetManagement = trim((string) ($latestEntry['management_treatment'] ?? '')) ?: (trim((string) $visit['action_taken']) ?: '');
 $sheetReferral = trim((string) ($latestEntry['referral_type'] ?? '')) ?: 'None';
 $sheetRemarks = trim((string) ($latestEntry['remarks'] ?? '')) ?: '';
+$sheetDispensedItemId = (int) ($latestEntry['dispensed_inventory_item_id'] ?? 0);
+$sheetDispensedQuantity = (int) ($latestEntry['dispensed_quantity'] ?? 0);
 $timeOfArrival = $visit['visit_datetime'] ? date('g:i A', strtotime($visit['visit_datetime'])) : 'Not recorded';
 $submittedPurpose = trim((string) ($visit['visit_purpose'] ?? ''));
 if ($submittedPurpose === '' && str_contains((string) $visit['chief_complaint'], ' - ')) {
@@ -315,8 +347,58 @@ $logbookReferralValue = $isReadOnlyLogbook ? $sheetReferral : 'None';
 $logbookRemarksValue = $isReadOnlyLogbook ? $sheetRemarks : '';
 $readOnlyAttr = $isReadOnlyLogbook ? ' readonly' : '';
 $disabledAttr = $isReadOnlyLogbook ? ' disabled' : '';
+$storedRiskReasons = trim((string) ($visit['risk_reasons'] ?? ''));
+if ($storedRiskReasons === '') {
+    $storedRiskReasons = risk_reasons_text(classify_patient_risk($visit));
+}
+$riskReasonLines = array_values(array_filter(array_map('trim', preg_split('/\R/', $storedRiskReasons) ?: [])));
+$riskBasisLines = risk_classification_basis();
+$riskGuidance = risk_escalation_guidance((string) $visit['risk_level']);
+$isMajorRisk = in_array((string) $visit['risk_level'], ['High', 'Critical'], true);
+
+function render_visit_risk_explanation(array $visit, array $riskReasonLines, array $riskBasisLines, string $riskGuidance, bool $isMajorRisk): void
+{
+    ?>
+    <section class="clinic-card p-6 risk-explanation-card <?= $isMajorRisk ? 'major-risk' : '' ?>">
+        <div class="flex flex-col lg:flex-row lg:items-start justify-between gap-5">
+            <div>
+                <p class="clinic-label">Risk Classification Basis</p>
+                <h2 class="font-headline text-xl font-extrabold text-[#1c2a59] flex items-center gap-2 mb-2">
+                    <span class="material-symbols-outlined text-[21px]">emergency</span>
+                    <?= e($visit['risk_level']) ?> Risk - Score <?= (int) $visit['risk_score'] ?>
+                </h2>
+                <p class="text-sm font-bold text-slate-500 mb-0"><?= e($riskGuidance) ?></p>
+            </div>
+            <span class="badge <?= e(risk_badge_class((string) $visit['risk_level'])) ?>">
+                <?= $isMajorRisk ? 'Escalate / Monitor' : 'Routine Flow' ?>
+            </span>
+        </div>
+
+        <div class="risk-explanation-grid mt-5">
+            <div class="risk-explanation-panel">
+                <strong>Why this grade was assigned</strong>
+                <ul>
+                    <?php foreach ($riskReasonLines as $reason): ?>
+                        <li><?= e($reason) ?></li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+            <div class="risk-explanation-panel">
+                <strong>Scoring rule used by CLINiQ</strong>
+                <ul>
+                    <?php foreach ($riskBasisLines as $basis): ?>
+                        <li><?= e($basis) ?></li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+        </div>
+    </section>
+    <?php
+}
 
 $pageTitle = $canAddressFromLogbook ? 'Address Clinic Visit' : ($canEndFromLogbook ? 'End Clinic Visit' : 'Visit Treatment');
+$visitBackUrl = $isProfileMode ? app_url('patients/view.php?id=' . (int) $visit['patient_id']) : 'index.php';
+set_page_back_link($visitBackUrl, $isProfileMode ? 'Profile' : 'Logbook');
 render_header($pageTitle);
 ?>
 
@@ -485,9 +567,46 @@ render_header($pageTitle);
         font-size: 0.68rem;
         font-weight: 900;
     }
+    .risk-explanation-card {
+        border-color: rgba(148, 163, 184, 0.24);
+    }
+    .risk-explanation-card.major-risk {
+        border-color: rgba(239, 68, 68, 0.22);
+        background: linear-gradient(180deg, #fff, #fff7f7);
+    }
+    .risk-explanation-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+        gap: 1rem;
+    }
+    .risk-explanation-panel {
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 0.75rem;
+        background: rgba(248, 250, 252, 0.82);
+        padding: 1rem;
+    }
+    .risk-explanation-panel strong {
+        display: block;
+        color: #0f172a;
+        font-size: 0.86rem;
+        margin-bottom: 0.65rem;
+    }
+    .risk-explanation-panel ul {
+        display: grid;
+        gap: 0.45rem;
+        margin: 0;
+        padding-left: 1.1rem;
+        color: #475569;
+        font-size: 0.78rem;
+        font-weight: 700;
+        line-height: 1.45;
+    }
     @media (max-width: 900px) {
         .vitals-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .risk-explanation-grid {
+            grid-template-columns: 1fr;
         }
     }
     @media (max-width: 640px) {
@@ -528,6 +647,8 @@ render_header($pageTitle);
             <?php endif; ?>
         </div>
     </section>
+
+    <?php render_visit_risk_explanation($visit, $riskReasonLines, $riskBasisLines, $riskGuidance, $isMajorRisk); ?>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <section class="clinic-card p-6 space-y-5">
@@ -612,11 +733,18 @@ render_header($pageTitle);
             </div>
             <div>
                 <label class="clinic-label">Medicine / Item Name</label>
-                <input class="record-sheet-field px-4 amendable-field" name="dispensed_item" placeholder="Optional item dispensed" readonly data-amendable>
+                <select class="record-sheet-field px-4 amendable-field" name="dispensed_inventory_item_id" disabled data-amendable>
+                    <option value="">No medicine dispensed</option>
+                    <?php foreach ($medicineInventory as $medicine): ?>
+                        <option value="<?= (int) $medicine['id'] ?>" <?= (int) $medicine['quantity'] <= 0 ? 'disabled' : '' ?>>
+                            <?= e($medicine['item_name']) ?> (<?= (int) $medicine['quantity'] ?> <?= e($medicine['unit']) ?>)
+                        </option>
+                    <?php endforeach; ?>
+                </select>
             </div>
             <div>
                 <label class="clinic-label">Quantity</label>
-                <input class="record-sheet-field px-4 amendable-field" name="dispensed_quantity" placeholder="0" readonly data-amendable>
+                <input class="record-sheet-field px-4 amendable-field" name="dispensed_quantity" type="number" min="1" placeholder="0" readonly data-amendable>
             </div>
         </div>
     </section>
@@ -674,7 +802,6 @@ render_header($pageTitle);
                 View History
             </a>
             <div class="flex flex-wrap gap-3">
-                <a href="<?= app_url('patients/view.php?id=' . (int) $visit['patient_id']) ?>" class="btn btn-ghost text-decoration-none">Back to Profile</a>
                 <button id="saveAmendmentBtn" class="btn btn-primary amendment-only" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save this amendment?" data-confirm-message="This will add a new append-only treatment entry and keep the original visit details unchanged." data-confirm-toast="Saving amendment...">
                     <span class="material-symbols-outlined text-[18px]">save</span>
                     Save Amendment
@@ -797,6 +924,8 @@ render_header($pageTitle);
         </div>
     </section>
 
+    <?php render_visit_risk_explanation($visit, $riskReasonLines, $riskBasisLines, $riskGuidance, $isMajorRisk); ?>
+
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <section class="clinic-card p-6 space-y-5">
             <h2 class="font-headline text-lg font-extrabold text-[#1c2a59] flex items-center gap-2 mb-1">
@@ -850,21 +979,21 @@ render_header($pageTitle);
             <div class="vital-tile">
                 <div class="vital-label"><span class="material-symbols-outlined">favorite</span>BP</div>
                 <div class="vital-value-wrap">
-                    <input class="vital-input" name="blood_pressure" value="<?= e($visit['blood_pressure'] ?: '') ?>" placeholder="120/80"<?= $readOnlyAttr ?>>
+                    <input class="vital-input" name="blood_pressure" value="<?= e($visit['blood_pressure'] ?: '') ?>" placeholder="0"<?= $readOnlyAttr ?>>
                     <span class="vital-unit">mmHg</span>
                 </div>
             </div>
             <div class="vital-tile">
                 <div class="vital-label"><span class="material-symbols-outlined">thermostat</span>Temp</div>
                 <div class="vital-value-wrap">
-                    <input class="vital-input" name="temperature" type="number" step="0.1" value="<?= e($visit['temperature'] ? (string) $visit['temperature'] : '') ?>" placeholder="37.5"<?= $readOnlyAttr ?>>
+                    <input class="vital-input" name="temperature" type="number" step="0.1" value="<?= e($visit['temperature'] ? (string) $visit['temperature'] : '') ?>" placeholder="0"<?= $readOnlyAttr ?>>
                     <span class="vital-unit">C</span>
                 </div>
             </div>
             <div class="vital-tile">
                 <div class="vital-label"><span class="material-symbols-outlined">ecg_heart</span>Heart</div>
                 <div class="vital-value-wrap">
-                    <input class="vital-input" name="pulse_rate" type="number" value="<?= e($visit['pulse_rate'] ? (string) $visit['pulse_rate'] : '') ?>" placeholder="88"<?= $readOnlyAttr ?>>
+                    <input class="vital-input" name="pulse_rate" type="number" value="<?= e($visit['pulse_rate'] ? (string) $visit['pulse_rate'] : '') ?>" placeholder="0"<?= $readOnlyAttr ?>>
                     <span class="vital-unit">BPM</span>
                 </div>
             </div>
@@ -876,7 +1005,7 @@ render_header($pageTitle);
                 <div class="vital-tile">
                     <div class="vital-label"><span class="material-symbols-outlined"><?= e($icon) ?></span><?= e($label) ?></div>
                     <div class="vital-value-wrap">
-                        <input class="vital-input" placeholder="Optional"<?= $readOnlyAttr ?>>
+                        <input class="vital-input" placeholder="0"<?= $readOnlyAttr ?>>
                         <span class="vital-unit"><?= e($unit) ?></span>
                     </div>
                 </div>
@@ -893,17 +1022,34 @@ render_header($pageTitle);
             <div>
                 <label class="clinic-label">Type</label>
                 <select class="record-sheet-field px-4" name="dispensing_type"<?= $disabledAttr ?>>
-                    <option>Medicine</option>
-                    <option>Supply</option>
+                    <option value="Medicine">Medicine</option>
+                    <option value="Equipment">Equipment</option>
                 </select>
             </div>
             <div>
-                <label class="clinic-label">Medicine / Item Name</label>
-                <input class="record-sheet-field px-4" name="dispensed_item" placeholder="Optional item dispensed"<?= $readOnlyAttr ?>>
+                <label class="clinic-label">Medicine / Equipment</label>
+                <select class="record-sheet-field px-4 js-visit-inventory-item" name="dispensed_inventory_item_id"<?= $disabledAttr ?>>
+                    <option value="" data-type="Medicine">No item selected</option>
+                    <?php foreach ($medicineInventory as $medicine): ?>
+                        <?php
+                            $medicineId = (int) $medicine['id'];
+                            $isSelectedMedicine = $sheetDispensedItemId === $medicineId;
+                            $isUnavailableMedicine = (int) $medicine['quantity'] <= 0 && !$isSelectedMedicine;
+                        ?>
+                        <option value="<?= $medicineId ?>" data-type="Medicine" <?= $isSelectedMedicine ? 'selected' : '' ?> <?= $isUnavailableMedicine ? 'disabled' : '' ?>>
+                            <?= e($medicine['item_name']) ?> (<?= (int) $medicine['quantity'] ?> <?= e($medicine['unit']) ?>)
+                        </option>
+                    <?php endforeach; ?>
+                    <?php foreach ($equipmentInventory as $equipment): ?>
+                        <option value="<?= (int) $equipment['id'] ?>" data-type="Equipment" <?= (int) $equipment['quantity'] <= 0 ? 'disabled' : '' ?>>
+                            <?= e($equipment['item_name']) ?> (<?= (int) $equipment['quantity'] ?> <?= e($equipment['unit']) ?>)
+                        </option>
+                    <?php endforeach; ?>
+                </select>
             </div>
             <div>
                 <label class="clinic-label">Quantity</label>
-                <input class="record-sheet-field px-4" name="dispensed_quantity" placeholder="0"<?= $readOnlyAttr ?>>
+                <input class="record-sheet-field px-4" name="dispensed_quantity" type="number" min="1" value="<?= $sheetDispensedQuantity > 0 ? (int) $sheetDispensedQuantity : '' ?>" placeholder="0"<?= $readOnlyAttr ?>>
             </div>
         </div>
     </section>
@@ -940,11 +1086,11 @@ render_header($pageTitle);
             </div>
         </div>
         <?php if ($canTreatFromLogbook): ?>
-            <div class="mt-6 pt-5 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <a href="index.php" class="btn btn-ghost text-decoration-none justify-center">Back to Logbook</a>
+            <div class="mt-6 pt-5 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3">
                 <div class="flex flex-col sm:flex-row gap-3">
-                    <button type="submit" form="cancelTreatmentForm" class="btn btn-danger btn-cancel-icon justify-center" title="Cancel treatment" aria-label="Cancel treatment" data-confirm-submit data-confirm-type="danger" data-confirm-title="Cancel this treatment?" data-confirm-message="This will cancel the active treatment session and mark the visit as Cancelled." data-confirm-toast="Cancelling treatment...">
+                    <button type="submit" form="cancelTreatmentForm" class="btn btn-danger justify-center" data-confirm-submit data-confirm-type="danger" data-confirm-title="Cancel this treatment?" data-confirm-message="This will cancel the active treatment session and mark the visit as Cancelled." data-confirm-toast="Cancelling treatment...">
                         <span class="material-symbols-outlined text-[18px]">cancel</span>
+                        Cancel Treatment
                     </button>
                     <button class="btn btn-primary justify-center" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save treatment?" data-confirm-message="This will save the current vitals, assessment, diagnosis, treatment, referral, and remarks for this active visit." data-confirm-toast="Saving treatment...">
                         <span class="material-symbols-outlined text-[18px]">save</span>
@@ -953,8 +1099,7 @@ render_header($pageTitle);
                 </div>
             </div>
         <?php elseif ($isReadOnlyLogbook): ?>
-            <div class="mt-6 pt-5 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <a href="index.php" class="btn btn-ghost text-decoration-none justify-center">Back to Logbook</a>
+            <div class="mt-6 pt-5 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3">
                 <a href="<?= app_url('patients/view.php?id=' . (int) $visit['patient_id']) ?>" class="btn btn-primary text-decoration-none justify-center">
                     <span class="material-symbols-outlined text-[18px]">person</span>
                     Open Student Profile
@@ -995,7 +1140,7 @@ render_header($pageTitle);
             This will mark the visit as Active now because the nurse is already attending to the patient while filling out the treatment sheet.
         </p>
         <div class="flex flex-col sm:flex-row gap-3">
-            <a href="index.php" class="btn btn-ghost flex-1 text-decoration-none justify-center">Back to Logbook</a>
+            <a href="index.php" class="btn btn-ghost flex-1 text-decoration-none justify-center">Cancel</a>
             <button type="submit" form="beginTreatmentForm" class="btn btn-primary flex-1" data-confirm-submit data-confirm-type="primary" data-confirm-title="Begin treatment?" data-confirm-message="This will mark the visit as Active because the nurse is now attending to the patient." data-confirm-toast="Starting treatment...">
                 <span class="material-symbols-outlined text-[18px]">play_arrow</span>
                 Begin Treatment
@@ -1004,6 +1149,29 @@ render_header($pageTitle);
     </div>
 </div>
 <?php endif; ?>
+
+<script>
+document.querySelectorAll('select[name="dispensing_type"]').forEach((typeSelect) => {
+    const container = typeSelect.closest('section');
+    const itemSelect = container?.querySelector('.js-visit-inventory-item');
+    if (!itemSelect) return;
+
+    const syncItems = () => {
+        const activeType = typeSelect.value || 'Medicine';
+        let currentVisible = false;
+        Array.from(itemSelect.options).forEach((option) => {
+            const optionType = option.dataset.type || 'Medicine';
+            const visible = option.value === '' || optionType === activeType;
+            option.hidden = !visible;
+            if (option.selected && visible) currentVisible = true;
+        });
+        if (!currentVisible) itemSelect.value = '';
+    };
+
+    typeSelect.addEventListener('change', syncItems);
+    syncItems();
+});
+</script>
 
 <?php render_footer(); exit; ?>
 <?php endif; ?>

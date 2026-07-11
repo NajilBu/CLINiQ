@@ -19,6 +19,7 @@ $db->query("TRUNCATE TABLE referrals;");
 $db->query("TRUNCATE TABLE ape_records;");
 $db->query("TRUNCATE TABLE clinic_visits;");
 $db->query("TRUNCATE TABLE nurse_alerts;");
+$db->query("TRUNCATE TABLE inventory_loans;");
 $db->query("TRUNCATE TABLE inventory_items;");
 $db->query("TRUNCATE TABLE patients;");
 $db->query("SET FOREIGN_KEY_CHECKS = 1;");
@@ -66,19 +67,16 @@ for ($i = 0; $i < 30; $i++) {
 // Generate Inventory
 echo "Seeding Inventory...\n";
 $items = [
-    ['Paracetamol 500mg', 'Analgesic', 500, 'pcs', 100, date('Y-m-d', strtotime('+1 year'))],
-    ['Ibuprofen 200mg', 'Analgesic', 200, 'pcs', 50, date('Y-m-d', strtotime('+8 months'))],
-    ['Amoxicillin 500mg', 'Antibiotic', 150, 'pcs', 50, date('Y-m-d', strtotime('+6 months'))],
-    ['Loperamide 2mg', 'Antidiarrheal', 100, 'pcs', 30, date('Y-m-d', strtotime('+2 years'))],
-    ['Cetirizine 10mg', 'Antihistamine', 50, 'pcs', 20, date('Y-m-d', strtotime('+15 days'))], // Expiring soon
-    ['Mefenamic Acid 500mg', 'Analgesic', 30, 'pcs', 50, date('Y-m-d', strtotime('+1 year'))], // Low stock
-    ['Salbutamol Nebule', 'Bronchodilator', 15, 'pcs', 20, date('Y-m-d', strtotime('+4 months'))], // Low stock
-    ['Band-Aids', 'Supply', 1000, 'pcs', 200, null],
-    ['Gauze Pads', 'Supply', 300, 'pcs', 100, null],
-    ['Povidone Iodine 10% 120ml', 'Antiseptic', 5, 'btl', 10, date('Y-m-d', strtotime('+2 years'))], // Low stock
-    ['Surgical Tape', 'Supply', 20, 'rolls', 15, null],
+    ['Paracetamol 500mg', 'Analgesic', 86, 'tabs', 100, date('Y-m-d', strtotime('+11 months'))], // Low stock
+    ['Cetirizine 10mg', 'Antihistamine', 18, 'tabs', 40, date('Y-m-d', strtotime('+20 days'))], // Low stock, expiring soon
+    ['Oral Rehydration Salts', 'Electrolyte', 24, 'sachets', 30, date('Y-m-d', strtotime('+14 months'))], // Low stock
+    ['Salbutamol Nebule 2.5mg', 'Respiratory', 9, 'nebules', 20, date('Y-m-d', strtotime('+5 months'))], // Low stock
+    ['Ibuprofen 200mg', 'Analgesic', 55, 'tabs', 30, date('Y-m-d', strtotime('+9 months'))],
+    ['Amoxicillin 500mg', 'Antibiotic', 36, 'capsules', 25, date('Y-m-d', strtotime('+7 months'))],
+    ['Digital Thermometer', 'Equipment', 3, 'units', 1, null],
+    ['Pulse Oximeter', 'Equipment', 2, 'units', 1, null],
+    ['Wheelchair', 'Equipment', 1, 'unit', 1, null],
     ['Ice Packs', 'Equipment', 4, 'pcs', 5, null], // Low stock
-    ['Alcohol 70% 500ml', 'Antiseptic', 0, 'btl', 10, date('Y-m-d', strtotime('+1 year'))], // Out of stock
 ];
 
 foreach ($items as $item) {

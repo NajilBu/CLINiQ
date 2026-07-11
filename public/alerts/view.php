@@ -34,6 +34,7 @@ if (!$alert) {
 $patientName = trim(($alert['first_name'] ?? '') . ' ' . ($alert['last_name'] ?? ''));
 $photoUrl = $alert['photo_path'] ? app_url($alert['photo_path']) : '';
 
+set_page_back_link('index.php', 'Alert Queue');
 render_header('Alert Report');
 ?>
 
@@ -70,10 +71,6 @@ render_header('Alert Report');
     </div>
     <div class="flex flex-wrap items-center gap-3">
         <span class="badge <?= e(status_badge_class($alert['status'])) ?>"><?= e($alert['status']) ?></span>
-        <a href="index.php" class="btn btn-ghost text-decoration-none">
-            <span class="material-symbols-outlined text-[18px]">arrow_back</span>
-            Alert Queue
-        </a>
     </div>
 </div>
 

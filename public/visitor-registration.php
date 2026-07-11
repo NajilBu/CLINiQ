@@ -44,6 +44,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors['year_level'] = 'Required';
     }
 
+    if ($form['category'] === 'Student' && !preg_match('/^\d{2}-\d{5}$/', $form['identifier'])) {
+        $errors['identifier'] = 'Use the format 00-00000';
+    }
+
     if (!$errors) {
         [$firstName, $lastName] = split_visitor_name($form['full_name']);
         $courseSection = trim(implode(' - ', array_filter([
@@ -75,10 +79,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'Visitor notes: ' . $form['chief_complaint']
         );
         $risk = classify_patient_risk(['symptoms' => $symptoms]);
+        $riskReasons = risk_reasons_text($risk);
 
         $visitStmt = db()->prepare(
-            'INSERT INTO clinic_visits (patient_id, visit_datetime, chief_complaint, symptoms, risk_level, risk_score, status, visit_purpose, visit_source, action_taken, recorded_by)
-             VALUES (?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, NULL)'
+            'INSERT INTO clinic_visits (patient_id, visit_datetime, chief_complaint, symptoms, risk_level, risk_score, risk_reasons, status, visit_purpose, visit_source, action_taken, recorded_by)
+             VALUES (?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)'
         );
         $visitStmt->execute([
             $patientId,
@@ -86,11 +91,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $symptoms,
             $risk['level'],
             $risk['score'],
+            $riskReasons,
             'Unaddressed',
             normalize_visit_purpose($form['reason']),
             'Self Logbook',
             'Visitor/patient self-registration. Awaiting clinic assessment.',
         ]);
+        escalate_major_risk_visit(db(), (int) db()->lastInsertId(), $patientId, $risk['level'], (int) $risk['score'], $riskReasons);
 
         $success = [
             'name' => $form['full_name'],
@@ -298,7 +305,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <label class="visit-label" for="identifier">Student / Staff ID</label>
                             <div class="visit-field">
                                 <span class="material-symbols-outlined">badge</span>
-                                <input class="visit-input <?= isset($errors['identifier']) ? 'input-error' : '' ?>" id="identifier" name="identifier" value="<?= e($form['identifier']) ?>" placeholder="e.g. 2026-00123" required>
+                                <input class="visit-input <?= isset($errors['identifier']) ? 'input-error' : '' ?>" id="identifier" name="identifier" value="<?= e($form['identifier']) ?>" placeholder="00-00000" data-student-id-format data-student-category-source="category" required>
                             </div>
                         </div>
 
@@ -437,6 +444,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }, 1000);
     <?php endif; ?>
 </script>
-<script src="<?= app_url('assets/js/app.js?v=cancel-icon-1') ?>"></script>
+<script src="<?= app_url('assets/js/app.js?v=student-id-format-1') ?>"></script>
 </body>
 </html>

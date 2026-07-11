@@ -175,6 +175,36 @@ function render_student_auth_header(string $title): void
 function render_student_auth_footer(): void
 {
     ?>
+    <script>
+        function formatStudentId(value) {
+            const digits = String(value || '').replace(/\D/g, '').slice(0, 7);
+            if (digits.length <= 2) {
+                return digits;
+            }
+            return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+        }
+
+        function initStudentIdFormatting(root = document) {
+            const scope = root.querySelectorAll ? root : document;
+            scope.querySelectorAll('[data-student-id-format], #student-id').forEach((input) => {
+                if (!(input instanceof HTMLInputElement) || input.dataset.studentIdFormatterReady === '1') {
+                    return;
+                }
+
+                input.dataset.studentIdFormatterReady = '1';
+                input.inputMode = 'numeric';
+                input.maxLength = 8;
+                input.pattern = '\\d{2}-\\d{5}';
+                input.title = 'Use the format 00-00000.';
+                input.placeholder = input.placeholder || '00-00000';
+                input.addEventListener('input', () => {
+                    input.value = formatStudentId(input.value);
+                });
+            });
+        }
+
+        initStudentIdFormatting();
+    </script>
     </body>
     </html>
     <?php

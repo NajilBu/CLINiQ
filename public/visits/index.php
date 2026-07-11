@@ -7,7 +7,7 @@ ensure_visit_workflow_schema();
 
 $filters = [
     'q' => trim($_GET['q'] ?? ''),
-    'status' => $_GET['status'] ?? 'all',
+    'status' => $_GET['status'] ?? 'Unaddressed',
     'risk' => $_GET['risk'] ?? 'all',
     'purpose' => $_GET['purpose'] ?? 'all',
     'staff' => $_GET['staff'] ?? 'all',
@@ -182,22 +182,25 @@ foreach ($visits as $visit) {
     $openLabel = match ($visitStatus) {
         'Unaddressed' => 'Address',
         'Active' => 'Treat',
-        default => 'View',
+        default => '',
     };
     $actionUrl = app_url('visits/view.php?id=' . (int) $visit['id'] . '&from=logbook' . ($visitStatus === 'Unaddressed' ? '&begin=1' : ''));
-    $actionsHtml = '<div class="flex items-center gap-2">'
-        . '<a href="' . e($actionUrl) . '" class="btn btn-sm btn-ghost text-decoration-none"><span class="material-symbols-outlined text-[14px]">medical_services</span>' . e($openLabel) . '</a>';
+    $actionParts = [];
+    if ($openLabel !== '') {
+        $actionParts[] = '<a href="' . e($actionUrl) . '" class="btn btn-sm btn-ghost text-decoration-none"><span class="material-symbols-outlined text-[14px]">medical_services</span>' . e($openLabel) . '</a>';
+    }
     if ($visitStatus === 'Unaddressed') {
-        $actionsHtml .= '<form method="post" action="' . e(app_url('visits/view.php?id=' . (int) $visit['id'] . '&from=logbook')) . '" style="margin:0;">'
+        $actionParts[] = '<form method="post" action="' . e(app_url('visits/view.php?id=' . (int) $visit['id'] . '&from=logbook')) . '" style="margin:0;">'
             . '<input type="hidden" name="mode" value="no_show">'
             . '<input type="hidden" name="from" value="logbook">'
             . '<input type="hidden" name="return_to" value="index">'
             . '<button class="btn btn-sm btn-ghost btn-cancel-icon" title="Mark no show" aria-label="Mark no show" data-confirm-submit data-confirm-type="danger" data-confirm-title="Mark as no show?" data-confirm-message="This will cancel the unaddressed logbook entry because the patient did not proceed to the nurse station." data-confirm-toast="Marking no show..."><span class="material-symbols-outlined text-[14px]">cancel</span></button>'
             . '</form>';
     }
-    $actionsHtml .= '</div>';
+    $actionsHtml = $actionParts ? '<div class="flex items-center gap-2">' . implode('', $actionParts) . '</div>' : '';
 
     $visitRows[] = [
+        'rowUrl' => $actionUrl,
         'dateTimeHtml' => '<p class="text-sm font-bold text-slate-700 mb-0">' . e(date('M d, Y', strtotime($visit['visit_datetime']))) . '</p><p class="text-xs font-bold text-slate-400 mb-0">' . e(date('g:i A', strtotime($visit['visit_datetime']))) . '</p>',
         'patientHtml' => '<div class="flex items-center gap-3"><div class="avatar ' . e(avatar_color($fullName)) . '">' . e(initials($fullName)) . '</div><div><strong class="text-sm text-slate-800">' . e($fullName) . '</strong><div class="text-xs font-bold text-slate-400">' . e($visit['student_number']) . '</div></div></div>',
         'complaint' => $visit['chief_complaint'],
@@ -227,7 +230,6 @@ render_header('Clinic Visits');
 
 <section class="bg-white rounded-[2rem] border border-outline-variant/20 shadow-sm overflow-hidden">
     <form id="visitFilterForm" method="get">
-        <input type="hidden" name="status" value="<?= e($filters['status']) ?>">
         <div class="p-6 border-b border-slate-100">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
@@ -248,7 +250,7 @@ render_header('Clinic Visits');
 
             <div class="flex items-center gap-2 mt-4 border-t border-slate-100 pt-4 overflow-x-auto scrollbar-hide">
                 <?php
-                $statusTabs = ['all' => 'All Records', 'Unaddressed' => 'Unaddressed', 'Active' => 'Active', 'Completed' => 'Completed', 'Cancelled' => 'Cancelled'];
+                $statusTabs = ['Unaddressed' => 'Unaddressed', 'Active' => 'Active', 'Completed' => 'Completed', 'Cancelled' => 'Cancelled'];
                 foreach ($statusTabs as $key => $label):
                     $isActive = $filters['status'] === $key;
                     $hrefParams = $baseParams;
@@ -297,6 +299,15 @@ render_header('Clinic Visits');
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div>
+                        <label class="clinic-label">Status</label>
+                        <select class="clinic-select" name="status">
+                            <option value="all" <?= $filters['status'] === 'all' ? 'selected' : '' ?>>All Records</option>
+                            <?php foreach (visit_statuses() as $status): ?>
+                                <option value="<?= e($status) ?>" <?= $filters['status'] === $status ? 'selected' : '' ?>><?= e($status) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
                     <div>
                         <label class="clinic-label">Risk Classification</label>
                         <select class="clinic-select" name="risk">

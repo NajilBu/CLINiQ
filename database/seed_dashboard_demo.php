@@ -99,13 +99,15 @@ echo "Patients ready: " . count($patientIds) . "\n";
 
 $inventory = [
     ['Paracetamol 500mg', 'Analgesic', 86, 'tabs', 100, '+11 months'],
-    ['Cetirizine 10mg', 'Antihistamine', 18, 'tabs', 40, '+7 months'],
+    ['Cetirizine 10mg', 'Antihistamine', 18, 'tabs', 40, '+20 days'],
     ['Oral Rehydration Salts', 'Electrolyte', 24, 'sachets', 30, '+14 months'],
     ['Salbutamol Nebule 2.5mg', 'Respiratory', 9, 'nebules', 20, '+5 months'],
-    ['Sterile Gauze Pads 4x4', 'Wound Care', 42, 'packs', 50, null],
-    ['Elastic Bandage 3in', 'Wound Care', 16, 'rolls', 12, null],
-    ['Digital Thermometer Probe Covers', 'Clinic Supply', 75, 'pcs', 60, null],
-    ['Alcohol 70% 500ml', 'Antiseptic', 6, 'bottles', 12, '+18 months'],
+    ['Ibuprofen 200mg', 'Analgesic', 55, 'tabs', 30, '+9 months'],
+    ['Amoxicillin 500mg', 'Antibiotic', 36, 'capsules', 25, '+7 months'],
+    ['Digital Thermometer', 'Equipment', 3, 'units', 1, null],
+    ['Pulse Oximeter', 'Equipment', 2, 'units', 1, null],
+    ['Wheelchair', 'Equipment', 1, 'unit', 1, null],
+    ['Ice Packs', 'Equipment', 4, 'pcs', 5, null],
 ];
 
 $inventoryExists = $db->prepare('SELECT id FROM inventory_items WHERE item_name = ? LIMIT 1');
@@ -119,6 +121,23 @@ foreach ($inventory as [$name, $category, $qty, $unit, $reorder, $expiryOffset])
     } else {
         $inventoryInsert->execute([$name, $category, $qty, $unit, $reorder, $expiry]);
     }
+}
+$legacyInventorySamples = [
+    'Ibuprofen 200mg',
+    'Amoxicillin 500mg',
+    'Loperamide 2mg',
+    'Mefenamic Acid 500mg',
+    'Salbutamol Nebule',
+    'Band-Aids',
+    'Gauze Pads',
+    'Povidone Iodine 10% 120ml',
+    'Surgical Tape',
+    'Elastic Bandage 3in',
+    'Digital Thermometer Probe Covers',
+];
+$deleteLegacyInventory = $db->prepare('DELETE FROM inventory_items WHERE item_name = ? AND archived_at IS NULL');
+foreach ($legacyInventorySamples as $legacyName) {
+    $deleteLegacyInventory->execute([$legacyName]);
 }
 echo "Inventory ready: " . count($inventory) . "\n";
 

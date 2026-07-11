@@ -10,6 +10,14 @@ CREATE TABLE users (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE system_settings (
+  setting_key VARCHAR(120) PRIMARY KEY,
+  setting_value MEDIUMTEXT NOT NULL,
+  updated_by INT NULL,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
 CREATE TABLE patients (
   id INT AUTO_INCREMENT PRIMARY KEY,
   student_number VARCHAR(50) NOT NULL UNIQUE,
@@ -42,6 +50,7 @@ CREATE TABLE clinic_visits (
   pulse_rate INT NULL,
   risk_level ENUM('Low','Moderate','High','Critical') NOT NULL DEFAULT 'Low',
   risk_score INT NOT NULL DEFAULT 0,
+  risk_reasons TEXT NULL,
   status ENUM('Unaddressed','Active','Completed','Cancelled') NOT NULL DEFAULT 'Unaddressed',
   visit_purpose VARCHAR(80) NULL,
   visit_source ENUM('Self Logbook','Staff Recorded','Nurse Emergency') NOT NULL DEFAULT 'Staff Recorded',
@@ -64,6 +73,8 @@ CREATE TABLE visit_treatment_entries (
   referral_type VARCHAR(120) NULL,
   remarks TEXT NULL,
   amendment_reason TEXT NULL,
+  dispensed_inventory_item_id INT NULL,
+  dispensed_quantity INT NULL,
   created_by INT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (visit_id) REFERENCES clinic_visits(id) ON DELETE CASCADE,
@@ -157,6 +168,27 @@ CREATE TABLE inventory_items (
   archived_by INT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE inventory_loans (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  item_id INT NOT NULL,
+  borrower_name VARCHAR(160) NOT NULL,
+  borrower_identifier VARCHAR(80) NULL,
+  borrowed_quantity INT NOT NULL DEFAULT 1,
+  borrowed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  due_at DATETIME NULL,
+  status ENUM('Borrowed','Returned','Lost') NOT NULL DEFAULT 'Borrowed',
+  return_condition ENUM('Good','Defective','Lost') NULL,
+  return_notes TEXT NULL,
+  returned_at DATETIME NULL,
+  borrowed_by INT NULL,
+  returned_by INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (item_id) REFERENCES inventory_items(id) ON DELETE CASCADE,
+  FOREIGN KEY (borrowed_by) REFERENCES users(id) ON DELETE SET NULL,
+  FOREIGN KEY (returned_by) REFERENCES users(id) ON DELETE SET NULL
 );
 
 CREATE TABLE referrals (

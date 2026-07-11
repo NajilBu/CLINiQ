@@ -45,6 +45,14 @@ function initials(string $name): string
     return $initials;
 }
 
+function set_page_back_link(string $url, string $label = 'Back'): void
+{
+    $GLOBALS['cliniq_page_back_link'] = [
+        'url' => $url,
+        'label' => $label,
+    ];
+}
+
 /**
  * Get the CSS class for a risk level badge.
  */
@@ -92,6 +100,7 @@ function status_badge_class(string $status): string
 function render_header(string $title): void
 {
     $user = current_user();
+    $pageBackLink = $GLOBALS['cliniq_page_back_link'] ?? null;
     $currentPath = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
     $activeAlertCount = 0;
     if ($user) {
@@ -110,6 +119,7 @@ function render_header(string $title): void
         'APE' => ['url' => app_url('ape/index.php'), 'match' => '/ape/', 'icon' => 'description'],
         'Referrals' => ['url' => app_url('referrals/index.php'), 'match' => '/referrals/', 'icon' => 'send'],
         'Reports' => ['url' => app_url('reports/index.php'), 'match' => '/reports/', 'icon' => 'analytics'],
+        'Settings' => ['url' => app_url('settings/index.php'), 'match' => '/settings/', 'icon' => 'settings'],
     ];
     ?>
     <!doctype html>
@@ -147,7 +157,7 @@ function render_header(string $title): void
         <link rel="stylesheet" href="<?= app_url('assets/vendor/ag-grid/ag-grid.css?v=31') ?>">
         <link rel="stylesheet" href="<?= app_url('assets/vendor/ag-grid/ag-theme-quartz.css?v=31') ?>">
         <script src="<?= app_url('assets/vendor/ag-grid/ag-grid-community.min.js?v=31') ?>"></script>
-        <link href="<?= app_url('assets/css/app.css?v=table-fit-1') ?>" rel="stylesheet">
+        <link href="<?= app_url('assets/css/app.css?v=page-back-1') ?>" rel="stylesheet">
     </head>
     <body class="bg-surface font-body text-on-surface min-h-screen overflow-x-hidden">
     <?php if ($user): ?>
@@ -186,9 +196,11 @@ function render_header(string $title): void
                         $searchPlaceholder = 'Search APE records...';
                     }
                     ?>
-                    <button class="app-sidebar-toggle" type="button" id="sidebarToggle" aria-label="Collapse sidebar" aria-expanded="true">
-                        <span class="material-symbols-outlined" aria-hidden="true">left_panel_close</span>
-                    </button>
+                    <div class="app-topbar-controls">
+                        <button class="app-sidebar-toggle" type="button" id="sidebarToggle" aria-label="Collapse sidebar" aria-expanded="true">
+                            <span class="material-symbols-outlined" aria-hidden="true">left_panel_close</span>
+                        </button>
+                    </div>
                     <form class="app-search" action="<?= $searchAction ?>" method="get">
                         <span class="material-symbols-outlined">search</span>
                         <input name="q" placeholder="<?= $searchPlaceholder ?>" autocomplete="off" value="<?= isset($_GET['q']) ? e($_GET['q']) : '' ?>">
@@ -209,7 +221,15 @@ function render_header(string $title): void
                     </div>
                 </header>
                 <main class="app-content">
-                    <div class="max-w-7xl mx-auto w-full space-y-6 pb-14">
+                    <div class="max-w-7xl mx-auto w-full space-y-6 pb-14" id="cliniqPageContent" data-cliniq-page-content>
+                        <?php if ($pageBackLink): ?>
+                            <div class="app-page-back-row">
+                                <a href="<?= e($pageBackLink['url']) ?>" class="app-page-back text-decoration-none">
+                                    <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+                                    <span><?= e($pageBackLink['label']) ?></span>
+                                </a>
+                            </div>
+                        <?php endif; ?>
     <?php else: ?>
         <main class="auth-main">
             <div class="auth-wrap">
@@ -228,8 +248,8 @@ function render_footer(): void
         </div>
         <?php endif; ?>
     <?php render_flash_toasts(); ?>
-    <script src="<?= app_url('assets/js/app.js?v=cancel-icon-1') ?>"></script>
-    <script src="<?= app_url('assets/js/ag-grid-tables.js?v=4') ?>"></script>
+    <script src="<?= app_url('assets/js/app.js?v=student-id-format-1') ?>"></script>
+    <script src="<?= app_url('assets/js/ag-grid-tables.js?v=6') ?>"></script>
     </body>
     </html>
     <?php

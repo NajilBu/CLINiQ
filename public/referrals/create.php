@@ -21,6 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
+set_page_back_link('index.php', 'Back');
 render_header('New Referral');
 ?>
 <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
@@ -28,9 +29,6 @@ render_header('New Referral');
         <h1 class="font-headline text-3xl md:text-4xl font-extrabold text-[#1c2a59]">New Referral</h1>
         <p class="text-sm font-bold text-slate-500 mt-1">Refer a patient to an external facility or specialist.</p>
     </div>
-    <a class="btn btn-ghost text-decoration-none" href="index.php">
-        <span class="material-symbols-outlined text-[18px]">arrow_back</span> Back
-    </a>
 </div>
 
 <form class="clinic-card p-6 md:p-8" method="post">

@@ -69,7 +69,7 @@ function ape_next_action(array $record): array
             ? ['label' => 'Wait for Student Upload', 'icon' => 'upload_file']
             : ['label' => 'Archive Submission', 'icon' => 'inventory_2'],
         'follow_up' => ['label' => 'Update Follow-up', 'icon' => 'medical_information'],
-        'completed' => ['label' => 'View Record', 'icon' => 'visibility'],
+        'completed' => ['label' => 'Completed', 'icon' => 'check_circle'],
         default => ['label' => 'Review Record', 'icon' => 'visibility'],
     };
 }

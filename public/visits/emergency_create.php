@@ -59,6 +59,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
 
+        if ($category === 'Student' && !preg_match('/^\d{2}-\d{5}$/', $identifier)) {
+            flash_message('error', 'Student ID must use the format 00-00000.');
+            header('Location: emergency_create.php');
+            exit;
+        }
+
         $existing = db()->prepare('SELECT id FROM patients WHERE student_number = ? LIMIT 1');
         $existing->execute([$identifier]);
         $patientId = (int) $existing->fetchColumn();
@@ -78,6 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $risk = classify_patient_risk($_POST);
+    $riskReasons = risk_reasons_text($risk);
     $management = trim($_POST['management_treatment'] ?? '');
     $referralType = trim($_POST['referral_type'] ?? '');
     if ($referralType === 'None') {
@@ -85,8 +92,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $visitStmt = db()->prepare(
-        'INSERT INTO clinic_visits (patient_id, visit_datetime, chief_complaint, symptoms, temperature, blood_pressure, pulse_rate, risk_level, risk_score, status, visit_purpose, visit_source, action_taken, recorded_by, attended_by)
-         VALUES (?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        'INSERT INTO clinic_visits (patient_id, visit_datetime, chief_complaint, symptoms, temperature, blood_pressure, pulse_rate, risk_level, risk_score, risk_reasons, status, visit_purpose, visit_source, action_taken, recorded_by, attended_by)
+         VALUES (?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
     $visitStmt->execute([
         $patientId,
@@ -97,6 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_POST['pulse_rate'] ?: null,
         $risk['level'],
         $risk['score'],
+        $riskReasons,
         normalize_visit_status($_POST['status'] ?? 'Active', 'Active'),
         'Emergency',
         'Nurse Emergency',
@@ -105,6 +113,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $user['id'],
     ]);
     $visitId = (int) db()->lastInsertId();
+    escalate_major_risk_visit(db(), $visitId, $patientId, $risk['level'], (int) $risk['score'], $riskReasons);
 
     $entry = [
         'symptoms_note' => trim($_POST['symptoms'] ?? ''),
@@ -135,6 +144,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
+set_page_back_link('index.php', 'Logbook');
 render_header('Emergency Visit');
 ?>
 
@@ -144,9 +154,6 @@ render_header('Emergency Visit');
         <h1 class="font-headline text-3xl md:text-4xl font-extrabold text-[#1c2a59]">Record Emergency Visit</h1>
         <p class="text-sm font-bold text-slate-500 mt-1">Use this when the patient cannot complete the public logbook process.</p>
     </div>
-    <a class="btn btn-ghost text-decoration-none" href="index.php">
-        <span class="material-symbols-outlined text-[18px]">arrow_back</span> Back to Logbook
-    </a>
 </div>
 
 <section class="clinic-card p-6 md:p-8">
@@ -184,11 +191,11 @@ render_header('Emergency Visit');
                 </div>
                 <div>
                     <label class="clinic-label">Student / Staff ID</label>
-                    <input class="clinic-input" name="identifier" value="<?= e($search) ?>" placeholder="Required for new emergency patient">
+                    <input class="clinic-input" name="identifier" value="<?= e($search) ?>" placeholder="00-00000" data-student-id-format data-student-category-source="emergencyPatientCategory">
                 </div>
                 <div>
                     <label class="clinic-label">Category</label>
-                    <select class="clinic-select" name="category">
+                    <select class="clinic-select" name="category" id="emergencyPatientCategory">
                         <?php foreach (['Student', 'Staff', 'Faculty', 'Guest'] as $category): ?>
                             <option value="<?= e($category) ?>"><?= e($category) ?></option>
                         <?php endforeach; ?>
@@ -221,15 +228,15 @@ render_header('Emergency Visit');
                 </div>
                 <div>
                     <label class="clinic-label">Temperature (C)</label>
-                    <input class="clinic-input" name="temperature" type="number" step="0.1" placeholder="e.g. 37.5">
+                    <input class="clinic-input" name="temperature" type="number" step="0.1" placeholder="0">
                 </div>
                 <div>
                     <label class="clinic-label">Blood Pressure</label>
-                    <input class="clinic-input" name="blood_pressure" placeholder="e.g. 120/80">
+                    <input class="clinic-input" name="blood_pressure" placeholder="0">
                 </div>
                 <div>
                     <label class="clinic-label">Pulse Rate (bpm)</label>
-                    <input class="clinic-input" name="pulse_rate" type="number" placeholder="e.g. 72">
+                    <input class="clinic-input" name="pulse_rate" type="number" placeholder="0">
                 </div>
                 <div>
                     <label class="clinic-label">Referral</label>

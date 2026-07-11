@@ -105,6 +105,7 @@ foreach ($visitorLogs as $visit) {
     if ($visit['risk_level'] === 'Critical')
         $riskClass = 'badge-high animate-pulse';
     $visitorRows[] = [
+        'rowUrl' => app_url('visits/view.php?id=' . (int) $visit['id'] . '&from=dashboard'),
         'time' => date('h:i A', strtotime($visit['visit_datetime'])),
         'patientHtml' => '<div class="font-bold text-slate-800 text-sm">' . e($fullName) . '</div><div class="text-[10px] text-slate-400">' . e($visit['student_number']) . '</div>',
         'complaint' => $visit['chief_complaint'],
@@ -125,6 +126,7 @@ foreach ($apeQueue as $rec) {
     $queue = $dashboardQueues[$queueKey];
     $next = ape_next_action($rec);
     $dashboardApeRows[] = [
+        'rowUrl' => app_url('ape/view.php?id=' . (int) $rec['id']),
         'studentHtml' => '<div class="flex items-center gap-3"><div class="avatar ' . e(avatar_color($fullName)) . '">' . e(initials($fullName)) . '</div><div><strong class="text-sm text-slate-800">' . e($fullName) . '</strong><div class="text-[10px] font-bold text-slate-400">' . e($rec['student_number']) . '</div></div></div>',
         'queueHtml' => '<span class="badge ' . ($queueKey === 'follow_up' ? 'badge-high' : 'badge-in-progress') . '">' . e($queue['short_title'] ?? $queue['title']) . '</span>',
         'missing' => ape_missing_item($rec),

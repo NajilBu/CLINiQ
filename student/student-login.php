@@ -38,7 +38,7 @@ render_student_auth_header('Student Login');
             <form onsubmit="handleLogin(event)">
                 <div class="student-field">
                     <label class="student-label" for="student-id">Student ID</label>
-                    <input type="text" id="student-id" class="student-input" placeholder="23-00456" autocomplete="username" required>
+                    <input type="text" id="student-id" class="student-input" placeholder="00-00000" autocomplete="username" data-student-id-format required>
                 </div>
 
                 <div class="student-field">

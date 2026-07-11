@@ -78,6 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
+set_page_back_link('index.php', 'Back');
 render_header('Add APE Record');
 ?>
 <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
@@ -85,9 +86,6 @@ render_header('Add APE Record');
         <h1 class="font-headline text-3xl md:text-4xl font-extrabold text-[#1c2a59]">Add APE Record</h1>
         <p class="text-sm font-bold text-slate-500 mt-1">Create a staff-managed APE workflow entry and attach digital documents.</p>
     </div>
-    <a class="btn btn-ghost text-decoration-none" href="index.php">
-        <span class="material-symbols-outlined text-[18px]">arrow_back</span> Back
-    </a>
 </div>
 
 <form class="clinic-card p-6 md:p-8" method="post" enctype="multipart/form-data">

@@ -141,6 +141,7 @@ $sexLabel = $record['sex'] ?: 'Not specified';
 $documentUrl = !empty($record['document_path']) ? app_url($record['document_path']) : null;
 $clearanceUrl = !empty($record['clearance_document_path']) ? app_url($record['clearance_document_path']) : null;
 
+set_page_back_link('index.php', 'Queues');
 render_header('APE Record - ' . $fullName);
 ?>
 
@@ -215,9 +216,6 @@ render_header('APE Record - ' . $fullName);
                 <span class="badge <?= ape_priority_badge($record)['class'] ?>"><?= e(ape_waiting_label($record)) ?></span>
                 <a class="btn btn-ghost text-decoration-none" href="<?= app_url('patients/view.php?id=' . (int)$record['patient_id']) ?>">
                     <span class="material-symbols-outlined text-[18px]">folder_shared</span> Patient
-                </a>
-                <a class="btn btn-ghost text-decoration-none" href="index.php">
-                    <span class="material-symbols-outlined text-[18px]">arrow_back</span> Queues
                 </a>
             </div>
         </div>

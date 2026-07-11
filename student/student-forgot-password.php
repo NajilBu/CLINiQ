@@ -38,7 +38,7 @@ render_student_auth_header('Recover Password');
             <form onsubmit="handleRecover(event)">
                 <div class="student-field">
                     <label class="student-label" for="student-id">Student ID</label>
-                    <input id="student-id" class="student-input" type="text" placeholder="23-00456" autocomplete="username" required>
+                    <input id="student-id" class="student-input" type="text" placeholder="00-00000" autocomplete="username" data-student-id-format required>
                 </div>
 
                 <div class="student-field">

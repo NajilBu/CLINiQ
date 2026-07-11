@@ -50,7 +50,7 @@ render_student_auth_header('Student Registration');
                     </div>
                     <div class="student-field student-span-6">
                         <label class="student-label" for="student-id">Student ID</label>
-                        <input id="student-id" class="student-input" type="text" placeholder="23-00456" required>
+                        <input id="student-id" class="student-input" type="text" placeholder="00-00000" data-student-id-format required>
                     </div>
                     <div class="student-field student-span-6">
                         <label class="student-label" for="course">Course and Year</label>
