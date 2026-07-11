@@ -5,18 +5,44 @@ require_once __DIR__ . '/includes/student-layout.php';
 
 ensure_appointment_schema();
 
+$profile = student_require_login();
+$patientId = (int) $profile['patient_id'];
 $db = db();
-$db->exec("INSERT IGNORE INTO patients (id, student_number, first_name, last_name, emergency_token) VALUES (1, '23-00456', 'Juan', 'dela Cruz', 'dummy-token-123')");
 
 $appointmentStmt = $db->prepare("
     SELECT *
     FROM appointments
-    WHERE patient_id = 1
+    WHERE patient_id = ?
     ORDER BY appointment_datetime DESC, created_at DESC
     LIMIT 1
 ");
-$appointmentStmt->execute();
+$appointmentStmt->execute([$patientId]);
 $latestAppointment = $appointmentStmt->fetch();
+
+$apeStmt = $db->prepare("
+    SELECT *
+    FROM ape_records
+    WHERE patient_id = ?
+    ORDER BY updated_at DESC, created_at DESC
+    LIMIT 1
+");
+$apeStmt->execute([$patientId]);
+$latestApe = $apeStmt->fetch();
+$apeStatus = $latestApe['workflow_status'] ?? 'Not Started';
+$apePercent = match ($apeStatus) {
+    'Registered' => 20,
+    'Batch Assigned', 'Requirements Checked' => 40,
+    'Submitted', 'Reviewed' => 60,
+    'Scheduled', 'Exam Done', 'Follow-up Required' => 80,
+    'Cleared' => 100,
+    default => 0,
+};
+$apeBadgeClass = match ($latestApe['clearance_status'] ?? '') {
+    'Cleared' => 'student-badge-success',
+    'For Follow-up' => 'student-badge-warning',
+    default => $latestApe ? 'student-badge-info' : 'student-badge-warning',
+};
+$apeNote = $latestApe['student_visible_note'] ?? 'Start your APE record with the clinic.';
 
 $appointmentStatus = $latestAppointment['status'] ?? 'No Request';
 $appointmentBadgeClass = match ($appointmentStatus) {
@@ -26,15 +52,13 @@ $appointmentBadgeClass = match ($appointmentStatus) {
     default => 'student-badge-info',
 };
 
-$profile = student_demo_profile();
-
 render_student_header('Dashboard', 'dashboard');
 ?>
 
 <section class="student-page-header">
     <div>
         <p class="student-eyebrow">Student Health Portal</p>
-        <h1 class="student-title">Welcome back, Juan</h1>
+        <h1 class="student-title">Welcome back, <?= student_e($profile['first_name']) ?></h1>
         <p class="student-subtitle">Track your APE requirements, clinic notes, and appointment requests in one place.</p>
     </div>
     <span class="student-badge student-badge-success">
@@ -49,8 +73,8 @@ render_student_header('Dashboard', 'dashboard');
             <span class="material-symbols-outlined">upload_file</span>
         </span>
         <div>
-            <h2>Next action: Upload missing APE documents</h2>
-            <p>Submit your UHS Medical Record, UHS Dental Record, and Referral Form so the clinic can continue review.</p>
+            <h2>Next action: Continue your APE clearance</h2>
+            <p><?= student_e($apeNote) ?></p>
         </div>
     </div>
     <a href="student-ape-status.php" class="student-button text-decoration-none">
@@ -97,32 +121,32 @@ render_student_header('Dashboard', 'dashboard');
                 <h2 class="student-card-title">APE Progress</h2>
                 <p class="student-card-copy">Your current clearance path</p>
             </div>
-            <span class="student-badge student-badge-warning">In Progress</span>
+            <span class="student-badge <?= student_e($apeBadgeClass) ?>"><?= student_e($apeStatus) ?></span>
         </div>
         <div class="student-card-pad">
             <div class="flex items-end justify-between mb-3">
                 <span class="text-xs font-black text-slate-500 uppercase tracking-wider">Completion</span>
-                <strong class="font-headline text-3xl font-black text-[#17261d]">40%</strong>
+                <strong class="font-headline text-3xl font-black text-[#17261d]"><?= (int) $apePercent ?>%</strong>
             </div>
             <div class="w-full h-3 rounded-full bg-[#edf8f0] overflow-hidden mb-4">
-                <div class="h-full bg-[#3F7D52] rounded-full" style="width: 40%;"></div>
+                <div class="h-full bg-[#3F7D52] rounded-full" style="width: <?= (int) $apePercent ?>%;"></div>
             </div>
             <div class="student-progress-list">
                 <div class="student-progress-step">
                     <span class="student-progress-step-icon material-symbols-outlined">fact_check</span>
                     <div>
-                        <strong>Hard-copy check</strong>
-                        <span>Clinic reviewed initial papers</span>
+                        <strong><?= student_e($latestApe['document_type'] ?? 'APE Form') ?></strong>
+                        <span><?= student_e($latestApe['clinical_remarks'] ?? 'No clinic remarks yet.') ?></span>
                     </div>
-                    <span class="student-badge student-badge-success">Done</span>
+                    <span class="student-badge <?= student_e($apeBadgeClass) ?>"><?= student_e($latestApe['clearance_status'] ?? 'Pending') ?></span>
                 </div>
                 <div class="student-progress-step">
                     <span class="student-progress-step-icon material-symbols-outlined">cloud_upload</span>
                     <div>
-                        <strong>Digital submission</strong>
-                        <span>Three documents still missing</span>
+                        <strong>Required action</strong>
+                        <span><?= student_e($latestApe['missing_items'] ?? 'No missing items recorded.') ?></span>
                     </div>
-                    <span class="student-badge student-badge-warning">Action</span>
+                    <span class="student-badge <?= student_e($apeBadgeClass) ?>"><?= student_e($latestApe['verification_status'] ?? 'Pending') ?></span>
                 </div>
             </div>
         </div>

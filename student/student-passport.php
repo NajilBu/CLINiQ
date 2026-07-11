@@ -1,32 +1,30 @@
 <?php
 require_once __DIR__ . '/includes/student-layout.php';
 
-$profile = student_demo_profile();
+$profile = student_require_login();
+$patientId = (int) $profile['patient_id'];
 
-// Demo passport data (in production, this would come from the database)
 $passport = [
-    'name'            => 'Juan dela Cruz',
-    'student_id'      => '23-00456',
-    'dob'             => 'March 15, 2002',
-    'sex'             => 'Male',
-    'blood_type'      => 'O+',
-    'allergies'       => 'Penicillin, Sulfonamides, Shellfish',
-    'conditions'      => 'Asthma (mild, intermittent)' . "\n" . 'Iron-deficiency anaemia',
-    'medications'     => 'Salbutamol inhaler (as needed)',
-    'instructions'    => "Do NOT administer penicillin or any sulfa-based antibiotics.\nPatient uses a Salbutamol inhaler &mdash; check bag first.\nIf unconscious, place in recovery position and call guardian immediately.",
-    'guardian_name'   => 'Elena R. dela Cruz',
-    'relationship'    => 'Mother',
-    'primary_contact' => '+63 917 555 0192',
-    'secondary_contact' => '+63 998 123 4567',
-    'last_updated'    => 'July 10, 2026',
-    'token'           => 'demo-token-abc123',
+    'name'            => $profile['name'],
+    'student_id'      => $profile['student_id'],
+    'dob'             => $profile['birthdate'] ? date('F j, Y', strtotime($profile['birthdate'])) : 'Not recorded',
+    'sex'             => $profile['sex'] ?: 'Not specified',
+    'blood_type'      => $profile['blood_type'] ?: 'Unknown',
+    'allergies'       => $profile['allergies'] ?: 'None',
+    'conditions'      => $profile['existing_conditions'] ?: 'None reported.',
+    'medications'     => 'No current medications recorded.',
+    'instructions'    => $profile['emergency_instructions'] ?: "If unconscious, place in recovery position and notify the clinic immediately.",
+    'guardian_name'   => $profile['guardian_name'] ?: 'Not recorded',
+    'relationship'    => 'Guardian',
+    'primary_contact' => $profile['guardian_contact'] ?: 'Not recorded',
+    'secondary_contact' => '',
+    'last_updated'    => $profile['updated_at'] ? date('F j, Y', strtotime($profile['updated_at'])) : date('F j, Y'),
+    'token'           => $profile['emergency_token'] ?: 'not-generated',
 ];
 
 $saved = false;
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // In production: validate and save to DB
     $saved = true;
-    // Update demo values from POST for preview
     $passport['blood_type']       = trim($_POST['blood_type'] ?? $passport['blood_type']);
     $passport['allergies']        = trim($_POST['allergies'] ?? $passport['allergies']);
     $passport['conditions']       = trim($_POST['conditions'] ?? $passport['conditions']);
@@ -36,6 +34,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $passport['relationship']     = trim($_POST['relationship'] ?? $passport['relationship']);
     $passport['primary_contact']  = trim($_POST['primary_contact'] ?? $passport['primary_contact']);
     $passport['secondary_contact']= trim($_POST['secondary_contact'] ?? $passport['secondary_contact']);
+
+    $stmt = db()->prepare("
+        UPDATE patients
+        SET blood_type = ?, allergies = ?, existing_conditions = ?, emergency_instructions = ?,
+            guardian_name = ?, guardian_contact = ?
+        WHERE id = ?
+    ");
+    $stmt->execute([
+        $passport['blood_type'],
+        $passport['allergies'],
+        $passport['conditions'],
+        $passport['instructions'],
+        $passport['guardian_name'],
+        $passport['primary_contact'],
+        $patientId,
+    ]);
+    $passport['last_updated'] = date('F j, Y');
 }
 
 render_student_header('Emergency Health Passport', 'passport');

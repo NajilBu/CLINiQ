@@ -1,6 +1,16 @@
 <?php
 
+require_once __DIR__ . '/../../app/config/database.php';
 require_once __DIR__ . '/../../app/helpers/brand.php';
+
+const STUDENT_DEMO_PASSWORD = 'student123';
+
+function student_start_session(): void
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        session_start();
+    }
+}
 
 function student_e(?string $value): string
 {
@@ -33,19 +43,108 @@ function student_nav_items(): array
     ];
 }
 
+function student_profile_from_patient(array $patient): array
+{
+    $fullName = trim(implode(' ', array_filter([
+        $patient['first_name'] ?? '',
+        $patient['middle_name'] ?? '',
+        $patient['last_name'] ?? '',
+    ])));
+    $studentId = (string) ($patient['student_number'] ?? '');
+    $emailId = strtolower(str_replace('-', '', $studentId));
+
+    return [
+        'patient_id' => (int) ($patient['id'] ?? 0),
+        'name' => $fullName !== '' ? $fullName : 'Student',
+        'first_name' => (string) ($patient['first_name'] ?? 'Student'),
+        'student_id' => $studentId,
+        'course' => (string) ($patient['course_section'] ?? 'Not recorded'),
+        'email' => ($emailId !== '' ? $emailId : 'student') . '@plpasig.edu.ph',
+        'birthdate' => $patient['birthdate'] ?? null,
+        'sex' => $patient['sex'] ?? null,
+        'blood_type' => $patient['blood_type'] ?? null,
+        'allergies' => $patient['allergies'] ?? null,
+        'existing_conditions' => $patient['existing_conditions'] ?? null,
+        'emergency_instructions' => $patient['emergency_instructions'] ?? null,
+        'guardian_name' => $patient['guardian_name'] ?? null,
+        'guardian_contact' => $patient['guardian_contact'] ?? null,
+        'emergency_token' => $patient['emergency_token'] ?? null,
+        'updated_at' => $patient['updated_at'] ?? null,
+    ];
+}
+
+function student_current_profile(): ?array
+{
+    student_start_session();
+
+    $patientId = (int) ($_SESSION['student_patient_id'] ?? 0);
+    if ($patientId <= 0) {
+        return null;
+    }
+
+    static $profile = null;
+    if (is_array($profile) && (int) ($profile['patient_id'] ?? 0) === $patientId) {
+        return $profile;
+    }
+
+    $stmt = db()->prepare('SELECT * FROM patients WHERE id = ? LIMIT 1');
+    $stmt->execute([$patientId]);
+    $patient = $stmt->fetch();
+    if (!$patient) {
+        unset($_SESSION['student_patient_id']);
+        return null;
+    }
+
+    $profile = student_profile_from_patient($patient);
+    return $profile;
+}
+
 function student_demo_profile(): array
 {
-    return [
-        'name' => 'Juan dela Cruz',
-        'student_id' => '23-00456',
-        'course' => 'BSIT - 3rd Year',
-        'email' => 'juandelacruz@plpasig.edu.ph',
+    return student_current_profile() ?? [
+        'patient_id' => 0,
+        'name' => 'Sofia L. Bautista',
+        'first_name' => 'Sofia',
+        'student_id' => '26-01024',
+        'course' => 'BS Psychology 1-2',
+        'email' => '2601024@plpasig.edu.ph',
     ];
+}
+
+function student_require_login(): array
+{
+    $profile = student_current_profile();
+    if ($profile === null) {
+        header('Location: student-login.php');
+        exit;
+    }
+
+    return $profile;
+}
+
+function student_logout(): void
+{
+    student_start_session();
+    $_SESSION = [];
+    if (ini_get('session.use_cookies')) {
+        $params = session_get_cookie_params();
+        setcookie(session_name(), '', time() - 42000, $params['path'], $params['domain'], (bool) $params['secure'], (bool) $params['httponly']);
+    }
+    session_destroy();
+}
+
+function student_find_patient_by_number(string $studentNumber): ?array
+{
+    $stmt = db()->prepare('SELECT * FROM patients WHERE student_number = ? LIMIT 1');
+    $stmt->execute([$studentNumber]);
+    $patient = $stmt->fetch();
+
+    return $patient ?: null;
 }
 
 function render_student_header(string $title, string $active = ''): void
 {
-    $profile = student_demo_profile();
+    $profile = student_require_login();
     $navItems = student_nav_items();
     ?>
     <!DOCTYPE html>
@@ -111,7 +210,7 @@ function render_student_header(string $title, string $active = ''): void
                         <strong><?= student_e($profile['name']) ?></strong>
                         <span><?= student_e($profile['student_id']) ?></span>
                     </div>
-                    <a href="student-login.php" onclick="localStorage.clear();" class="student-logout text-decoration-none" title="Logout">
+                    <a href="student-login.php?logout=1" onclick="localStorage.clear();" class="student-logout text-decoration-none" title="Logout">
                         <span class="material-symbols-outlined">logout</span>
                     </a>
                 </div>
@@ -126,11 +225,6 @@ function render_student_footer(): void
     ?>
             </main>
         </div>
-        <script>
-            if (!document.body.classList.contains('student-auth-page') && localStorage.getItem('student_logged_in') !== 'true') {
-                window.location.href = 'student-login.php';
-            }
-        </script>
     </body>
     </html>
     <?php
