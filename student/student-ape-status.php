@@ -1,6 +1,33 @@
 <?php
 require_once __DIR__ . '/includes/student-layout.php';
 
+$profile = student_require_login();
+$patientId = (int) $profile['patient_id'];
+
+$apeStmt = db()->prepare("
+    SELECT *
+    FROM ape_records
+    WHERE patient_id = ?
+    ORDER BY updated_at DESC, created_at DESC
+    LIMIT 1
+");
+$apeStmt->execute([$patientId]);
+$apeRecord = $apeStmt->fetch();
+$apeStatus = $apeRecord['workflow_status'] ?? 'Not Started';
+$clearanceStatus = $apeRecord['clearance_status'] ?? 'Pending';
+$studentNote = $apeRecord['student_visible_note'] ?? 'No APE record has been opened by the clinic yet.';
+$missingItems = trim((string) ($apeRecord['missing_items'] ?? ''));
+$actionNeeded = $clearanceStatus !== 'Cleared' && $apeStatus !== 'Not Started';
+$apePercent = match ($apeStatus) {
+    'Registered' => 20,
+    'Batch Assigned', 'Requirements Checked' => 40,
+    'Submitted', 'Reviewed' => 60,
+    'Scheduled', 'Exam Done', 'Follow-up Required' => 80,
+    'Cleared' => 100,
+    default => 0,
+};
+$headerBadge = $clearanceStatus === 'Cleared' ? 'student-badge-success' : ($actionNeeded ? 'student-badge-warning' : 'student-badge-info');
+
 $documents = [
     [
         'name' => 'Lab Request Form',
@@ -58,9 +85,9 @@ render_student_header('APE Status', 'ape');
         <h1 class="student-title">APE Status</h1>
         <p class="student-subtitle">Complete the documents requested by the clinic and monitor your clearance status.</p>
     </div>
-    <span class="student-badge student-badge-warning">
+    <span class="student-badge <?= student_e($headerBadge) ?>">
         <span class="material-symbols-outlined text-[14px]">pending_actions</span>
-        Action Needed
+        <?= student_e($clearanceStatus) ?>
     </span>
 </section>
 
@@ -70,8 +97,8 @@ render_student_header('APE Status', 'ape');
             <span class="material-symbols-outlined">cloud_upload</span>
         </span>
         <div>
-            <h2>Next action: Upload missing checked documents</h2>
-            <p>The clinic already checked your hard-copy requirements. Upload the missing forms so your record can be digitized.</p>
+            <h2>Next action: <?= $clearanceStatus === 'Cleared' ? 'APE completed' : 'Continue your APE clearance' ?></h2>
+            <p><?= student_e($studentNote) ?></p>
         </div>
     </div>
     <button class="student-button" type="button" onclick="triggerUpload('Missing APE documents')">
@@ -89,9 +116,16 @@ render_student_header('APE Status', 'ape');
                 <h2 class="student-card-title">APE Flow</h2>
                 <p class="student-card-copy">What happens to your record</p>
             </div>
-            <span class="student-badge student-badge-info">Step 2 of 5</span>
+            <span class="student-badge <?= student_e($headerBadge) ?>"><?= student_e($apeStatus) ?></span>
         </div>
         <div class="student-card-pad">
+            <div class="flex items-end justify-between mb-4">
+                <span class="text-xs font-black text-slate-500 uppercase tracking-wider">Completion</span>
+                <strong class="font-headline text-3xl font-black text-[#17261d]"><?= (int) $apePercent ?>%</strong>
+            </div>
+            <div class="w-full h-3 rounded-full bg-[#edf8f0] overflow-hidden mb-5">
+                <div class="h-full bg-[#3F7D52] rounded-full" style="width: <?= (int) $apePercent ?>%;"></div>
+            </div>
             <div class="student-progress-list">
                 <div class="student-progress-step">
                     <span class="student-progress-step-icon material-symbols-outlined">fact_check</span>
@@ -143,9 +177,15 @@ render_student_header('APE Status', 'ape');
                 <h2 class="student-card-title">Required Documents</h2>
                 <p class="student-card-copy">Upload only documents already checked by the clinic.</p>
             </div>
-            <span class="student-badge student-badge-warning">3 Missing</span>
+            <span class="student-badge <?= student_e($headerBadge) ?>"><?= student_e($clearanceStatus) ?></span>
         </div>
         <div class="student-card-pad">
+            <?php if ($missingItems !== ''): ?>
+                <div class="student-note student-note-warning mb-4">
+                    <span class="material-symbols-outlined">info</span>
+                    <div><strong>Clinic note:</strong> <?= student_e($missingItems) ?></div>
+                </div>
+            <?php endif; ?>
             <div class="student-document-list">
                 <?php foreach ($documents as $doc): ?>
                     <div class="student-document-card">
@@ -176,14 +216,14 @@ render_student_header('APE Status', 'ape');
             <h2 class="student-card-title">Clinic Findings and Follow-Up</h2>
             <p class="student-card-copy">This appears when clinic staff marks something that needs attention.</p>
         </div>
-        <span class="student-badge student-badge-info">No Active Treatment</span>
+        <span class="student-badge <?= student_e($headerBadge) ?>"><?= student_e($apeRecord['result_status'] ?? 'No Active Treatment') ?></span>
     </div>
     <div class="student-card-pad">
-        <div class="student-note student-note-warning">
+        <div class="student-note <?= $clearanceStatus === 'Cleared' ? 'student-note-success' : 'student-note-warning' ?>">
             <span class="material-symbols-outlined">info</span>
             <div>
-                <strong>Referral Form may be required later.</strong>
-                If the clinic records a finding, upload treatment proof or clearance here before your APE can be completed.
+                <strong><?= student_e($apeRecord['clinical_remarks'] ?? 'No active finding recorded.') ?></strong>
+                <?= student_e($apeRecord['result_notes'] ?? 'If the clinic records a finding, upload treatment proof or clearance here before your APE can be completed.') ?>
             </div>
         </div>
     </div>

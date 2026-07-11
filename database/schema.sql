@@ -223,10 +223,114 @@ CREATE TABLE appointments (
   FOREIGN KEY (patient_id) REFERENCES patients(id)
 );
 
-INSERT INTO users (name, email, password_hash, role)
-VALUES (
-  'System Administrator',
-  'admin@cliniq.local',
-  '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
-  'admin'
-);
+INSERT INTO users (id, name, email, password_hash, role)
+VALUES
+(1, 'System Administrator', 'admin@cliniq.local', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'admin');
+
+-- Demo / dummy data for fresh local installs.
+-- Student numbers follow the CLINiQ format: 00-00000.
+-- Student portal demo login: use any seeded student_number with password student123.
+-- Example fresh-install account: 26-01024 / student123.
+INSERT INTO patients (
+  id, student_number, first_name, middle_name, last_name, birthdate, sex, course_section,
+  blood_type, allergies, existing_conditions, guardian_name, guardian_contact, emergency_token
+) VALUES
+(1, '26-01024', 'Sofia', 'L.', 'Bautista', DATE_SUB(CURDATE(), INTERVAL 18 YEAR), 'Female', 'BS Psychology 1-2', 'O+', 'None', 'None reported.', 'Lorna Bautista', '0917-204-1188', SHA2('cliniq-demo-26-01024', 256)),
+(2, '26-01041', 'Rhea', 'C.', 'Ilagan', DATE_SUB(CURDATE(), INTERVAL 18 YEAR), 'Female', 'BS Nursing 1-1', 'A+', 'Penicillin', 'None reported.', 'Marites Ilagan', '0918-337-9021', SHA2('cliniq-demo-26-01041', 256)),
+(3, '26-01058', 'Marco', 'T.', 'Villanueva', DATE_SUB(CURDATE(), INTERVAL 18 YEAR), 'Male', 'BSIT 1-3', 'B+', 'Dust mites', 'History of mild asthma; carries rescue inhaler.', 'Ramon Villanueva', '0920-818-4432', SHA2('cliniq-demo-26-01058', 256)),
+(4, '26-01073', 'Chloe', 'V.', 'Mendoza', DATE_SUB(CURDATE(), INTERVAL 18 YEAR), 'Female', 'BS Biology 1-1', 'AB+', 'None', 'None reported.', 'Carina Mendoza', '0916-552-0114', SHA2('cliniq-demo-26-01073', 256)),
+(5, '26-01089', 'Daniel', 'P.', 'Reyes', DATE_SUB(CURDATE(), INTERVAL 18 YEAR), 'Male', 'BSEd English 1-2', 'O-', 'Seafood', 'Previous allergic reaction to seafood.', 'Paolo Reyes', '0919-214-7710', SHA2('cliniq-demo-26-01089', 256)),
+(6, '26-01102', 'Jessa', 'M.', 'Ocampo', DATE_SUB(CURDATE(), INTERVAL 18 YEAR), 'Female', 'BSBA Marketing 1-4', 'A-', 'None', 'None reported.', 'Joy Ocampo', '0995-310-2248', SHA2('cliniq-demo-26-01102', 256)),
+(7, '26-01119', 'Kevin', 'R.', 'Navarro', DATE_SUB(CURDATE(), INTERVAL 18 YEAR), 'Male', 'BS Criminology 1-1', 'B-', 'None', 'None reported.', 'Katrina Navarro', '0917-998-6612', SHA2('cliniq-demo-26-01119', 256)),
+(8, '26-01136', 'Alyssa', 'D.', 'Santos', DATE_SUB(CURDATE(), INTERVAL 18 YEAR), 'Female', 'BSCS 1-2', 'O+', 'Latex', 'None reported.', 'Diana Santos', '0927-430-1195', SHA2('cliniq-demo-26-01136', 256)),
+(9, '26-01155', 'Miguel', 'A.', 'Flores', DATE_SUB(CURDATE(), INTERVAL 18 YEAR), 'Male', 'BS Accountancy 1-1', 'A+', 'None', 'None reported.', 'Anton Flores', '0918-781-4403', SHA2('cliniq-demo-26-01155', 256)),
+(10, '26-01178', 'Bianca', 'R.', 'Garcia', DATE_SUB(CURDATE(), INTERVAL 18 YEAR), 'Female', 'BSTM 1-3', 'B+', 'Pollen', 'Seasonal allergic rhinitis.', 'Riza Garcia', '0916-773-9004', SHA2('cliniq-demo-26-01178', 256));
+
+INSERT INTO inventory_items (id, item_name, category, quantity, unit, reorder_level, expiration_date, archived_at, archived_reason, archived_by)
+VALUES
+(1, 'Paracetamol 500mg', 'Analgesic', 86, 'tabs', 100, DATE_ADD(CURDATE(), INTERVAL 11 MONTH), NULL, NULL, NULL),
+(2, 'Cetirizine 10mg', 'Antihistamine', 18, 'tabs', 40, DATE_ADD(CURDATE(), INTERVAL 20 DAY), NULL, NULL, NULL),
+(3, 'Oral Rehydration Salts', 'Electrolyte', 24, 'sachets', 30, DATE_ADD(CURDATE(), INTERVAL 14 MONTH), NULL, NULL, NULL),
+(4, 'Salbutamol Nebule 2.5mg', 'Respiratory', 9, 'nebules', 20, DATE_ADD(CURDATE(), INTERVAL 5 MONTH), NULL, NULL, NULL),
+(5, 'Ibuprofen 200mg', 'Analgesic', 55, 'tabs', 30, DATE_ADD(CURDATE(), INTERVAL 9 MONTH), NULL, NULL, NULL),
+(6, 'Amoxicillin 500mg', 'Antibiotic', 36, 'capsules', 25, DATE_ADD(CURDATE(), INTERVAL 7 MONTH), NULL, NULL, NULL),
+(7, 'Digital Thermometer', 'Equipment', 3, 'units', 1, NULL, NULL, NULL, NULL),
+(8, 'Pulse Oximeter', 'Equipment', 2, 'units', 1, NULL, NULL, NULL, NULL),
+(9, 'Wheelchair', 'Equipment', 1, 'unit', 1, NULL, NULL, NULL, NULL),
+(10, 'Ice Packs', 'Equipment', 3, 'pcs', 5, NULL, NULL, NULL, NULL),
+(11, 'Expired Ibuprofen 200mg', 'Analgesic', 4, 'tabs', 30, DATE_SUB(CURDATE(), INTERVAL 2 MONTH), NOW(), 'Expired demo batch', 1);
+
+INSERT INTO inventory_loans (
+  id, item_id, borrower_name, borrower_identifier, borrowed_quantity, borrowed_at, due_at,
+  status, return_condition, return_notes, returned_at, borrowed_by, returned_by
+) VALUES
+(1, 10, 'Marco Villanueva', '26-01058', 1, CONCAT(CURDATE(), ' 09:15:00'), CONCAT(CURDATE(), ' 17:00:00'), 'Borrowed', NULL, NULL, NULL, 1, NULL);
+
+INSERT INTO clinic_visits (
+  id, patient_id, visit_datetime, chief_complaint, symptoms, temperature, blood_pressure, pulse_rate,
+  risk_level, risk_score, risk_reasons, status, visit_purpose, visit_source, action_taken, recorded_by, attended_by
+) VALUES
+(1, 1, CONCAT(CURDATE(), ' 08:10:00'), 'Fever with sore throat', 'Temperature 38.2 C, throat pain, mild body weakness', 38.2, '112/74', 92, 'Moderate', 3, 'Fever and weakness reported.', 'Completed', 'Medical Consult', 'Staff Recorded', 'Given Paracetamol 500mg, advised oral fluids, mask use, and sent home with guardian notification.', 1, 1),
+(2, 3, CONCAT(CURDATE(), ' 08:55:00'), 'Wheezing after PE class', 'Shortness of breath, audible wheeze, no chest pain', 37.0, '118/78', 104, 'High', 5, 'Respiratory symptoms after exertion.', 'Active', 'Emergency', 'Staff Recorded', 'Nebulized Salbutamol given, monitored for 45 minutes, advised follow-up if symptoms recur.', 1, 1),
+(3, 7, CONCAT(CURDATE(), ' 09:40:00'), 'Right ankle sprain', 'Pain and swelling after basketball activity', 36.8, '120/80', 84, 'Low', 1, 'Minor sports injury.', 'Completed', 'Wound Care', 'Staff Recorded', 'Cold compress applied, elastic bandage used, advised rest and elevation.', 1, 1),
+(4, 8, CONCAT(CURDATE(), ' 10:25:00'), 'Migraine episode', 'Headache with light sensitivity, no vomiting', 36.9, '110/70', 76, 'Moderate', 2, 'Persistent headache requiring observation.', 'Active', 'Health Monitoring', 'Staff Recorded', 'Rested in observation area, hydration encouraged, parent informed.', 1, 1),
+(5, 5, CONCAT(CURDATE(), ' 11:15:00'), 'Seafood allergy concern', 'Itchy lips and scattered hives after lunch', 37.1, '116/72', 88, 'Moderate', 3, 'Possible food allergy exposure.', 'Unaddressed', 'Medical Consult', 'Self Logbook', 'Visitor/patient self-registration. Awaiting clinic assessment.', NULL, NULL),
+(6, 9, CONCAT(CURDATE(), ' 13:05:00'), 'Minor hand laceration', 'Small cut from laboratory glassware, bleeding controlled', 36.7, '118/76', 78, 'Low', 1, 'Minor wound care needed.', 'Completed', 'Wound Care', 'Staff Recorded', 'Wound cleaned, gauze dressing applied, advised return for dressing check.', 1, 1),
+(7, 10, CONCAT(CURDATE(), ' 14:20:00'), 'Allergic rhinitis flare-up', 'Sneezing, watery eyes, nasal congestion', 36.6, '108/68', 74, 'Low', 1, 'Allergic rhinitis flare-up.', 'Completed', 'Medical Consult', 'Staff Recorded', 'Cetirizine provided, advised avoiding dusty storage room.', 1, 1);
+
+INSERT INTO visit_treatment_entries (
+  id, visit_id, symptoms_note, diagnosis, management_treatment, referral_type, remarks, amendment_reason,
+  dispensed_inventory_item_id, dispensed_quantity, created_by, created_at
+) VALUES
+(1, 2, 'Wheezing improved after nebulization; oxygen saturation stable.', 'Exercise-induced asthma symptoms', 'Nebulized Salbutamol, rest, and observation.', 'None', 'Advise pulmonary follow-up if recurrence occurs.', 'Initial treatment record for active emergency visit.', 4, 1, 1, CONCAT(CURDATE(), ' 09:20:00')),
+(2, 1, 'Fever persisted but patient was stable before dismissal.', 'Acute febrile illness', 'Paracetamol 500mg and oral fluids.', 'None', 'Guardian notified. Return if fever persists beyond 48 hours.', 'Follow-up note after observation.', 1, 1, 1, CONCAT(CURDATE(), ' 08:45:00'));
+
+INSERT INTO appointments (id, patient_id, appointment_datetime, purpose, status, notes)
+VALUES
+(1, 9, CONCAT(CURDATE(), ' 09:30:00'), 'Wound dressing re-check', 'Pending', 'Check hand laceration dressing before afternoon laboratory class.'),
+(2, 3, CONCAT(CURDATE(), ' 10:30:00'), 'Asthma follow-up assessment', 'Scheduled', 'Review breathing status after morning PE-related wheezing.'),
+(3, 4, CONCAT(CURDATE(), ' 13:00:00'), 'APE hard-copy document review', 'Scheduled', 'Review UHS medical record, consent form, and lab request form.'),
+(4, 5, CONCAT(CURDATE(), ' 14:00:00'), 'Food allergy counseling', 'Pending', 'Discuss canteen exposure, medication instructions, and emergency warning signs.'),
+(5, 6, CONCAT(CURDATE(), ' 15:00:00'), 'APE online submission review', 'Scheduled', 'Confirm uploaded APE files match checked hard copies.');
+
+INSERT INTO nurse_alerts (
+  id, patient_id, reporter_name, reporter_role, location, concern, details, photo_path,
+  status, resolution_report, resolved_by, resolved_at, created_at, updated_at
+) VALUES
+(1, 3, 'Coach Marvin Dela Pena', 'PE Instructor', 'Gymnasium court', 'Student experiencing asthma symptoms', 'Student reported tightness of chest after shuttle run. Clinic assistance requested immediately.', NULL, 'Pending', NULL, NULL, NULL, CONCAT(CURDATE(), ' 08:48:00'), CONCAT(CURDATE(), ' 08:48:00')),
+(2, 1, 'Ms. Teresa Mendoza', 'Library Staff', 'Library second floor', 'Student with fever and weakness', 'Student looked pale and requested help after feeling dizzy while studying.', NULL, 'Pending', NULL, NULL, NULL, CONCAT(CURDATE(), ' 09:05:00'), CONCAT(CURDATE(), ' 09:05:00')),
+(3, 9, 'Mr. Allan Cruz', 'Laboratory Technician', 'Science Laboratory 2', 'Minor glassware cut reported', 'Student sustained a small hand cut while cleaning lab materials; bleeding controlled before clinic visit.', NULL, 'Resolved', 'Assessed and cleaned wound in clinic. No further incident report needed.', 1, CONCAT(CURDATE(), ' 13:20:00'), CONCAT(CURDATE(), ' 13:00:00'), CONCAT(CURDATE(), ' 13:20:00'));
+
+INSERT INTO ape_records (
+  id, patient_id, exam_date, document_type, requirement_status, workflow_status, document_path,
+  verification_status, verified_by, appointment_datetime, appointment_location, clearance_status,
+  clinical_remarks, student_visible_note, follow_up_required, missing_items, result_status, result_notes,
+  clearance_document_path, created_at, updated_at
+) VALUES
+(1, 4, CURDATE(), 'APE Form', 'Not Checked', 'Registered', NULL, 'Pending', NULL, NULL, NULL, 'Pending', 'UHS Medical Record and Dental Record pending hard-copy review.', 'Document review needed before student upload.', 0, 'UHS Medical Record and Dental Record pending hard-copy review.', 'Pending', NULL, NULL, DATE_SUB(NOW(), INTERVAL 3 DAY), DATE_SUB(NOW(), INTERVAL 2 DAY)),
+(2, 6, CURDATE(), 'APE Form', 'Pre-Verified', 'Submitted', '/uploads/ape/26-01102-ape-bundle.pdf', 'Pending', NULL, NULL, NULL, 'Pending', 'Online files uploaded; verify against checked hard copies.', 'Consent, lab request, medical, dental, and referral forms uploaded.', 0, 'Online files uploaded; verify against checked hard copies.', 'Pending', NULL, NULL, DATE_SUB(NOW(), INTERVAL 2 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY)),
+(3, 1, CURDATE(), 'APE Form', 'Needs Correction', 'Submitted', NULL, 'Needs Correction', 1, NULL, NULL, 'Pending', 'Lab request form lacks physician signature.', 'Please return with signed lab request form before online submission.', 0, 'Hard-copy requirements need correction.', 'Pending', NULL, NULL, DATE_SUB(NOW(), INTERVAL 5 DAY), DATE_SUB(NOW(), INTERVAL 4 DAY)),
+(4, 3, CURDATE(), 'APE Form', 'Pre-Verified', 'Follow-up Required', '/uploads/ape/26-01058-ape-bundle.pdf', 'Verified', 1, NULL, NULL, 'For Follow-up', 'History of asthma noted during APE review. Needs pulmonary clearance after school clinic observation.', 'Submit pulmonary clearance or treatment note after follow-up consultation.', 1, 'Pulmonary clearance required.', 'With Finding', 'Follow-up requirement tracked by clinic.', NULL, DATE_SUB(NOW(), INTERVAL 6 DAY), DATE_SUB(NOW(), INTERVAL 5 DAY)),
+(5, 5, CURDATE(), 'APE Form', 'Pre-Verified', 'Follow-up Required', '/uploads/ape/26-01089-ape-bundle.pdf', 'Verified', 1, NULL, NULL, 'Submitted', 'Food allergy history documented. Student submitted allergist clearance for review.', 'Clearance submitted; wait for clinic approval.', 1, 'Allergy clearance waiting for approval.', 'With Finding', 'Follow-up requirement tracked by clinic.', NULL, DATE_SUB(NOW(), INTERVAL 2 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY)),
+(6, 8, CURDATE(), 'APE Form', 'Pre-Verified', 'Cleared', '/uploads/ape/26-01136-ape-bundle.pdf', 'Verified', 1, NULL, NULL, 'Cleared', 'No significant findings. Fit to study.', 'APE completed and archived.', 0, NULL, 'Fit to Proceed', 'Cleared for academic activities.', NULL, DATE_SUB(NOW(), INTERVAL 1 DAY), NOW());
+
+INSERT INTO ape_activity_logs (id, ape_record_id, user_id, action_label, notes, created_at)
+VALUES
+(1, 1, 1, 'Dashboard demo status prepared', 'Document review needed before student upload.', DATE_SUB(NOW(), INTERVAL 2 DAY)),
+(2, 2, 1, 'Dashboard demo status prepared', 'Online files uploaded; verify against checked hard copies.', DATE_SUB(NOW(), INTERVAL 1 DAY)),
+(3, 3, 1, 'Dashboard demo status prepared', 'Hard-copy requirements need correction.', DATE_SUB(NOW(), INTERVAL 4 DAY)),
+(4, 4, 1, 'Dashboard demo status prepared', 'Pulmonary clearance required.', DATE_SUB(NOW(), INTERVAL 5 DAY)),
+(5, 5, 1, 'Dashboard demo status prepared', 'Allergy clearance waiting for approval.', DATE_SUB(NOW(), INTERVAL 1 DAY)),
+(6, 6, 1, 'Dashboard demo status prepared', 'APE completed and archived.', NOW());
+
+INSERT INTO referrals (id, patient_id, referral_date, referred_to, reason, status)
+VALUES
+(1, 3, DATE_SUB(CURDATE(), INTERVAL 1 DAY), 'City Health Office - Pulmonary Clinic', 'Asthma symptoms during PE; student advised pulmonary clearance for APE follow-up.', 'Pending'),
+(2, 5, CURDATE(), 'Allergy and Immunology Clinic', 'Food allergy history and recent hives after canteen exposure.', 'Pending'),
+(3, 7, DATE_SUB(CURDATE(), INTERVAL 3 DAY), 'Partner Diagnostic Center', 'Right ankle sprain; X-ray advised only if swelling worsens within 24 hours.', 'Completed');
+
+INSERT INTO passport_access_logs (id, patient_id, ip_address, user_agent, accessed_at)
+VALUES
+(1, 3, '127.0.0.1', 'CLINiQ Demo Browser', CONCAT(CURDATE(), ' 08:50:00')),
+(2, 1, '127.0.0.1', 'CLINiQ Demo Browser', CONCAT(CURDATE(), ' 09:08:00')),
+(3, 5, '127.0.0.1', 'CLINiQ Demo Browser', CONCAT(CURDATE(), ' 11:10:00'));

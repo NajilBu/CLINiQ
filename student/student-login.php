@@ -1,5 +1,34 @@
 <?php
 require_once __DIR__ . '/includes/student-layout.php';
+
+if (isset($_GET['logout'])) {
+    student_logout();
+}
+
+$error = '';
+$studentIdValue = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $studentIdValue = trim($_POST['student_id'] ?? '');
+    $password = (string) ($_POST['password'] ?? '');
+
+    if (!preg_match('/^\d{2}-\d{5}$/', $studentIdValue)) {
+        $error = 'Use the Student ID format 00-00000.';
+    } elseif ($password !== STUDENT_DEMO_PASSWORD) {
+        $error = 'Incorrect password. Use student123 for the demo seeded accounts.';
+    } else {
+        $patient = student_find_patient_by_number($studentIdValue);
+        if ($patient === null) {
+            $error = 'Student ID not found in the clinic records. Try 26-01024 for the seeded demo.';
+        } else {
+            student_start_session();
+            $_SESSION['student_patient_id'] = (int) $patient['id'];
+            header('Location: student-dashboard.php');
+            exit;
+        }
+    }
+}
+
 render_student_auth_header('Student Login');
 ?>
 
@@ -30,15 +59,15 @@ render_student_auth_header('Student Login');
             <h2 class="student-card-title text-xl">Sign in to your clinic record</h2>
             <p class="student-card-copy mb-5">Access your APE status, document uploads, and appointment requests.</p>
 
-            <div id="error-alert" class="student-note student-note-danger mb-4 hidden">
+            <div id="error-alert" class="student-note student-note-danger mb-4 <?= $error === '' ? 'hidden' : '' ?>">
                 <span class="material-symbols-outlined">error</span>
-                <div id="error-msg">Invalid Student ID or password. Please try again.</div>
+                <div id="error-msg"><?= student_e($error !== '' ? $error : 'Invalid Student ID or password. Please try again.') ?></div>
             </div>
 
-            <form onsubmit="handleLogin(event)">
+            <form method="POST" action="">
                 <div class="student-field">
                     <label class="student-label" for="student-id">Student ID</label>
-                    <input type="text" id="student-id" class="student-input" placeholder="00-00000" autocomplete="username" data-student-id-format required>
+                    <input type="text" id="student-id" name="student_id" class="student-input" placeholder="00-00000" autocomplete="username" data-student-id-format value="<?= student_e($studentIdValue) ?>" required>
                 </div>
 
                 <div class="student-field">
@@ -47,7 +76,7 @@ render_student_auth_header('Student Login');
                         <a href="student-forgot-password.php" class="student-auth-link text-[11px] text-decoration-none">Forgot password?</a>
                     </div>
                     <div class="relative">
-                        <input type="password" id="password" class="student-input pr-14" placeholder="Enter your password" autocomplete="current-password" required>
+                        <input type="password" id="password" name="password" class="student-input pr-14" placeholder="Enter your password" autocomplete="current-password" required>
                         <button type="button" class="student-toggle-pw" data-target="password">Show</button>
                     </div>
                 </div>
@@ -77,28 +106,7 @@ render_student_auth_header('Student Login');
         });
     });
 
-    function handleLogin(event) {
-        event.preventDefault();
-        const studentId = document.getElementById('student-id').value.trim();
-        const password = document.getElementById('password').value;
-        const errorAlert = document.getElementById('error-alert');
-        const errorMsg = document.getElementById('error-msg');
-
-        if (studentId === '23-00456' && password === 'student123') {
-            errorAlert.classList.add('hidden');
-            localStorage.setItem('student_logged_in', 'true');
-            localStorage.setItem('student_name', 'Juan dela Cruz');
-            localStorage.setItem('student_id', '23-00456');
-            localStorage.setItem('student_course', 'BSIT - 3rd Year');
-            window.location.href = 'student-dashboard.php';
-            return;
-        }
-
-        errorAlert.classList.remove('hidden');
-        errorMsg.textContent = studentId !== '23-00456'
-            ? 'Student ID not found. Use 23-00456 for the demo.'
-            : 'Incorrect password. Use student123 for the demo.';
-    }
+    localStorage.removeItem('student_logged_in');
 </script>
 
 <?php render_student_auth_footer(); ?>

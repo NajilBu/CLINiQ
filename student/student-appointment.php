@@ -5,8 +5,9 @@ require_once __DIR__ . '/includes/student-layout.php';
 
 ensure_appointment_schema();
 
+$profile = student_require_login();
+$patientId = (int) $profile['patient_id'];
 $db = db();
-$db->exec("INSERT IGNORE INTO patients (id, student_number, first_name, last_name, emergency_token) VALUES (1, '23-00456', 'Juan', 'dela Cruz', 'dummy-token-123')");
 
 $success = false;
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['appt_type'], $_POST['appt_date'], $_POST['appt_time'])) {
@@ -20,19 +21,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['appt_type'], $_POST['
         $notes .= ' Student note: ' . $note;
     }
 
-    $stmt = $db->prepare("INSERT INTO appointments (patient_id, appointment_datetime, purpose, status, notes) VALUES (1, ?, ?, 'Pending', ?)");
-    $stmt->execute([$datetimeStr, $type, $notes]);
+    $stmt = $db->prepare("INSERT INTO appointments (patient_id, appointment_datetime, purpose, status, notes) VALUES (?, ?, ?, 'Pending', ?)");
+    $stmt->execute([$patientId, $datetimeStr, $type, $notes]);
     $success = true;
 }
 
 $historyStmt = $db->prepare("
     SELECT *
     FROM appointments
-    WHERE patient_id = 1
+    WHERE patient_id = ?
     ORDER BY appointment_datetime DESC, created_at DESC
     LIMIT 5
 ");
-$historyStmt->execute();
+$historyStmt->execute([$patientId]);
 $appointments = $historyStmt->fetchAll();
 
 render_student_header('Appointments', 'appointment');
