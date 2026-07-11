@@ -285,6 +285,24 @@ html:has(.student-body) body {
     box-shadow: 0 10px 28px rgba(23, 38, 29, 0.04);
 }
 
+.student-clickable-card {
+    position: relative;
+    cursor: pointer;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.student-clickable-card:hover,
+.student-clickable-card:focus-visible {
+    border-color: #a9d7b4;
+    box-shadow: 0 14px 34px rgba(23, 38, 29, 0.08);
+    transform: translateY(-1px);
+    outline: none;
+}
+
+.student-clickable-card:focus-visible {
+    box-shadow: 0 0 0 3px rgba(63, 125, 82, 0.14), 0 14px 34px rgba(23, 38, 29, 0.08);
+}
+
 .student-card-pad {
     padding: 1.25rem;
 }
@@ -338,6 +356,76 @@ html:has(.student-body) body {
     background: linear-gradient(180deg, #ffffff 0%, #fbfffc 100%);
     border-radius: 0.95rem;
     box-shadow: 0 16px 36px rgba(79, 159, 94, 0.1);
+}
+
+.student-required-actions {
+    display: grid;
+    gap: 0.8rem;
+}
+
+.student-required-actions-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.student-required-actions-head h2 {
+    margin: 0;
+    color: var(--student-fg);
+    font-size: 1.15rem;
+    font-weight: 650;
+}
+
+.student-required-action-list {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.student-action-step {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.65rem;
+    height: 1.65rem;
+    margin-top: 0.45rem;
+    color: var(--student-primary-dark);
+    background: var(--student-primary-soft);
+    border: 1px solid #cfe6d6;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    flex: 0 0 auto;
+}
+
+.student-action-step-danger {
+    color: #991b1b;
+    background: #fef2f2;
+    border-color: #fecaca;
+}
+
+.student-action-card-danger {
+    border-color: #ffb7b7;
+    background: linear-gradient(180deg, #ffffff 0%, #fff7f7 100%);
+    box-shadow: 0 16px 36px rgba(220, 38, 38, 0.1);
+}
+
+.student-action-kicker {
+    margin: 0 0 0.28rem !important;
+    color: #b91c1c !important;
+    font-size: 0.68rem !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.student-action-kicker-primary {
+    color: var(--student-primary) !important;
+}
+
+.student-icon-box-danger {
+    color: #dc2626;
+    background: #fef2f2;
 }
 
 .student-action-card h2 {
@@ -935,6 +1023,11 @@ html:has(.student-body) body {
     .student-page-header,
     .student-action-card {
         align-items: stretch;
+        flex-direction: column;
+    }
+
+    .student-required-actions-head {
+        align-items: flex-start;
         flex-direction: column;
     }
 

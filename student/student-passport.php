@@ -21,6 +21,7 @@ $passport = [
     'last_updated'    => $profile['updated_at'] ? date('F j, Y', strtotime($profile['updated_at'])) : date('F j, Y'),
     'token'           => $profile['emergency_token'] ?: 'not-generated',
 ];
+$passportUrl = 'passport-demo.php?token=' . urlencode($passport['token']);
 
 $saved = false;
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -278,7 +279,7 @@ render_student_header('Emergency Health Passport', 'passport');
                 <span class="material-symbols-outlined">save</span>
                 Save Passport Settings
             </button>
-            <a href="passport-demo.html" target="_blank" class="student-button-secondary text-decoration-none" style="white-space:nowrap;">
+            <a href="<?= student_e($passportUrl) ?>" target="_blank" class="student-button-secondary text-decoration-none" style="white-space:nowrap;">
                 <span class="material-symbols-outlined">open_in_new</span>
                 View Live Passport
             </a>
@@ -368,7 +369,7 @@ render_student_header('Emergency Health Passport', 'passport');
                 </span>
             </div>
 
-            <!-- Preview shell mimicking passport-demo.html style -->
+            <!-- Preview shell mimicking the live passport style -->
             <div class="passport-preview">
 
                 <!-- Preview header -->

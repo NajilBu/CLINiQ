@@ -43,6 +43,22 @@ $apeBadgeClass = match ($latestApe['clearance_status'] ?? '') {
     default => $latestApe ? 'student-badge-info' : 'student-badge-warning',
 };
 $apeNote = $latestApe['student_visible_note'] ?? 'Start your APE record with the clinic.';
+$passportMissing = [];
+if (empty($profile['blood_type']) || $profile['blood_type'] === 'Unknown') {
+    $passportMissing[] = 'blood type';
+}
+if (empty($profile['allergies'])) {
+    $passportMissing[] = 'allergy notes';
+}
+if (empty($profile['guardian_name']) || empty($profile['guardian_contact'])) {
+    $passportMissing[] = 'guardian contact';
+}
+if (empty($profile['emergency_instructions'])) {
+    $passportMissing[] = 'emergency instructions';
+}
+$passportComplete = empty($passportMissing);
+$apeNeedsAction = ($latestApe['clearance_status'] ?? 'Pending') !== 'Cleared';
+$requiredActionCount = ($passportComplete ? 0 : 1) + ($apeNeedsAction ? 1 : 0);
 
 $appointmentStatus = $latestAppointment['status'] ?? 'No Request';
 $appointmentBadgeClass = match ($appointmentStatus) {
@@ -67,24 +83,77 @@ render_student_header('Dashboard', 'dashboard');
     </span>
 </section>
 
-<section class="student-action-card mb-4">
-    <div class="flex items-start gap-4">
-        <span class="student-icon-box">
-            <span class="material-symbols-outlined">upload_file</span>
-        </span>
+<section class="student-required-actions mb-4" aria-label="Required student actions">
+    <div class="student-required-actions-head">
         <div>
-            <h2>Next action: Continue your APE clearance</h2>
-            <p><?= student_e($apeNote) ?></p>
+            <p class="student-eyebrow" style="margin-bottom:0.28rem;">Required Actions</p>
+            <h2>Complete these to keep your clinic profile ready</h2>
         </div>
+        <span class="student-badge <?= $requiredActionCount > 0 ? 'student-badge-warning' : 'student-badge-success' ?>">
+            <?= (int) $requiredActionCount ?> Pending
+        </span>
     </div>
-    <a href="student-ape-status.php" class="student-button text-decoration-none">
-        Continue APE
-        <span class="material-symbols-outlined">arrow_forward</span>
-    </a>
+
+    <div class="student-required-action-list">
+        <?php if (!$passportComplete): ?>
+            <article class="student-action-card student-action-card-danger">
+                <div class="flex items-start gap-4">
+                    <span class="student-action-step student-action-step-danger">1</span>
+                    <span class="student-icon-box student-icon-box-danger">
+                        <span class="material-symbols-outlined">emergency</span>
+                    </span>
+                    <div>
+                        <p class="student-action-kicker">Urgent profile action</p>
+                        <h2>Complete your Emergency Health Passport</h2>
+                        <p>Add <?= student_e(implode(', ', $passportMissing)) ?> before an incident happens.</p>
+                    </div>
+                </div>
+                <a href="student-passport.php" class="student-button-danger text-decoration-none">
+                    Complete Passport
+                    <span class="material-symbols-outlined">arrow_forward</span>
+                </a>
+            </article>
+        <?php endif; ?>
+
+        <?php if ($apeNeedsAction): ?>
+            <article class="student-action-card">
+                <div class="flex items-start gap-4">
+                    <span class="student-action-step"><?= $passportComplete ? 1 : 2 ?></span>
+                    <span class="student-icon-box">
+                        <span class="material-symbols-outlined">upload_file</span>
+                    </span>
+                    <div>
+                        <p class="student-action-kicker student-action-kicker-primary">APE requirement</p>
+                        <h2>Continue your APE clearance</h2>
+                        <p><?= student_e($apeNote) ?></p>
+                    </div>
+                </div>
+                <a href="student-ape-status.php" class="student-button text-decoration-none">
+                    Continue APE
+                    <span class="material-symbols-outlined">arrow_forward</span>
+                </a>
+            </article>
+        <?php endif; ?>
+
+        <?php if ($requiredActionCount === 0): ?>
+            <article class="student-action-card">
+                <div class="flex items-start gap-4">
+                    <span class="student-icon-box">
+                        <span class="material-symbols-outlined">verified</span>
+                    </span>
+                    <div>
+                        <p class="student-action-kicker student-action-kicker-primary">Ready</p>
+                        <h2>Your clinic profile is complete</h2>
+                        <p>Your passport and APE clearance records are up to date.</p>
+                    </div>
+                </div>
+            </article>
+        <?php endif; ?>
+    </div>
 </section>
 
 <div class="student-grid">
-    <section class="student-card student-card-pad student-span-4">
+    <section class="student-card student-card-pad student-span-4 student-clickable-card" data-href="student-passport.php" role="link" tabindex="0" aria-label="Open Health Passport profile">
         <div class="flex items-center gap-3 mb-5">
             <span class="student-icon-box">
                 <span class="material-symbols-outlined">badge</span>
@@ -115,7 +184,7 @@ render_student_header('Dashboard', 'dashboard');
         </div>
     </section>
 
-    <section class="student-card student-span-4">
+    <section class="student-card student-span-4 student-clickable-card" data-href="student-ape-status.php" role="link" tabindex="0" aria-label="Open APE status">
         <div class="student-card-header">
             <div>
                 <h2 class="student-card-title">APE Progress</h2>
@@ -152,7 +221,7 @@ render_student_header('Dashboard', 'dashboard');
         </div>
     </section>
 
-    <section class="student-card student-span-4">
+    <section class="student-card student-span-4 student-clickable-card" data-href="student-appointment.php" role="link" tabindex="0" aria-label="Open appointment page">
         <div class="student-card-header">
             <div>
                 <h2 class="student-card-title">Appointment</h2>
@@ -214,5 +283,29 @@ render_student_header('Dashboard', 'dashboard');
         </div>
     </div>
 </section>
+
+<script>
+(function () {
+    document.querySelectorAll('[data-href].student-clickable-card').forEach((card) => {
+        const navigate = () => {
+            window.location.href = card.dataset.href;
+        };
+
+        card.addEventListener('click', (event) => {
+            if (event.target.closest('a, button, input, select, textarea, label')) {
+                return;
+            }
+            navigate();
+        });
+
+        card.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                navigate();
+            }
+        });
+    });
+})();
+</script>
 
 <?php render_student_footer(); ?>
