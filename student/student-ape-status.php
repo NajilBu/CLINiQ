@@ -18,6 +18,30 @@ $clearanceStatus = $apeRecord['clearance_status'] ?? 'Pending';
 $studentNote = $apeRecord['student_visible_note'] ?? 'No APE record has been opened by the clinic yet.';
 $missingItems = trim((string) ($apeRecord['missing_items'] ?? ''));
 $actionNeeded = $clearanceStatus !== 'Cleared' && $apeStatus !== 'Not Started';
+$requirementStatus = $apeRecord['requirement_status'] ?? 'Not Checked';
+$requirementsVerified = $requirementStatus === 'Pre-Verified' || in_array($apeStatus, [
+    'Requirements Checked',
+    'Submitted',
+    'Reviewed',
+    'Scheduled',
+    'Exam Done',
+    'Follow-up Required',
+    'Cleared',
+], true);
+$requirementsNeedCorrection = $requirementStatus === 'Needs Correction';
+$canUploadDocuments = $requirementsVerified && !$requirementsNeedCorrection && $clearanceStatus !== 'Cleared';
+$nextActionTitle = match (true) {
+    $clearanceStatus === 'Cleared' => 'APE completed',
+    $requirementsNeedCorrection => 'Return corrected hard-copy requirements',
+    !$requirementsVerified => 'Wait for clinic hard-copy verification',
+    default => 'Upload verified APE documents',
+};
+$nextActionCopy = match (true) {
+    $clearanceStatus === 'Cleared' => 'Your APE record is already cleared by the clinic.',
+    $requirementsNeedCorrection => $studentNote,
+    !$requirementsVerified => 'The clinic must check your physical requirements first. Upload controls will appear after the clinic marks your requirements as verified.',
+    default => $studentNote,
+};
 $apePercent = match ($apeStatus) {
     'Registered' => 20,
     'Batch Assigned', 'Requirements Checked' => 40,
@@ -27,54 +51,80 @@ $apePercent = match ($apeStatus) {
     default => 0,
 };
 $headerBadge = $clearanceStatus === 'Cleared' ? 'student-badge-success' : ($actionNeeded ? 'student-badge-warning' : 'student-badge-info');
+$currentStep = match (true) {
+    $clearanceStatus === 'Cleared' => 5,
+    $apeStatus === 'Follow-up Required' || $clearanceStatus === 'For Follow-up' => 4,
+    in_array($apeStatus, ['Submitted', 'Reviewed', 'Scheduled', 'Exam Done'], true) => 3,
+    $requirementsVerified => 2,
+    default => 1,
+};
 
-$documents = [
+$flowSteps = [
     [
-        'name' => 'Lab Request Form',
-        'status' => 'Approved',
-        'badge' => 'student-badge-success',
-        'detail' => 'Stored in your clinic record.',
-        'action' => 'View',
-        'button' => 'student-button-secondary',
-        'icon' => 'description',
+        'number' => 1,
+        'icon' => 'task_alt',
+        'title' => 'Hard-copy review',
+        'copy' => $requirementsVerified
+            ? 'Clinic checked your physical requirements and noted findings.'
+            : 'Bring your hard-copy requirements to the clinic for verification.',
     ],
     [
-        'name' => 'UHS Consent Form',
-        'status' => 'Pending Review',
-        'badge' => 'student-badge-warning',
-        'detail' => 'Uploaded today. Waiting for clinic review.',
-        'action' => 'Re-upload',
-        'button' => 'student-button-secondary',
-        'icon' => 'approval',
+        'number' => 2,
+        'icon' => 'cloud_upload',
+        'title' => 'Digital document keeping',
+        'copy' => $requirementsVerified
+            ? 'Upload checked forms for the clinic digital record.'
+            : 'This opens only after clinic hard-copy verification.',
     ],
     [
-        'name' => 'UHS Medical Record',
-        'status' => 'Missing',
-        'badge' => 'student-badge-danger',
-        'detail' => 'Upload the checked hard-copy form after clinic verification.',
-        'action' => 'Upload',
-        'button' => 'student-button',
-        'icon' => 'clinical_notes',
+        'number' => 3,
+        'icon' => 'manage_search',
+        'title' => 'Clinic review',
+        'copy' => 'Clinic reviews uploaded files and asks for correction if needed.',
     ],
     [
-        'name' => 'UHS Dental Record',
-        'status' => 'Missing',
-        'badge' => 'student-badge-danger',
-        'detail' => 'Submit the checked dental record for digital keeping.',
-        'action' => 'Upload',
-        'button' => 'student-button',
-        'icon' => 'dentistry',
+        'number' => 4,
+        'icon' => 'medical_services',
+        'title' => 'Follow-up, if required',
+        'copy' => 'Treatment proof or clearance may be requested only when the clinic records findings.',
     ],
     [
-        'name' => 'Referral Form',
-        'status' => 'Missing',
-        'badge' => 'student-badge-danger',
-        'detail' => 'Required if the clinic marked you for follow-up or treatment.',
-        'action' => 'Upload',
-        'button' => 'student-button',
-        'icon' => 'send',
+        'number' => 5,
+        'icon' => 'verified_user',
+        'title' => 'Completed APE',
+        'copy' => 'Your student clinic record is cleared.',
     ],
 ];
+
+$documents = array_map(static function (array $doc) use ($canUploadDocuments, $requirementsNeedCorrection): array {
+    if ($canUploadDocuments) {
+        return $doc + [
+            'status' => 'Ready to Upload',
+            'badge' => 'student-badge-warning',
+            'detail' => 'This requirement has been checked by the clinic. Upload the digital copy for record keeping.',
+            'action' => 'Upload',
+            'button' => 'student-button',
+            'disabled' => false,
+        ];
+    }
+
+    return $doc + [
+        'status' => $requirementsNeedCorrection ? 'Needs Correction' : 'Awaiting Clinic Check',
+        'badge' => $requirementsNeedCorrection ? 'student-badge-danger' : 'student-badge-info',
+        'detail' => $requirementsNeedCorrection
+            ? 'Bring the corrected hard copy back to the clinic before digital submission opens.'
+            : 'Clinic staff must verify the hard copy before this can be uploaded.',
+        'action' => 'Locked',
+        'button' => 'student-button-secondary student-button-disabled',
+        'disabled' => true,
+    ];
+}, [
+    ['name' => 'Lab Request Form', 'icon' => 'description'],
+    ['name' => 'UHS Consent Form', 'icon' => 'approval'],
+    ['name' => 'UHS Medical Record', 'icon' => 'description'],
+    ['name' => 'UHS Dental Record', 'icon' => 'assignment'],
+    ['name' => 'Referral Form', 'icon' => 'send'],
+]);
 
 render_student_header('APE Status', 'ape');
 ?>
@@ -97,14 +147,20 @@ render_student_header('APE Status', 'ape');
             <span class="material-symbols-outlined">cloud_upload</span>
         </span>
         <div>
-            <h2>Next action: <?= $clearanceStatus === 'Cleared' ? 'APE completed' : 'Continue your APE clearance' ?></h2>
-            <p><?= student_e($studentNote) ?></p>
+            <h2>Next action: <?= student_e($nextActionTitle) ?></h2>
+            <p><?= student_e($nextActionCopy) ?></p>
         </div>
     </div>
-    <button class="student-button" type="button" onclick="triggerUpload('Missing APE documents')">
-        Upload File
-        <span class="material-symbols-outlined">upload</span>
-    </button>
+    <?php if ($canUploadDocuments): ?>
+        <button class="student-button" type="button" onclick="triggerUpload('Verified APE documents')">
+            Upload File
+            <span class="material-symbols-outlined">upload</span>
+        </button>
+    <?php else: ?>
+        <span class="student-badge <?= $requirementsNeedCorrection ? 'student-badge-danger' : 'student-badge-info' ?>">
+            <?= $requirementsNeedCorrection ? 'Correction Needed' : 'Clinic Verification First' ?>
+        </span>
+    <?php endif; ?>
 </section>
 
 <input type="file" id="file-picker" accept=".pdf,.png,.jpg,.jpeg" class="hidden" onchange="handleFileSelected(this)">
@@ -126,47 +182,31 @@ render_student_header('APE Status', 'ape');
             <div class="w-full h-3 rounded-full bg-[#edf8f0] overflow-hidden mb-5">
                 <div class="h-full bg-[#3F7D52] rounded-full" style="width: <?= (int) $apePercent ?>%;"></div>
             </div>
-            <div class="student-progress-list">
-                <div class="student-progress-step">
-                    <span class="student-progress-step-icon material-symbols-outlined">fact_check</span>
-                    <div>
-                        <strong>Hard-copy review</strong>
-                        <span>Clinic checked your physical documents and noted findings.</span>
+            <div class="student-ape-stepper" aria-label="APE progress steps">
+                <?php foreach ($flowSteps as $step): ?>
+                    <?php
+                    $stepNumber = (int) $step['number'];
+                    $isDone = $stepNumber < $currentStep || ($currentStep === 5 && $stepNumber === 5);
+                    $isCurrent = $stepNumber === $currentStep && !$isDone;
+                    $stepClass = $isDone ? 'is-done' : ($isCurrent ? 'is-current' : 'is-locked');
+                    $badgeClass = $isDone ? 'student-badge-success' : ($isCurrent ? 'student-badge-warning' : 'student-badge-info');
+                    $badgeLabel = $isDone ? 'Done' : ($isCurrent ? 'Current' : ($stepNumber === 2 && !$requirementsVerified ? 'Locked' : 'Next'));
+                    ?>
+                    <div class="student-ape-step <?= student_e($stepClass) ?>">
+                        <span class="student-ape-step-rail" aria-hidden="true"></span>
+                        <span class="student-ape-step-index">
+                            <span class="material-symbols-outlined"><?= student_e($isDone ? 'check' : $step['icon']) ?></span>
+                        </span>
+                        <div class="student-ape-step-body">
+                            <div class="student-ape-step-top">
+                                <span class="student-ape-step-count">Step <?= (int) $stepNumber ?> of 5</span>
+                                <span class="student-badge <?= student_e($badgeClass) ?>"><?= student_e($badgeLabel) ?></span>
+                            </div>
+                            <strong><?= student_e($step['title']) ?></strong>
+                            <span><?= student_e($step['copy']) ?></span>
+                        </div>
                     </div>
-                    <span class="student-badge student-badge-success">Done</span>
-                </div>
-                <div class="student-progress-step">
-                    <span class="student-progress-step-icon material-symbols-outlined">cloud_upload</span>
-                    <div>
-                        <strong>Digital document keeping</strong>
-                        <span>Upload checked forms for the clinic's digital record.</span>
-                    </div>
-                    <span class="student-badge student-badge-warning">Now</span>
-                </div>
-                <div class="student-progress-step">
-                    <span class="student-progress-step-icon material-symbols-outlined">rate_review</span>
-                    <div>
-                        <strong>Clinic review</strong>
-                        <span>Clinic approves files or asks for correction.</span>
-                    </div>
-                    <span class="student-badge student-badge-info">Next</span>
-                </div>
-                <div class="student-progress-step">
-                    <span class="student-progress-step-icon material-symbols-outlined">healing</span>
-                    <div>
-                        <strong>Follow-up, if required</strong>
-                        <span>Treatment proof or clearance may be requested.</span>
-                    </div>
-                    <span class="student-badge student-badge-info">If Needed</span>
-                </div>
-                <div class="student-progress-step">
-                    <span class="student-progress-step-icon material-symbols-outlined">verified</span>
-                    <div>
-                        <strong>Completed APE</strong>
-                        <span>Your student clinic record is cleared.</span>
-                    </div>
-                    <span class="student-badge student-badge-info">Final</span>
-                </div>
+                <?php endforeach; ?>
             </div>
         </div>
     </section>
@@ -199,8 +239,8 @@ render_student_header('APE Status', 'ape');
                             </div>
                             <p><?= student_e($doc['detail']) ?></p>
                         </div>
-                        <button class="<?= student_e($doc['button']) ?>" type="button" onclick="triggerUpload('<?= student_e($doc['name']) ?>')">
-                            <span class="material-symbols-outlined"><?= $doc['action'] === 'View' ? 'visibility' : 'upload' ?></span>
+                        <button class="<?= student_e($doc['button']) ?>" type="button" <?= $doc['disabled'] ? 'disabled' : "onclick=\"triggerUpload('" . student_e($doc['name']) . "')\"" ?>>
+                            <span class="material-symbols-outlined"><?= $doc['disabled'] ? 'lock' : 'upload' ?></span>
                             <?= student_e($doc['action']) ?>
                         </button>
                     </div>
