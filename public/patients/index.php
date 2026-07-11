@@ -1,61 +1,108 @@
-<?php
+﻿<?php
 
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_login();
 
-$patients = db()->query('SELECT * FROM patients ORDER BY last_name, first_name LIMIT 100')->fetchAll();
+// ── Search & pagination ─────────────────────────────────────
+$search = trim($_GET['q'] ?? '');
+$page = max(1, (int)($_GET['page'] ?? 1));
+$perPage = 25;
+$offset = ($page - 1) * $perPage;
+
+// Count total
+if ($search !== '') {
+    $countStmt = db()->prepare("SELECT COUNT(*) AS total FROM patients WHERE first_name LIKE ? OR last_name LIKE ? OR student_number LIKE ?");
+    $like = "%{$search}%";
+    $countStmt->execute([$like, $like, $like]);
+} else {
+    $countStmt = db()->query("SELECT COUNT(*) AS total FROM patients");
+}
+$totalRows = (int)$countStmt->fetch()['total'];
+$totalPages = max(1, ceil($totalRows / $perPage));
+
+// Fetch page
+if ($search !== '') {
+    $stmt = db()->prepare("SELECT * FROM patients WHERE first_name LIKE ? OR last_name LIKE ? OR student_number LIKE ? ORDER BY last_name, first_name LIMIT {$perPage} OFFSET {$offset}");
+    $stmt->execute([$like, $like, $like]);
+} else {
+    $stmt = db()->prepare("SELECT * FROM patients ORDER BY last_name, first_name LIMIT {$perPage} OFFSET {$offset}");
+    $stmt->execute();
+}
+$patients = $stmt->fetchAll();
+
+$patientColumns = [
+    ['headerName' => 'Student No.', 'field' => 'studentNumber', 'width' => 150],
+    ['headerName' => 'Name', 'field' => 'nameHtml', 'cellRenderer' => 'html', 'minWidth' => 240],
+    ['headerName' => 'Course/Section', 'field' => 'courseSection', 'minWidth' => 190],
+    ['headerName' => 'Guardian Contact', 'field' => 'guardianContact', 'minWidth' => 180],
+    ['headerName' => 'QR', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 120],
+];
+$patientRows = [];
+foreach ($patients as $patient) {
+    $fullName = trim($patient['last_name'] . ', ' . $patient['first_name']);
+    $displayName = trim($patient['first_name'] . ' ' . $patient['last_name']);
+    $patientRows[] = [
+        'rowUrl' => 'view.php?id=' . (int)$patient['id'],
+        'studentNumber' => $patient['student_number'],
+        'nameHtml' => '<div class="flex items-center gap-3"><div class="avatar ' . e(avatar_color($displayName)) . '">' . e(initials($displayName)) . '</div><strong class="text-sm text-slate-800">' . e($fullName) . '</strong></div>',
+        'courseSection' => $patient['course_section'],
+        'guardianContact' => $patient['guardian_contact'] ?: '-',
+        'actionsHtml' => '<a class="btn btn-sm btn-outline text-decoration-none" href="' . e(app_url('emergency.php?token=' . $patient['emergency_token'])) . '" target="_blank"><span class="material-symbols-outlined text-[14px]">qr_code_2</span> QR</a>',
+    ];
+}
 
 render_header('Patients');
 ?>
-<div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-    <div>
-        <h1 class="font-headline text-3xl md:text-4xl font-extrabold text-[#1c2a59]">Patient Records</h1>
-        <p class="text-sm font-bold text-slate-500 mt-1">Manage student profiles, emergency tags, and staff-only health details.</p>
-    </div>
-    <a class="px-5 py-3 bg-primary text-white rounded-2xl flex items-center gap-2 text-sm font-bold shadow-lg shadow-primary/20 hover:bg-primary-container text-decoration-none" href="create.php">
-        <span class="material-symbols-outlined text-[20px]">person_add</span>
-        Add Patient
-    </a>
-</div>
 
+<!-- ═══ Patient Registry ═══ -->
 <section class="bg-white rounded-[2rem] border border-outline-variant/20 shadow-sm overflow-hidden">
+    <!-- Header + Search -->
     <div class="p-6 border-b border-slate-100">
-        <h2 class="font-headline text-xl font-extrabold text-[#1c2a59] mb-1">Patient Registry</h2>
-        <p class="text-xs font-bold text-slate-500 mb-0">Public QR page is for reporting only; staff profile contains private health data.</p>
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+                <h2 class="font-headline text-xl font-extrabold text-[#1c2a59] mb-1">Patient Registry</h2>
+                <p class="text-xs font-bold text-slate-500 mb-0"><?= $totalRows ?> registered patient(s). Public QR page is for reporting only; staff profile contains private health data.</p>
+            </div>
+            <form method="get" class="search-input-wrap" style="max-width: 280px;">
+                <span class="search-icon material-symbols-outlined">search</span>
+                <input id="patientsGridSearch" type="text" name="q" value="<?= e($search) ?>" placeholder="Search name or student no..." class="search-input">
+            </form>
+        </div>
     </div>
-    <div class="overflow-x-auto">
-        <table class="w-full text-left">
-            <thead>
-            <tr class="bg-slate-50 text-[10px] uppercase font-black text-slate-400">
-                <th class="p-4">Student No.</th>
-                <th class="p-4">Name</th>
-                <th class="p-4">Course/Section</th>
-                <th class="p-4">Guardian Contact</th>
-                <th class="p-4">Emergency Access</th>
-            </tr>
-            </thead>
-            <tbody>
-            <?php foreach ($patients as $patient): ?>
-                <tr class="border-t border-slate-100">
-                    <td class="p-4 text-sm font-bold text-slate-600"><?= e($patient['student_number']) ?></td>
-                    <td class="p-4">
-                        <strong class="text-sm text-slate-800"><?= e($patient['last_name'] . ', ' . $patient['first_name']) ?></strong>
-                    </td>
-                    <td class="p-4 text-sm font-bold text-slate-600"><?= e($patient['course_section']) ?></td>
-                    <td class="p-4 text-sm font-bold text-slate-600"><?= e($patient['guardian_contact']) ?></td>
-                    <td class="p-4">
-                        <div class="flex flex-wrap gap-2">
-                            <a class="px-3 py-2 rounded-xl bg-slate-100 text-primary text-xs font-black text-decoration-none" href="<?= app_url('emergency.php?token=' . $patient['emergency_token']) ?>" target="_blank">Public QR Page</a>
-                            <a class="px-3 py-2 rounded-xl bg-red-50 text-red-700 text-xs font-black text-decoration-none" href="<?= app_url('patients/emergency_profile.php?id=' . (int) $patient['id']) ?>">Staff Profile</a>
-                        </div>
-                    </td>
-                </tr>
-            <?php endforeach; ?>
-            <?php if (!$patients): ?>
-                <tr><td colspan="5" class="p-6 text-sm font-bold text-slate-500">No patients yet.</td></tr>
+
+    <?php render_ag_grid('patientsGrid', $patientColumns, $patientRows, [
+        'searchInput' => 'patientsGridSearch',
+        'emptyTitle' => $search ? 'No patients found' : 'No patients yet',
+        'emptyText' => $search ? 'Try a different search term.' : 'Add a patient to get started.',
+    ]); ?>
+
+    <!-- Pagination -->
+    <?php if ($totalPages > 1): ?>
+    <div class="pagination">
+        <?php if ($page > 1): ?>
+            <a href="?page=<?= $page - 1 ?><?= $search ? '&q=' . urlencode($search) : '' ?>">
+                <span class="material-symbols-outlined text-[18px]">chevron_left</span>
+            </a>
+        <?php else: ?>
+            <span class="page-disabled"><span class="material-symbols-outlined text-[18px]">chevron_left</span></span>
+        <?php endif; ?>
+
+        <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+            <?php if ($i === $page): ?>
+                <span class="page-active"><?= $i ?></span>
+            <?php else: ?>
+                <a href="?page=<?= $i ?><?= $search ? '&q=' . urlencode($search) : '' ?>"><?= $i ?></a>
             <?php endif; ?>
-            </tbody>
-        </table>
+        <?php endfor; ?>
+
+        <?php if ($page < $totalPages): ?>
+            <a href="?page=<?= $page + 1 ?><?= $search ? '&q=' . urlencode($search) : '' ?>">
+                <span class="material-symbols-outlined text-[18px]">chevron_right</span>
+            </a>
+        <?php else: ?>
+            <span class="page-disabled"><span class="material-symbols-outlined text-[18px]">chevron_right</span></span>
+        <?php endif; ?>
     </div>
+    <?php endif; ?>
 </section>
 <?php render_footer(); ?>

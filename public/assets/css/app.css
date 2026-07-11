@@ -1,46 +1,1247 @@
+/* ============================================================
+   CLINiQ Design System — app.css
+   Core styles ported from wireframe screens 1-12
+   ============================================================ */
+
+:root {
+    --cliniq-background: oklch(98.5% .005 230);
+    --cliniq-foreground: oklch(22% .03 250);
+    --cliniq-card: oklch(100% 0 0);
+    --cliniq-primary: #3F7D52;
+    --cliniq-primary-hover: #23422C;
+    --cliniq-primary-foreground: oklch(99% .005 200);
+    --cliniq-accent: #e4efe6;
+    --cliniq-secondary: oklch(95.5% .012 220);
+    --cliniq-muted: oklch(96.5% .008 230);
+    --cliniq-muted-foreground: oklch(52% .02 250);
+    --cliniq-border: oklch(92% .01 230);
+    --cliniq-accent-foreground: #23422C;
+    --cliniq-danger: oklch(58% .19 25);
+    --cliniq-control-font-size: 0.8125rem;
+    --cliniq-control-line-height: 1.35;
+}
+
+html,
+body {
+    height: 100%;
+    overflow: hidden;
+}
+
+body {
+    font-family: Inter, sans-serif;
+    font-weight: 400;
+    letter-spacing: 0;
+    scrollbar-color: #cbd8ce #f4fbf6;
+    scrollbar-width: thin;
+    scrollbar-gutter: stable;
+}
+
+* {
+    scrollbar-color: #cbd8ce transparent;
+    scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+    width: 0.58rem;
+    height: 0.58rem;
+}
+
+*::-webkit-scrollbar-track {
+    background: transparent;
+    border-radius: 9999px;
+}
+
+*::-webkit-scrollbar-thumb {
+    background: #cbd8ce;
+    border: 2px solid transparent;
+    border-radius: 9999px;
+    background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+    background: #aebfb3;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.font-headline {
+    font-family: Inter, sans-serif !important;
+    letter-spacing: 0 !important;
+}
+
+.font-bold {
+    font-weight: 600 !important;
+}
+
+.font-extrabold,
+.font-black {
+    font-weight: 700 !important;
+}
+
+/* --- Material Symbols Base --- */
 .material-symbols-outlined {
     font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
 }
 
+/* --- Utility: Text Decoration --- */
 .text-decoration-none {
     text-decoration: none;
 }
 
 .text-secondary {
     color: #64748b;
+    font-weight: 500;
+}
+
+/* Lovable palette bridge for older blue utility accents. */
+.text-\[\#1c2a59\] { color: var(--cliniq-foreground) !important; }
+.text-\[\#004d9c\] { color: var(--cliniq-primary) !important; }
+.bg-blue-50 { background-color: var(--cliniq-muted) !important; }
+.border-blue-100 { border-color: var(--cliniq-border) !important; }
+.text-blue-500 { color: var(--cliniq-primary) !important; }
+.text-blue-700 { color: var(--cliniq-accent-foreground) !important; }
+.text-blue-950 { color: var(--cliniq-foreground) !important; }
+.text-blue-100\/80 { color: oklch(99% .005 200 / .8) !important; }
+.hover\:bg-blue-50:hover { background-color: oklch(96.5% .008 230) !important; }
+.hover\:border-blue-100:hover { border-color: #cfe6d6 !important; }
+.rounded-2xl { border-radius: 0.75rem !important; }
+.rounded-\[2rem\],
+.rounded-\[4rem\] { border-radius: 1rem !important; }
+
+/* Lovable-style neutral surfaces for older slate utilities used across pages. */
+.bg-slate-50,
+.bg-slate-50\/40,
+.bg-slate-50\/50,
+.bg-slate-100 { background-color: oklch(96.5% .008 230) !important; }
+.hover\:bg-slate-50:hover,
+.hover\:bg-slate-50\/50:hover { background-color: oklch(96.5% .008 230) !important; }
+.border-slate-100,
+.border-slate-200,
+.border-outline-variant\/10,
+.border-outline-variant\/20 { border-color: oklch(92% .01 230 / .72) !important; }
+.shadow-slate-200\/60 { --tw-shadow-color: oklch(22% .03 250 / .08) !important; }
+
+/* ============================================================
+   LOVABLE-STYLE APP SHELL
+   Sidebar, topbar, and page canvas replacing the old top-nav shell
+   ============================================================ */
+.app-shell {
+    height: 100vh;
+    min-height: 100vh;
+    overflow: hidden;
+    background: oklch(98.5% .005 230);
+}
+
+.app-sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    width: 4.75rem;
+    background: #ffffff;
+    border-right: 1px solid oklch(92% .01 230 / .72);
+    box-shadow: 1px 0 2px oklch(22% .03 250 / .03);
+    transition: width 0.18s ease;
+}
+
+.app-main {
+    height: 100vh;
+    min-height: 100vh;
+    padding-left: 4.75rem;
+    overflow: hidden;
+    transition: padding-left 0.18s ease;
+    scrollbar-color: #cbd8ce transparent;
+    scrollbar-width: thin;
+    scrollbar-gutter: stable;
+}
+
+.app-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    min-height: 4.25rem;
+    padding: 0.75rem 1rem;
+    background: oklch(98.5% .005 230 / .88);
+    border-bottom: 1px solid oklch(92% .01 230 / .72);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+}
+
+.app-search {
+    position: relative;
+    width: min(100%, 26rem);
+}
+
+.app-topbar-controls {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+}
+
+.app-sidebar-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 2.5rem;
+    height: 2.5rem;
+    border: 1px solid oklch(92% .01 230 / .82);
+    border-radius: 0.625rem;
+    background: #ffffff;
+    color: #506157;
+    cursor: pointer;
+    box-shadow: 0 1px 2px oklch(22% .03 250 / .03);
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.app-sidebar-toggle:hover {
+    background: #edf8f0;
+    border-color: #cfe6d6;
+    color: var(--cliniq-primary-hover);
+}
+
+.app-sidebar-toggle .material-symbols-outlined {
+    font-size: 1.2rem;
+}
+
+.app-page-back-row {
+    display: flex;
+    align-items: center;
+}
+
+.app-page-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 2.1rem;
+    padding: 0.45rem 0.72rem;
+    border: 1px solid oklch(92% .01 230 / .82);
+    border-radius: 0.625rem;
+    background: #ffffff;
+    color: var(--cliniq-accent-foreground);
+    font-size: var(--cliniq-control-font-size);
+    font-weight: 700;
+    line-height: var(--cliniq-control-line-height);
+    box-shadow: 0 1px 2px oklch(22% .03 250 / .03);
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.app-page-back:hover {
+    background: #edf8f0;
+    border-color: #cfe6d6;
+    color: var(--cliniq-primary-hover);
+}
+
+.app-page-back .material-symbols-outlined {
+    font-size: 1rem;
+}
+
+.app-search .material-symbols-outlined {
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: oklch(52% .02 250);
+    font-size: 1rem;
+    line-height: 1;
+    width: 1.25rem;
+    text-align: center;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.app-search input {
+    width: 100%;
+    min-height: 2.35rem;
+    box-sizing: border-box;
+    padding: 0.55rem 0.9rem 0.55rem 3rem !important;
+    text-indent: 0;
+    background: #ffffff;
+    border: 1px solid oklch(92% .01 230 / .82);
+    border-radius: 0.625rem;
+    color: oklch(22% .03 250);
+    font-size: var(--cliniq-control-font-size);
+    font-weight: 600;
+    line-height: var(--cliniq-control-line-height);
+    outline: none;
+    box-shadow: 0 1px 2px oklch(22% .03 250 / .03);
+}
+
+.app-search input::placeholder {
+    color: #6b7280;
+    font-size: var(--cliniq-control-font-size);
+    font-weight: 600;
+    line-height: var(--cliniq-control-line-height);
+}
+
+.app-search input:focus {
+    border-color: rgba(63, 125, 82, 0.48);
+    box-shadow: 0 0 0 3px rgba(63, 125, 82, 0.13);
+}
+
+.app-topbar-meta {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    color: #64756a;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.app-alert-link {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-height: 2.25rem;
+    padding: 0.48rem 0.82rem;
+    border: 1px solid rgba(199, 220, 205, 0.72);
+    border-radius: 0.85rem;
+    color: #64756a;
+    background: rgba(255, 255, 255, 0.68);
+    font-size: 0.75rem;
+    font-weight: 900;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.app-alert-link:hover {
+    color: var(--cliniq-primary);
+    border-color: rgba(63, 125, 82, 0.34);
+    background: #ffffff;
+}
+
+.app-alert-link.has-alerts {
+    color: #ffffff;
+    border-color: #dc2626;
+    background: #dc2626;
+    box-shadow: 0 12px 26px rgba(220, 38, 38, 0.22);
+}
+
+.app-alert-link.has-alerts:hover {
+    color: #ffffff;
+    border-color: #b91c1c;
+    background: #b91c1c;
+}
+
+.app-alert-link .material-symbols-outlined {
+    font-size: 1rem;
+}
+
+.app-alert-badge {
+    min-width: 1.1rem;
+    height: 1.1rem;
+    padding: 0 0.3rem;
+    border-radius: 9999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #ffffff;
+    color: #b91c1c;
+    font-size: 0.62rem;
+    font-weight: 900;
+    line-height: 1;
+}
+
+.app-logout {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: #64756a;
+    transition: color 0.15s ease;
+}
+
+.app-logout:hover {
+    color: #be123c;
+}
+
+.app-logout .material-symbols-outlined {
+    font-size: 1rem;
+}
+
+.app-content {
+    height: calc(100vh - 4.25rem);
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 1.25rem;
+    scrollbar-color: #cbd8ce transparent;
+    scrollbar-width: thin;
+    scrollbar-gutter: stable;
+}
+
+.app-mobile-nav {
+    display: flex;
+    gap: 0.4rem;
+    overflow-x: auto;
+    padding: 0.6rem 1rem;
+    background: #ffffff;
+    border-bottom: 1px solid oklch(92% .01 230 / .72);
+    scrollbar-width: none;
+}
+
+.app-mobile-nav::-webkit-scrollbar {
+    display: none;
+}
+
+.app-mobile-nav-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex: 0 0 auto;
+    min-height: 2.2rem;
+    padding: 0.45rem 0.7rem;
+    border-radius: 0.55rem;
+    color: oklch(30% .03 250);
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.app-mobile-nav-link .material-symbols-outlined {
+    font-size: 1rem;
+    color: oklch(52% .02 250);
+}
+
+.app-mobile-nav-link.active {
+    background: #e4f4e8;
+    color: oklch(22% .03 250);
+}
+
+.app-mobile-nav-link.active .material-symbols-outlined {
+    color: var(--cliniq-primary);
+}
+
+.app-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    justify-content: center;
+    padding: 1.1rem 0.7rem;
+    border-bottom: 1px solid oklch(92% .01 230 / .72);
+}
+
+.app-brand-copy {
+    display: none;
+}
+
+.app-brand-mark {
+    display: grid;
+    place-items: center;
+    width: 2.35rem;
+    height: 2.35rem;
+    border-radius: 0.625rem;
+    background: #ffffff;
+    border: 1px solid oklch(92% .01 230 / .82);
+    padding: 0.12rem;
+    overflow: hidden;
+    box-shadow: 0 8px 18px oklch(22% .03 250 / .08);
+}
+
+.app-brand-mark img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.app-brand-title {
+    display: block;
+    color: oklch(22% .03 250);
+    font-size: 0.92rem;
+    line-height: 1.1;
+    font-weight: 650;
+}
+
+.app-brand-subtitle {
+    display: block;
+    color: oklch(52% .02 250);
+    font-size: 0.66rem;
+    line-height: 1.1;
+    font-weight: 500;
+}
+
+.app-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    align-items: center;
+    padding: 0.65rem;
+}
+
+.app-nav-link {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    justify-content: center;
+    width: 2.75rem;
+    min-height: 2.75rem;
+    padding: 0.55rem;
+    border-radius: 0.55rem;
+    color: oklch(30% .03 250);
+    font-size: 0.84rem;
+    font-weight: 500;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.app-nav-link .material-symbols-outlined {
+    width: 1.1rem;
+    font-size: 1.05rem;
+    color: oklch(52% .02 250);
+}
+
+.app-nav-label {
+    display: none;
+}
+
+.app-nav-link:hover {
+    background: oklch(96.5% .008 230);
+    color: oklch(22% .03 250);
+}
+
+.app-nav-link.active {
+    background: #e4f4e8;
+    color: oklch(22% .03 250);
+}
+
+.app-nav-link.active .material-symbols-outlined {
+    color: var(--cliniq-primary);
+}
+
+.app-sidebar-footer {
+    display: none;
+}
+
+.app-user-label {
+    display: block;
+    color: oklch(52% .02 250);
+    font-size: 0.68rem;
+    font-weight: 500;
+}
+
+.auth-main {
+    height: 100svh;
+    min-height: 100svh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: grid;
+    align-items: start;
+    justify-items: center;
+    padding: 7rem 1.25rem 1.5rem;
+    background: oklch(98.5% .005 230);
+}
+
+.auth-wrap {
+    width: min(100%, 68rem);
+}
+
+.cliniq-entry-header {
+    position: fixed;
+    top: 1.5rem;
+    left: 2.5rem;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.cliniq-entry-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.42rem;
+    min-height: 2.3rem;
+    padding: 0 0.9rem;
+    background: #f2f7f4;
+    border-radius: 0.7rem;
+    color: #08261a;
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
+}
+
+.cliniq-entry-back:hover {
+    background: #e6efe9;
+    color: var(--cliniq-primary-hover);
+    transform: translateX(-1px);
+}
+
+.cliniq-entry-back .material-symbols-outlined {
+    font-size: 1rem;
+}
+
+.cliniq-entry-divider {
+    width: 1px;
+    height: 2rem;
+    background: #dfe8e3;
+}
+
+.cliniq-entry-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: #08261a;
+    text-decoration: none;
+}
+
+.cliniq-entry-logo {
+    display: grid;
+    place-items: center;
+    width: 2.55rem;
+    height: 2.55rem;
+    padding: 0.12rem;
+    overflow: hidden;
+    background: #ffffff;
+    border: 1px solid oklch(92% .01 230 / .82);
+    border-radius: 0.625rem;
+    box-shadow: 0 12px 26px rgba(35, 66, 44, 0.13);
+}
+
+.cliniq-entry-logo img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.cliniq-entry-name {
+    display: block;
+    color: #08261a;
+    font-size: 0.92rem;
+    font-weight: 650;
+    letter-spacing: 0;
+    line-height: 1.05;
+}
+
+.cliniq-entry-subtitle {
+    display: block;
+    margin-top: 0.18rem;
+    color: #90a1b8;
+    font-size: 0.66rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    line-height: 1.1;
+    text-transform: uppercase;
+}
+
+.app-content h1 {
+    color: oklch(22% .03 250) !important;
+    font-size: clamp(1.45rem, 2vw, 1.75rem) !important;
+    line-height: 1.2 !important;
+    font-weight: 700 !important;
+    letter-spacing: 0 !important;
+}
+
+.app-content h2,
+.app-content h3 {
+    color: oklch(22% .03 250) !important;
+    letter-spacing: 0 !important;
+}
+
+.app-content .font-extrabold {
+    font-weight: 700 !important;
+}
+
+.app-content .clinic-card,
+.app-content .bg-white {
+    border-color: oklch(92% .01 230 / .72) !important;
+}
+
+.app-content table {
+    border-color: oklch(92% .01 230 / .72);
+}
+
+.app-content thead tr,
+.app-content .bg-slate-50\/50 {
+    background: oklch(96.5% .008 230) !important;
+}
+
+@media (min-width: 1024px) {
+    .app-sidebar {
+        width: 16rem;
+    }
+
+    .app-main {
+        padding-left: 16rem;
+    }
+
+    .app-brand {
+        justify-content: flex-start;
+        padding: 1.25rem 1rem;
+    }
+
+    .app-brand-copy,
+    .app-nav-label {
+        display: block;
+    }
+
+    .app-nav {
+        align-items: stretch;
+    }
+
+    .app-nav-link {
+        justify-content: flex-start;
+        width: auto;
+        min-height: 2.45rem;
+        padding: 0.55rem 0.75rem;
+    }
+
+    .app-sidebar-footer {
+        display: block;
+        margin-top: auto;
+        padding: 1rem;
+        border-top: 1px solid oklch(92% .01 230 / .72);
+        color: oklch(22% .03 250);
+        font-size: 0.78rem;
+    }
+
+    .app-topbar {
+        padding-left: 1.5rem;
+        padding-right: 1.5rem;
+    }
+
+    .app-content {
+        padding: 1.5rem;
+    }
+
+    .app-mobile-nav {
+        display: none;
+    }
+
+    .app-shell.sidebar-collapsed .app-sidebar {
+        width: 4.75rem;
+    }
+
+    .app-shell.sidebar-collapsed .app-main {
+        padding-left: 4.75rem;
+    }
+
+    .app-shell.sidebar-collapsed .app-brand {
+        justify-content: center;
+        padding: 1.1rem 0.7rem;
+    }
+
+    .app-shell.sidebar-collapsed .app-brand-copy,
+    .app-shell.sidebar-collapsed .app-nav-label,
+    .app-shell.sidebar-collapsed .app-sidebar-footer {
+        display: none;
+    }
+
+    .app-shell.sidebar-collapsed .app-nav {
+        align-items: center;
+    }
+
+    .app-shell.sidebar-collapsed .app-nav-link {
+        justify-content: center;
+        width: 2.75rem;
+        min-height: 2.75rem;
+        padding: 0.55rem;
+    }
+}
+
+/* ============================================================
+   MODAL SYSTEM
+   Glassmorphism backdrop with scale-in animation
+   ============================================================ */
+.modal-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.4);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 100;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    justify-content: center;
+    align-items: center;
+    padding: 1rem;
+}
+
+.modal-backdrop.show {
+    display: flex;
+    opacity: 1;
+}
+
+.modal-content {
+    transform: scale(0.95);
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.modal-backdrop.show .modal-content {
+    transform: scale(1);
+}
+
+/* ============================================================
+   TOAST NOTIFICATIONS
+   Slide-in from right with auto-dismiss
+   ============================================================ */
+@keyframes toast-in {
+    from { transform: translateX(120%); opacity: 0; }
+    to   { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes toast-out {
+    from { transform: translateX(0); opacity: 1; }
+    to   { transform: translateX(120%); opacity: 0; }
+}
+
+.toast-container {
+    position: fixed;
+    top: 1.5rem;
+    right: 1.5rem;
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    pointer-events: none;
+}
+
+.toast-item {
+    animation: toast-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    pointer-events: auto;
+    min-width: 320px;
+    max-width: 420px;
+    padding: 1rem 1.25rem;
+    border-radius: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+}
+
+.toast-item.removing {
+    animation: toast-out 0.3s ease forwards;
+}
+
+.toast-item.toast-success {
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
+    color: #065f46;
+}
+
+.toast-item.toast-error {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #991b1b;
+}
+
+.toast-item.toast-info {
+    background: oklch(96.5% .008 230);
+    border: 1px solid oklch(90% .03 200);
+    color: var(--cliniq-accent-foreground);
+}
+
+.toast-item.toast-warning {
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    color: #92400e;
+}
+
+/* ============================================================
+   TAB SYSTEM
+   Pill-style tabs with active state
+   ============================================================ */
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.tab-btn.active {
+    background-color: white;
+    color: var(--cliniq-accent-foreground);
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+}
+
+/* ============================================================
+   STATUS BADGES
+   Semantic color-coded status indicators
+   ============================================================ */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.625rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    white-space: nowrap;
+}
+
+.badge .material-symbols-outlined {
+    font-size: 14px;
+}
+
+.badge-active {
+    background: oklch(96.5% .008 230);
+    color: var(--cliniq-accent-foreground);
+    border: 1px solid #cfe6d6;
+}
+
+.badge-pending {
+    background: #fffbeb;
+    color: #b45309;
+    border: 1px solid #fde68a;
+}
+
+.badge-completed {
+    background: #ecfdf5;
+    color: #047857;
+    border: 1px solid #a7f3d0;
+}
+
+.badge-cancelled {
+    background: #f8fafc;
+    color: #64748b;
+    border: 1px solid #e2e8f0;
+}
+
+.badge-critical {
+    background: #fef2f2;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+}
+
+.badge-low {
+    background: #ecfdf5;
+    color: #047857;
+    border: 1px solid #a7f3d0;
+}
+
+.badge-moderate {
+    background: #fffbeb;
+    color: #b45309;
+    border: 1px solid #fde68a;
+}
+
+.badge-high {
+    background: #fff1f2;
+    color: #be123c;
+    border: 1px solid #fecdd3;
+}
+
+.badge-in-progress {
+    background: oklch(96.5% .008 230);
+    color: var(--cliniq-accent-foreground);
+    border: 1px solid #cfe6d6;
+}
+
+.badge-resolved {
+    background: #ecfdf5;
+    color: #047857;
+    border: 1px solid #a7f3d0;
+}
+
+/* ============================================================
+   STOCK LEVEL BARS
+   Visual progress indicator for inventory
+   ============================================================ */
+.stock-bar {
+    width: 6rem;
+    height: 0.5rem;
+    background: #f1f5f9;
+    border-radius: 9999px;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.stock-bar-fill {
+    display: block;
+    height: 100%;
+    border-radius: 9999px;
+    transition: width 0.5s ease;
+}
+
+.stock-bar-fill.stock-healthy { background: #10b981; }
+.stock-bar-fill.stock-warning { background: #f59e0b; }
+.stock-bar-fill.stock-critical { background: #ef4444; }
+
+/* ============================================================
+   AVATAR INITIALS
+   Circle with initials for patient/user identity
+   ============================================================ */
+.avatar {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 9999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.875rem;
+    font-weight: 800;
+    flex-shrink: 0;
+}
+
+.avatar-blue { background: #e4efe6; color: var(--cliniq-accent-foreground); }
+.avatar-emerald { background: #d1fae5; color: #047857; }
+.avatar-amber { background: #fef3c7; color: #b45309; }
+.avatar-red { background: #fee2e2; color: #b91c1c; }
+.avatar-indigo { background: #e0e7ff; color: #4338ca; }
+.avatar-slate { background: #f1f5f9; color: #64748b; }
+
+/* ============================================================
+   TREND INDICATORS
+   Comparison chips for metric cards
+   ============================================================ */
+.trend {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.125rem 0.5rem;
+    border-radius: 0.375rem;
+    font-size: 0.75rem;
     font-weight: 700;
 }
 
+.trend .material-symbols-outlined { font-size: 14px; }
+
+.trend-up {
+    background: #ecfdf5;
+    color: #047857;
+    border: 1px solid #a7f3d0;
+}
+
+.trend-down {
+    background: #fef2f2;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+}
+
+.trend-neutral {
+    background: #f8fafc;
+    color: #64748b;
+    border: 1px solid #e2e8f0;
+}
+
+/* ============================================================
+   STATUS FILTER TABS
+   Horizontal quick-filter tabs below toolbar
+   ============================================================ */
+.status-tab {
+    padding: 0.625rem 1.25rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+    border-bottom: 2px solid transparent;
+    color: #64748b;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+    cursor: pointer;
+    background: none;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+}
+
+.status-tab:hover {
+    color: #1e293b;
+}
+
+.status-tab.active {
+    border-bottom-color: var(--cliniq-primary);
+    color: var(--cliniq-accent-foreground);
+}
+
+/* ============================================================
+   SCROLLBAR UTILITY
+   Cross-browser scrollbar hiding
+   ============================================================ */
+.scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+
+/* Light styled scrollbar for contained panels */
+.styled-scrollbar,
+.modal-content,
+.app-content {
+    scrollbar-color: #cbd8ce transparent;
+    scrollbar-width: thin;
+    scrollbar-gutter: stable;
+}
+
+/* ============================================================
+   TABLE ENHANCEMENTS
+   Sortable columns, hover rows, clickable rows
+   ============================================================ */
+.table-row-clickable {
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.table-row-clickable:hover {
+    background-color: #f8fafc;
+}
+
+.sort-header {
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+    user-select: none;
+}
+
+.sort-header:hover {
+    background-color: #f1f5f9;
+}
+
+.sort-header .sort-icon {
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    font-size: 14px;
+}
+
+.sort-header:hover .sort-icon {
+    opacity: 1;
+}
+
+/* ============================================================
+   SEARCH INPUT
+   Icon-prefixed search field matching wireframe style
+   ============================================================ */
+.search-input-wrap {
+    position: relative;
+    width: 100%;
+}
+
+.search-input-wrap .search-icon {
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    font-size: 1.05rem;
+    line-height: 1;
+    width: 1.5rem;
+    text-align: center;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.search-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.68rem 1rem 0.68rem 3.1rem !important;
+    text-indent: 0;
+    background: white;
+    border: 1px solid rgba(194, 198, 212, 0.2);
+    border-radius: 1rem;
+    font-size: var(--cliniq-control-font-size);
+    font-weight: 600;
+    line-height: var(--cliniq-control-line-height);
+    color: #334155;
+    outline: none;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.search-input::placeholder {
+    color: #7c8798;
+    font-size: var(--cliniq-control-font-size);
+    font-weight: 600;
+    line-height: var(--cliniq-control-line-height);
+}
+
+.search-input:focus {
+    border-color: var(--cliniq-primary);
+    box-shadow: 0 0 0 3px rgba(63, 125, 82, 0.14);
+}
+
+/* ============================================================
+   EMERGENCY / PASSPORT PAGE
+   ============================================================ */
 .passport-page {
     min-height: calc(100vh - 10rem);
     display: grid;
     place-items: center;
 }
 
+/* ============================================================
+   FORM CONTROLS
+   Clinic-standard form inputs, selects, textareas
+   ============================================================ */
 .clinic-input,
 .clinic-select,
 .clinic-textarea {
     width: 100%;
     min-height: 3rem;
+    padding: 0.75rem 1rem;
     border: 1px solid #e2e8f0;
-    border-radius: 1rem;
+    border-radius: 0.75rem;
     background: #f8fafc;
     color: #1e293b;
     font-weight: 700;
-    font-size: 0.875rem;
+    font-size: var(--cliniq-control-font-size);
+    line-height: var(--cliniq-control-line-height);
+    outline: none;
+    transition: all 0.2s ease;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+select,
+textarea {
+    font-family: Inter, sans-serif;
+    font-size: var(--cliniq-control-font-size);
+    line-height: var(--cliniq-control-line-height);
+    border-color: oklch(92% .01 230 / .85);
+    border-radius: 0.75rem;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"])::placeholder,
+textarea::placeholder {
+    font-size: var(--cliniq-control-font-size);
+    line-height: var(--cliniq-control-line-height);
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus,
+select:focus,
+textarea:focus {
+    border-color: rgba(63, 125, 82, 0.42);
+    box-shadow: 0 0 0 3px rgba(63, 125, 82, 0.14);
 }
 
 .clinic-textarea {
     min-height: 7rem;
+    resize: vertical;
 }
 
 .clinic-input:focus,
 .clinic-select:focus,
 .clinic-textarea:focus {
-    outline: none;
-    border-color: rgba(0, 71, 141, 0.35);
-    box-shadow: 0 0 0 3px rgba(0, 71, 141, 0.15);
+    border-color: rgba(63, 125, 82, 0.38);
+    box-shadow: 0 0 0 3px rgba(63, 125, 82, 0.14);
     background: #ffffff;
+}
+
+.clinic-input.input-error,
+.clinic-select.input-error,
+.clinic-textarea.input-error {
+    border-color: #ef4444;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
 }
 
 .clinic-label {
@@ -48,13 +1249,664 @@
     margin-bottom: 0.5rem;
     color: #94a3b8;
     font-size: 0.625rem;
-    font-weight: 900;
+    font-weight: 600;
     text-transform: uppercase;
+    letter-spacing: 0.08em;
 }
 
 .clinic-card {
     background: #ffffff;
-    border: 1px solid rgba(194, 198, 212, 0.2);
-    border-radius: 2rem;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.03);
+    border: 1px solid oklch(92% .01 230 / .72);
+    border-radius: 0.75rem;
+    box-shadow: 0 1px 2px oklch(22% .03 250 / .04), 0 8px 22px oklch(22% .03 250 / .04);
+}
+
+/* ============================================================
+   DASHBOARD CALM MODE
+   Softer clinic command center surfaces
+   ============================================================ */
+.dashboard-page {
+    --danger-soft: #fff1f1;
+    --danger-line: #ffbcbc;
+    --danger-text: #991b1b;
+    --danger-strong: #dc2626;
+}
+
+.dashboard-page .clinic-card,
+.dashboard-metric-card {
+    border-radius: 1rem;
+    border-color: oklch(92% .01 230 / .82);
+    box-shadow: 0 1px 2px oklch(22% .03 250 / .035), 0 10px 26px oklch(22% .03 250 / .035);
+}
+
+.dashboard-hero {
+    padding: 0.25rem 0 0.35rem;
+}
+
+.dashboard-hero h1 {
+    font-size: clamp(1.9rem, 3vw, 2.45rem) !important;
+    letter-spacing: 0 !important;
+}
+
+.dashboard-hero .btn {
+    min-height: 3rem;
+    border-radius: 0.875rem;
+}
+
+.btn-soft-danger {
+    background: var(--danger-soft);
+    color: var(--danger-text);
+    border: 1px solid var(--danger-line);
+    box-shadow: none;
+}
+
+.btn-soft-danger:hover {
+    background: #ffecec;
+    border-color: #ffbcbc;
+    color: #991b1b;
+}
+
+.dashboard-alert-panel {
+    position: relative;
+    background: #fff7f7;
+    border: 1px solid #ffb7b7;
+    border-radius: 1rem;
+    box-shadow: 0 1px 2px rgba(180, 35, 42, 0.08), 0 18px 34px rgba(180, 35, 42, 0.1);
+    overflow: hidden;
+}
+
+.dashboard-alert-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.25rem 1rem 1.5rem;
+    color: var(--danger-text);
+    background: linear-gradient(90deg, #fff0f0 0%, #fffafa 72%);
+    border-bottom: 1px solid #ffc7c7;
+}
+
+.dashboard-alert-header p {
+    color: #8f3e42;
+}
+
+.dashboard-alert-icon {
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 0.75rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    background: var(--danger-strong);
+    border: 1px solid #dc2626;
+    font-size: 1.25rem;
+    box-shadow: 0 8px 16px rgba(220, 38, 38, 0.18);
+}
+
+.dashboard-alert-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.65rem;
+    height: 1.65rem;
+    margin-left: 0.35rem;
+    border-radius: 999px;
+    background: var(--danger-strong);
+    color: #ffffff;
+    font-size: 0.75rem;
+    vertical-align: middle;
+}
+
+.dashboard-alert-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.25rem;
+    padding: 0 0.85rem;
+    border-radius: 0.75rem;
+    background: #ffffff;
+    border: 1px solid #ffb7b7;
+    color: var(--danger-text);
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.dashboard-alert-body {
+    padding: 0.85rem;
+}
+
+.dashboard-alert-card {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 12rem;
+    padding: 1.1rem;
+    border-radius: 0.875rem;
+    background: #ffffff;
+    border: 1px solid rgba(255, 183, 183, 0.95);
+    border-left: 4px solid var(--danger-strong);
+    box-shadow: 0 1px 2px rgba(180, 35, 42, 0.06);
+}
+
+.dashboard-alert-chip {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 0.25rem 0.65rem;
+    background: #dc2626;
+    border: 1px solid #dc2626;
+    color: #ffffff;
+    font-size: 0.65rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.dashboard-metric-card {
+    background: #ffffff;
+    padding: 1.1rem 1.25rem;
+}
+
+.dashboard-metric-card .material-symbols-outlined {
+    font-size: 1.35rem;
+}
+
+.dashboard-metric-card p:first-of-type {
+    letter-spacing: 0.06em;
+}
+
+.dashboard-metric-card p:last-of-type {
+    font-size: 2rem;
+}
+
+.dashboard-activity-card > .flex-1 {
+    min-height: 0;
+}
+
+.dashboard-visitor-grid-wrap {
+    display: flex;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.dashboard-visitor-grid-wrap .cliniq-ag-grid {
+    flex: 1 1 auto;
+    height: 100%;
+    min-height: 0;
+    --ag-cell-horizontal-padding: 16px;
+}
+
+.dashboard-visitor-grid-wrap .cliniq-ag-grid .ag-root-wrapper,
+.dashboard-visitor-grid-wrap .cliniq-ag-grid .ag-root {
+    height: 100%;
+}
+
+.dashboard-visitor-grid-wrap .ag-body-horizontal-scroll {
+    display: none;
+}
+
+.ape-queue-map-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+    gap: 0.75rem;
+}
+
+.ape-queue-map-card {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-width: 0;
+    min-height: 5.75rem;
+}
+
+.ape-queue-map-label {
+    margin: 0.85rem 0 0;
+    color: #64748b;
+    font-size: 0.64rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    line-height: 1.25;
+    text-transform: uppercase;
+}
+
+@media (min-width: 1280px) {
+    .dashboard-activity-card {
+        height: clamp(34rem, calc(100vh - 13rem), 42rem);
+        max-height: none;
+    }
+}
+
+/* ============================================================
+   BUTTON UTILITIES
+   Reusable button patterns
+   ============================================================ */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    border-radius: 0.625rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border: none;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.btn:active {
+    transform: scale(0.95);
+}
+
+.btn-primary {
+    background: var(--cliniq-primary);
+    color: white;
+    box-shadow: 0 10px 15px -3px rgba(63, 125, 82, 0.22);
+}
+
+.btn-primary:hover {
+    background: var(--cliniq-primary-hover);
+}
+
+.btn-danger {
+    background: #dc2626;
+    color: white;
+    box-shadow: 0 10px 15px -3px rgba(220, 38, 38, 0.2);
+}
+
+.btn-danger:hover {
+    background: #b91c1c;
+}
+
+.btn-outline {
+    background: white;
+    color: var(--cliniq-accent-foreground);
+    border: 1px solid rgba(63, 125, 82, 0.24);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.btn-outline:hover {
+    background: #f8fafc;
+}
+
+.btn-ghost {
+    background: oklch(96.5% .008 230);
+    color: var(--cliniq-accent-foreground);
+}
+
+.btn-ghost:hover {
+    background: var(--cliniq-accent);
+}
+
+.btn-sm {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.75rem;
+    border-radius: 0.5rem;
+}
+
+.btn-cancel-icon {
+    width: 2.65rem;
+    min-width: 2.65rem;
+    height: 2.65rem;
+    padding: 0;
+    border-radius: 999px;
+    gap: 0;
+}
+
+.btn-cancel-icon.btn-sm {
+    width: 2.1rem;
+    min-width: 2.1rem;
+    height: 2.1rem;
+    padding: 0;
+    border-radius: 999px;
+}
+
+.btn-cancel-icon .material-symbols-outlined {
+    font-size: 1.15rem;
+}
+
+.btn-cancel-icon.btn-sm .material-symbols-outlined {
+    font-size: 1rem;
+}
+
+.btn-icon {
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-icon:hover { background: #f1f5f9; }
+.btn-icon.btn-icon-primary { color: var(--cliniq-accent-foreground); }
+.btn-icon.btn-icon-primary:hover { background: var(--cliniq-accent); }
+.btn-icon.btn-icon-danger { color: #ef4444; }
+.btn-icon.btn-icon-danger:hover { background: #fef2f2; }
+.btn-icon.btn-icon-slate { color: #94a3b8; }
+.btn-icon.btn-icon-slate:hover { background: #f1f5f9; color: #64748b; }
+
+/* ============================================================
+   PAGINATION
+   Page navigation controls
+   ============================================================ */
+.pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    padding: 1.5rem;
+}
+
+.pagination a,
+.pagination span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.25rem;
+    height: 2.25rem;
+    padding: 0 0.5rem;
+    border-radius: 0.75rem;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    text-decoration: none;
+    transition: all 0.15s ease;
+}
+
+.pagination a {
+    color: #64748b;
+}
+
+.pagination a:hover {
+    background: #f1f5f9;
+    color: #1e293b;
+}
+
+.pagination .page-active {
+    background: var(--cliniq-primary);
+    color: white;
+}
+
+.pagination .page-disabled {
+    color: #cbd5e1;
+    pointer-events: none;
+}
+
+/* ============================================================
+   AG GRID TABLES
+   Shared data-grid treatment for record management screens
+   ============================================================ */
+.cliniq-grid-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid oklch(92% .01 230 / .72);
+    background: oklch(98.5% .005 230);
+}
+
+.cliniq-ag-grid {
+    width: 100%;
+    height: 560px;
+    min-height: 420px;
+    --ag-background-color: #ffffff;
+    --ag-foreground-color: oklch(22% .03 250);
+    --ag-border-color: oklch(92% .01 230 / .88);
+    --ag-secondary-border-color: oklch(92% .01 230 / .6);
+    --ag-header-background-color: oklch(98.5% .005 230);
+    --ag-header-foreground-color: #64748b;
+    --ag-row-hover-color: rgba(63, 125, 82, 0.10);
+    --ag-selected-row-background-color: rgba(63, 125, 82, 0.16);
+    --ag-odd-row-background-color: #ffffff;
+    --ag-font-family: Inter, sans-serif;
+    --ag-font-size: 13px;
+    --ag-wrapper-border-radius: 0;
+    --ag-cell-horizontal-padding: 14px;
+    --ag-range-selection-border-color: var(--cliniq-primary);
+}
+
+.cliniq-ag-grid .ag-root-wrapper,
+.cliniq-ag-grid .ag-root,
+.cliniq-ag-grid .ag-body,
+.cliniq-ag-grid .ag-body-viewport,
+.cliniq-ag-grid .ag-center-cols-viewport {
+    max-width: 100%;
+}
+
+.cliniq-ag-grid .ag-center-cols-viewport,
+.cliniq-ag-grid .ag-body-horizontal-scroll-viewport,
+.cliniq-ag-grid .ag-body-horizontal-scroll-container {
+    overflow-x: hidden !important;
+}
+
+.cliniq-ag-grid .ag-body-viewport,
+.cliniq-ag-grid .ag-center-cols-viewport,
+.cliniq-ag-grid .ag-center-cols-container,
+.cliniq-ag-grid .ag-body-vertical-scroll-viewport {
+    scrollbar-color: #cbd8ce transparent;
+    scrollbar-width: thin;
+}
+
+.cliniq-ag-grid .ag-body-viewport::-webkit-scrollbar,
+.cliniq-ag-grid .ag-center-cols-viewport::-webkit-scrollbar,
+.cliniq-ag-grid .ag-body-vertical-scroll-viewport::-webkit-scrollbar {
+    width: 0.55rem;
+    height: 0.55rem;
+}
+
+.cliniq-ag-grid .ag-body-viewport::-webkit-scrollbar-track,
+.cliniq-ag-grid .ag-center-cols-viewport::-webkit-scrollbar-track,
+.cliniq-ag-grid .ag-body-vertical-scroll-viewport::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.cliniq-ag-grid .ag-body-viewport::-webkit-scrollbar-thumb,
+.cliniq-ag-grid .ag-center-cols-viewport::-webkit-scrollbar-thumb,
+.cliniq-ag-grid .ag-body-vertical-scroll-viewport::-webkit-scrollbar-thumb {
+    background: #cbd8ce;
+    border: 2px solid #ffffff;
+    border-radius: 9999px;
+    background-clip: padding-box;
+}
+
+.cliniq-ag-grid .ag-body-viewport::-webkit-scrollbar-thumb:hover,
+.cliniq-ag-grid .ag-center-cols-viewport::-webkit-scrollbar-thumb:hover,
+.cliniq-ag-grid .ag-body-vertical-scroll-viewport::-webkit-scrollbar-thumb:hover {
+    background: #aebfb3;
+    border: 2px solid #ffffff;
+    background-clip: padding-box;
+}
+
+.cliniq-ag-grid .ag-body-vertical-scroll {
+    width: 0.7rem !important;
+    max-width: 0.7rem !important;
+    background: #ffffff;
+    border-left: 1px solid oklch(92% .01 230 / .45);
+}
+
+.cliniq-ag-grid .ag-body-horizontal-scroll {
+    display: none !important;
+}
+
+.cliniq-ag-grid-standard {
+    height: 560px;
+    min-height: 520px;
+}
+
+.cliniq-ag-grid-compact {
+    height: 390px;
+    min-height: 340px;
+}
+
+.cliniq-ag-grid-fill {
+    height: 100%;
+    min-height: 0;
+}
+
+.cliniq-ag-grid .ag-root-wrapper {
+    border: 0;
+}
+
+.cliniq-ag-grid .ag-row-clickable {
+    cursor: pointer;
+}
+
+.cliniq-ag-grid .ag-row-clickable:hover .ag-cell {
+    background: rgba(63, 125, 82, 0.08);
+}
+
+.cliniq-ag-grid .ag-header-cell-label {
+    color: #64748b;
+    font-size: 0.625rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.cliniq-ag-grid .ag-cell {
+    display: flex;
+    align-items: center;
+    line-height: 1.35;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.cliniq-ag-grid .ag-cell-value,
+.cliniq-ag-grid .ag-cell-wrapper {
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.cliniq-ag-grid .ag-cell-value > *,
+.cliniq-ag-grid .ag-cell-wrapper > * {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.cliniq-ag-grid .ag-cell .flex {
+    min-width: 0;
+}
+
+.cliniq-ag-grid .ag-cell .btn {
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding-left: 0.65rem;
+    padding-right: 0.65rem;
+}
+
+.cliniq-ag-grid .ag-cell strong,
+.cliniq-ag-grid .ag-cell p,
+.cliniq-ag-grid .ag-cell span:not(.material-symbols-outlined) {
+    overflow-wrap: anywhere;
+}
+
+.cliniq-ag-grid .ag-paging-panel {
+    min-height: 56px;
+    border-top-color: oklch(92% .01 230 / .72);
+    color: #64748b;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.cliniq-grid-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    min-height: 220px;
+    color: #94a3b8;
+    text-align: center;
+    padding: 2rem;
+}
+
+.cliniq-grid-empty .material-symbols-outlined {
+    font-size: 42px;
+    color: #cbd5e1;
+}
+
+.cliniq-grid-empty strong {
+    color: #64748b;
+    font-size: 1rem;
+    font-weight: 800;
+}
+
+.cliniq-grid-empty p {
+    margin: 0;
+    font-size: 0.78rem;
+    font-weight: 600;
+    line-height: 1.25;
+}
+
+/* ============================================================
+   EMPTY STATE
+   Placeholder for when no data is available
+   ============================================================ */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 1.5rem;
+    text-align: center;
+}
+
+.empty-state .material-symbols-outlined {
+    font-size: 48px;
+    color: #cbd5e1;
+    margin-bottom: 1rem;
+}
+
+.empty-state-title {
+    font-size: 1rem;
+    font-weight: 800;
+    color: #64748b;
+    margin-bottom: 0.25rem;
+}
+
+.empty-state-text {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #94a3b8;
+}
+
+/* ============================================================
+   RESPONSIVE HELPERS
+   ============================================================ */
+@media (max-width: 768px) {
+    .cliniq-entry-header {
+        position: static;
+        padding: 1rem 1rem 0;
+    }
+
+    .auth-main {
+        min-height: auto;
+        padding: 1.25rem;
+    }
+
+    .toast-container {
+        left: 1rem;
+        right: 1rem;
+        top: 1rem;
+    }
+
+    .toast-item {
+        min-width: unset;
+        max-width: unset;
+    }
+
+    .stock-bar {
+        width: 4rem;
+    }
 }

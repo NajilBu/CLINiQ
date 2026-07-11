@@ -456,6 +456,33 @@ Recommended future files:
 - `stock-in.php`
 - `stock-out.php`
 
+## `public/ape/`
+
+Annual Physical Examination module.
+
+Put here:
+
+- APE document list
+- APE upload workflow
+- Verification workflow
+
+Current files:
+
+- `index.php` lists APE records
+
+## `public/referrals/`
+
+External Referrals module.
+
+Put here:
+
+- Outgoing referrals
+- External health facility tracking
+
+Current files:
+
+- `index.php` lists referrals
+
 ## `public/reports/`
 
 Reports module.
@@ -508,7 +535,7 @@ Put here:
 - Dashboard styling
 - Form styling
 - Emergency passport styling
-- Custom Bootstrap adjustments
+- Custom Tailwind adjustments
 
 Do not put JavaScript here.
 

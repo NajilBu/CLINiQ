@@ -86,71 +86,58 @@ render_header('Emergency QR/NFC Response');
 ?>
 <div class="passport-page">
     <?php if (!$patient): ?>
-        <div class="rounded-2xl bg-red-50 border border-red-100 text-red-700 px-5 py-4 font-bold">Emergency tag not found or disabled.</div>
+        <div class="rounded-2xl bg-red-50 border border-red-100 text-red-700 px-5 py-4 font-bold">Emergency tag not found or
+            disabled.</div>
     <?php else: ?>
         <div class="clinic-card w-full max-w-2xl overflow-hidden">
             <div class="bg-red-700 text-white px-6 py-4 font-black">Emergency QR/NFC Response</div>
             <div class="p-6 md:p-8">
-            <p class="clinic-label">Student Emergency Tag</p>
-            <h1 class="font-headline text-3xl font-extrabold text-[#1c2a59] mb-2">Possible emergency?</h1>
-            <p class="text-sm font-bold text-slate-500 mb-6">
-                This page notifies the clinic. Private health details are visible only to authorized clinic staff.
-            </p>
+                <p class="clinic-label">Student Emergency Tag</p>
+                <h1 class="font-headline text-3xl font-extrabold text-[#1c2a59] mb-2">Possible emergency?</h1>
+                <p class="text-sm font-bold text-slate-500 mb-6">
+                    This page notifies the clinic. Private health details are visible only to authorized clinic staff.
+                </p>
 
-            <?php if ($message): ?>
-                <div class="rounded-2xl bg-emerald-50 border border-emerald-100 text-emerald-700 px-5 py-4 font-bold mb-4"><?= e($message) ?></div>
-            <?php endif; ?>
+                <?php if ($message): ?>
+                    <div class="rounded-2xl bg-emerald-50 border border-emerald-100 text-emerald-700 px-5 py-4 font-bold mb-4">
+                        <?= e($message) ?></div>
+                <?php endif; ?>
 
-            <?php if ($error): ?>
-                <div class="rounded-2xl bg-red-50 border border-red-100 text-red-700 px-5 py-4 font-bold mb-4"><?= e($error) ?></div>
-            <?php endif; ?>
+                <?php if ($error): ?>
+                    <div class="rounded-2xl bg-red-50 border border-red-100 text-red-700 px-5 py-4 font-bold mb-4">
+                        <?= e($error) ?></div>
+                <?php endif; ?>
 
-            <form method="post" class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div class="md:col-span-2">
-                    <label class="clinic-label">Reported Location</label>
-                    <input class="clinic-input" name="location" required placeholder="Example: Gymnasium, Room 204, gate area">
-                </div>
-                <div>
-                    <label class="clinic-label">Reporter Name</label>
-                    <input class="clinic-input" name="reporter_name" placeholder="Optional">
-                </div>
-                <div>
-                    <label class="clinic-label">Reporter Contact</label>
-                    <input class="clinic-input" name="reporter_contact" placeholder="Optional phone number">
-                </div>
-                <div class="md:col-span-2">
-                    <label class="clinic-label">Notes</label>
-                    <textarea class="clinic-textarea" name="notes" rows="4" placeholder="What happened? What does the student need?"></textarea>
-                </div>
-                <div class="md:col-span-2">
-                    <button class="w-full px-5 py-3 bg-red-600 text-white rounded-2xl text-sm font-black shadow-lg hover:bg-red-700">Report Possible Accident to Clinic</button>
-                </div>
-            </form>
+                <form method="post" class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div class="md:col-span-2">
+                        <label class="clinic-label">Reported Location</label>
+                        <input class="clinic-input" name="location" required
+                            placeholder="Example: Gymnasium, Room 204, gate area">
+                    </div>
+                    <div>
+                        <label class="clinic-label">Reporter Name</label>
+                        <input class="clinic-input" name="reporter_name" placeholder="Optional">
+                    </div>
+                    <div>
+                        <label class="clinic-label">Reporter Contact</label>
+                        <input class="clinic-input" name="reporter_contact" placeholder="Optional phone number">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="clinic-label">Notes</label>
+                        <textarea class="clinic-textarea" name="notes" rows="4"
+                            placeholder="What happened? What does the student need?"></textarea>
+                    </div>
+                    <div class="md:col-span-2">
+                        <button
+                            class="w-full px-5 py-3 bg-red-600 text-white rounded-2xl text-sm font-black shadow-lg hover:bg-red-700" data-confirm-submit data-confirm-type="danger" data-confirm-title="Submit this emergency report?" data-confirm-message="This will send the possible accident report to the clinic response queue." data-confirm-toast="Submitting emergency report...">Report
+                            Possible Accident to Clinic</button>
+                    </div>
+                </form>
 
-            <p class="text-xs font-bold text-slate-500 mt-6 mb-0">
-                If this is urgent, call the clinic or school emergency contact immediately after submitting the report.
-            </p>
+                <p class="text-xs font-bold text-slate-500 mt-6 mb-0">
+                    If this is urgent, call the clinic or school emergency contact immediately after submitting the report.
+                </p>
             </div>
         </div>
     <?php endif; ?>
 </div>
-<?php
-render_footer();
-__halt_compiler();
-            <p class="text-secondary mb-4"><?= e($patient['student_number']) ?> · <?= e($patient['course_section']) ?></p>
-            <dl class="row">
-                <dt class="col-sm-4">Blood Type</dt>
-                <dd class="col-sm-8"><?= e($patient['blood_type']) ?: 'Not specified' ?></dd>
-                <dt class="col-sm-4">Allergies</dt>
-                <dd class="col-sm-8"><?= nl2br(e($patient['allergies'])) ?: 'None recorded' ?></dd>
-                <dt class="col-sm-4">Existing Conditions</dt>
-                <dd class="col-sm-8"><?= nl2br(e($patient['existing_conditions'])) ?: 'None recorded' ?></dd>
-                <dt class="col-sm-4">Emergency Instructions</dt>
-                <dd class="col-sm-8"><?= nl2br(e($patient['emergency_instructions'])) ?: 'None recorded' ?></dd>
-                <dt class="col-sm-4">Guardian</dt>
-                <dd class="col-sm-8"><?= e($patient['guardian_name']) ?> · <?= e($patient['guardian_contact']) ?></dd>
-            </dl>
-        </div>
-    <?php endif; ?>
-</div>
-<?php render_footer(); ?>
