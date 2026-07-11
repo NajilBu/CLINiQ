@@ -43,6 +43,29 @@ $apeBadgeClass = match ($latestApe['clearance_status'] ?? '') {
     default => $latestApe ? 'student-badge-info' : 'student-badge-warning',
 };
 $apeNote = $latestApe['student_visible_note'] ?? 'Start your APE record with the clinic.';
+$apeRequirementStatus = $latestApe['requirement_status'] ?? 'Not Checked';
+$apeRequirementsVerified = $apeRequirementStatus === 'Pre-Verified' || in_array($apeStatus, [
+    'Requirements Checked',
+    'Submitted',
+    'Reviewed',
+    'Scheduled',
+    'Exam Done',
+    'Follow-up Required',
+    'Cleared',
+], true);
+$apeRequirementsNeedCorrection = $apeRequirementStatus === 'Needs Correction';
+$apeActionTitle = match (true) {
+    ($latestApe['clearance_status'] ?? 'Pending') === 'Cleared' => 'APE completed',
+    $apeRequirementsNeedCorrection => 'Return corrected hard-copy requirements',
+    !$apeRequirementsVerified => 'Wait for clinic hard-copy verification',
+    default => 'Upload verified APE documents',
+};
+$apeActionCopy = match (true) {
+    ($latestApe['clearance_status'] ?? 'Pending') === 'Cleared' => 'Your APE record is already cleared by the clinic.',
+    $apeRequirementsNeedCorrection => $apeNote,
+    !$apeRequirementsVerified => 'The clinic must verify your physical requirements first. Digital upload will open after that step.',
+    default => $apeNote,
+};
 $passportMissing = [];
 if (empty($profile['blood_type']) || $profile['blood_type'] === 'Unknown') {
     $passportMissing[] = 'blood type';
@@ -124,8 +147,8 @@ render_student_header('Dashboard', 'dashboard');
                     </span>
                     <div>
                         <p class="student-action-kicker student-action-kicker-primary">APE requirement</p>
-                        <h2>Continue your APE clearance</h2>
-                        <p><?= student_e($apeNote) ?></p>
+                        <h2><?= student_e($apeActionTitle) ?></h2>
+                        <p><?= student_e($apeActionCopy) ?></p>
                     </div>
                 </div>
                 <a href="student-ape-status.php" class="student-button text-decoration-none">
@@ -202,7 +225,7 @@ render_student_header('Dashboard', 'dashboard');
             </div>
             <div class="student-progress-list">
                 <div class="student-progress-step">
-                    <span class="student-progress-step-icon material-symbols-outlined">fact_check</span>
+                    <span class="student-progress-step-icon material-symbols-outlined">task_alt</span>
                     <div>
                         <strong><?= student_e($latestApe['document_type'] ?? 'APE Form') ?></strong>
                         <span><?= student_e($latestApe['clinical_remarks'] ?? 'No clinic remarks yet.') ?></span>

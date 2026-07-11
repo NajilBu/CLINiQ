@@ -40,6 +40,25 @@ html:has(.student-body) body {
     font-family: Inter, sans-serif;
 }
 
+.student-body .material-symbols-outlined {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    direction: ltr;
+    font-family: 'Material Symbols Outlined' !important;
+    font-feature-settings: 'liga';
+    font-style: normal;
+    font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+    font-weight: normal !important;
+    letter-spacing: normal;
+    line-height: 1;
+    text-transform: none;
+    white-space: nowrap;
+    word-wrap: normal;
+    -webkit-font-feature-settings: 'liga';
+    -webkit-font-smoothing: antialiased;
+}
+
 .student-body h1,
 .student-body h2,
 .student-body h3,
@@ -488,6 +507,19 @@ html:has(.student-body) body {
     border-color: #fecaca;
 }
 
+.student-button-disabled,
+.student-button:disabled,
+.student-button-secondary:disabled,
+.student-button-danger:disabled {
+    color: #8fa097;
+    background: #f4faf6;
+    border-color: #dce9e1;
+    box-shadow: none;
+    cursor: not-allowed;
+    opacity: 0.78;
+    transform: none;
+}
+
 .student-button .material-symbols-outlined,
 .student-button-secondary .material-symbols-outlined,
 .student-button-danger .material-symbols-outlined {
@@ -572,6 +604,128 @@ html:has(.student-body) body {
     color: var(--student-muted);
     font-size: 0.72rem;
     font-weight: 750;
+}
+
+.student-ape-stepper {
+    display: grid;
+    gap: 0;
+}
+
+.student-ape-step {
+    position: relative;
+    display: grid;
+    grid-template-columns: 2.35rem minmax(0, 1fr);
+    gap: 0.85rem;
+    min-height: 5rem;
+    padding: 0 0 1rem;
+}
+
+.student-ape-step:last-child {
+    min-height: auto;
+    padding-bottom: 0;
+}
+
+.student-ape-step-rail {
+    position: absolute;
+    top: 2.35rem;
+    bottom: 0;
+    left: 1.16rem;
+    width: 2px;
+    background: #dcebe1;
+}
+
+.student-ape-step:last-child .student-ape-step-rail {
+    display: none;
+}
+
+.student-ape-step-index {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.35rem;
+    height: 2.35rem;
+    color: var(--student-primary);
+    background: var(--student-primary-soft);
+    border: 1px solid #cfe6d6;
+    border-radius: 999px;
+}
+
+.student-ape-step-index .material-symbols-outlined {
+    font-size: 1.05rem;
+}
+
+.student-ape-step-body {
+    display: grid;
+    gap: 0.35rem;
+    min-width: 0;
+    padding: 0.9rem;
+    background: #ffffff;
+    border: 1px solid var(--student-border-soft);
+    border-radius: 0.8rem;
+    box-shadow: 0 6px 18px rgba(23, 38, 29, 0.035);
+}
+
+.student-ape-step-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.student-ape-step-count {
+    color: var(--student-muted);
+    font-size: 0.66rem;
+    font-weight: 850;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.student-ape-step-body strong {
+    color: var(--student-fg);
+    font-size: 0.92rem;
+    font-weight: 900;
+}
+
+.student-ape-step-body > span:not(.student-badge):not(.student-ape-step-count) {
+    color: var(--student-muted);
+    font-size: 0.78rem;
+    font-weight: 650;
+    line-height: 1.45;
+}
+
+.student-ape-step.is-current .student-ape-step-index {
+    color: #ffffff;
+    background: var(--student-primary);
+    border-color: var(--student-primary);
+    box-shadow: 0 0 0 5px rgba(63, 125, 82, 0.12);
+}
+
+.student-ape-step.is-current .student-ape-step-body {
+    border-color: #9fd4ad;
+    background: linear-gradient(180deg, #ffffff 0%, #f7fff9 100%);
+    box-shadow: 0 14px 30px rgba(63, 125, 82, 0.08);
+}
+
+.student-ape-step.is-done .student-ape-step-index {
+    color: #ffffff;
+    background: #16a36b;
+    border-color: #16a36b;
+}
+
+.student-ape-step.is-done .student-ape-step-rail {
+    background: #9fd4ad;
+}
+
+.student-ape-step.is-locked {
+    opacity: 0.82;
+}
+
+.student-ape-step.is-locked .student-ape-step-index {
+    color: #75887d;
+    background: #f2f8f4;
+    border-color: #dcebe1;
 }
 
 .student-document-list {
