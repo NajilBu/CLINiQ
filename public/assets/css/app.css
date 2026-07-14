@@ -1882,6 +1882,156 @@ textarea:focus {
 }
 
 /* ============================================================
+   APPOINTMENT AVAILABILITY
+   Monthly block calendar for clinic appointment scheduling
+   ============================================================ */
+.appointment-calendar {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 0.55rem;
+}
+
+.appointment-calendar-weekday {
+    padding: 0.25rem 0;
+    color: #94a3b8;
+    font-size: 0.68rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.appointment-calendar-day {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 0.4rem;
+    min-height: 7.2rem;
+    padding: 0.85rem;
+    border: 1px solid oklch(92% .01 230 / .82);
+    border-radius: 0.75rem;
+    background: #ffffff;
+    color: #17261d;
+    text-align: left;
+    transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
+}
+
+.appointment-calendar-day:not(.is-empty):hover {
+    transform: translateY(-1px);
+    border-color: #cfe6d6;
+}
+
+.appointment-calendar-day.is-empty {
+    min-height: 7.2rem;
+    background: transparent;
+    border-color: transparent;
+}
+
+.appointment-calendar-day.is-open {
+    background: #f8fffb;
+    border-color: #d7eadc;
+}
+
+.appointment-calendar-day.is-partial {
+    background: #fffbeb;
+    border-color: #fde68a;
+}
+
+.appointment-calendar-day.is-unavailable {
+    background: #fff1f2;
+    border-color: #fecdd3;
+}
+
+.appointment-calendar-number {
+    font-size: 1rem;
+    font-weight: 900;
+}
+
+.appointment-calendar-status {
+    width: fit-content;
+    padding: 0.32rem 0.55rem;
+    border-radius: 999px;
+    background: #edf8f0;
+    color: var(--cliniq-primary-hover);
+    font-size: 0.62rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    line-height: 1;
+    text-transform: uppercase;
+}
+
+.appointment-calendar-day.is-partial .appointment-calendar-status {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.appointment-calendar-day.is-unavailable .appointment-calendar-status {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.appointment-calendar-note {
+    color: #64748b;
+    font-size: 0.68rem;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.appointment-block-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.85rem;
+    border: 1px solid oklch(92% .01 230 / .72);
+    border-radius: 0.75rem;
+    background: #f8fafc;
+}
+
+.appointment-block-row strong,
+.appointment-block-row span {
+    display: block;
+}
+
+.appointment-block-row strong {
+    color: #17261d;
+    font-size: 0.82rem;
+    font-weight: 900;
+}
+
+.appointment-block-row span {
+    margin-top: 0.18rem;
+    color: #64748b;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.appointment-action-group {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.45rem;
+    width: 100%;
+    min-width: 0;
+}
+
+.appointment-cancel-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+}
+
+.appointment-cancel-input {
+    width: 8rem;
+    min-height: 2.1rem;
+    padding: 0.35rem 0.55rem;
+    border-radius: 0.5rem;
+    font-size: 0.72rem;
+}
+
+/* ============================================================
    RESPONSIVE HELPERS
    ============================================================ */
 @media (max-width: 768px) {
@@ -1908,5 +2058,14 @@ textarea:focus {
 
     .stock-bar {
         width: 4rem;
+    }
+
+    .appointment-calendar {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .appointment-calendar-weekday,
+    .appointment-calendar-day.is-empty {
+        display: none;
     }
 }

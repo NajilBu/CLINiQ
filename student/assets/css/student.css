@@ -758,6 +758,24 @@ html:has(.student-body) body {
     font-weight: 750;
 }
 
+.student-appointment-actions {
+    display: grid;
+    justify-items: end;
+    gap: 0.45rem;
+    min-width: min(100%, 14rem);
+}
+
+.student-cancel-form {
+    display: grid;
+    gap: 0.4rem;
+    width: 100%;
+}
+
+.student-cancel-input {
+    min-height: 2.35rem;
+    padding: 0.5rem 0.65rem;
+}
+
 .student-note {
     display: flex;
     align-items: flex-start;
@@ -1073,6 +1091,90 @@ html:has(.student-body) body {
     gap: 0.35rem;
 }
 
+.student-month-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.student-month-nav {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: var(--student-fg);
+    font-size: 0.78rem;
+    font-weight: 800;
+}
+
+.student-month-nav a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.9rem;
+    height: 1.9rem;
+    border: 1px solid var(--student-border-soft);
+    border-radius: 0.55rem;
+    background: #ffffff;
+    color: var(--student-primary);
+}
+
+.student-month-nav .material-symbols-outlined {
+    font-size: 1rem;
+}
+
+.student-calendar-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem 0.85rem;
+    margin-bottom: 0.85rem;
+    color: var(--student-muted);
+    font-size: 0.68rem;
+    font-weight: 800;
+}
+
+.student-calendar-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.student-calendar-legend i {
+    display: inline-block;
+    width: 0.65rem;
+    height: 0.65rem;
+    border-radius: 999px;
+}
+
+.legend-open {
+    background: var(--student-primary);
+}
+
+.legend-blocked {
+    background: var(--student-danger);
+}
+
+.legend-partial {
+    background: #f59e0b;
+}
+
+.legend-appointment {
+    background: #f97316;
+}
+
+.student-calendar-weekday {
+    color: #94a3b8;
+    font-size: 0.65rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.student-date-empty {
+    min-height: 3.3rem;
+}
+
 .student-date-btn,
 .student-time-slot {
     display: inline-flex;
@@ -1089,10 +1191,36 @@ html:has(.student-body) body {
     transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
+.student-date-btn {
+    min-height: 3.3rem;
+    flex-direction: column;
+    gap: 0.18rem;
+}
+
+.student-date-btn small {
+    font-size: 0.55rem;
+    font-weight: 900;
+    letter-spacing: 0.06em;
+    line-height: 1;
+    text-transform: uppercase;
+}
+
 .student-date-btn.available {
     color: var(--student-primary);
     background: var(--student-primary-soft);
     border-color: #cfe6d6;
+}
+
+.student-date-btn.partial {
+    color: #92400e;
+    background: #fffbeb;
+    border-color: #fde68a;
+}
+
+.student-date-btn.has-appointment {
+    color: #9a3412;
+    background: #fff7ed;
+    border-color: #fed7aa;
 }
 
 .student-date-btn.selected,
@@ -1102,10 +1230,21 @@ html:has(.student-body) body {
     border-color: var(--student-primary);
 }
 
-.student-date-btn.disabled {
+.student-date-btn.disabled,
+.student-time-slot.disabled {
     color: #b8c4bd;
     background: #f6faf7;
     cursor: not-allowed;
+}
+
+.student-date-btn.disabled[disabled] {
+    border-color: #edf2ef;
+}
+
+.student-date-btn.has-appointment.disabled {
+    color: #9a3412;
+    background: #fff7ed;
+    border-color: #fed7aa;
 }
 
 .student-time-grid {
@@ -1227,9 +1366,14 @@ html:has(.student-body) body {
 
     .student-document-card>.student-button,
     .student-document-card>.student-button-secondary,
+    .student-document-card>.student-appointment-actions,
     .student-progress-step>.student-badge {
         grid-column: 1 / -1;
         width: 100%;
+    }
+
+    .student-appointment-actions {
+        justify-items: stretch;
     }
 
     .student-time-grid {

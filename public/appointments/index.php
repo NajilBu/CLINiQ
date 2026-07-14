@@ -45,8 +45,9 @@ $columns = [
     ['headerName' => 'Purpose', 'field' => 'purpose', 'minWidth' => 220],
     ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'width' => 150],
     ['headerName' => 'Notes', 'field' => 'notes', 'minWidth' => 220],
+    ['headerName' => 'Cancellation Reason', 'field' => 'cancelReason', 'minWidth' => 240],
     ['headerName' => 'Requested', 'field' => 'created', 'width' => 150],
-    ['headerName' => 'Clinic Action', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 260],
+    ['headerName' => 'Clinic Action', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 280],
 ];
 
 $rows = [];
@@ -56,14 +57,15 @@ foreach ($appointments as $appointment) {
     $actions = '';
 
     if ($status === 'Pending') {
-        $actions = '<div class="flex justify-end gap-2">'
+        $actions = '<div class="appointment-action-group">'
             . '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['id'] . '"><input type="hidden" name="status" value="Scheduled"><button class="btn btn-sm btn-primary" title="Approve appointment" data-confirm-submit data-confirm-type="primary" data-confirm-title="Approve this appointment?" data-confirm-message="This will schedule the appointment request." data-confirm-toast="Approving appointment..."><span class="material-symbols-outlined text-[14px]">event_available</span> Approve</button></form>'
-            . '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['id'] . '"><input type="hidden" name="status" value="Cancelled"><button class="btn btn-sm btn-ghost btn-cancel-icon" title="Cancel request" aria-label="Cancel request" data-confirm-submit data-confirm-type="danger" data-confirm-title="Cancel this appointment request?" data-confirm-message="This will mark the appointment request as Cancelled." data-confirm-toast="Cancelling appointment..."><span class="material-symbols-outlined text-[14px]">cancel</span></button></form>'
+            . '<button type="button" class="btn btn-sm btn-ghost btn-cancel-icon" title="Cancel request" aria-label="Cancel request" data-cancel-appointment data-cancel-id="' . (int)$appointment['id'] . '" data-cancel-title="Cancel appointment request"><span class="material-symbols-outlined text-[14px]">cancel</span></button>'
             . '</div>';
     } elseif ($status === 'Scheduled') {
-        $actions = '<div class="flex justify-end gap-2">'
+        $actions = '<div class="appointment-action-group">'
             . '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['id'] . '"><input type="hidden" name="status" value="Completed"><button class="btn btn-sm btn-outline" title="Mark completed" data-confirm-submit data-confirm-type="primary" data-confirm-title="Mark appointment completed?" data-confirm-message="This will mark the scheduled appointment as Completed." data-confirm-toast="Completing appointment..."><span class="material-symbols-outlined text-[14px]">check</span> Complete</button></form>'
             . '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['id'] . '"><input type="hidden" name="status" value="No Show"><button class="btn btn-sm btn-ghost" title="Mark no-show" data-confirm-submit data-confirm-type="danger" data-confirm-title="Mark as no-show?" data-confirm-message="This will mark the scheduled appointment as No Show." data-confirm-toast="Marking no-show..."><span class="material-symbols-outlined text-[14px]">person_cancel</span> No Show</button></form>'
+            . '<button type="button" class="btn btn-sm btn-ghost btn-cancel-icon" title="Cancel appointment" aria-label="Cancel appointment" data-cancel-appointment data-cancel-id="' . (int)$appointment['id'] . '" data-cancel-title="Cancel scheduled appointment"><span class="material-symbols-outlined text-[14px]">cancel</span></button>'
             . '</div>';
     }
 
@@ -74,6 +76,7 @@ foreach ($appointments as $appointment) {
         'purpose' => $appointment['purpose'],
         'statusHtml' => '<span class="badge ' . e(appointment_status_badge_class($status)) . '">' . e($status) . '</span>',
         'notes' => $appointment['notes'] ?: '-',
+        'cancelReason' => $appointment['cancellation_reason'] ?: '-',
         'created' => date('M d, g:i A', strtotime($appointment['created_at'])),
         'actionsHtml' => $actions,
     ];
@@ -88,6 +91,10 @@ render_header('Appointments');
         <h1 class="font-headline text-3xl md:text-4xl font-extrabold text-[#17261d]">Appointment Requests</h1>
         <p class="text-sm font-bold text-slate-500 mt-1">Approve student booking requests before they become clinic schedules.</p>
     </div>
+    <a href="<?= app_url('appointments/availability.php') ?>" class="btn btn-primary text-decoration-none">
+        <span class="material-symbols-outlined">calendar_month</span>
+        Manage Availability
+    </a>
 </div>
 
 <section class="clinic-card overflow-hidden">
@@ -131,5 +138,50 @@ render_header('Appointments');
         'emptyText' => $filterStatus === 'Pending' ? 'Student appointment requests will appear here for clinic approval.' : 'Try another status filter.',
     ]); ?>
 </section>
+
+<div id="appointmentCancelModal" class="modal-backdrop" data-no-row-click>
+    <div class="modal-content bg-white rounded-[2rem] p-8 w-full max-w-md shadow-2xl">
+        <div class="flex items-start gap-4 mb-6">
+            <div class="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">
+                <span class="material-symbols-outlined">event_busy</span>
+            </div>
+            <div>
+                <h3 id="appointmentCancelTitle" class="font-headline text-lg font-extrabold text-[#1c2a59] mb-1">Cancel appointment</h3>
+                <p class="text-sm font-bold text-slate-500">Please provide a reason. This will be visible in the appointment record.</p>
+            </div>
+        </div>
+        <form method="post" action="update.php">
+            <input type="hidden" name="id" id="appointmentCancelId" value="">
+            <input type="hidden" name="status" value="Cancelled">
+            <div class="mb-5">
+                <label class="clinic-label" for="appointmentCancellationReason">Cancellation Reason</label>
+                <textarea id="appointmentCancellationReason" name="cancellation_reason" class="clinic-textarea" required maxlength="500" placeholder="Example: Student requested reschedule, clinic schedule conflict, or another reason."></textarea>
+            </div>
+            <div class="flex justify-end gap-3">
+                <button type="button" onclick="closeModal('appointmentCancelModal')" class="btn btn-ghost">Back</button>
+                <button type="submit" class="btn btn-danger">
+                    <span class="material-symbols-outlined text-[16px]">cancel</span>
+                    Cancel Appointment
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-cancel-appointment]');
+        if (!button) {
+            return;
+        }
+
+        event.preventDefault();
+        document.getElementById('appointmentCancelId').value = button.dataset.cancelId || '';
+        document.getElementById('appointmentCancelTitle').textContent = button.dataset.cancelTitle || 'Cancel appointment';
+        document.getElementById('appointmentCancellationReason').value = '';
+        showModal('appointmentCancelModal');
+        setTimeout(() => document.getElementById('appointmentCancellationReason').focus(), 60);
+    });
+</script>
 
 <?php render_footer(); ?>

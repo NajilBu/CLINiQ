@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/../../app/config/database.php';
 require_once __DIR__ . '/../../app/helpers/brand.php';
+require_once __DIR__ . '/../../app/helpers/student_id.php';
 
 const STUDENT_DEMO_PASSWORD = 'student123';
 

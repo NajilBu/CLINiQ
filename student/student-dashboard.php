@@ -90,6 +90,24 @@ $appointmentBadgeClass = match ($appointmentStatus) {
     'Pending' => 'student-badge-warning',
     default => 'student-badge-info',
 };
+$appointmentNoteClass = match ($appointmentStatus) {
+    'Pending' => 'student-note-warning',
+    'Cancelled', 'No Show' => 'student-note-danger',
+    default => 'student-note-success',
+};
+$appointmentIcon = match ($appointmentStatus) {
+    'Pending' => 'hourglass_top',
+    'Cancelled', 'No Show' => 'event_busy',
+    default => 'event_available',
+};
+$appointmentSummary = match ($appointmentStatus) {
+    'Pending' => 'Your request was sent to the clinic. Please wait for approval before going to the clinic.',
+    'Scheduled' => 'Please arrive 10 minutes before your scheduled time.',
+    'Completed' => 'This appointment has been completed.',
+    'Cancelled' => 'This appointment was cancelled.',
+    'No Show' => 'This appointment was marked as no-show by the clinic.',
+    default => 'Manage your appointment request from the appointment page.',
+};
 
 render_student_header('Dashboard', 'dashboard');
 ?>
@@ -254,17 +272,18 @@ render_student_header('Dashboard', 'dashboard');
         </div>
         <div class="student-card-pad">
             <?php if ($latestAppointment): ?>
-                <div class="student-note <?= $appointmentStatus === 'Pending' ? 'student-note-warning' : 'student-note-success' ?> mb-4">
-                    <span class="material-symbols-outlined"><?= $appointmentStatus === 'Pending' ? 'hourglass_top' : 'event_available' ?></span>
+                <div class="student-note <?= student_e($appointmentNoteClass) ?> mb-4">
+                    <span class="material-symbols-outlined"><?= student_e($appointmentIcon) ?></span>
                     <div>
                         <strong><?= student_e($latestAppointment['purpose']) ?></strong><br>
                         <?= student_e(date('F j, Y \a\t g:i A', strtotime($latestAppointment['appointment_datetime']))) ?>
+                        <?php if ($appointmentStatus === 'Cancelled' && trim((string) ($latestAppointment['cancellation_reason'] ?? '')) !== ''): ?>
+                            <br><strong>Reason:</strong> <?= student_e($latestAppointment['cancellation_reason']) ?>
+                        <?php endif; ?>
                     </div>
                 </div>
                 <p class="text-xs font-bold text-slate-500 mb-5">
-                    <?= $appointmentStatus === 'Pending'
-                        ? 'Your request was sent to the clinic. Please wait for approval before going to the clinic.'
-                        : 'Please arrive 10 minutes before your scheduled time.' ?>
+                    <?= student_e($appointmentSummary) ?>
                 </p>
             <?php else: ?>
                 <div class="student-note student-note-warning mb-4">

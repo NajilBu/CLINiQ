@@ -1,0 +1,483 @@
+{"kind":"deck","id":"pr/clh4j2","name":"Deck"}
+{"kind":"layout","layoutId":"/ppt/slideMasters/slideMaster1.xml","name":"","type":"master"}
+{"kind":"layout","layoutId":"/ppt/slideLayouts/slideLayout1.xml","name":"DEFAULT"}
+{"kind":"slide","id":"sl/y90nupkv","slide":1,"title":"BSIT-3D | COLLEGE OF COMPUTER STUDIES","textShapes":9}
+{"kind":"shape","id":"sh/ul4vaxgb","slide":1,"name":"Google Shape;12;p3","bbox":[729.6,-124.8,384,384]}
+{"kind":"shape","id":"sh/vmdcj2xw","slide":1,"name":"Google Shape;13;p3","bbox":[-134.4,345.6,326.4,326.4]}
+{"kind":"shape","id":"sh/4r6dg7et","slide":1,"name":"Google Shape;14;p3","bbox":[67.2,52.8,67.2,67.2]}
+{"kind":"textbox","id":"sh/ipovexwn","slide":1,"name":"Google Shape;16;p3","text":"BSIT-3D | COLLEGE OF COMPUTER STUDIES","textPreview":"BSIT-3D | COLLEGE OF COMPUTER STUDIES","textChars":37,"textLines":1,"bbox":[67.2,144,825.6,33.6]}
+{"kind":"textbox","id":"sh/3qxwn2x8","slide":1,"name":"Google Shape;17;p3","text":"CLINiQ","textPreview":"CLINiQ","textChars":6,"textLines":1,"bbox":[62.4,177.6,825.6,105.6]}
+{"kind":"textbox","id":"sh/sfqdkrep","slide":1,"name":"Google Shape;18;p3","text":"A Smart Clinic Information Management System with QR/NFC Patient Health Passport and Nurse Alerting for the Clinic of PLP","textPreview":"A Smart Clinic Information Management System with QR/NFC Patient Health Passport and Nurse Alerting for the Clinic of PLP","textChars":121,"textLines":1,"bbox":[67.2,273.6,729.6,72]}
+{"kind":"textbox","id":"sh/dgzetcfa","slide":1,"name":"Google Shape;19;p3","text":"Bumacod, Najil J.","textPreview":"Bumacod, Najil J.","textChars":17,"textLines":1,"bbox":[67.2,444.48,264,38.4]}
+{"kind":"textbox","id":"sh/1cvuxc7e","slide":1,"name":"Google Shape;20;p3","text":"Cainglet, Jan Alain S.","textPreview":"Cainglet, Jan Alain S.","textChars":22,"textLines":1,"bbox":[355.2,444.48,264,38.4]}
+{"kind":"textbox","id":"sh/0bmd476t","slide":1,"name":"Google Shape;21;p3","text":"Faustino, Justine Angelo B.","textPreview":"Faustino, Justine Angelo B.","textChars":27,"textLines":1,"bbox":[643.2,444.48,264,38.4]}
+{"kind":"textbox","id":"sh/zadcv2p8","slide":1,"name":"Google Shape;22;p3","text":"Pamantasan ng Lungsod ng Pasig  |  College of Computer Studies","textPreview":"Pamantasan ng Lungsod ng Pasig  |  College of Computer Studies","textChars":62,"textLines":1,"bbox":[67.2,484.8,825.6,33.6]}
+{"kind":"textbox","id":"sh/e94v2hon","slide":1,"name":"Google Shape;23;p3","text":"CLINiQ","textPreview":"CLINiQ","textChars":6,"textLines":1,"bbox":[48,505.44,480,28.8]}
+{"kind":"textbox","id":"sh/90ve1w7q","slide":1,"name":"Google Shape;24;p3","text":"1","textPreview":"1","textChars":1,"textLines":1,"bbox":[864,505.44,48,28.8]}
+{"kind":"shape","id":"sh/ozmd8r65","slide":1,"name":"Google Shape;25;p3","bbox":[158.95,366.85,80.5,80.31]}
+{"kind":"shape","id":"sh/nydczmpk","slide":1,"name":"Google Shape;26;p3","bbox":[442.85,366.87,85.17,80.31]}
+{"kind":"shape","id":"sh/mx4v6hoz","slide":1,"name":"Google Shape;27;p3","bbox":[734.94,366.88,88.69,80.31]}
+{"kind":"image","id":"im/mlofqdgr","slide":1,"name":"Google Shape;15;p3","bbox":[75.94,61.54,49.73,49.73]}
+{"kind":"image","id":"im/nmxgjixc","slide":1,"name":"Google Shape;28;p3","bbox":[158.95,366.87,80.5,80.33]}
+{"kind":"image","id":"im/xgzi9wzu","slide":1,"name":"Google Shape;29;p3","bbox":[442.85,366.87,88.7,80.33]}
+{"kind":"notes","id":"nt/y90nupkv","slide":1,"text":"Presentation pacing target: maximum 15 minutes.\nDemo focus: student appointment request -> staff approval -> visit recording -> risk result -> patient profile -> passport incident -> nurse alert -> APE/reports proof.\nDefense phrasing: rule-based decision support, tokenized QR/NFC-ready emergency link, near real-time dashboard polling."}
+{"kind":"slide","id":"sl/hwbqtkby","slide":2,"title":"Introduction","textShapes":12}
+{"kind":"textbox","id":"sh/ba9cn6l4","slide":2,"name":"Google Shape;35;p4","text":"Introduction","textPreview":"Introduction","textChars":12,"textLines":1,"bbox":[57.6,43.2,768,57.6]}
+{"kind":"textbox","id":"sh/wbidwb29","slide":2,"name":"Google Shape;36;p4","text":"What CLINiQ is, and why it was developed","textPreview":"What CLINiQ is, and why it was developed","textChars":40,"textLines":1,"bbox":[57.6,96,768,33.6]}
+{"kind":"shape","id":"sh/xcrupg3u","slide":2,"name":"Google Shape;37;p4","bbox":[57.6,148.8,412.8,336]}
+{"kind":"shape","id":"sh/id0vylkf","slide":2,"name":"Google Shape;38;p4","bbox":[91.2,182.4,72,72]}
+{"kind":"textbox","id":"sh/ru5cbqd4","slide":2,"name":"Google Shape;40;p4","text":"A web-based school clinic information management system","textPreview":"A web-based school clinic information management system","textChars":55,"textLines":1,"bbox":[91.2,273.6,350.4,96]}
+{"kind":"textbox","id":"sh/69wbilcj","slide":2,"name":"Google Shape;41;p4","text":"Purpose-built for the Clinic of Pamantasan ng Lungsod ng Pasig (PLP)","textPreview":"Purpose-built for the Clinic of Pamantasan ng Lungsod ng Pasig (PLP)","textChars":68,"textLines":1,"bbox":[91.2,369.6,350.4,86.4]}
+{"kind":"shape","id":"sh/tw7ud0va","slide":2,"name":"Google Shape;42;p4","bbox":[494.4,148.8,408,98.88]}
+{"kind":"shape","id":"sh/svedkvup","slide":2,"name":"Google Shape;43;p4","bbox":[513.6,168,57.6,57.6]}
+{"kind":"textbox","id":"sh/exgvmlcv","slide":2,"name":"Google Shape;45;p4","text":"Improves clinic documentation","textPreview":"Improves clinic documentation","textChars":29,"textLines":1,"bbox":[585.6,158.4,302.4,33.6]}
+{"kind":"textbox","id":"sh/107uh0v6","slide":2,"name":"Google Shape;46;p4","text":"Centralizes patient profiles, visits, APE status, appointments, alerts, inventory, and reports.","textPreview":"Centralizes patient profiles, visits, APE status, appointments, alerts, inventory, and reports.","textChars":95,"textLines":1,"bbox":[585.6,192,302.4,52.8]}
+{"kind":"shape","id":"sh/gzydovul","slide":2,"name":"Google Shape;47;p4","bbox":[494.4,262.08,408,98.88]}
+{"kind":"shape","id":"sh/v2lc36dw","slide":2,"name":"Google Shape;48;p4","bbox":[513.6,281.28,57.6,57.6]}
+{"kind":"textbox","id":"sh/0vq1o36x","slide":2,"name":"Google Shape;50;p4","text":"Strengthens clinic response","textPreview":"Strengthens clinic response","textChars":27,"textLines":1,"bbox":[585.6,271.68,302.4,33.6]}
+{"kind":"textbox","id":"sh/1wzix87i","slide":2,"name":"Google Shape;51;p4","text":"Gives staff faster access to records, risk levels, alerts, and emergency-approved information.","textPreview":"Gives staff faster access to records, risk levels, alerts, and emergency-approved information.","textChars":94,"textLines":1,"bbox":[585.6,305.28,302.4,52.8]}
+{"kind":"shape","id":"sh/et8zmto7","slide":2,"name":"Google Shape;52;p4","bbox":[494.4,375.36,408,98.88]}
+{"kind":"shape","id":"sh/zuh0vypc","slide":2,"name":"Google Shape;53;p4","bbox":[513.6,394.56,57.6,57.6]}
+{"kind":"textbox","id":"sh/d8zit87m","slide":2,"name":"Google Shape;55;p4","text":"Supports staff and students","textPreview":"Supports staff and students","textChars":27,"textLines":1,"bbox":[585.6,384.96,302.4,33.6]}
+{"kind":"textbox","id":"sh/q5ozitov","slide":2,"name":"Google Shape;56;p4","text":"Includes a staff portal, student portal, self-logbook, and tokenized emergency passport flow.","textPreview":"Includes a staff portal, student portal, self-logbook, and tokenized emergency passport flow.","textChars":93,"textLines":1,"bbox":[585.6,418.56,302.4,52.8]}
+{"kind":"textbox","id":"sh/r6x0rypg","slide":2,"name":"Google Shape;57;p4","text":"CLINiQ ","textPreview":"CLINiQ","textChars":7,"textLines":1,"bbox":[48,505.44,480,28.8]}
+{"kind":"textbox","id":"sh/w3a1wn65","slide":2,"name":"Google Shape;58;p4","text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[864,505.44,48,28.8]}
+{"kind":"image","id":"im/yh8fylcn","slide":2,"name":"Google Shape;39;p4","bbox":[100.56,191.76,53.28,53.28]}
+{"kind":"image","id":"im/2xwz6twb","slide":2,"name":"Google Shape;44;p4","bbox":[521.09,175.49,42.62,42.62]}
+{"kind":"image","id":"im/3yp0zyxg","slide":2,"name":"Google Shape;49;p4","bbox":[521.09,288.77,42.62,42.62]}
+{"kind":"image","id":"im/ozyh83e1","slide":2,"name":"Google Shape;54;p4","bbox":[521.09,402.05,42.62,42.62]}
+{"kind":"notes","id":"nt/hwbqtkby","slide":2,"text":"Presentation pacing target: maximum 15 minutes.\nDemo focus: student appointment request -> staff approval -> visit recording -> risk result -> patient profile -> passport incident -> nurse alert -> APE/reports proof.\nDefense phrasing: rule-based decision support, tokenized QR/NFC-ready emergency link, near real-time dashboard polling."}
+{"kind":"slide","id":"sl/ofy9wn61","slide":3,"title":"Background of the Study","textShapes":16}
+{"kind":"textbox","id":"sh/qtofadkf","slide":3,"name":"Google Shape;64;p5","text":"Background of the Study","textPreview":"Background of the Study","textChars":23,"textLines":1,"bbox":[57.6,43.2,816,57.6]}
+{"kind":"textbox","id":"sh/bexwjil0","slide":3,"name":"Google Shape;65;p5","text":"Where manual clinic processes fall short","textPreview":"Where manual clinic processes fall short","textChars":40,"textLines":1,"bbox":[57.6,96,768,33.6]}
+{"kind":"shape","id":"sh/cf6xcn2l","slide":3,"name":"Google Shape;66;p5","bbox":[52.8,148.8,398.4,345.6]}
+{"kind":"textbox","id":"sh/dgfyls3q","slide":3,"name":"Google Shape;67;p5","text":"THE PROBLEM","textPreview":"THE PROBLEM","textChars":11,"textLines":1,"bbox":[86.4,168,336,33.6]}
+{"kind":"shape","id":"sh/6xkvytkb","slide":3,"name":"Google Shape;68;p5","bbox":[86.4,216,15.36,15.36]}
+{"kind":"textbox","id":"sh/7idw7ylg","slide":3,"name":"Google Shape;69;p5","text":"Clinic records rely heavily on paper","textPreview":"Clinic records rely heavily on paper","textChars":36,"textLines":1,"bbox":[115.2,205.44,307.2,38.4]}
+{"kind":"shape","id":"sh/9cjidwny","slide":3,"name":"Google Shape;70;p5","bbox":[86.4,268.8,15.36,15.36]}
+{"kind":"textbox","id":"sh/8bahkrmt","slide":3,"name":"Google Shape;71;p5","text":"Delays retrieving patient information","textPreview":"Delays retrieving patient information","textChars":37,"textLines":1,"bbox":[115.2,258.24,307.2,38.4]}
+{"kind":"shape","id":"sh/na10bm58","slide":3,"name":"Google Shape;72;p5","bbox":[86.4,321.6,15.36,15.36]}
+{"kind":"textbox","id":"sh/m9szih4n","slide":3,"name":"Google Shape;73;p5","text":"Incomplete documentation","textPreview":"Incomplete documentation","textChars":24,"textLines":1,"bbox":[115.2,311.04,307.2,38.4]}
+{"kind":"shape","id":"sh/xg3ihwna","slide":3,"name":"Google Shape;74;p5","bbox":[86.4,374.4,15.36,15.36]}
+{"kind":"textbox","id":"sh/wfahormp","slide":3,"name":"Google Shape;75;p5","text":"Difficulties in emergency response","textPreview":"Difficulties in emergency response","textChars":34,"textLines":1,"bbox":[115.2,363.84,307.2,38.4]}
+{"kind":"shape","id":"sh/ve10fm54","slide":3,"name":"Google Shape;76;p5","bbox":[86.4,427.2,15.36,15.36]}
+{"kind":"textbox","id":"sh/adszm14j","slide":3,"name":"Google Shape;77;p5","text":"Challenges prioritizing patients","textPreview":"Challenges prioritizing patients","textChars":32,"textLines":1,"bbox":[115.2,416.64,307.2,38.4]}
+{"kind":"shape","id":"sh/dkzy5cn6","slide":3,"name":"Google Shape;78;p5","bbox":[458.88,292.8,52.8,52.8]}
+{"kind":"shape","id":"sh/436lcve1","slide":3,"name":"Google Shape;80;p5","bbox":[523.2,148.8,384,345.6]}
+{"kind":"textbox","id":"sh/54fm50vm","slide":3,"name":"Google Shape;81;p5","text":"THE CLINiQ SOLUTION","textPreview":"THE CLINiQ SOLUTION","textChars":19,"textLines":1,"bbox":[556.8,168,326.4,33.6]}
+{"kind":"textbox","id":"sh/3id43qdg","slide":3,"name":"Google Shape;83;p5","text":"Centralized electronic health records","textPreview":"Centralized electronic health records","textChars":37,"textLines":1,"bbox":[590.4,206.4,302.4,38.4]}
+{"kind":"textbox","id":"sh/hgvm1gvq","slide":3,"name":"Google Shape;85;p5","text":"Searchable patient profiles and visit history","textPreview":"Searchable patient profiles and visit history","textChars":45,"textLines":1,"bbox":[590.4,259.2,302.4,38.4]}
+{"kind":"textbox","id":"sh/ved4zqdk","slide":3,"name":"Google Shape;87;p5","text":"Structured documentation for visits and APE","textPreview":"Structured documentation for visits and APE","textChars":43,"textLines":1,"bbox":[590.4,312,302.4,38.4]}
+{"kind":"textbox","id":"sh/1czmdkvu","slide":3,"name":"Google Shape;89;p5","text":"QR/NFC-ready passport + nurse alerts","textPreview":"QR/NFC-ready passport + nurse alerts","textChars":36,"textLines":1,"bbox":[590.4,364.8,302.4,38.4]}
+{"kind":"textbox","id":"sh/a5s7a9gb","slide":3,"name":"Google Shape;91;p5","text":"Transparent rule-based risk classification","textPreview":"Transparent rule-based risk classification","textChars":42,"textLines":1,"bbox":[590.4,417.6,302.4,38.4]}
+{"kind":"textbox","id":"sh/x8jq5of2","slide":3,"name":"Google Shape;92;p5","text":"CLINiQ","textPreview":"CLINiQ","textChars":6,"textLines":1,"bbox":[48,505.44,480,28.8]}
+{"kind":"textbox","id":"sh/w7apcjyh","slide":3,"name":"Google Shape;93;p5","text":"3","textPreview":"3","textChars":1,"textLines":1,"bbox":[864,505.44,48,28.8]}
+{"kind":"image","id":"im/kf2ho7yh","slide":3,"name":"Google Shape;79;p5","bbox":[465.74,299.66,39.07,39.07]}
+{"kind":"image","id":"im/5gbyxcz2","slide":3,"name":"Google Shape;82;p5","bbox":[556.8,211.2,21.12,21.12]}
+{"kind":"image","id":"im/idkzmhgb","slide":3,"name":"Google Shape;84;p5","bbox":[556.8,264,21.12,21.12]}
+{"kind":"image","id":"im/jetgv2hw","slide":3,"name":"Google Shape;86;p5","bbox":[556.8,316.8,21.12,21.12]}
+{"kind":"image","id":"im/4b6h0byl","slide":3,"name":"Google Shape;88;p5","bbox":[556.8,369.6,21.12,21.12]}
+{"kind":"image","id":"im/pcfi9gf6","slide":3,"name":"Google Shape;90;p5","bbox":[556.8,422.4,21.12,21.12]}
+{"kind":"notes","id":"nt/ofy9wn61","slide":3,"text":"Presentation pacing target: maximum 15 minutes.\nDemo focus: student appointment request -> staff approval -> visit recording -> risk result -> patient profile -> passport incident -> nurse alert -> APE/reports proof.\nDefense phrasing: rule-based decision support, tokenized QR/NFC-ready emergency link, near real-time dashboard polling."}
+{"kind":"slide","id":"sl/jyx0ra1s","slide":4,"title":"Statement of the Problem","textShapes":16}
+{"kind":"textbox","id":"sh/l03q1cra","slide":4,"name":"Google Shape;99;p6","text":"Statement of the Problem","textPreview":"Statement of the Problem","textChars":24,"textLines":1,"bbox":[57.6,43.2,816,57.6]}
+{"kind":"shape","id":"sh/yl0b2t47","slide":4,"name":"Google Shape;100;p6","bbox":[57.6,105.6,844.8,91.2]}
+{"kind":"textbox","id":"sh/j6tsbyls","slide":4,"name":"Google Shape;101;p6","text":"General Problem","textPreview":"General Problem","textChars":15,"textLines":1,"bbox":[86.4,115.2,787.2,28.8]}
+{"kind":"textbox","id":"sh/k72t43md","slide":4,"name":"Google Shape;102;p6","text":"PLP Clinic still relies on manual and fragmented workflows for records, appointments, APE tracking, and emergency response, which can delay retrieval, documentation, and coordination.","textPreview":"PLP Clinic still relies on manual and fragmented workflows for records, appointments, APE tracking, and emergency response, which can del...","textChars":183,"textLines":1,"bbox":[86.4,142.08,787.2,48]}
+{"kind":"textbox","id":"sh/l8bad83y","slide":4,"name":"Google Shape;103;p6","text":"Specifically, the study seeks to answer:","textPreview":"Specifically, the study seeks to answer:","textChars":40,"textLines":1,"bbox":[57.6,211.2,576,33.6]}
+{"kind":"shape","id":"sh/ah0byt4b","slide":4,"name":"Google Shape;104;p6","bbox":[57.6,249.6,40.32,40.32]}
+{"kind":"textbox","id":"sh/bi9s7ylw","slide":4,"name":"Google Shape;105;p6","text":"1","textPreview":"1","textChars":1,"textLines":1,"bbox":[57.6,249.6,40.32,40.32]}
+{"kind":"textbox","id":"sh/wjit0jmh","slide":4,"name":"Google Shape;106;p6","text":"How can CLINiQ improve the management, accessibility, and security of electronic health records?","textPreview":"How can CLINiQ improve the management, accessibility, and security of electronic health records?","textChars":96,"textLines":1,"bbox":[110.4,247.68,782.4,44.16]}
+{"kind":"shape","id":"sh/xkra9o3m","slide":4,"name":"Google Shape;107;p6","bbox":[57.6,303.36,40.32,40.32]}
+{"kind":"textbox","id":"sh/udkbadkf","slide":4,"name":"Google Shape;108;p6","text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[57.6,303.36,40.32,40.32]}
+{"kind":"textbox","id":"sh/vedcjil0","slide":4,"name":"Google Shape;109;p6","text":"How can Appointment Management improve clinic workflow and scheduling efficiency?","textPreview":"How can Appointment Management improve clinic workflow and scheduling efficiency?","textChars":81,"textLines":1,"bbox":[110.4,301.44,782.4,44.16]}
+{"kind":"shape","id":"sh/58fe9cn2","slide":4,"name":"Google Shape;110;p6","bbox":[57.6,357.12,40.32,40.32]}
+{"kind":"textbox","id":"sh/476d076h","slide":4,"name":"Google Shape;111;p6","text":"3","textPreview":"3","textChars":1,"textLines":1,"bbox":[57.6,357.12,40.32,40.32]}
+{"kind":"textbox","id":"sh/36xw7m5c","slide":4,"name":"Google Shape;112;p6","text":"How can Patient Risk Classification assist personnel in prioritizing patients by urgency?","textPreview":"How can Patient Risk Classification assist personnel in prioritizing patients by urgency?","textChars":89,"textLines":1,"bbox":[110.4,355.2,782.4,44.16]}
+{"kind":"shape","id":"sh/i5ovyhor","slide":4,"name":"Google Shape;113;p6","bbox":[57.6,410.88,40.32,40.32]}
+{"kind":"textbox","id":"sh/h4ve5cn6","slide":4,"name":"Google Shape;114;p6","text":"4","textPreview":"4","textChars":1,"textLines":1,"bbox":[57.6,410.88,40.32,40.32]}
+{"kind":"textbox","id":"sh/g3mdw76l","slide":4,"name":"Google Shape;115;p6","text":"How can QR/NFC Passport and Nurse Alerting improve emergency preparedness?","textPreview":"How can QR/NFC Passport and Nurse Alerting improve emergency preparedness?","textChars":74,"textLines":1,"bbox":[110.4,408.96,782.4,44.16]}
+{"kind":"shape","id":"sh/v2dw3250","slide":4,"name":"Google Shape;116;p6","bbox":[57.6,464.64,40.32,40.32]}
+{"kind":"textbox","id":"sh/u14vuxof","slide":4,"name":"Google Shape;117;p6","text":"5","textPreview":"5","textChars":1,"textLines":1,"bbox":[57.6,464.64,40.32,40.32]}
+{"kind":"textbox","id":"sh/10zehwna","slide":4,"name":"Google Shape;118;p6","text":"How does the integrated prototype support system quality based on ISO/IEC 25010 criteria?","textPreview":"How does the integrated prototype support system quality based on ISO/IEC 25010 criteria?","textChars":89,"textLines":1,"bbox":[110.4,462.72,782.4,44.16]}
+{"kind":"textbox","id":"sh/0zqd8rmp","slide":4,"name":"Google Shape;119;p6","text":"4","textPreview":"4","textChars":1,"textLines":1,"bbox":[864,505.44,48,28.8]}
+{"kind":"textbox","id":"sh/kfip0zyd","slide":4,"name":"Google Shape;120;p6","text":"CLINiQ","textPreview":"CLINiQ","textChars":6,"textLines":1,"bbox":[48,505.44,480,28.8]}
+{"kind":"notes","id":"nt/jyx0ra1s","slide":4,"text":"Presentation pacing target: maximum 15 minutes.\nDemo focus: student appointment request -> staff approval -> visit recording -> risk result -> patient profile -> passport incident -> nurse alert -> APE/reports proof.\nDefense phrasing: rule-based decision support, tokenized QR/NFC-ready emergency link, near real-time dashboard polling."}
+{"kind":"slide","id":"sl/i107q5of","slide":5,"title":"Scope and Limitation","textShapes":18}
+{"kind":"textbox","id":"sh/2d4j2dsn","slide":5,"name":"Google Shape;126;p7","text":"Scope and Limitation","textPreview":"Scope and Limitation","textChars":20,"textLines":1,"bbox":[57.6,43.2,816,57.6]}
+{"kind":"textbox","id":"sh/3ed0vyt8","slide":5,"name":"Google Shape;127;p7","text":"What the system can and cannot do","textPreview":"What the system can and cannot do","textChars":33,"textLines":1,"bbox":[57.6,96,768,33.6]}
+{"kind":"shape","id":"sh/cj618nap","slide":5,"name":"Google Shape;128;p7","bbox":[52.8,148.8,432,350.4]}
+{"kind":"shape","id":"sh/dkfi1sba","slide":5,"name":"Google Shape;129;p7","bbox":[81.6,170.88,48,48]}
+{"kind":"textbox","id":"sh/md83yhcr","slide":5,"name":"Google Shape;131;p7","text":"SCOPE","textPreview":"SCOPE","textChars":5,"textLines":1,"bbox":[139.2,177.6,288,33.6]}
+{"kind":"textbox","id":"sh/8fql0rux","slide":5,"name":"Google Shape;133;p7","text":"Electronic Health Records","textPreview":"Electronic Health Records","textChars":25,"textLines":1,"bbox":[110.4,224.64,360,33.6]}
+{"kind":"textbox","id":"sh/y983uxcv","slide":5,"name":"Google Shape;135;p7","text":"APE Workflow Tracking","textPreview":"APE Workflow Tracking","textChars":21,"textLines":1,"bbox":[110.4,264.96,360,33.6]}
+{"kind":"textbox","id":"sh/kbqlw7u1","slide":5,"name":"Google Shape;137;p7","text":"Appointment Management","textPreview":"Appointment Management","textChars":22,"textLines":1,"bbox":[110.4,305.28,360,33.6]}
+{"kind":"textbox","id":"sh/i5s361cz","slide":5,"name":"Google Shape;139;p7","text":"Patient Risk Classification","textPreview":"Patient Risk Classification","textChars":27,"textLines":1,"bbox":[110.4,345.6,360,33.6]}
+{"kind":"textbox","id":"sh/ru1onq9o","slide":5,"name":"Google Shape;141;p7","text":"QR/NFC Emergency Health Passport","textPreview":"QR/NFC Emergency Health Passport","textChars":32,"textLines":1,"bbox":[110.4,385.92,360,33.6]}
+{"kind":"textbox","id":"sh/dgj6p0ru","slide":5,"name":"Google Shape;143;p7","text":"Near Real-Time Nurse Alerting","textPreview":"Near Real-Time Nurse Alerting","textChars":29,"textLines":1,"bbox":[110.4,426.24,360,33.6]}
+{"kind":"textbox","id":"sh/3qhojq9s","slide":5,"name":"Google Shape;145;p7","text":"Inventory & Referral Management","textPreview":"Inventory & Referral Management","textChars":31,"textLines":1,"bbox":[110.4,466.56,360,33.6]}
+{"kind":"shape","id":"sh/4rqpsvad","slide":5,"name":"Google Shape;146;p7","bbox":[499.2,148.8,408,350.4]}
+{"kind":"shape","id":"sh/5sz6l0ry","slide":5,"name":"Google Shape;147;p7","bbox":[528,170.88,48,48]}
+{"kind":"textbox","id":"sh/nml8va9w","slide":5,"name":"Google Shape;149;p7","text":"LIMITATIONS","textPreview":"LIMITATIONS","textChars":11,"textLines":1,"bbox":[585.6,177.6,288,33.6]}
+{"kind":"shape","id":"sh/xgna1obe","slide":5,"name":"Google Shape;150;p7","bbox":[528,235.2,15.36,15.36]}
+{"kind":"textbox","id":"sh/cfe9sjat","slide":5,"name":"Google Shape;151;p7","text":"Local single-school prototype","textPreview":"Local single-school prototype","textChars":29,"textLines":1,"bbox":[558.72,224.64,336,38.4]}
+{"kind":"shape","id":"sh/be5szet8","slide":5,"name":"Google Shape;152;p7","bbox":[528,283.2,15.36,15.36]}
+{"kind":"textbox","id":"sh/adwrq9cn","slide":5,"name":"Google Shape;153;p7","text":"No telemedicine services","textPreview":"No telemedicine services","textChars":24,"textLines":1,"bbox":[558.72,272.64,336,38.4]}
+{"kind":"shape","id":"sh/pc3ax4b2","slide":5,"name":"Google Shape;154;p7","bbox":[528,331.2,15.36,15.36]}
+{"kind":"textbox","id":"sh/obu9ozuh","slide":5,"name":"Google Shape;155;p7","text":"No direct hospital system integration","textPreview":"No direct hospital system integration","textChars":37,"textLines":1,"bbox":[558.72,320.64,336,38.4]}
+{"kind":"shape","id":"sh/nalsvutw","slide":5,"name":"Google Shape;156;p7","bbox":[528,379.2,15.36,15.36]}
+{"kind":"textbox","id":"sh/29crmpcr","slide":5,"name":"Google Shape;157;p7","text":"No automatic SMS/parent/hospital alerts","textPreview":"No automatic SMS/parent/hospital alerts","textChars":39,"textLines":1,"bbox":[558.72,368.64,336,38.4]}
+{"kind":"shape","id":"sh/t87at8bm","slide":5,"name":"Google Shape;158;p7","bbox":[528,427.2,15.36,15.36]}
+{"kind":"textbox","id":"sh/87yt03a1","slide":5,"name":"Google Shape;159;p7","text":"Risk Classification does not diagnose","textPreview":"Risk Classification does not diagnose","textChars":37,"textLines":1,"bbox":[558.72,416.64,336,38.4]}
+{"kind":"textbox","id":"sh/snqlcbm9","slide":5,"name":"Google Shape;160;p7","text":"5","textPreview":"5","textChars":1,"textLines":1,"bbox":[864,505.44,48,28.8]}
+{"kind":"textbox","id":"sh/dozmlwnu","slide":5,"name":"Google Shape;161;p7","text":"CLINiQ","textPreview":"CLINiQ","textChars":6,"textLines":1,"bbox":[48,505.44,480,28.8]}
+{"kind":"image","id":"im/fetgzup4","slide":5,"name":"Google Shape;130;p7","bbox":[87.84,177.12,35.52,35.52]}
+{"kind":"image","id":"im/ed0f6poz","slide":5,"name":"Google Shape;132;p7","bbox":[81.6,230.4,19.2,19.2]}
+{"kind":"image","id":"im/p4by547m","slide":5,"name":"Google Shape;134;p7","bbox":[81.6,270.72,19.2,19.2]}
+{"kind":"image","id":"im/o32xcz61","slide":5,"name":"Google Shape;136;p7","bbox":[81.6,311.04,19.2,19.2]}
+{"kind":"image","id":"im/32tg3upg","slide":5,"name":"Google Shape;138;p7","bbox":[81.6,351.36,19.2,19.2]}
+{"kind":"image","id":"im/21kfapov","slide":5,"name":"Google Shape;140;p7","bbox":[81.6,391.68,19.2,19.2]}
+{"kind":"image","id":"im/d8vy9o7i","slide":5,"name":"Google Shape;142;p7","bbox":[81.6,432,19.2,19.2]}
+{"kind":"image","id":"im/c7mxgj6x","slide":5,"name":"Google Shape;144;p7","bbox":[81.6,472.32,19.2,19.2]}
+{"kind":"image","id":"im/udwva14f","slide":5,"name":"Google Shape;148;p7","bbox":[534.24,177.12,35.52,35.52]}
+{"kind":"notes","id":"nt/i107q5of","slide":5,"text":"Presentation pacing target: maximum 15 minutes.\nDemo focus: student appointment request -> staff approval -> visit recording -> risk result -> patient profile -> passport incident -> nurse alert -> APE/reports proof.\nDefense phrasing: rule-based decision support, tokenized QR/NFC-ready emergency link, near real-time dashboard polling."}
+{"kind":"slide","id":"sl/x8f69ofe","slide":6,"title":"Concept of the Study","textShapes":8}
+{"kind":"shape","id":"sh/snipgbi5","slide":6,"name":"Google Shape;167;p8","bbox":[39.03,115.35,897.73,390.08]}
+{"kind":"textbox","id":"sh/fq9orq1g","slide":6,"name":"Google Shape;168;p8","text":"Concept of the Study","textPreview":"Concept of the Study","textChars":20,"textLines":1,"bbox":[57.6,38.4,816,52.79]}
+{"kind":"shape","id":"sh/ep07il0v","slide":6,"name":"Google Shape;169;p8","bbox":[57.6,88.32,768,33.61]}
+{"kind":"shape","id":"sh/xgb610fu","slide":6,"name":"Google Shape;171;p8","bbox":[58.97,177.36,220.36,79.34]}
+{"kind":"shape","id":"sh/atkn6lg3","slide":6,"name":"Google Shape;172;p8","bbox":[69.98,189.48,55.09,55.09]}
+{"kind":"textbox","id":"sh/or254byx","slide":6,"name":"Google Shape;174;p8","text":"Students / Clinic Staff","textPreview":"Students / Clinic Staff","textChars":23,"textLines":1,"bbox":[133.89,177.36,137.72,79.34]}
+{"kind":"shape","id":"sh/2p0n2lg7","slide":6,"name":"Google Shape;176;p8","bbox":[312.21,200.72,32.63,32.63]}
+{"kind":"shape","id":"sh/1ormtgzm","slide":6,"name":"Google Shape;179;p8","bbox":[630.96,200.72,32.63,32.63]}
+{"kind":"shape","id":"sh/7ax4rilg","slide":6,"name":"Google Shape;182;p8","bbox":[696.47,177.36,220.36,79.34]}
+{"kind":"shape","id":"sh/6943yd4v","slide":6,"name":"Google Shape;183;p8","bbox":[707.48,189.48,55.09,55.09]}
+{"kind":"textbox","id":"sh/gz6l47mx","slide":6,"name":"Google Shape;185;p8","text":"CLINiQ PHP/MySQL Core","textPreview":"CLINiQ PHP/MySQL Core","textChars":21,"textLines":1,"bbox":[771.39,177.36,137.72,79.34]}
+{"kind":"shape","id":"sh/uxo32x4r","slide":6,"name":"Google Shape;187;p8","bbox":[776.15,301.69,32.63,32.63]}
+{"kind":"shape","id":"sh/mxgr6pgf","slide":6,"name":"Google Shape;190;p8","bbox":[696.47,368.86,220.36,79.34]}
+{"kind":"shape","id":"sh/ny9sfax0","slide":6,"name":"Google Shape;191;p8","bbox":[707.49,380.98,55.09,55.09]}
+{"kind":"textbox","id":"sh/ozi98fy5","slide":6,"name":"Google Shape;192;p8","text":"EHR, visits, alerts, APE, inventory, reports","textPreview":"EHR, visits, alerts, APE, inventory, reports","textChars":44,"textLines":1,"bbox":[771.39,368.86,137.72,79.34]}
+{"kind":"shape","id":"sh/w3i9czyh","slide":6,"name":"Google Shape;196;p8","bbox":[58.97,368.86,220.36,79.34]}
+{"kind":"shape","id":"sh/x4ral4f2","slide":6,"name":"Google Shape;197;p8","bbox":[69.99,380.98,55.09,55.09]}
+{"kind":"textbox","id":"sh/y5kre9wn","slide":6,"name":"Google Shape;198;p8","text":"Improved Campus Clinic Workflow","textPreview":"Improved Campus Clinic Workflow","textChars":31,"textLines":1,"bbox":[133.89,368.86,137.72,79.34]}
+{"kind":"textbox","id":"sh/mhgn2pk3","slide":6,"name":"Google Shape;200;p8","text":"6","textPreview":"6","textChars":1,"textLines":1,"bbox":[864,505.44,48,28.79]}
+{"kind":"shape","id":"sh/9476d4ju","slide":6,"name":"Google Shape;203;p8","bbox":[377.72,177.36,220.36,79.34]}
+{"kind":"shape","id":"sh/a5g769kf","slide":6,"name":"Google Shape;204;p8","bbox":[388.74,189.48,55.09,55.09]}
+{"kind":"textbox","id":"sh/b6pofe10","slide":6,"name":"Google Shape;205;p8","text":"Profiles, symptoms, vitals, appointments, APE data","textPreview":"Profiles, symptoms, vitals, appointments, APE data","textChars":50,"textLines":1,"bbox":[452.64,177.36,137.72,79.34]}
+{"kind":"shape","id":"sh/y907a90b","slide":6,"name":"Google Shape;208;p8","bbox":[377.72,368.86,220.36,79.34]}
+{"kind":"shape","id":"sh/ja9oje1w","slide":6,"name":"Google Shape;209;p8","bbox":[388.74,380.98,55.09,55.09]}
+{"kind":"textbox","id":"sh/83290nmd","slide":6,"name":"Google Shape;211;p8","text":"Risk levels, schedules, alerts, reports","textPreview":"Risk levels, schedules, alerts, reports","textChars":39,"textLines":1,"bbox":[452.64,368.86,145.42,79.34]}
+{"kind":"shape","id":"sh/61kryd4n","slide":6,"name":"Google Shape;213;p8","bbox":[630.96,392.22,32.63,32.63]}
+{"kind":"shape","id":"sh/v6t8bil4","slide":6,"name":"Google Shape;216;p8","bbox":[312.21,392.22,32.63,32.63]}
+{"kind":"image","id":"im/fixsjeh0","slide":6,"name":"Google Shape;173;p8","bbox":[77.14,196.64,40.77,40.77]}
+{"kind":"image","id":"im/wnm9gzy1","slide":6,"name":"Google Shape;177;p8","bbox":[316.45,204.96,24.15,24.15]}
+{"kind":"image","id":"im/xovq94zm","slide":6,"name":"Google Shape;180;p8","bbox":[635.2,204.96,24.15,24.15]}
+{"kind":"image","id":"im/d83yxwne","slide":6,"name":"Google Shape;184;p8","bbox":[714.65,196.64,40.77,40.77]}
+{"kind":"image","id":"im/c7uxor6t","slide":6,"name":"Google Shape;188;p8","bbox":[780.39,305.93,24.15,24.15]}
+{"kind":"image","id":"im/b6lgvm58","slide":6,"name":"Google Shape;193;p8","bbox":[717.67,390.77,35.52,35.52]}
+{"kind":"image","id":"im/q5sfmhon","slide":6,"name":"Google Shape;199;p8","bbox":[80.61,388.15,40.77,40.77]}
+{"kind":"image","id":"im/lw3y1wna","slide":6,"name":"Google Shape;206;p8","bbox":[396.06,196.65,40.77,40.77]}
+{"kind":"image","id":"im/0vuxsrmp","slide":6,"name":"Google Shape;210;p8","bbox":[395.9,388.14,40.77,40.77]}
+{"kind":"image","id":"im/zulgz65k","slide":6,"name":"Google Shape;214;p8","bbox":[635.2,396.46,24.15,24.15]}
+{"kind":"image","id":"im/y9cfq1oz","slide":6,"name":"Google Shape;217;p8","bbox":[316.45,396.46,24.15,24.15]}
+{"kind":"notes","id":"nt/x8f69ofe","slide":6,"text":"Presentation pacing target: maximum 15 minutes.\nDemo focus: student appointment request -> staff approval -> visit recording -> risk result -> patient profile -> passport incident -> nurse alert -> APE/reports proof.\nDefense phrasing: rule-based decision support, tokenized QR/NFC-ready emergency link, near real-time dashboard polling."}
+{"kind":"slide","id":"sl/gnmp4jqx","slide":7,"title":"Implemented Core Features","textShapes":22}
+{"kind":"textbox","id":"sh/dw3qhkne","slide":7,"name":"Google Shape;223;p9","text":"Implemented Core Features","textPreview":"Implemented Core Features","textChars":25,"textLines":1,"bbox":[57.6,38.4,816,52.8]}
+{"kind":"textbox","id":"sh/excrqp4z","slide":7,"name":"Google Shape;224;p9","text":"What the current prototype already supports","textPreview":"What the current prototype already supports","textChars":43,"textLines":1,"bbox":[57.6,88.32,768,33.6]}
+{"kind":"shape","id":"sh/zy58ju5k","slide":7,"name":"Google Shape;225;p9","bbox":[57.6,139.2,275.52,168]}
+{"kind":"shape","id":"sh/0ze9szm5","slide":7,"name":"Google Shape;226;p9","bbox":[74.88,156.48,48,48]}
+{"kind":"textbox","id":"sh/u1s7el4v","slide":7,"name":"Google Shape;228;p9","text":"Electronic Health Records","textPreview":"Electronic Health Records","textChars":25,"textLines":1,"bbox":[74.88,214.08,240.96,38.4]}
+{"kind":"textbox","id":"sh/f218nq5g","slide":7,"name":"Google Shape;229;p9","text":"Purpose: Centralizes patient profiles, visits, APE, and referrals","textPreview":"Purpose: Centralizes patient profiles, visits, APE, and referrals","textChars":65,"textLines":1,"bbox":[74.88,248.64,240.96,28.8]}
+{"kind":"textbox","id":"sh/xw7uto7y","slide":7,"name":"Google Shape;230;p9","text":"Benefit: Faster record retrieval","textPreview":"Benefit: Faster record retrieval","textChars":32,"textLines":1,"bbox":[74.88,273.6,240.96,28.8]}
+{"kind":"shape","id":"sh/wvytkj6d","slide":7,"name":"Google Shape;231;p9","bbox":[350.4,139.2,275.52,168]}
+{"kind":"shape","id":"sh/bupcryps","slide":7,"name":"Google Shape;232;p9","bbox":[367.68,156.48,48,48]}
+{"kind":"textbox","id":"sh/50rux87u","slide":7,"name":"Google Shape;234;p9","text":"APE Work Queues","textPreview":"APE Work Queues","textChars":15,"textLines":1,"bbox":[367.68,214.08,240.96,38.4]}
+{"kind":"textbox","id":"sh/kzito369","slide":7,"name":"Google Shape;235;p9","text":"Purpose: Tracks document review, submission, follow-up, and clearance","textPreview":"Purpose: Tracks document review, submission, follow-up, and clearance","textChars":69,"textLines":1,"bbox":[367.68,248.64,240.96,28.8]}
+{"kind":"textbox","id":"sh/jy9cvypo","slide":7,"name":"Google Shape;236;p9","text":"Benefit: Clearer APE monitoring","textPreview":"Benefit: Clearer APE monitoring","textChars":31,"textLines":1,"bbox":[367.68,273.6,240.96,28.8]}
+{"kind":"shape","id":"sh/ixgbmto3","slide":7,"name":"Google Shape;237;p9","bbox":[643.2,139.2,275.52,168]}
+{"kind":"shape","id":"sh/14nal47q","slide":7,"name":"Google Shape;238;p9","bbox":[660.48,156.48,48,48]}
+{"kind":"textbox","id":"sh/ov65gbup","slide":7,"name":"Google Shape;240;p9","text":"Appointment Management","textPreview":"Appointment Management","textChars":22,"textLines":1,"bbox":[660.48,214.08,240.96,38.4]}
+{"kind":"textbox","id":"sh/pwf69gva","slide":7,"name":"Google Shape;241;p9","text":"Purpose: Lets students request consultations for staff approval","textPreview":"Purpose: Lets students request consultations for staff approval","textChars":63,"textLines":1,"bbox":[660.48,248.64,240.96,28.8]}
+{"kind":"textbox","id":"sh/2t4ne1cz","slide":7,"name":"Google Shape;242;p9","text":"Benefit: Better scheduling control","textPreview":"Benefit: Better scheduling control","textChars":34,"textLines":1,"bbox":[660.48,273.6,240.96,28.8]}
+{"kind":"shape","id":"sh/3uxo76dk","slide":7,"name":"Google Shape;243;p9","bbox":[57.6,324.48,275.52,168]}
+{"kind":"shape","id":"sh/grm5crut","slide":7,"name":"Google Shape;244;p9","bbox":[74.88,341.76,48,48]}
+{"kind":"textbox","id":"sh/e54na1cn","slide":7,"name":"Google Shape;246;p9","text":"Patient Risk Classification","textPreview":"Patient Risk Classification","textChars":27,"textLines":1,"bbox":[74.88,399.36,240.96,38.4]}
+{"kind":"textbox","id":"sh/f6d436d8","slide":7,"name":"Google Shape;247;p9","text":"Purpose: Scores urgency from symptoms, vitals, BP, pulse, and keywords","textPreview":"Purpose: Scores urgency from symptoms, vitals, BP, pulse, and keywords","textChars":70,"textLines":1,"bbox":[74.88,433.92,240.96,28.8]}
+{"kind":"textbox","id":"sh/s3m58rux","slide":7,"name":"Google Shape;248;p9","text":"Benefit: Consistent prioritization","textPreview":"Benefit: Consistent prioritization","textChars":34,"textLines":1,"bbox":[74.88,458.88,240.96,28.8]}
+{"kind":"shape","id":"sh/t4vm1wv2","slide":7,"name":"Google Shape;249;p9","bbox":[350.4,324.48,275.52,168]}
+{"kind":"shape","id":"sh/vytobmx4","slide":7,"name":"Google Shape;250;p9","bbox":[367.68,341.76,48,48]}
+{"kind":"textbox","id":"sh/h0b6dwfa","slide":7,"name":"Google Shape;252;p9","text":"QR/NFC Health Passport","textPreview":"QR/NFC Health Passport","textChars":22,"textLines":1,"bbox":[367.68,399.36,240.96,38.4]}
+{"kind":"textbox","id":"sh/wz25kryp","slide":7,"name":"Google Shape;253;p9","text":"Purpose: Provides a tokenized emergency-ready health link","textPreview":"Purpose: Provides a tokenized emergency-ready health link","textChars":57,"textLines":1,"bbox":[367.68,433.92,240.96,28.8]}
+{"kind":"textbox","id":"sh/j2tofmx0","slide":7,"name":"Google Shape;254;p9","text":"Benefit: Faster emergency context","textPreview":"Benefit: Faster emergency context","textChars":33,"textLines":1,"bbox":[367.68,458.88,240.96,28.8]}
+{"kind":"shape","id":"sh/i1k7mhgf","slide":7,"name":"Google Shape;255;p9","bbox":[643.2,324.48,275.52,168]}
+{"kind":"shape","id":"sh/54v6hwf6","slide":7,"name":"Google Shape;256;p9","bbox":[660.48,341.76,48,48]}
+{"kind":"textbox","id":"sh/rqdoj6xc","slide":7,"name":"Google Shape;258;p9","text":"Real-Time Nurse Alerting","textPreview":"Real-Time Nurse Alerting","textChars":24,"textLines":1,"bbox":[660.48,399.36,240.96,38.4]}
+{"kind":"textbox","id":"sh/6p47q1gr","slide":7,"name":"Google Shape;259;p9","text":"Purpose: Sends pending alerts through dashboard polling","textPreview":"Purpose: Sends pending alerts through dashboard polling","textChars":55,"textLines":1,"bbox":[660.48,433.92,240.96,28.8]}
+{"kind":"textbox","id":"sh/2lori50z","slide":7,"name":"Google Shape;260;p9","text":"Benefit: Faster clinic coordination","textPreview":"Benefit: Faster clinic coordination","textChars":35,"textLines":1,"bbox":[660.48,458.88,240.96,28.8]}
+{"kind":"textbox","id":"sh/3mh8rahk","slide":7,"name":"Google Shape;261;p9","text":"7","textPreview":"7","textChars":1,"textLines":1,"bbox":[864,505.44,48,28.8]}
+{"kind":"textbox","id":"sh/onq9kfi5","slide":7,"name":"Google Shape;262;p9","text":"CLINiQ","textPreview":"CLINiQ","textChars":6,"textLines":1,"bbox":[48,505.44,480,28.8]}
+{"kind":"image","id":"im/sjmpcja9","slide":7,"name":"Google Shape;227;p9","bbox":[81.12,162.72,35.52,35.52]}
+{"kind":"image","id":"im/fmxonytk","slide":7,"name":"Google Shape;233;p9","bbox":[373.92,162.72,35.52,35.52]}
+{"kind":"image","id":"im/ulo7etsf","slide":7,"name":"Google Shape;239;p9","bbox":[666.72,162.72,35.52,35.52]}
+{"kind":"image","id":"im/hof6pobq","slide":7,"name":"Google Shape;245;p9","bbox":[81.12,348,35.52,35.52]}
+{"kind":"image","id":"im/gn6pgja5","slide":7,"name":"Google Shape;251;p9","bbox":[373.92,348,35.52,35.52]}
+{"kind":"image","id":"im/vqtobutg","slide":7,"name":"Google Shape;257;p9","bbox":[666.72,348,35.52,35.52]}
+{"kind":"notes","id":"nt/gnmp4jqx","slide":7,"text":"Presentation pacing target: maximum 15 minutes.\nDemo focus: student appointment request -> staff approval -> visit recording -> risk result -> patient profile -> passport incident -> nurse alert -> APE/reports proof.\nDefense phrasing: rule-based decision support, tokenized QR/NFC-ready emergency link, near real-time dashboard polling."}
+{"kind":"slide","id":"sl/fu1gfa1s","slide":8,"title":"Patient Risk Classification","textShapes":15}
+{"kind":"textbox","id":"sh/n2hc36tk","slide":8,"name":"Google Shape;268;p10","text":"Patient Risk Classification","textPreview":"Patient Risk Classification","textChars":27,"textLines":1,"bbox":[57.6,38.4,816,52.8]}
+{"kind":"textbox","id":"sh/218ba1cz","slide":8,"name":"Google Shape;269;p10","text":"Rule-based decision support for nurse prioritization","textPreview":"Rule-based decision support for nurse prioritization","textChars":52,"textLines":1,"bbox":[57.6,88.32,768,33.6]}
+{"kind":"shape","id":"sh/s7m9k7ax","slide":8,"name":"Google Shape;270;p10","bbox":[52.8,134.4,374.4,249.6]}
+{"kind":"textbox","id":"sh/d8vadcri","slide":8,"name":"Google Shape;271;p10","text":"INPUTS","textPreview":"INPUTS","textChars":6,"textLines":1,"bbox":[81.6,153.6,288,28.8]}
+{"kind":"shape","id":"sh/ql4rixsr","slide":8,"name":"Google Shape;272;p10","bbox":[81.6,192,38.4,38.4]}
+{"kind":"textbox","id":"sh/0b69o7at","slide":8,"name":"Google Shape;274;p10","text":"Symptoms","textPreview":"Symptoms","textChars":8,"textLines":1,"bbox":[129.6,192,288,38.4]}
+{"kind":"shape","id":"sh/1cfahcre","slide":8,"name":"Google Shape;275;p10","bbox":[81.6,240,38.4,38.4]}
+{"kind":"textbox","id":"sh/faxsf298","slide":8,"name":"Google Shape;277;p10","text":"Temperature","textPreview":"Temperature","textChars":11,"textLines":1,"bbox":[129.6,240,288,38.4]}
+{"kind":"shape","id":"sh/gf29cnap","slide":8,"name":"Google Shape;278;p10","bbox":[81.6,288,38.4,38.4]}
+{"kind":"textbox","id":"sh/l87yxk3q","slide":8,"name":"Google Shape;280;p10","text":"Pulse Rate","textPreview":"Pulse Rate","textChars":10,"textLines":1,"bbox":[129.6,288,288,38.4]}
+{"kind":"shape","id":"sh/07yxofm5","slide":8,"name":"Google Shape;281;p10","bbox":[81.6,336,38.4,38.4]}
+{"kind":"textbox","id":"sh/y5gfm54z","slide":8,"name":"Google Shape;283;p10","text":"Blood Pressure / Keywords","textPreview":"Blood Pressure / Keywords","textChars":25,"textLines":1,"bbox":[129.6,336,288,38.4]}
+{"kind":"shape","id":"sh/dknetk3e","slide":8,"name":"Google Shape;284;p10","bbox":[436.8,240,52.8,52.8]}
+{"kind":"shape","id":"sh/bi5wralo","slide":8,"name":"Google Shape;286;p10","bbox":[504,134.4,430.02,249.61]}
+{"kind":"textbox","id":"sh/qhwfi543","slide":8,"name":"Google Shape;287;p10","text":"OUTPUT: URGENCY LEVEL","textPreview":"OUTPUT: URGENCY LEVEL","textChars":21,"textLines":1,"bbox":[532.8,153.6,345.6,28.8]}
+{"kind":"shape","id":"sh/hgry543y","slide":8,"name":"Google Shape;288;p10","bbox":[532.8,206.4,88.32,148.8]}
+{"kind":"textbox","id":"sh/wfixwzmd","slide":8,"name":"Google Shape;289;p10","text":"Low","textPreview":"Low","textChars":3,"textLines":1,"bbox":[532.8,206.4,88.32,148.8]}
+{"kind":"shape","id":"sh/elsvq1kv","slide":8,"name":"Google Shape;290;p10","bbox":[630.72,206.4,88.32,148.8]}
+{"kind":"textbox","id":"sh/fmlcz61g","slide":8,"name":"Google Shape;291;p10","text":"Moderate","textPreview":"Moderate","textChars":8,"textLines":1,"bbox":[630.72,206.4,88.32,148.8]}
+{"kind":"shape","id":"sh/gnudsb21","slide":8,"name":"Google Shape;292;p10","bbox":[728.64,206.4,88.32,148.8]}
+{"kind":"textbox","id":"sh/1o3u1gj6","slide":8,"name":"Google Shape;293;p10","text":"High","textPreview":"High","textChars":4,"textLines":1,"bbox":[728.64,206.4,88.32,148.8]}
+{"kind":"shape","id":"sh/6hsbm1kj","slide":8,"name":"Google Shape;294;p10","bbox":[826.56,206.4,88.32,148.8]}
+{"kind":"textbox","id":"sh/ri1cvm14","slide":8,"name":"Google Shape;295;p10","text":"Critical","textPreview":"Critical","textChars":8,"textLines":1,"bbox":[826.56,206.4,88.32,148.8]}
+{"kind":"shape","id":"sh/sjador2p","slide":8,"name":"Google Shape;296;p10","bbox":[52.8,403.2,854.4,81.6]}
+{"kind":"shape","id":"sh/tkjuxwja","slide":8,"name":"Google Shape;297;p10","bbox":[74.88,418.56,48,48]}
+{"kind":"textbox","id":"sh/be5c7q1o","slide":8,"name":"Google Shape;299;p10","text":"Decision-support only - not a diagnostic AI. Final clinical judgment always remains with the nurse.","textPreview":"Decision-support only - not a diagnostic AI. Final clinical judgment always remains with the nurse.","textChars":99,"textLines":1,"bbox":[139.2,412.8,753.6,57.6]}
+{"kind":"textbox","id":"sh/ojqd0fa5","slide":8,"name":"Google Shape;300;p10","text":"8","textPreview":"8","textChars":1,"textLines":1,"bbox":[864,505.44,48,28.8]}
+{"kind":"textbox","id":"sh/pkze9krq","slide":8,"name":"Google Shape;301;p10","text":"CLINiQ","textPreview":"CLINiQ","textChars":6,"textLines":1,"bbox":[48,505.44,480,28.8]}
+{"kind":"image","id":"im/fq5wbq1o","slide":8,"name":"Google Shape;273;p10","bbox":[86.59,196.99,28.42,28.42]}
+{"kind":"image","id":"im/epwf2l03","slide":8,"name":"Google Shape;276;p10","bbox":[86.59,244.99,28.42,28.42]}
+{"kind":"image","id":"im/tone9gji","slide":8,"name":"Google Shape;279;p10","bbox":[86.59,292.99,28.42,28.42]}
+{"kind":"image","id":"im/snex0bix","slide":8,"name":"Google Shape;282;p10","bbox":[86.59,340.99,28.42,28.42]}
+{"kind":"image","id":"im/rm5w761c","slide":8,"name":"Google Shape;285;p10","bbox":[443.66,246.86,39.07,39.07]}
+{"kind":"image","id":"im/6lwvy1kr","slide":8,"name":"Google Shape;298;p10","bbox":[81.12,424.8,35.52,35.52]}
+{"kind":"notes","id":"nt/fu1gfa1s","slide":8,"text":"Presentation pacing target: maximum 15 minutes.\nDemo focus: student appointment request -> staff approval -> visit recording -> risk result -> patient profile -> passport incident -> nurse alert -> APE/reports proof.\nDefense phrasing: rule-based decision support, tokenized QR/NFC-ready emergency link, near real-time dashboard polling."}
+{"kind":"slide","id":"sl/udsvah03","slide":9,"title":"QR/NFC-Ready Emergency Health Passport","textShapes":14}
+{"kind":"textbox","id":"sh/fi1wjql0","slide":9,"name":"Google Shape;307;p11","text":"QR/NFC-Ready Emergency Health Passport","textPreview":"QR/NFC-Ready Emergency Health Passport","textChars":38,"textLines":1,"bbox":[57.6,38.4,825.6,52.8]}
+{"kind":"textbox","id":"sh/wn6dgb21","slide":9,"name":"Google Shape;308;p11","text":"Tokenized access to emergency-approved student health information","textPreview":"Tokenized access to emergency-approved student health information","textChars":65,"textLines":1,"bbox":[57.6,88.32,825.6,33.6]}
+{"kind":"shape","id":"sh/h8fu9w3m","slide":9,"name":"Google Shape;309;p11","bbox":[52.8,148.8,193.92,96]}
+{"kind":"shape","id":"sh/z25gfe54","slide":9,"name":"Google Shape;310;p11","bbox":[127.68,160.32,44.16,44.16]}
+{"kind":"textbox","id":"sh/l4nyh4na","slide":9,"name":"Google Shape;312;p11","text":"Student Health Passport","textPreview":"Student Health Passport","textChars":23,"textLines":1,"bbox":[57.6,208.32,184.32,33.6]}
+{"kind":"shape","id":"sh/03ehojmp","slide":9,"name":"Google Shape;313;p11","bbox":[262.08,148.8,193.92,96]}
+{"kind":"shape","id":"sh/bylgbu58","slide":9,"name":"Google Shape;314;p11","bbox":[336.96,160.32,44.16,44.16]}
+{"kind":"textbox","id":"sh/d0nyd4ny","slide":9,"name":"Google Shape;316;p11","text":"QR Scan or NFC Tap","textPreview":"QR Scan or NFC Tap","textChars":18,"textLines":1,"bbox":[266.88,208.32,184.32,33.6]}
+{"kind":"shape","id":"sh/czuxkzmd","slide":9,"name":"Google Shape;317;p11","bbox":[471.36,148.8,193.92,96]}
+{"kind":"shape","id":"sh/3alg7u5w","slide":9,"name":"Google Shape;318;p11","bbox":[546.24,160.32,44.16,44.16]}
+{"kind":"textbox","id":"sh/65szqp83","slide":9,"name":"Google Shape;320;p11","text":"Token Validation","textPreview":"Token Validation","textChars":16,"textLines":1,"bbox":[476.16,208.32,184.32,33.6]}
+{"kind":"shape","id":"sh/r61gzapo","slide":9,"name":"Google Shape;321;p11","bbox":[680.64,148.8,193.92,96]}
+{"kind":"shape","id":"sh/s7ahsfq9","slide":9,"name":"Google Shape;322;p11","bbox":[755.52,160.32,44.16,44.16]}
+{"kind":"textbox","id":"sh/e9czup8f","slide":9,"name":"Google Shape;324;p11","text":"Emergency Profile / Report","textPreview":"Emergency Profile / Report","textChars":26,"textLines":1,"bbox":[685.44,208.32,184.32,33.6]}
+{"kind":"shape","id":"sh/fal03up0","slide":9,"name":"Google Shape;325;p11","bbox":[247.68,182.4,28.8,28.8]}
+{"kind":"shape","id":"sh/1w3i547q","slide":9,"name":"Google Shape;327;p11","bbox":[456.96,182.4,28.8,28.8]}
+{"kind":"shape","id":"sh/3yl07upw","slide":9,"name":"Google Shape;329;p11","bbox":[666.24,182.4,28.8,28.8]}
+{"kind":"shape","id":"sh/cre1o3at","slide":9,"name":"Google Shape;331;p11","bbox":[52.8,273.6,854.39,211.21]}
+{"kind":"textbox","id":"sh/bq5kvy98","slide":9,"name":"Google Shape;332;p11","text":"DISPLAYS ONLY:","textPreview":"DISPLAYS ONLY:","textChars":14,"textLines":1,"bbox":[86.4,292.8,384,30.72]}
+{"kind":"shape","id":"sh/qpwjmtsn","slide":9,"name":"Google Shape;333;p11","bbox":[151.21,340.81,52.79,52.79]}
+{"kind":"textbox","id":"sh/0vy1s3ap","slide":9,"name":"Google Shape;335;p11","text":"Allergies","textPreview":"Allergies","textChars":9,"textLines":1,"bbox":[72,400.32,216,72]}
+{"kind":"shape","id":"sh/zupkzy94","slide":9,"name":"Google Shape;336;p11","bbox":[352.81,340.81,52.79,52.79]}
+{"kind":"textbox","id":"sh/90r25sr6","slide":9,"name":"Google Shape;338;p11","text":"Existing Conditions","textPreview":"Existing Conditions","textChars":19,"textLines":1,"bbox":[273.6,400.32,216,72]}
+{"kind":"textbox","id":"sh/8zylwnql","slide":9,"name":"Google Shape;339;p11","text":"Emergency Instructions","textPreview":"Emergency Instructions","textChars":22,"textLines":1,"bbox":[475.2,400.32,216,72]}
+{"kind":"shape","id":"sh/5gbmxwbe","slide":9,"name":"Google Shape;341;p11","bbox":[554.41,340.81,52.79,52.79]}
+{"kind":"shape","id":"sh/jut4vmto","slide":9,"name":"Google Shape;343;p11","bbox":[756.01,340.81,52.79,52.79]}
+{"kind":"textbox","id":"sh/xsbmtcbi","slide":9,"name":"Google Shape;345;p11","text":"Guardian Contact","textPreview":"Guardian Contact","textChars":16,"textLines":1,"bbox":[676.8,400.32,216,72]}
+{"kind":"textbox","id":"sh/ap0nixcr","slide":9,"name":"Google Shape;346;p11","text":"Emergency-approved details are separated from full clinic records, which remain protected behind staff login.","textPreview":"Emergency-approved details are separated from full clinic records, which remain protected behind staff login.","textChars":109,"textLines":1,"bbox":[86.4,443.52,787.2,33.6]}
+{"kind":"textbox","id":"sh/vq94r2tc","slide":9,"name":"Google Shape;347;p11","text":"9","textPreview":"9","textChars":1,"textLines":1,"bbox":[864,505.44,48,28.8]}
+{"kind":"textbox","id":"sh/gnm5wba1","slide":9,"name":"Google Shape;348;p11","text":"CLINiQ","textPreview":"CLINiQ","textChars":6,"textLines":1,"bbox":[48,505.44,480,28.8]}
+{"kind":"image","id":"im/onydwve5","slide":9,"name":"Google Shape;311;p11","bbox":[133.42,166.06,32.68,32.68]}
+{"kind":"image","id":"im/6t8rqxcn","slide":9,"name":"Google Shape;315;p11","bbox":[342.7,166.06,32.68,32.68]}
+{"kind":"image","id":"im/7u1sz2t8","slide":9,"name":"Google Shape;319;p11","bbox":[551.98,166.06,32.68,32.68]}
+{"kind":"image","id":"im/8va9s7ut","slide":9,"name":"Google Shape;323;p11","bbox":[761.26,166.06,32.68,32.68]}
+{"kind":"image","id":"im/twja1cbe","slide":9,"name":"Google Shape;326;p11","bbox":[249.6,186.24,23.04,23.04]}
+{"kind":"image","id":"im/y58rmdcr","slide":9,"name":"Google Shape;328;p11","bbox":[458.88,186.24,23.04,23.04]}
+{"kind":"image","id":"im/jqhsvitc","slide":9,"name":"Google Shape;330;p11","bbox":[668.16,186.24,23.04,23.04]}
+{"kind":"image","id":"im/krq9onux","slide":9,"name":"Google Shape;334;p11","bbox":[158.07,347.67,39.07,39.07]}
+{"kind":"image","id":"im/lszaxsbi","slide":9,"name":"Google Shape;337;p11","bbox":[359.67,347.67,39.07,39.07]}
+{"kind":"image","id":"im/i1cbyhcv","slide":9,"name":"Google Shape;342;p11","bbox":[561.27,347.67,39.07,39.07]}
+{"kind":"image","id":"im/3mls7mtg","slide":9,"name":"Google Shape;344;p11","bbox":[762.87,347.67,39.07,39.07]}
+{"kind":"notes","id":"nt/udsvah03","slide":9,"text":"Presentation pacing target: maximum 15 minutes.\nDemo focus: student appointment request -> staff approval -> visit recording -> risk result -> patient profile -> passport incident -> nurse alert -> APE/reports proof.\nDefense phrasing: rule-based decision support, tokenized QR/NFC-ready emergency link, near real-time dashboard polling."}
+{"kind":"slide","id":"sl/m90b6t0r","slide":10,"title":"Near Real-Time Nurse Alerting","textShapes":15}
+{"kind":"textbox","id":"sh/b21crel4","slide":10,"name":"Google Shape;354;p12","text":"Near Real-Time Nurse Alerting","textPreview":"Near Real-Time Nurse Alerting","textChars":29,"textLines":1,"bbox":[57.6,38.4,825.6,52.8]}
+{"kind":"textbox","id":"sh/a1svit4z","slide":10,"name":"Google Shape;355;p12","text":"Improving emergency communication and clinic coordination","textPreview":"Improving emergency communication and clinic coordination","textChars":57,"textLines":1,"bbox":[57.6,88.32,825.6,33.6]}
+{"kind":"shape","id":"sh/x4juto3a","slide":10,"name":"Google Shape;356;p12","bbox":[52.8,148.8,155.52,148.8]}
+{"kind":"shape","id":"sh/c3adkjmp","slide":10,"name":"Google Shape;357;p12","bbox":[104.16,168,52.8,52.8]}
+{"kind":"textbox","id":"sh/q5obmp4f","slide":10,"name":"Google Shape;359;p12","text":"Emergency Occurs","textPreview":"Emergency Occurs","textChars":16,"textLines":1,"bbox":[58.56,233.28,144,57.6]}
+{"kind":"shape","id":"sh/ulwfuxo3","slide":10,"name":"Google Shape;360;p12","bbox":[58.56,131.52,30.72,30.72]}
+{"kind":"textbox","id":"sh/vm5gn25o","slide":10,"name":"Google Shape;361;p12","text":"1","textPreview":"1","textChars":1,"textLines":1,"bbox":[58.56,131.52,30.72,30.72]}
+{"kind":"shape","id":"sh/gnexw769","slide":10,"name":"Google Shape;362;p12","bbox":[208.8,209.76,26.88,26.88]}
+{"kind":"shape","id":"sh/mxcfqdo7","slide":10,"name":"Google Shape;364;p12","bbox":[220.8,148.8,155.52,148.8]}
+{"kind":"shape","id":"sh/7y5wji5c","slide":10,"name":"Google Shape;365;p12","bbox":[272.16,168,52.8,52.8]}
+{"kind":"textbox","id":"sh/9knylsni","slide":10,"name":"Google Shape;367;p12","text":"Student/Teacher submits report","textPreview":"Student/Teacher submits report","textChars":30,"textLines":1,"bbox":[226.56,233.28,144,57.6]}
+{"kind":"shape","id":"sh/zulwfi5g","slide":10,"name":"Google Shape;369;p12","bbox":[220.8,131.52,30.71,30.71]}
+{"kind":"textbox","id":"sh/1orilg7y","slide":10,"name":"Google Shape;370;p12","text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[220.8,131.52,26.87,28.79]}
+{"kind":"shape","id":"sh/0ni1sbqd","slide":10,"name":"Google Shape;371;p12","bbox":[376.8,209.76,26.88,26.88]}
+{"kind":"shape","id":"sh/el0zq187","slide":10,"name":"Google Shape;373;p12","bbox":[388.8,148.8,155.52,148.8]}
+{"kind":"shape","id":"sh/dkrihw72","slide":10,"name":"Google Shape;374;p12","bbox":[440.16,168,52.8,52.8]}
+{"kind":"textbox","id":"sh/ri90f6pw","slide":10,"name":"Google Shape;376;p12","text":"Clinic dashboard receives alert","textPreview":"Clinic dashboard receives alert","textChars":31,"textLines":1,"bbox":[394.56,233.28,144,57.6]}
+{"kind":"shape","id":"sh/qh0zm18b","slide":10,"name":"Google Shape;377;p12","bbox":[394.56,131.52,30.72,30.72]}
+{"kind":"textbox","id":"sh/5g7idw7q","slide":10,"name":"Google Shape;378;p12","text":"3","textPreview":"3","textChars":1,"textLines":1,"bbox":[394.56,131.52,30.72,30.72]}
+{"kind":"shape","id":"sh/4fyhkrq5","slide":10,"name":"Google Shape;379;p12","bbox":[544.8,209.76,26.88,26.88]}
+{"kind":"shape","id":"sh/hwjm5cjy","slide":10,"name":"Google Shape;381;p12","bbox":[556.8,148.8,155.52,148.8]}
+{"kind":"shape","id":"sh/utsnuxkn","slide":10,"name":"Google Shape;382;p12","bbox":[608.16,168,52.8,52.8]}
+{"kind":"textbox","id":"sh/4zu5072p","slide":10,"name":"Google Shape;384;p12","text":"Nurse Responds","textPreview":"Nurse Responds","textChars":14,"textLines":1,"bbox":[562.56,233.28,144,57.6]}
+{"kind":"shape","id":"sh/5k369cja","slide":10,"name":"Google Shape;385;p12","bbox":[562.56,131.52,30.72,30.72]}
+{"kind":"textbox","id":"sh/ixsnyhkj","slide":10,"name":"Google Shape;386;p12","text":"4","textPreview":"4","textChars":1,"textLines":1,"bbox":[562.56,131.52,30.72,30.72]}
+{"kind":"shape","id":"sh/3y1o7214","slide":10,"name":"Google Shape;387;p12","bbox":[712.8,209.76,26.88,26.88]}
+{"kind":"shape","id":"sh/do36dwj6","slide":10,"name":"Google Shape;389;p12","bbox":[724.8,148.8,155.52,148.8]}
+{"kind":"shape","id":"sh/ni583ql8","slide":10,"name":"Google Shape;390;p12","bbox":[776.16,168,52.8,52.8]}
+{"kind":"textbox","id":"sh/9k7q503e","slide":10,"name":"Google Shape;392;p12","text":"Incident Documented","textPreview":"Incident Documented","textChars":19,"textLines":1,"bbox":[730.56,233.28,144,57.6]}
+{"kind":"shape","id":"sh/ojypwvmt","slide":10,"name":"Google Shape;393;p12","bbox":[730.56,131.52,30.72,30.72]}
+{"kind":"textbox","id":"sh/fe58z6lc","slide":10,"name":"Google Shape;394;p12","text":"5","textPreview":"5","textChars":1,"textLines":1,"bbox":[730.56,131.52,30.72,30.72]}
+{"kind":"shape","id":"sh/etw7614r","slide":10,"name":"Google Shape;395;p12","bbox":[52.8,340.8,854.4,144]}
+{"kind":"textbox","id":"sh/1gnq1g3i","slide":10,"name":"Google Shape;396;p12","text":"Alerts appear on the staff dashboard through lightweight polling, so clinic personnel can monitor incidents, coordinate response, and log actions taken in one place.","textPreview":"Alerts appear on the staff dashboard through lightweight polling, so clinic personnel can monitor incidents, coordinate response, and log...","textChars":165,"textLines":1,"bbox":[86.4,360,787.2,105.6]}
+{"kind":"textbox","id":"sh/0fep8bmx","slide":10,"name":"Google Shape;397;p12","text":"10","textPreview":"10","textChars":2,"textLines":1,"bbox":[864,505.44,48,28.8]}
+{"kind":"textbox","id":"sh/ja98balg","slide":10,"name":"Google Shape;398;p12","text":"CLINiQ","textPreview":"CLINiQ","textChars":6,"textLines":1,"bbox":[48,505.44,480,28.8]}
+{"kind":"image","id":"im/fihczu5w","slide":10,"name":"Google Shape;358;p12","bbox":[111.02,174.86,39.07,39.07]}
+{"kind":"image","id":"im/69cnilcv","slide":10,"name":"Google Shape;363;p12","bbox":[200.57,215.04,21.12,21.12]}
+{"kind":"image","id":"im/7ulobqdg","slide":10,"name":"Google Shape;366;p12","bbox":[279.02,174.86,39.07,39.07]}
+{"kind":"image","id":"im/svu5kvu1","slide":10,"name":"Google Shape;372;p12","bbox":[368.57,215.04,21.12,21.12]}
+{"kind":"image","id":"im/tw36d0vm","slide":10,"name":"Google Shape;375;p12","bbox":[447.02,174.86,39.07,39.07]}
+{"kind":"image","id":"im/i5snelcz","slide":10,"name":"Google Shape;380;p12","bbox":[536.57,215.04,21.12,21.12]}
+{"kind":"image","id":"im/j6147qdk","slide":10,"name":"Google Shape;383;p12","bbox":[615.02,174.86,39.07,39.07]}
+{"kind":"image","id":"im/k7a5gbu5","slide":10,"name":"Google Shape;388;p12","bbox":[704.57,215.04,21.12,21.12]}
+{"kind":"image","id":"im/58jm9gva","slide":10,"name":"Google Shape;391;p12","bbox":[783.02,174.86,39.07,39.07]}
+{"kind":"notes","id":"nt/m90b6t0r","slide":10,"text":"Presentation pacing target: maximum 15 minutes.\nDemo focus: student appointment request -> staff approval -> visit recording -> risk result -> patient profile -> passport incident -> nurse alert -> APE/reports proof.\nDefense phrasing: rule-based decision support, tokenized QR/NFC-ready emergency link, near real-time dashboard polling."}
+{"kind":"slide","id":"sl/jetc3ut0","slide":11,"title":"Live Demo Roadmap","textShapes":21}
+{"kind":"textbox","id":"sh/jyhozyt8","slide":11,"name":"Google Shape;404;p13","text":"Live Demo Roadmap","textPreview":"Live Demo Roadmap","textChars":17,"textLines":1,"bbox":[57.6,38.4,825.6,52.8]}
+{"kind":"textbox","id":"sh/ix8n6dcn","slide":11,"name":"Google Shape;405;p13","text":"The focused workflow for the recorded presentation","textPreview":"The focused workflow for the recorded presentation","textChars":50,"textLines":1,"bbox":[57.6,88.32,825.6,33.6]}
+{"kind":"shape","id":"sh/50z618by","slide":11,"name":"Google Shape;406;p13","bbox":[57.6,144,273.6,120]}
+{"kind":"shape","id":"sh/4zq583ud","slide":11,"name":"Google Shape;407;p13","bbox":[72,161.28,34.56,34.56]}
+{"kind":"textbox","id":"sh/r21o3it4","slide":11,"name":"Google Shape;408;p13","text":"1","textPreview":"1","textChars":1,"textLines":1,"bbox":[72,161.28,34.56,34.56]}
+{"kind":"shape","id":"sh/6187adcj","slide":11,"name":"Google Shape;409;p13","bbox":[265.92,159.36,40.32,40.32]}
+{"kind":"textbox","id":"sh/psjmtsri","slide":11,"name":"Google Shape;411;p13","text":"Student login/request","textPreview":"Student login/request","textChars":21,"textLines":1,"bbox":[72,209.28,244.8,48]}
+{"kind":"shape","id":"sh/25snyd8r","slide":11,"name":"Google Shape;412;p13","bbox":[348.48,144,273.6,120]}
+{"kind":"shape","id":"sh/3614ri9c","slide":11,"name":"Google Shape;413;p13","bbox":[362.88,161.28,34.56,34.56]}
+{"kind":"textbox","id":"sh/g3a5w3ql","slide":11,"name":"Google Shape;414;p13","text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[362.88,161.28,34.56,34.56]}
+{"kind":"shape","id":"sh/14jmp8r6","slide":11,"name":"Google Shape;415;p13","bbox":[556.8,159.36,40.32,40.32]}
+{"kind":"textbox","id":"sh/f214ni90","slide":11,"name":"Google Shape;417;p13","text":"Staff dashboard","textPreview":"Staff dashboard","textChars":15,"textLines":1,"bbox":[362.88,209.28,244.8,48]}
+{"kind":"shape","id":"sh/szq5s3qp","slide":11,"name":"Google Shape;418;p13","bbox":[639.36,144,273.6,120]}
+{"kind":"shape","id":"sh/t0zml8ra","slide":11,"name":"Google Shape;419;p13","bbox":[653.76,161.28,34.56,34.56]}
+{"kind":"textbox","id":"sh/9k7u90fm","slide":11,"name":"Google Shape;420;p13","text":"3","textPreview":"3","textChars":1,"textLines":1,"bbox":[653.76,161.28,34.56,34.56]}
+{"kind":"shape","id":"sh/8jyt0ve1","slide":11,"name":"Google Shape;421;p13","bbox":[847.68,159.36,40.32,40.32]}
+{"kind":"textbox","id":"sh/mhgbylgb","slide":11,"name":"Google Shape;423;p13","text":"Approve appointment","textPreview":"Approve appointment","textChars":19,"textLines":1,"bbox":[653.76,209.28,244.8,48]}
+{"kind":"shape","id":"sh/lg7u50fq","slide":11,"name":"Google Shape;424;p13","bbox":[57.6,281.28,273.6,120]}
+{"kind":"shape","id":"sh/0fytwvy5","slide":11,"name":"Google Shape;425;p13","bbox":[72,298.56,34.56,34.56]}
+{"kind":"textbox","id":"sh/zepc3qxk","slide":11,"name":"Google Shape;426;p13","text":"4","textPreview":"4","textChars":1,"textLines":1,"bbox":[72,298.56,34.56,34.56]}
+{"kind":"shape","id":"sh/ytgbulgz","slide":11,"name":"Google Shape;427;p13","bbox":[265.92,296.64,40.32,40.32]}
+{"kind":"textbox","id":"sh/4bid8fe9","slide":11,"name":"Google Shape;429;p13","text":"Record clinic visit","textPreview":"Record clinic visit","textChars":19,"textLines":1,"bbox":[72,346.56,244.8,48]}
+{"kind":"shape","id":"sh/2xcr2hwr","slide":11,"name":"Google Shape;430;p13","bbox":[348.48,281.28,273.6,120]}
+{"kind":"shape","id":"sh/3yl8vmdc","slide":11,"name":"Google Shape;431;p13","bbox":[362.88,298.56,34.56,34.56]}
+{"kind":"textbox","id":"sh/ozu94rex","slide":11,"name":"Google Shape;432;p13","text":"5","textPreview":"5","textChars":1,"textLines":1,"bbox":[362.88,298.56,34.56,34.56]}
+{"kind":"shape","id":"sh/pk3qxwvi","slide":11,"name":"Google Shape;433;p13","bbox":[556.8,296.64,40.32,40.32]}
+{"kind":"textbox","id":"sh/ful8r2dg","slide":11,"name":"Google Shape;435;p13","text":"Risk classification","textPreview":"Risk classification","textChars":19,"textLines":1,"bbox":[362.88,346.56,244.8,48]}
+{"kind":"shape","id":"sh/gvu907el","slide":11,"name":"Google Shape;436;p13","bbox":[639.36,281.28,273.6,120]}
+{"kind":"shape","id":"sh/1w3qtcv6","slide":11,"name":"Google Shape;437;p13","bbox":[653.76,298.56,34.56,34.56]}
+{"kind":"textbox","id":"sh/ypwra1cz","slide":11,"name":"Google Shape;438;p13","text":"6","textPreview":"6","textChars":1,"textLines":1,"bbox":[653.76,298.56,34.56,34.56]}
+{"kind":"shape","id":"sh/zq5s36dk","slide":11,"name":"Google Shape;439;p13","bbox":[847.68,296.64,40.32,40.32]}
+{"kind":"textbox","id":"sh/ihcn6tgf","slide":11,"name":"Google Shape;441;p13","text":"Patient profile","textPreview":"Patient profile","textChars":15,"textLines":1,"bbox":[653.76,346.56,244.8,48]}
+{"kind":"shape","id":"sh/5k3618z6","slide":11,"name":"Google Shape;442;p13","bbox":[57.6,418.56,273.6,120]}
+{"kind":"shape","id":"sh/kju583yl","slide":11,"name":"Google Shape;443;p13","bbox":[72,435.84,34.56,34.56]}
+{"kind":"textbox","id":"sh/ve14vyho","slide":11,"name":"Google Shape;444;p13","text":"7","textPreview":"7","textChars":1,"textLines":1,"bbox":[72,435.84,34.56,34.56]}
+{"kind":"shape","id":"sh/adsn2tgj","slide":11,"name":"Google Shape;445;p13","bbox":[265.92,433.92,40.32,40.32]}
+{"kind":"textbox","id":"sh/wfa543y9","slide":11,"name":"Google Shape;447;p13","text":"Passport incident","textPreview":"Passport incident","textChars":17,"textLines":1,"bbox":[72,483.84,244.8,48]}
+{"kind":"shape","id":"sh/fa5o7ih8","slide":11,"name":"Google Shape;448;p13","bbox":[348.48,418.56,273.6,120]}
+{"kind":"shape","id":"sh/u9wnedgn","slide":11,"name":"Google Shape;449;p13","bbox":[362.88,435.84,34.56,34.56]}
+{"kind":"textbox","id":"sh/cv618fe5","slide":11,"name":"Google Shape;450;p13","text":"8","textPreview":"8","textChars":1,"textLines":1,"bbox":[362.88,435.84,34.56,34.56]}
+{"kind":"shape","id":"sh/dwz21kfq","slide":11,"name":"Google Shape;451;p13","bbox":[556.8,433.92,40.32,40.32]}
+{"kind":"textbox","id":"sh/ruxkzaxk","slide":11,"name":"Google Shape;453;p13","text":"Nurse alert response","textPreview":"Nurse alert response","textChars":20,"textLines":1,"bbox":[362.88,483.84,244.8,48]}
+{"kind":"shape","id":"sh/0jqlcze1","slide":11,"name":"Google Shape;454;p13","bbox":[639.36,418.56,273.6,120]}
+{"kind":"shape","id":"sh/1kz254fm","slide":11,"name":"Google Shape;455;p13","bbox":[653.76,435.84,34.56,34.56]}
+{"kind":"textbox","id":"sh/eh83apwb","slide":11,"name":"Google Shape;456;p13","text":"9","textPreview":"9","textChars":1,"textLines":1,"bbox":[653.76,435.84,34.56,34.56]}
+{"kind":"shape","id":"sh/zihk3uxg","slide":11,"name":"Google Shape;457;p13","bbox":[847.68,433.92,40.32,40.32]}
+{"kind":"textbox","id":"sh/9oj294fy","slide":11,"name":"Google Shape;459;p13","text":"APE / Reports","textPreview":"APE / Reports","textChars":13,"textLines":1,"bbox":[653.76,483.84,244.8,48]}
+{"kind":"textbox","id":"sh/h4f2t472","slide":11,"name":"Google Shape;460;p13","text":"11","textPreview":"11","textChars":2,"textLines":1,"bbox":[864,505.44,48,28.8]}
+{"kind":"image","id":"im/t8ridc3a","slide":11,"name":"Google Shape;410;p13","bbox":[271.16,164.6,29.84,29.84]}
+{"kind":"image","id":"im/65gz2x4z","slide":11,"name":"Google Shape;416;p13","bbox":[562.04,164.6,29.84,29.84]}
+{"kind":"image","id":"im/r6p0b2lk","slide":11,"name":"Google Shape;422;p13","bbox":[852.92,164.6,29.84,29.84]}
+{"kind":"image","id":"im/gbih8rm1","slide":11,"name":"Google Shape;428;p13","bbox":[271.16,301.88,29.84,29.84]}
+{"kind":"image","id":"im/1crihw3m","slide":11,"name":"Google Shape;434;p13","bbox":[562.04,301.88,29.84,29.84]}
+{"kind":"image","id":"im/e90z6h4v","slide":11,"name":"Google Shape;440;p13","bbox":[852.92,301.88,29.84,29.84]}
+{"kind":"image","id":"im/fa90fmlg","slide":11,"name":"Google Shape;446;p13","bbox":[271.16,439.16,29.84,29.84]}
+{"kind":"image","id":"im/wfyhwnmx","slide":11,"name":"Google Shape;452;p13","bbox":[562.04,439.16,29.84,29.84]}
+{"kind":"image","id":"im/hg7y5s3i","slide":11,"name":"Google Shape;458;p13","bbox":[852.92,439.16,29.84,29.84]}
+{"kind":"notes","id":"nt/jetc3ut0","slide":11,"text":"Presentation pacing target: maximum 15 minutes.\nDemo focus: student appointment request -> staff approval -> visit recording -> risk result -> patient profile -> passport incident -> nurse alert -> APE/reports proof.\nDefense phrasing: rule-based decision support, tokenized QR/NFC-ready emergency link, near real-time dashboard polling."}
+{"kind":"slide","id":"sl/8f2psfyx","slide":12,"title":"Current Status & Next Improvements","textShapes":12}
+{"kind":"textbox","id":"sh/ju1o7ehg","slide":12,"name":"Google Shape;466;p14","text":"Current Status & Next Improvements","textPreview":"Current Status & Next Improvements","textChars":34,"textLines":1,"bbox":[57.6,38.4,825.6,52.8]}
+{"kind":"textbox","id":"sh/yt8nytgv","slide":12,"name":"Google Shape;467;p14","text":"What is working now, and what should be strengthened next","textPreview":"What is working now, and what should be strengthened next","textChars":57,"textLines":1,"bbox":[57.6,88.32,825.6,33.6]}
+{"kind":"shape","id":"sh/1kf6x4z2","slide":12,"name":"Google Shape;468;p14","bbox":[57.6,144,273.6,110.4]}
+{"kind":"shape","id":"sh/0j65ozyh","slide":12,"name":"Google Shape;469;p14","bbox":[74.88,172.8,52.8,52.8]}
+{"kind":"textbox","id":"sh/rqdk7qx0","slide":12,"name":"Google Shape;471;p14","text":"Working Staff Portal","textPreview":"Working Staff Portal","textChars":20,"textLines":1,"bbox":[144,144,172.8,110.4]}
+{"kind":"shape","id":"sh/crml0vel","slide":12,"name":"Google Shape;472;p14","bbox":[348.48,144,273.6,110.4]}
+{"kind":"shape","id":"sh/dsv290f6","slide":12,"name":"Google Shape;473;p14","bbox":[365.76,172.8,52.8,52.8]}
+{"kind":"textbox","id":"sh/zudkbaxw","slide":12,"name":"Google Shape;475;p14","text":"Student Portal","textPreview":"Student Portal","textChars":14,"textLines":1,"bbox":[434.88,144,172.8,110.4]}
+{"kind":"shape","id":"sh/0v6l4feh","slide":12,"name":"Google Shape;476;p14","bbox":[639.36,144,273.6,110.4]}
+{"kind":"shape","id":"sh/1wfmdkf2","slide":12,"name":"Google Shape;477;p14","bbox":[656.64,172.8,52.8,52.8]}
+{"kind":"textbox","id":"sh/fytkz6xs","slide":12,"name":"Google Shape;479;p14","text":"Patient Profile","textPreview":"Patient Profile","textChars":15,"textLines":1,"bbox":[725.76,144,172.8,110.4]}
+{"kind":"shape","id":"sh/z6hcv698","slide":12,"name":"Google Shape;480;p14","bbox":[57.6,271.68,273.6,110.4]}
+{"kind":"shape","id":"sh/y58v21sn","slide":12,"name":"Google Shape;481;p14","bbox":[74.88,300.48,52.8,52.8]}
+{"kind":"textbox","id":"sh/k7ad4bat","slide":12,"name":"Google Shape;483;p14","text":"APE Tracking","textPreview":"APE Tracking","textChars":12,"textLines":1,"bbox":[144,271.68,172.8,110.4]}
+{"kind":"shape","id":"sh/7a1wzq94","slide":12,"name":"Google Shape;484;p14","bbox":[348.48,271.68,273.6,110.4]}
+{"kind":"shape","id":"sh/m9sv6lsj","slide":12,"name":"Google Shape;485;p14","bbox":[365.76,300.48,52.8,52.8]}
+{"kind":"textbox","id":"sh/8bad8bap","slide":12,"name":"Google Shape;487;p14","text":"Role Restrictions","textPreview":"Role Restrictions","textChars":17,"textLines":1,"bbox":[434.88,271.68,172.8,110.4]}
+{"kind":"shape","id":"sh/nexcnm90","slide":12,"name":"Google Shape;488;p14","bbox":[639.36,271.68,273.6,110.4]}
+{"kind":"shape","id":"sh/2dovuhsf","slide":12,"name":"Google Shape;489;p14","bbox":[656.64,300.48,52.8,52.8]}
+{"kind":"textbox","id":"sh/tkvaxs7y","slide":12,"name":"Google Shape;491;p14","text":"Secure File Upload","textPreview":"Secure File Upload","textChars":18,"textLines":1,"bbox":[725.76,271.68,172.8,110.4]}
+{"kind":"shape","id":"sh/6h4r2d87","slide":12,"name":"Google Shape;492;p14","bbox":[57.6,399.36,273.6,110.4]}
+{"kind":"shape","id":"sh/ridsvips","slide":12,"name":"Google Shape;493;p14","bbox":[74.88,428.16,52.8,52.8]}
+{"kind":"textbox","id":"sh/5gvat87m","slide":12,"name":"Google Shape;495;p14","text":"QR/NFC Production","textPreview":"QR/NFC Production","textChars":17,"textLines":1,"bbox":[144,399.36,172.8,110.4]}
+{"kind":"shape","id":"sh/itkryd8b","slide":12,"name":"Google Shape;496;p14","bbox":[348.48,399.36,273.6,110.4]}
+{"kind":"shape","id":"sh/jetsripg","slide":12,"name":"Google Shape;497;p14","bbox":[365.76,428.16,52.8,52.8]}
+{"kind":"textbox","id":"sh/pcfa5c7q","slide":12,"name":"Google Shape;499;p14","text":"SMS/Email Alerts","textPreview":"SMS/Email Alerts","textChars":16,"textLines":1,"bbox":[434.88,399.36,172.8,110.4]}
+{"kind":"shape","id":"sh/alwfeh8n","slide":12,"name":"Google Shape;500;p14","bbox":[639.36,399.36,273.6,110.4]}
+{"kind":"shape","id":"sh/bm5w72p8","slide":12,"name":"Google Shape;501;p14","bbox":[656.64,428.16,52.8,52.8]}
+{"kind":"textbox","id":"sh/xone9c7e","slide":12,"name":"Google Shape;503;p14","text":"Reports Expansion","textPreview":"Reports Expansion","textChars":17,"textLines":1,"bbox":[725.76,399.36,172.8,110.4]}
+{"kind":"textbox","id":"sh/ypwfihoz","slide":12,"name":"Google Shape;504;p14","text":"12","textPreview":"12","textChars":2,"textLines":1,"bbox":[864,505.44,48,28.8]}
+{"kind":"image","id":"im/ixov2tof","slide":12,"name":"Google Shape;470;p14","bbox":[81.74,179.66,39.07,39.07]}
+{"kind":"image","id":"im/50zex876","slide":12,"name":"Google Shape;474;p14","bbox":[372.62,179.66,39.07,39.07]}
+{"kind":"image","id":"im/4z6d436l","slide":12,"name":"Google Shape;478;p14","bbox":[663.5,179.66,39.07,39.07]}
+{"kind":"image","id":"im/z2dwjepw","slide":12,"name":"Google Shape;482;p14","bbox":[81.74,307.34,39.07,39.07]}
+{"kind":"image","id":"im/y14vq98b","slide":12,"name":"Google Shape;486;p14","bbox":[372.62,307.34,39.07,39.07]}
+{"kind":"image","id":"im/o7it0f6t","slide":12,"name":"Google Shape;490;p14","bbox":[663.5,307.34,39.07,39.07]}
+{"kind":"image","id":"im/p8rat0ne","slide":12,"name":"Google Shape;494;p14","bbox":[81.74,435.02,39.07,39.07]}
+{"kind":"image","id":"im/250by5o3","slide":12,"name":"Google Shape;498;p14","bbox":[372.62,435.02,39.07,39.07]}
+{"kind":"image","id":"im/n69sra5o","slide":12,"name":"Google Shape;502;p14","bbox":[663.5,435.02,39.07,39.07]}
+{"kind":"notes","id":"nt/8f2psfyx","slide":12,"text":"Presentation pacing target: maximum 15 minutes.\nDemo focus: student appointment request -> staff approval -> visit recording -> risk result -> patient profile -> passport incident -> nurse alert -> APE/reports proof.\nDefense phrasing: rule-based decision support, tokenized QR/NFC-ready emergency link, near real-time dashboard polling."}
+{"kind":"slide","id":"sl/hgzapcr6","slide":13,"title":"Conclusion","textShapes":17}
+{"kind":"shape","id":"sh/it4nmdsf","slide":13,"name":"Google Shape;510;p15","bbox":[758.4,-115.2,345.6,345.6]}
+{"kind":"textbox","id":"sh/judovit0","slide":13,"name":"Google Shape;511;p15","text":"Conclusion","textPreview":"Conclusion","textChars":10,"textLines":1,"bbox":[57.6,40.32,816,57.6]}
+{"kind":"textbox","id":"sh/kvm5onal","slide":13,"name":"Google Shape;512;p15","text":"A working prototype for more coordinated campus clinic operations","textPreview":"A working prototype for more coordinated campus clinic operations","textChars":65,"textLines":1,"bbox":[57.6,94.08,816,38.4]}
+{"kind":"shape","id":"sh/5wv6xsb6","slide":13,"name":"Google Shape;513;p15","bbox":[57.6,158.4,273.6,336]}
+{"kind":"textbox","id":"sh/6h4nqdsr","slide":13,"name":"Google Shape;514;p15","text":"PROBLEMS ADDRESSED","textPreview":"PROBLEMS ADDRESSED","textChars":18,"textLines":1,"bbox":[76.8,177.6,235.2,57.6]}
+{"kind":"shape","id":"sh/7ixozitw","slide":13,"name":"Google Shape;515;p15","bbox":[76.8,253.44,13.44,13.44]}
+{"kind":"textbox","id":"sh/sj6psnah","slide":13,"name":"Google Shape;516;p15","text":"Manual, paper-based records","textPreview":"Manual, paper-based records","textChars":27,"textLines":1,"bbox":[100.8,243.84,211.2,48]}
+{"kind":"shape","id":"sh/tkf61sr2","slide":13,"name":"Google Shape;517;p15","bbox":[76.8,312.96,13.44,13.44]}
+{"kind":"textbox","id":"sh/mlknets7","slide":13,"name":"Google Shape;518;p15","text":"Slow information retrieval","textPreview":"Slow information retrieval","textChars":26,"textLines":1,"bbox":[100.8,303.36,211.2,48]}
+{"kind":"shape","id":"sh/nmtonyts","slide":13,"name":"Google Shape;519;p15","bbox":[76.8,372.48,13.44,13.44]}
+{"kind":"textbox","id":"sh/r6pkfu9k","slide":13,"name":"Google Shape;520;p15","text":"Weak emergency response","textPreview":"Weak emergency response","textChars":23,"textLines":1,"bbox":[100.8,362.88,211.2,48]}
+{"kind":"shape","id":"sh/q5g3mp8z","slide":13,"name":"Google Shape;521;p15","bbox":[345.6,158.4,273.6,336]}
+{"kind":"textbox","id":"sh/dsr2h4rq","slide":13,"name":"Google Shape;522;p15","text":"SOLUTIONS IMPLEMENTED","textPreview":"SOLUTIONS IMPLEMENTED","textChars":21,"textLines":1,"bbox":[364.8,177.6,235.2,57.6]}
+{"kind":"shape","id":"sh/crilozq5","slide":13,"name":"Google Shape;523;p15","bbox":[364.8,253.44,13.44,13.44]}
+{"kind":"textbox","id":"sh/32pkba9o","slide":13,"name":"Google Shape;524;p15","text":"Centralized EHR","textPreview":"Centralized EHR","textChars":15,"textLines":1,"bbox":[388.8,243.84,211.2,48]}
+{"kind":"shape","id":"sh/21g3i583","slide":13,"name":"Google Shape;525;p15","bbox":[364.8,312.96,13.44,13.44]}
+{"kind":"textbox","id":"sh/p472dkre","slide":13,"name":"Google Shape;526;p15","text":"Patient Risk Classification","textPreview":"Patient Risk Classification","textChars":27,"textLines":1,"bbox":[388.8,303.36,211.2,48]}
+{"kind":"shape","id":"sh/43ylkfq9","slide":13,"name":"Google Shape;527;p15","bbox":[364.8,372.48,13.44,13.44]}
+{"kind":"textbox","id":"sh/nyt4ne9s","slide":13,"name":"Google Shape;528;p15","text":"QR/NFC-Ready Passport","textPreview":"QR/NFC-Ready Passport","textChars":21,"textLines":1,"bbox":[388.8,362.88,211.2,48]}
+{"kind":"shape","id":"sh/mx03u987","slide":13,"name":"Google Shape;529;p15","bbox":[364.8,432,13.44,13.44]}
+{"kind":"textbox","id":"sh/k3uhob6p","slide":13,"name":"Google Shape;530;p15","text":"Nurse Alerting","textPreview":"Nurse Alerting","textChars":14,"textLines":1,"bbox":[388.8,422.4,211.2,48]}
+{"kind":"shape","id":"sh/543ihg7a","slide":13,"name":"Google Shape;531;p15","bbox":[633.6,158.4,273.6,336]}
+{"kind":"textbox","id":"sh/i1czm1oj","slide":13,"name":"Google Shape;532;p15","text":"PROTOTYPE BENEFITS","textPreview":"PROTOTYPE BENEFITS","textChars":18,"textLines":1,"bbox":[652.8,177.6,235.2,57.6]}
+{"kind":"shape","id":"sh/j2l0f6p4","slide":13,"name":"Google Shape;533;p15","bbox":[652.8,253.44,13.44,13.44]}
+{"kind":"textbox","id":"sh/s7uhsb61","slide":13,"name":"Google Shape;534;p15","text":"Faster clinic coordination","textPreview":"Faster clinic coordination","textChars":26,"textLines":1,"bbox":[676.8,243.84,211.2,48]}
+{"kind":"shape","id":"sh/t8nilg76","slide":13,"name":"Google Shape;535;p15","bbox":[652.8,312.96,13.44,13.44]}
+{"kind":"textbox","id":"sh/65czqlov","slide":13,"name":"Google Shape;536;p15","text":"Better record management","textPreview":"Better record management","textChars":24,"textLines":1,"bbox":[676.8,303.36,211.2,48]}
+{"kind":"shape","id":"sh/76l0j6pg","slide":13,"name":"Google Shape;537;p15","bbox":[652.8,372.48,13.44,13.44]}
+{"kind":"textbox","id":"sh/gbe1wv6x","slide":13,"name":"Google Shape;538;p15","text":"More efficient daily workflow","textPreview":"More efficient daily workflow","textChars":29,"textLines":1,"bbox":[676.8,362.88,211.2,48]}
+{"kind":"textbox","id":"sh/hcnip07i","slide":13,"name":"Google Shape;539;p15","text":"13","textPreview":"13","textChars":2,"textLines":1,"bbox":[864,505.44,48,28.8]}
+{"kind":"textbox","id":"sh/18vapw7m","slide":13,"name":"Google Shape;540;p15","text":"CLINiQ","textPreview":"CLINiQ","textChars":6,"textLines":1,"bbox":[48,505.44,480,28.8]}
+{"kind":"notes","id":"nt/hgzapcr6","slide":13,"text":"Presentation pacing target: maximum 15 minutes.\nDemo focus: student appointment request -> staff approval -> visit recording -> risk result -> patient profile -> passport incident -> nurse alert -> APE/reports proof.\nDefense phrasing: rule-based decision support, tokenized QR/NFC-ready emergency link, near real-time dashboard polling."}

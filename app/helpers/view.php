@@ -3,6 +3,7 @@
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/../config/env.php';
 require_once __DIR__ . '/brand.php';
+require_once __DIR__ . '/student_id.php';
 
 function e(?string $value): string
 {
@@ -248,7 +249,7 @@ function render_footer(): void
         </div>
         <?php endif; ?>
     <?php render_flash_toasts(); ?>
-    <script src="<?= app_url('assets/js/app.js?v=student-id-format-1') ?>"></script>
+    <script src="<?= app_url('assets/js/app.js?v=student-id-format-2') ?>"></script>
     <script src="<?= app_url('assets/js/ag-grid-tables.js?v=6') ?>"></script>
     </body>
     </html>

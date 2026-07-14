@@ -12,8 +12,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $studentIdValue = trim($_POST['student_id'] ?? '');
     $password = (string) ($_POST['password'] ?? '');
 
-    if (!preg_match('/^\d{2}-\d{5}$/', $studentIdValue)) {
-        $error = 'Use the Student ID format 00-00000.';
+    if (!is_valid_student_id($studentIdValue)) {
+        $error = 'Use the Student ID format ' . STUDENT_ID_FORMAT_LABEL . '.';
     } elseif ($password !== STUDENT_DEMO_PASSWORD) {
         $error = 'Incorrect password. Use student123 for the demo seeded accounts.';
     } else {
