@@ -53,13 +53,27 @@ render_student_auth_header('Student Registration');
                         <input id="student-id" class="student-input" type="text" placeholder="00-00000" data-student-id-format required>
                     </div>
                     <div class="student-field student-span-6">
-                        <label class="student-label" for="course">Course and Year</label>
+                        <label class="student-label" for="course">Program</label>
                         <select id="course" class="student-select" required>
-                            <option value="">Select course</option>
-                            <option>BSIT - 1st Year</option>
-                            <option>BSIT - 2nd Year</option>
-                            <option>BSIT - 3rd Year</option>
-                            <option>BSIT - 4th Year</option>
+                            <option value="">Select program</option>
+                            <option value="BSIT">BSIT</option>
+                        </select>
+                    </div>
+                    <div class="student-field student-span-6">
+                        <label class="student-label" for="year-level">Year Level</label>
+                        <select id="year-level" class="student-select" required>
+                            <option value="">Select year level</option>
+                            <option value="1">1</option><option value="2">2</option>
+                            <option value="3">3</option><option value="4">4</option>
+                        </select>
+                    </div>
+                    <div class="student-field student-span-6">
+                        <label class="student-label" for="section">Section</label>
+                        <select id="section" class="student-select" required>
+                            <option value="">Select section</option>
+                            <option value="A">A</option><option value="B">B</option>
+                            <option value="C">C</option><option value="D">D</option>
+                            <option value="E">E</option>
                         </select>
                     </div>
                 </div>

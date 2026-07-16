@@ -14,12 +14,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!is_valid_student_id($studentIdValue)) {
         $error = 'Use the Student ID format ' . STUDENT_ID_FORMAT_LABEL . '.';
-    } elseif ($password !== STUDENT_DEMO_PASSWORD) {
-        $error = 'Incorrect password. Use student123 for the demo seeded accounts.';
     } else {
         $patient = student_find_patient_by_number($studentIdValue);
         if ($patient === null) {
             $error = 'Student ID not found in the clinic records. Try 26-01024 for the seeded demo.';
+        } elseif (!student_password_is_valid($patient, $password)) {
+            $error = 'Invalid Student ID or password. Please try again.';
         } else {
             student_start_session();
             $_SESSION['student_patient_id'] = (int) $patient['id'];

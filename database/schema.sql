@@ -21,6 +21,7 @@ CREATE TABLE system_settings (
 CREATE TABLE patients (
   id INT AUTO_INCREMENT PRIMARY KEY,
   student_number VARCHAR(50) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NULL,
   first_name VARCHAR(80) NOT NULL,
   middle_name VARCHAR(80) NULL,
   last_name VARCHAR(80) NOT NULL,
@@ -252,19 +253,20 @@ VALUES
 -- Student portal demo login: use any seeded student_number with password student123.
 -- Example fresh-install account: 26-01024 / student123.
 INSERT INTO patients (
-  id, student_number, first_name, middle_name, last_name, birthdate, sex, course_section,
+  id, student_number, password_hash, first_name, middle_name, last_name, birthdate, sex, course_section,
   blood_type, allergies, existing_conditions, guardian_name, guardian_contact, emergency_token
 ) VALUES
-(1, '26-01024', 'Sofia', 'L.', 'Bautista', DATE_SUB(CURDATE(), INTERVAL 18 YEAR), 'Female', 'BS Psychology 1-2', 'O+', 'None', 'None reported.', 'Lorna Bautista', '0917-204-1188', SHA2('cliniq-demo-26-01024', 256)),
-(2, '26-01041', 'Rhea', 'C.', 'Ilagan', DATE_SUB(CURDATE(), INTERVAL 18 YEAR), 'Female', 'BS Nursing 1-1', 'A+', 'Penicillin', 'None reported.', 'Marites Ilagan', '0918-337-9021', SHA2('cliniq-demo-26-01041', 256)),
-(3, '26-01058', 'Marco', 'T.', 'Villanueva', DATE_SUB(CURDATE(), INTERVAL 18 YEAR), 'Male', 'BSIT 1-3', 'B+', 'Dust mites', 'History of mild asthma; carries rescue inhaler.', 'Ramon Villanueva', '0920-818-4432', SHA2('cliniq-demo-26-01058', 256)),
-(4, '26-01073', 'Chloe', 'V.', 'Mendoza', DATE_SUB(CURDATE(), INTERVAL 18 YEAR), 'Female', 'BS Biology 1-1', 'AB+', 'None', 'None reported.', 'Carina Mendoza', '0916-552-0114', SHA2('cliniq-demo-26-01073', 256)),
-(5, '26-01089', 'Daniel', 'P.', 'Reyes', DATE_SUB(CURDATE(), INTERVAL 18 YEAR), 'Male', 'BSEd English 1-2', 'O-', 'Seafood', 'Previous allergic reaction to seafood.', 'Paolo Reyes', '0919-214-7710', SHA2('cliniq-demo-26-01089', 256)),
-(6, '26-01102', 'Jessa', 'M.', 'Ocampo', DATE_SUB(CURDATE(), INTERVAL 18 YEAR), 'Female', 'BSBA Marketing 1-4', 'A-', 'None', 'None reported.', 'Joy Ocampo', '0995-310-2248', SHA2('cliniq-demo-26-01102', 256)),
-(7, '26-01119', 'Kevin', 'R.', 'Navarro', DATE_SUB(CURDATE(), INTERVAL 18 YEAR), 'Male', 'BS Criminology 1-1', 'B-', 'None', 'None reported.', 'Katrina Navarro', '0917-998-6612', SHA2('cliniq-demo-26-01119', 256)),
-(8, '26-01136', 'Alyssa', 'D.', 'Santos', DATE_SUB(CURDATE(), INTERVAL 18 YEAR), 'Female', 'BSCS 1-2', 'O+', 'Latex', 'None reported.', 'Diana Santos', '0927-430-1195', SHA2('cliniq-demo-26-01136', 256)),
-(9, '26-01155', 'Miguel', 'A.', 'Flores', DATE_SUB(CURDATE(), INTERVAL 18 YEAR), 'Male', 'BS Accountancy 1-1', 'A+', 'None', 'None reported.', 'Anton Flores', '0918-781-4403', SHA2('cliniq-demo-26-01155', 256)),
-(10, '26-01178', 'Bianca', 'R.', 'Garcia', DATE_SUB(CURDATE(), INTERVAL 18 YEAR), 'Female', 'BSTM 1-3', 'B+', 'Pollen', 'Seasonal allergic rhinitis.', 'Riza Garcia', '0916-773-9004', SHA2('cliniq-demo-26-01178', 256));
+(1, '26-01024', NULL, 'Sofia', 'L.', 'Bautista', DATE_SUB(CURDATE(), INTERVAL 18 YEAR), 'Female', 'BS Psychology 1-2', 'O+', 'None', 'None reported.', 'Lorna Bautista', '0917-204-1188', SHA2('cliniq-demo-26-01024', 256)),
+(2, '26-01041', NULL, 'Rhea', 'C.', 'Ilagan', DATE_SUB(CURDATE(), INTERVAL 18 YEAR), 'Female', 'BS Nursing 1-1', 'A+', 'Penicillin', 'None reported.', 'Marites Ilagan', '0918-337-9021', SHA2('cliniq-demo-26-01041', 256)),
+(3, '26-01058', NULL, 'Marco', 'T.', 'Villanueva', DATE_SUB(CURDATE(), INTERVAL 18 YEAR), 'Male', 'BSIT 1-3', 'B+', 'Dust mites', 'History of mild asthma; carries rescue inhaler.', 'Ramon Villanueva', '0920-818-4432', SHA2('cliniq-demo-26-01058', 256)),
+(4, '26-01073', NULL, 'Chloe', 'V.', 'Mendoza', DATE_SUB(CURDATE(), INTERVAL 18 YEAR), 'Female', 'BS Biology 1-1', 'AB+', 'None', 'None reported.', 'Carina Mendoza', '0916-552-0114', SHA2('cliniq-demo-26-01073', 256)),
+(5, '26-01089', NULL, 'Daniel', 'P.', 'Reyes', DATE_SUB(CURDATE(), INTERVAL 18 YEAR), 'Male', 'BSEd English 1-2', 'O-', 'Seafood', 'Previous allergic reaction to seafood.', 'Paolo Reyes', '0919-214-7710', SHA2('cliniq-demo-26-01089', 256)),
+(6, '26-01102', NULL, 'Jessa', 'M.', 'Ocampo', DATE_SUB(CURDATE(), INTERVAL 18 YEAR), 'Female', 'BSBA Marketing 1-4', 'A-', 'None', 'None reported.', 'Joy Ocampo', '0995-310-2248', SHA2('cliniq-demo-26-01102', 256)),
+(7, '26-01119', NULL, 'Kevin', 'R.', 'Navarro', DATE_SUB(CURDATE(), INTERVAL 18 YEAR), 'Male', 'BS Criminology 1-1', 'B-', 'None', 'None reported.', 'Katrina Navarro', '0917-998-6612', SHA2('cliniq-demo-26-01119', 256)),
+(8, '26-01136', NULL, 'Alyssa', 'D.', 'Santos', DATE_SUB(CURDATE(), INTERVAL 18 YEAR), 'Female', 'BSCS 1-2', 'O+', 'Latex', 'None reported.', 'Diana Santos', '0927-430-1195', SHA2('cliniq-demo-26-01136', 256)),
+(9, '26-01155', NULL, 'Miguel', 'A.', 'Flores', DATE_SUB(CURDATE(), INTERVAL 18 YEAR), 'Male', 'BS Accountancy 1-1', 'A+', 'None', 'None reported.', 'Anton Flores', '0918-781-4403', SHA2('cliniq-demo-26-01155', 256)),
+(10, '26-01178', NULL, 'Bianca', 'R.', 'Garcia', DATE_SUB(CURDATE(), INTERVAL 18 YEAR), 'Female', 'BSTM 1-3', 'B+', 'Pollen', 'Seasonal allergic rhinitis.', 'Riza Garcia', '0916-773-9004', SHA2('cliniq-demo-26-01178', 256)),
+(11, '23-00211', '$2y$10$7PCvWXIALwbg45uLsA/cm.ZyOl0CoZHtzBp/iXftYj8OTqkfcAYeq', 'Justine Angelo', NULL, 'Faustino', NULL, NULL, 'BSIT 3D', NULL, NULL, NULL, NULL, NULL, SHA2('cliniq-23-00211', 256));
 
 INSERT INTO inventory_items (id, item_name, category, quantity, unit, reorder_level, expiration_date, archived_at, archived_reason, archived_by)
 VALUES

@@ -143,6 +143,16 @@ function student_find_patient_by_number(string $studentNumber): ?array
     return $patient ?: null;
 }
 
+function student_password_is_valid(array $patient, string $password): bool
+{
+    $passwordHash = (string) ($patient['password_hash'] ?? '');
+    if ($passwordHash !== '') {
+        return password_verify($password, $passwordHash);
+    }
+
+    return hash_equals(STUDENT_DEMO_PASSWORD, $password);
+}
+
 function render_student_header(string $title, string $active = ''): void
 {
     $profile = student_require_login();
