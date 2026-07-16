@@ -123,6 +123,7 @@ $visibleItems = match ($activeTab) {
 };
 
 $inventoryRows = [];
+$highlightedLowStockKeys = [];
 foreach ($visibleItems as $item) {
     $isArchived = !empty($item['archived_at']);
     $isExpiring = $item['expiration_date'] && strtotime($item['expiration_date']) <= strtotime('+30 days');
@@ -190,8 +191,9 @@ foreach ($visibleItems as $item) {
     }
     $actionsHtml .= '<button onclick="editItem(' . $editArgs . ')" class="btn-icon btn-icon-primary" title="Edit item"><span class="material-symbols-outlined">edit</span></button><button onclick="openArchiveItem(' . $archiveArgs . ')" class="btn-icon btn-icon-slate" title="Archive item"><span class="material-symbols-outlined">archive</span></button></div>';
     $highlightKeys = [];
-    if ($isLow && !$isEquipment) {
+    if ($isLow && !$isEquipment && !isset($highlightedLowStockKeys[$stockKey])) {
         $highlightKeys[] = 'low-stock';
+        $highlightedLowStockKeys[$stockKey] = true;
     }
     if ($isExpiring && !$isEquipment) {
         $highlightKeys[] = 'expiring';
@@ -468,11 +470,11 @@ render_header('Inventory');
             return Array.isArray(data && data.highlightKeys) && data.highlightKeys.includes(targetKey);
         }
 
-        function findTargetNode(api, targetKey) {
-            let found = null;
+        function findTargetNodes(api, targetKey) {
+            const matches = [];
             const visitNode = (node) => {
-                if (!found && rowHasTarget(node.data, targetKey)) {
-                    found = node;
+                if (rowHasTarget(node.data, targetKey)) {
+                    matches.push(node);
                 }
             };
 
@@ -482,28 +484,46 @@ render_header('Inventory');
                 api.forEachNode(visitNode);
             }
 
-            return found;
+            return matches;
         }
 
-        function pulseTargetRow(gridId, api, targetKey) {
+        function cleanAttentionClass(rowClass) {
+            return String(rowClass || '').replace(/\binventory-row-attention\b/g, '').replace(/\s+/g, ' ').trim();
+        }
+
+        function setTargetRowsAttention(api, targetNodes, shouldPulse) {
+            targetNodes.forEach((node) => {
+                if (!node.data) return;
+                const baseClass = cleanAttentionClass(node.data.rowClass);
+                node.data.rowClass = shouldPulse
+                    ? `${baseClass} inventory-row-attention`.trim()
+                    : baseClass;
+            });
+
+            if (api.redrawRows) {
+                api.redrawRows({ rowNodes: targetNodes });
+            }
+        }
+
+        function pulseTargetRows(gridId, api, targetKey) {
             const grid = document.getElementById(gridId);
             if (!grid || !api || !targetKey) return;
 
-            const targetNode = findTargetNode(api, targetKey);
-            if (!targetNode) return;
+            const targetNodes = findTargetNodes(api, targetKey);
+            if (targetNodes.length === 0) return;
 
             if (api.ensureIndexVisible) {
-                api.ensureIndexVisible(targetNode.rowIndex, 'middle');
+                api.ensureIndexVisible(targetNodes[0].rowIndex, 'middle');
             }
 
             grid.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
             window.setTimeout(() => {
-                const row = grid.querySelector(`.ag-row[row-index="${targetNode.rowIndex}"]`);
-                if (!row) return;
-                row.classList.remove('inventory-row-attention');
-                void row.offsetWidth;
-                row.classList.add('inventory-row-attention');
+                setTargetRowsAttention(api, targetNodes, false);
+                window.requestAnimationFrame(() => {
+                    setTargetRowsAttention(api, targetNodes, true);
+                    window.setTimeout(() => setTargetRowsAttention(api, targetNodes, false), 2400);
+                });
             }, 450);
         }
 
@@ -512,14 +532,14 @@ render_header('Inventory');
             const gridId = targetGridId(targetKey);
             const api = window.cliniqAgGrids && window.cliniqAgGrids[gridId];
             if (api) {
-                pulseTargetRow(gridId, api, targetKey);
+                pulseTargetRows(gridId, api, targetKey);
                 return;
             }
 
             const handler = (event) => {
                 if (event.detail && event.detail.id === gridId) {
                     window.removeEventListener('cliniq:ag-grid-ready', handler);
-                    pulseTargetRow(gridId, event.detail.api, targetKey);
+                    pulseTargetRows(gridId, event.detail.api, targetKey);
                 }
             };
             window.addEventListener('cliniq:ag-grid-ready', handler);

@@ -164,9 +164,9 @@ function render_student_header(string $title, string $active = ''): void
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title><?= student_e($title) ?> | CLINiQ Student Portal</title>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@700;800&display=swap" rel="stylesheet">
-        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
-        <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+        <link href="../public/assets/vendor/fonts/inter-manrope.css?v=offline-1" rel="stylesheet">
+        <link href="../public/assets/vendor/fonts/material-symbols.css?v=offline-1" rel="stylesheet">
+        <script src="../public/assets/vendor/tailwind/tailwind-cdn.js?v=offline-1"></script>
         <script>
             tailwind.config = {
                 theme: {
@@ -250,9 +250,9 @@ function render_student_auth_header(string $title): void
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title><?= student_e($title) ?> | CLINiQ Student Portal</title>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@700;800&display=swap" rel="stylesheet">
-        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
-        <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+        <link href="../public/assets/vendor/fonts/inter-manrope.css?v=offline-1" rel="stylesheet">
+        <link href="../public/assets/vendor/fonts/material-symbols.css?v=offline-1" rel="stylesheet">
+        <script src="../public/assets/vendor/tailwind/tailwind-cdn.js?v=offline-1"></script>
         <script>
             tailwind.config = {
                 theme: {

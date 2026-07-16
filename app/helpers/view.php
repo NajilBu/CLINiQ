@@ -129,9 +129,9 @@ function render_header(string $title): void
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title><?= e($title) ?> | PLP ClinicConnect</title>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@700;800&display=swap" rel="stylesheet">
-        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
-        <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+        <link href="<?= app_url('assets/vendor/fonts/inter-manrope.css?v=offline-1') ?>" rel="stylesheet">
+        <link href="<?= app_url('assets/vendor/fonts/material-symbols.css?v=offline-1') ?>" rel="stylesheet">
+        <script src="<?= app_url('assets/vendor/tailwind/tailwind-cdn.js?v=offline-1') ?>"></script>
         <script>
             tailwind.config = {
                 darkMode: 'class',
@@ -158,7 +158,7 @@ function render_header(string $title): void
         <link rel="stylesheet" href="<?= app_url('assets/vendor/ag-grid/ag-grid.css?v=31') ?>">
         <link rel="stylesheet" href="<?= app_url('assets/vendor/ag-grid/ag-theme-quartz.css?v=31') ?>">
         <script src="<?= app_url('assets/vendor/ag-grid/ag-grid-community.min.js?v=31') ?>"></script>
-        <link href="<?= app_url('assets/css/app.css?v=page-back-1') ?>" rel="stylesheet">
+        <link href="<?= app_url('assets/css/app.css?v=user-menu-2') ?>" rel="stylesheet">
     </head>
     <body class="bg-surface font-body text-on-surface min-h-screen overflow-x-hidden">
     <?php if ($user): ?>
@@ -182,10 +182,21 @@ function render_header(string $title): void
                         </a>
                     <?php endforeach; ?>
                 </nav>
-                <div class="app-sidebar-footer">
-                    <span class="app-user-label">Signed in as</span>
-                    <strong><?= e($user['name']) ?></strong>
-                </div>
+                <details class="app-sidebar-footer app-user-menu">
+                    <summary class="app-user-menu-trigger">
+                        <span class="app-user-copy">
+                            <span class="app-user-label">Signed in as</span>
+                            <strong><?= e($user['name']) ?></strong>
+                        </span>
+                        <span class="material-symbols-outlined app-user-menu-icon" aria-hidden="true">expand_more</span>
+                    </summary>
+                    <div class="app-user-menu-popover">
+                        <a href="<?= app_url('logout.php') ?>" class="app-logout text-decoration-none">
+                            <span class="material-symbols-outlined">logout</span>
+                            Logout
+                        </a>
+                    </div>
+                </details>
             </aside>
             <div class="app-main">
                 <header class="app-topbar">
@@ -215,10 +226,6 @@ function render_header(string $title): void
                             </a>
                         <?php endif; ?>
                         <span><?= e(date('l, F j')) ?></span>
-                        <a href="<?= app_url('logout.php') ?>" class="app-logout text-decoration-none">
-                            <span class="material-symbols-outlined">logout</span>
-                            Logout
-                        </a>
                     </div>
                 </header>
                 <main class="app-content">

@@ -361,12 +361,23 @@ h6,
 .app-logout {
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
+    justify-content: flex-start;
+    gap: 0.5rem;
+    width: 100%;
+    min-height: 2.5rem;
+    padding: 0.62rem 0.78rem;
+    border: 1px solid transparent;
+    border-radius: 0.72rem;
     color: #64756a;
-    transition: color 0.15s ease;
+    font-size: 0.8rem;
+    font-weight: 800;
+    line-height: 1;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .app-logout:hover {
+    background: #fff1f2;
+    border-color: #fecdd3;
     color: #be123c;
 }
 
@@ -525,11 +536,123 @@ h6,
     display: none;
 }
 
+.app-user-menu {
+    position: relative;
+    isolation: isolate;
+}
+
+.app-user-menu-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.72rem 0.78rem;
+    border-radius: 0.78rem;
+    cursor: pointer;
+    list-style: none;
+    list-style-type: none;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+    transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.app-user-menu > summary {
+    list-style: none;
+    list-style-type: none;
+}
+
+.app-user-menu-trigger::-webkit-details-marker {
+    display: none;
+}
+
+.app-user-menu-trigger::marker {
+    content: none;
+    display: none;
+    font-size: 0;
+}
+
+.app-user-menu-trigger:hover,
+.app-user-menu[open] .app-user-menu-trigger,
+.app-user-menu:focus-within .app-user-menu-trigger {
+    background: #edf8f0;
+    box-shadow: inset 0 0 0 1px rgba(63, 125, 82, 0.12);
+}
+
+.app-user-copy {
+    min-width: 0;
+}
+
 .app-user-label {
     display: block;
     color: oklch(52% .02 250);
     font-size: 0.68rem;
     font-weight: 500;
+}
+
+.app-user-copy strong {
+    display: block;
+    overflow: hidden;
+    color: oklch(22% .03 250);
+    font-size: 0.82rem;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.app-user-menu-icon {
+    flex: 0 0 auto;
+    color: #64756a;
+    font-size: 1.1rem;
+    transition: transform 0.15s ease;
+}
+
+.app-user-menu[open] .app-user-menu-icon,
+.app-user-menu:hover .app-user-menu-icon,
+.app-user-menu:focus-within .app-user-menu-icon {
+    transform: rotate(180deg);
+}
+
+.app-user-menu-popover {
+    position: absolute;
+    left: 1rem;
+    right: 1rem;
+    bottom: calc(100% - 0.25rem);
+    z-index: 70;
+    padding: 0.42rem;
+    border: 1px solid rgba(199, 220, 205, 0.72);
+    border-radius: 0.92rem;
+    background: #ffffff;
+    box-shadow: 0 18px 42px rgba(23, 38, 29, 0.14), 0 1px 2px rgba(23, 38, 29, 0.06);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(0.4rem) scale(0.98);
+    transform-origin: bottom center;
+    visibility: hidden;
+    transition: opacity 0.16s ease, transform 0.16s ease, visibility 0.16s ease;
+}
+
+.app-user-menu-popover::after {
+    content: '';
+    position: absolute;
+    left: 1.35rem;
+    bottom: -0.38rem;
+    width: 0.72rem;
+    height: 0.72rem;
+    border-right: 1px solid rgba(199, 220, 205, 0.72);
+    border-bottom: 1px solid rgba(199, 220, 205, 0.72);
+    background: #ffffff;
+    transform: rotate(45deg);
+}
+
+.app-user-menu:hover .app-user-menu-popover,
+.app-user-menu[open] .app-user-menu-popover,
+.app-user-menu:focus-within .app-user-menu-popover {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
+    visibility: visible;
 }
 
 .auth-main {
