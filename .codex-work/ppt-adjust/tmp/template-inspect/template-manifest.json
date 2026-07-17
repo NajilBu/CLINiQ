@@ -1,0 +1,320 @@
+{
+  "sourcePptx": "D:\\Downloads\\CLINiQ_PPT (1).pptx",
+  "workspace": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp",
+  "outDir": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect",
+  "generatedAt": "2026-07-11T08:33:58.352Z",
+  "slideCount": 13,
+  "slideArtifacts": [
+    {
+      "slide": 1,
+      "previewPath": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\source-slides\\source-slide-01.png",
+      "previewRelativePath": "template-inspect/source-slides/source-slide-01.png",
+      "layoutPath": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\layouts\\source-slide-01.layout.json",
+      "layoutRelativePath": "template-inspect/layouts/source-slide-01.layout.json"
+    },
+    {
+      "slide": 2,
+      "previewPath": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\source-slides\\source-slide-02.png",
+      "previewRelativePath": "template-inspect/source-slides/source-slide-02.png",
+      "layoutPath": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\layouts\\source-slide-02.layout.json",
+      "layoutRelativePath": "template-inspect/layouts/source-slide-02.layout.json"
+    },
+    {
+      "slide": 3,
+      "previewPath": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\source-slides\\source-slide-03.png",
+      "previewRelativePath": "template-inspect/source-slides/source-slide-03.png",
+      "layoutPath": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\layouts\\source-slide-03.layout.json",
+      "layoutRelativePath": "template-inspect/layouts/source-slide-03.layout.json"
+    },
+    {
+      "slide": 4,
+      "previewPath": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\source-slides\\source-slide-04.png",
+      "previewRelativePath": "template-inspect/source-slides/source-slide-04.png",
+      "layoutPath": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\layouts\\source-slide-04.layout.json",
+      "layoutRelativePath": "template-inspect/layouts/source-slide-04.layout.json"
+    },
+    {
+      "slide": 5,
+      "previewPath": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\source-slides\\source-slide-05.png",
+      "previewRelativePath": "template-inspect/source-slides/source-slide-05.png",
+      "layoutPath": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\layouts\\source-slide-05.layout.json",
+      "layoutRelativePath": "template-inspect/layouts/source-slide-05.layout.json"
+    },
+    {
+      "slide": 6,
+      "previewPath": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\source-slides\\source-slide-06.png",
+      "previewRelativePath": "template-inspect/source-slides/source-slide-06.png",
+      "layoutPath": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\layouts\\source-slide-06.layout.json",
+      "layoutRelativePath": "template-inspect/layouts/source-slide-06.layout.json"
+    },
+    {
+      "slide": 7,
+      "previewPath": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\source-slides\\source-slide-07.png",
+      "previewRelativePath": "template-inspect/source-slides/source-slide-07.png",
+      "layoutPath": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\layouts\\source-slide-07.layout.json",
+      "layoutRelativePath": "template-inspect/layouts/source-slide-07.layout.json"
+    },
+    {
+      "slide": 8,
+      "previewPath": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\source-slides\\source-slide-08.png",
+      "previewRelativePath": "template-inspect/source-slides/source-slide-08.png",
+      "layoutPath": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\layouts\\source-slide-08.layout.json",
+      "layoutRelativePath": "template-inspect/layouts/source-slide-08.layout.json"
+    },
+    {
+      "slide": 9,
+      "previewPath": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\source-slides\\source-slide-09.png",
+      "previewRelativePath": "template-inspect/source-slides/source-slide-09.png",
+      "layoutPath": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\layouts\\source-slide-09.layout.json",
+      "layoutRelativePath": "template-inspect/layouts/source-slide-09.layout.json"
+    },
+    {
+      "slide": 10,
+      "previewPath": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\source-slides\\source-slide-10.png",
+      "previewRelativePath": "template-inspect/source-slides/source-slide-10.png",
+      "layoutPath": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\layouts\\source-slide-10.layout.json",
+      "layoutRelativePath": "template-inspect/layouts/source-slide-10.layout.json"
+    },
+    {
+      "slide": 11,
+      "previewPath": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\source-slides\\source-slide-11.png",
+      "previewRelativePath": "template-inspect/source-slides/source-slide-11.png",
+      "layoutPath": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\layouts\\source-slide-11.layout.json",
+      "layoutRelativePath": "template-inspect/layouts/source-slide-11.layout.json"
+    },
+    {
+      "slide": 12,
+      "previewPath": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\source-slides\\source-slide-12.png",
+      "previewRelativePath": "template-inspect/source-slides/source-slide-12.png",
+      "layoutPath": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\layouts\\source-slide-12.layout.json",
+      "layoutRelativePath": "template-inspect/layouts/source-slide-12.layout.json"
+    },
+    {
+      "slide": 13,
+      "previewPath": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\source-slides\\source-slide-13.png",
+      "previewRelativePath": "template-inspect/source-slides/source-slide-13.png",
+      "layoutPath": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\layouts\\source-slide-13.layout.json",
+      "layoutRelativePath": "template-inspect/layouts/source-slide-13.layout.json"
+    }
+  ],
+  "inspectPath": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\template-inspect.ndjson",
+  "inspectRelativePath": "template-inspect/template-inspect.ndjson",
+  "inspectTruncated": true,
+  "inspectMetadata": {
+    "revision": "aswz35",
+    "target": {
+      "id": "pr/3jdlk1"
+    },
+    "kind": {
+      "requested": "slide,textbox,shape,image,table,chart",
+      "tokens": [
+        "slide",
+        "textbox",
+        "shape",
+        "image",
+        "table",
+        "chart"
+      ]
+    },
+    "include": {
+      "tokens": []
+    },
+    "exclude": {
+      "tokens": []
+    },
+    "notices": []
+  },
+  "extractedMedia": [
+    {
+      "entry": "ppt/media/image4.png",
+      "path": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\assets\\ppt\\media\\image4.png",
+      "relativePath": "template-inspect/assets/ppt/media/image4.png",
+      "bytes": 3355
+    },
+    {
+      "entry": "ppt/media/image13.png",
+      "path": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\assets\\ppt\\media\\image13.png",
+      "relativePath": "template-inspect/assets/ppt/media/image13.png",
+      "bytes": 4229
+    },
+    {
+      "entry": "ppt/media/image17.png",
+      "path": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\assets\\ppt\\media\\image17.png",
+      "relativePath": "template-inspect/assets/ppt/media/image17.png",
+      "bytes": 2785
+    },
+    {
+      "entry": "ppt/media/image3.png",
+      "path": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\assets\\ppt\\media\\image3.png",
+      "relativePath": "template-inspect/assets/ppt/media/image3.png",
+      "bytes": 4477
+    },
+    {
+      "entry": "ppt/media/image18.png",
+      "path": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\assets\\ppt\\media\\image18.png",
+      "relativePath": "template-inspect/assets/ppt/media/image18.png",
+      "bytes": 3296
+    },
+    {
+      "entry": "ppt/media/image8.png",
+      "path": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\assets\\ppt\\media\\image8.png",
+      "relativePath": "template-inspect/assets/ppt/media/image8.png",
+      "bytes": 5645
+    },
+    {
+      "entry": "ppt/media/image20.png",
+      "path": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\assets\\ppt\\media\\image20.png",
+      "relativePath": "template-inspect/assets/ppt/media/image20.png",
+      "bytes": 2437
+    },
+    {
+      "entry": "ppt/media/image22.png",
+      "path": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\assets\\ppt\\media\\image22.png",
+      "relativePath": "template-inspect/assets/ppt/media/image22.png",
+      "bytes": 1941
+    },
+    {
+      "entry": "ppt/media/image7.png",
+      "path": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\assets\\ppt\\media\\image7.png",
+      "relativePath": "template-inspect/assets/ppt/media/image7.png",
+      "bytes": 1983
+    },
+    {
+      "entry": "ppt/media/image16.png",
+      "path": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\assets\\ppt\\media\\image16.png",
+      "relativePath": "template-inspect/assets/ppt/media/image16.png",
+      "bytes": 3552
+    },
+    {
+      "entry": "ppt/media/image12.png",
+      "path": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\assets\\ppt\\media\\image12.png",
+      "relativePath": "template-inspect/assets/ppt/media/image12.png",
+      "bytes": 5532
+    },
+    {
+      "entry": "ppt/media/image2.png",
+      "path": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\assets\\ppt\\media\\image2.png",
+      "relativePath": "template-inspect/assets/ppt/media/image2.png",
+      "bytes": 4868
+    },
+    {
+      "entry": "ppt/media/image25.png",
+      "path": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\assets\\ppt\\media\\image25.png",
+      "relativePath": "template-inspect/assets/ppt/media/image25.png",
+      "bytes": 3308
+    },
+    {
+      "entry": "ppt/media/image21.png",
+      "path": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\assets\\ppt\\media\\image21.png",
+      "relativePath": "template-inspect/assets/ppt/media/image21.png",
+      "bytes": 3649
+    },
+    {
+      "entry": "ppt/media/image1.png",
+      "path": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\assets\\ppt\\media\\image1.png",
+      "relativePath": "template-inspect/assets/ppt/media/image1.png",
+      "bytes": 3521
+    },
+    {
+      "entry": "ppt/media/image10.png",
+      "path": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\assets\\ppt\\media\\image10.png",
+      "relativePath": "template-inspect/assets/ppt/media/image10.png",
+      "bytes": 2367
+    },
+    {
+      "entry": "ppt/media/image6.png",
+      "path": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\assets\\ppt\\media\\image6.png",
+      "relativePath": "template-inspect/assets/ppt/media/image6.png",
+      "bytes": 148598
+    },
+    {
+      "entry": "ppt/media/image15.png",
+      "path": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\assets\\ppt\\media\\image15.png",
+      "relativePath": "template-inspect/assets/ppt/media/image15.png",
+      "bytes": 1811
+    },
+    {
+      "entry": "ppt/media/image24.png",
+      "path": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\assets\\ppt\\media\\image24.png",
+      "relativePath": "template-inspect/assets/ppt/media/image24.png",
+      "bytes": 3461
+    },
+    {
+      "entry": "ppt/media/image11.png",
+      "path": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\assets\\ppt\\media\\image11.png",
+      "relativePath": "template-inspect/assets/ppt/media/image11.png",
+      "bytes": 5063
+    },
+    {
+      "entry": "ppt/media/image14.jpg",
+      "path": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\assets\\ppt\\media\\image14.jpg",
+      "relativePath": "template-inspect/assets/ppt/media/image14.jpg",
+      "bytes": 43612
+    },
+    {
+      "entry": "ppt/media/image19.png",
+      "path": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\assets\\ppt\\media\\image19.png",
+      "relativePath": "template-inspect/assets/ppt/media/image19.png",
+      "bytes": 3750
+    },
+    {
+      "entry": "ppt/media/image5.png",
+      "path": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\assets\\ppt\\media\\image5.png",
+      "relativePath": "template-inspect/assets/ppt/media/image5.png",
+      "bytes": 4616
+    },
+    {
+      "entry": "ppt/media/image9.png",
+      "path": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\assets\\ppt\\media\\image9.png",
+      "relativePath": "template-inspect/assets/ppt/media/image9.png",
+      "bytes": 3829
+    },
+    {
+      "entry": "ppt/media/image23.png",
+      "path": "C:\\xampp\\htdocs\\CLINiQ\\.codex-work\\ppt-adjust\\tmp\\template-inspect\\assets\\ppt\\media\\image23.png",
+      "relativePath": "template-inspect/assets/ppt/media/image23.png",
+      "bytes": 5134
+    }
+  ],
+  "fonts": [
+    "Angsana New",
+    "Arial",
+    "Calibri",
+    "Cambria",
+    "Cordia New",
+    "DaunPenh",
+    "DokChampa",
+    "Estrangelo Edessa",
+    "Euphemia",
+    "Gautami",
+    "Iskoola Pota",
+    "Kalinga",
+    "Kartika",
+    "Latha",
+    "MV Boli",
+    "Mangal",
+    "Microsoft Himalaya",
+    "Microsoft Uighur",
+    "Microsoft Yi Baiti",
+    "Mongolian Baiti",
+    "MoolBoran",
+    "Nyala",
+    "Plantagenet Cherokee",
+    "Raavi",
+    "Shruti",
+    "Sylfaen",
+    "Times New Roman",
+    "Tunga",
+    "Vrinda",
+    "宋体",
+    "新細明體",
+    "맑은 고딕",
+    "ＭＳ Ｐゴシック"
+  ],
+  "packageParts": {
+    "mediaCount": 25,
+    "slideXmlCount": 13,
+    "chartCount": 0,
+    "tableSlideCount": 0
+  }
+}

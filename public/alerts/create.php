@@ -6,15 +6,39 @@ ensure_alert_workflow_schema();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $photoPath = isset($_FILES['photo']) ? save_alert_photo_upload($_FILES['photo']) : null;
+    $answers = collect_incident_report_answers([
+        'incident_type' => $_POST['incident_type'] ?? '',
+        'observed_condition' => $_POST['observed_condition'] ?? '',
+        'breathing_status' => $_POST['breathing_status'] ?? '',
+        'bleeding_status' => $_POST['bleeding_status'] ?? '',
+        'pain_level' => $_POST['pain_level'] ?? '',
+        'mobility_status' => $_POST['mobility_status'] ?? '',
+        'notes' => $_POST['details'] ?? '',
+        'concern' => $_POST['concern'] ?? '',
+    ]);
+    $reportAnswers = incident_report_answers_text($answers);
+    $classification = classify_reported_incident($answers);
+    $riskReasons = incident_risk_reasons_text($classification);
+    $details = trim((string) ($_POST['details'] ?? ''));
+    $details = trim($details . ($details !== '' ? "\n\n" : '') . $reportAnswers);
     $stmt = db()->prepare(
-        'INSERT INTO nurse_alerts (reporter_name, reporter_role, location, concern, details, photo_path) VALUES (?, ?, ?, ?, ?, ?)'
+        'INSERT INTO nurse_alerts (
+            reporter_name, reporter_role, location, concern, incident_type, details, report_answers,
+            risk_level, risk_score, risk_reasons, response_guidance, photo_path
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
     $stmt->execute([
         trim($_POST['reporter_name'] ?? ''),
         trim($_POST['reporter_role'] ?? ''),
         trim($_POST['location'] ?? ''),
         trim($_POST['concern'] ?? ''),
-        trim($_POST['details'] ?? ''),
+        $answers['incident_type'] ?: null,
+        $details,
+        $reportAnswers,
+        $classification['level'],
+        $classification['score'],
+        $riskReasons,
+        $classification['guidance'],
         $photoPath,
     ]);
 
@@ -50,6 +74,61 @@ render_header('Submit Alert');
         <div>
             <label class="clinic-label">Concern</label>
             <input class="clinic-input" name="concern" required placeholder="Brief description of the emergency">
+        </div>
+        <div>
+            <label class="clinic-label">Incident Type</label>
+            <select class="clinic-input" name="incident_type" required>
+                <option value="">Select the closest type</option>
+                <?php foreach (incident_type_options() as $option): ?>
+                    <option value="<?= e($option) ?>"><?= e($option) ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <div>
+            <label class="clinic-label">Student Condition</label>
+            <select class="clinic-input" name="observed_condition" required>
+                <option value="">Select condition</option>
+                <?php foreach (incident_condition_options() as $option): ?>
+                    <option value="<?= e($option) ?>"><?= e($option) ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <div>
+            <label class="clinic-label">Breathing</label>
+            <select class="clinic-input" name="breathing_status" required>
+                <option value="">Select breathing status</option>
+                <?php foreach (incident_breathing_options() as $option): ?>
+                    <option value="<?= e($option) ?>"><?= e($option) ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <div>
+            <label class="clinic-label">Bleeding</label>
+            <select class="clinic-input" name="bleeding_status" required>
+                <option value="">Select bleeding status</option>
+                <?php foreach (incident_bleeding_options() as $option): ?>
+                    <option value="<?= e($option) ?>"><?= e($option) ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <div>
+            <label class="clinic-label">Pain Level</label>
+            <select class="clinic-input" name="pain_level" required>
+                <option value="">Select pain level</option>
+                <option value="0 - No pain">0 - No pain</option>
+                <option value="1-3 - Mild pain">1-3 - Mild pain</option>
+                <option value="4-6 - Moderate pain">4-6 - Moderate pain</option>
+                <option value="7-10 - Severe pain">7-10 - Severe pain</option>
+            </select>
+        </div>
+        <div>
+            <label class="clinic-label">Mobility</label>
+            <select class="clinic-input" name="mobility_status" required>
+                <option value="">Select mobility</option>
+                <?php foreach (incident_mobility_options() as $option): ?>
+                    <option value="<?= e($option) ?>"><?= e($option) ?></option>
+                <?php endforeach; ?>
+            </select>
         </div>
         <div class="md:col-span-2">
             <label class="clinic-label">Details</label>

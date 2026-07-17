@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/../../app/config/database.php';
 require_once __DIR__ . '/../../app/helpers/brand.php';
+require_once __DIR__ . '/../../app/helpers/student_id.php';
 
 const STUDENT_DEMO_PASSWORD = 'student123';
 
@@ -140,6 +141,16 @@ function student_find_patient_by_number(string $studentNumber): ?array
     $patient = $stmt->fetch();
 
     return $patient ?: null;
+}
+
+function student_password_is_valid(array $patient, string $password): bool
+{
+    $passwordHash = (string) ($patient['password_hash'] ?? '');
+    if ($passwordHash !== '') {
+        return password_verify($password, $passwordHash);
+    }
+
+    return hash_equals(STUDENT_DEMO_PASSWORD, $password);
 }
 
 function render_student_header(string $title, string $active = ''): void

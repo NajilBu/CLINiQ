@@ -7,10 +7,12 @@ if (php_sapi_name() !== 'cli') {
 
 require_once __DIR__ . '/../app/config/env.php';
 require_once __DIR__ . '/../app/config/database.php';
+require_once __DIR__ . '/../app/services/AlertWorkflow.php';
 
 echo "Starting CLINiQ Database Seeder...\n";
 
 $db = db();
+ensure_alert_workflow_schema();
 
 // Clear existing data (optional, but good for a fresh seed. Let's not delete users.)
 echo "Clearing existing data (except users)...\n";
@@ -44,7 +46,7 @@ for ($i = 0; $i < 30; $i++) {
     $month = str_pad(rand(1, 12), 2, '0', STR_PAD_LEFT);
     $day = str_pad(rand(1, 28), 2, '0', STR_PAD_LEFT);
     
-    $studentNum = '202' . rand(1, 4) . '-' . str_pad(rand(1, 9999), 5, '0', STR_PAD_LEFT);
+    $studentNum = rand(21, 26) . '-' . str_pad(rand(1, 99999), 5, '0', STR_PAD_LEFT);
     $token = bin2hex(random_bytes(16));
     
     $stmt = $db->prepare("INSERT INTO patients (student_number, first_name, middle_name, last_name, birthdate, sex, course_section, blood_type, allergies, emergency_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
@@ -168,12 +170,42 @@ for ($i = 0; $i < 15; $i++) {
     
     $createdAt = date('Y-m-d H:i:s', strtotime("-$daysAgo days " . rand(8, 16) . ":" . str_pad(rand(0, 59), 2, '0', STR_PAD_LEFT) . ":00"));
     
-    $stmt = $db->prepare("INSERT INTO nurse_alerts (reporter_name, reporter_role, location, concern, status, created_at) VALUES (?, ?, ?, ?, ?, ?)");
+    $answers = collect_incident_report_answers([
+        'incident_type' => match ($a[2]) {
+            'Difficulty breathing' => 'Breathing difficulty',
+            'Chest pain' => 'Other concern',
+            'Student fainted' => 'Fainting or unconscious',
+            'Chemical spill on hand' => 'Bleeding or wound',
+            default => 'Injury or fall',
+        },
+        'observed_condition' => str_contains(strtolower($a[2]), 'fainted') ? 'Unconscious' : 'Awake and responsive',
+        'breathing_status' => str_contains(strtolower($a[2]), 'breathing') || str_contains(strtolower($a[2]), 'chest') ? 'Shortness of breath' : 'Normal',
+        'bleeding_status' => str_contains(strtolower($a[2]), 'spill') ? 'Minor bleeding' : 'None observed',
+        'pain_level' => str_contains(strtolower($a[2]), 'chest') || str_contains(strtolower($a[2]), 'fractured') ? '7-10 - Severe pain' : '4-6 - Moderate pain',
+        'mobility_status' => str_contains(strtolower($a[2]), 'fractured') || str_contains(strtolower($a[2]), 'fainted') ? 'Cannot stand or walk' : 'Needs assistance',
+        'notes' => $a[0],
+        'concern' => $a[2],
+    ]);
+    $classification = classify_reported_incident($answers);
+    $reportAnswers = incident_report_answers_text($answers);
+    $stmt = $db->prepare("
+        INSERT INTO nurse_alerts (
+            reporter_name, reporter_role, location, concern, incident_type, details, report_answers,
+            risk_level, risk_score, risk_reasons, response_guidance, status, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ");
     $stmt->execute([
         $firstNames[array_rand($firstNames)] . ' ' . $lastNames[array_rand($lastNames)],
         array_rand(['Student' => 1, 'Teacher' => 1, 'Staff' => 1]),
         $a[1],
         $a[0],
+        $answers['incident_type'],
+        $a[2],
+        $reportAnswers,
+        $classification['level'],
+        $classification['score'],
+        incident_risk_reasons_text($classification),
+        $classification['guidance'],
         $status,
         $createdAt
     ]);

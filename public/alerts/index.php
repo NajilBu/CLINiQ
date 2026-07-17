@@ -30,6 +30,7 @@ foreach ($statusCountQuery->fetchAll() as $sc) {
 
 $alertColumns = [
     ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'width' => 150],
+    ['headerName' => 'Risk', 'field' => 'riskHtml', 'cellRenderer' => 'html', 'width' => 130],
     ['headerName' => 'Patient', 'field' => 'patient', 'width' => 180],
     ['headerName' => 'Reporter', 'field' => 'reporterHtml', 'cellRenderer' => 'html', 'minWidth' => 190],
     ['headerName' => 'Location', 'field' => 'location'],
@@ -40,6 +41,8 @@ $alertColumns = [
 $alertRows = [];
 foreach ($alerts as $alert) {
     $patientName = trim(($alert['first_name'] ?? '') . ' ' . ($alert['last_name'] ?? ''));
+    $riskLevel = $alert['risk_level'] ?? 'Low';
+    $riskScore = (int) ($alert['risk_score'] ?? 0);
     $actions = '';
     if ($alert['status'] === 'Pending') {
         $actions = '<div class="flex justify-end gap-2">'
@@ -58,10 +61,11 @@ foreach ($alerts as $alert) {
     $alertRows[] = [
         'rowUrl' => 'view.php?id=' . (int)$alert['id'],
         'statusHtml' => '<span class="badge ' . e(status_badge_class($alert['status'])) . '">' . e($alert['status']) . '</span>',
+        'riskHtml' => '<span class="badge ' . e(risk_badge_class($riskLevel)) . '">' . e($riskLevel) . '</span><p class="text-[10px] font-bold text-slate-400 mb-0 mt-1">Score ' . $riskScore . '</p>',
         'patient' => $patientName !== '' ? $patientName : 'Unlisted',
         'reporterHtml' => '<p class="text-sm font-bold text-slate-600 mb-0">' . e($alert['reporter_name']) . '</p>' . ($alert['reporter_role'] ? '<p class="text-xs font-bold text-slate-400 mb-0">' . e($alert['reporter_role']) . '</p>' : ''),
         'location' => $alert['location'],
-        'concernHtml' => '<a href="view.php?id=' . (int)$alert['id'] . '" class="block text-decoration-none"><p class="text-sm font-bold text-slate-800 mb-0">' . e($alert['concern']) . '</p>' . ($alert['details'] ? '<p class="text-xs font-bold text-slate-400 mt-0.5 mb-0 truncate">' . e($alert['details']) . '</p>' : '') . '</a>',
+        'concernHtml' => '<a href="view.php?id=' . (int)$alert['id'] . '" class="block text-decoration-none"><p class="text-sm font-bold text-slate-800 mb-0">' . e($alert['concern']) . '</p>' . (!empty($alert['incident_type']) ? '<p class="text-[10px] font-black text-red-500 uppercase tracking-widest mt-0.5 mb-0">' . e($alert['incident_type']) . '</p>' : '') . ($alert['report_answers'] ? '<p class="text-xs font-bold text-slate-400 mt-0.5 mb-0 truncate">' . e($alert['report_answers']) . '</p>' : ($alert['details'] ? '<p class="text-xs font-bold text-slate-400 mt-0.5 mb-0 truncate">' . e($alert['details']) . '</p>' : '')) . '</a>',
         'created' => date('M d, g:i A', strtotime($alert['created_at'])),
         'actionsHtml' => $actions,
     ];

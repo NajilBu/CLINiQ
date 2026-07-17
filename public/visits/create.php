@@ -12,10 +12,38 @@ $patients = db()->query('SELECT id, student_number, first_name, last_name, cours
 $medicineInventory = visit_medicine_inventory_options();
 $equipmentInventory = visit_equipment_inventory_options();
 $preselectedPatientId = (int) ($_GET['patient_id'] ?? 0);
+$preselectedPatient = null;
+foreach ($patients as $patient) {
+    if ($preselectedPatientId === (int) $patient['id']) {
+        $preselectedPatient = $patient;
+        break;
+    }
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $db = db();
     try {
+        $postedStudentNumber = trim($_POST['student_number'] ?? '');
+        $patientId = 0;
+        if ($postedStudentNumber !== '') {
+            if (!is_valid_student_id($postedStudentNumber)) {
+                throw new InvalidArgumentException(student_id_format_message());
+            }
+
+            $patientCheck = $db->prepare('SELECT id FROM patients WHERE student_number = ? LIMIT 1');
+            $patientCheck->execute([$postedStudentNumber]);
+            $patientId = (int) ($patientCheck->fetchColumn() ?: 0);
+        } else {
+            $patientId = (int) ($_POST['patient_id'] ?? 0);
+            $patientCheck = $db->prepare('SELECT id FROM patients WHERE id = ? LIMIT 1');
+            $patientCheck->execute([$patientId]);
+            $patientId = (int) ($patientCheck->fetchColumn() ?: 0);
+        }
+
+        if ($patientId <= 0) {
+            throw new InvalidArgumentException('Please enter a valid student ID before saving the visit.');
+        }
+
         $risk = classify_patient_risk($_POST);
         $riskReasons = risk_reasons_text($risk);
         $actionTaken = trim($_POST['action_taken'] ?? '');
@@ -36,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
              VALUES (?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         $stmt->execute([
-            (int) $_POST['patient_id'],
+            $patientId,
             trim($_POST['chief_complaint'] ?? ''),
             trim($_POST['symptoms'] ?? ''),
             $_POST['temperature'] ?: null,
@@ -53,9 +81,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             current_user()['id'],
         ]);
         $visitId = (int) $db->lastInsertId();
-        escalate_major_risk_visit($db, $visitId, (int) $_POST['patient_id'], $risk['level'], (int) $risk['score'], $riskReasons);
+        escalate_major_risk_visit($db, $visitId, $patientId, $risk['level'], (int) $risk['score'], $riskReasons);
 
-        $borrower = visit_patient_borrower($db, (int) $_POST['patient_id']);
+        $borrower = visit_patient_borrower($db, $patientId);
         $dispensed = process_visit_inventory_request($db, $dispensingRequest, $borrower['name'], $borrower['identifier']);
         $remarks = trim($_POST['remarks'] ?? '');
         $dispensingNote = visit_dispensing_note($dispensed);
@@ -177,6 +205,18 @@ render_header('Record Visit');
     @media (max-width: 640px) {
         .vitals-grid { grid-template-columns: 1fr; }
     }
+    .patient-lookup-status {
+        min-height: 1.1rem;
+        color: #64748b;
+        font-size: 0.72rem;
+        font-weight: 800;
+    }
+    .patient-lookup-status.is-found {
+        color: #15803d;
+    }
+    .patient-lookup-status.is-missing {
+        color: #b91c1c;
+    }
 </style>
 
 <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-6">
@@ -189,6 +229,37 @@ render_header('Record Visit');
 
 <form method="post" id="visitForm" class="space-y-6">
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <section class="clinic-card p-6 space-y-5">
+            <h2 class="font-headline text-lg font-extrabold text-[#1c2a59] flex items-center gap-2 mb-1">
+                <span class="material-symbols-outlined text-primary text-[19px]">person</span>
+                Patient Information
+            </h2>
+            <div>
+                <label class="clinic-label" for="studentIdLookup">Student ID</label>
+                <input class="record-sheet-field px-4" id="studentIdLookup" name="student_number" list="studentIdOptions" placeholder="00-00000" value="<?= e($preselectedPatient['student_number'] ?? '') ?>" autocomplete="off" data-student-id-format required>
+                <input type="hidden" name="patient_id" id="patientIdInput" value="<?= $preselectedPatient ? (int) $preselectedPatient['id'] : '' ?>">
+                <datalist id="studentIdOptions">
+                    <?php foreach ($patients as $patient): ?>
+                        <?php $patientName = trim($patient['last_name'] . ', ' . $patient['first_name']); ?>
+                        <option value="<?= e($patient['student_number']) ?>"><?= e($patientName) ?></option>
+                    <?php endforeach; ?>
+                </datalist>
+                <div id="patientLookupStatus" class="patient-lookup-status mt-2">Enter a student ID to load patient details.</div>
+            </div>
+            <div>
+                <label class="clinic-label">Student Name</label>
+                <input class="record-sheet-field px-4" id="patientNameDisplay" value="<?= $preselectedPatient ? e(trim($preselectedPatient['first_name'] . ' ' . $preselectedPatient['last_name'])) : 'Enter student ID' ?>" readonly>
+            </div>
+            <div>
+                <label class="clinic-label">Course / Department</label>
+                <input class="record-sheet-field px-4" id="patientCourseDisplay" value="<?= $preselectedPatient ? e($preselectedPatient['course_section'] ?: 'Not specified') : 'Enter student ID' ?>" readonly>
+            </div>
+            <div>
+                <label class="clinic-label">Sex</label>
+                <input class="record-sheet-field px-4" id="patientSexDisplay" value="<?= $preselectedPatient ? e($preselectedPatient['sex'] ?: 'Not specified') : 'Enter student ID' ?>" readonly>
+            </div>
+        </section>
+
         <section class="clinic-card p-6 space-y-5">
             <h2 class="font-headline text-lg font-extrabold text-[#1c2a59] flex items-center gap-2 mb-1">
                 <span class="material-symbols-outlined text-primary text-[19px]">clinical_notes</span>
@@ -213,38 +284,6 @@ render_header('Record Visit');
                     <option value="Active">Active</option>
                     <option value="Completed">Completed</option>
                 </select>
-            </div>
-        </section>
-
-        <section class="clinic-card p-6 space-y-5">
-            <h2 class="font-headline text-lg font-extrabold text-[#1c2a59] flex items-center gap-2 mb-1">
-                <span class="material-symbols-outlined text-primary text-[19px]">person</span>
-                Patient Information
-            </h2>
-            <div>
-                <label class="clinic-label">Patient</label>
-                <select class="record-sheet-field px-4" name="patient_id" id="patientSelect" required>
-                    <option value="">Select patient</option>
-                    <?php foreach ($patients as $patient): ?>
-                        <?php $patientName = trim($patient['last_name'] . ', ' . $patient['first_name']); ?>
-                        <option
-                            value="<?= (int) $patient['id'] ?>"
-                            data-course="<?= e($patient['course_section'] ?: 'Not specified') ?>"
-                            data-sex="<?= e($patient['sex'] ?: 'Not specified') ?>"
-                            <?= $preselectedPatientId === (int) $patient['id'] ? 'selected' : '' ?>
-                        >
-                            <?= e($patientName . ' - ' . $patient['student_number']) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div>
-                <label class="clinic-label">Course / Department</label>
-                <input class="record-sheet-field px-4" id="patientCourseDisplay" value="Select patient" readonly>
-            </div>
-            <div>
-                <label class="clinic-label">Sex</label>
-                <input class="record-sheet-field px-4" id="patientSexDisplay" value="Select patient" readonly>
             </div>
             <div>
                 <label class="clinic-label">Time of Arrival</label>
@@ -378,15 +417,82 @@ render_header('Record Visit');
 </form>
 
 <script>
-function updatePatientPreview() {
-    const select = document.getElementById('patientSelect');
-    const selected = select?.selectedOptions?.[0];
-    document.getElementById('patientCourseDisplay').value = selected?.dataset?.course || 'Select patient';
-    document.getElementById('patientSexDisplay').value = selected?.dataset?.sex || 'Select patient';
+const visitPatients = <?= json_encode(array_map(static function (array $patient): array {
+    return [
+        'id' => (int) $patient['id'],
+        'studentNumber' => $patient['student_number'],
+        'name' => trim($patient['first_name'] . ' ' . $patient['last_name']),
+        'course' => $patient['course_section'] ?: 'Not specified',
+        'sex' => $patient['sex'] ?: 'Not specified',
+    ];
+}, $patients), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+const visitPatientsByStudentNumber = new Map(visitPatients.map((patient) => [patient.studentNumber, patient]));
+const studentIdLookup = document.getElementById('studentIdLookup');
+const patientIdInput = document.getElementById('patientIdInput');
+const patientNameDisplay = document.getElementById('patientNameDisplay');
+const patientCourseDisplay = document.getElementById('patientCourseDisplay');
+const patientSexDisplay = document.getElementById('patientSexDisplay');
+const patientLookupStatus = document.getElementById('patientLookupStatus');
+
+function normalizeStudentId(value) {
+    const digits = String(value || '').replace(/\D/g, '').slice(0, 7);
+    if (digits.length <= 2) {
+        return digits;
+    }
+
+    return `${digits.slice(0, 2)}-${digits.slice(2)}`;
 }
 
-document.getElementById('patientSelect')?.addEventListener('change', updatePatientPreview);
-updatePatientPreview();
+function setLookupStatus(message, state = '') {
+    patientLookupStatus.textContent = message;
+    patientLookupStatus.classList.toggle('is-found', state === 'found');
+    patientLookupStatus.classList.toggle('is-missing', state === 'missing');
+}
+
+function clearPatientLookup(message = 'Enter a student ID to load patient details.', state = '') {
+    patientIdInput.value = '';
+    patientNameDisplay.value = 'Enter student ID';
+    patientCourseDisplay.value = 'Enter student ID';
+    patientSexDisplay.value = 'Enter student ID';
+    setLookupStatus(message, state);
+}
+
+function updatePatientLookup() {
+    const formatted = normalizeStudentId(studentIdLookup.value);
+    if (studentIdLookup.value !== formatted) {
+        studentIdLookup.value = formatted;
+    }
+
+    if (formatted.length === 0) {
+        clearPatientLookup();
+        return;
+    }
+
+    const patient = visitPatientsByStudentNumber.get(formatted);
+    if (!patient) {
+        clearPatientLookup(formatted.length >= 8 ? 'No patient found for this student ID.' : 'Continue typing the student ID.', formatted.length >= 8 ? 'missing' : '');
+        return;
+    }
+
+    patientIdInput.value = patient.id;
+    patientNameDisplay.value = patient.name;
+    patientCourseDisplay.value = patient.course;
+    patientSexDisplay.value = patient.sex;
+    setLookupStatus('Patient details loaded.', 'found');
+}
+
+studentIdLookup?.addEventListener('input', updatePatientLookup);
+studentIdLookup?.addEventListener('change', updatePatientLookup);
+updatePatientLookup();
+
+document.getElementById('visitForm')?.addEventListener('submit', (event) => {
+    updatePatientLookup();
+    if (!patientIdInput.value) {
+        event.preventDefault();
+        studentIdLookup.focus();
+        setLookupStatus('Enter a valid student ID before saving the visit.', 'missing');
+    }
+});
 
 document.querySelectorAll('select[name="dispensing_type"]').forEach((typeSelect) => {
     const container = typeSelect.closest('section');

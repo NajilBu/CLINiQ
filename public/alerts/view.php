@@ -33,6 +33,11 @@ if (!$alert) {
 
 $patientName = trim(($alert['first_name'] ?? '') . ' ' . ($alert['last_name'] ?? ''));
 $photoUrl = $alert['photo_path'] ? app_url($alert['photo_path']) : '';
+$riskLevel = $alert['risk_level'] ?? 'Low';
+$riskScore = (int) ($alert['risk_score'] ?? 0);
+$riskReasons = trim((string) ($alert['risk_reasons'] ?? ''));
+$responseGuidance = trim((string) ($alert['response_guidance'] ?? ''));
+$reportAnswers = trim((string) ($alert['report_answers'] ?? ''));
 
 set_page_back_link('index.php', 'Alert Queue');
 render_header('Alert Report');
@@ -70,6 +75,7 @@ render_header('Alert Report');
         </div>
     </div>
     <div class="flex flex-wrap items-center gap-3">
+        <span class="badge <?= e(risk_badge_class($riskLevel)) ?>"><?= e($riskLevel) ?> Risk</span>
         <span class="badge <?= e(status_badge_class($alert['status'])) ?>"><?= e($alert['status']) ?></span>
     </div>
 </div>
@@ -107,6 +113,18 @@ render_header('Alert Report');
                     <?php endif; ?>
                 </strong>
             </div>
+            <?php if (!empty($alert['incident_type'])): ?>
+                <div class="md:col-span-2 alert-report-field">
+                    <span class="clinic-label">Incident Type</span>
+                    <strong><?= e($alert['incident_type']) ?></strong>
+                </div>
+            <?php endif; ?>
+            <?php if ($reportAnswers !== ''): ?>
+                <div class="md:col-span-2">
+                    <span class="clinic-label">Reporter Answers</span>
+                    <div class="mt-2 rounded-2xl border border-red-100 bg-red-50/50 p-4 text-sm font-bold text-slate-700 whitespace-pre-wrap min-h-[6rem]"><?= e($reportAnswers) ?></div>
+                </div>
+            <?php endif; ?>
             <div class="md:col-span-2">
                 <span class="clinic-label">Details</span>
                 <div class="mt-2 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-700 whitespace-pre-wrap min-h-[7rem]"><?= e($alert['details'] ?: 'No additional details provided.') ?></div>
@@ -122,7 +140,36 @@ render_header('Alert Report');
         </div>
     </section>
 
-    <section class="clinic-card overflow-hidden self-start">
+    <div class="space-y-6 self-start">
+    <section class="clinic-card overflow-hidden">
+        <div class="p-6 border-b border-slate-100 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center">
+                <span class="material-symbols-outlined">emergency</span>
+            </div>
+            <div>
+                <h2 class="font-headline text-xl font-extrabold text-[#17261d] m-0">Risk Classification</h2>
+                <p class="text-xs font-bold text-slate-500 m-0">System guidance based on submitted incident answers.</p>
+            </div>
+        </div>
+        <div class="p-6 space-y-4">
+            <div class="flex flex-wrap items-center gap-3">
+                <span class="badge <?= e(risk_badge_class($riskLevel)) ?>"><?= e($riskLevel) ?> Risk</span>
+                <span class="text-xs font-black text-slate-400 uppercase tracking-widest">Score <?= e((string) $riskScore) ?></span>
+            </div>
+            <div>
+                <span class="clinic-label">Suggested Response</span>
+                <div class="mt-2 rounded-2xl border border-red-100 bg-red-50/70 p-4 text-sm font-bold text-red-800 leading-relaxed">
+                    <?= e($responseGuidance !== '' ? $responseGuidance : incident_response_guidance($riskLevel)) ?>
+                </div>
+            </div>
+            <div>
+                <span class="clinic-label">Classification Basis</span>
+                <div class="mt-2 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs font-bold text-slate-600 whitespace-pre-wrap leading-relaxed"><?= e($riskReasons !== '' ? $riskReasons : 'No urgent incident indicators were detected from the submitted answers.') ?></div>
+            </div>
+        </div>
+    </section>
+
+    <section class="clinic-card overflow-hidden">
         <div class="p-6 border-b border-slate-100 flex items-center gap-3">
             <div class="w-10 h-10 rounded-xl bg-primary-fixed text-primary flex items-center justify-center">
                 <span class="material-symbols-outlined">assignment</span>
@@ -190,6 +237,7 @@ render_header('Alert Report');
             <?php endif; ?>
         </div>
     </section>
+    </div>
 </div>
 
 <?php render_footer(); ?>

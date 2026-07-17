@@ -15,11 +15,18 @@ if (!$patient) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $studentNumber = trim($_POST['student_number'] ?? '');
+    if (!is_valid_student_id($studentNumber)) {
+        flash_message('error', student_id_format_message('Student number'));
+        header('Location: edit.php?id=' . $id);
+        exit;
+    }
+
     $stmt = db()->prepare(
         'UPDATE patients SET student_number=?, first_name=?, middle_name=?, last_name=?, birthdate=?, sex=?, course_section=?, blood_type=?, allergies=?, existing_conditions=?, emergency_instructions=?, guardian_name=?, guardian_contact=? WHERE id=?'
     );
     $stmt->execute([
-        trim($_POST['student_number'] ?? ''),
+        $studentNumber,
         trim($_POST['first_name'] ?? ''),
         trim($_POST['middle_name'] ?? ''),
         trim($_POST['last_name'] ?? ''),
@@ -54,7 +61,7 @@ render_header('Edit Patient');
     <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
         <div>
             <label class="clinic-label">Student Number</label>
-            <input class="clinic-input" name="student_number" value="<?= e($patient['student_number']) ?>" required>
+            <input class="clinic-input" name="student_number" value="<?= e($patient['student_number']) ?>" placeholder="<?= e(STUDENT_ID_FORMAT_LABEL) ?>" data-student-id-format required>
         </div>
         <div>
             <label class="clinic-label">First Name</label>

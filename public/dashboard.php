@@ -2,9 +2,11 @@
 
 require_once __DIR__ . '/../app/helpers/view.php';
 require_once __DIR__ . '/../app/services/ApeWorkflow.php';
+require_once __DIR__ . '/../app/services/AlertWorkflow.php';
 require_once __DIR__ . '/../app/services/AppointmentWorkflow.php';
 require_login();
 ensure_ape_workflow_schema();
+ensure_alert_workflow_schema();
 ensure_appointment_schema();
 
 // --- 1. Metrics & Analytics ---
@@ -92,24 +94,17 @@ $visitorColumns = [
     ['headerName' => 'Time', 'field' => 'time', 'width' => 100, 'minWidth' => 96, 'maxWidth' => 112, 'flex' => 0],
     ['headerName' => 'Patient', 'field' => 'patientHtml', 'cellRenderer' => 'html', 'minWidth' => 150, 'flex' => 1],
     ['headerName' => 'Complaint', 'field' => 'complaint', 'minWidth' => 170, 'flex' => 1.2],
-    ['headerName' => 'Risk', 'field' => 'riskHtml', 'cellRenderer' => 'html', 'width' => 112, 'minWidth' => 112, 'maxWidth' => 124, 'flex' => 0],
+    ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'width' => 128, 'minWidth' => 120, 'maxWidth' => 140, 'flex' => 0],
 ];
 $visitorRows = [];
 foreach ($visitorLogs as $visit) {
     $fullName = trim($visit['first_name'] . ' ' . $visit['last_name']);
-    $riskClass = 'badge-pending';
-    if ($visit['risk_level'] === 'Moderate')
-        $riskClass = 'badge-in-progress';
-    if ($visit['risk_level'] === 'High')
-        $riskClass = 'badge-high';
-    if ($visit['risk_level'] === 'Critical')
-        $riskClass = 'badge-high animate-pulse';
     $visitorRows[] = [
         'rowUrl' => app_url('visits/view.php?id=' . (int) $visit['id'] . '&from=dashboard'),
         'time' => date('h:i A', strtotime($visit['visit_datetime'])),
         'patientHtml' => '<div class="font-bold text-slate-800 text-sm">' . e($fullName) . '</div><div class="text-[10px] text-slate-400">' . e($visit['student_number']) . '</div>',
         'complaint' => $visit['chief_complaint'],
-        'riskHtml' => '<span class="badge ' . e($riskClass) . ' text-[9px]">' . e($visit['risk_level']) . '</span>',
+        'statusHtml' => '<span class="badge ' . e(status_badge_class($visit['status'])) . ' text-[9px]">' . e($visit['status']) . '</span>',
     ];
 }
 
@@ -255,18 +250,39 @@ render_header('Main Dashboard');
             <div class="p-4 sm:p-5">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <?php foreach ($activeAlerts as $alert): ?>
+                        <?php
+                        $alertRisk = $alert['risk_level'] ?? 'Low';
+                        $alertRiskClass = risk_badge_class($alertRisk);
+                        $alertPhotoUrl = !empty($alert['photo_path']) ? app_url($alert['photo_path']) : '';
+                        ?>
                         <div
                             class="flex flex-col justify-between rounded-xl border border-slate-100 border-l-4 border-l-red-500 bg-white p-4 hover:shadow-sm transition-shadow">
                             <div>
                                 <div class="flex justify-between items-start mb-2">
-                                    <span class="badge badge-pending text-[9px]">Pending</span>
+                                    <div class="flex flex-wrap gap-2">
+                                        <span class="badge badge-pending text-[9px]">Pending</span>
+                                        <span class="badge <?= e($alertRiskClass) ?> text-[9px]"><?= e($alertRisk) ?> risk</span>
+                                    </div>
                                     <span class="text-[11px] font-bold text-slate-400 flex items-center gap-1">
                                         <span class="material-symbols-outlined text-[13px]">schedule</span>
                                         <?= date('h:i A', strtotime($alert['created_at'])) ?>
                                     </span>
                                 </div>
                                 <h3 class="font-bold text-slate-800 text-sm mb-1"><?= e($alert['concern']) ?></h3>
-                                <p class="text-xs text-slate-500 line-clamp-2 mb-3"><?= e($alert['details']) ?></p>
+                                <?php if (!empty($alert['incident_type'])): ?>
+                                    <p class="text-[11px] font-black text-red-500 uppercase tracking-widest mb-1"><?= e($alert['incident_type']) ?></p>
+                                <?php endif; ?>
+                                <p class="text-xs text-slate-500 line-clamp-2 mb-2"><?= e($alert['report_answers'] ?: $alert['details']) ?></p>
+                                <?php if (!empty($alert['response_guidance'])): ?>
+                                    <div class="rounded-xl bg-red-50 border border-red-100 px-3 py-2 text-[11px] font-bold text-red-700 mb-3 line-clamp-2">
+                                        <?= e($alert['response_guidance']) ?>
+                                    </div>
+                                <?php endif; ?>
+                                <?php if ($alertPhotoUrl): ?>
+                                    <a href="<?= e($alertPhotoUrl) ?>" target="_blank" class="block rounded-xl overflow-hidden border border-slate-100 bg-slate-50 mb-3">
+                                        <img src="<?= e($alertPhotoUrl) ?>" alt="Alert evidence" class="w-full h-28 object-cover">
+                                    </a>
+                                <?php endif; ?>
                             </div>
                             <div class="flex items-center gap-1 text-xs font-bold text-slate-500 mb-3">
                                 <span class="material-symbols-outlined text-[14px] text-red-400">location_on</span>
@@ -346,7 +362,7 @@ render_header('Main Dashboard');
                                         </div>
                                         <span class="badge badge-pending text-[9px] shrink-0">Pending</span>
                                     </div>
-                                    <div class="flex gap-2 mt-3">
+                                    <div class="flex flex-col sm:flex-row gap-2 mt-3">
                                         <form method="post" action="<?= app_url('appointments/update.php') ?>" class="flex-1">
                                             <input type="hidden" name="id" value="<?= (int) $request['id'] ?>">
                                             <input type="hidden" name="status" value="Scheduled">
@@ -363,6 +379,7 @@ render_header('Main Dashboard');
                                             <input type="hidden" name="id" value="<?= (int) $request['id'] ?>">
                                             <input type="hidden" name="status" value="Cancelled">
                                             <input type="hidden" name="redirect" value="../dashboard.php">
+                                            <input class="clinic-input mb-2" type="text" name="cancellation_reason" placeholder="Cancellation reason" required maxlength="500">
                                             <button class="btn btn-sm btn-ghost w-full" data-confirm-submit
                                                 data-confirm-type="danger" data-confirm-title="Cancel this appointment request?"
                                                 data-confirm-message="This will mark the appointment request as Cancelled."

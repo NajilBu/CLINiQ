@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../app/config/database.php';
+require_once __DIR__ . '/../app/services/AlertWorkflow.php';
 
 function pp_e(?string $value): string
 {
@@ -41,7 +42,7 @@ function pp_upload_incident_photo(array $file): ?string
         return null;
     }
 
-    $uploadDir = __DIR__ . '/../uploads/incidents';
+    $uploadDir = __DIR__ . '/../public/uploads/incidents';
     if (!is_dir($uploadDir)) {
         mkdir($uploadDir, 0775, true);
     }
@@ -123,12 +124,26 @@ $guardian = [
 $reportSubmitted = false;
 $reportError = '';
 $photoPath = null;
+ensure_alert_workflow_schema();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $reporterName = trim($_POST['reporter_name'] ?? 'Emergency Tag Scanner') ?: 'Emergency Tag Scanner';
     $reporterContact = trim($_POST['reporter_contact'] ?? '');
     $location = trim($_POST['location'] ?? 'Location not specified') ?: 'Location not specified';
     $notes = trim($_POST['incident_notes'] ?? '');
+    $answers = collect_incident_report_answers([
+        'incident_type' => $_POST['incident_type'] ?? '',
+        'observed_condition' => $_POST['observed_condition'] ?? '',
+        'breathing_status' => $_POST['breathing_status'] ?? '',
+        'bleeding_status' => $_POST['bleeding_status'] ?? '',
+        'pain_level' => $_POST['pain_level'] ?? '',
+        'mobility_status' => $_POST['mobility_status'] ?? '',
+        'notes' => $notes,
+        'concern' => 'Emergency passport incident report',
+    ]);
+    $reportAnswers = incident_report_answers_text($answers);
+    $classification = classify_reported_incident($answers);
+    $riskReasons = incident_risk_reasons_text($classification);
     $photoCount = 0;
 
     if (isset($_FILES['incident_photos']) && is_array($_FILES['incident_photos']['name'] ?? null)) {
@@ -167,17 +182,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255),
         ]);
 
-        $details = trim("Emergency passport incident report submitted.\nReporter: {$reporterName}\nContact: {$reporterContact}\nNotes: {$notes}\nPhotos attached: {$photoCount}");
+        $details = trim("Emergency passport incident report submitted.\nReporter: {$reporterName}\nContact: {$reporterContact}\nPhotos attached: {$photoCount}\n\n{$reportAnswers}");
         $stmt = db()->prepare("
             INSERT INTO nurse_alerts (
-                patient_id, reporter_name, reporter_role, location, concern, details, photo_path, status
-            ) VALUES (?, ?, 'Emergency Passport Scanner', ?, 'Emergency passport incident report', ?, ?, 'Pending')
+                patient_id, reporter_name, reporter_role, location, concern, incident_type, details, report_answers,
+                risk_level, risk_score, risk_reasons, response_guidance, photo_path, status
+            ) VALUES (?, ?, 'Emergency Passport Scanner', ?, 'Emergency passport incident report', ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')
         ");
         $stmt->execute([
             (int) $patient['id'],
             $reporterName,
             $location,
+            $answers['incident_type'] ?: null,
             $details,
+            $reportAnswers,
+            $classification['level'],
+            $classification['score'],
+            $riskReasons,
+            $classification['guidance'],
             $photoPath,
         ]);
 
@@ -360,7 +382,7 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
     }
 
     .pp-shell {
-      width: min(100% - 2rem, 74rem);
+      width: min(100% - 2rem, 88rem);
       margin: 0 auto;
       padding: 1.25rem 0 2rem;
     }
@@ -426,7 +448,7 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
 
     .pp-grid {
       display: grid;
-      grid-template-columns: minmax(0, 1.35fr) minmax(20rem, 0.85fr);
+      grid-template-columns: minmax(0, 1fr) minmax(26rem, 0.92fr);
       gap: 1rem;
       align-items: start;
     }
@@ -932,20 +954,31 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
     }
 
     .pp-incident-drawer.open {
-      max-height: 42rem;
+      max-height: 76rem;
     }
 
     .pp-form {
       display: grid;
-      gap: 0.9rem;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.7rem 0.8rem;
       padding: 0 1rem 1rem;
+    }
+
+    .pp-form > div,
+    .pp-form .pp-button {
+      min-width: 0;
+    }
+
+    .pp-form-full,
+    .pp-form .pp-button {
+      grid-column: 1 / -1;
     }
 
     .pp-form-label {
       display: block;
-      margin-bottom: 0.45rem;
+      margin-bottom: 0.32rem;
       color: var(--muted);
-      font-size: 0.68rem;
+      font-size: 0.62rem;
       font-weight: 900;
       letter-spacing: 0.07em;
       text-transform: uppercase;
@@ -954,15 +987,26 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
     .pp-dropzone {
       display: grid;
       place-items: center;
-      gap: 0.35rem;
-      min-height: 6rem;
-      padding: 1rem;
+      grid-template-columns: auto 1fr;
+      gap: 0.45rem 0.65rem;
+      min-height: 4.25rem;
+      padding: 0.7rem 0.85rem;
       text-align: center;
       color: var(--muted);
       background: #f8fafc;
       border: 2px dashed #cbd5e1;
       border-radius: 0.75rem;
       cursor: pointer;
+    }
+
+    .pp-dropzone .material-symbols-outlined {
+      grid-row: span 2;
+    }
+
+    .pp-dropzone strong,
+    .pp-dropzone span:not(.material-symbols-outlined) {
+      justify-self: start;
+      text-align: left;
     }
 
     .pp-dropzone strong {
@@ -978,7 +1022,7 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
     .pp-textarea {
       width: 100%;
       min-height: 7rem;
-      padding: 0.75rem 0.85rem;
+      padding: 0.62rem 0.75rem;
       color: var(--ink);
       background: #fff;
       border: 1px solid var(--border);
@@ -987,6 +1031,19 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
       line-height: 1.45;
       resize: vertical;
       outline: none;
+    }
+
+    input.pp-textarea,
+    select.pp-textarea {
+      min-height: 2.55rem !important;
+    }
+
+    textarea.pp-textarea {
+      min-height: 5.2rem;
+    }
+
+    #incidentDesc {
+      min-height: 4.25rem;
     }
 
     .pp-textarea:focus {
@@ -1048,7 +1105,7 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
     }
 
     .pp-footer {
-      width: min(100% - 2rem, 74rem);
+      width: min(100% - 2rem, 88rem);
       margin: 0 auto;
       padding: 0 0 1.5rem;
       color: var(--muted);
@@ -1063,6 +1120,10 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
 
     @media (max-width: 960px) {
       .pp-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .pp-form {
         grid-template-columns: 1fr;
       }
 
@@ -1388,6 +1449,67 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
               </div>
 
               <div>
+                <label class="pp-form-label" for="incidentType">Incident Type</label>
+                <select class="pp-textarea" id="incidentType" name="incident_type" required style="min-height:2.75rem;resize:none;">
+                  <option value="">Select the closest type</option>
+                  <?php foreach (incident_type_options() as $option): ?>
+                    <option value="<?= pp_e($option) ?>"><?= pp_e($option) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+
+              <div>
+                <label class="pp-form-label" for="observedCondition">Student Condition</label>
+                <select class="pp-textarea" id="observedCondition" name="observed_condition" required style="min-height:2.75rem;resize:none;">
+                  <option value="">Select condition</option>
+                  <?php foreach (incident_condition_options() as $option): ?>
+                    <option value="<?= pp_e($option) ?>"><?= pp_e($option) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+
+              <div>
+                <label class="pp-form-label" for="breathingStatus">Breathing</label>
+                <select class="pp-textarea" id="breathingStatus" name="breathing_status" required style="min-height:2.75rem;resize:none;">
+                  <option value="">Select breathing status</option>
+                  <?php foreach (incident_breathing_options() as $option): ?>
+                    <option value="<?= pp_e($option) ?>"><?= pp_e($option) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+
+              <div>
+                <label class="pp-form-label" for="bleedingStatus">Bleeding</label>
+                <select class="pp-textarea" id="bleedingStatus" name="bleeding_status" required style="min-height:2.75rem;resize:none;">
+                  <option value="">Select bleeding status</option>
+                  <?php foreach (incident_bleeding_options() as $option): ?>
+                    <option value="<?= pp_e($option) ?>"><?= pp_e($option) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+
+              <div>
+                <label class="pp-form-label" for="painLevel">Pain Level</label>
+                <select class="pp-textarea" id="painLevel" name="pain_level" required style="min-height:2.75rem;resize:none;">
+                  <option value="">Select pain level</option>
+                  <option value="0 - No pain">0 - No pain</option>
+                  <option value="1-3 - Mild pain">1-3 - Mild pain</option>
+                  <option value="4-6 - Moderate pain">4-6 - Moderate pain</option>
+                  <option value="7-10 - Severe pain">7-10 - Severe pain</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="pp-form-label" for="mobilityStatus">Mobility</label>
+                <select class="pp-textarea" id="mobilityStatus" name="mobility_status" required style="min-height:2.75rem;resize:none;">
+                  <option value="">Select mobility</option>
+                  <?php foreach (incident_mobility_options() as $option): ?>
+                    <option value="<?= pp_e($option) ?>"><?= pp_e($option) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+
+              <div class="pp-form-full">
                 <label class="pp-form-label">Upload Incident Photos</label>
                 <label class="pp-dropzone">
                   <input id="incidentPhotos" name="incident_photos[]" type="file" accept="image/*" multiple hidden>
@@ -1397,7 +1519,7 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
                 </label>
               </div>
 
-              <div>
+              <div class="pp-form-full">
                 <label class="pp-form-label" for="incidentDesc">Incident Description</label>
                 <textarea class="pp-textarea" id="incidentDesc" name="incident_notes" required placeholder="Describe what happened, the student condition, actions already taken, and other observations."></textarea>
               </div>

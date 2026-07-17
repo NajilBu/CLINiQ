@@ -5,8 +5,8 @@ require_login();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $studentNumber = trim($_POST['student_number'] ?? '');
-    if (!preg_match('/^\d{2}-\d{5}$/', $studentNumber)) {
-        flash_message('error', 'Student number must use the format 00-00000.');
+    if (!is_valid_student_id($studentNumber)) {
+        flash_message('error', student_id_format_message('Student number'));
         header('Location: create.php');
         exit;
     }

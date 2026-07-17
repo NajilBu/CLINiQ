@@ -277,6 +277,10 @@ function submitConfirmableAction(button) {
     const form = formId ? document.getElementById(formId) : button.form;
     if (!form) return;
 
+    if (typeof form.reportValidity === 'function' && !form.reportValidity()) {
+        return;
+    }
+
     const title = button.dataset.confirmTitle || 'Confirm action?';
     const message = button.dataset.confirmMessage || 'Please confirm before continuing.';
     const type = button.dataset.confirmType || 'primary';

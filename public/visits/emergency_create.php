@@ -59,8 +59,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
 
-        if ($category === 'Student' && !preg_match('/^\d{2}-\d{5}$/', $identifier)) {
-            flash_message('error', 'Student ID must use the format 00-00000.');
+        if ($category === 'Student' && !is_valid_student_id($identifier)) {
+            flash_message('error', student_id_format_message());
             header('Location: emergency_create.php');
             exit;
         }
