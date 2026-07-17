@@ -406,6 +406,29 @@ function initSidebarToggle() {
     });
 }
 
+function initSettingsTabs() {
+    if (document.documentElement.dataset.cliniqSettingsTabsReady === '1') return;
+    document.documentElement.dataset.cliniqSettingsTabsReady = '1';
+
+    document.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-settings-tab]');
+        if (!button) return;
+
+        event.preventDefault();
+        const tab = button.dataset.settingsTab;
+        document.querySelectorAll('[data-settings-tab]').forEach((item) => {
+            item.classList.toggle('active', item === button);
+        });
+        document.querySelectorAll('.settings-tab-panel').forEach((panel) => {
+            panel.classList.toggle('active', panel.id === 'settings-' + tab);
+        });
+
+        const url = new URL(window.location.href);
+        url.searchParams.set('tab', tab);
+        window.history.replaceState({}, '', url);
+    });
+}
+
 /**
  * Escape HTML entities to prevent XSS.
  */
@@ -448,17 +471,35 @@ function formatDateTime(dateStr) {
 
 async function refreshAlerts() {
     const feed = document.querySelector('[data-alert-feed]');
-    if (!feed) {
+    const statusUrl = document.body ? document.body.dataset.alertStatusUrl : '';
+    const requestUrl = statusUrl || (feed ? feed.dataset.alertFeed : '');
+    if (!requestUrl) {
         return;
     }
 
     try {
-        const response = await fetch(feed.dataset.alertFeed);
+        const response = await fetch(requestUrl);
         const data = await response.json();
         const count = document.getElementById('pending-alert-count');
+        const pendingCount = Number(data.pending_count || 0);
+        const criticalCount = Number(data.critical_count || 0);
+
+        if (document.body) {
+            document.body.classList.toggle('has-active-alerts', pendingCount > 0);
+            document.body.dataset.activeAlertCount = String(pendingCount);
+            document.body.dataset.criticalAlertCount = String(criticalCount);
+        }
+
+        document.querySelectorAll('.app-alert-link.has-alerts').forEach((link) => {
+            link.classList.toggle('has-active-alerts', pendingCount > 0);
+        });
 
         if (count) {
             count.textContent = data.pending_count;
+        }
+
+        if (!feed) {
+            return;
         }
 
         if (!data.alerts.length) {
@@ -515,6 +556,10 @@ function cliniqReplaceTopbarState(doc) {
 
 function cliniqCloseOpenModals() {
     document.querySelectorAll('.modal-backdrop.show').forEach((modal) => {
+        if (modal.id === 'confirmActionModal') {
+            modal.remove();
+            return;
+        }
         if (modal.id && typeof closeModal === 'function') {
             closeModal(modal.id);
         } else {
@@ -522,6 +567,13 @@ function cliniqCloseOpenModals() {
             modal.style.display = 'none';
         }
     });
+}
+
+function cliniqRemoveStaleConfirmModal() {
+    const modal = document.getElementById('confirmActionModal');
+    if (modal) {
+        modal.remove();
+    }
 }
 
 function cliniqAfterContentSwap(root) {
@@ -550,6 +602,7 @@ function cliniqRenderFetchedPage(html, finalUrl, options = {}) {
     cliniqReplaceTopbarState(doc);
     cliniqShowFetchedFlashes(doc);
     cliniqCloseOpenModals();
+    cliniqRemoveStaleConfirmModal();
 
     const title = doc.querySelector('title');
     if (title) {
@@ -716,6 +769,12 @@ function initStudentIdFormatting(root = document) {
 document.addEventListener('DOMContentLoaded', () => {
     // Sidebar open/close control
     initSidebarToggle();
+
+    // Remove any stale confirmation shell left by an interrupted form action.
+    cliniqRemoveStaleConfirmModal();
+
+    // Settings page vertical tab controls
+    initSettingsTabs();
 
     // Initialize tabs from URL
     initTabsFromURL();

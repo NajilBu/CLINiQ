@@ -125,7 +125,7 @@ render_student_header('Emergency Health Passport', 'passport');
                         <label class="student-label" for="blood_type">Blood Type <span class="passport-editable-tag">Editable</span></label>
                         <select id="blood_type" name="blood_type" class="student-select">
                             <?php
-                            $types = ['A+','A−','B+','B−','AB+','AB−','O+','O−','Unknown'];
+                            $types = dropdown_options('blood_type');
                             foreach ($types as $t):
                             ?>
                                 <option value="<?= student_e($t) ?>" <?= $passport['blood_type'] === $t ? 'selected' : '' ?>><?= student_e($t) ?></option>
@@ -240,7 +240,7 @@ render_student_header('Emergency Health Passport', 'passport');
                         <label class="student-label" for="relationship">Relationship</label>
                         <select id="relationship" name="relationship" class="student-select">
                             <?php
-                            $rels = ['Mother','Father','Parent','Sibling','Spouse','Relative','Guardian','Other'];
+                            $rels = dropdown_options('guardian_relationship');
                             foreach ($rels as $r):
                             ?>
                                 <option value="<?= student_e($r) ?>" <?= $passport['relationship'] === $r ? 'selected' : '' ?>><?= student_e($r) ?></option>

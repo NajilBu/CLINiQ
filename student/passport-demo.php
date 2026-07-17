@@ -74,7 +74,7 @@ if (!$patient) {
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1">
       <title>Emergency Passport Not Found | CLINiQ</title>
-      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap" rel="stylesheet">
+      <link href="../public/assets/vendor/fonts/inter-passport.css?v=offline-1" rel="stylesheet">
       <style>
         body { margin:0; min-height:100vh; display:grid; place-items:center; font-family:Inter,system-ui,sans-serif; background:#f4fbf6; color:#17261d; }
         section { width:min(92vw,34rem); padding:2rem; background:#fff; border:1px solid #d8e9dd; border-radius:1rem; box-shadow:0 14px 34px rgba(23,38,29,.08); }
@@ -241,10 +241,8 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#23422C">
   <title><?= pp_e($student['name']) ?> - Emergency Passport | CLINiQ</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+  <link href="../public/assets/vendor/fonts/inter-manrope.css?v=offline-1" rel="stylesheet">
+  <link href="../public/assets/vendor/fonts/material-symbols.css?v=offline-1" rel="stylesheet">
 
   <style>
     *,
@@ -1492,10 +1490,9 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
                 <label class="pp-form-label" for="painLevel">Pain Level</label>
                 <select class="pp-textarea" id="painLevel" name="pain_level" required style="min-height:2.75rem;resize:none;">
                   <option value="">Select pain level</option>
-                  <option value="0 - No pain">0 - No pain</option>
-                  <option value="1-3 - Mild pain">1-3 - Mild pain</option>
-                  <option value="4-6 - Moderate pain">4-6 - Moderate pain</option>
-                  <option value="7-10 - Severe pain">7-10 - Severe pain</option>
+                  <?php foreach (incident_pain_level_options() as $option): ?>
+                    <option value="<?= pp_e($option) ?>"><?= pp_e($option) ?></option>
+                  <?php endforeach; ?>
                 </select>
               </div>
 

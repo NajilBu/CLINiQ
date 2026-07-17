@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="850" height="1100" viewBox="0 0 850 1100" role="img" aria-labelledby="title desc">
+  <title id="title">CLINiQ Architectural Framework - Portrait Page 1</title>
+  <desc id="desc">Portrait short bond page 1 of the CLINiQ architectural framework, showing user access, presentation, and application services layers.</desc>
+  <defs>
+    <style>
+      text { font-family: Arial, Helvetica, sans-serif; fill: #222; }
+      .title { font-size: 27px; font-weight: 700; }
+      .subtitle { font-size: 15px; fill: #333; font-weight: 600; }
+      .page { font-size: 12px; fill: #444; font-weight: 700; }
+      .layer-title { font-size: 22px; font-weight: 700; fill: #111; }
+      .layer-note { font-size: 15px; fill: #333; font-weight: 600; }
+      .tile-title { font-size: 15px; font-weight: 700; }
+      .layer-a { fill: #eceff1; stroke: #333; stroke-width: 2.2; }
+      .layer-b { fill: #fff; stroke: #333; stroke-width: 2.2; }
+      .tile { fill: #fff; stroke: #3f3f3f; stroke-width: 1.7; }
+      .arrow { stroke: #222; stroke-width: 2.5; fill: none; marker-end: url(#arrowhead); }
+      .connector { fill: #fff; stroke: #222; stroke-width: 2.2; }
+      .connector-text { font-size: 14px; font-weight: 700; fill: #222; }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,4 L0,8 Z" fill="#222" />
+    </marker>
+  </defs>
+
+  <text x="425" y="48" text-anchor="middle" class="title">CLINiQ Architectural Framework</text>
+  <text x="425" y="76" text-anchor="middle" class="subtitle">Smart Clinic Information Management System for the Clinic of PLP</text>
+  <text x="790" y="42" text-anchor="end" class="page">Page 1 of 2</text>
+
+  <rect x="55" y="110" width="740" height="260" rx="5" class="layer-a" />
+  <text x="85" y="147" class="layer-title">User and Access Layer</text>
+  <text x="85" y="173" class="layer-note">Main users and entry points that access CLINiQ features.</text>
+  <g>
+    <rect x="95" y="205" width="210" height="48" rx="4" class="tile" />
+    <text x="200" y="235" text-anchor="middle" class="tile-title">Clinic Personnel</text>
+    <rect x="320" y="205" width="210" height="48" rx="4" class="tile" />
+    <text x="425" y="235" text-anchor="middle" class="tile-title">Students</text>
+    <rect x="545" y="205" width="210" height="48" rx="4" class="tile" />
+    <text x="650" y="235" text-anchor="middle" class="tile-title">Teachers / Staff</text>
+    <rect x="205" y="285" width="210" height="48" rx="4" class="tile" />
+    <text x="310" y="315" text-anchor="middle" class="tile-title">Administrators</text>
+    <rect x="435" y="285" width="210" height="48" rx="4" class="tile" />
+    <text x="540" y="315" text-anchor="middle" class="tile-title">QR / NFC Scanner</text>
+  </g>
+
+  <line x1="425" y1="370" x2="425" y2="400" class="arrow" />
+
+  <rect x="55" y="400" width="740" height="260" rx="5" class="layer-b" />
+  <text x="85" y="437" class="layer-title">Presentation Layer</text>
+  <text x="85" y="463" class="layer-note">Screens and portals used to interact with the system.</text>
+  <g>
+    <rect x="95" y="495" width="210" height="48" rx="4" class="tile" />
+    <text x="200" y="525" text-anchor="middle" class="tile-title">Nurse Dashboard</text>
+    <rect x="320" y="495" width="210" height="48" rx="4" class="tile" />
+    <text x="425" y="525" text-anchor="middle" class="tile-title">Patient Portal</text>
+    <rect x="545" y="495" width="210" height="48" rx="4" class="tile" />
+    <text x="650" y="525" text-anchor="middle" class="tile-title">Admin Console</text>
+    <rect x="205" y="575" width="210" height="48" rx="4" class="tile" />
+    <text x="310" y="605" text-anchor="middle" class="tile-title">Emergency Passport</text>
+    <rect x="435" y="575" width="210" height="48" rx="4" class="tile" />
+    <text x="540" y="605" text-anchor="middle" class="tile-title">Report Screens</text>
+  </g>
+
+  <line x1="425" y1="660" x2="425" y2="690" class="arrow" />
+
+  <rect x="55" y="690" width="740" height="260" rx="5" class="layer-a" />
+  <text x="85" y="727" class="layer-title">Application Services Layer</text>
+  <text x="85" y="753" class="layer-note">Core clinic services that process patient and clinic transactions.</text>
+  <g>
+    <rect x="95" y="785" width="210" height="48" rx="4" class="tile" />
+    <text x="200" y="815" text-anchor="middle" class="tile-title">EHR Management</text>
+    <rect x="320" y="785" width="210" height="48" rx="4" class="tile" />
+    <text x="425" y="815" text-anchor="middle" class="tile-title">Appointments</text>
+    <rect x="545" y="785" width="210" height="48" rx="4" class="tile" />
+    <text x="650" y="815" text-anchor="middle" class="tile-title">Medical Uploads</text>
+    <rect x="205" y="865" width="210" height="48" rx="4" class="tile" />
+    <text x="310" y="895" text-anchor="middle" class="tile-title">Inventory</text>
+    <rect x="435" y="865" width="210" height="48" rx="4" class="tile" />
+    <text x="540" y="895" text-anchor="middle" class="tile-title">Referrals / Reports</text>
+  </g>
+
+  <line x1="425" y1="950" x2="425" y2="980" class="arrow" />
+  <path d="M365 980 L485 980 L485 1018 L425 1050 L365 1018 Z" class="connector" />
+  <text x="425" y="1007" text-anchor="middle" class="connector-text">A</text>
+  <text x="425" y="1082" text-anchor="middle" class="subtitle">Continued on Page 2</text>
+</svg>

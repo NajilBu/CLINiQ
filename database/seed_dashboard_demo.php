@@ -53,16 +53,16 @@ function insert_once(PDO $db, string $existsSql, array $existsParams, string $in
 }
 
 $students = [
-    ['26-01024', 'Sofia', 'L.', 'Bautista', 'Female', 'BS Psychology 1-2', 'O+', 'None', 'Lorna Bautista', '0917-204-1188'],
-    ['26-01041', 'Rhea', 'C.', 'Ilagan', 'Female', 'BS Nursing 1-1', 'A+', 'Penicillin', 'Marites Ilagan', '0918-337-9021'],
-    ['26-01058', 'Marco', 'T.', 'Villanueva', 'Male', 'BSIT 1-3', 'B+', 'Dust mites', 'Ramon Villanueva', '0920-818-4432'],
-    ['26-01073', 'Chloe', 'V.', 'Mendoza', 'Female', 'BS Biology 1-1', 'AB+', 'None', 'Carina Mendoza', '0916-552-0114'],
-    ['26-01089', 'Daniel', 'P.', 'Reyes', 'Male', 'BSEd English 1-2', 'O-', 'Seafood', 'Paolo Reyes', '0919-214-7710'],
-    ['26-01102', 'Jessa', 'M.', 'Ocampo', 'Female', 'BSBA Marketing 1-4', 'A-', 'None', 'Joy Ocampo', '0995-310-2248'],
-    ['26-01119', 'Kevin', 'R.', 'Navarro', 'Male', 'BS Criminology 1-1', 'B-', 'None', 'Katrina Navarro', '0917-998-6612'],
-    ['26-01136', 'Alyssa', 'D.', 'Santos', 'Female', 'BSCS 1-2', 'O+', 'Latex', 'Diana Santos', '0927-430-1195'],
-    ['26-01155', 'Miguel', 'A.', 'Flores', 'Male', 'BS Accountancy 1-1', 'A+', 'None', 'Anton Flores', '0918-781-4403'],
-    ['26-01178', 'Bianca', 'R.', 'Garcia', 'Female', 'BSTM 1-3', 'B+', 'Pollen', 'Riza Garcia', '0916-773-9004'],
+    ['26-01024', 'Sofia', 'L.', 'Bautista', 'Female', 'BS Psychology A', 'O+', 'None', 'Lorna Bautista', '0917-204-1188'],
+    ['26-01041', 'Rhea', 'C.', 'Ilagan', 'Female', 'BS Nursing A', 'A+', 'Penicillin', 'Marites Ilagan', '0918-337-9021'],
+    ['26-01058', 'Marco', 'T.', 'Villanueva', 'Male', 'BSIT C', 'B+', 'Dust mites', 'Ramon Villanueva', '0920-818-4432'],
+    ['26-01073', 'Chloe', 'V.', 'Mendoza', 'Female', 'BS Biology A', 'AB+', 'None', 'Carina Mendoza', '0916-552-0114'],
+    ['26-01089', 'Daniel', 'P.', 'Reyes', 'Male', 'BSEd English B', 'O-', 'Seafood', 'Paolo Reyes', '0919-214-7710'],
+    ['26-01102', 'Jessa', 'M.', 'Ocampo', 'Female', 'BSBA Marketing D', 'A-', 'None', 'Joy Ocampo', '0995-310-2248'],
+    ['26-01119', 'Kevin', 'R.', 'Navarro', 'Male', 'BS Criminology A', 'B-', 'None', 'Katrina Navarro', '0917-998-6612'],
+    ['26-01136', 'Alyssa', 'D.', 'Santos', 'Female', 'BSCS B', 'O+', 'Latex', 'Diana Santos', '0927-430-1195'],
+    ['26-01155', 'Miguel', 'A.', 'Flores', 'Male', 'BS Accountancy A', 'A+', 'None', 'Anton Flores', '0918-781-4403'],
+    ['26-01178', 'Bianca', 'R.', 'Garcia', 'Female', 'BSTM C', 'B+', 'Pollen', 'Riza Garcia', '0916-773-9004'],
 ];
 
 $patientStmt = $db->prepare("
@@ -144,26 +144,26 @@ foreach ($legacyInventorySamples as $legacyName) {
 echo "Inventory ready: " . count($inventory) . "\n";
 
 $visits = [
-    ['26-01024', '08:10:00', 'Fever with sore throat', 'Temperature 38.2 C, throat pain, mild body weakness', 38.2, '112/74', 92, 'Moderate', 3, 'Completed', 'Medical Consult', 'Given Paracetamol 500mg, advised oral fluids, mask use, and sent home with guardian notification.'],
-    ['26-01058', '08:55:00', 'Wheezing after PE class', 'Shortness of breath, audible wheeze, no chest pain', 37.0, '118/78', 104, 'High', 5, 'Active', 'Emergency', 'Nebulized Salbutamol given, monitored for 45 minutes, advised follow-up if symptoms recur.'],
-    ['26-01119', '09:40:00', 'Right ankle sprain', 'Pain and swelling after basketball activity', 36.8, '120/80', 84, 'Low', 1, 'Completed', 'Wound Care', 'Cold compress applied, elastic bandage used, advised rest and elevation.'],
-    ['26-01136', '10:25:00', 'Migraine episode', 'Headache with light sensitivity, no vomiting', 36.9, '110/70', 76, 'Moderate', 2, 'Active', 'Health Monitoring', 'Rested in observation area, hydration encouraged, parent informed.'],
-    ['26-01089', '11:15:00', 'Seafood allergy concern', 'Itchy lips and scattered hives after lunch', 37.1, '116/72', 88, 'Moderate', 3, 'Unaddressed', 'Medical Consult', 'Visitor/patient self-registration. Awaiting clinic assessment.'],
-    ['26-01155', '13:05:00', 'Minor hand laceration', 'Small cut from laboratory glassware, bleeding controlled', 36.7, '118/76', 78, 'Low', 1, 'Completed', 'Wound Care', 'Wound cleaned, gauze dressing applied, advised return for dressing check.'],
-    ['26-01178', '14:20:00', 'Allergic rhinitis flare-up', 'Sneezing, watery eyes, nasal congestion', 36.6, '108/68', 74, 'Low', 1, 'Completed', 'Medical Consult', 'Cetirizine provided, advised avoiding dusty storage room.'],
+    ['26-01024', '08:10:00', 'Fever with sore throat', 'Temperature 38.2 C, throat pain, mild body weakness', 38.2, '112/74', 92, 'Completed', 'Medical Consult', 'Given Paracetamol 500mg, advised oral fluids, mask use, and sent home with guardian notification.'],
+    ['26-01058', '08:55:00', 'Wheezing after PE class', 'Shortness of breath, audible wheeze, no chest pain', 37.0, '118/78', 104, 'Active', 'Emergency', 'Nebulized Salbutamol given, monitored for 45 minutes, advised follow-up if symptoms recur.'],
+    ['26-01119', '09:40:00', 'Right ankle sprain', 'Pain and swelling after basketball activity', 36.8, '120/80', 84, 'Completed', 'Wound Care', 'Cold compress applied, elastic bandage used, advised rest and elevation.'],
+    ['26-01136', '10:25:00', 'Migraine episode', 'Headache with light sensitivity, no vomiting', 36.9, '110/70', 76, 'Active', 'Health Monitoring', 'Rested in observation area, hydration encouraged, parent informed.'],
+    ['26-01089', '11:15:00', 'Seafood allergy concern', 'Itchy lips and scattered hives after lunch', 37.1, '116/72', 88, 'Unaddressed', 'Medical Consult', 'Visitor/patient self-registration. Awaiting clinic assessment.'],
+    ['26-01155', '13:05:00', 'Minor hand laceration', 'Small cut from laboratory glassware, bleeding controlled', 36.7, '118/76', 78, 'Completed', 'Wound Care', 'Wound cleaned, gauze dressing applied, advised return for dressing check.'],
+    ['26-01178', '14:20:00', 'Allergic rhinitis flare-up', 'Sneezing, watery eyes, nasal congestion', 36.6, '108/68', 74, 'Completed', 'Medical Consult', 'Cetirizine provided, advised avoiding dusty storage room.'],
 ];
 
 $visitFind = $db->prepare('SELECT id FROM clinic_visits WHERE patient_id = ? AND chief_complaint = ? ORDER BY id DESC LIMIT 1');
-$visitInsert = $db->prepare('INSERT INTO clinic_visits (patient_id, visit_datetime, chief_complaint, symptoms, temperature, blood_pressure, pulse_rate, risk_level, risk_score, status, visit_purpose, visit_source, action_taken, recorded_by, attended_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-$visitUpdate = $db->prepare('UPDATE clinic_visits SET visit_datetime = ?, symptoms = ?, temperature = ?, blood_pressure = ?, pulse_rate = ?, risk_level = ?, risk_score = ?, status = ?, visit_purpose = ?, visit_source = ?, action_taken = ?, recorded_by = ?, attended_by = ? WHERE id = ?');
-foreach ($visits as [$number, $time, $complaint, $symptoms, $temp, $bp, $pulse, $risk, $score, $status, $purpose, $action]) {
+$visitInsert = $db->prepare('INSERT INTO clinic_visits (patient_id, visit_datetime, chief_complaint, symptoms, temperature, blood_pressure, pulse_rate, status, visit_purpose, visit_source, action_taken, recorded_by, attended_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+$visitUpdate = $db->prepare('UPDATE clinic_visits SET visit_datetime = ?, symptoms = ?, temperature = ?, blood_pressure = ?, pulse_rate = ?, status = ?, visit_purpose = ?, visit_source = ?, action_taken = ?, recorded_by = ?, attended_by = ? WHERE id = ?');
+foreach ($visits as [$number, $time, $complaint, $symptoms, $temp, $bp, $pulse, $status, $purpose, $action]) {
     $visitFind->execute([$patientIds[$number], $complaint]);
     $visitId = $visitFind->fetchColumn();
     $attendedBy = in_array($status, ['Active', 'Completed'], true) ? $adminId : null;
     if ($visitId) {
-        $visitUpdate->execute([demo_date($time), $symptoms, $temp, $bp, $pulse, $risk, $score, $status, $purpose, 'Staff Recorded', $action, $adminId, $attendedBy, $visitId]);
+        $visitUpdate->execute([demo_date($time), $symptoms, $temp, $bp, $pulse, $status, $purpose, 'Staff Recorded', $action, $adminId, $attendedBy, $visitId]);
     } else {
-        $visitInsert->execute([$patientIds[$number], demo_date($time), $complaint, $symptoms, $temp, $bp, $pulse, $risk, $score, $status, $purpose, 'Staff Recorded', $action, $adminId, $attendedBy]);
+        $visitInsert->execute([$patientIds[$number], demo_date($time), $complaint, $symptoms, $temp, $bp, $pulse, $status, $purpose, 'Staff Recorded', $action, $adminId, $attendedBy]);
     }
 }
 echo "Today's visits ready: " . count($visits) . "\n";

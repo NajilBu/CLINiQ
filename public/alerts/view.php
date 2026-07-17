@@ -43,24 +43,6 @@ set_page_back_link('index.php', 'Alert Queue');
 render_header('Alert Report');
 ?>
 
-<style>
-    .alert-report-field {
-        min-height: 4.15rem;
-        border: 1px solid rgba(199, 220, 205, 0.75);
-        border-radius: 0.8rem;
-        background: #f8fbf9;
-        padding: 0.85rem 1rem;
-    }
-
-    .alert-report-field strong {
-        display: block;
-        color: #0f172a;
-        font-size: 0.93rem;
-        line-height: 1.35;
-        margin-top: 0.2rem;
-    }
-</style>
-
 <div class="dashboard-hero flex flex-col lg:flex-row lg:items-center justify-between gap-5 mb-8">
     <div class="flex items-start gap-4">
         <div class="w-14 h-14 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">

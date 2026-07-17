@@ -70,7 +70,6 @@ foreach ($visits as $visit) {
 $attentionVisitCount = count(array_filter(
     $visits,
     fn(array $visit): bool => in_array(($visit['status'] ?? 'Unaddressed'), ['Unaddressed', 'Active'], true)
-        || in_array(($visit['risk_level'] ?? ''), ['High', 'Critical'], true)
 ));
 $birthdateLabel = $patient['birthdate'] ? date('F j, Y', strtotime($patient['birthdate'])) : 'Not specified';
 $ageLabel = 'Not specified';
@@ -343,7 +342,6 @@ render_header($fullName . ' - Patient Profile');
                 <?php foreach ($visits as $visit): ?>
                     <?php
                     $visitStatus = $visit['status'] ?? 'Unaddressed';
-                    $visitRisk = $visit['risk_level'] ?? 'Low';
                     $visitPurpose = $visit['visit_purpose'] ?: 'General Visit';
                     $visitSource = $visit['visit_source'] ?: 'Staff Recorded';
                     $vitalBits = [];
@@ -361,13 +359,12 @@ render_header($fullName . ' - Patient Profile');
                     }
                     ?>
                     <a class="patient-profile-event" href="<?= e(app_url('visits/view.php?id=' . (int) $visit['id'] . '&from=profile')) ?>">
-                        <div class="patient-profile-event-icon <?= in_array($visitRisk, ['High', 'Critical'], true) ? 'alert' : '' ?>">
+                        <div class="patient-profile-event-icon">
                             <span class="material-symbols-outlined">medical_information</span>
                         </div>
                         <div class="min-w-0">
                             <div class="flex flex-wrap items-center gap-2 mb-2">
                                 <span class="badge <?= visit_status_badge_class($visitStatus) ?>"><?= e($visitStatus) ?></span>
-                                <span class="badge <?= risk_badge_class($visitRisk) ?>"><?= e($visitRisk) ?> - <?= (int) ($visit['risk_score'] ?? 0) ?></span>
                                 <span class="text-[11px] font-black uppercase tracking-widest text-slate-400"><?= e($visitPurpose) ?> / <?= e($visitSource) ?></span>
                             </div>
                             <h3 class="text-base font-extrabold text-slate-900 mb-1"><?= e($visit['chief_complaint'] ?: 'No complaint recorded') ?></h3>

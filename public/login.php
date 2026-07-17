@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../app/helpers/view.php';
 
 $error = null;
+$clinicProfile = clinic_profile_settings();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email'] ?? '');
@@ -211,11 +212,11 @@ render_header('Login');
     <div class="staff-login-card">
         <section class="staff-login-panel">
             <div>
-                <a href="<?= app_url('index.php') ?>" class="staff-login-logo text-decoration-none" aria-label="Go to CLINiQ access portal">
-                    <img src="<?= app_url('assets/img/clinic-logo.png') ?>" alt="PLP Health Services Department logo">
+                <a href="<?= app_url('index.php') ?>" class="staff-login-logo text-decoration-none" aria-label="Go to <?= e($clinicProfile['system_name']) ?> access portal">
+                    <img src="<?= app_url('assets/img/clinic-logo.png') ?>" alt="<?= e($clinicProfile['department']) ?> logo">
                 </a>
                 <p class="staff-login-eyebrow">
-                    <a href="<?= app_url('index.php') ?>" class="text-white/70 hover:text-white text-decoration-none">University Health Services</a>
+                    <a href="<?= app_url('index.php') ?>" class="text-white/70 hover:text-white text-decoration-none"><?= e($clinicProfile['department']) ?></a>
                 </p>
                 <h1 class="staff-login-title">Nurse's<br>Station</h1>
                 <p class="staff-login-copy">Sign in with your staff account to manage patient records, alerts, inventory, and clinic reports.</p>
@@ -227,7 +228,7 @@ render_header('Login');
         </section>
 
         <div class="staff-login-form">
-            <h2 class="font-headline text-2xl font-extrabold text-[#17261d] mb-1">CLINiQ</h2>
+            <h2 class="font-headline text-2xl font-extrabold text-[#17261d] mb-1"><?= e($clinicProfile['system_name']) ?></h2>
             <p class="text-sm font-bold text-slate-500 mb-7">Enter your credentials to continue.</p>
 
             <?php if ($error): ?>

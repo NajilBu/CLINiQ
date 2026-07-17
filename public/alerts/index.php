@@ -72,25 +72,14 @@ foreach ($alerts as $alert) {
 }
 
 render_header('Nurse Alerts');
-?>
 
-<div class="dashboard-hero flex flex-col lg:flex-row lg:items-center justify-between gap-5 mb-8">
-    <div>
-        <p class="text-[11px] font-black text-primary uppercase tracking-widest mb-2">Emergency</p>
-        <h1 class="font-headline text-3xl md:text-4xl font-extrabold text-[#17261d]">Nurse Alerts</h1>
-        <p class="text-sm font-bold text-slate-500 mt-1">Live emergency reports from staff and QR/NFC scans.</p>
-    </div>
-    <div class="flex items-center gap-3">
-        <div class="flex items-center gap-2 text-xs font-semibold text-slate-400 bg-slate-100/50 px-3 py-1.5 rounded-full border border-slate-200/50">
-            <span class="material-symbols-outlined text-[14px]">sync</span>
-            Auto-refreshing every 5s
-        </div>
-        <a class="btn btn-danger text-decoration-none" href="create.php">
-            <span class="material-symbols-outlined text-[20px]">emergency_home</span>
-            Submit Alert
-        </a>
-    </div>
-</div>
+render_clinic_command_header(
+    'Emergency',
+    'Nurse Alerts',
+    'Live emergency reports from staff and QR/NFC scans.',
+    '<div class="flex items-center gap-2 text-xs font-semibold text-slate-400 bg-slate-100/50 px-3 py-1.5 rounded-full border border-slate-200/50"><span class="material-symbols-outlined text-[14px]">sync</span>Auto-refreshing every 5s</div><a class="btn btn-danger text-decoration-none" href="create.php"><span class="material-symbols-outlined text-[20px]">emergency_home</span>Submit Alert</a>'
+);
+?>
 
 <!-- Alert Queue -->
 <section class="clinic-card overflow-hidden">

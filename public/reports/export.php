@@ -9,7 +9,7 @@ $dateTo = $_GET['to'] ?? date('Y-m-d');
 $stmt = db()->prepare("
     SELECT v.visit_datetime, p.student_number, p.first_name, p.last_name,
            v.chief_complaint, v.symptoms, v.temperature, v.blood_pressure,
-           v.pulse_rate, v.risk_level, v.risk_score, v.risk_reasons, v.action_taken, u.name AS recorded_by
+           v.pulse_rate, v.status, v.visit_purpose, v.visit_source, v.action_taken, u.name AS recorded_by
     FROM clinic_visits v
     JOIN patients p ON p.id = v.patient_id
     LEFT JOIN users u ON u.id = v.recorded_by
@@ -33,7 +33,7 @@ fwrite($output, "\xEF\xBB\xBF");
 fputcsv($output, [
     'Date/Time', 'Student No.', 'First Name', 'Last Name',
     'Chief Complaint', 'Symptoms', 'Temperature', 'Blood Pressure',
-    'Pulse Rate', 'Risk Level', 'Risk Score', 'Risk Reasons', 'Action Taken', 'Recorded By'
+    'Pulse Rate', 'Status', 'Purpose', 'Source', 'Action Taken', 'Recorded By'
 ]);
 
 foreach ($visits as $v) {
@@ -47,9 +47,9 @@ foreach ($visits as $v) {
         $v['temperature'],
         $v['blood_pressure'],
         $v['pulse_rate'],
-        $v['risk_level'],
-        $v['risk_score'],
-        $v['risk_reasons'],
+        $v['status'],
+        $v['visit_purpose'],
+        $v['visit_source'],
         $v['action_taken'],
         $v['recorded_by'],
     ]);

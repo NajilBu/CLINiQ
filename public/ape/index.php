@@ -75,38 +75,30 @@ $apeQueueColumns = [
 ];
 
 render_header('APE Work Queues');
-?>
 
-<div class="flex flex-col xl:flex-row justify-between items-start xl:items-end gap-6 mb-6">
-    <div>
-        <h1 class="font-headline text-3xl md:text-4xl font-extrabold text-[#17261d]">Good morning, Nurse Cruz</h1>
-        <p class="text-sm font-bold text-slate-500 mt-1">Here's what needs your attention today. Start at the top.</p>
-    </div>
-    
-    <div class="flex items-center gap-3">
-        <div class="bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-4 min-w-[140px]">
-            <span class="material-symbols-outlined text-slate-400 text-[28px]">group</span>
-            <div>
-                <p class="font-headline text-2xl font-extrabold text-[#17261d] leading-none mb-1"><?= (int)$activeStudents ?></p>
-                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Active students</p>
-            </div>
-        </div>
-        <div class="bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-4 min-w-[140px]">
-            <span class="material-symbols-outlined text-slate-400 text-[28px]">notification_important</span>
-            <div>
-                <p class="font-headline text-2xl font-extrabold text-[#17261d] leading-none mb-1"><?= count($overdueRecords) ?></p>
-                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Needs attention</p>
-            </div>
-        </div>
-        <div class="bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-4 min-w-[140px]">
-            <span class="material-symbols-outlined text-slate-400 text-[28px]">show_chart</span>
-            <div>
-                <p class="font-headline text-2xl font-extrabold text-[#17261d] leading-none mb-1"><?= (int)$metrics['completed'] ?></p>
-                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Completed</p>
-            </div>
-        </div>
-    </div>
-</div>
+$apeUser = current_user() ?? [];
+$apeDisplayName = trim((string) ($apeUser['name'] ?? '')) ?: 'Nurse';
+$apeHeaderActions = ''
+    . '<div class="bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-4 min-w-[140px]">'
+    . '<span class="material-symbols-outlined text-slate-400 text-[28px]">group</span>'
+    . '<div><p class="font-headline text-2xl font-extrabold text-[#17261d] leading-none mb-1">' . (int) $activeStudents . '</p>'
+    . '<p class="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Active students</p></div></div>'
+    . '<div class="bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-4 min-w-[140px]">'
+    . '<span class="material-symbols-outlined text-slate-400 text-[28px]">notification_important</span>'
+    . '<div><p class="font-headline text-2xl font-extrabold text-[#17261d] leading-none mb-1">' . count($overdueRecords) . '</p>'
+    . '<p class="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Needs attention</p></div></div>'
+    . '<div class="bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-4 min-w-[140px]">'
+    . '<span class="material-symbols-outlined text-slate-400 text-[28px]">show_chart</span>'
+    . '<div><p class="font-headline text-2xl font-extrabold text-[#17261d] leading-none mb-1">' . (int) $metrics['completed'] . '</p>'
+    . '<p class="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Completed</p></div></div>';
+
+render_clinic_command_header(
+    'APE Work Queues',
+    'Good day, ' . $apeDisplayName,
+    "Here's what needs your attention today. Start at the top.",
+    $apeHeaderActions
+);
+?>
 
 <?php if (count($overdueRecords) > 0): ?>
 <div class="bg-red-50 border border-red-200 rounded-2xl p-1 mb-8">

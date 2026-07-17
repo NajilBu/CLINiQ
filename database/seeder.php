@@ -30,7 +30,7 @@ $db->query("SET FOREIGN_KEY_CHECKS = 1;");
 echo "Seeding Patients...\n";
 $firstNames = ['Juan', 'Maria', 'Jose', 'Ana', 'Pedro', 'Carmela', 'Miguel', 'Lourdes', 'Carlos', 'Teresa', 'Mark', 'Jessa', 'Kevin', 'Rhea', 'John'];
 $lastNames = ['Dela Cruz', 'Garcia', 'Reyes', 'Ramos', 'Mendoza', 'Santos', 'Flores', 'Gonzales', 'Bautista', 'Villanueva', 'Cruz', 'Ocampo', 'Aquino', 'Navarro', 'Mercado'];
-$courses = ['BSIT 1-1', 'BSCS 2-3', 'BSBA 3-1', 'BSED 4-2', 'BSN 1-5', 'BSIT 3-2', 'BSCS 4-1', 'BSBA 1-4'];
+$courses = ['BSIT A', 'BSIT B', 'BSIT C', 'BSIT D', 'BSIT E', 'BSCS A', 'BSBA B', 'BSED C', 'BSN D'];
 $bloodTypes = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 $allergiesList = ['None', 'None', 'None', 'Peanuts', 'Penicillin', 'Dust Mites', 'Seafood', 'None', 'Latex'];
 
@@ -89,17 +89,15 @@ foreach ($items as $item) {
 // Generate Visits
 echo "Seeding Visits...\n";
 $complaints = [
-    ['Fever and headache', 'headache, fever', 38.5, '120/80', 85, 'Moderate', 3, 'Given Paracetamol 500mg. Advised to rest and drink plenty of fluids.'],
-    ['Stomachache', 'abdominal pain', 37.0, '110/70', 75, 'Low', 0, 'Given Antacid. Advised to avoid spicy foods.'],
-    ['Dizziness', 'dizziness, nausea', 36.8, '100/60', 65, 'Low', 1, 'Advised to rest for 30 minutes in the clinic bed.'],
-    ['Sprained ankle', 'pain, swelling', 37.1, '125/82', 90, 'Low', 0, 'Applied cold compress. Wrapped with elastic bandage.'],
-    ['Difficulty breathing', 'shortness of breath', 37.5, '130/85', 110, 'High', 4, 'Administered Salbutamol via nebulizer. Monitored for 1 hour.'],
-    ['Cut on finger', 'bleeding', 36.9, '115/75', 80, 'Low', 0, 'Cleaned with Povidone Iodine. Applied Band-Aid.'],
-    ['Chest pain', 'chest pain, sweating', 37.2, '140/90', 105, 'Critical', 7, 'Immediate assessment. Called emergency services.'],
-    ['Allergic reaction', 'hives, itching', 37.3, '120/80', 88, 'Moderate', 2, 'Given Cetirizine 10mg. Observed for 30 minutes.']
+    ['Fever and headache', 'headache, fever', 38.5, '120/80', 85, 'Given Paracetamol 500mg. Advised to rest and drink plenty of fluids.'],
+    ['Stomachache', 'abdominal pain', 37.0, '110/70', 75, 'Given Antacid. Advised to avoid spicy foods.'],
+    ['Dizziness', 'dizziness, nausea', 36.8, '100/60', 65, 'Advised to rest for 30 minutes in the clinic bed.'],
+    ['Sprained ankle', 'pain, swelling', 37.1, '125/82', 90, 'Applied cold compress. Wrapped with elastic bandage.'],
+    ['Difficulty breathing', 'shortness of breath', 37.5, '130/85', 110, 'Administered Salbutamol via nebulizer. Monitored for 1 hour.'],
+    ['Cut on finger', 'bleeding', 36.9, '115/75', 80, 'Cleaned with Povidone Iodine. Applied Band-Aid.'],
+    ['Chest pain', 'chest pain, sweating', 37.2, '140/90', 105, 'Immediate assessment. Called emergency services.'],
+    ['Allergic reaction', 'hives, itching', 37.3, '120/80', 88, 'Given Cetirizine 10mg. Observed for 30 minutes.']
 ];
-
-require_once __DIR__ . '/../app/services/RiskClassifier.php';
 
 // Get admin user ID for recorded_by
 $adminId = $db->query("SELECT id FROM users LIMIT 1")->fetchColumn();
@@ -112,7 +110,7 @@ for ($i = 0; $i < 60; $i++) {
     $daysAgo = rand(0, 180);
     $visitDate = date('Y-m-d H:i:s', strtotime("-$daysAgo days " . rand(8, 16) . ":" . str_pad(rand(0, 59), 2, '0', STR_PAD_LEFT) . ":00"));
     
-    if (in_array($c[5], ['High', 'Critical'], true) && $daysAgo <= 14) {
+    if (in_array($c[0], ['Difficulty breathing', 'Chest pain'], true) && $daysAgo <= 14) {
         $visitStatus = 'Active';
     } elseif (rand(1, 18) === 1) {
         $visitStatus = 'Cancelled';
@@ -124,7 +122,7 @@ for ($i = 0; $i < 60; $i++) {
     $visitPurpose = in_array($c[0], ['Sprained ankle', 'Cut on finger'], true) ? 'Wound Care' : 'Medical Consult';
     $attendedBy = in_array($visitStatus, ['Active', 'Completed'], true) ? $adminId : null;
 
-    $stmt = $db->prepare("INSERT INTO clinic_visits (patient_id, visit_datetime, chief_complaint, symptoms, temperature, blood_pressure, pulse_rate, risk_level, risk_score, status, visit_purpose, visit_source, action_taken, recorded_by, attended_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt = $db->prepare("INSERT INTO clinic_visits (patient_id, visit_datetime, chief_complaint, symptoms, temperature, blood_pressure, pulse_rate, status, visit_purpose, visit_source, action_taken, recorded_by, attended_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     $stmt->execute([
         $pid,
         $visitDate,
@@ -133,12 +131,10 @@ for ($i = 0; $i < 60; $i++) {
         $c[2],
         $c[3],
         $c[4],
-        $c[5],
-        $c[6],
         $visitStatus,
         $visitPurpose,
         'Staff Recorded',
-        $c[7],
+        $c[5],
         $adminId,
         $attendedBy
     ]);

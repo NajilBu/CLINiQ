@@ -10,11 +10,17 @@
     --cliniq-primary: #3F7D52;
     --cliniq-primary-hover: #23422C;
     --cliniq-primary-foreground: oklch(99% .005 200);
+    --cliniq-primary-fixed: #e8f6ec;
     --cliniq-accent: #e4efe6;
     --cliniq-secondary: oklch(95.5% .012 220);
     --cliniq-muted: oklch(96.5% .008 230);
     --cliniq-muted-foreground: oklch(52% .02 250);
     --cliniq-border: oklch(92% .01 230);
+    --cliniq-surface: oklch(98.5% .005 230);
+    --cliniq-surface-low: #edf8f0;
+    --cliniq-outline: #c7dccd;
+    --cliniq-focus-rgb: 63, 125, 82;
+    --cliniq-shadow-rgb: 35, 66, 44;
     --cliniq-accent-foreground: #23422C;
     --cliniq-danger: oklch(58% .19 25);
     --cliniq-control-font-size: 0.8125rem;
@@ -34,6 +40,92 @@ body {
     scrollbar-color: #cbd8ce #f4fbf6;
     scrollbar-width: thin;
     scrollbar-gutter: stable;
+}
+
+body.has-active-alerts::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    pointer-events: none;
+    border: 0;
+    border-radius: 0.55rem;
+    box-shadow:
+        inset 0 0 42px rgba(220, 38, 38, 0.34),
+        inset 0 0 112px rgba(220, 38, 38, 0.28),
+        0 0 44px rgba(220, 38, 38, 0.52);
+    animation: critical-alert-glow 1.35s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+body.has-active-alerts::after {
+    content: "";
+    position: fixed;
+    inset: 0.45rem;
+    z-index: 89;
+    pointer-events: none;
+    border-radius: 0.8rem;
+    box-shadow:
+        inset 0 0 58px rgba(248, 113, 113, 0.26),
+        0 0 0 0 rgba(220, 38, 38, 0);
+    animation: critical-alert-heartbeat 1.35s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+@keyframes critical-alert-glow {
+    0%, 100% {
+        box-shadow:
+            inset 0 0 30px rgba(220, 38, 38, 0.24),
+            inset 0 0 78px rgba(220, 38, 38, 0.18),
+            0 0 26px rgba(220, 38, 38, 0.32);
+    }
+    18% {
+        box-shadow:
+            inset 0 0 64px rgba(220, 38, 38, 0.58),
+            inset 0 0 156px rgba(220, 38, 38, 0.44),
+            0 0 58px rgba(220, 38, 38, 0.78);
+    }
+    34% {
+        box-shadow:
+            inset 0 0 42px rgba(220, 38, 38, 0.34),
+            inset 0 0 108px rgba(220, 38, 38, 0.26),
+            0 0 38px rgba(220, 38, 38, 0.44);
+    }
+    52% {
+        box-shadow:
+            inset 0 0 72px rgba(220, 38, 38, 0.64),
+            inset 0 0 172px rgba(220, 38, 38, 0.48),
+            0 0 68px rgba(220, 38, 38, 0.84);
+    }
+}
+
+@keyframes critical-alert-heartbeat {
+    0%, 100% {
+        opacity: 0.2;
+        transform: scale(1);
+        box-shadow:
+            inset 0 0 44px rgba(248, 113, 113, 0.20),
+            0 0 0 0 rgba(220, 38, 38, 0);
+    }
+    18%, 52% {
+        opacity: 1;
+        transform: scale(0.992);
+        box-shadow:
+            inset 0 0 118px rgba(248, 113, 113, 0.44),
+            0 0 72px 18px rgba(220, 38, 38, 0.34);
+    }
+    34%, 68% {
+        opacity: 0.58;
+        transform: scale(1);
+        box-shadow:
+            inset 0 0 64px rgba(248, 113, 113, 0.24),
+            0 0 32px 8px rgba(220, 38, 38, 0.18);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body.has-active-alerts::before,
+    body.has-active-alerts::after {
+        animation: none;
+    }
 }
 
 * {
@@ -113,7 +205,7 @@ h6,
 .text-blue-950 { color: var(--cliniq-foreground) !important; }
 .text-blue-100\/80 { color: oklch(99% .005 200 / .8) !important; }
 .hover\:bg-blue-50:hover { background-color: oklch(96.5% .008 230) !important; }
-.hover\:border-blue-100:hover { border-color: #cfe6d6 !important; }
+.hover\:border-blue-100:hover { border-color: var(--cliniq-outline) !important; }
 .rounded-2xl { border-radius: 0.75rem !important; }
 .rounded-\[2rem\],
 .rounded-\[4rem\] { border-radius: 1rem !important; }
@@ -209,8 +301,8 @@ h6,
 }
 
 .app-sidebar-toggle:hover {
-    background: #edf8f0;
-    border-color: #cfe6d6;
+    background: var(--cliniq-surface-low);
+    border-color: var(--cliniq-outline);
     color: var(--cliniq-primary-hover);
 }
 
@@ -241,8 +333,8 @@ h6,
 }
 
 .app-page-back:hover {
-    background: #edf8f0;
-    border-color: #cfe6d6;
+    background: var(--cliniq-surface-low);
+    border-color: var(--cliniq-outline);
     color: var(--cliniq-primary-hover);
 }
 
@@ -290,8 +382,8 @@ h6,
 }
 
 .app-search input:focus {
-    border-color: rgba(63, 125, 82, 0.48);
-    box-shadow: 0 0 0 3px rgba(63, 125, 82, 0.13);
+    border-color: rgba(var(--cliniq-focus-rgb), 0.48);
+    box-shadow: 0 0 0 3px rgba(var(--cliniq-focus-rgb), 0.13);
 }
 
 .app-topbar-meta {
@@ -322,7 +414,7 @@ h6,
 
 .app-alert-link:hover {
     color: var(--cliniq-primary);
-    border-color: rgba(63, 125, 82, 0.34);
+    border-color: rgba(var(--cliniq-focus-rgb), 0.34);
     background: #ffffff;
 }
 
@@ -337,6 +429,25 @@ h6,
     color: #ffffff;
     border-color: #b91c1c;
     background: #b91c1c;
+}
+
+.app-alert-link.has-active-alerts {
+    animation: critical-alert-button 1.15s ease-in-out infinite;
+}
+
+@keyframes critical-alert-button {
+    0%, 100% {
+        box-shadow: 0 12px 26px rgba(220, 38, 38, 0.24);
+    }
+    50% {
+        box-shadow: 0 14px 34px rgba(220, 38, 38, 0.48);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .app-alert-link.has-active-alerts {
+        animation: none;
+    }
 }
 
 .app-alert-link .material-symbols-outlined {
@@ -361,12 +472,23 @@ h6,
 .app-logout {
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
+    justify-content: flex-start;
+    gap: 0.5rem;
+    width: 100%;
+    min-height: 2.5rem;
+    padding: 0.62rem 0.78rem;
+    border: 1px solid transparent;
+    border-radius: 0.72rem;
     color: #64756a;
-    transition: color 0.15s ease;
+    font-size: 0.8rem;
+    font-weight: 800;
+    line-height: 1;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .app-logout:hover {
+    background: #fff1f2;
+    border-color: #fecdd3;
     color: #be123c;
 }
 
@@ -417,7 +539,7 @@ h6,
 }
 
 .app-mobile-nav-link.active {
-    background: #e4f4e8;
+    background: var(--cliniq-accent);
     color: oklch(22% .03 250);
 }
 
@@ -513,7 +635,7 @@ h6,
 }
 
 .app-nav-link.active {
-    background: #e4f4e8;
+    background: var(--cliniq-accent);
     color: oklch(22% .03 250);
 }
 
@@ -525,11 +647,123 @@ h6,
     display: none;
 }
 
+.app-user-menu {
+    position: relative;
+    isolation: isolate;
+}
+
+.app-user-menu-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.72rem 0.78rem;
+    border-radius: 0.78rem;
+    cursor: pointer;
+    list-style: none;
+    list-style-type: none;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+    transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.app-user-menu > summary {
+    list-style: none;
+    list-style-type: none;
+}
+
+.app-user-menu-trigger::-webkit-details-marker {
+    display: none;
+}
+
+.app-user-menu-trigger::marker {
+    content: none;
+    display: none;
+    font-size: 0;
+}
+
+.app-user-menu-trigger:hover,
+.app-user-menu[open] .app-user-menu-trigger,
+.app-user-menu:focus-within .app-user-menu-trigger {
+    background: var(--cliniq-surface-low);
+    box-shadow: inset 0 0 0 1px rgba(var(--cliniq-focus-rgb), 0.12);
+}
+
+.app-user-copy {
+    min-width: 0;
+}
+
 .app-user-label {
     display: block;
     color: oklch(52% .02 250);
     font-size: 0.68rem;
     font-weight: 500;
+}
+
+.app-user-copy strong {
+    display: block;
+    overflow: hidden;
+    color: oklch(22% .03 250);
+    font-size: 0.82rem;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.app-user-menu-icon {
+    flex: 0 0 auto;
+    color: #64756a;
+    font-size: 1.1rem;
+    transition: transform 0.15s ease;
+}
+
+.app-user-menu[open] .app-user-menu-icon,
+.app-user-menu:hover .app-user-menu-icon,
+.app-user-menu:focus-within .app-user-menu-icon {
+    transform: rotate(180deg);
+}
+
+.app-user-menu-popover {
+    position: absolute;
+    left: 1rem;
+    right: 1rem;
+    bottom: calc(100% - 0.25rem);
+    z-index: 70;
+    padding: 0.42rem;
+    border: 1px solid rgba(199, 220, 205, 0.72);
+    border-radius: 0.92rem;
+    background: #ffffff;
+    box-shadow: 0 18px 42px rgba(23, 38, 29, 0.14), 0 1px 2px rgba(23, 38, 29, 0.06);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(0.4rem) scale(0.98);
+    transform-origin: bottom center;
+    visibility: hidden;
+    transition: opacity 0.16s ease, transform 0.16s ease, visibility 0.16s ease;
+}
+
+.app-user-menu-popover::after {
+    content: '';
+    position: absolute;
+    left: 1.35rem;
+    bottom: -0.38rem;
+    width: 0.72rem;
+    height: 0.72rem;
+    border-right: 1px solid rgba(199, 220, 205, 0.72);
+    border-bottom: 1px solid rgba(199, 220, 205, 0.72);
+    background: #ffffff;
+    transform: rotate(45deg);
+}
+
+.app-user-menu:hover .app-user-menu-popover,
+.app-user-menu[open] .app-user-menu-popover,
+.app-user-menu:focus-within .app-user-menu-popover {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
+    visibility: visible;
 }
 
 .auth-main {
@@ -607,7 +841,7 @@ h6,
     background: #ffffff;
     border: 1px solid oklch(92% .01 230 / .82);
     border-radius: 0.625rem;
-    box-shadow: 0 12px 26px rgba(35, 66, 44, 0.13);
+    box-shadow: 0 12px 26px rgba(var(--cliniq-shadow-rgb), 0.13);
 }
 
 .cliniq-entry-logo img {
@@ -897,7 +1131,7 @@ h6,
 .badge-active {
     background: oklch(96.5% .008 230);
     color: var(--cliniq-accent-foreground);
-    border: 1px solid #cfe6d6;
+    border: 1px solid var(--cliniq-outline);
 }
 
 .badge-pending {
@@ -945,7 +1179,7 @@ h6,
 .badge-in-progress {
     background: oklch(96.5% .008 230);
     color: var(--cliniq-accent-foreground);
-    border: 1px solid #cfe6d6;
+    border: 1px solid var(--cliniq-outline);
 }
 
 .badge-resolved {
@@ -1168,7 +1402,7 @@ h6,
 
 .search-input:focus {
     border-color: var(--cliniq-primary);
-    box-shadow: 0 0 0 3px rgba(63, 125, 82, 0.14);
+    box-shadow: 0 0 0 3px rgba(var(--cliniq-focus-rgb), 0.14);
 }
 
 /* ============================================================
@@ -1220,8 +1454,8 @@ textarea::placeholder {
 input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus,
 select:focus,
 textarea:focus {
-    border-color: rgba(63, 125, 82, 0.42);
-    box-shadow: 0 0 0 3px rgba(63, 125, 82, 0.14);
+    border-color: rgba(var(--cliniq-focus-rgb), 0.42);
+    box-shadow: 0 0 0 3px rgba(var(--cliniq-focus-rgb), 0.14);
 }
 
 .clinic-textarea {
@@ -1232,8 +1466,8 @@ textarea:focus {
 .clinic-input:focus,
 .clinic-select:focus,
 .clinic-textarea:focus {
-    border-color: rgba(63, 125, 82, 0.38);
-    box-shadow: 0 0 0 3px rgba(63, 125, 82, 0.14);
+    border-color: rgba(var(--cliniq-focus-rgb), 0.38);
+    box-shadow: 0 0 0 3px rgba(var(--cliniq-focus-rgb), 0.14);
     background: #ffffff;
 }
 
@@ -1291,6 +1525,579 @@ textarea:focus {
 .dashboard-hero .btn {
     min-height: 3rem;
     border-radius: 0.875rem;
+}
+
+@keyframes inventory-row-blink {
+    0%, 100% {
+        background-color: transparent;
+    }
+    35% {
+        background-color: rgba(16, 185, 129, 0.16);
+    }
+    70% {
+        background-color: rgba(245, 158, 11, 0.18);
+    }
+}
+
+.cliniq-ag-grid .ag-row.inventory-row-attention .ag-cell {
+    animation: inventory-row-blink 0.5s ease-in-out 0s 4;
+}
+
+.settings-shell {
+    display: grid;
+    grid-template-columns: 17rem minmax(0, 1fr);
+    gap: 1.5rem;
+    align-items: start;
+}
+
+.settings-tabs {
+    position: sticky;
+    top: 1rem;
+    display: grid;
+    gap: 0.6rem;
+}
+
+.settings-tab-link {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    width: 100%;
+    border: 1px solid transparent;
+    border-radius: 0.85rem;
+    padding: 0.95rem 1rem;
+    background: transparent;
+    color: #64748b;
+    font-size: 0.82rem;
+    font-weight: 900;
+    text-align: left;
+    transition: background-color 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+}
+
+.settings-tab-link:hover {
+    background: var(--cliniq-surface-low);
+    color: var(--cliniq-primary-hover);
+}
+
+.settings-tab-link.active {
+    background: var(--cliniq-primary);
+    border-color: var(--cliniq-primary);
+    color: #ffffff;
+    box-shadow: 0 14px 32px rgba(var(--cliniq-focus-rgb), 0.18);
+}
+
+.settings-tab-link .material-symbols-outlined {
+    font-size: 1.25rem;
+}
+
+.settings-tab-panel {
+    display: none;
+}
+
+.settings-tab-panel.active {
+    display: block;
+}
+
+.settings-panel {
+    border: 1px solid rgba(199, 220, 205, 0.72);
+    border-radius: 1rem;
+    background: #ffffff;
+    box-shadow: 0 14px 30px rgba(15, 23, 42, 0.04);
+    overflow: hidden;
+}
+
+.settings-panel-body {
+    padding: clamp(1.25rem, 3vw, 2rem);
+}
+
+.settings-section {
+    border: 1px solid rgba(199, 220, 205, 0.72);
+    border-radius: 0.9rem;
+    background: #fbfdfb;
+    padding: 1.25rem;
+}
+
+.settings-field {
+    display: grid;
+    gap: 0.42rem;
+}
+
+.settings-input,
+.settings-textarea {
+    width: 100%;
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    border-radius: 0.7rem;
+    background: #ffffff;
+    color: #17261d;
+    font-size: 0.83rem;
+    font-weight: 800;
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.settings-input {
+    min-height: 3.15rem;
+    padding: 0.7rem 0.9rem;
+}
+
+.settings-textarea {
+    min-height: 9rem;
+    padding: 0.9rem;
+    line-height: 1.45;
+    resize: vertical;
+}
+
+.settings-textarea-compact {
+    min-height: 6.25rem;
+}
+
+.settings-input:focus,
+.settings-textarea:focus {
+    border-color: rgba(var(--cliniq-focus-rgb), 0.55);
+    box-shadow: 0 0 0 3px rgba(var(--cliniq-focus-rgb), 0.12);
+}
+
+.settings-help {
+    color: #64748b;
+    font-size: 0.75rem;
+    font-weight: 700;
+    line-height: 1.45;
+}
+
+.settings-switch {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    border: 1px solid rgba(199, 220, 205, 0.72);
+    border-radius: 0.85rem;
+    background: #ffffff;
+    padding: 1rem;
+}
+
+.settings-switch input {
+    width: 1.25rem;
+    height: 1.25rem;
+    border-radius: 0.35rem;
+    color: var(--cliniq-primary);
+}
+
+.settings-theme-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+    gap: 0.75rem;
+}
+
+.settings-theme-option {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 3.25rem;
+    padding: 0.75rem;
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    border-radius: 0.75rem;
+    background: #ffffff;
+    color: #17261d;
+    font-size: 0.82rem;
+    font-weight: 800;
+    cursor: pointer;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.settings-theme-option:hover,
+.settings-theme-option.active {
+    border-color: rgba(var(--cliniq-focus-rgb), 0.42);
+    background: var(--cliniq-surface-low);
+    box-shadow: 0 0 0 3px rgba(var(--cliniq-focus-rgb), 0.08);
+}
+
+.settings-theme-option input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.settings-theme-swatch {
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 999px;
+    background: var(--theme-swatch);
+    color: #ffffff;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.settings-theme-swatch .material-symbols-outlined {
+    font-size: 1rem;
+}
+
+.settings-profile-list {
+    display: grid;
+    gap: 0.9rem;
+}
+
+.settings-profile-card {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 1rem;
+    align-items: start;
+    padding: 1rem;
+    border: 1px solid rgba(199, 220, 205, 0.72);
+    border-radius: 0.9rem;
+    background: #ffffff;
+}
+
+.settings-profile-avatar {
+    width: 3rem;
+    height: 3rem;
+    border-radius: 0.8rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    font-weight: 900;
+}
+
+.settings-profile-main {
+    min-width: 0;
+}
+
+.settings-password-reset-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.settings-dropdown-group-list {
+    display: grid;
+    gap: 0.5rem;
+    align-content: start;
+}
+
+.settings-dropdown-category-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+}
+
+.settings-dropdown-category-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    border-radius: 999px;
+    background: #ffffff;
+    color: #475569;
+    padding: 0.55rem 0.85rem;
+    font-size: 0.82rem;
+    font-weight: 900;
+}
+
+.settings-dropdown-category-link:hover,
+.settings-dropdown-category-link.active {
+    border-color: rgba(var(--cliniq-focus-rgb), 0.35);
+    background: var(--cliniq-primary);
+    color: #ffffff;
+}
+
+.settings-dropdown-category-link small {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.35rem;
+    height: 1.35rem;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.08);
+    font-size: 0.72rem;
+    font-weight: 900;
+}
+
+.settings-dropdown-category-link.active small,
+.settings-dropdown-category-link:hover small {
+    background: rgba(255, 255, 255, 0.18);
+}
+
+.settings-dropdown-group-heading {
+    border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+    margin-bottom: 0.35rem;
+    padding: 0 0 0.7rem;
+}
+
+.settings-dropdown-group-heading strong,
+.settings-dropdown-group-heading small {
+    display: block;
+}
+
+.settings-dropdown-group-heading strong {
+    color: #17261d;
+    font-size: 0.92rem;
+    font-weight: 900;
+}
+
+.settings-dropdown-group-heading small {
+    color: #64748b;
+    font-size: 0.72rem;
+    font-weight: 800;
+    margin-top: 0.15rem;
+}
+
+.settings-dropdown-group-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 0.75rem;
+    padding: 0.8rem 0.9rem;
+    color: #334155;
+    background: #ffffff;
+}
+
+.settings-dropdown-group-link:hover,
+.settings-dropdown-group-link.active {
+    border-color: rgba(var(--cliniq-focus-rgb), 0.35);
+    background: var(--cliniq-primary-fixed);
+    color: var(--cliniq-primary);
+}
+
+.settings-dropdown-group-link strong,
+.settings-dropdown-group-link small {
+    display: block;
+}
+
+.settings-dropdown-group-link small {
+    margin-top: 0.15rem;
+    color: #64748b;
+    font-size: 0.72rem;
+    font-weight: 800;
+}
+
+.settings-dropdown-add-form,
+.settings-dropdown-option-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.settings-dropdown-option-list {
+    display: grid;
+    gap: 0.85rem;
+}
+
+.settings-dropdown-option-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.85rem;
+    align-items: end;
+}
+
+.settings-dropdown-option-form {
+    min-width: 0;
+}
+
+.settings-switch-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 2.75rem;
+    color: #475569;
+    font-size: 0.78rem;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.settings-switch-inline input {
+    width: 1rem;
+    height: 1rem;
+    accent-color: var(--cliniq-primary);
+}
+
+.settings-score-band {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.85rem;
+}
+
+.settings-band-card {
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 0.8rem;
+    background: #ffffff;
+    padding: 1rem;
+}
+
+.record-sheet-field {
+    width: 100%;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 0.625rem;
+    background: #f8fafc;
+    color: #0f172a;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    line-height: 1.35;
+    height: 3.625rem;
+    min-height: 3.625rem;
+    padding: 0.75rem 1rem;
+    box-sizing: border-box;
+}
+
+textarea.record-sheet-field {
+    min-height: 7rem;
+    height: auto;
+}
+
+.vitals-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.vital-tile {
+    min-height: 6.25rem;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 0.875rem;
+    background: #f8fafc;
+    padding: 1rem;
+}
+
+.vital-label {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: #94a3b8;
+    font-size: 0.68rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 0.75rem;
+}
+
+.vital-label .material-symbols-outlined {
+    font-size: 1rem;
+}
+
+.vital-value-wrap {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.vital-input {
+    width: 100%;
+    height: 2.375rem;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    border-radius: 0.5rem;
+    background: #ffffff;
+    padding: 0 0.75rem;
+    font-size: 0.8125rem;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.vital-unit {
+    color: #94a3b8;
+    font-size: 0.68rem;
+    font-weight: 800;
+}
+
+.patient-lookup-status {
+    min-height: 1.1rem;
+    color: #64748b;
+    font-size: 0.72rem;
+    font-weight: 800;
+}
+
+.patient-lookup-status.is-found {
+    color: #15803d;
+}
+
+.patient-lookup-status.is-missing {
+    color: #b91c1c;
+}
+
+.alert-report-field {
+    min-height: 4.15rem;
+    border: 1px solid rgba(199, 220, 205, 0.75);
+    border-radius: 0.8rem;
+    background: #f8fbf9;
+    padding: 0.85rem 1rem;
+}
+
+.alert-report-field strong {
+    display: block;
+    color: #0f172a;
+    font-size: 0.93rem;
+    line-height: 1.35;
+    margin-top: 0.2rem;
+}
+
+@media (max-width: 900px) {
+    .vitals-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 980px) {
+    .settings-shell {
+        grid-template-columns: 1fr;
+    }
+
+    .settings-tabs {
+        position: static;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .settings-tab-link {
+        justify-content: center;
+    }
+
+    .settings-tab-link span:last-child {
+        display: none;
+    }
+
+    .settings-score-band {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .settings-profile-card {
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .settings-profile-card > .badge {
+        grid-column: 2;
+        width: fit-content;
+    }
+}
+
+@media (max-width: 640px) {
+    .vitals-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .settings-score-band {
+        grid-template-columns: 1fr;
+    }
+
+    .settings-profile-card {
+        grid-template-columns: 1fr;
+    }
+
+    .settings-profile-card > .badge {
+        grid-column: auto;
+    }
+
+    .settings-password-reset-row {
+        grid-template-columns: 1fr;
+    }
+
+    .settings-dropdown-add-form,
+    .settings-dropdown-option-row,
+    .settings-dropdown-option-card {
+        grid-template-columns: 1fr;
+    }
 }
 
 .btn-soft-danger {
@@ -1505,7 +2312,7 @@ textarea:focus {
 .btn-primary {
     background: var(--cliniq-primary);
     color: white;
-    box-shadow: 0 10px 15px -3px rgba(63, 125, 82, 0.22);
+    box-shadow: 0 10px 15px -3px rgba(var(--cliniq-focus-rgb), 0.22);
 }
 
 .btn-primary:hover {
@@ -1525,7 +2332,7 @@ textarea:focus {
 .btn-outline {
     background: white;
     color: var(--cliniq-accent-foreground);
-    border: 1px solid rgba(63, 125, 82, 0.24);
+    border: 1px solid rgba(var(--cliniq-focus-rgb), 0.24);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
@@ -1662,8 +2469,8 @@ textarea:focus {
     --ag-secondary-border-color: oklch(92% .01 230 / .6);
     --ag-header-background-color: oklch(98.5% .005 230);
     --ag-header-foreground-color: #64748b;
-    --ag-row-hover-color: rgba(63, 125, 82, 0.10);
-    --ag-selected-row-background-color: rgba(63, 125, 82, 0.16);
+    --ag-row-hover-color: rgba(var(--cliniq-focus-rgb), 0.10);
+    --ag-selected-row-background-color: rgba(var(--cliniq-focus-rgb), 0.16);
     --ag-odd-row-background-color: #ffffff;
     --ag-font-family: Inter, sans-serif;
     --ag-font-size: 13px;
@@ -1759,7 +2566,7 @@ textarea:focus {
 }
 
 .cliniq-ag-grid .ag-row-clickable:hover .ag-cell {
-    background: rgba(63, 125, 82, 0.08);
+    background: rgba(var(--cliniq-focus-rgb), 0.08);
 }
 
 .cliniq-ag-grid .ag-header-cell-label {
@@ -1918,7 +2725,7 @@ textarea:focus {
 
 .appointment-calendar-day:not(.is-empty):hover {
     transform: translateY(-1px);
-    border-color: #cfe6d6;
+    border-color: var(--cliniq-outline);
 }
 
 .appointment-calendar-day.is-empty {
@@ -1951,7 +2758,7 @@ textarea:focus {
     width: fit-content;
     padding: 0.32rem 0.55rem;
     border-radius: 999px;
-    background: #edf8f0;
+    background: var(--cliniq-surface-low);
     color: var(--cliniq-primary-hover);
     font-size: 0.62rem;
     font-weight: 900;

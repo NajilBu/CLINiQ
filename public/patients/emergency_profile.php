@@ -19,14 +19,12 @@ if ($patient) {
 
 render_header('Staff Emergency Profile');
 ?>
-<div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-    <div>
-        <p class="clinic-label">Staff Only</p>
-        <h1 class="font-headline text-3xl md:text-4xl font-extrabold text-[#1c2a59]">Emergency Profile</h1>
-        <p class="text-sm font-bold text-slate-500 mt-1">Sensitive emergency health details for authorized clinic staff.</p>
-    </div>
-    <a class="px-5 py-3 bg-slate-100 text-primary rounded-2xl text-sm font-bold text-decoration-none" href="<?= app_url('patients/index.php') ?>">Back to Patients</a>
-</div>
+<?php render_clinic_command_header(
+    'Staff Only',
+    'Emergency Profile',
+    'Sensitive emergency health details for authorized clinic staff.',
+    '<a class="px-5 py-3 bg-slate-100 text-primary rounded-2xl text-sm font-bold text-decoration-none" href="' . e(app_url('patients/index.php')) . '">Back to Patients</a>'
+); ?>
 
 <?php if (!$patient): ?>
     <div class="rounded-2xl bg-red-50 border border-red-100 text-red-700 px-5 py-4 font-bold">Patient not found.</div>

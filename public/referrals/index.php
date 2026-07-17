@@ -57,19 +57,14 @@ foreach ($referrals as $ref) {
 }
 
 render_header('Referrals');
-?>
 
-<div class="dashboard-hero flex flex-col lg:flex-row lg:items-center justify-between gap-5 mb-8">
-    <div>
-        <p class="text-[11px] font-black text-primary uppercase tracking-widest mb-2">External Care</p>
-        <h1 class="font-headline text-3xl md:text-4xl font-extrabold text-[#17261d]">Referrals</h1>
-        <p class="text-sm font-bold text-slate-500 mt-1">Track patient referrals to external facilities and specialists.</p>
-    </div>
-    <a class="btn btn-primary text-decoration-none" href="create.php">
-        <span class="material-symbols-outlined text-[20px]">send</span>
-        New Referral
-    </a>
-</div>
+render_clinic_command_header(
+    'External Care',
+    'Referrals',
+    'Track patient referrals to external facilities and specialists.',
+    '<a class="btn btn-primary text-decoration-none" href="create.php"><span class="material-symbols-outlined text-[20px]">send</span>New Referral</a>'
+);
+?>
 
 <section class="clinic-card overflow-hidden">
     <div class="p-6 border-b border-slate-100">

@@ -8,7 +8,6 @@ ensure_visit_workflow_schema();
 $filters = [
     'q' => trim($_GET['q'] ?? ''),
     'status' => $_GET['status'] ?? 'Unaddressed',
-    'risk' => $_GET['risk'] ?? 'all',
     'purpose' => $_GET['purpose'] ?? 'all',
     'staff' => $_GET['staff'] ?? 'all',
     'date_from' => trim($_GET['date_from'] ?? ''),
@@ -17,9 +16,6 @@ $filters = [
 
 if ($filters['status'] !== 'all' && !in_array($filters['status'], visit_statuses(), true)) {
     $filters['status'] = 'all';
-}
-if ($filters['risk'] !== 'all' && !in_array($filters['risk'], ['Low', 'Moderate', 'High', 'Critical'], true)) {
-    $filters['risk'] = 'all';
 }
 if ($filters['purpose'] !== 'all' && $filters['purpose'] === '') {
     $filters['purpose'] = 'all';
@@ -48,11 +44,6 @@ $buildWhere = function (bool $includeStatus = true) use ($filters): array {
     if ($includeStatus && $filters['status'] !== 'all') {
         $where[] = 'v.status = ?';
         $params[] = $filters['status'];
-    }
-
-    if ($filters['risk'] !== 'all') {
-        $where[] = 'v.risk_level = ?';
-        $params[] = $filters['risk'];
     }
 
     if ($filters['purpose'] !== 'all') {
@@ -141,7 +132,6 @@ $activeChips = [];
 $chipParams = $baseParams;
 foreach ([
     'status' => 'Status',
-    'risk' => 'Risk',
     'purpose' => 'Purpose',
     'staff' => 'Attended By',
     'date_from' => 'From',
@@ -170,7 +160,6 @@ $visitColumns = [
     ['headerName' => 'Patient', 'field' => 'patientHtml', 'cellRenderer' => 'html', 'minWidth' => 230],
     ['headerName' => 'Complaint', 'field' => 'complaint', 'minWidth' => 210],
     ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'width' => 145],
-    ['headerName' => 'Risk', 'field' => 'riskHtml', 'cellRenderer' => 'html', 'width' => 135],
     ['headerName' => 'Attended By', 'field' => 'attendedBy', 'minWidth' => 165],
     ['headerName' => 'Open', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 210],
 ];
@@ -205,28 +194,20 @@ foreach ($visits as $visit) {
         'patientHtml' => '<div class="flex items-center gap-3"><div class="avatar ' . e(avatar_color($fullName)) . '">' . e(initials($fullName)) . '</div><div><strong class="text-sm text-slate-800">' . e($fullName) . '</strong><div class="text-xs font-bold text-slate-400">' . e($visit['student_number']) . '</div></div></div>',
         'complaint' => $visit['chief_complaint'],
         'statusHtml' => '<span class="badge ' . e(visit_status_badge_class($visitStatus)) . '">' . e($visitStatus) . '</span>',
-        'riskHtml' => '<span class="badge ' . e(risk_badge_class($visit['risk_level'])) . '">' . e($visit['risk_level']) . ' - ' . (int) $visit['risk_score'] . '</span>',
         'attendedBy' => $visit['attended_by_name'] ?: 'Not yet attended',
         'actionsHtml' => $actionsHtml,
     ];
 }
 
 render_header('Clinic Visits');
-?>
 
-<div class="dashboard-hero flex flex-col lg:flex-row lg:items-center justify-between gap-5 mb-8">
-    <div>
-        <p class="text-[11px] font-black text-primary uppercase tracking-widest mb-2">Clinic Logbook</p>
-        <h1 class="font-headline text-3xl md:text-4xl font-extrabold text-[#17261d]">Visits</h1>
-        <p class="text-sm font-bold text-slate-500 mt-1">Review clinic visits, open treatment records, and log emergency cases.</p>
-    </div>
-    <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">
-        <a class="btn btn-primary text-decoration-none justify-center" href="<?= app_url('visits/create.php') ?>">
-            <span class="material-symbols-outlined text-[20px]">add_notes</span>
-            Manual Record Visit
-        </a>
-    </div>
-</div>
+render_clinic_command_header(
+    'Clinic Logbook',
+    'Visits',
+    'Review clinic visits, open treatment records, and log emergency cases.',
+    '<a class="btn btn-primary text-decoration-none justify-center" href="' . e(app_url('visits/create.php')) . '"><span class="material-symbols-outlined text-[20px]">add_notes</span>Manual Record Visit</a>'
+);
+?>
 
 <section class="bg-white rounded-[2rem] border border-outline-variant/20 shadow-sm overflow-hidden">
     <form id="visitFilterForm" method="get">
@@ -305,15 +286,6 @@ render_header('Clinic Visits');
                             <option value="all" <?= $filters['status'] === 'all' ? 'selected' : '' ?>>All Records</option>
                             <?php foreach (visit_statuses() as $status): ?>
                                 <option value="<?= e($status) ?>" <?= $filters['status'] === $status ? 'selected' : '' ?>><?= e($status) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="clinic-label">Risk Classification</label>
-                        <select class="clinic-select" name="risk">
-                            <option value="all">All Risk Levels</option>
-                            <?php foreach (['Low', 'Moderate', 'High', 'Critical'] as $risk): ?>
-                                <option value="<?= e($risk) ?>" <?= $filters['risk'] === $risk ? 'selected' : '' ?>><?= e($risk) ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>

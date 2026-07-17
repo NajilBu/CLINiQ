@@ -4,6 +4,7 @@ require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/../config/env.php';
 require_once __DIR__ . '/brand.php';
 require_once __DIR__ . '/student_id.php';
+require_once __DIR__ . '/../services/SystemSettings.php';
 
 function e(?string $value): string
 {
@@ -54,6 +55,26 @@ function set_page_back_link(string $url, string $label = 'Back'): void
     ];
 }
 
+function render_clinic_command_header(string $eyebrow, string $heading, string $subheading = '', string $actionsHtml = ''): void
+{
+    ?>
+    <div class="dashboard-hero flex flex-col lg:flex-row lg:items-center justify-between gap-5 mb-8">
+        <div>
+            <p class="text-[11px] font-black text-primary uppercase tracking-widest mb-2"><?= e($eyebrow) ?></p>
+            <h1 class="font-headline text-3xl md:text-4xl font-extrabold text-[#17261d]"><?= e($heading) ?></h1>
+            <?php if ($subheading !== ''): ?>
+                <p class="text-sm font-bold text-slate-500 mt-1"><?= e($subheading) ?></p>
+            <?php endif; ?>
+        </div>
+        <?php if ($actionsHtml !== ''): ?>
+            <div class="flex items-center gap-3">
+                <?= $actionsHtml ?>
+            </div>
+        <?php endif; ?>
+    </div>
+    <?php
+}
+
 /**
  * Get the CSS class for a risk level badge.
  */
@@ -101,15 +122,46 @@ function status_badge_class(string $status): string
 function render_header(string $title): void
 {
     $user = current_user();
+    $clinicProfile = clinic_profile_settings();
+    $theme = active_cliniq_theme();
     $pageBackLink = $GLOBALS['cliniq_page_back_link'] ?? null;
     $currentPath = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
     $activeAlertCount = 0;
+    $criticalAlertCount = 0;
+    $pendingAlertUrl = app_url('alerts/index.php?status=pending');
+    $pendingAlertTitle = 'View pending alerts';
     if ($user) {
         try {
-            $activeAlertCount = (int) (db()->query("SELECT COUNT(*) AS total FROM nurse_alerts WHERE status = 'Pending'")->fetch()['total'] ?? 0);
+            $alertSummary = db()->query("
+                SELECT
+                    COUNT(*) AS total,
+                    SUM(CASE WHEN risk_level = 'Critical' THEN 1 ELSE 0 END) AS critical_total
+                FROM nurse_alerts
+                WHERE status = 'Pending'
+            ")->fetch();
+            $activeAlertCount = (int) ($alertSummary['total'] ?? 0);
+            $criticalAlertCount = (int) ($alertSummary['critical_total'] ?? 0);
+
+            if ($activeAlertCount === 1) {
+                $latestAlert = db()->query("SELECT id FROM nurse_alerts WHERE status = 'Pending' ORDER BY created_at DESC, id DESC LIMIT 1")->fetch();
+                $latestAlertId = (int) ($latestAlert['id'] ?? 0);
+                if ($latestAlertId > 0) {
+                    $pendingAlertUrl = app_url('alerts/view.php?id=' . $latestAlertId);
+                    $pendingAlertTitle = 'Open pending alert #' . $latestAlertId;
+                }
+            } elseif ($activeAlertCount > 1) {
+                $pendingAlertTitle = 'View ' . $activeAlertCount . ' pending alerts';
+            }
         } catch (Throwable $e) {
             $activeAlertCount = 0;
+            $criticalAlertCount = 0;
+            $pendingAlertUrl = app_url('alerts/index.php?status=pending');
+            $pendingAlertTitle = 'View pending alerts';
         }
+    }
+    $bodyClasses = 'bg-surface font-body text-on-surface min-h-screen overflow-x-hidden';
+    if ($activeAlertCount > 0) {
+        $bodyClasses .= ' has-active-alerts';
     }
     $nav = [
         'Dashboard' => ['url' => app_url('dashboard.php'), 'match' => 'dashboard.php', 'icon' => 'dashboard'],
@@ -128,24 +180,24 @@ function render_header(string $title): void
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title><?= e($title) ?> | PLP ClinicConnect</title>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@700;800&display=swap" rel="stylesheet">
-        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
-        <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+        <title><?= e($title) ?> | <?= e($clinicProfile['system_name']) ?></title>
+        <link href="<?= app_url('assets/vendor/fonts/inter-manrope.css?v=offline-1') ?>" rel="stylesheet">
+        <link href="<?= app_url('assets/vendor/fonts/material-symbols.css?v=offline-1') ?>" rel="stylesheet">
+        <script src="<?= app_url('assets/vendor/tailwind/tailwind-cdn.js?v=offline-1') ?>"></script>
         <script>
             tailwind.config = {
                 darkMode: 'class',
                 theme: {
                     extend: {
                         colors: {
-                            primary: '#3F7D52',
-                            'primary-fixed': '#e8f6ec',
-                            'primary-container': '#23422C',
+                            primary: <?= json_encode($theme['primary']) ?>,
+                            'primary-fixed': <?= json_encode($theme['primary_fixed']) ?>,
+                            'primary-container': <?= json_encode($theme['primary_container']) ?>,
                             'on-primary': '#ffffff',
-                            surface: '#f4fbf6',
+                            surface: <?= json_encode($theme['surface']) ?>,
                             'on-surface': '#17261d',
-                            'surface-container-low': '#edf8f0',
-                            'outline-variant': '#c7dccd'
+                            'surface-container-low': <?= json_encode($theme['surface_container_low']) ?>,
+                            'outline-variant': <?= json_encode($theme['outline_variant']) ?>
                         },
                         fontFamily: {
                             headline: ['Manrope', 'sans-serif'],
@@ -158,34 +210,59 @@ function render_header(string $title): void
         <link rel="stylesheet" href="<?= app_url('assets/vendor/ag-grid/ag-grid.css?v=31') ?>">
         <link rel="stylesheet" href="<?= app_url('assets/vendor/ag-grid/ag-theme-quartz.css?v=31') ?>">
         <script src="<?= app_url('assets/vendor/ag-grid/ag-grid-community.min.js?v=31') ?>"></script>
-        <link href="<?= app_url('assets/css/app.css?v=page-back-1') ?>" rel="stylesheet">
+        <link href="<?= app_url('assets/css/app.css?v=critical-alert-frame-1') ?>" rel="stylesheet">
+        <style>
+            :root {
+                --cliniq-primary: <?= e($theme['primary']) ?>;
+                --cliniq-primary-hover: <?= e($theme['primary_container']) ?>;
+                --cliniq-primary-fixed: <?= e($theme['primary_fixed']) ?>;
+                --cliniq-accent: <?= e($theme['accent']) ?>;
+                --cliniq-accent-foreground: <?= e($theme['primary_container']) ?>;
+                --cliniq-surface: <?= e($theme['surface']) ?>;
+                --cliniq-surface-low: <?= e($theme['surface_container_low']) ?>;
+                --cliniq-outline: <?= e($theme['outline_variant']) ?>;
+                --cliniq-focus-rgb: <?= e($theme['focus_rgb']) ?>;
+                --cliniq-shadow-rgb: <?= e($theme['shadow_rgb']) ?>;
+            }
+        </style>
     </head>
-    <body class="bg-surface font-body text-on-surface min-h-screen overflow-x-hidden">
+    <body class="<?= e($bodyClasses) ?>"<?php if ($user): ?> data-alert-status-url="<?= e(app_url('api/alerts.php')) ?>" data-active-alert-count="<?= (int) $activeAlertCount ?>" data-critical-alert-count="<?= (int) $criticalAlertCount ?>"<?php endif; ?>>
     <?php if ($user): ?>
         <div class="app-shell">
             <aside class="app-sidebar">
-                <a href="<?= app_url('dashboard.php') ?>" class="app-brand text-decoration-none">
+                <a href="<?= app_url('dashboard.php') ?>" class="app-brand text-decoration-none" data-no-ajax="true">
                     <span class="app-brand-mark">
-                        <img src="<?= app_url('assets/img/clinic-logo.png') ?>" alt="PLP Health Services Department logo">
+                        <img src="<?= app_url('assets/img/clinic-logo.png') ?>" alt="<?= e($clinicProfile['department']) ?> logo">
                     </span>
                     <span class="app-brand-copy">
-                        <span class="app-brand-title">CLINiQ</span>
-                        <span class="app-brand-subtitle">University Health Services</span>
+                        <span class="app-brand-title"><?= e($clinicProfile['system_name']) ?></span>
+                        <span class="app-brand-subtitle"><?= e($clinicProfile['department']) ?></span>
                     </span>
                 </a>
                 <nav class="app-nav">
                     <?php foreach ($nav as $label => $item): ?>
                         <?php $active = str_contains($currentPath, $item['match']); ?>
-                        <a href="<?= e($item['url']) ?>" class="app-nav-link <?= $active ? 'active' : '' ?> text-decoration-none" title="<?= e($label) ?>">
+                        <a href="<?= e($item['url']) ?>" class="app-nav-link <?= $active ? 'active' : '' ?> text-decoration-none" title="<?= e($label) ?>" data-no-ajax="true">
                             <span class="material-symbols-outlined"><?= e($item['icon']) ?></span>
                             <span class="app-nav-label"><?= e($label) ?></span>
                         </a>
                     <?php endforeach; ?>
                 </nav>
-                <div class="app-sidebar-footer">
-                    <span class="app-user-label">Signed in as</span>
-                    <strong><?= e($user['name']) ?></strong>
-                </div>
+                <details class="app-sidebar-footer app-user-menu">
+                    <summary class="app-user-menu-trigger">
+                        <span class="app-user-copy">
+                            <span class="app-user-label">Signed in as</span>
+                            <strong><?= e($user['name']) ?></strong>
+                        </span>
+                        <span class="material-symbols-outlined app-user-menu-icon" aria-hidden="true">expand_more</span>
+                    </summary>
+                    <div class="app-user-menu-popover">
+                        <a href="<?= app_url('logout.php') ?>" class="app-logout text-decoration-none" data-no-ajax="true">
+                            <span class="material-symbols-outlined">logout</span>
+                            Logout
+                        </a>
+                    </div>
+                </details>
             </aside>
             <div class="app-main">
                 <header class="app-topbar">
@@ -208,17 +285,13 @@ function render_header(string $title): void
                     </form>
                     <div class="app-topbar-meta">
                         <?php if ($activeAlertCount > 0): ?>
-                            <a href="<?= app_url('alerts/index.php') ?>" class="app-alert-link has-alerts text-decoration-none" title="<?= e($activeAlertCount . ' pending alert(s)') ?>">
+                            <a href="<?= e($pendingAlertUrl) ?>" class="app-alert-link has-alerts <?= $activeAlertCount > 0 ? 'has-active-alerts' : '' ?> text-decoration-none" title="<?= e($pendingAlertTitle) ?>" data-no-ajax="true">
                                 <span class="material-symbols-outlined">notification_important</span>
                                 <span class="app-alert-label">Pending Alerts</span>
                                 <span class="app-alert-badge"><?= $activeAlertCount > 99 ? '99+' : $activeAlertCount ?></span>
                             </a>
                         <?php endif; ?>
                         <span><?= e(date('l, F j')) ?></span>
-                        <a href="<?= app_url('logout.php') ?>" class="app-logout text-decoration-none">
-                            <span class="material-symbols-outlined">logout</span>
-                            Logout
-                        </a>
                     </div>
                 </header>
                 <main class="app-content">
@@ -249,7 +322,7 @@ function render_footer(): void
         </div>
         <?php endif; ?>
     <?php render_flash_toasts(); ?>
-    <script src="<?= app_url('assets/js/app.js?v=student-id-format-2') ?>"></script>
+    <script src="<?= app_url('assets/js/app.js?v=settings-link-tabs-1') ?>"></script>
     <script src="<?= app_url('assets/js/ag-grid-tables.js?v=6') ?>"></script>
     </body>
     </html>

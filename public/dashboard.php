@@ -24,13 +24,22 @@ $metrics['ape_clearance_rate'] = $apeTotal > 0 ? round(($apeCleared / $apeTotal)
 $metrics['ape_pending_review'] = (int) (db()->query("SELECT COUNT(*) AS total FROM ape_records WHERE COALESCE(requirement_status, '') <> 'Pre-Verified'")->fetch()['total'] ?? 0);
 
 
-// --- 2. Live Alerts (Emergency & High Priority) ---
+// --- 2. Live Alerts (Most Urgent First) ---
 $activeAlerts = db()->query("
     SELECT a.*, p.first_name, p.last_name
     FROM nurse_alerts a
     LEFT JOIN patients p ON p.id = a.patient_id
     WHERE a.status = 'Pending'
-    ORDER BY a.created_at DESC
+    ORDER BY
+        CASE COALESCE(a.risk_level, 'Low')
+            WHEN 'Critical' THEN 4
+            WHEN 'High' THEN 3
+            WHEN 'Moderate' THEN 2
+            ELSE 1
+        END DESC,
+        COALESCE(a.risk_score, 0) DESC,
+        a.created_at DESC,
+        a.id DESC
     LIMIT 2
 ")->fetchAll();
 
@@ -147,16 +156,11 @@ render_header('Main Dashboard');
 
 <div class="dashboard-page">
 
-    <div class="dashboard-hero flex flex-col lg:flex-row lg:items-center justify-between gap-5 mb-8">
-        <div>
-            <p class="text-[11px] font-black text-primary uppercase tracking-widest mb-2">Clinic Command Center</p>
-            <h1 class="font-headline text-3xl md:text-4xl font-extrabold text-[#17261d]">Good day,
-                <?= e($dashboardDisplayName) ?>
-            </h1>
-            <p class="text-sm font-bold text-slate-500 mt-1">Real-time alerts, daily schedule, and active patient logs.
-            </p>
-        </div>
-    </div>
+    <?php render_clinic_command_header(
+        'Clinic Command Center',
+        'Good day, ' . $dashboardDisplayName,
+        'Real-time alerts, daily schedule, and active patient logs.'
+    ); ?>
 
     <!-- 2. Analytics & Metrics Ribbon -->
     <div class="dashboard-metrics grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
@@ -233,14 +237,14 @@ render_header('Main Dashboard');
                     <div>
                         <h2 class="font-headline text-base font-extrabold text-[#17261d] m-0 flex items-center gap-2">
                             Active Emergency Alerts
-                            <span class="badge badge-high text-[10px]"><?= count($activeAlerts) ?></span>
+                            <span class="badge badge-high text-[10px]"><?= $metrics['pending_alerts'] > 99 ? '99+' : $metrics['pending_alerts'] ?></span>
                         </h2>
-                        <p class="text-xs font-bold text-slate-500 m-0">Clinic response needed for
-                            <?= count($activeAlerts) ?> pending alert(s).
+                        <p class="text-xs font-bold text-slate-500 m-0">
+                            Showing the most urgent <?= count($activeAlerts) ?> of <?= $metrics['pending_alerts'] ?> pending alert(s).
                         </p>
                     </div>
                 </div>
-                <a href="<?= app_url('alerts/index.php') ?>"
+                <a href="<?= app_url('alerts/index.php?status=pending') ?>"
                     class="btn btn-sm btn-ghost text-red-600 hover:text-red-700 text-decoration-none shrink-0">
                     View All
                     <span class="material-symbols-outlined text-[16px]">arrow_forward</span>

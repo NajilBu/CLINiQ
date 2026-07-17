@@ -83,19 +83,14 @@ foreach ($appointments as $appointment) {
 }
 
 render_header('Appointments');
-?>
 
-<div class="dashboard-hero flex flex-col lg:flex-row lg:items-center justify-between gap-5 mb-8">
-    <div>
-        <p class="text-[11px] font-black text-primary uppercase tracking-widest mb-2">Scheduling</p>
-        <h1 class="font-headline text-3xl md:text-4xl font-extrabold text-[#17261d]">Appointment Requests</h1>
-        <p class="text-sm font-bold text-slate-500 mt-1">Approve student booking requests before they become clinic schedules.</p>
-    </div>
-    <a href="<?= app_url('appointments/availability.php') ?>" class="btn btn-primary text-decoration-none">
-        <span class="material-symbols-outlined">calendar_month</span>
-        Manage Availability
-    </a>
-</div>
+render_clinic_command_header(
+    'Scheduling',
+    'Appointment Requests',
+    'Approve student booking requests before they become clinic schedules.',
+    '<a href="' . e(app_url('appointments/availability.php')) . '" class="btn btn-primary text-decoration-none"><span class="material-symbols-outlined">calendar_month</span>Manage Availability</a>'
+);
+?>
 
 <section class="clinic-card overflow-hidden">
     <div class="p-6 border-b border-slate-100">

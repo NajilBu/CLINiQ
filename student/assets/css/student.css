@@ -1820,3 +1820,171 @@ html:has(.student-body) body {
     color: #065f46; padding: 4px 10px; border-radius: 100px;
     font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
 }
+
+@media (max-width: 640px) {
+    .student-body {
+        overflow-x: hidden;
+    }
+
+    .student-main {
+        width: 100%;
+        padding: 1.25rem 0.75rem 2.5rem;
+        overflow-x: hidden;
+    }
+
+    .student-page-header {
+        gap: 0.8rem;
+        margin-bottom: 1rem;
+    }
+
+    .student-page-header > div,
+    .student-card-header > div {
+        min-width: 0;
+        width: 100%;
+    }
+
+    .student-title {
+        font-size: clamp(1.8rem, 9vw, 2.25rem);
+        line-height: 1.1;
+    }
+
+    .student-subtitle {
+        max-width: 100%;
+        font-size: 0.88rem;
+        line-height: 1.55;
+    }
+
+    .student-card {
+        max-width: 100%;
+        overflow: hidden;
+    }
+
+    .student-card-header {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 0.75rem;
+        padding: 1rem;
+    }
+
+    .student-card-pad {
+        padding: 1rem;
+    }
+
+    .student-badge,
+    .passport-badge-emergency,
+    .passport-badge-emergency-soft {
+        max-width: 100%;
+        white-space: normal;
+        line-height: 1.25;
+    }
+
+    .passport-badge-emergency {
+        align-self: stretch;
+        justify-content: flex-start;
+    }
+
+    .student-note {
+        padding: 0.85rem;
+        line-height: 1.5;
+    }
+
+    .student-note > .material-symbols-outlined {
+        flex: 0 0 auto;
+    }
+
+    .student-note strong,
+    .student-note div,
+    .passport-readonly-field,
+    .passport-token-chip,
+    .passport-token-chip code,
+    .pv-val,
+    .pv-instr {
+        overflow-wrap: anywhere;
+    }
+
+    #passport-form .student-span-7 > .flex.gap-3,
+    #passport-form .flex.gap-2 {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    #passport-form .student-span-7 > .flex.gap-3 .student-button,
+    #passport-form .student-span-7 > .flex.gap-3 .student-button-secondary,
+    #passport-form .flex.gap-2 .student-button-secondary {
+        width: 100%;
+        white-space: normal !important;
+    }
+
+    .passport-qr-wrap {
+        padding: 0.9rem;
+    }
+
+    .passport-qr-svg {
+        width: min(140px, 100%);
+        height: auto;
+    }
+
+    .passport-token-chip {
+        width: 100%;
+        justify-content: center;
+        border-radius: 0.7rem;
+    }
+
+    .pv-head {
+        align-items: flex-start;
+        flex-wrap: wrap;
+        padding: 14px;
+    }
+
+    .pv-avatar {
+        width: 46px;
+        height: 46px;
+    }
+
+    .pv-head-info {
+        flex: 1 1 calc(100% - 58px);
+    }
+
+    .pv-name {
+        white-space: normal;
+    }
+
+    .pv-blood {
+        width: 100%;
+    }
+
+    .pv-body,
+    .pv-contact,
+    .pv-updated {
+        padding-left: 14px;
+        padding-right: 14px;
+    }
+
+    .pv-contact {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .pv-contact > div:nth-child(2) {
+        min-width: 0;
+        flex: 1 1 calc(100% - 46px);
+    }
+
+    .pv-call {
+        width: 100%;
+        justify-content: center;
+        margin-left: 0;
+    }
+
+    .pv-section-title {
+        margin-left: 14px;
+        margin-right: 14px;
+        line-height: 1.3;
+    }
+
+    .pv-guidance-card,
+    .pv-card {
+        margin-left: 14px;
+        margin-right: 14px;
+    }
+}

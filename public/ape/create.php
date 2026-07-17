@@ -37,7 +37,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $stmt = db()->prepare("
         INSERT INTO ape_records (
             patient_id,
-            batch_name,
             exam_date,
             document_type,
             requirement_status,
@@ -52,11 +51,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             clinical_remarks,
             student_visible_note,
             follow_up_required
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ");
     $stmt->execute([
         (int)$_POST['patient_id'],
-        trim($_POST['batch_name'] ?? '') ?: null,
         $_POST['exam_date'] ?: null,
         trim($_POST['document_type'] ?? 'APE Form') ?: 'APE Form',
         $_POST['requirement_status'] ?? 'Not Checked',
@@ -81,17 +79,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 set_page_back_link('index.php', 'Back');
 render_header('Add APE Record');
 ?>
-<div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-    <div>
-        <h1 class="font-headline text-3xl md:text-4xl font-extrabold text-[#1c2a59]">Add APE Record</h1>
-        <p class="text-sm font-bold text-slate-500 mt-1">Create a staff-managed APE workflow entry and attach digital documents.</p>
-    </div>
-</div>
+<?php render_clinic_command_header(
+    'APE Workflow',
+    'Add APE Record',
+    'Create a staff-managed APE workflow entry and attach digital documents.'
+); ?>
 
 <form class="clinic-card p-6 md:p-8" method="post" enctype="multipart/form-data">
     <div class="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-8">
         <section>
-            <h2 class="font-headline text-xl font-extrabold text-[#1c2a59] mb-4">Student & Batch</h2>
+            <h2 class="font-headline text-xl font-extrabold text-[#1c2a59] mb-4">Student & Status</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div class="md:col-span-2">
                     <label class="clinic-label">Student</label>
@@ -105,18 +102,9 @@ render_header('Add APE Record');
                     </select>
                 </div>
                 <div>
-                    <label class="clinic-label">APE Batch</label>
-                    <select class="clinic-select" name="batch_name">
-                        <option value="">Unassigned</option>
-                        <option>Batch 1</option>
-                        <option>Batch 2</option>
-                        <option>Batch 3</option>
-                    </select>
-                </div>
-                <div>
                     <label class="clinic-label">Workflow Status</label>
                     <select class="clinic-select" name="workflow_status">
-                        <?php foreach (ape_workflow_steps() as $step): ?>
+                        <?php foreach (ape_workflow_status_options() as $step): ?>
                             <option value="<?= e($step) ?>" <?= $step === 'Registered' ? 'selected' : '' ?>><?= e($step) ?></option>
                         <?php endforeach; ?>
                     </select>
@@ -124,17 +112,17 @@ render_header('Add APE Record');
                 <div>
                     <label class="clinic-label">Requirement Status</label>
                     <select class="clinic-select" name="requirement_status">
-                        <option>Not Checked</option>
-                        <option>Pre-Verified</option>
-                        <option>Needs Correction</option>
+                        <?php foreach (ape_requirement_status_options() as $status): ?>
+                            <option value="<?= e($status) ?>"><?= e($status) ?></option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
                 <div>
                     <label class="clinic-label">Clinic Review Status</label>
                     <select class="clinic-select" name="verification_status">
-                        <option>Pending</option>
-                        <option>Verified</option>
-                        <option>Needs Correction</option>
+                        <?php foreach (ape_verification_status_options() as $status): ?>
+                            <option value="<?= e($status) ?>"><?= e($status) ?></option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
             </div>

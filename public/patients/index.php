@@ -54,6 +54,13 @@ foreach ($patients as $patient) {
 render_header('Patients');
 ?>
 
+<?php render_clinic_command_header(
+    'Patient Registry',
+    'Patients',
+    $totalRows . ' registered patient(s). Public QR page is for reporting only; staff profile contains private health data.',
+    '<a class="btn btn-primary text-decoration-none" href="' . e(app_url('patients/create.php')) . '"><span class="material-symbols-outlined text-[20px]">person_add</span>Add Patient</a>'
+); ?>
+
 <!-- ═══ Patient Registry ═══ -->
 <section class="bg-white rounded-[2rem] border border-outline-variant/20 shadow-sm overflow-hidden">
     <!-- Header + Search -->

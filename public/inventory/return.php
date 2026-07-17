@@ -13,11 +13,11 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $loanId = (int) ($_POST['loan_id'] ?? 0);
 $condition = trim((string) ($_POST['return_condition'] ?? 'Good'));
 $notes = trim((string) ($_POST['return_notes'] ?? ''));
-$validConditions = ['Good', 'Defective', 'Lost'];
+$validConditions = dropdown_options('inventory_return_condition');
 $user = current_user();
 
 if (!in_array($condition, $validConditions, true)) {
-    $condition = 'Good';
+    $condition = $validConditions[0] ?? 'Good';
 }
 
 $db = db();

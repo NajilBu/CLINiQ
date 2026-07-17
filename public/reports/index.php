@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../../app/helpers/view.php';
+require_once __DIR__ . '/../../app/services/VisitWorkflow.php';
 require_login();
 
 // ── Date range filter ───────────────────────────────────────
@@ -33,16 +34,16 @@ $complaints->execute([$dateFrom, $dateTo]);
 $complaints = $complaints->fetchAll();
 $maxComplaint = $complaints ? max(array_column($complaints, 'total')) : 1;
 
-// Risk distribution
-$riskDist = db()->prepare("
-    SELECT risk_level, COUNT(*) AS total
+// Visit status distribution
+$statusDist = db()->prepare("
+    SELECT COALESCE(status, 'Unaddressed') AS status, COUNT(*) AS total
     FROM clinic_visits
     WHERE DATE(visit_datetime) BETWEEN ? AND ?
-    GROUP BY risk_level
-    ORDER BY FIELD(risk_level, 'Critical', 'High', 'Moderate', 'Low')
+    GROUP BY COALESCE(status, 'Unaddressed')
+    ORDER BY FIELD(COALESCE(status, 'Unaddressed'), 'Unaddressed', 'Active', 'Completed', 'Cancelled')
 ");
-$riskDist->execute([$dateFrom, $dateTo]);
-$riskDist = $riskDist->fetchAll();
+$statusDist->execute([$dateFrom, $dateTo]);
+$statusDist = $statusDist->fetchAll();
 
 // Monthly trend (last 6 months)
 $monthlyTrend = db()->query("
@@ -60,16 +61,12 @@ render_header('Reports');
 ?>
 
 <!-- ═══ Title ═══ -->
-<div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-    <div>
-        <h1 class="font-headline text-3xl md:text-4xl font-extrabold text-[#1c2a59]">Reports & Analytics</h1>
-        <p class="text-sm font-bold text-slate-500 mt-1">Clinic summaries, visit trends, alerts, and inventory warnings.</p>
-    </div>
-    <a class="btn btn-primary text-decoration-none" href="export.php?from=<?= e($dateFrom) ?>&to=<?= e($dateTo) ?>">
-        <span class="material-symbols-outlined text-[20px]">download</span>
-        Export CSV
-    </a>
-</div>
+<?php render_clinic_command_header(
+    'Reports',
+    'Reports & Analytics',
+    'Clinic summaries, visit trends, alerts, and inventory warnings.',
+    '<a class="btn btn-primary text-decoration-none" href="export.php?from=' . e($dateFrom) . '&to=' . e($dateTo) . '"><span class="material-symbols-outlined text-[20px]">download</span>Export CSV</a>'
+); ?>
 
 <!-- ═══ Date Range Filter ═══ -->
 <form method="get" class="clinic-card p-4 flex flex-col sm:flex-row items-end gap-4">
@@ -134,34 +131,35 @@ render_header('Reports');
         </div>
     </section>
 
-    <!-- ═══ Risk Distribution ═══ -->
+    <!-- Visit Status Breakdown -->
     <section class="bg-white rounded-[2rem] border border-outline-variant/20 shadow-sm overflow-hidden">
         <div class="p-6 border-b border-slate-100">
-            <h2 class="font-headline text-xl font-extrabold text-[#1c2a59] mb-1">Risk Distribution</h2>
-            <p class="text-xs font-bold text-slate-500 mb-0">Breakdown of risk levels in selected period.</p>
+            <h2 class="font-headline text-xl font-extrabold text-[#1c2a59] mb-1">Visit Status Breakdown</h2>
+            <p class="text-xs font-bold text-slate-500 mb-0">Breakdown of visit workflow states in selected period.</p>
         </div>
         <div class="p-6 space-y-4">
             <?php
-            $riskColors = [
-                'Critical' => ['bg' => 'bg-red-100', 'fill' => 'bg-red-500', 'text' => 'text-red-700'],
-                'High'     => ['bg' => 'bg-rose-100', 'fill' => 'bg-rose-400', 'text' => 'text-rose-700'],
-                'Moderate' => ['bg' => 'bg-amber-100', 'fill' => 'bg-amber-400', 'text' => 'text-amber-700'],
-                'Low'      => ['bg' => 'bg-emerald-100', 'fill' => 'bg-emerald-400', 'text' => 'text-emerald-700'],
+            $statusColors = [
+                'Unaddressed' => ['bg' => 'bg-amber-100', 'fill' => 'bg-amber-400', 'text' => 'text-amber-700'],
+                'Active'      => ['bg' => 'bg-blue-100', 'fill' => 'bg-blue-400', 'text' => 'text-blue-700'],
+                'Completed'   => ['bg' => 'bg-emerald-100', 'fill' => 'bg-emerald-400', 'text' => 'text-emerald-700'],
+                'Cancelled'   => ['bg' => 'bg-slate-100', 'fill' => 'bg-slate-400', 'text' => 'text-slate-700'],
             ];
-            $totalRiskVisits = array_sum(array_column($riskDist, 'total')) ?: 1;
-            foreach ($riskDist as $risk):
-                $colors = $riskColors[$risk['risk_level']] ?? $riskColors['Low'];
-                $pct = round(((int)$risk['total'] / $totalRiskVisits) * 100);
+            $totalStatusVisits = array_sum(array_column($statusDist, 'total')) ?: 1;
+            foreach ($statusDist as $statusRow):
+                $status = $statusRow['status'] ?: 'Unaddressed';
+                $colors = $statusColors[$status] ?? $statusColors['Unaddressed'];
+                $pct = round(((int)$statusRow['total'] / $totalStatusVisits) * 100);
             ?>
                 <div class="flex items-center gap-4">
-                    <span class="badge <?= risk_badge_class($risk['risk_level']) ?> w-24 justify-center"><?= e($risk['risk_level']) ?></span>
+                    <span class="badge <?= visit_status_badge_class($status) ?> w-28 justify-center"><?= e($status) ?></span>
                     <div class="flex-1 h-3 <?= $colors['bg'] ?> rounded-full overflow-hidden">
                         <div class="h-full <?= $colors['fill'] ?> rounded-full transition-all" style="width: <?= $pct ?>%"></div>
                     </div>
-                    <span class="text-sm font-extrabold <?= $colors['text'] ?> w-16 text-right"><?= (int)$risk['total'] ?> (<?= $pct ?>%)</span>
+                    <span class="text-sm font-extrabold <?= $colors['text'] ?> w-16 text-right"><?= (int)$statusRow['total'] ?> (<?= $pct ?>%)</span>
                 </div>
             <?php endforeach; ?>
-            <?php if (!$riskDist): ?>
+            <?php if (!$statusDist): ?>
                 <p class="text-sm font-bold text-slate-500 mb-0">No data for this period.</p>
             <?php endif; ?>
         </div>

@@ -60,19 +60,14 @@ $nextMonth = $month->modify('+1 month')->format('Y-m');
 
 set_page_back_link(app_url('appointments/index.php'), 'Appointments');
 render_header('Appointment Availability');
-?>
 
-<div class="dashboard-hero flex flex-col lg:flex-row lg:items-center justify-between gap-5 mb-8">
-    <div>
-        <p class="text-[11px] font-black text-primary uppercase tracking-widest mb-2">Scheduling</p>
-        <h1 class="font-headline text-3xl md:text-4xl font-extrabold text-[#17261d]">Clinic Availability</h1>
-        <p class="text-sm font-bold text-slate-500 mt-1">Block dates or hours when the clinic cannot entertain student appointments.</p>
-    </div>
-    <a href="<?= app_url('appointments/index.php') ?>" class="btn btn-outline text-decoration-none">
-        <span class="material-symbols-outlined">event_note</span>
-        Appointment Queue
-    </a>
-</div>
+render_clinic_command_header(
+    'Scheduling',
+    'Clinic Availability',
+    'Block dates or hours when the clinic cannot entertain student appointments.',
+    '<a href="' . e(app_url('appointments/index.php')) . '" class="btn btn-outline text-decoration-none"><span class="material-symbols-outlined">event_note</span>Appointment Queue</a>'
+);
+?>
 
 <div class="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-5">
     <section class="clinic-card overflow-hidden">

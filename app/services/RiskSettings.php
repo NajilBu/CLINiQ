@@ -1,139 +1,109 @@
 <?php
 
+require_once __DIR__ . '/SystemSettings.php';
+
 function default_risk_settings(): array
 {
     return [
-        'fever_temp' => 37.8,
-        'fever_points' => 1,
-        'high_fever_temp' => 39.0,
-        'high_fever_points' => 3,
-        'pulse_low' => 50,
-        'pulse_high' => 120,
-        'pulse_points' => 2,
-        'bp_high_systolic' => 140,
-        'bp_high_diastolic' => 90,
-        'bp_high_points' => 2,
-        'bp_low_systolic' => 90,
-        'bp_low_diastolic' => 60,
-        'bp_low_points' => 3,
-        'bp_critical_systolic' => 180,
-        'bp_critical_diastolic' => 120,
-        'bp_critical_points' => 4,
-        'critical_symptom_points' => 4,
-        'critical_keywords' => ['chest pain', 'difficulty breathing', 'fainting', 'seizure', 'severe bleeding'],
+        'incident_type_breathing_points' => 4,
+        'incident_type_unconscious_points' => 4,
+        'incident_type_allergic_points' => 3,
+        'incident_type_bleeding_points' => 3,
+        'incident_type_injury_points' => 2,
+        'incident_type_illness_points' => 1,
+        'condition_unconscious_points' => 6,
+        'condition_seizure_points' => 5,
+        'condition_severe_pain_points' => 3,
+        'condition_dizzy_weak_points' => 1,
+        'breathing_not_normal_points' => 6,
+        'breathing_shortness_points' => 4,
+        'breathing_wheezing_points' => 3,
+        'bleeding_heavy_points' => 5,
+        'bleeding_minor_points' => 1,
+        'mobility_cannot_points' => 3,
+        'mobility_assistance_points' => 1,
+        'pain_severe_points' => 3,
+        'pain_moderate_points' => 1,
+        'critical_keyword_points' => 5,
+        'urgent_keyword_points' => 3,
+        'minor_keyword_points' => 1,
+        'critical_keywords' => ['not breathing', 'unconscious', 'seizure', 'severe bleeding', 'chest pain', 'anaphylaxis', 'collapsed', 'blue lips'],
+        'urgent_keywords' => ['difficulty breathing', 'shortness of breath', 'wheezing', 'fainted', 'fainting', 'head injury', 'heavy bleeding', 'fracture', 'asthma', 'allergic reaction'],
+        'minor_keywords' => ['dizzy', 'dizziness', 'vomiting', 'fever', 'sprain', 'cut', 'wound', 'weak', 'pain'],
         'moderate_min' => 2,
-        'high_min' => 4,
-        'critical_min' => 7,
-        'auto_alert_major_risk' => true,
+        'high_min' => 6,
+        'critical_min' => 10,
+        'guidance_low' => 'Routine response. Verify the student condition, provide basic assistance, and continue monitoring until the concern is closed.',
+        'guidance_moderate' => 'Prompt clinic assessment needed. Assist the student to the clinic when safe, provide first aid, observe symptoms, and document the response.',
+        'guidance_high' => 'Urgent nurse response needed. Go to the reported location, check vital signs, give appropriate first aid, monitor closely, and prepare referral if symptoms worsen.',
+        'guidance_critical' => 'Immediate response needed. Bring emergency kit, prioritize airway/breathing/circulation, call clinic support, notify guardian, and prepare referral or emergency transfer if needed.',
     ];
-}
-
-function ensure_system_settings_schema(): void
-{
-    static $ready = false;
-    if ($ready) {
-        return;
-    }
-
-    db()->exec("
-        CREATE TABLE IF NOT EXISTS system_settings (
-            setting_key VARCHAR(120) PRIMARY KEY,
-            setting_value MEDIUMTEXT NOT NULL,
-            updated_by INT NULL,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
-        )
-    ");
-
-    $ready = true;
 }
 
 function risk_settings_key(): string
 {
-    return 'risk.classification';
+    return 'incident.risk.classification';
 }
 
 function risk_settings(): array
 {
     $defaults = default_risk_settings();
-
-    try {
-        ensure_system_settings_schema();
-        $stmt = db()->prepare('SELECT setting_value FROM system_settings WHERE setting_key = ? LIMIT 1');
-        $stmt->execute([risk_settings_key()]);
-        $raw = $stmt->fetchColumn();
-        if (!$raw) {
-            return $defaults;
-        }
-
-        $saved = json_decode((string) $raw, true);
-        if (!is_array($saved)) {
-            return $defaults;
-        }
-
-        $settings = array_merge($defaults, $saved);
-        $settings['critical_keywords'] = risk_keywords_from_value($settings['critical_keywords'] ?? $defaults['critical_keywords']);
-        $settings['auto_alert_major_risk'] = filter_var($settings['auto_alert_major_risk'] ?? true, FILTER_VALIDATE_BOOLEAN);
-
-        return $settings;
-    } catch (Throwable $e) {
-        return $defaults;
-    }
+    $settings = cliniq_setting_read(risk_settings_key(), $defaults);
+    return normalize_risk_settings($settings);
 }
 
 function save_risk_settings(array $settings, ?int $updatedBy = null): void
 {
-    ensure_system_settings_schema();
-
-    $normalized = normalize_risk_settings($settings);
-    $stmt = db()->prepare('
-        INSERT INTO system_settings (setting_key, setting_value, updated_by)
-        VALUES (?, ?, ?)
-        ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by = VALUES(updated_by)
-    ');
-    $stmt->execute([
-        risk_settings_key(),
-        json_encode($normalized),
-        $updatedBy,
-    ]);
+    cliniq_setting_write(risk_settings_key(), normalize_risk_settings($settings), $updatedBy);
 }
 
 function normalize_risk_settings(array $input): array
 {
     $defaults = default_risk_settings();
+    $settings = $defaults;
+
     $numberFields = [
-        'fever_temp', 'fever_points', 'high_fever_temp', 'high_fever_points',
-        'pulse_low', 'pulse_high', 'pulse_points',
-        'bp_high_systolic', 'bp_high_diastolic', 'bp_high_points',
-        'bp_low_systolic', 'bp_low_diastolic', 'bp_low_points',
-        'bp_critical_systolic', 'bp_critical_diastolic', 'bp_critical_points',
-        'critical_symptom_points', 'moderate_min', 'high_min', 'critical_min',
+        'incident_type_breathing_points',
+        'incident_type_unconscious_points',
+        'incident_type_allergic_points',
+        'incident_type_bleeding_points',
+        'incident_type_injury_points',
+        'incident_type_illness_points',
+        'condition_unconscious_points',
+        'condition_seizure_points',
+        'condition_severe_pain_points',
+        'condition_dizzy_weak_points',
+        'breathing_not_normal_points',
+        'breathing_shortness_points',
+        'breathing_wheezing_points',
+        'bleeding_heavy_points',
+        'bleeding_minor_points',
+        'mobility_cannot_points',
+        'mobility_assistance_points',
+        'pain_severe_points',
+        'pain_moderate_points',
+        'critical_keyword_points',
+        'urgent_keyword_points',
+        'minor_keyword_points',
+        'moderate_min',
+        'high_min',
+        'critical_min',
     ];
 
-    $settings = $defaults;
     foreach ($numberFields as $field) {
         $raw = $input[$field] ?? $defaults[$field];
-        $settings[$field] = is_numeric($raw) ? (float) $raw : $defaults[$field];
+        $settings[$field] = max(0, (int) round(is_numeric($raw) ? (float) $raw : (float) $defaults[$field]));
     }
 
-    foreach ([
-        'fever_points', 'high_fever_points', 'pulse_points',
-        'bp_high_points', 'bp_low_points', 'bp_critical_points',
-        'critical_symptom_points', 'moderate_min', 'high_min', 'critical_min',
-    ] as $integerField) {
-        $settings[$integerField] = max(0, (int) round($settings[$integerField]));
+    foreach (['critical_keywords', 'urgent_keywords', 'minor_keywords'] as $field) {
+        $settings[$field] = risk_keywords_from_value($input[$field] ?? $defaults[$field], $defaults[$field]);
     }
 
-    $settings['critical_keywords'] = risk_keywords_from_value($input['critical_keywords'] ?? $defaults['critical_keywords']);
-    $settings['auto_alert_major_risk'] = !empty($input['auto_alert_major_risk']);
+    foreach (['guidance_low', 'guidance_moderate', 'guidance_high', 'guidance_critical'] as $field) {
+        $value = trim((string) ($input[$field] ?? $defaults[$field]));
+        $settings[$field] = $value !== '' ? mb_substr($value, 0, 500) : $defaults[$field];
+    }
 
-    if ($settings['high_fever_temp'] < $settings['fever_temp']) {
-        $settings['high_fever_temp'] = $settings['fever_temp'];
-    }
-    if ($settings['pulse_high'] <= $settings['pulse_low']) {
-        $settings['pulse_high'] = $defaults['pulse_high'];
-        $settings['pulse_low'] = $defaults['pulse_low'];
-    }
     if ($settings['high_min'] < $settings['moderate_min']) {
         $settings['high_min'] = $settings['moderate_min'];
     }
@@ -144,7 +114,7 @@ function normalize_risk_settings(array $input): array
     return $settings;
 }
 
-function risk_keywords_from_value(mixed $value): array
+function risk_keywords_from_value(mixed $value, array $fallback = []): array
 {
     if (is_array($value)) {
         $keywords = $value;
@@ -158,10 +128,11 @@ function risk_keywords_from_value(mixed $value): array
     );
     $keywords = array_values(array_unique(array_filter($keywords)));
 
-    return $keywords ?: default_risk_settings()['critical_keywords'];
+    return $keywords ?: $fallback;
 }
 
-function risk_keywords_text(array $settings): string
+function risk_keywords_text(array $settings, string $key = 'critical_keywords'): string
 {
-    return implode("\n", risk_keywords_from_value($settings['critical_keywords'] ?? []));
+    $defaults = default_risk_settings();
+    return implode("\n", risk_keywords_from_value($settings[$key] ?? [], $defaults[$key] ?? []));
 }

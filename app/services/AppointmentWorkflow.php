@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/SystemSettings.php';
+
 function ensure_appointment_schema(): void
 {
     static $ready = false;
@@ -12,7 +14,7 @@ function ensure_appointment_schema(): void
     $statusColumn = $stmt->fetch();
     $type = $statusColumn['Type'] ?? '';
 
-    if (!str_contains($type, "'Pending'")) {
+    if (str_starts_with(strtolower((string) $type), 'enum(') && !str_contains($type, "'Pending'")) {
         $db->exec("ALTER TABLE appointments MODIFY status ENUM('Pending', 'Scheduled', 'Completed', 'Cancelled', 'No Show') NOT NULL DEFAULT 'Pending'");
     }
 

@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/SystemSettings.php';
+
 function ape_workflow_steps(): array
 {
     return [
@@ -8,6 +10,21 @@ function ape_workflow_steps(): array
         'Follow-up',
         'Completed',
     ];
+}
+
+function ape_requirement_status_options(): array
+{
+    return dropdown_options('ape_requirement_status');
+}
+
+function ape_verification_status_options(): array
+{
+    return dropdown_options('ape_verification_status');
+}
+
+function ape_workflow_status_options(): array
+{
+    return dropdown_options('ape_workflow_status');
 }
 
 function ape_work_queues(): array
@@ -259,7 +276,6 @@ function ensure_ape_workflow_schema(): void
         }
     };
 
-    $addColumn('batch_name', "VARCHAR(40) NULL AFTER patient_id");
     $addColumn('document_type', "VARCHAR(80) NOT NULL DEFAULT 'APE Form' AFTER exam_date");
     $addColumn('requirement_status', "ENUM('Not Checked','Pre-Verified','Needs Correction') NOT NULL DEFAULT 'Not Checked' AFTER document_type");
     $addColumn('workflow_status', "ENUM('Registered','Batch Assigned','Requirements Checked','Submitted','Reviewed','Scheduled','Exam Done','Follow-up Required','Cleared') NOT NULL DEFAULT 'Submitted' AFTER requirement_status");

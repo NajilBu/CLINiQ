@@ -10,7 +10,7 @@ const VISITOR_REASON_BORROW_EQUIPMENT = 'Borrow Equipment';
 
 $errors = [];
 $success = null;
-$reasonOptions = ['APE', 'Health Monitoring', 'Pain Management', 'Medical Consult', 'Dental Consult', 'Wound Care', VISITOR_REASON_BORROW_EQUIPMENT];
+$reasonOptions = array_values(array_unique(array_merge(visit_purposes(), [VISITOR_REASON_BORROW_EQUIPMENT])));
 $equipmentItems = db()->query("
     SELECT id, item_name, quantity, unit
     FROM inventory_items
@@ -236,21 +236,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'Reason: ' . $form['reason'] . "\n" .
             'Visitor notes: ' . $form['chief_complaint']
         );
-        $riskLevel = 'Low';
-        $riskScore = 0;
-        $riskReasons = 'Self logbook entry only. Incident risk is classified through emergency alert reports.';
-
         $visitStmt = db()->prepare(
-            'INSERT INTO clinic_visits (patient_id, visit_datetime, chief_complaint, symptoms, risk_level, risk_score, risk_reasons, status, visit_purpose, visit_source, action_taken, recorded_by)
-             VALUES (?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)'
+            'INSERT INTO clinic_visits (patient_id, visit_datetime, chief_complaint, symptoms, status, visit_purpose, visit_source, action_taken, recorded_by)
+             VALUES (?, NOW(), ?, ?, ?, ?, ?, ?, NULL)'
         );
         $visitStmt->execute([
             $patientId,
             mb_substr($form['reason'] . ' - ' . $form['chief_complaint'], 0, 255),
             $symptoms,
-            $riskLevel,
-            $riskScore,
-            $riskReasons,
             'Unaddressed',
             normalize_visit_purpose($form['reason']),
             'Self Logbook',
@@ -275,9 +268,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Visitor / Patient Registration | CLINiQ</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@700;800&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="<?= app_url('assets/vendor/fonts/inter-manrope.css?v=offline-1') ?>" rel="stylesheet">
+    <link href="<?= app_url('assets/vendor/fonts/material-symbols.css?v=offline-1') ?>" rel="stylesheet">
+    <script src="<?= app_url('assets/vendor/tailwind/tailwind-cdn.js?v=offline-1') ?>"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -618,7 +611,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <span class="material-symbols-outlined">group</span>
                                 <select class="visit-input <?= isset($errors['category']) ? 'input-error' : '' ?>" id="category" name="category" required>
                                     <option value="">Select Category</option>
-                                    <?php foreach (['Student', 'Staff', 'Faculty', 'Guest'] as $category): ?>
+                                    <?php foreach (dropdown_options('person_category') as $category): ?>
                                         <option <?= $form['category'] === $category ? 'selected' : '' ?>><?= e($category) ?></option>
                                     <?php endforeach; ?>
                                 </select>
@@ -631,7 +624,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <span class="material-symbols-outlined">grade</span>
                                 <select class="visit-input <?= isset($errors['year_level']) ? 'input-error' : '' ?>" id="year_level" name="year_level">
                                     <option value="">Select Year</option>
-                                    <?php foreach (['1st Year', '2nd Year', '3rd Year', '4th Year'] as $year): ?>
+                                    <?php foreach (dropdown_options('year_level') as $year): ?>
                                         <option <?= $form['year_level'] === $year ? 'selected' : '' ?>><?= e($year) ?></option>
                                     <?php endforeach; ?>
                                 </select>
@@ -644,7 +637,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <span class="material-symbols-outlined">school</span>
                                 <input class="visit-input <?= isset($errors['department']) ? 'input-error' : '' ?>" id="department" name="department" value="<?= e($form['department']) ?>" list="departmentOptions" placeholder="Course, section, or department" required>
                                 <datalist id="departmentOptions">
-                                    <?php foreach (['College of Computer Studies', 'College of Nursing', 'Arts & Sciences', 'Administrative Office', 'Guest / Visitor'] as $department): ?>
+                                    <?php foreach (dropdown_options('department') as $department): ?>
                                         <option value="<?= e($department) ?>"></option>
                                     <?php endforeach; ?>
                                 </datalist>

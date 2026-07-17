@@ -12,6 +12,7 @@ $appBase = preg_replace('#/public$#', '', $publicBase);
 $visitorRegisterUrl = app_url('visitor-registration.php');
 $studentLoginUrl = $appBase . '/student/student-login.php';
 $staffLoginUrl = app_url('login.php');
+$clinicProfile = clinic_profile_settings();
 
 ?>
 <!doctype html>
@@ -19,10 +20,10 @@ $staffLoginUrl = app_url('login.php');
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>CLINiQ | Access Portal</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@700;800&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <title><?= e($clinicProfile['system_name']) ?> | Access Portal</title>
+    <link href="<?= app_url('assets/vendor/fonts/inter-manrope.css?v=offline-1') ?>" rel="stylesheet">
+    <link href="<?= app_url('assets/vendor/fonts/material-symbols.css?v=offline-1') ?>" rel="stylesheet">
+    <script src="<?= app_url('assets/vendor/tailwind/tailwind-cdn.js?v=offline-1') ?>"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -156,11 +157,11 @@ $staffLoginUrl = app_url('login.php');
     <header class="portal-header w-full px-5 sm:px-8 py-5 flex items-center justify-between">
         <a href="<?= app_url('index.php') ?>" class="flex items-center gap-3 text-decoration-none">
             <span class="app-brand-mark">
-                <img src="<?= app_url('assets/img/clinic-logo.png') ?>" alt="PLP Health Services Department logo">
+                <img src="<?= app_url('assets/img/clinic-logo.png') ?>" alt="<?= e($clinicProfile['department']) ?> logo">
             </span>
             <span>
-                <span class="block font-headline font-extrabold text-base leading-none text-[#17261d]">CLINiQ</span>
-                <span class="block text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1">University Health Services</span>
+                <span class="block font-headline font-extrabold text-base leading-none text-[#17261d]"><?= e($clinicProfile['system_name']) ?></span>
+                <span class="block text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1"><?= e($clinicProfile['department']) ?></span>
             </span>
         </a>
         <a href="<?= e($studentLoginUrl) ?>" class="btn btn-sm btn-ghost text-decoration-none">
@@ -172,7 +173,7 @@ $staffLoginUrl = app_url('login.php');
     <main class="portal-main">
         <section class="portal-card text-center">
             <div class="mx-auto max-w-2xl mb-9">
-                <h1 class="font-headline font-extrabold text-4xl sm:text-5xl text-[#17261d] mb-3">CLINiQ</h1>
+                <h1 class="font-headline font-extrabold text-4xl sm:text-5xl text-[#17261d] mb-3"><?= e($clinicProfile['system_name']) ?></h1>
                 <p class="text-sm sm:text-base font-bold text-slate-500 leading-relaxed">
                     Select your access point to begin your clinic session.
                 </p>
@@ -219,7 +220,7 @@ $staffLoginUrl = app_url('login.php');
 
     <footer class="portal-footer px-5 sm:px-8 py-5">
         <div class="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between text-[10px] font-black text-slate-400 uppercase tracking-[0.18em]">
-            <span>&copy; <?= date('Y') ?> CLINiQ</span>
+            <span>&copy; <?= date('Y') ?> <?= e($clinicProfile['system_name']) ?></span>
             <span>Pamantasan ng Lungsod ng Pasig Clinic Services</span>
         </div>
     </footer>

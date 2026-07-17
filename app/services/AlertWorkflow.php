@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/RiskSettings.php';
+
 function ensure_alert_workflow_schema(): void
 {
     static $ready = false;
@@ -74,35 +76,32 @@ function save_alert_photo_upload(array $file): ?string
 
 function incident_type_options(): array
 {
-    return [
-        'Breathing difficulty',
-        'Fainting or unconscious',
-        'Injury or fall',
-        'Bleeding or wound',
-        'Allergic reaction',
-        'Fever or illness',
-        'Other concern',
-    ];
+    return dropdown_options('incident_type');
 }
 
 function incident_condition_options(): array
 {
-    return ['Awake and responsive', 'Dizzy or weak', 'Severe pain', 'Seizure-like movement', 'Unconscious'];
+    return dropdown_options('incident_condition');
 }
 
 function incident_breathing_options(): array
 {
-    return ['Normal', 'Shortness of breath', 'Wheezing', 'Not breathing normally'];
+    return dropdown_options('incident_breathing');
 }
 
 function incident_bleeding_options(): array
 {
-    return ['None observed', 'Minor bleeding', 'Heavy bleeding'];
+    return dropdown_options('incident_bleeding');
 }
 
 function incident_mobility_options(): array
 {
-    return ['Can walk', 'Needs assistance', 'Cannot stand or walk'];
+    return dropdown_options('incident_mobility');
+}
+
+function incident_pain_level_options(): array
+{
+    return dropdown_options('incident_pain_level');
 }
 
 function collect_incident_report_answers(array $source): array
@@ -144,6 +143,7 @@ function incident_report_answers_text(array $answers): string
 
 function classify_reported_incident(array $answers): array
 {
+    $settings = risk_settings();
     $score = 0;
     $reasons = [];
 
@@ -165,68 +165,68 @@ function classify_reported_incident(array $answers): array
 
     $incidentType = strtolower((string) ($answers['incident_type'] ?? ''));
     if (str_contains($incidentType, 'breathing')) {
-        $add(4, 'Incident type involves breathing difficulty');
+        $add((int) $settings['incident_type_breathing_points'], 'Incident type involves breathing difficulty');
     } elseif (str_contains($incidentType, 'unconscious') || str_contains($incidentType, 'fainting')) {
-        $add(4, 'Incident type involves fainting or loss of consciousness');
+        $add((int) $settings['incident_type_unconscious_points'], 'Incident type involves fainting or loss of consciousness');
     } elseif (str_contains($incidentType, 'allergic')) {
-        $add(3, 'Incident type involves a possible allergic reaction');
+        $add((int) $settings['incident_type_allergic_points'], 'Incident type involves a possible allergic reaction');
     } elseif (str_contains($incidentType, 'bleeding')) {
-        $add(3, 'Incident type involves bleeding or wound care');
+        $add((int) $settings['incident_type_bleeding_points'], 'Incident type involves bleeding or wound care');
     } elseif (str_contains($incidentType, 'injury') || str_contains($incidentType, 'fall')) {
-        $add(2, 'Incident type involves injury or fall');
+        $add((int) $settings['incident_type_injury_points'], 'Incident type involves injury or fall');
     } elseif (str_contains($incidentType, 'fever') || str_contains($incidentType, 'illness')) {
-        $add(1, 'Incident type involves illness symptoms');
+        $add((int) $settings['incident_type_illness_points'], 'Incident type involves illness symptoms');
     }
 
     $condition = strtolower((string) ($answers['observed_condition'] ?? ''));
     if (str_contains($condition, 'unconscious')) {
-        $add(6, 'Reporter observed unconsciousness');
+        $add((int) $settings['condition_unconscious_points'], 'Reporter observed unconsciousness');
     } elseif (str_contains($condition, 'seizure')) {
-        $add(5, 'Reporter observed seizure-like movement');
+        $add((int) $settings['condition_seizure_points'], 'Reporter observed seizure-like movement');
     } elseif (str_contains($condition, 'severe pain')) {
-        $add(3, 'Reporter observed severe pain');
+        $add((int) $settings['condition_severe_pain_points'], 'Reporter observed severe pain');
     } elseif (str_contains($condition, 'dizzy') || str_contains($condition, 'weak')) {
-        $add(1, 'Reporter observed dizziness or weakness');
+        $add((int) $settings['condition_dizzy_weak_points'], 'Reporter observed dizziness or weakness');
     }
 
     $breathing = strtolower((string) ($answers['breathing_status'] ?? ''));
     if (str_contains($breathing, 'not breathing')) {
-        $add(6, 'Breathing is not normal');
+        $add((int) $settings['breathing_not_normal_points'], 'Breathing is not normal');
     } elseif (str_contains($breathing, 'shortness')) {
-        $add(4, 'Shortness of breath reported');
+        $add((int) $settings['breathing_shortness_points'], 'Shortness of breath reported');
     } elseif (str_contains($breathing, 'wheezing')) {
-        $add(3, 'Wheezing reported');
+        $add((int) $settings['breathing_wheezing_points'], 'Wheezing reported');
     }
 
     $bleeding = strtolower((string) ($answers['bleeding_status'] ?? ''));
     if (str_contains($bleeding, 'heavy')) {
-        $add(5, 'Heavy bleeding reported');
+        $add((int) $settings['bleeding_heavy_points'], 'Heavy bleeding reported');
     } elseif (str_contains($bleeding, 'minor')) {
-        $add(1, 'Minor bleeding reported');
+        $add((int) $settings['bleeding_minor_points'], 'Minor bleeding reported');
     }
 
     $mobility = strtolower((string) ($answers['mobility_status'] ?? ''));
     if (str_contains($mobility, 'cannot')) {
-        $add(3, 'Student cannot stand or walk');
+        $add((int) $settings['mobility_cannot_points'], 'Student cannot stand or walk');
     } elseif (str_contains($mobility, 'assistance')) {
-        $add(1, 'Student needs assistance moving');
+        $add((int) $settings['mobility_assistance_points'], 'Student needs assistance moving');
     }
 
     if (preg_match('/\b([0-9]|10)\b/', (string) ($answers['pain_level'] ?? ''), $match)) {
         $pain = (int) $match[1];
         if ($pain >= 7) {
-            $add(3, 'Severe pain level reported');
+            $add((int) $settings['pain_severe_points'], 'Severe pain level reported');
         } elseif ($pain >= 4) {
-            $add(1, 'Moderate pain level reported');
+            $add((int) $settings['pain_moderate_points'], 'Moderate pain level reported');
         }
     }
 
     $keywordGroups = [
-        5 => ['not breathing', 'unconscious', 'seizure', 'severe bleeding', 'chest pain', 'anaphylaxis', 'collapsed', 'blue lips'],
-        3 => ['difficulty breathing', 'shortness of breath', 'wheezing', 'fainted', 'fainting', 'head injury', 'heavy bleeding', 'fracture', 'asthma', 'allergic reaction'],
-        1 => ['dizzy', 'dizziness', 'vomiting', 'fever', 'sprain', 'cut', 'wound', 'weak', 'pain'],
+        [(int) $settings['critical_keyword_points'], risk_keywords_from_value($settings['critical_keywords'] ?? [], default_risk_settings()['critical_keywords'])],
+        [(int) $settings['urgent_keyword_points'], risk_keywords_from_value($settings['urgent_keywords'] ?? [], default_risk_settings()['urgent_keywords'])],
+        [(int) $settings['minor_keyword_points'], risk_keywords_from_value($settings['minor_keywords'] ?? [], default_risk_settings()['minor_keywords'])],
     ];
-    foreach ($keywordGroups as $points => $keywords) {
+    foreach ($keywordGroups as [$points, $keywords]) {
         foreach ($keywords as $keyword) {
             if (str_contains($text, $keyword)) {
                 $add($points, 'Keyword indicator found: ' . $keyword);
@@ -235,11 +235,11 @@ function classify_reported_incident(array $answers): array
         }
     }
 
-    if ($score >= 10) {
+    if ($score >= (int) $settings['critical_min']) {
         $level = 'Critical';
-    } elseif ($score >= 6) {
+    } elseif ($score >= (int) $settings['high_min']) {
         $level = 'High';
-    } elseif ($score >= 2) {
+    } elseif ($score >= (int) $settings['moderate_min']) {
         $level = 'Moderate';
     } else {
         $level = 'Low';
@@ -262,10 +262,12 @@ function incident_risk_reasons_text(array $classification): string
 
 function incident_response_guidance(string $level): string
 {
+    $settings = risk_settings();
+
     return match ($level) {
-        'Critical' => 'Immediate response needed. Bring emergency kit, prioritize airway/breathing/circulation, call clinic support, notify guardian, and prepare referral or emergency transfer if needed.',
-        'High' => 'Urgent nurse response needed. Go to the reported location, check vital signs, give appropriate first aid, monitor closely, and prepare referral if symptoms worsen.',
-        'Moderate' => 'Prompt clinic assessment needed. Assist the student to the clinic when safe, provide first aid, observe symptoms, and document the response.',
-        default => 'Routine response. Verify the student condition, provide basic assistance, and continue monitoring until the concern is closed.',
+        'Critical' => (string) $settings['guidance_critical'],
+        'High' => (string) $settings['guidance_high'],
+        'Moderate' => (string) $settings['guidance_moderate'],
+        default => (string) $settings['guidance_low'],
     };
 }

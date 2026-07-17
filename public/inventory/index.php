@@ -123,6 +123,7 @@ $visibleItems = match ($activeTab) {
 };
 
 $inventoryRows = [];
+$highlightedLowStockKeys = [];
 foreach ($visibleItems as $item) {
     $isArchived = !empty($item['archived_at']);
     $isExpiring = $item['expiration_date'] && strtotime($item['expiration_date']) <= strtotime('+30 days');
@@ -190,8 +191,9 @@ foreach ($visibleItems as $item) {
     }
     $actionsHtml .= '<button onclick="editItem(' . $editArgs . ')" class="btn-icon btn-icon-primary" title="Edit item"><span class="material-symbols-outlined">edit</span></button><button onclick="openArchiveItem(' . $archiveArgs . ')" class="btn-icon btn-icon-slate" title="Archive item"><span class="material-symbols-outlined">archive</span></button></div>';
     $highlightKeys = [];
-    if ($isLow && !$isEquipment) {
+    if ($isLow && !$isEquipment && !isset($highlightedLowStockKeys[$stockKey])) {
         $highlightKeys[] = 'low-stock';
+        $highlightedLowStockKeys[$stockKey] = true;
     }
     if ($isExpiring && !$isEquipment) {
         $highlightKeys[] = 'expiring';
@@ -291,42 +293,14 @@ if (count($activeLoans) > 0) {
 }
 
 render_header('Inventory');
+
+render_clinic_command_header(
+    'Medicines',
+    'Inventory & Tracking',
+    'Manage clinic medicines, expiring stock, equipment loans, and archived records.',
+    '<button onclick="openAddMedicineModal()" class="btn btn-primary justify-center"><span class="material-symbols-outlined text-[20px]">medication</span>+ Medicine</button><button onclick="showModal(\'addEquipmentModal\')" class="btn btn-outline justify-center"><span class="material-symbols-outlined text-[20px]">medical_services</span>+ Equipment</button>'
+);
 ?>
-<style>
-    @keyframes inventory-row-blink {
-        0%, 100% {
-            background-color: transparent;
-        }
-        35% {
-            background-color: rgba(16, 185, 129, 0.16);
-        }
-        70% {
-            background-color: rgba(245, 158, 11, 0.18);
-        }
-    }
-
-    .cliniq-ag-grid .ag-row.inventory-row-attention .ag-cell {
-        animation: inventory-row-blink 0.5s ease-in-out 0s 4;
-    }
-</style>
-
-<div class="flex flex-col xl:flex-row justify-between items-start xl:items-end gap-6 mb-8">
-    <div>
-        <p class="text-[11px] font-black text-primary uppercase tracking-widest mb-2">Medicines</p>
-        <h1 class="font-headline text-3xl md:text-4xl font-extrabold text-[#17261d]">Inventory & Tracking</h1>
-        <p class="text-sm font-bold text-slate-500 mt-1">Manage clinic medicines, expiring stock, equipment loans, and archived records.</p>
-    </div>
-    <div class="flex flex-wrap items-center gap-3 w-full xl:w-auto">
-        <button onclick="openAddMedicineModal()" class="btn btn-primary justify-center">
-            <span class="material-symbols-outlined text-[20px]">medication</span>
-            + Medicine
-        </button>
-        <button onclick="showModal('addEquipmentModal')" class="btn btn-outline justify-center">
-            <span class="material-symbols-outlined text-[20px]">medical_services</span>
-            + Equipment
-        </button>
-    </div>
-</div>
 
 <div id="inventoryLiveRegion" data-inventory-live-region>
 <?php if (!empty($inventoryNotices)): ?>
@@ -468,11 +442,11 @@ render_header('Inventory');
             return Array.isArray(data && data.highlightKeys) && data.highlightKeys.includes(targetKey);
         }
 
-        function findTargetNode(api, targetKey) {
-            let found = null;
+        function findTargetNodes(api, targetKey) {
+            const matches = [];
             const visitNode = (node) => {
-                if (!found && rowHasTarget(node.data, targetKey)) {
-                    found = node;
+                if (rowHasTarget(node.data, targetKey)) {
+                    matches.push(node);
                 }
             };
 
@@ -482,28 +456,46 @@ render_header('Inventory');
                 api.forEachNode(visitNode);
             }
 
-            return found;
+            return matches;
         }
 
-        function pulseTargetRow(gridId, api, targetKey) {
+        function cleanAttentionClass(rowClass) {
+            return String(rowClass || '').replace(/\binventory-row-attention\b/g, '').replace(/\s+/g, ' ').trim();
+        }
+
+        function setTargetRowsAttention(api, targetNodes, shouldPulse) {
+            targetNodes.forEach((node) => {
+                if (!node.data) return;
+                const baseClass = cleanAttentionClass(node.data.rowClass);
+                node.data.rowClass = shouldPulse
+                    ? `${baseClass} inventory-row-attention`.trim()
+                    : baseClass;
+            });
+
+            if (api.redrawRows) {
+                api.redrawRows({ rowNodes: targetNodes });
+            }
+        }
+
+        function pulseTargetRows(gridId, api, targetKey) {
             const grid = document.getElementById(gridId);
             if (!grid || !api || !targetKey) return;
 
-            const targetNode = findTargetNode(api, targetKey);
-            if (!targetNode) return;
+            const targetNodes = findTargetNodes(api, targetKey);
+            if (targetNodes.length === 0) return;
 
             if (api.ensureIndexVisible) {
-                api.ensureIndexVisible(targetNode.rowIndex, 'middle');
+                api.ensureIndexVisible(targetNodes[0].rowIndex, 'middle');
             }
 
             grid.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
             window.setTimeout(() => {
-                const row = grid.querySelector(`.ag-row[row-index="${targetNode.rowIndex}"]`);
-                if (!row) return;
-                row.classList.remove('inventory-row-attention');
-                void row.offsetWidth;
-                row.classList.add('inventory-row-attention');
+                setTargetRowsAttention(api, targetNodes, false);
+                window.requestAnimationFrame(() => {
+                    setTargetRowsAttention(api, targetNodes, true);
+                    window.setTimeout(() => setTargetRowsAttention(api, targetNodes, false), 2400);
+                });
             }, 450);
         }
 
@@ -512,14 +504,14 @@ render_header('Inventory');
             const gridId = targetGridId(targetKey);
             const api = window.cliniqAgGrids && window.cliniqAgGrids[gridId];
             if (api) {
-                pulseTargetRow(gridId, api, targetKey);
+                pulseTargetRows(gridId, api, targetKey);
                 return;
             }
 
             const handler = (event) => {
                 if (event.detail && event.detail.id === gridId) {
                     window.removeEventListener('cliniq:ag-grid-ready', handler);
-                    pulseTargetRow(gridId, event.detail.api, targetKey);
+                    pulseTargetRows(gridId, event.detail.api, targetKey);
                 }
             };
             window.addEventListener('cliniq:ag-grid-ready', handler);
@@ -887,9 +879,9 @@ render_header('Inventory');
                 <div>
                     <label class="clinic-label">Equipment Condition</label>
                     <select class="clinic-select" name="return_condition">
-                        <option value="Good">Good - return to available inventory</option>
-                        <option value="Defective">Defective - keep out of available inventory</option>
-                        <option value="Lost">Lost - keep out of available inventory</option>
+                        <?php foreach (dropdown_options('inventory_return_condition') as $condition): ?>
+                            <option value="<?= e($condition) ?>"><?= e($condition) ?></option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
                 <div>

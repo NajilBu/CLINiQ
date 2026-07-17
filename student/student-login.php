@@ -7,6 +7,7 @@ if (isset($_GET['logout'])) {
 
 $error = '';
 $studentIdValue = '';
+$clinicProfile = clinic_profile_settings();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $studentIdValue = trim($_POST['student_id'] ?? '');
@@ -42,9 +43,9 @@ render_student_auth_header('Student Login');
         <aside class="student-auth-side">
             <div>
                 <a href="../public/index.php" class="student-brand-mark text-decoration-none" aria-label="Go to CLINiQ access portal">
-                    <img src="../public/assets/img/clinic-logo.png" alt="PLP Health Services Department logo">
+                    <img src="../public/assets/img/clinic-logo.png" alt="<?= student_e($clinicProfile['department']) ?> logo">
                 </a>
-                <p class="student-auth-brand-line">CLINiQ</p>
+                <p class="student-auth-brand-line"><?= student_e($clinicProfile['system_name']) ?></p>
                 <h1 class="student-auth-side-title">Student<br>Health Portal</h1>
                 <p class="student-auth-side-copy">Track your APE status, upload documents, and book clinic appointments in one place.</p>
                 <svg class="student-auth-pulse" viewBox="0 0 320 40" preserveAspectRatio="none" aria-hidden="true">

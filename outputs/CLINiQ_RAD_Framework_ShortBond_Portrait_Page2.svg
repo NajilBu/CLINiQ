@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="850" height="1100" viewBox="0 0 850 1100" role="img" aria-labelledby="title desc">
+  <title id="title">CLINiQ RAD Methodology Framework - Portrait Page 2</title>
+  <desc id="desc">Portrait short bond page 2 of the CLINiQ RAD methodology framework, showing Construction and Cutover.</desc>
+  <defs>
+    <style>
+      text { font-family: Arial, Helvetica, sans-serif; fill: #222; }
+      .title { font-size: 27px; font-weight: 700; }
+      .subtitle { font-size: 15px; fill: #333; font-weight: 600; }
+      .page { font-size: 12px; fill: #444; font-weight: 700; }
+      .layer-title { font-size: 23px; font-weight: 700; fill: #111; }
+      .layer-note { font-size: 15.5px; fill: #333; font-weight: 600; }
+      .tile-title { font-size: 16px; font-weight: 700; }
+      .tile-note { font-size: 13px; fill: #333; font-weight: 600; }
+      .layer-a { fill: #eceff1; stroke: #333; stroke-width: 2.2; }
+      .layer-b { fill: #fff; stroke: #333; stroke-width: 2.2; }
+      .tile { fill: #fff; stroke: #3f3f3f; stroke-width: 1.7; }
+      .arrow { stroke: #222; stroke-width: 2.5; fill: none; marker-end: url(#arrowhead); }
+      .loop { stroke: #222; stroke-width: 2.2; fill: none; stroke-dasharray: 8 6; marker-end: url(#arrowhead); }
+      .loop-label { font-size: 14px; font-weight: 700; fill: #222; }
+      .connector { fill: #fff; stroke: #222; stroke-width: 2.2; }
+      .connector-text { font-size: 14px; font-weight: 700; fill: #222; }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,4 L0,8 Z" fill="#222" />
+    </marker>
+  </defs>
+
+  <text x="425" y="48" text-anchor="middle" class="title">CLINiQ RAD Methodology Framework</text>
+  <text x="425" y="76" text-anchor="middle" class="subtitle">Rapid Application Development process used for CLINiQ</text>
+  <text x="790" y="42" text-anchor="end" class="page">Page 2 of 2</text>
+
+  <path d="M365 105 L425 78 L485 105 L485 142 L365 142 Z" class="connector" />
+  <text x="425" y="125" text-anchor="middle" class="connector-text">A</text>
+  <line x1="425" y1="142" x2="425" y2="165" class="arrow" />
+
+  <rect x="55" y="165" width="740" height="350" rx="5" class="layer-a" />
+  <text x="85" y="203" class="layer-title">3. Construction</text>
+  <text x="85" y="230" class="layer-note">Build, integrate, test, and refine the functional prototype through feedback.</text>
+  <g>
+    <rect x="95" y="270" width="300" height="76" rx="4" class="tile" />
+    <text x="245" y="300" text-anchor="middle" class="tile-title">Web System Development</text>
+    <text x="245" y="325" text-anchor="middle" class="tile-note">PHP pages and database tools</text>
+    <rect x="455" y="270" width="300" height="76" rx="4" class="tile" />
+    <text x="605" y="300" text-anchor="middle" class="tile-title">Module Integration</text>
+    <text x="605" y="325" text-anchor="middle" class="tile-note">EHR, alerts, inventory, reports</text>
+    <rect x="95" y="380" width="300" height="76" rx="4" class="tile" />
+    <text x="245" y="410" text-anchor="middle" class="tile-title">Functional Testing</text>
+    <text x="245" y="435" text-anchor="middle" class="tile-note">verify each required feature</text>
+    <rect x="455" y="380" width="300" height="76" rx="4" class="tile" />
+    <text x="605" y="410" text-anchor="middle" class="tile-title">Iterative Refinement</text>
+    <text x="605" y="435" text-anchor="middle" class="tile-note">apply feedback and improve usability</text>
+  </g>
+
+  <line x1="425" y1="515" x2="425" y2="565" class="arrow" />
+
+  <rect x="55" y="565" width="740" height="380" rx="5" class="layer-b" />
+  <text x="85" y="605" class="layer-title">4. Cutover</text>
+  <text x="85" y="632" class="layer-note">Prepare the completed system for evaluation, deployment, and operational use.</text>
+  <g>
+    <rect x="95" y="680" width="300" height="78" rx="4" class="tile" />
+    <text x="245" y="711" text-anchor="middle" class="tile-title">System Evaluation</text>
+    <text x="245" y="736" text-anchor="middle" class="tile-note">quality, usability, security</text>
+    <rect x="455" y="680" width="300" height="78" rx="4" class="tile" />
+    <text x="605" y="711" text-anchor="middle" class="tile-title">User Orientation</text>
+    <text x="605" y="736" text-anchor="middle" class="tile-note">guide authorized clinic users</text>
+    <rect x="95" y="800" width="300" height="78" rx="4" class="tile" />
+    <text x="245" y="831" text-anchor="middle" class="tile-title">System Documentation</text>
+    <text x="245" y="856" text-anchor="middle" class="tile-note">prepare references and guides</text>
+    <rect x="455" y="800" width="300" height="78" rx="4" class="tile" />
+    <text x="605" y="831" text-anchor="middle" class="tile-title">Database Initialization</text>
+    <text x="605" y="856" text-anchor="middle" class="tile-note">ready for clinic operations</text>
+  </g>
+
+  <path d="M770 875 C760 935, 598 978, 486 978" class="loop" />
+  <text x="662" y="944" text-anchor="middle" class="loop-label">feedback and refinement</text>
+  <path d="M365 954 L485 954 L485 992 L425 1024 L365 992 Z" class="connector" />
+  <text x="425" y="981" text-anchor="middle" class="connector-text">B</text>
+  <text x="425" y="1070" text-anchor="middle" class="subtitle">RAD emphasizes rapid prototyping, user involvement, and incremental refinement.</text>
+</svg>

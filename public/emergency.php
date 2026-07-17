@@ -188,10 +188,9 @@ render_header('Emergency QR/NFC Response');
                         <label class="clinic-label">Pain Level</label>
                         <select class="clinic-input" name="pain_level" required>
                             <option value="">Select pain level</option>
-                            <option value="0 - No pain">0 - No pain</option>
-                            <option value="1-3 - Mild pain">1-3 - Mild pain</option>
-                            <option value="4-6 - Moderate pain">4-6 - Moderate pain</option>
-                            <option value="7-10 - Severe pain">7-10 - Severe pain</option>
+                            <?php foreach (incident_pain_level_options() as $option): ?>
+                                <option value="<?= e($option) ?>"><?= e($option) ?></option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
                     <div>

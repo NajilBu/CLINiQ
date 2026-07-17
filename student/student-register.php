@@ -56,24 +56,27 @@ render_student_auth_header('Student Registration');
                         <label class="student-label" for="course">Program</label>
                         <select id="course" class="student-select" required>
                             <option value="">Select program</option>
-                            <option value="BSIT">BSIT</option>
+                            <?php foreach (dropdown_options('student_program') as $program): ?>
+                                <option value="<?= student_e($program) ?>"><?= student_e($program) ?></option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
                     <div class="student-field student-span-6">
                         <label class="student-label" for="year-level">Year Level</label>
                         <select id="year-level" class="student-select" required>
                             <option value="">Select year level</option>
-                            <option value="1">1</option><option value="2">2</option>
-                            <option value="3">3</option><option value="4">4</option>
+                            <?php foreach (dropdown_options('year_level') as $year): ?>
+                                <option value="<?= student_e($year) ?>"><?= student_e($year) ?></option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
                     <div class="student-field student-span-6">
                         <label class="student-label" for="section">Section</label>
                         <select id="section" class="student-select" required>
                             <option value="">Select section</option>
-                            <option value="A">A</option><option value="B">B</option>
-                            <option value="C">C</option><option value="D">D</option>
-                            <option value="E">E</option>
+                            <?php foreach (dropdown_options('student_section') as $section): ?>
+                                <option value="<?= student_e($section) ?>"><?= student_e($section) ?></option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
                 </div>

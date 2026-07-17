@@ -172,11 +172,9 @@ render_student_header('Appointments', 'appointment');
                     <label class="student-label" for="appt-type">Appointment Purpose</label>
                     <select id="appt-type" name="appt_type" class="student-select" required>
                         <option value="" disabled selected>Select appointment purpose...</option>
-                        <option value="General Checkup">General Checkup</option>
-                        <option value="Dental Consultation">Dental Consultation</option>
-                        <option value="Medical Consultation">Medical Consultation</option>
-                        <option value="APE Follow-up">APE Follow-up</option>
-                        <option value="Clearance Submission">Clearance Submission</option>
+                        <?php foreach (dropdown_options('appointment_purpose') as $purpose): ?>
+                            <option value="<?= student_e($purpose) ?>"><?= student_e($purpose) ?></option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
 

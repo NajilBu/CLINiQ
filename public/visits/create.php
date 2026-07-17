@@ -1,7 +1,6 @@
 <?php
 
 require_once __DIR__ . '/../../app/helpers/view.php';
-require_once __DIR__ . '/../../app/services/RiskClassifier.php';
 require_once __DIR__ . '/../../app/services/VisitWorkflow.php';
 require_once __DIR__ . '/../../app/services/InventoryWorkflow.php';
 require_login();
@@ -44,8 +43,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new InvalidArgumentException('Please enter a valid student ID before saving the visit.');
         }
 
-        $risk = classify_patient_risk($_POST);
-        $riskReasons = risk_reasons_text($risk);
         $actionTaken = trim($_POST['action_taken'] ?? '');
         $status = normalize_visit_status($_POST['status'] ?? 'Active', 'Active');
         if ($status === 'Unaddressed' || $status === 'Cancelled') {
@@ -60,8 +57,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $db->beginTransaction();
         $stmt = $db->prepare(
-            'INSERT INTO clinic_visits (patient_id, visit_datetime, chief_complaint, symptoms, temperature, blood_pressure, pulse_rate, risk_level, risk_score, risk_reasons, status, visit_purpose, visit_source, action_taken, recorded_by, attended_by)
-             VALUES (?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            'INSERT INTO clinic_visits (patient_id, visit_datetime, chief_complaint, symptoms, temperature, blood_pressure, pulse_rate, status, visit_purpose, visit_source, action_taken, recorded_by, attended_by)
+             VALUES (?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         $stmt->execute([
             $patientId,
@@ -70,9 +67,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_POST['temperature'] ?: null,
             trim($_POST['blood_pressure'] ?? ''),
             $_POST['pulse_rate'] ?: null,
-            $risk['level'],
-            $risk['score'],
-            $riskReasons,
             $status,
             $purpose,
             'Staff Recorded',
@@ -81,15 +75,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             current_user()['id'],
         ]);
         $visitId = (int) $db->lastInsertId();
-        escalate_major_risk_visit($db, $visitId, $patientId, $risk['level'], (int) $risk['score'], $riskReasons);
 
         $borrower = visit_patient_borrower($db, $patientId);
         $dispensed = process_visit_inventory_request($db, $dispensingRequest, $borrower['name'], $borrower['identifier']);
         $remarks = trim($_POST['remarks'] ?? '');
-        $dispensingNote = visit_dispensing_note($dispensed);
-        if ($dispensingNote !== '') {
-            $remarks = trim($remarks . "\n" . $dispensingNote);
-        }
         $entry = [
             'symptoms_note' => trim($_POST['symptoms'] ?? ''),
             'diagnosis' => trim($_POST['diagnosis'] ?? ''),
@@ -98,11 +87,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'remarks' => $remarks,
         ];
 
-        if (treatment_entry_has_content($entry)) {
+        if (treatment_entry_has_content($entry) || $dispensed) {
             $treatmentStmt = $db->prepare(
                 'INSERT INTO visit_treatment_entries (visit_id, symptoms_note, diagnosis, management_treatment, referral_type, remarks, dispensed_inventory_item_id, dispensed_quantity, created_by)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
+            $firstDispensed = $dispensed[0] ?? [];
             $treatmentStmt->execute([
                 $visitId,
                 $entry['symptoms_note'] ?: null,
@@ -110,14 +100,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $entry['management_treatment'] ?: null,
                 $entry['referral_type'] ?: null,
                 $entry['remarks'] ?: null,
-                $dispensed['item_id'] ?? null,
-                $dispensed['quantity'] ?? null,
+                $firstDispensed['item_id'] ?? null,
+                $firstDispensed['quantity'] ?? null,
                 current_user()['id'],
             ]);
+            save_visit_treatment_dispensings($db, (int) $db->lastInsertId(), $visitId, $dispensed);
         }
 
         $db->commit();
-        flash_message('success', $dispensed ? 'Manual visit recorded and medicine stock deducted.' : 'Manual visit recorded.');
+        flash_message('success', $dispensed ? 'Manual visit recorded and inventory updated.' : 'Manual visit recorded.');
         header('Location: view.php?id=' . $visitId . '&from=logbook');
     } catch (Throwable $e) {
         if ($db->inTransaction()) {
@@ -131,101 +122,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 set_page_back_link('index.php', 'Visits');
 render_header('Record Visit');
-?>
-<style>
-    .record-sheet-field {
-        width: 100%;
-        border: 1px solid rgba(148, 163, 184, 0.22);
-        border-radius: 0.625rem;
-        background: #f8fafc;
-        color: #0f172a;
-        font-size: 0.8125rem;
-        font-weight: 700;
-        line-height: 1.35;
-        height: 3.625rem;
-        min-height: 3.625rem;
-        padding: 0.75rem 1rem;
-        box-sizing: border-box;
-    }
-    textarea.record-sheet-field {
-        min-height: 7rem;
-        height: auto;
-    }
-    .vitals-grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 1rem;
-    }
-    .vital-tile {
-        min-height: 6.25rem;
-        border: 1px solid rgba(148, 163, 184, 0.18);
-        border-radius: 0.875rem;
-        background: #f8fafc;
-        padding: 1rem;
-    }
-    .vital-label {
-        display: flex;
-        align-items: center;
-        gap: 0.35rem;
-        color: #94a3b8;
-        font-size: 0.68rem;
-        font-weight: 900;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        margin-bottom: 0.75rem;
-    }
-    .vital-label .material-symbols-outlined {
-        font-size: 1rem;
-    }
-    .vital-value-wrap {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        align-items: center;
-        gap: 0.5rem;
-    }
-    .vital-input {
-        width: 100%;
-        height: 2.375rem;
-        border: 1px solid rgba(148, 163, 184, 0.35);
-        border-radius: 0.5rem;
-        background: #fff;
-        padding: 0 0.75rem;
-        font-size: 0.8125rem;
-        font-weight: 800;
-        color: #0f172a;
-    }
-    .vital-unit {
-        color: #94a3b8;
-        font-size: 0.68rem;
-        font-weight: 800;
-    }
-    @media (max-width: 900px) {
-        .vitals-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    }
-    @media (max-width: 640px) {
-        .vitals-grid { grid-template-columns: 1fr; }
-    }
-    .patient-lookup-status {
-        min-height: 1.1rem;
-        color: #64748b;
-        font-size: 0.72rem;
-        font-weight: 800;
-    }
-    .patient-lookup-status.is-found {
-        color: #15803d;
-    }
-    .patient-lookup-status.is-missing {
-        color: #b91c1c;
-    }
-</style>
 
-<div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-6">
-    <div>
-        <p class="clinic-label mb-1">Manual Nurse Station Flow</p>
-        <h1 class="font-headline text-3xl md:text-4xl font-extrabold text-[#1c2a59]">Manual Record Visit</h1>
-        <p class="text-sm font-bold text-slate-500 mt-1">Record a walk-in visit directly with vitals, treatment, dispensing, and clinical notes.</p>
-    </div>
-</div>
+render_clinic_command_header(
+    'Manual Nurse Station Flow',
+    'Manual Record Visit',
+    'Record a walk-in visit directly with vitals, treatment, dispensing, and clinical notes.'
+);
+?>
 
 <form method="post" id="visitForm" class="space-y-6">
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -281,8 +184,9 @@ render_header('Record Visit');
             <div>
                 <label class="clinic-label">Visit Status</label>
                 <select class="record-sheet-field px-4" name="status">
-                    <option value="Active">Active</option>
-                    <option value="Completed">Completed</option>
+                    <?php foreach (array_filter(visit_statuses(), fn($status) => $status !== 'Unaddressed') as $status): ?>
+                        <option value="<?= e($status) ?>"><?= e($status) ?></option>
+                    <?php endforeach; ?>
                 </select>
             </div>
             <div>
@@ -339,35 +243,45 @@ render_header('Record Visit');
             <span class="material-symbols-outlined text-primary text-[19px]">inventory_2</span>
             Inventory & Dispensing
         </h2>
-        <div class="grid grid-cols-1 md:grid-cols-[0.7fr_1.6fr_0.6fr] gap-4">
-            <div>
-                <label class="clinic-label">Type</label>
-                <select class="record-sheet-field px-4" name="dispensing_type">
-                    <option value="Medicine">Medicine</option>
-                    <option value="Equipment">Equipment</option>
-                </select>
-            </div>
-            <div>
-                <label class="clinic-label">Medicine / Equipment</label>
-                <select class="record-sheet-field px-4 js-visit-inventory-item" name="dispensed_inventory_item_id">
-                    <option value="" data-type="Medicine">No item selected</option>
-                    <?php foreach ($medicineInventory as $medicine): ?>
-                        <option value="<?= (int) $medicine['id'] ?>" data-type="Medicine" <?= (int) $medicine['quantity'] <= 0 ? 'disabled' : '' ?>>
-                            <?= e($medicine['item_name']) ?> (<?= (int) $medicine['quantity'] ?> <?= e($medicine['unit']) ?>)
-                        </option>
-                    <?php endforeach; ?>
-                    <?php foreach ($equipmentInventory as $equipment): ?>
-                        <option value="<?= (int) $equipment['id'] ?>" data-type="Equipment" <?= (int) $equipment['quantity'] <= 0 ? 'disabled' : '' ?>>
-                            <?= e($equipment['item_name']) ?> (<?= (int) $equipment['quantity'] ?> <?= e($equipment['unit']) ?>)
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div>
-                <label class="clinic-label">Quantity</label>
-                <input class="record-sheet-field px-4" name="dispensed_quantity" type="number" min="1" placeholder="0">
+        <div class="space-y-3" data-dispensing-list>
+            <div class="grid grid-cols-1 md:grid-cols-[0.7fr_1.6fr_0.55fr_auto] gap-4 items-end" data-dispensing-row>
+                <div>
+                    <label class="clinic-label">Type</label>
+                    <select class="record-sheet-field px-4 js-dispensing-type" name="dispensing_type[]">
+                        <option value="Medicine">Medicine</option>
+                        <option value="Equipment">Equipment</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="clinic-label">Medicine / Equipment</label>
+                    <select class="record-sheet-field px-4 js-visit-inventory-item" name="dispensed_inventory_item_id[]">
+                        <option value="" data-type="Medicine">No item selected</option>
+                        <?php foreach ($medicineInventory as $medicine): ?>
+                            <option value="<?= (int) $medicine['id'] ?>" data-type="Medicine" <?= (int) $medicine['quantity'] <= 0 ? 'disabled' : '' ?>>
+                                <?= e($medicine['item_name']) ?> (<?= (int) $medicine['quantity'] ?> <?= e($medicine['unit']) ?>)
+                            </option>
+                        <?php endforeach; ?>
+                        <?php foreach ($equipmentInventory as $equipment): ?>
+                            <option value="<?= (int) $equipment['id'] ?>" data-type="Equipment" <?= (int) $equipment['quantity'] <= 0 ? 'disabled' : '' ?>>
+                                <?= e($equipment['item_name']) ?> (<?= (int) $equipment['quantity'] ?> <?= e($equipment['unit']) ?>)
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div>
+                    <label class="clinic-label">Quantity</label>
+                    <input class="record-sheet-field px-4" name="dispensed_quantity[]" type="number" min="1" placeholder="0">
+                </div>
+                <button type="button" class="btn btn-ghost js-remove-dispensing-row" title="Remove item" aria-label="Remove item">
+                    <span class="material-symbols-outlined text-[18px]">delete</span>
+                </button>
             </div>
         </div>
+        <button type="button" class="btn btn-outline mt-4 js-add-dispensing-row">
+            <span class="material-symbols-outlined text-[18px]">add</span>
+            Add Item
+        </button>
+        <p class="settings-help mt-3 mb-0">Add multiple rows to dispense any combination of medicines and equipment.</p>
     </section>
 
     <section class="clinic-card p-6">
@@ -407,7 +321,7 @@ render_header('Record Visit');
                     <span class="material-symbols-outlined">cancel</span>
                     Cancel
                 </a>
-                <button class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save this manual visit?" data-confirm-message="This will create a staff-recorded visit and deduct medicine stock if medicine was dispensed." data-confirm-toast="Saving visit...">
+                <button class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save this manual visit?" data-confirm-message="This will create a staff-recorded visit and update inventory for any dispensed medicines or equipment." data-confirm-toast="Saving visit...">
                     <span class="material-symbols-outlined text-[18px]">save</span>
                     Save Visit
                 </button>
@@ -494,25 +408,66 @@ document.getElementById('visitForm')?.addEventListener('submit', (event) => {
     }
 });
 
-document.querySelectorAll('select[name="dispensing_type"]').forEach((typeSelect) => {
-    const container = typeSelect.closest('section');
-    const itemSelect = container?.querySelector('.js-visit-inventory-item');
-    if (!itemSelect) return;
+function syncDispensingRow(row) {
+    const typeSelect = row.querySelector('.js-dispensing-type');
+    const itemSelect = row.querySelector('.js-visit-inventory-item');
+    if (!typeSelect || !itemSelect) return;
 
-    const syncItems = () => {
-        const activeType = typeSelect.value || 'Medicine';
-        let currentVisible = false;
-        Array.from(itemSelect.options).forEach((option) => {
-            const optionType = option.dataset.type || 'Medicine';
-            const visible = option.value === '' || optionType === activeType;
-            option.hidden = !visible;
-            if (option.selected && visible) currentVisible = true;
+    const activeType = typeSelect.value || 'Medicine';
+    let currentVisible = false;
+    Array.from(itemSelect.options).forEach((option) => {
+        const optionType = option.dataset.type || 'Medicine';
+        const visible = option.value === '' || optionType === activeType;
+        option.hidden = !visible;
+        if (option.selected && visible) currentVisible = true;
+    });
+    if (!currentVisible) itemSelect.value = '';
+}
+
+function updateDispensingRemoveButtons(list) {
+    const rows = list.querySelectorAll('[data-dispensing-row]');
+    rows.forEach((row) => {
+        const removeButton = row.querySelector('.js-remove-dispensing-row');
+        if (removeButton) removeButton.disabled = rows.length === 1;
+    });
+}
+
+document.querySelectorAll('[data-dispensing-list]').forEach((list) => {
+    list.querySelectorAll('[data-dispensing-row]').forEach(syncDispensingRow);
+    updateDispensingRemoveButtons(list);
+
+    list.addEventListener('change', (event) => {
+        const typeSelect = event.target.closest('.js-dispensing-type');
+        if (typeSelect) syncDispensingRow(typeSelect.closest('[data-dispensing-row]'));
+    });
+});
+
+document.addEventListener('click', (event) => {
+    const addButton = event.target.closest('.js-add-dispensing-row');
+    if (addButton) {
+        const section = addButton.closest('section');
+        const list = section?.querySelector('[data-dispensing-list]');
+        const firstRow = list?.querySelector('[data-dispensing-row]');
+        if (!list || !firstRow) return;
+
+        const clone = firstRow.cloneNode(true);
+        clone.querySelectorAll('select, input').forEach((field) => {
+            field.value = '';
+            if (field.classList.contains('js-dispensing-type')) field.value = 'Medicine';
         });
-        if (!currentVisible) itemSelect.value = '';
-    };
+        list.appendChild(clone);
+        syncDispensingRow(clone);
+        updateDispensingRemoveButtons(list);
+    }
 
-    typeSelect.addEventListener('change', syncItems);
-    syncItems();
+    const removeButton = event.target.closest('.js-remove-dispensing-row');
+    if (removeButton) {
+        const row = removeButton.closest('[data-dispensing-row]');
+        const list = row?.closest('[data-dispensing-list]');
+        if (!row || !list || list.querySelectorAll('[data-dispensing-row]').length <= 1) return;
+        row.remove();
+        updateDispensingRemoveButtons(list);
+    }
 });
 </script>
 
