@@ -46,7 +46,7 @@ $activeAlerts = db()->query("
 // --- 3. Today's Appointments ---
 // We check the new appointments table
 $appointmentsStmt = db()->query("
-    SELECT a.*, p.first_name, p.last_name, p.student_number, p.course_section
+    SELECT a.*, p.first_name, p.last_name, p.id_number, p.course_section
     FROM appointments a
     JOIN patients p ON p.id = a.patient_id
     WHERE DATE(a.appointment_datetime) = CURDATE()
@@ -56,7 +56,7 @@ $appointmentsStmt = db()->query("
 $appointments = $appointmentsStmt ? $appointmentsStmt->fetchAll() : [];
 
 $pendingAppointments = db()->query("
-    SELECT a.*, p.first_name, p.last_name, p.student_number, p.course_section
+    SELECT a.*, p.first_name, p.last_name, p.id_number, p.course_section
     FROM appointments a
     JOIN patients p ON p.id = a.patient_id
     WHERE a.status = 'Pending'
@@ -66,7 +66,7 @@ $pendingAppointments = db()->query("
 
 // --- 4. Real-time Visitor Log (Clinic Visits Today) ---
 $visitorLogs = db()->query("
-    SELECT v.*, p.first_name, p.last_name, p.student_number, p.course_section
+    SELECT v.*, p.first_name, p.last_name, p.id_number, p.course_section
     FROM clinic_visits v
     JOIN patients p ON p.id = v.patient_id
     WHERE DATE(v.visit_datetime) = CURDATE()
@@ -75,7 +75,7 @@ $visitorLogs = db()->query("
 
 // --- 5. APE Action Queue (Condensed) ---
 $allApeRecords = db()->query("
-    SELECT a.*, p.first_name, p.last_name, p.student_number, p.course_section
+    SELECT a.*, p.first_name, p.last_name, p.id_number, p.course_section
     FROM ape_records a
     JOIN patients p ON p.id = a.patient_id
     WHERE a.workflow_status NOT IN ('Cleared')
@@ -111,7 +111,7 @@ foreach ($visitorLogs as $visit) {
     $visitorRows[] = [
         'rowUrl' => app_url('visits/view.php?id=' . (int) $visit['id'] . '&from=dashboard'),
         'time' => date('h:i A', strtotime($visit['visit_datetime'])),
-        'patientHtml' => '<div class="font-bold text-slate-800 text-sm">' . e($fullName) . '</div><div class="text-[10px] text-slate-400">' . e($visit['student_number']) . '</div>',
+        'patientHtml' => '<div class="font-bold text-slate-800 text-sm">' . e($fullName) . '</div><div class="text-[10px] text-slate-400">' . e($visit['id_number']) . '</div>',
         'complaint' => $visit['chief_complaint'],
         'statusHtml' => '<span class="badge ' . e(status_badge_class($visit['status'])) . ' text-[9px]">' . e($visit['status']) . '</span>',
     ];
@@ -131,7 +131,7 @@ foreach ($apeQueue as $rec) {
     $next = ape_next_action($rec);
     $dashboardApeRows[] = [
         'rowUrl' => app_url('ape/view.php?id=' . (int) $rec['id']),
-        'studentHtml' => '<div class="flex items-center gap-3"><div class="avatar ' . e(avatar_color($fullName)) . '">' . e(initials($fullName)) . '</div><div><strong class="text-sm text-slate-800">' . e($fullName) . '</strong><div class="text-[10px] font-bold text-slate-400">' . e($rec['student_number']) . '</div></div></div>',
+        'studentHtml' => '<div class="flex items-center gap-3"><div class="avatar ' . e(avatar_color($fullName)) . '">' . e(initials($fullName)) . '</div><div><strong class="text-sm text-slate-800">' . e($fullName) . '</strong><div class="text-[10px] font-bold text-slate-400">' . e($rec['id_number']) . '</div></div></div>',
         'queueHtml' => '<span class="badge ' . ($queueKey === 'follow_up' ? 'badge-high' : 'badge-in-progress') . '">' . e($queue['short_title'] ?? $queue['title']) . '</span>',
         'missing' => ape_missing_item($rec),
         'actionHtml' => '<a href="' . e(app_url('ape/view.php?id=' . (int) $rec['id'])) . '" class="btn btn-sm btn-ghost border border-slate-200 hover:border-primary hover:text-primary text-decoration-none"><span class="material-symbols-outlined text-[14px]">' . e($next['icon']) . '</span>' . e($next['label']) . '</a>',
@@ -357,7 +357,7 @@ render_header('Main Dashboard');
                                     <div class="flex items-start justify-between gap-3">
                                         <div class="min-w-0">
                                             <h4 class="font-bold text-slate-800 text-sm mb-0 truncate"><?= e($fullName) ?></h4>
-                                            <p class="text-xs text-slate-500 mb-1 truncate"><?= e($request['student_number']) ?>
+                                            <p class="text-xs text-slate-500 mb-1 truncate"><?= e($request['id_number']) ?>
                                                 &bull; <?= e($request['purpose']) ?></p>
                                             <p class="text-[11px] font-bold text-amber-700 mb-0 flex items-center gap-1">
                                                 <span class="material-symbols-outlined text-[13px]">schedule</span>
@@ -424,7 +424,7 @@ render_header('Main Dashboard');
                                     <div class="w-px h-10 bg-slate-200 shrink-0"></div>
                                     <div class="flex-1 min-w-0">
                                         <h4 class="font-bold text-slate-800 text-sm mb-0 truncate"><?= e($fullName) ?></h4>
-                                        <p class="text-xs text-slate-500 mb-1 truncate"><?= e($apt['student_number']) ?> &bull;
+                                        <p class="text-xs text-slate-500 mb-1 truncate"><?= e($apt['id_number']) ?> &bull;
                                             <?= e($apt['purpose']) ?>
                                         </p>
                                         <span class="badge badge-in-progress text-[9px]"><?= e($apt['status']) ?></span>

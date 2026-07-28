@@ -722,7 +722,7 @@ function studentIdFormatIsActive(input) {
 
 function initStudentIdFormatting(root = document) {
     const scope = root.querySelectorAll ? root : document;
-    scope.querySelectorAll('[data-student-id-format], #student-id').forEach((input) => {
+    scope.querySelectorAll('[data-legacy-student-id-format]').forEach((input) => {
         if (!(input instanceof HTMLInputElement) || input.dataset.studentIdFormatterReady === '1') {
             return;
         }
@@ -730,12 +730,12 @@ function initStudentIdFormatting(root = document) {
         input.dataset.studentIdFormatterReady = '1';
         input.dataset.originalMaxLength = input.getAttribute('maxlength') || '';
         input.inputMode = 'numeric';
-        input.placeholder = input.placeholder || '00-00000';
+        input.placeholder = input.placeholder || 'Enter ID number';
 
         const syncPattern = () => {
             const active = studentIdFormatIsActive(input);
             input.pattern = active ? '\\d{2}-\\d{5}' : '';
-            input.title = active ? 'Use the format 00-00000.' : '';
+            input.title = active ? 'Use the format Enter ID number.' : '';
             input.inputMode = active ? 'numeric' : 'text';
             if (active) {
                 input.maxLength = 8;
@@ -782,7 +782,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Same-page links/forms update content without a full browser reload
     initSamePageAjax();
 
-    // Student IDs use 00-00000 format.
+    // ID Numbers use Enter ID number format.
     initStudentIdFormatting();
 
     // Start alert polling

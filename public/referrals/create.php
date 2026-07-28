@@ -3,7 +3,7 @@
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_login();
 
-$patients = db()->query('SELECT id, student_number, first_name, last_name FROM patients ORDER BY last_name, first_name')->fetchAll();
+$patients = db()->query('SELECT id, id_number, first_name, last_name FROM patients ORDER BY last_name, first_name')->fetchAll();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $stmt = db()->prepare(
@@ -37,7 +37,7 @@ render_header('New Referral');
             <select class="clinic-select" name="patient_id" required>
                 <option value="">Select patient</option>
                 <?php foreach ($patients as $p): ?>
-                    <option value="<?= (int)$p['id'] ?>"><?= e($p['last_name'] . ', ' . $p['first_name'] . ' - ' . $p['student_number']) ?></option>
+                    <option value="<?= (int)$p['id'] ?>"><?= e($p['last_name'] . ', ' . $p['first_name'] . ' - ' . $p['id_number']) ?></option>
                 <?php endforeach; ?>
             </select>
         </div>

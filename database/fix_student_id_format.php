@@ -125,4 +125,4 @@ if ($failedRows) {
     exit(1);
 }
 
-echo 'Student ID format is now standardized as ' . STUDENT_ID_FORMAT_LABEL . ".\n";
+echo 'ID Number format is now standardized as ' . ID_NUMBER_FORMAT_LABEL . ".\n";

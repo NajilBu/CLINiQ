@@ -52,7 +52,7 @@ function student_profile_from_patient(array $patient): array
         $patient['middle_name'] ?? '',
         $patient['last_name'] ?? '',
     ])));
-    $studentId = (string) ($patient['student_number'] ?? '');
+    $studentId = (string) ($patient['id_number'] ?? '');
     $emailId = strtolower(str_replace('-', '', $studentId));
 
     return [
@@ -137,7 +137,7 @@ function student_logout(): void
 
 function student_find_patient_by_number(string $studentNumber): ?array
 {
-    $stmt = db()->prepare('SELECT * FROM patients WHERE student_number = ? LIMIT 1');
+    $stmt = db()->prepare('SELECT * FROM patients WHERE id_number = ? LIMIT 1');
     $stmt->execute([$studentNumber]);
     $patient = $stmt->fetch();
 
@@ -299,7 +299,7 @@ function render_student_auth_footer(): void
 
         function initStudentIdFormatting(root = document) {
             const scope = root.querySelectorAll ? root : document;
-            scope.querySelectorAll('[data-student-id-format], #student-id').forEach((input) => {
+            scope.querySelectorAll('[data-legacy-student-id-format]').forEach((input) => {
                 if (!(input instanceof HTMLInputElement) || input.dataset.studentIdFormatterReady === '1') {
                     return;
                 }
@@ -308,8 +308,8 @@ function render_student_auth_footer(): void
                 input.inputMode = 'numeric';
                 input.maxLength = 8;
                 input.pattern = '\\d{2}-\\d{5}';
-                input.title = 'Use the format 00-00000.';
-                input.placeholder = input.placeholder || '00-00000';
+                input.title = 'Use the format Enter ID number.';
+                input.placeholder = input.placeholder || 'Enter ID number';
                 input.addEventListener('input', () => {
                     input.value = formatStudentId(input.value);
                 });

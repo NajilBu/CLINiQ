@@ -7,7 +7,7 @@ ensure_alert_workflow_schema();
 
 $id = (int) ($_GET['id'] ?? 0);
 $stmt = db()->prepare('
-    SELECT a.*, p.first_name, p.last_name, p.student_number, p.course_section, u.name AS resolved_by_name
+    SELECT a.*, p.first_name, p.last_name, p.id_number, p.course_section, u.name AS resolved_by_name
     FROM nurse_alerts a
     LEFT JOIN patients p ON p.id = a.patient_id
     LEFT JOIN users u ON u.id = a.resolved_by
@@ -90,8 +90,8 @@ render_header('Alert Report');
                 <span class="clinic-label">Linked Patient</span>
                 <strong>
                     <?= e($patientName !== '' ? $patientName : 'Unlisted') ?>
-                    <?php if ($alert['student_number']): ?>
-                        <span class="text-slate-400">&bull;</span> <?= e($alert['student_number']) ?>
+                    <?php if ($alert['id_number']): ?>
+                        <span class="text-slate-400">&bull;</span> <?= e($alert['id_number']) ?>
                     <?php endif; ?>
                 </strong>
             </div>

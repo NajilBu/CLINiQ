@@ -36,7 +36,7 @@ $buildWhere = function (bool $includeStatus = true) use ($filters): array {
     $params = [];
 
     if ($filters['q'] !== '') {
-        $where[] = "(p.first_name LIKE ? OR p.last_name LIKE ? OR p.student_number LIKE ? OR v.chief_complaint LIKE ? OR v.symptoms LIKE ? OR v.action_taken LIKE ? OR v.visit_purpose LIKE ?)";
+        $where[] = "(p.first_name LIKE ? OR p.last_name LIKE ? OR p.id_number LIKE ? OR v.chief_complaint LIKE ? OR v.symptoms LIKE ? OR v.action_taken LIKE ? OR v.visit_purpose LIKE ?)";
         $like = '%' . $filters['q'] . '%';
         array_push($params, $like, $like, $like, $like, $like, $like, $like);
     }
@@ -77,7 +77,7 @@ $totalRows = (int) $countStmt->fetch()['total'];
 $totalPages = max(1, (int) ceil($totalRows / $perPage));
 
 $stmt = db()->prepare("
-    SELECT v.*, p.first_name, p.last_name, p.student_number, p.course_section, au.name AS attended_by_name
+    SELECT v.*, p.first_name, p.last_name, p.id_number, p.course_section, au.name AS attended_by_name
     FROM clinic_visits v
     JOIN patients p ON p.id = v.patient_id
     LEFT JOIN users au ON au.id = v.attended_by
@@ -191,7 +191,7 @@ foreach ($visits as $visit) {
     $visitRows[] = [
         'rowUrl' => $actionUrl,
         'dateTimeHtml' => '<p class="text-sm font-bold text-slate-700 mb-0">' . e(date('M d, Y', strtotime($visit['visit_datetime']))) . '</p><p class="text-xs font-bold text-slate-400 mb-0">' . e(date('g:i A', strtotime($visit['visit_datetime']))) . '</p>',
-        'patientHtml' => '<div class="flex items-center gap-3"><div class="avatar ' . e(avatar_color($fullName)) . '">' . e(initials($fullName)) . '</div><div><strong class="text-sm text-slate-800">' . e($fullName) . '</strong><div class="text-xs font-bold text-slate-400">' . e($visit['student_number']) . '</div></div></div>',
+        'patientHtml' => '<div class="flex items-center gap-3"><div class="avatar ' . e(avatar_color($fullName)) . '">' . e(initials($fullName)) . '</div><div><strong class="text-sm text-slate-800">' . e($fullName) . '</strong><div class="text-xs font-bold text-slate-400">' . e($visit['id_number']) . '</div></div></div>',
         'complaint' => $visit['chief_complaint'],
         'statusHtml' => '<span class="badge ' . e(visit_status_badge_class($visitStatus)) . '">' . e($visitStatus) . '</span>',
         'attendedBy' => $visit['attended_by_name'] ?: 'Not yet attended',

@@ -33,9 +33,9 @@ $patientOptions = [];
 if ($search !== '') {
     $like = '%' . $search . '%';
     $stmt = db()->prepare("
-        SELECT id, student_number, first_name, last_name, course_section
+        SELECT id, id_number, first_name, last_name, course_section
         FROM patients
-        WHERE first_name LIKE ? OR last_name LIKE ? OR student_number LIKE ?
+        WHERE first_name LIKE ? OR last_name LIKE ? OR id_number LIKE ?
         ORDER BY last_name, first_name
         LIMIT 30
     ");
@@ -58,13 +58,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
 
-        if ($category === 'Student' && !is_valid_student_id($identifier)) {
-            flash_message('error', student_id_format_message());
+        if ($category === 'Student' && !is_valid_id_number($identifier)) {
+            flash_message('error', id_number_validation_message());
             header('Location: emergency_create.php');
             exit;
         }
 
-        $existing = db()->prepare('SELECT id FROM patients WHERE student_number = ? LIMIT 1');
+        $existing = db()->prepare('SELECT id FROM patients WHERE id_number = ? LIMIT 1');
         $existing->execute([$identifier]);
         $patientId = (int) $existing->fetchColumn();
 
@@ -74,7 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $token = hash('sha256', 'emergency-' . $identifier . '-' . microtime(true));
 
             $insertPatient = db()->prepare(
-                'INSERT INTO patients (student_number, first_name, last_name, course_section, emergency_token)
+                'INSERT INTO patients (id_number, first_name, last_name, course_section, emergency_token)
                  VALUES (?, ?, ?, ?, ?)'
             );
             $insertPatient->execute([$identifier, $firstName, $lastName, $courseSection ?: null, $token]);
@@ -169,7 +169,7 @@ render_header('Emergency Visit');
                         <option value="">Create minimal emergency patient instead</option>
                         <?php foreach ($patientOptions as $patient): ?>
                             <?php $name = trim($patient['last_name'] . ', ' . $patient['first_name']); ?>
-                            <option value="<?= (int) $patient['id'] ?>"><?= e($name . ' - ' . $patient['student_number'] . ' - ' . ($patient['course_section'] ?: 'No section')) ?></option>
+                            <option value="<?= (int) $patient['id'] ?>"><?= e($name . ' - ' . $patient['id_number'] . ' - ' . ($patient['course_section'] ?: 'No section')) ?></option>
                         <?php endforeach; ?>
                     </select>
                     <?php if ($search !== '' && !$patientOptions): ?>
@@ -182,7 +182,7 @@ render_header('Emergency Visit');
                 </div>
                 <div>
                     <label class="clinic-label">Student / Staff ID</label>
-                    <input class="clinic-input" name="identifier" value="<?= e($search) ?>" placeholder="00-00000" data-student-id-format data-student-category-source="emergencyPatientCategory">
+                    <input class="clinic-input" name="identifier" value="<?= e($search) ?>" placeholder="Enter ID number" data-id-number-format data-student-category-source="emergencyPatientCategory">
                 </div>
                 <div>
                     <label class="clinic-label">Category</label>

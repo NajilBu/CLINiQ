@@ -7,7 +7,7 @@ require_login();
 ensure_visit_workflow_schema();
 ensure_inventory_workflow_schema();
 
-$patients = db()->query('SELECT id, student_number, first_name, last_name, course_section, sex FROM patients ORDER BY last_name, first_name')->fetchAll();
+$patients = db()->query('SELECT id, id_number, first_name, last_name, course_section, sex FROM patients ORDER BY last_name, first_name')->fetchAll();
 $medicineInventory = visit_medicine_inventory_options();
 $equipmentInventory = visit_equipment_inventory_options();
 $preselectedPatientId = (int) ($_GET['patient_id'] ?? 0);
@@ -22,14 +22,14 @@ foreach ($patients as $patient) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $db = db();
     try {
-        $postedStudentNumber = trim($_POST['student_number'] ?? '');
+        $postedStudentNumber = trim($_POST['id_number'] ?? '');
         $patientId = 0;
         if ($postedStudentNumber !== '') {
-            if (!is_valid_student_id($postedStudentNumber)) {
-                throw new InvalidArgumentException(student_id_format_message());
+            if (!is_valid_id_number($postedStudentNumber)) {
+                throw new InvalidArgumentException(id_number_validation_message());
             }
 
-            $patientCheck = $db->prepare('SELECT id FROM patients WHERE student_number = ? LIMIT 1');
+            $patientCheck = $db->prepare('SELECT id FROM patients WHERE id_number = ? LIMIT 1');
             $patientCheck->execute([$postedStudentNumber]);
             $patientId = (int) ($patientCheck->fetchColumn() ?: 0);
         } else {
@@ -40,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($patientId <= 0) {
-            throw new InvalidArgumentException('Please enter a valid student ID before saving the visit.');
+            throw new InvalidArgumentException('Please enter a valid ID number before saving the visit.');
         }
 
         $actionTaken = trim($_POST['action_taken'] ?? '');
@@ -138,28 +138,28 @@ render_clinic_command_header(
                 Patient Information
             </h2>
             <div>
-                <label class="clinic-label" for="studentIdLookup">Student ID</label>
-                <input class="record-sheet-field px-4" id="studentIdLookup" name="student_number" list="studentIdOptions" placeholder="00-00000" value="<?= e($preselectedPatient['student_number'] ?? '') ?>" autocomplete="off" data-student-id-format required>
+                <label class="clinic-label" for="studentIdLookup">ID Number</label>
+                <input class="record-sheet-field px-4" id="studentIdLookup" name="id_number" list="studentIdOptions" placeholder="Enter ID number" value="<?= e($preselectedPatient['id_number'] ?? '') ?>" autocomplete="off" data-id-number-format required>
                 <input type="hidden" name="patient_id" id="patientIdInput" value="<?= $preselectedPatient ? (int) $preselectedPatient['id'] : '' ?>">
                 <datalist id="studentIdOptions">
                     <?php foreach ($patients as $patient): ?>
                         <?php $patientName = trim($patient['last_name'] . ', ' . $patient['first_name']); ?>
-                        <option value="<?= e($patient['student_number']) ?>"><?= e($patientName) ?></option>
+                        <option value="<?= e($patient['id_number']) ?>"><?= e($patientName) ?></option>
                     <?php endforeach; ?>
                 </datalist>
-                <div id="patientLookupStatus" class="patient-lookup-status mt-2">Enter a student ID to load patient details.</div>
+                <div id="patientLookupStatus" class="patient-lookup-status mt-2">Enter a ID number to load patient details.</div>
             </div>
             <div>
                 <label class="clinic-label">Student Name</label>
-                <input class="record-sheet-field px-4" id="patientNameDisplay" value="<?= $preselectedPatient ? e(trim($preselectedPatient['first_name'] . ' ' . $preselectedPatient['last_name'])) : 'Enter student ID' ?>" readonly>
+                <input class="record-sheet-field px-4" id="patientNameDisplay" value="<?= $preselectedPatient ? e(trim($preselectedPatient['first_name'] . ' ' . $preselectedPatient['last_name'])) : 'Enter ID number' ?>" readonly>
             </div>
             <div>
                 <label class="clinic-label">Course / Department</label>
-                <input class="record-sheet-field px-4" id="patientCourseDisplay" value="<?= $preselectedPatient ? e($preselectedPatient['course_section'] ?: 'Not specified') : 'Enter student ID' ?>" readonly>
+                <input class="record-sheet-field px-4" id="patientCourseDisplay" value="<?= $preselectedPatient ? e($preselectedPatient['course_section'] ?: 'Not specified') : 'Enter ID number' ?>" readonly>
             </div>
             <div>
                 <label class="clinic-label">Sex</label>
-                <input class="record-sheet-field px-4" id="patientSexDisplay" value="<?= $preselectedPatient ? e($preselectedPatient['sex'] ?: 'Not specified') : 'Enter student ID' ?>" readonly>
+                <input class="record-sheet-field px-4" id="patientSexDisplay" value="<?= $preselectedPatient ? e($preselectedPatient['sex'] ?: 'Not specified') : 'Enter ID number' ?>" readonly>
             </div>
         </section>
 
@@ -334,7 +334,7 @@ render_clinic_command_header(
 const visitPatients = <?= json_encode(array_map(static function (array $patient): array {
     return [
         'id' => (int) $patient['id'],
-        'studentNumber' => $patient['student_number'],
+        'studentNumber' => $patient['id_number'],
         'name' => trim($patient['first_name'] . ' ' . $patient['last_name']),
         'course' => $patient['course_section'] ?: 'Not specified',
         'sex' => $patient['sex'] ?: 'Not specified',
@@ -363,11 +363,11 @@ function setLookupStatus(message, state = '') {
     patientLookupStatus.classList.toggle('is-missing', state === 'missing');
 }
 
-function clearPatientLookup(message = 'Enter a student ID to load patient details.', state = '') {
+function clearPatientLookup(message = 'Enter a ID number to load patient details.', state = '') {
     patientIdInput.value = '';
-    patientNameDisplay.value = 'Enter student ID';
-    patientCourseDisplay.value = 'Enter student ID';
-    patientSexDisplay.value = 'Enter student ID';
+    patientNameDisplay.value = 'Enter ID number';
+    patientCourseDisplay.value = 'Enter ID number';
+    patientSexDisplay.value = 'Enter ID number';
     setLookupStatus(message, state);
 }
 
@@ -384,7 +384,7 @@ function updatePatientLookup() {
 
     const patient = visitPatientsByStudentNumber.get(formatted);
     if (!patient) {
-        clearPatientLookup(formatted.length >= 8 ? 'No patient found for this student ID.' : 'Continue typing the student ID.', formatted.length >= 8 ? 'missing' : '');
+        clearPatientLookup(formatted.length >= 8 ? 'No patient found for this ID number.' : 'Continue typing the ID number.', formatted.length >= 8 ? 'missing' : '');
         return;
     }
 
@@ -404,7 +404,7 @@ document.getElementById('visitForm')?.addEventListener('submit', (event) => {
     if (!patientIdInput.value) {
         event.preventDefault();
         studentIdLookup.focus();
-        setLookupStatus('Enter a valid student ID before saving the visit.', 'missing');
+        setLookupStatus('Enter a valid ID number before saving the visit.', 'missing');
     }
 });
 

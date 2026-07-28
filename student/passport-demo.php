@@ -100,7 +100,7 @@ $fullName = trim(implode(' ', array_filter([
 ])));
 $student = [
     'name' => $fullName !== '' ? $fullName : 'Student',
-    'student_id' => (string) ($patient['student_number'] ?? 'Not recorded'),
+    'student_id' => (string) ($patient['id_number'] ?? 'Not recorded'),
     'course' => (string) ($patient['course_section'] ?? 'Not recorded'),
     'blood_type' => (string) ($patient['blood_type'] ?: 'Unknown'),
     'status' => 'No Active Incident',

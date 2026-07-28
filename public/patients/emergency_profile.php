@@ -33,7 +33,7 @@ render_header('Staff Emergency Profile');
         <div class="flex flex-col md:flex-row items-start justify-between gap-3 mb-6">
             <div>
                 <h2 class="font-headline text-2xl font-extrabold text-[#1c2a59] mb-1"><?= e($patient['first_name'] . ' ' . $patient['last_name']) ?></h2>
-                <p class="text-secondary mb-0"><?= e($patient['student_number']) ?> · <?= e($patient['course_section']) ?></p>
+                <p class="text-secondary mb-0"><?= e($patient['id_number']) ?> · <?= e($patient['course_section']) ?></p>
             </div>
             <span class="px-3 py-1 rounded-full bg-red-50 text-red-700 text-xs font-black">Private Health Data</span>
         </div>

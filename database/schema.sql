@@ -39,7 +39,7 @@ CREATE TABLE system_settings (
 
 CREATE TABLE patients (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  student_number VARCHAR(50) NOT NULL UNIQUE,
+  id_number VARCHAR(50) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NULL,
   first_name VARCHAR(80) NOT NULL,
   middle_name VARCHAR(80) NULL,
@@ -284,11 +284,11 @@ VALUES
 (6, 'IT Support', 'it@cliniq.local', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'it_expert');
 
 -- Demo / dummy data for fresh local installs.
--- Student numbers follow the CLINiQ format: 00-00000.
+-- ID numbers follow the CLINiQ format: Enter ID number.
 -- Staff demo login password: password.
 -- Student portal demo login for seeded students: 123123.
 INSERT INTO patients (
-  id, student_number, password_hash, first_name, middle_name, last_name, birthdate, sex, course_section,
+  id, id_number, password_hash, first_name, middle_name, last_name, birthdate, sex, course_section,
   blood_type, allergies, existing_conditions, guardian_name, guardian_contact, emergency_token
 ) VALUES
 (1, '26-01024', '$2y$10$7PCvWXIALwbg45uLsA/cm.ZyOl0CoZHtzBp/iXftYj8OTqkfcAYeq', 'Sofia', 'L.', 'Bautista', DATE_SUB(CURDATE(), INTERVAL 18 YEAR), 'Female', 'BS Psychology A', 'O+', 'None', 'None reported.', 'Lorna Bautista', '0917-204-1188', SHA2('cliniq-demo-26-01024', 256)),

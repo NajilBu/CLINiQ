@@ -185,7 +185,7 @@ render_header($fullName . ' - Patient Profile');
                     <p class="text-[11px] font-black text-primary uppercase tracking-widest mb-1">Patient Profile</p>
                     <h1 class="font-headline text-3xl md:text-4xl font-extrabold text-[#17261d] leading-tight m-0"><?= e($fullName) ?></h1>
                     <p class="text-sm font-bold text-slate-500 mt-1">
-                        <?= e($patient['student_number']) ?> &bull; <?= e($courseLabel) ?>
+                        <?= e($patient['id_number']) ?> &bull; <?= e($courseLabel) ?>
                     </p>
                 </div>
             </div>

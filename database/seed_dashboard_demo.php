@@ -34,7 +34,7 @@ function demo_days_ago(int $days, string $time = '09:00:00'): string
 
 function patient_id_by_student(PDO $db, string $studentNumber): int
 {
-    $stmt = $db->prepare('SELECT id FROM patients WHERE student_number = ?');
+    $stmt = $db->prepare('SELECT id FROM patients WHERE id_number = ?');
     $stmt->execute([$studentNumber]);
     return (int)$stmt->fetchColumn();
 }
@@ -67,7 +67,7 @@ $students = [
 
 $patientStmt = $db->prepare("
     INSERT INTO patients (
-        student_number, first_name, middle_name, last_name, birthdate, sex, course_section,
+        id_number, first_name, middle_name, last_name, birthdate, sex, course_section,
         blood_type, allergies, existing_conditions, guardian_name, guardian_contact, emergency_token
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON DUPLICATE KEY UPDATE

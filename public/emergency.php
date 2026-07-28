@@ -34,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patient) {
         'pain_level' => $_POST['pain_level'] ?? '',
         'mobility_status' => $_POST['mobility_status'] ?? '',
         'notes' => $notes,
-        'concern' => 'Possible accident reported from student ID',
+        'concern' => 'Possible accident reported from ID number',
     ]);
     $reportAnswers = incident_report_answers_text($answers);
     $classification = classify_reported_incident($answers);
@@ -92,7 +92,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patient) {
                 $reporterName ?: 'QR/NFC scanner',
                 'Emergency passport scanner',
                 $location,
-                'Possible accident reported from student ID',
+                'Possible accident reported from ID number',
                 $answers['incident_type'] ?: null,
                 $details ?: null,
                 $reportAnswers,

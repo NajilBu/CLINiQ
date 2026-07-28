@@ -22,13 +22,13 @@ render_student_auth_header('Recover Password');
                     <path d="M0 20 H100 L112 20 L120 4 L132 36 L142 20 L154 20 L162 12 L170 28 L178 20 L320 20"/>
                 </svg>
             </div>
-            <p class="student-auth-side-footnote">Use your enrolled student ID and school email</p>
+            <p class="student-auth-side-footnote">Use your enrolled ID number and school email</p>
         </aside>
 
         <div class="student-auth-form-side">
             <p class="student-eyebrow">Account Help</p>
             <h2 class="student-card-title text-xl">Password recovery</h2>
-            <p class="student-card-copy mb-5">Enter your student ID and school email. The clinic system will send recovery instructions.</p>
+            <p class="student-card-copy mb-5">Enter your ID number and school email. The clinic system will send recovery instructions.</p>
 
             <div id="success-alert" class="student-note student-note-success mb-4 hidden">
                 <span class="material-symbols-outlined">mark_email_read</span>
@@ -37,8 +37,8 @@ render_student_auth_header('Recover Password');
 
             <form onsubmit="handleRecover(event)">
                 <div class="student-field">
-                    <label class="student-label" for="student-id">Student ID</label>
-                    <input id="student-id" class="student-input" type="text" placeholder="00-00000" autocomplete="username" data-student-id-format required>
+                    <label class="student-label" for="id-number">ID Number</label>
+                    <input id="id-number" class="student-input" type="text" placeholder="Enter ID number" autocomplete="username" data-id-number-format required>
                 </div>
 
                 <div class="student-field">

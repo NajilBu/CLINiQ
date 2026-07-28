@@ -110,7 +110,7 @@ render_student_header('Emergency Health Passport', 'passport');
                         <div class="passport-readonly-field"><?= student_e($passport['name']) ?></div>
                     </div>
                     <div class="student-span-6 student-field" style="margin-bottom:0;">
-                        <label class="student-label">Student ID</label>
+                        <label class="student-label">ID Number</label>
                         <div class="passport-readonly-field"><?= student_e($passport['student_id']) ?></div>
                     </div>
                     <div class="student-span-6 student-field" style="margin-bottom:0;">

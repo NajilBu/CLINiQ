@@ -10,7 +10,7 @@ $id = (int)($_GET['id'] ?? 0);
 function fetch_ape_record(int $id): ?array
 {
     $stmt = db()->prepare("
-        SELECT a.*, p.first_name, p.last_name, p.student_number, p.course_section, p.sex, p.birthdate, u.name AS verified_by_name
+        SELECT a.*, p.first_name, p.last_name, p.id_number, p.course_section, p.sex, p.birthdate, u.name AS verified_by_name
         FROM ape_records a
         JOIN patients p ON p.id = a.patient_id
         LEFT JOIN users u ON u.id = a.verified_by
@@ -208,7 +208,7 @@ render_header('APE Record - ' . $fullName);
                 <div class="min-w-0">
                     <p class="text-[10px] font-black text-primary uppercase tracking-widest mb-1">APE Review Station</p>
                     <h1 class="font-headline text-2xl md:text-3xl font-extrabold text-[#17261d] truncate"><?= e($fullName) ?></h1>
-                    <p class="text-sm font-bold text-slate-500 mt-1"><?= e($record['student_number']) ?><?= $record['course_section'] ? ' - ' . e($record['course_section']) : '' ?></p>
+                    <p class="text-sm font-bold text-slate-500 mt-1"><?= e($record['id_number']) ?><?= $record['course_section'] ? ' - ' . e($record['course_section']) : '' ?></p>
                 </div>
             </div>
             <div class="flex flex-wrap gap-2">
@@ -247,8 +247,8 @@ render_header('APE Record - ' . $fullName);
                 </h2>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div class="ape-flow-field">
-                        <p class="clinic-label mb-1">Student ID</p>
-                        <strong class="text-sm text-slate-800"><?= e($record['student_number']) ?></strong>
+                        <p class="clinic-label mb-1">ID Number</p>
+                        <strong class="text-sm text-slate-800"><?= e($record['id_number']) ?></strong>
                     </div>
                     <div class="ape-flow-field">
                         <p class="clinic-label mb-1">Program / Section</p>

@@ -211,7 +211,7 @@ render_student_header('Dashboard', 'dashboard');
                 <p class="text-sm font-black text-[#17261d] mb-0"><?= student_e($profile['name']) ?></p>
             </div>
             <div>
-                <span class="student-label">Student ID</span>
+                <span class="student-label">ID Number</span>
                 <p class="text-sm font-black text-[#17261d] mb-0"><?= student_e($profile['student_id']) ?></p>
             </div>
             <div>

@@ -5,7 +5,7 @@ require_once __DIR__ . '/../../app/services/ApeWorkflow.php';
 require_login();
 ensure_ape_workflow_schema();
 
-$patients = db()->query('SELECT id, student_number, first_name, last_name, course_section FROM patients ORDER BY last_name, first_name')->fetchAll();
+$patients = db()->query('SELECT id, id_number, first_name, last_name, course_section FROM patients ORDER BY last_name, first_name')->fetchAll();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $documentPath = null;
@@ -96,7 +96,7 @@ render_header('Add APE Record');
                         <option value="">Select student</option>
                         <?php foreach ($patients as $p): ?>
                             <option value="<?= (int)$p['id'] ?>">
-                                <?= e($p['last_name'] . ', ' . $p['first_name'] . ' - ' . $p['student_number'] . ($p['course_section'] ? ' (' . $p['course_section'] . ')' : '')) ?>
+                                <?= e($p['last_name'] . ', ' . $p['first_name'] . ' - ' . $p['id_number'] . ($p['course_section'] ? ' (' . $p['course_section'] . ')' : '')) ?>
                             </option>
                         <?php endforeach; ?>
                     </select>

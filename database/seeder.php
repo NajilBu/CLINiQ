@@ -49,7 +49,7 @@ for ($i = 0; $i < 30; $i++) {
     $studentNum = rand(21, 26) . '-' . str_pad(rand(1, 99999), 5, '0', STR_PAD_LEFT);
     $token = bin2hex(random_bytes(16));
     
-    $stmt = $db->prepare("INSERT INTO patients (student_number, first_name, middle_name, last_name, birthdate, sex, course_section, blood_type, allergies, emergency_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt = $db->prepare("INSERT INTO patients (id_number, first_name, middle_name, last_name, birthdate, sex, course_section, blood_type, allergies, emergency_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     $stmt->execute([
         $studentNum,
         $fn,

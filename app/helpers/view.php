@@ -170,6 +170,7 @@ function render_header(string $title): void
         'Alerts' => ['url' => app_url('alerts/index.php'), 'match' => '/alerts/', 'icon' => 'notification_important'],
         'Inventory' => ['url' => app_url('inventory/index.php'), 'match' => '/inventory/', 'icon' => 'inventory_2'],
         'APE' => ['url' => app_url('ape/index.php'), 'match' => '/ape/', 'icon' => 'description'],
+        'Appointments' => ['url' => app_url('appointments/index.php'), 'match' => '/appointments/', 'icon' => 'calendar_month'],
         'Referrals' => ['url' => app_url('referrals/index.php'), 'match' => '/referrals/', 'icon' => 'send'],
         'Reports' => ['url' => app_url('reports/index.php'), 'match' => '/reports/', 'icon' => 'analytics'],
         'Settings' => ['url' => app_url('settings/index.php'), 'match' => '/settings/', 'icon' => 'settings'],

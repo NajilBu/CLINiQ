@@ -7,7 +7,7 @@ $dateFrom = $_GET['from'] ?? date('Y-m-01');
 $dateTo = $_GET['to'] ?? date('Y-m-d');
 
 $stmt = db()->prepare("
-    SELECT v.visit_datetime, p.student_number, p.first_name, p.last_name,
+    SELECT v.visit_datetime, p.id_number, p.first_name, p.last_name,
            v.chief_complaint, v.symptoms, v.temperature, v.blood_pressure,
            v.pulse_rate, v.status, v.visit_purpose, v.visit_source, v.action_taken, u.name AS recorded_by
     FROM clinic_visits v
@@ -39,7 +39,7 @@ fputcsv($output, [
 foreach ($visits as $v) {
     fputcsv($output, [
         $v['visit_datetime'],
-        $v['student_number'],
+        $v['id_number'],
         $v['first_name'],
         $v['last_name'],
         $v['chief_complaint'],

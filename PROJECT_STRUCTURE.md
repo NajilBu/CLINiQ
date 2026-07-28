@@ -318,7 +318,7 @@ Purpose:
 Allowed information:
 
 - Patient name
-- Student number
+- ID number
 - Course/section
 - Blood type
 - Allergies

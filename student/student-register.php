@@ -49,8 +49,8 @@ render_student_auth_header('Student Registration');
                         <input id="last-name" class="student-input" type="text" placeholder="dela Cruz" required>
                     </div>
                     <div class="student-field student-span-6">
-                        <label class="student-label" for="student-id">Student ID</label>
-                        <input id="student-id" class="student-input" type="text" placeholder="00-00000" data-student-id-format required>
+                        <label class="student-label" for="id-number">ID Number</label>
+                        <input id="id-number" class="student-input" type="text" placeholder="Enter ID number" data-id-number-format required>
                     </div>
                     <div class="student-field student-span-6">
                         <label class="student-label" for="course">Program</label>

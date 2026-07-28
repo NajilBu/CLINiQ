@@ -247,7 +247,7 @@ function visit_equipment_inventory_options(): array
 function visit_patient_borrower(PDO $db, int $patientId): array
 {
     $stmt = $db->prepare('
-        SELECT student_number, first_name, last_name
+        SELECT id_number, first_name, last_name
         FROM patients
         WHERE id = ?
         LIMIT 1
@@ -257,7 +257,7 @@ function visit_patient_borrower(PDO $db, int $patientId): array
 
     return [
         'name' => trim(($patient['first_name'] ?? '') . ' ' . ($patient['last_name'] ?? '')) ?: 'Clinic patient',
-        'identifier' => trim((string) ($patient['student_number'] ?? '')),
+        'identifier' => trim((string) ($patient['id_number'] ?? '')),
     ];
 }
 

@@ -19,7 +19,7 @@ if ($filterStatus !== 'all') {
 }
 
 $stmt = db()->prepare("
-    SELECT a.*, p.first_name, p.last_name, p.student_number, p.course_section
+    SELECT a.*, p.first_name, p.last_name, p.id_number, p.course_section
     FROM appointments a
     JOIN patients p ON p.id = a.patient_id
     WHERE {$where}
@@ -72,7 +72,7 @@ foreach ($appointments as $appointment) {
     $rows[] = [
         'rowUrl' => app_url('patients/view.php?id=' . (int)$appointment['patient_id']),
         'slotHtml' => '<p class="text-sm font-bold text-slate-800 mb-0">' . e(date('M d, Y', strtotime($appointment['appointment_datetime']))) . '</p><p class="text-xs font-bold text-slate-400 mb-0">' . e(date('g:i A', strtotime($appointment['appointment_datetime']))) . '</p>',
-        'studentHtml' => '<div class="flex items-center gap-3"><div class="avatar ' . e(avatar_color($fullName)) . '">' . e(initials($fullName)) . '</div><div><strong class="text-sm text-slate-800">' . e($fullName) . '</strong><div class="text-xs font-bold text-slate-400">' . e($appointment['student_number']) . ' · ' . e($appointment['course_section'] ?: 'No course') . '</div></div></div>',
+        'studentHtml' => '<div class="flex items-center gap-3"><div class="avatar ' . e(avatar_color($fullName)) . '">' . e(initials($fullName)) . '</div><div><strong class="text-sm text-slate-800">' . e($fullName) . '</strong><div class="text-xs font-bold text-slate-400">' . e($appointment['id_number']) . ' · ' . e($appointment['course_section'] ?: 'No course') . '</div></div></div>',
         'purpose' => $appointment['purpose'],
         'statusHtml' => '<span class="badge ' . e(appointment_status_badge_class($status)) . '">' . e($status) . '</span>',
         'notes' => $appointment['notes'] ?: '-',

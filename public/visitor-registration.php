@@ -61,12 +61,12 @@ if (isset($_GET['lookup_identifier'])) {
     $identifier = trim((string) $_GET['lookup_identifier']);
     header('Content-Type: application/json');
 
-    if (!is_valid_student_id($identifier)) {
+    if (!is_valid_id_number($identifier)) {
         echo json_encode(['found' => false]);
         exit;
     }
 
-    $stmt = db()->prepare('SELECT first_name, last_name, course_section FROM patients WHERE student_number = ? LIMIT 1');
+    $stmt = db()->prepare('SELECT first_name, last_name, course_section FROM patients WHERE id_number = ? LIMIT 1');
     $stmt->execute([$identifier]);
     $patient = $stmt->fetch();
 
@@ -103,7 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $matchedPatient = null;
     if ($form['identifier'] !== '') {
-        $matchedPatientStmt = db()->prepare('SELECT id, first_name, last_name, course_section FROM patients WHERE student_number = ? LIMIT 1');
+        $matchedPatientStmt = db()->prepare('SELECT id, first_name, last_name, course_section FROM patients WHERE id_number = ? LIMIT 1');
         $matchedPatientStmt->execute([$form['identifier']]);
         $matchedPatient = $matchedPatientStmt->fetch() ?: null;
         if ($matchedPatient) {
@@ -121,8 +121,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors['year_level'] = 'Required';
     }
 
-    if ($form['category'] === 'Student' && !is_valid_student_id($form['identifier'])) {
-        $errors['identifier'] = 'Use the format ' . STUDENT_ID_FORMAT_LABEL;
+    if ($form['category'] === 'Student' && !is_valid_id_number($form['identifier'])) {
+        $errors['identifier'] = 'Use the format ' . ID_NUMBER_FORMAT_LABEL;
     }
 
     if ($isBorrowingEquipment) {
@@ -214,14 +214,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $form['department'],
         ])));
 
-        $patientStmt = db()->prepare('SELECT id FROM patients WHERE student_number = ? LIMIT 1');
+        $patientStmt = db()->prepare('SELECT id FROM patients WHERE id_number = ? LIMIT 1');
         $patientStmt->execute([$form['identifier']]);
         $patientId = (int) $patientStmt->fetchColumn();
 
         if (!$patientId) {
             $token = hash('sha256', 'visitor-' . $form['identifier'] . '-' . microtime(true));
             $insertStmt = db()->prepare(
-                'INSERT INTO patients (student_number, first_name, last_name, course_section, emergency_token)
+                'INSERT INTO patients (id_number, first_name, last_name, course_section, emergency_token)
                  VALUES (?, ?, ?, ?, ?)'
             );
             $insertStmt->execute([$form['identifier'], $firstName, $lastName, $courseSection, $token]);
@@ -592,7 +592,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <label class="visit-label" for="identifier">Student / Staff ID</label>
                             <div class="visit-field">
                                 <span class="material-symbols-outlined">badge</span>
-                                <input class="visit-input <?= isset($errors['identifier']) ? 'input-error' : '' ?>" id="identifier" name="identifier" value="<?= e($form['identifier']) ?>" placeholder="00-00000" data-student-id-format data-student-category-source="category" autocomplete="off" required>
+                                <input class="visit-input <?= isset($errors['identifier']) ? 'input-error' : '' ?>" id="identifier" name="identifier" value="<?= e($form['identifier']) ?>" placeholder="Enter ID number" data-id-number-format data-student-category-source="category" autocomplete="off" required>
                             </div>
                             <div id="visitorLookupStatus" class="visit-lookup-status">Type your ID to load existing student details.</div>
                         </div>
@@ -860,7 +860,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         const sequence = ++visitorLookupSequence;
-        setVisitorLookupStatus('Checking student ID...');
+        setVisitorLookupStatus('Checking ID number...');
 
         try {
             const response = await fetch(`visitor-registration.php?lookup_identifier=${encodeURIComponent(formatted)}`, {
@@ -929,6 +929,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }, 1000);
     <?php endif; ?>
 </script>
-<script src="<?= app_url('assets/js/app.js?v=student-id-format-2') ?>"></script>
+<script src="<?= app_url('assets/js/app.js?v=id-number-format-2') ?>"></script>
 </body>
 </html>

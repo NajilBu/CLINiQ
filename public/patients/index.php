@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_login();
@@ -11,7 +11,7 @@ $offset = ($page - 1) * $perPage;
 
 // Count total
 if ($search !== '') {
-    $countStmt = db()->prepare("SELECT COUNT(*) AS total FROM patients WHERE first_name LIKE ? OR last_name LIKE ? OR student_number LIKE ?");
+    $countStmt = db()->prepare("SELECT COUNT(*) AS total FROM patients WHERE first_name LIKE ? OR last_name LIKE ? OR id_number LIKE ?");
     $like = "%{$search}%";
     $countStmt->execute([$like, $like, $like]);
 } else {
@@ -22,7 +22,7 @@ $totalPages = max(1, ceil($totalRows / $perPage));
 
 // Fetch page
 if ($search !== '') {
-    $stmt = db()->prepare("SELECT * FROM patients WHERE first_name LIKE ? OR last_name LIKE ? OR student_number LIKE ? ORDER BY last_name, first_name LIMIT {$perPage} OFFSET {$offset}");
+    $stmt = db()->prepare("SELECT * FROM patients WHERE first_name LIKE ? OR last_name LIKE ? OR id_number LIKE ? ORDER BY last_name, first_name LIMIT {$perPage} OFFSET {$offset}");
     $stmt->execute([$like, $like, $like]);
 } else {
     $stmt = db()->prepare("SELECT * FROM patients ORDER BY last_name, first_name LIMIT {$perPage} OFFSET {$offset}");
@@ -43,7 +43,7 @@ foreach ($patients as $patient) {
     $displayName = trim($patient['first_name'] . ' ' . $patient['last_name']);
     $patientRows[] = [
         'rowUrl' => 'view.php?id=' . (int)$patient['id'],
-        'studentNumber' => $patient['student_number'],
+        'studentNumber' => $patient['id_number'],
         'nameHtml' => '<div class="flex items-center gap-3"><div class="avatar ' . e(avatar_color($displayName)) . '">' . e(initials($displayName)) . '</div><strong class="text-sm text-slate-800">' . e($fullName) . '</strong></div>',
         'courseSection' => $patient['course_section'],
         'guardianContact' => $patient['guardian_contact'] ?: '-',

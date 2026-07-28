@@ -13,7 +13,7 @@ if ($filterStatus !== 'all') {
 }
 
 $stmt = db()->prepare("
-    SELECT r.*, p.first_name, p.last_name, p.student_number
+    SELECT r.*, p.first_name, p.last_name, p.id_number
     FROM referrals r
     JOIN patients p ON p.id = r.patient_id
     WHERE {$where}
@@ -47,7 +47,7 @@ foreach ($referrals as $ref) {
     }
     $referralRows[] = [
         'rowUrl' => app_url('patients/view.php?id=' . (int)$ref['patient_id']),
-        'patientHtml' => '<div class="flex items-center gap-3"><div class="avatar ' . e(avatar_color($fullName)) . '">' . e(initials($fullName)) . '</div><div><strong class="text-sm text-slate-800">' . e($fullName) . '</strong><div class="text-xs font-bold text-slate-400">' . e($ref['student_number']) . '</div></div></div>',
+        'patientHtml' => '<div class="flex items-center gap-3"><div class="avatar ' . e(avatar_color($fullName)) . '">' . e(initials($fullName)) . '</div><div><strong class="text-sm text-slate-800">' . e($fullName) . '</strong><div class="text-xs font-bold text-slate-400">' . e($ref['id_number']) . '</div></div></div>',
         'referredTo' => $ref['referred_to'],
         'reason' => $ref['reason'],
         'date' => date('M d, Y', strtotime($ref['referral_date'])),

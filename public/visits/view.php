@@ -230,7 +230,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $stmt = db()->prepare("
-    SELECT v.*, p.first_name, p.middle_name, p.last_name, p.student_number, p.course_section, p.birthdate, p.sex,
+    SELECT v.*, p.first_name, p.middle_name, p.last_name, p.id_number, p.course_section, p.birthdate, p.sex,
            p.blood_type, p.allergies, p.existing_conditions, p.guardian_name, p.guardian_contact,
            u.name AS recorded_by_name, au.name AS attended_by_name
     FROM clinic_visits v
@@ -530,7 +530,7 @@ render_header($pageTitle);
             <div>
                 <h1 class="font-headline text-2xl md:text-3xl font-extrabold text-[#1c2a59] mb-1"><?= e($fullName) ?></h1>
                 <div class="flex flex-wrap items-center gap-3 text-xs font-bold text-slate-500">
-                    <span class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[15px]">badge</span><?= e($visit['student_number']) ?></span>
+                    <span class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[15px]">badge</span><?= e($visit['id_number']) ?></span>
                     <span class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[15px]">water_drop</span>Blood Type: <?= e($visit['blood_type'] ?: '-') ?></span>
                 </div>
             </div>
@@ -823,7 +823,7 @@ render_header($pageTitle);
                 <p class="clinic-label mb-1"><?= $isReadOnlyLogbook ? 'Visit Treatment Record' : 'Nurse Station Intake' ?></p>
                 <h1 class="font-headline text-2xl md:text-3xl font-extrabold text-[#1c2a59] mb-1"><?= e($fullName) ?></h1>
                 <div class="flex flex-wrap items-center gap-3 text-xs font-bold text-slate-500">
-                    <span class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[15px]">badge</span><?= e($visit['student_number']) ?></span>
+                    <span class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[15px]">badge</span><?= e($visit['id_number']) ?></span>
                     <span class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[15px]">water_drop</span>Blood Type: <?= e($visit['blood_type'] ?: '-') ?></span>
                 </div>
             </div>

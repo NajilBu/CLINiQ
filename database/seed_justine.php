@@ -15,7 +15,7 @@ ensure_alert_workflow_schema();
 
 $columns = $db->query('SHOW COLUMNS FROM patients')->fetchAll(PDO::FETCH_COLUMN);
 if (!in_array('password_hash', $columns, true)) {
-    $db->exec('ALTER TABLE patients ADD COLUMN password_hash VARCHAR(255) NULL AFTER student_number');
+    $db->exec('ALTER TABLE patients ADD COLUMN password_hash VARCHAR(255) NULL AFTER id_number');
 }
 
 $adminId = (int) ($db->query('SELECT id FROM users ORDER BY id LIMIT 1')->fetchColumn() ?: 1);
@@ -80,7 +80,7 @@ $students = [
 
 $db->beginTransaction();
 try {
-    $findPatient = $db->prepare('SELECT id FROM patients WHERE student_number = ? LIMIT 1');
+    $findPatient = $db->prepare('SELECT id FROM patients WHERE id_number = ? LIMIT 1');
     $updatePatient = $db->prepare('
         UPDATE patients
         SET password_hash = ?, first_name = ?, middle_name = NULL, last_name = ?, birthdate = ?, sex = ?,
@@ -90,7 +90,7 @@ try {
     ');
     $insertPatient = $db->prepare('
         INSERT INTO patients (
-            student_number, password_hash, first_name, last_name, birthdate, sex, course_section,
+            id_number, password_hash, first_name, last_name, birthdate, sex, course_section,
             blood_type, allergies, existing_conditions, emergency_instructions, guardian_name,
             guardian_contact, emergency_token
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

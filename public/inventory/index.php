@@ -826,7 +826,7 @@ render_clinic_command_header(
                 </div>
                 <div>
                     <label class="clinic-label">Borrower ID / Contact</label>
-                    <input class="clinic-input" name="borrower_identifier" placeholder="Student ID, staff ID, or contact">
+                    <input class="clinic-input" name="borrower_identifier" placeholder="ID Number, staff ID, or contact">
                 </div>
                 <div>
                     <label class="clinic-label">Quantity</label>
