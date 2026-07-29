@@ -22,6 +22,7 @@ CREATE TABLE accounts (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   person_id BIGINT UNSIGNED NOT NULL UNIQUE,
   password_hash VARCHAR(255) NULL,
+  temporary_password_hash VARCHAR(255) NULL,
   account_status ENUM('inactive', 'active', 'suspended')
     NOT NULL DEFAULT 'inactive',
   activated_at DATETIME NULL,

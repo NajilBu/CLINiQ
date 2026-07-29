@@ -11,6 +11,7 @@ ensure_dropdown_options_schema();
 $user = current_user() ?? [];
 $canManageSettings = in_array($user['role'] ?? '', ['admin', 'nurse', 'it_expert'], true);
 $canManageStaffProfiles = in_array($user['role'] ?? '', ['admin', 'it_expert'], true);
+$canManagePatientAccounts = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
 $dropdownCategoryLabels = [
     'students' => 'Students & Visitors',
     'visits' => 'Clinic Visits',
@@ -271,6 +272,12 @@ render_clinic_command_header(
             <span class="material-symbols-outlined">admin_panel_settings</span>
             <span>Staff Profiles</span>
         </a>
+        <?php if ($canManagePatientAccounts): ?>
+            <a href="<?= e(app_url('patient-accounts/index.php')) ?>" class="settings-tab-link text-decoration-none" data-no-ajax="true">
+                <span class="material-symbols-outlined">manage_accounts</span>
+                <span>Patient Accounts</span>
+            </a>
+        <?php endif; ?>
         <a href="index.php?tab=dropdowns" class="settings-tab-link <?= $currentTab === 'dropdowns' ? 'active' : '' ?> text-decoration-none" data-settings-tab="dropdowns" data-no-ajax="true">
             <span class="material-symbols-outlined">list_alt</span>
             <span>Dropdowns</span>

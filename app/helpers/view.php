@@ -242,6 +242,7 @@ function render_header(string $title): void
                 </a>
                 <nav class="app-nav">
                     <?php foreach ($nav as $label => $item): ?>
+                        <?php if (isset($item['roles']) && !in_array($user['role'] ?? '', $item['roles'], true)) continue; ?>
                         <?php $active = str_contains($currentPath, $item['match']); ?>
                         <a href="<?= e($item['url']) ?>" class="app-nav-link <?= $active ? 'active' : '' ?> text-decoration-none" title="<?= e($label) ?>" data-no-ajax="true">
                             <span class="material-symbols-outlined"><?= e($item['icon']) ?></span>

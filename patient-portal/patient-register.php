@@ -8,6 +8,7 @@ $birthdate = trim((string) ($_POST['birthdate'] ?? ''));
 $accountType = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $temporaryPassword = (string) ($_POST['temporary_password'] ?? '');
     $password = (string) ($_POST['password'] ?? '');
     $confirmPassword = (string) ($_POST['confirm_password'] ?? '');
 
@@ -15,6 +16,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = id_number_validation_message();
     } elseif ($birthdate === '') {
         $error = 'Enter the birthdate recorded in the official roster.';
+    } elseif ($temporaryPassword === '') {
+        $error = 'Enter the temporary password provided by the clinic.';
     } elseif (strlen($password) < 8) {
         $error = 'Password must be at least 8 characters.';
     } elseif (!preg_match('/\d/', $password)) {
@@ -31,6 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     p.birthdate,
                     a.id AS account_id,
                     a.account_status,
+                    a.temporary_password_hash,
                     CASE
                         WHEN cs.person_id IS NOT NULL THEN "clinic_staff"
                         WHEN s.person_id IS NOT NULL THEN "student"
@@ -64,10 +68,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (empty($account['birthdate']) || $account['birthdate'] !== $birthdate) {
                 throw new RuntimeException('The ID number and birthdate do not match the official record.');
             }
+            if (
+                empty($account['temporary_password_hash'])
+                || !password_verify($temporaryPassword, $account['temporary_password_hash'])
+            ) {
+                throw new RuntimeException('The temporary password is incorrect. Contact the clinic if you need assistance.');
+            }
 
             $update = $authDb->prepare('
                 UPDATE accounts
-                SET password_hash = ?, account_status = "active", activated_at = NOW()
+                SET
+                    password_hash = ?,
+                    temporary_password_hash = NULL,
+                    account_status = "active",
+                    activated_at = NOW()
                 WHERE id = ?
             ');
             $update->execute([
@@ -111,13 +125,13 @@ render_student_auth_header('Account Registration');
                 <h1 class="student-auth-side-title">Register your account</h1>
                 <p class="student-auth-side-copy">Registration is available only to people already included in the official student, faculty, clinic staff, or patient list.</p>
             </div>
-            <p class="student-auth-side-footnote">Your ID number and birthdate must match the official roster</p>
+            <p class="student-auth-side-footnote">Use your ID number, birthdate, and clinic-provided temporary password</p>
         </aside>
 
         <div class="student-auth-form-side">
             <p class="student-eyebrow">Account registration</p>
             <h2 class="student-card-title text-xl">Activate your CLINiQ account</h2>
-            <p class="student-card-copy mb-5">Enter your registered details and create a secure password.</p>
+            <p class="student-card-copy mb-5">Verify the temporary credentials provided by the clinic, then create a secure password.</p>
 
             <?php if ($error !== ''): ?>
                 <div class="student-note student-note-danger mb-4">
@@ -133,7 +147,7 @@ render_student_auth_header('Account Registration');
                 </div>
                 <?php if ($accountType === 'clinic_staff'): ?>
                     <a href="../public/login.php" class="student-button w-full text-decoration-none justify-center">Go to Staff Login</a>
-                <?php elseif (in_array($accountType, ['student', 'faculty'], true)): ?>
+                <?php else: ?>
                     <a href="patient-login.php" class="student-button w-full text-decoration-none justify-center">Go to Patient Login</a>
                 <?php endif; ?>
             <?php else: ?>
@@ -145,6 +159,10 @@ render_student_auth_header('Account Registration');
                     <div class="student-field">
                         <label class="student-label" for="birthdate">Birthdate</label>
                         <input id="birthdate" name="birthdate" class="student-input" type="date" value="<?= student_e($birthdate) ?>" required>
+                    </div>
+                    <div class="student-field">
+                        <label class="student-label" for="temporary-password">Temporary Password</label>
+                        <input id="temporary-password" name="temporary_password" class="student-input" type="password" inputmode="numeric" autocomplete="one-time-code" required>
                     </div>
                     <div class="student-field">
                         <label class="student-label" for="password">Create Password</label>

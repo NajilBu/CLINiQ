@@ -194,6 +194,7 @@ function student_find_patient_by_number(string $studentNumber): ?array
           AND (
             EXISTS (SELECT 1 FROM students s WHERE s.person_id = p.id)
             OR EXISTS (SELECT 1 FROM faculty f WHERE f.person_id = p.id)
+            OR EXISTS (SELECT 1 FROM patients pt WHERE pt.person_id = p.id)
           )
         LIMIT 1
     ');
