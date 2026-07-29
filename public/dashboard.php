@@ -5,6 +5,73 @@ require_once __DIR__ . '/../app/services/ApeWorkflow.php';
 require_once __DIR__ . '/../app/services/AlertWorkflow.php';
 require_once __DIR__ . '/../app/services/AppointmentWorkflow.php';
 require_login();
+
+$firstRegistrationError = '';
+if (first_registration_pending('staff')) {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'complete_first_registration') {
+        try {
+            complete_first_registration(
+                (string) ($_POST['password'] ?? ''),
+                (string) ($_POST['confirm_password'] ?? '')
+            );
+            header('Location: dashboard.php?activated=1');
+            exit;
+        } catch (Throwable $e) {
+            $firstRegistrationError = $e->getMessage();
+        }
+    }
+
+    $registrationUser = current_user() ?? [];
+    render_header('Complete Registration');
+    ?>
+    <div class="dashboard-page">
+        <?php render_clinic_command_header(
+            'First Registration',
+            'Welcome, ' . (string) ($registrationUser['name'] ?? 'Clinic Staff'),
+            'Create your permanent password to activate and unlock your clinic staff account.',
+            '<span class="badge badge-pending">Activation Required</span>'
+        ); ?>
+
+        <section class="clinic-card p-6 max-w-2xl mx-auto">
+            <div class="flex items-start gap-4 mb-5">
+                <span class="w-12 h-12 rounded-xl bg-primary-fixed text-primary flex items-center justify-center">
+                    <span class="material-symbols-outlined">password</span>
+                </span>
+                <div>
+                    <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Create your password</h2>
+                    <p class="text-sm font-bold text-slate-500 mb-0">Your identity has been verified. Clinic functions remain locked until activation is completed.</p>
+                </div>
+            </div>
+
+            <?php if ($firstRegistrationError !== ''): ?>
+                <div class="rounded-xl bg-red-50 border border-red-100 text-red-700 px-4 py-3 text-sm font-bold mb-5">
+                    <?= e($firstRegistrationError) ?>
+                </div>
+            <?php endif; ?>
+
+            <form method="post" class="space-y-4" autocomplete="off">
+                <input type="hidden" name="action" value="complete_first_registration">
+                <div>
+                    <label class="clinic-label" for="password">Create Password</label>
+                    <input class="clinic-input" id="password" name="password" type="password" minlength="8" autocomplete="new-password" required>
+                </div>
+                <div>
+                    <label class="clinic-label" for="confirm-password">Confirm Password</label>
+                    <input class="clinic-input" id="confirm-password" name="confirm_password" type="password" minlength="8" autocomplete="new-password" required>
+                </div>
+                <p class="text-xs font-bold text-slate-500">Use at least 8 characters with at least one number.</p>
+                <button type="submit" class="btn btn-primary w-full justify-center">
+                    <span class="material-symbols-outlined">verified_user</span>
+                    Activate Account
+                </button>
+            </form>
+        </section>
+    </div>
+    <?php
+    render_footer();
+    return;
+}
+
 ensure_ape_workflow_schema();
 ensure_alert_workflow_schema();
 ensure_appointment_schema();
@@ -155,6 +222,12 @@ render_header('Main Dashboard');
 ?>
 
 <div class="dashboard-page">
+
+    <?php if (isset($_GET['activated'])): ?>
+        <div class="rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-800 px-4 py-3 text-sm font-bold mb-5">
+            Your account is now active. The clinic dashboard is fully unlocked.
+        </div>
+    <?php endif; ?>
 
     <?php render_clinic_command_header(
         'Clinic Command Center',

@@ -229,7 +229,7 @@ render_header('Login');
 
         <div class="staff-login-form">
             <h2 class="font-headline text-2xl font-extrabold text-[#17261d] mb-1"><?= e($clinicProfile['system_name']) ?></h2>
-            <p class="text-sm font-bold text-slate-500 mb-7">Enter your credentials to continue.</p>
+            <p class="text-sm font-bold text-slate-500 mb-7">Enter the password provided by the clinic or the password you created after activation.</p>
 
             <?php if ($error): ?>
                 <div class="rounded-xl bg-red-50 border border-red-100 text-red-700 px-4 py-3 text-sm font-bold mb-5"><?= e($error) ?></div>
@@ -244,7 +244,7 @@ render_header('Login');
                 <div class="staff-field">
                     <label for="password">Password</label>
                     <div class="staff-input-wrap">
-                        <input class="staff-login-input pr-14" id="password" name="password" type="password" value="<?= e($_POST['password'] ?? 'password') ?>" placeholder="Enter your password" autocomplete="current-password" required>
+                        <input class="staff-login-input pr-14" id="password" name="password" type="password" value="<?= e($_POST['password'] ?? 'password') ?>" placeholder="Enter password" autocomplete="current-password" required>
                         <button type="button" class="staff-toggle-pw" id="togglePassword">Show</button>
                     </div>
                 </div>
@@ -253,8 +253,7 @@ render_header('Login');
             </form>
 
             <p class="text-center text-xs font-bold text-slate-500 mt-4">
-                Inactive account?
-                <a href="../patient-portal/patient-register.php" class="text-primary text-decoration-none">Register here.</a>
+                First login? Enter the password provided by the clinic.
             </p>
 
             <div class="staff-note">

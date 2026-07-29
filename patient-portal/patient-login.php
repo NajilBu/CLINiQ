@@ -18,9 +18,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $patient = student_find_patient_by_number($studentIdValue);
         if ($patient === null) {
-            $error = 'Patient account not found or not active.';
+            $error = 'Patient account not found or currently suspended.';
         } elseif (!student_password_is_valid($patient, $password)) {
-            $error = 'Invalid ID Number or password. Please try again.';
+            $error = 'Invalid ID number or password. Please try again.';
+        } elseif ($patient['account_status'] === 'inactive') {
+            begin_first_registration($patient);
+            header('Location: patient-dashboard.php');
+            exit;
         } else {
             student_start_session();
             $_SESSION['patient_legacy_id'] = (int) $patient['legacy_patient_id'];
@@ -61,7 +65,7 @@ render_student_auth_header('Patient Login');
         <div class="student-auth-form-side">
             <p class="student-eyebrow">Welcome Back</p>
             <h2 class="student-card-title text-xl">Sign in to your clinic record</h2>
-            <p class="student-card-copy mb-5">Access your APE status, document uploads, and appointment requests.</p>
+            <p class="student-card-copy mb-5">Enter the password provided by the clinic or the password you created after activation.</p>
 
             <div id="error-alert" class="student-note student-note-danger mb-4 <?= $error === '' ? 'hidden' : '' ?>">
                 <span class="material-symbols-outlined">error</span>
@@ -80,7 +84,7 @@ render_student_auth_header('Patient Login');
                         <a href="patient-forgot-password.php" class="student-auth-link text-[11px] text-decoration-none">Forgot password?</a>
                     </div>
                     <div class="relative">
-                        <input type="password" id="password" name="password" class="student-input pr-14" placeholder="Enter your password" autocomplete="current-password" required>
+                        <input type="password" id="password" name="password" class="student-input pr-14" placeholder="Enter password" autocomplete="current-password" required>
                         <button type="button" class="student-toggle-pw" data-target="password">Show</button>
                     </div>
                 </div>
@@ -91,10 +95,8 @@ render_student_auth_header('Patient Login');
                 </button>
             </form>
 
-            <hr class="student-auth-divider">
-            <p class="text-center text-xs font-bold text-slate-500">
-                No account yet?
-                <a href="patient-register.php" class="student-auth-link text-decoration-none">Register here.</a>
+            <p class="text-center text-xs font-bold text-slate-500 mt-4">
+                First login? Enter the password provided by the clinic.
             </p>
         </div>
     </section>

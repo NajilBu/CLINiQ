@@ -389,7 +389,7 @@ render_clinic_command_header(
                                 </select>
                             </div>
                             <div class="settings-field">
-                                <label class="clinic-label" for="new_staff_password">Temporary Password</label>
+                                <label class="clinic-label" for="new_staff_password">Password</label>
                                 <input class="settings-input" id="new_staff_password" name="password" type="password" minlength="8" autocomplete="new-password" <?= !$canManageStaffProfiles ? 'readonly' : '' ?> required>
                             </div>
                         </div>

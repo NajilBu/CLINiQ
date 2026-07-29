@@ -90,7 +90,7 @@ function create_staff_profile(array $input): void
         throw new InvalidArgumentException('Enter a valid email address.');
     }
     if (strlen($password) < 8) {
-        throw new InvalidArgumentException('Temporary password must be at least 8 characters.');
+        throw new InvalidArgumentException('Password must be at least 8 characters.');
     }
 
     $stmt = db()->prepare('INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)');

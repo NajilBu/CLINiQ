@@ -175,6 +175,11 @@ function render_header(string $title): void
         'Reports' => ['url' => app_url('reports/index.php'), 'match' => '/reports/', 'icon' => 'analytics'],
         'Settings' => ['url' => app_url('settings/index.php'), 'match' => '/settings/', 'icon' => 'settings'],
     ];
+    if (first_registration_pending('staff')) {
+        $nav = [
+            'Dashboard' => $nav['Dashboard'],
+        ];
+    }
     ?>
     <!doctype html>
     <html class="light" lang="en">

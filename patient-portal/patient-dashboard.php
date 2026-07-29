@@ -6,6 +6,75 @@ require_once __DIR__ . '/includes/patient-layout.php';
 ensure_appointment_schema();
 
 $profile = student_require_login();
+$firstRegistrationError = '';
+if (!empty($profile['first_registration'])) {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'complete_first_registration') {
+        try {
+            complete_first_registration(
+                (string) ($_POST['password'] ?? ''),
+                (string) ($_POST['confirm_password'] ?? '')
+            );
+            header('Location: patient-dashboard.php?activated=1');
+            exit;
+        } catch (Throwable $e) {
+            $firstRegistrationError = $e->getMessage();
+        }
+    }
+
+    render_student_header('Complete Registration', 'dashboard');
+    ?>
+    <section class="student-page-header">
+        <div>
+            <p class="student-eyebrow">First Registration</p>
+            <h1 class="student-title">Welcome, <?= student_e($profile['first_name']) ?></h1>
+            <p class="student-subtitle">Create your permanent password to activate and unlock your CLINiQ account.</p>
+        </div>
+        <span class="student-badge student-badge-warning">
+            <span class="material-symbols-outlined text-[14px]">lock</span>
+            Activation Required
+        </span>
+    </section>
+
+    <section class="student-card student-card-pad max-w-2xl mx-auto">
+        <div class="flex items-start gap-4 mb-5">
+            <span class="student-icon-box">
+                <span class="material-symbols-outlined">password</span>
+            </span>
+            <div>
+                <h2 class="student-card-title">Create your password</h2>
+                <p class="student-card-copy">Your identity has been verified. Dashboard features will remain locked until this step is completed.</p>
+            </div>
+        </div>
+
+        <?php if ($firstRegistrationError !== ''): ?>
+            <div class="student-note student-note-danger mb-4">
+                <span class="material-symbols-outlined">error</span>
+                <div><?= student_e($firstRegistrationError) ?></div>
+            </div>
+        <?php endif; ?>
+
+        <form method="post" class="space-y-4" autocomplete="off">
+            <input type="hidden" name="action" value="complete_first_registration">
+            <div class="student-field">
+                <label class="student-label" for="password">Create Password</label>
+                <input id="password" name="password" class="student-input" type="password" minlength="8" autocomplete="new-password" required>
+            </div>
+            <div class="student-field">
+                <label class="student-label" for="confirm-password">Confirm Password</label>
+                <input id="confirm-password" name="confirm_password" class="student-input" type="password" minlength="8" autocomplete="new-password" required>
+            </div>
+            <p class="student-card-copy text-[11px]">Use at least 8 characters with at least one number.</p>
+            <button type="submit" class="student-button w-full">
+                Activate Account
+                <span class="material-symbols-outlined">verified_user</span>
+            </button>
+        </form>
+    </section>
+    <?php
+    render_student_footer();
+    return;
+}
+
 $patientId = (int) $profile['patient_id'];
 $db = db();
 
@@ -111,6 +180,13 @@ $appointmentSummary = match ($appointmentStatus) {
 
 render_student_header('Dashboard', 'dashboard');
 ?>
+
+<?php if (isset($_GET['activated'])): ?>
+    <div class="student-note student-note-success mb-4">
+        <span class="material-symbols-outlined">check_circle</span>
+        <div>Your account is now active. Your dashboard is fully unlocked.</div>
+    </div>
+<?php endif; ?>
 
 <section class="student-page-header">
     <div>

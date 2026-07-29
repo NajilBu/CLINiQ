@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../../app/config/database.php';
+require_once __DIR__ . '/../../app/helpers/auth.php';
 require_once __DIR__ . '/../../app/helpers/brand.php';
 require_once __DIR__ . '/../../app/helpers/student_id.php';
 require_once __DIR__ . '/../../app/services/SystemSettings.php';
@@ -59,6 +60,8 @@ function student_profile_from_identity(array $identity, ?array $legacyPatient): 
         'patient_id' => (int) ($legacyPatient['id'] ?? 0),
         'person_id' => (int) ($identity['person_id'] ?? 0),
         'account_id' => (int) ($identity['account_id'] ?? 0),
+        'account_status' => (string) ($identity['account_status'] ?? ''),
+        'first_registration' => !empty($identity['first_registration']),
         'account_type' => (string) ($identity['account_type'] ?? 'patient'),
         'has_clinical_record' => $legacyPatient !== null,
         'name' => $fullName !== '' ? $fullName : 'Patient',
@@ -109,6 +112,8 @@ function student_current_profile(): ?array
             p.updated_at,
             a.id AS account_id,
             a.account_status,
+            a.password_hash,
+            a.temporary_password_hash,
             s.program,
             f.department AS faculty_department,
             pt.blood_type,
@@ -128,15 +133,33 @@ function student_current_profile(): ?array
         LEFT JOIN students s ON s.person_id = p.id
         LEFT JOIN faculty f ON f.person_id = p.id
         LEFT JOIN patients pt ON pt.person_id = p.id
-        WHERE p.id = ? AND a.account_status = "active"
+        WHERE p.id = ?
         LIMIT 1
     ');
     $stmt->execute([$personId]);
     $identity = $stmt->fetch();
-    if (!$identity) {
-        unset($_SESSION['patient_person_id'], $_SESSION['student_person_id']);
+
+    $registration = first_registration_context();
+    $isFirstRegistration = (
+        $identity
+        && first_registration_pending('patient')
+        && (int) ($registration['person_id'] ?? 0) === (int) $identity['person_id']
+        && (int) ($registration['account_id'] ?? 0) === (int) $identity['account_id']
+        && $identity['account_status'] === 'inactive'
+        && empty($identity['password_hash'])
+        && !empty($identity['temporary_password_hash'])
+    );
+    if (!$identity || ($identity['account_status'] !== 'active' && !$isFirstRegistration)) {
+        unset(
+            $_SESSION['patient_person_id'],
+            $_SESSION['student_person_id'],
+            $_SESSION['patient_account_id'],
+            $_SESSION['student_account_id'],
+            $_SESSION['first_registration']
+        );
         return null;
     }
+    $identity['first_registration'] = $isFirstRegistration;
 
     $legacyStmt = db()->prepare('SELECT * FROM patients WHERE id_number = ? LIMIT 1');
     $legacyStmt->execute([$identity['id_number']]);
@@ -165,6 +188,14 @@ function student_require_login(): array
         exit;
     }
 
+    if (!empty($profile['first_registration'])) {
+        $script = basename((string) ($_SERVER['SCRIPT_NAME'] ?? ''));
+        if (!in_array($script, ['patient-dashboard.php', 'patient-login.php'], true)) {
+            header('Location: patient-dashboard.php');
+            exit;
+        }
+    }
+
     return $profile;
 }
 
@@ -185,11 +216,22 @@ function student_find_patient_by_number(string $studentNumber): ?array
         SELECT
             a.id AS account_id,
             a.password_hash,
+            a.temporary_password_hash,
             a.account_status,
             p.id AS person_id,
-            p.id_number
+            p.id_number,
+            p.first_name,
+            p.middle_name,
+            p.last_name,
+            CASE
+                WHEN s.person_id IS NOT NULL THEN "student"
+                WHEN f.person_id IS NOT NULL THEN "faculty"
+                ELSE "patient"
+            END AS account_type
         FROM accounts a
         JOIN people p ON p.id = a.person_id
+        LEFT JOIN students s ON s.person_id = p.id
+        LEFT JOIN faculty f ON f.person_id = p.id
         WHERE p.id_number = ?
           AND (
             EXISTS (SELECT 1 FROM students s WHERE s.person_id = p.id)
@@ -200,7 +242,7 @@ function student_find_patient_by_number(string $studentNumber): ?array
     ');
     $stmt->execute([$studentNumber]);
     $account = $stmt->fetch();
-    if (!$account || $account['account_status'] !== 'active') {
+    if (!$account || $account['account_status'] === 'suspended') {
         return null;
     }
 
@@ -213,7 +255,11 @@ function student_find_patient_by_number(string $studentNumber): ?array
 
 function student_password_is_valid(array $patient, string $password): bool
 {
-    $passwordHash = (string) ($patient['password_hash'] ?? '');
+    $passwordHash = (string) (
+        ($patient['account_status'] ?? '') === 'inactive'
+            ? ($patient['temporary_password_hash'] ?? '')
+            : ($patient['password_hash'] ?? '')
+    );
     return $passwordHash !== '' && password_verify($password, $passwordHash);
 }
 
@@ -228,6 +274,9 @@ function render_student_header(string $title, string $active = ''): void
     $profile = student_require_login();
     $clinicProfile = clinic_profile_settings();
     $navItems = student_nav_items();
+    if (!empty($profile['first_registration'])) {
+        $navItems = array_intersect_key($navItems, ['dashboard' => true]);
+    }
     ?>
     <!DOCTYPE html>
     <html lang="en">

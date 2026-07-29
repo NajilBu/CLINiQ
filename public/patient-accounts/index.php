@@ -55,10 +55,10 @@ render_clinic_command_header(
         <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-2"><?= e($createdAccount['name']) ?></h2>
         <div class="flex flex-wrap gap-3 text-sm font-bold">
             <span>ID: <code><?= e($createdAccount['id_number']) ?></code></span>
-            <span>Temporary password: <code><?= e($createdAccount['temporary_password']) ?></code></span>
+            <span>Password: <code><?= e($createdAccount['temporary_password']) ?></code></span>
             <span class="badge badge-pending">Inactive</span>
         </div>
-        <p class="text-xs font-bold text-emerald-800 mt-3 mb-0">Give the temporary password privately to the account owner. It is not stored as readable text.</p>
+        <p class="text-xs font-bold text-emerald-800 mt-3 mb-0">Give the password privately to the account owner. They will use it on the login page and create their own password in the dashboard.</p>
     </section>
 <?php endif; ?>
 
@@ -119,11 +119,11 @@ render_clinic_command_header(
                 </div>
             </div>
             <div class="rounded-xl bg-slate-50 border border-slate-100 px-4 py-3 text-xs font-bold text-slate-600">
-                Temporary password = last three ID digits repeated twice. Example: <code>23-00262 → 262262</code>.
+                Password = last three ID digits repeated twice. Example: <code>23-00262 → 262262</code>.
             </div>
             <button class="btn btn-primary w-full" data-confirm-submit data-confirm-type="primary"
                 data-confirm-title="Create inactive patient account?"
-                data-confirm-message="The patient must register and replace the temporary password before signing in."
+                data-confirm-message="The patient will sign in with the provided password, then create their own password in the dashboard."
                 data-confirm-toast="Creating patient account...">
                 <span class="material-symbols-outlined">person_add</span>
                 Create Inactive Account
@@ -193,7 +193,7 @@ render_clinic_command_header(
                         <th class="p-3">ID Number</th>
                         <th class="p-3">Name</th>
                         <th class="p-3">Type</th>
-                        <th class="p-3">Temporary Password</th>
+                        <th class="p-3">Password</th>
                         <th class="p-3">Result</th>
                     </tr>
                 </thead>
@@ -318,7 +318,7 @@ document.getElementById('downloadImportResults')?.addEventListener('click', () =
         'ID Number': row.id_number,
         'Name': row.name,
         'Patient Type': row.type,
-        'Temporary Password': row.temporary_password,
+        'Password': row.temporary_password,
         'Result': row.status === 'created' ? 'Created' : row.status,
     })));
     const workbook = XLSX.utils.book_new();

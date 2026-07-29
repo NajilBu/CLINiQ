@@ -1,3 +1,3 @@
 <?php
-header('Location: ../patient-portal/patient-register.php');
+header('Location: ../patient-portal/patient-login.php');
 exit;
