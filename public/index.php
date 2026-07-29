@@ -10,7 +10,7 @@ if (current_user()) {
 $publicBase = rtrim(app_url(''), '/');
 $appBase = preg_replace('#/public$#', '', $publicBase);
 $visitorRegisterUrl = app_url('visitor-registration.php');
-$studentLoginUrl = $appBase . '/student/student-login.php';
+$studentLoginUrl = $appBase . '/patient-portal/patient-login.php';
 $staffLoginUrl = app_url('login.php');
 $clinicProfile = clinic_profile_settings();
 
@@ -166,7 +166,7 @@ $clinicProfile = clinic_profile_settings();
         </a>
         <a href="<?= e($studentLoginUrl) ?>" class="btn btn-sm btn-ghost text-decoration-none">
             <span class="material-symbols-outlined text-[16px]">school</span>
-            Student
+            Patient
         </a>
     </header>
 

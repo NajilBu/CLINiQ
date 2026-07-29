@@ -1,0 +1,5 @@
+id_number,category,first_name,middle_name,last_name,birthdate,program_or_department,year_level_or_employment_type,section_or_position,staff_role
+26-00001,student,Juan,Santos,Dela Cruz,2007-01-15,BSIT,1,A,
+FAC-0001,faculty,Maria,Reyes,Santos,1985-06-20,College of Information Technology,Full-time,Instructor,
+CLINIC-001,clinic_staff,Ana,Lopez,Reyes,1990-03-12,University Health Services,,Clinic Nurse,nurse
+PAT-0001,patient,Pedro,,Garcia,1975-11-03,,,,

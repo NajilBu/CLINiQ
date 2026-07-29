@@ -901,6 +901,12 @@ html&gt;body{padding:0}&lt;/style&gt;
   &lt;/style&gt;
 
   &lt;div class=&quot;viz-controls toolbar&quot;&gt;
+    &lt;label class=&quot;form-label&quot;&gt;Database
+      &lt;select id=&quot;erd-database&quot; class=&quot;form-select&quot;&gt;
+        &lt;option value=&quot;old&quot;&gt;cliniq (current system)&lt;/option&gt;
+        &lt;option value=&quot;new&quot;&gt;Cliniq_db (new design)&lt;/option&gt;
+      &lt;/select&gt;
+    &lt;/label&gt;
     &lt;label class=&quot;form-label search-field&quot;&gt;Find a table
       &lt;input id=&quot;erd-search&quot; class=&quot;form-control&quot; type=&quot;search&quot; placeholder=&quot;patients, visits, inventory…&quot;&gt;
     &lt;/label&gt;
@@ -910,8 +916,9 @@ html&gt;body{padding:0}&lt;/style&gt;
   &lt;/div&gt;
 
   &lt;div class=&quot;card summary viz-row&quot;&gt;
-    &lt;span&gt;&lt;strong&gt;16&lt;/strong&gt; tables&lt;/span&gt;
-    &lt;span&gt;&lt;strong&gt;24&lt;/strong&gt; foreign-key relationships&lt;/span&gt;
+    &lt;span&gt;&lt;strong id=&quot;erd-table-count&quot;&gt;16&lt;/strong&gt; tables&lt;/span&gt;
+    &lt;span&gt;&lt;strong id=&quot;erd-relation-count&quot;&gt;24&lt;/strong&gt; foreign-key relationships&lt;/span&gt;
+    &lt;span id=&quot;erd-database-name&quot; class=&quot;viz-badge&quot;&gt;cliniq&lt;/span&gt;
     &lt;span class=&quot;text-muted&quot;&gt;Select a table to inspect its columns and links&lt;/span&gt;
   &lt;/div&gt;
 
@@ -939,7 +946,7 @@ html&gt;body{padding:0}&lt;/style&gt;
     const stage = root.querySelector(&#x27;#erd-stage&#x27;);
     const NS = &#x27;http://www.w3.org/2000/svg&#x27;;
 
-    const tables = [
+    const oldTables = [
       {n:&#x27;users&#x27;, x:20,y:20, c:[&#x27;id PK&#x27;,&#x27;name&#x27;,&#x27;email UNIQUE&#x27;,&#x27;password_hash&#x27;,&#x27;role&#x27;,&#x27;created_at&#x27;]},
       {n:&#x27;system_settings&#x27;,x:20,y:190,c:[&#x27;setting_key PK&#x27;,&#x27;setting_value&#x27;,&#x27;updated_by FK&#x27;,&#x27;updated_at&#x27;]},
       {n:&#x27;patients&#x27;,x:355,y:40,c:[&#x27;id PK&#x27;,&#x27;id_number UNIQUE&#x27;,&#x27;password_hash&#x27;,&#x27;first_name&#x27;,&#x27;middle_name&#x27;,&#x27;last_name&#x27;,&#x27;birthdate&#x27;,&#x27;sex&#x27;,&#x27;course_section&#x27;,&#x27;blood_type&#x27;,&#x27;allergies&#x27;,&#x27;existing_conditions&#x27;,&#x27;emergency_instructions&#x27;,&#x27;guardian_name&#x27;,&#x27;guardian_contact&#x27;,&#x27;emergency_token UNIQUE&#x27;,&#x27;token_enabled&#x27;,&#x27;created_at&#x27;,&#x27;updated_at&#x27;]},
@@ -957,7 +964,7 @@ html&gt;body{padding:0}&lt;/style&gt;
       {n:&#x27;appointments&#x27;,x:20,y:510,c:[&#x27;id PK&#x27;,&#x27;patient_id FK&#x27;,&#x27;appointment_datetime&#x27;,&#x27;purpose&#x27;,&#x27;status&#x27;,&#x27;notes&#x27;,&#x27;cancellation_reason&#x27;,&#x27;created_at&#x27;,&#x27;updated_at&#x27;]},
       {n:&#x27;appointment_availability_blocks&#x27;,x:20,y:760,c:[&#x27;id PK&#x27;,&#x27;block_date&#x27;,&#x27;start_time&#x27;,&#x27;end_time&#x27;,&#x27;reason&#x27;,&#x27;created_by FK&#x27;,&#x27;created_at&#x27;,&#x27;updated_at&#x27;]}
     ];
-    const rels = [
+    const oldRels = [
       [&#x27;system_settings&#x27;,&#x27;users&#x27;,&#x27;updated_by&#x27;,&#x27;id&#x27;],[&#x27;clinic_visits&#x27;,&#x27;patients&#x27;,&#x27;patient_id&#x27;,&#x27;id&#x27;],[&#x27;clinic_visits&#x27;,&#x27;users&#x27;,&#x27;recorded_by&#x27;,&#x27;id&#x27;],[&#x27;clinic_visits&#x27;,&#x27;users&#x27;,&#x27;attended_by&#x27;,&#x27;id&#x27;],
       [&#x27;visit_treatment_entries&#x27;,&#x27;clinic_visits&#x27;,&#x27;visit_id&#x27;,&#x27;id&#x27;],[&#x27;visit_treatment_entries&#x27;,&#x27;users&#x27;,&#x27;created_by&#x27;,&#x27;id&#x27;],
       [&#x27;ape_records&#x27;,&#x27;patients&#x27;,&#x27;patient_id&#x27;,&#x27;id&#x27;],[&#x27;ape_records&#x27;,&#x27;users&#x27;,&#x27;verified_by&#x27;,&#x27;id&#x27;],[&#x27;ape_activity_logs&#x27;,&#x27;ape_records&#x27;,&#x27;ape_record_id&#x27;,&#x27;id&#x27;],[&#x27;ape_activity_logs&#x27;,&#x27;users&#x27;,&#x27;user_id&#x27;,&#x27;id&#x27;],
@@ -966,45 +973,67 @@ html&gt;body{padding:0}&lt;/style&gt;
       [&#x27;visit_treatment_dispensings&#x27;,&#x27;visit_treatment_entries&#x27;,&#x27;treatment_entry_id&#x27;,&#x27;id&#x27;],[&#x27;visit_treatment_dispensings&#x27;,&#x27;clinic_visits&#x27;,&#x27;visit_id&#x27;,&#x27;id&#x27;],[&#x27;visit_treatment_dispensings&#x27;,&#x27;inventory_items&#x27;,&#x27;inventory_item_id&#x27;,&#x27;id&#x27;],[&#x27;visit_treatment_dispensings&#x27;,&#x27;inventory_loans&#x27;,&#x27;inventory_loan_id&#x27;,&#x27;id&#x27;],
       [&#x27;referrals&#x27;,&#x27;patients&#x27;,&#x27;patient_id&#x27;,&#x27;id&#x27;],[&#x27;passport_access_logs&#x27;,&#x27;patients&#x27;,&#x27;patient_id&#x27;,&#x27;id&#x27;],[&#x27;appointments&#x27;,&#x27;patients&#x27;,&#x27;patient_id&#x27;,&#x27;id&#x27;],[&#x27;appointment_availability_blocks&#x27;,&#x27;users&#x27;,&#x27;created_by&#x27;,&#x27;id&#x27;]
     ];
-    const tableMap = new Map(tables.map(t =&gt; [t.n,t]));
+    const newTables = [
+      {n:&#x27;people&#x27;,x:60,y:80,c:[&#x27;id PK&#x27;,&#x27;id_number UNIQUE&#x27;,&#x27;first_name&#x27;,&#x27;middle_name&#x27;,&#x27;last_name&#x27;,&#x27;birthdate&#x27;,&#x27;created_at&#x27;,&#x27;updated_at&#x27;]},
+      {n:&#x27;accounts&#x27;,x:420,y:80,c:[&#x27;id PK&#x27;,&#x27;person_id FK UNIQUE&#x27;,&#x27;password_hash&#x27;,&#x27;account_status&#x27;,&#x27;activated_at&#x27;,&#x27;last_login_at&#x27;,&#x27;created_at&#x27;,&#x27;updated_at&#x27;]},
+      {n:&#x27;students&#x27;,x:60,y:430,c:[&#x27;person_id PK FK&#x27;,&#x27;program&#x27;,&#x27;year_level&#x27;,&#x27;section&#x27;,&#x27;academic_year&#x27;]},
+      {n:&#x27;faculty&#x27;,x:360,y:430,c:[&#x27;person_id PK FK&#x27;,&#x27;department&#x27;,&#x27;employment_type&#x27;,&#x27;position_title&#x27;,&#x27;office&#x27;]},
+      {n:&#x27;clinic_staff&#x27;,x:660,y:430,c:[&#x27;person_id PK FK&#x27;,&#x27;staff_role&#x27;,&#x27;department&#x27;,&#x27;position_title&#x27;]},
+      {n:&#x27;patients&#x27;,x:960,y:430,c:[&#x27;person_id PK FK&#x27;,&#x27;blood_type&#x27;,&#x27;allergies&#x27;,&#x27;existing_conditions&#x27;,&#x27;emergency_instructions&#x27;,&#x27;guardian_or_contact_name&#x27;,&#x27;guardian_or_contact_number&#x27;,&#x27;emergency_token UNIQUE&#x27;,&#x27;token_enabled&#x27;]}
+    ];
+    const newRels = [
+      [&#x27;accounts&#x27;,&#x27;people&#x27;,&#x27;person_id&#x27;,&#x27;id&#x27;],
+      [&#x27;students&#x27;,&#x27;people&#x27;,&#x27;person_id&#x27;,&#x27;id&#x27;],
+      [&#x27;faculty&#x27;,&#x27;people&#x27;,&#x27;person_id&#x27;,&#x27;id&#x27;],
+      [&#x27;clinic_staff&#x27;,&#x27;people&#x27;,&#x27;person_id&#x27;,&#x27;id&#x27;],
+      [&#x27;patients&#x27;,&#x27;people&#x27;,&#x27;person_id&#x27;,&#x27;id&#x27;]
+    ];
+    let tables = oldTables;
+    let rels = oldRels;
+    let tableMap = new Map();
     const nodeW=260;
     const nodeHeight=t=&gt;44+t.c.length*18;
 
-    const edges = document.createElementNS(NS,&#x27;g&#x27;);
-    rels.forEach((r,i) =&gt; {
-      const a=tableMap.get(r[0]), b=tableMap.get(r[1]);
-      const x1=a.x+nodeW/2, y1=a.y+nodeHeight(a)/2, x2=b.x+nodeW/2, y2=b.y+nodeHeight(b)/2;
-      const mid=(x1+x2)/2;
-      const p=document.createElementNS(NS,&#x27;path&#x27;);
-      p.setAttribute(&#x27;d&#x27;,`M${x1} ${y1} C${mid} ${y1},${mid} ${y2},${x2} ${y2}`);
-      p.setAttribute(&#x27;class&#x27;,&#x27;edge&#x27;);
-      p.setAttribute(&#x27;marker-end&#x27;,&#x27;url(#erd-arrow)&#x27;);
-      p.dataset.from=r[0]; p.dataset.to=r[1]; p.dataset.i=i;
-      edges.appendChild(p);
-    });
-    world.appendChild(edges);
-
-    const nodes = document.createElementNS(NS,&#x27;g&#x27;);
-    tables.forEach(t =&gt; {
-      const g=document.createElementNS(NS,&#x27;g&#x27;);
-      g.setAttribute(&#x27;class&#x27;,&#x27;node&#x27;); g.setAttribute(&#x27;transform&#x27;,`translate(${t.x},${t.y})`);
-      g.dataset.table=t.n; g.setAttribute(&#x27;role&#x27;,&#x27;button&#x27;); g.setAttribute(&#x27;aria-label&#x27;,`${t.n} table, ${t.c.length} columns`);
-      const body=document.createElementNS(NS,&#x27;rect&#x27;); body.setAttribute(&#x27;width&#x27;,nodeW); body.setAttribute(&#x27;height&#x27;,nodeHeight(t)); body.setAttribute(&#x27;rx&#x27;,8);
-      const head=document.createElementNS(NS,&#x27;rect&#x27;); head.setAttribute(&#x27;class&#x27;,&#x27;head&#x27;); head.setAttribute(&#x27;width&#x27;,nodeW); head.setAttribute(&#x27;height&#x27;,34); head.setAttribute(&#x27;rx&#x27;,8);
-      const title=document.createElementNS(NS,&#x27;text&#x27;); title.setAttribute(&#x27;class&#x27;,&#x27;name&#x27;); title.setAttribute(&#x27;x&#x27;,12); title.setAttribute(&#x27;y&#x27;,22); title.textContent=t.n;
-      g.append(body,head,title);
-      t.c.forEach((column,index)=&gt;{
-        const row=document.createElementNS(NS,&#x27;text&#x27;);
-        row.setAttribute(&#x27;x&#x27;,12); row.setAttribute(&#x27;y&#x27;,52+index*18);
-        const parts=column.split(&#x27; &#x27;);
-        row.textContent=`${parts.slice(1).join(&#x27; &#x27;)||&#x27;  &#x27;}  ${parts[0]}`;
-        if(parts.length&gt;1) row.setAttribute(&#x27;class&#x27;,&#x27;meta&#x27;);
-        g.appendChild(row);
+    function renderGraph(database) {
+      tables=database===&#x27;new&#x27;?newTables:oldTables;
+      rels=database===&#x27;new&#x27;?newRels:oldRels;
+      tableMap=new Map(tables.map(t=&gt;[t.n,t]));
+      world.replaceChildren();
+      const edges=document.createElementNS(NS,&#x27;g&#x27;);
+      rels.forEach((r,i)=&gt;{
+        const a=tableMap.get(r[0]),b=tableMap.get(r[1]);
+        const x1=a.x+nodeW/2,y1=a.y+nodeHeight(a)/2,x2=b.x+nodeW/2,y2=b.y+nodeHeight(b)/2;
+        const mid=(x1+x2)/2;
+        const p=document.createElementNS(NS,&#x27;path&#x27;);
+        p.setAttribute(&#x27;d&#x27;,`M${x1} ${y1} C${mid} ${y1},${mid} ${y2},${x2} ${y2}`);
+        p.setAttribute(&#x27;class&#x27;,&#x27;edge&#x27;);p.setAttribute(&#x27;marker-end&#x27;,&#x27;url(#erd-arrow)&#x27;);
+        p.dataset.from=r[0];p.dataset.to=r[1];p.dataset.i=i;edges.appendChild(p);
       });
-      g.addEventListener(&#x27;click&#x27;,e=&gt;{e.stopPropagation(); select(t.n);});
-      nodes.appendChild(g);
-    });
-    world.appendChild(nodes);
+      world.appendChild(edges);
+      const nodes=document.createElementNS(NS,&#x27;g&#x27;);
+      tables.forEach(t=&gt;{
+        const g=document.createElementNS(NS,&#x27;g&#x27;);
+        g.setAttribute(&#x27;class&#x27;,&#x27;node&#x27;);g.setAttribute(&#x27;transform&#x27;,`translate(${t.x},${t.y})`);
+        g.dataset.table=t.n;g.setAttribute(&#x27;role&#x27;,&#x27;button&#x27;);g.setAttribute(&#x27;aria-label&#x27;,`${t.n} table, ${t.c.length} columns`);
+        const body=document.createElementNS(NS,&#x27;rect&#x27;);body.setAttribute(&#x27;width&#x27;,nodeW);body.setAttribute(&#x27;height&#x27;,nodeHeight(t));body.setAttribute(&#x27;rx&#x27;,8);
+        const head=document.createElementNS(NS,&#x27;rect&#x27;);head.setAttribute(&#x27;class&#x27;,&#x27;head&#x27;);head.setAttribute(&#x27;width&#x27;,nodeW);head.setAttribute(&#x27;height&#x27;,34);head.setAttribute(&#x27;rx&#x27;,8);
+        const title=document.createElementNS(NS,&#x27;text&#x27;);title.setAttribute(&#x27;class&#x27;,&#x27;name&#x27;);title.setAttribute(&#x27;x&#x27;,12);title.setAttribute(&#x27;y&#x27;,22);title.textContent=t.n;
+        g.append(body,head,title);
+        t.c.forEach((column,index)=&gt;{
+          const row=document.createElementNS(NS,&#x27;text&#x27;);row.setAttribute(&#x27;x&#x27;,12);row.setAttribute(&#x27;y&#x27;,52+index*18);
+          const parts=column.split(&#x27; &#x27;);row.textContent=`${parts.slice(1).join(&#x27; &#x27;)||&#x27;  &#x27;}  ${parts[0]}`;
+          if(parts.length&gt;1)row.setAttribute(&#x27;class&#x27;,&#x27;meta&#x27;);g.appendChild(row);
+        });
+        g.addEventListener(&#x27;click&#x27;,e=&gt;{e.stopPropagation();select(t.n);});nodes.appendChild(g);
+      });
+      world.appendChild(nodes);
+      root.querySelector(&#x27;#erd-table-count&#x27;).textContent=tables.length;
+      root.querySelector(&#x27;#erd-relation-count&#x27;).textContent=rels.length;
+      root.querySelector(&#x27;#erd-database-name&#x27;).textContent=database===&#x27;new&#x27;?&#x27;Cliniq_db&#x27;:&#x27;cliniq&#x27;;
+      root.querySelector(&#x27;#erd-search&#x27;).value=&#x27;&#x27;;
+      reset();
+      select(database===&#x27;new&#x27;?&#x27;people&#x27;:&#x27;patients&#x27;);
+    }
 
     function select(name) {
       const t=tableMap.get(name);
@@ -1031,7 +1060,8 @@ html&gt;body{padding:0}&lt;/style&gt;
       root.querySelectorAll(&#x27;.node&#x27;).forEach(n=&gt;n.classList.toggle(&#x27;dim&#x27;,q&amp;&amp;!n.dataset.table.includes(q)));
       if(q){const match=tables.find(t=&gt;t.n.includes(q));if(match)select(match.n);}
     });
-    reset(); select(&#x27;patients&#x27;);
+    root.querySelector(&#x27;#erd-database&#x27;).addEventListener(&#x27;change&#x27;,e=&gt;renderGraph(e.target.value));
+    renderGraph(&#x27;old&#x27;);
   })();
   &lt;/script&gt;
 &lt;/div&gt;

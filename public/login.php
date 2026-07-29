@@ -6,15 +6,15 @@ $error = null;
 $clinicProfile = clinic_profile_settings();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $email = trim($_POST['email'] ?? '');
+    $idNumber = trim($_POST['id_number'] ?? '');
     $password = $_POST['password'] ?? '';
 
-    if (login_attempt($email, $password)) {
+    if (login_attempt($idNumber, $password)) {
         header('Location: dashboard.php');
         exit;
     }
 
-    $error = 'Invalid email or password.';
+    $error = 'Invalid ID number or password, or the account is not active.';
 }
 
 render_header('Login');
@@ -237,8 +237,8 @@ render_header('Login');
 
             <form method="post">
                 <div class="staff-field">
-                    <label for="email">Email</label>
-                    <input class="staff-login-input" id="email" name="email" type="email" value="<?= e($_POST['email'] ?? 'admin@cliniq.local') ?>" placeholder="name@cliniq.local" autocomplete="username" required>
+                    <label for="id_number">ID Number</label>
+                    <input class="staff-login-input" id="id_number" name="id_number" type="text" value="<?= e($_POST['id_number'] ?? 'STAFF-0001') ?>" placeholder="STAFF-0001" autocomplete="username" required>
                 </div>
 
                 <div class="staff-field">
@@ -251,6 +251,11 @@ render_header('Login');
 
                 <button class="btn btn-primary w-full min-h-[2.9rem] mt-2" type="submit">Sign in</button>
             </form>
+
+            <p class="text-center text-xs font-bold text-slate-500 mt-4">
+                Inactive account?
+                <a href="../patient-portal/patient-register.php" class="text-primary text-decoration-none">Register here.</a>
+            </p>
 
             <div class="staff-note">
                 <span class="material-symbols-outlined text-[16px]">lock</span>
