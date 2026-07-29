@@ -151,6 +151,12 @@ if (empty($profile['emergency_instructions'])) {
 $passportComplete = empty($passportMissing);
 $apeNeedsAction = ($latestApe['clearance_status'] ?? 'Pending') !== 'Cleared';
 $requiredActionCount = ($passportComplete ? 0 : 1) + ($apeNeedsAction ? 1 : 0);
+$profileDetailLabel = match ($profile['account_type'] ?? 'patient') {
+    'student' => 'Program',
+    'faculty', 'school_personnel' => 'Department or Office',
+    default => 'Affiliation',
+};
+$accountBadgeLabel = ($profile['account_type'] ?? '') === 'student' ? 'Enrolled' : 'Active';
 
 $appointmentStatus = $latestAppointment['status'] ?? 'No Request';
 $appointmentBadgeClass = match ($appointmentStatus) {
@@ -196,7 +202,7 @@ render_student_header('Dashboard', 'dashboard');
     </div>
     <span class="student-badge student-badge-success">
         <span class="material-symbols-outlined text-[14px]">verified</span>
-        Enrolled
+        <?= student_e($accountBadgeLabel) ?>
     </span>
 </section>
 
@@ -291,7 +297,7 @@ render_student_header('Dashboard', 'dashboard');
                 <p class="text-sm font-black text-[#17261d] mb-0"><?= student_e($profile['student_id']) ?></p>
             </div>
             <div>
-                <span class="student-label">Course and Year</span>
+                <span class="student-label"><?= student_e($profileDetailLabel) ?></span>
                 <p class="text-sm font-black text-[#17261d] mb-0"><?= student_e($profile['course']) ?></p>
             </div>
             <div>

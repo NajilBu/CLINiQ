@@ -59,7 +59,7 @@ render_student_auth_header('Patient Login');
                     <path d="M0 20 H100 L112 20 L120 4 L132 36 L142 20 L154 20 L162 12 L170 28 L178 20 L320 20"/>
                 </svg>
             </div>
-            <p class="student-auth-side-footnote">For registered students and faculty members</p>
+            <p class="student-auth-side-footnote">For students, faculty, and school personnel</p>
         </aside>
 
         <div class="student-auth-form-side">

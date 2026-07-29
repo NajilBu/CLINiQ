@@ -329,7 +329,7 @@ function render_footer(): void
         </div>
         <?php endif; ?>
     <?php render_flash_toasts(); ?>
-    <script src="<?= app_url('assets/js/app.js?v=settings-link-tabs-1') ?>"></script>
+    <script src="<?= app_url('assets/js/app.js?v=form-action-fix-1') ?>"></script>
     <script src="<?= app_url('assets/js/ag-grid-tables.js?v=6') ?>"></script>
     </body>
     </html>

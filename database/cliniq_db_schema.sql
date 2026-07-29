@@ -4,7 +4,7 @@ CREATE DATABASE IF NOT EXISTS Cliniq_db
 
 USE Cliniq_db;
 
--- Shared identity. The four profile tables below contain category-specific data.
+-- Shared identity. The profile tables below contain category-specific data.
 CREATE TABLE people (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   id_number VARCHAR(50) NOT NULL UNIQUE,
@@ -51,6 +51,14 @@ CREATE TABLE faculty (
   FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE CASCADE
 );
 
+CREATE TABLE school_personnel (
+  person_id BIGINT UNSIGNED PRIMARY KEY,
+  department_or_office VARCHAR(160) NULL,
+  employment_type VARCHAR(80) NULL,
+  position_title VARCHAR(160) NULL,
+  FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE CASCADE
+);
+
 CREATE TABLE clinic_staff (
   person_id BIGINT UNSIGNED PRIMARY KEY,
   staff_role ENUM('admin', 'doctor', 'nurse', 'staff', 'it_expert')
@@ -61,8 +69,8 @@ CREATE TABLE clinic_staff (
   INDEX idx_clinic_staff_role (staff_role)
 );
 
--- A patient profile may belong to a student, faculty member, clinic employee,
--- or another eligible person. It contains health-related profile information.
+-- A patient profile may belong to a student, faculty member, school personnel,
+-- clinic employee, or another authorized person. It contains health information.
 CREATE TABLE patients (
   person_id BIGINT UNSIGNED PRIMARY KEY,
   blood_type VARCHAR(10) NULL,

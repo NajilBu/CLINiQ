@@ -641,7 +641,8 @@ function cliniqFormData(form, submitter) {
 
 async function cliniqSubmitFormAjax(form, submitter) {
     const method = (form.method || 'GET').toUpperCase();
-    let url = new URL(form.action || window.location.href, window.location.href);
+    const actionAttribute = form.getAttribute('action');
+    let url = new URL(actionAttribute || window.location.href, window.location.href);
     const formData = cliniqFormData(form, submitter);
     const fetchOptions = {
         method,

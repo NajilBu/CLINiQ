@@ -10,10 +10,77 @@ function can_manage_patient_accounts(?array $user): bool
 
 function patient_account_type(string $value): string
 {
-    $normalized = strtolower(trim($value));
-    return in_array($normalized, ['student', 'faculty', 'patient'], true)
+    $normalized = preg_replace('/[^a-z0-9]+/', '_', strtolower(trim($value))) ?? '';
+    if (in_array($normalized, ['school_personnel', 'personnel', 'patient'], true)) {
+        return 'school_personnel';
+    }
+
+    return in_array($normalized, ['student', 'faculty'], true)
         ? $normalized
-        : 'patient';
+        : 'school_personnel';
+}
+
+function patient_account_type_label(string $value): string
+{
+    return match (patient_account_type($value)) {
+        'student' => 'Student',
+        'faculty' => 'Faculty',
+        default => 'School Personnel',
+    };
+}
+
+function normalize_faculty_employment_type(string $value): string
+{
+    $normalized = preg_replace('/[^a-z]+/', '', strtolower(trim($value))) ?? '';
+
+    return match ($normalized) {
+        'fulltime' => 'Full-time',
+        'parttime' => 'Part-time',
+        default => throw new InvalidArgumentException(
+            'Faculty employment type must be Full-time or Part-time.'
+        ),
+    };
+}
+
+function normalize_student_program_code(string $value): string
+{
+    $code = strtoupper(trim($value));
+    if (!preg_match('/^[A-Z0-9]+(?:-[A-Z0-9]+)*$/', $code)) {
+        throw new InvalidArgumentException(
+            'Student program must be a code such as BSIT.'
+        );
+    }
+
+    return $code;
+}
+
+function normalize_student_year_level(string $value): string
+{
+    $normalized = preg_replace('/[^a-z0-9]+/', '', strtolower(trim($value))) ?? '';
+    $suffixes = [1 => 'st', 2 => 'nd', 3 => 'rd', 4 => 'th'];
+
+    foreach ($suffixes as $year => $suffix) {
+        if (in_array($normalized, [
+            (string) $year,
+            $year . $suffix,
+            $year . $suffix . 'year',
+            'year' . $year,
+        ], true)) {
+            return (string) $year;
+        }
+    }
+
+    throw new InvalidArgumentException('Student year level must be 1, 2, 3, or 4.');
+}
+
+function normalize_student_section_code(string $value): string
+{
+    $code = strtoupper(trim($value));
+    if (!in_array($code, ['A', 'B', 'C', 'D', 'E'], true)) {
+        throw new InvalidArgumentException('Student section code must be A, B, C, D, or E.');
+    }
+
+    return $code;
 }
 
 function patient_account_temporary_password(string $idNumber): string
@@ -40,8 +107,8 @@ function patient_account_valid_birthdate(string $value): bool
  */
 function create_inactive_patient_account(array $input): array
 {
-    $idNumber = trim((string) ($input['id_number'] ?? ''));
-    $type = patient_account_type((string) ($input['patient_type'] ?? $input['category'] ?? 'patient'));
+    $idNumber = strtoupper(trim((string) ($input['id_number'] ?? '')));
+    $type = patient_account_type((string) ($input['patient_type'] ?? $input['category'] ?? 'school_personnel'));
     $firstName = trim((string) ($input['first_name'] ?? ''));
     $middleName = trim((string) ($input['middle_name'] ?? ''));
     $lastName = trim((string) ($input['last_name'] ?? ''));
@@ -50,6 +117,16 @@ function create_inactive_patient_account(array $input): array
     $yearEmployment = trim((string) ($input['year_level_or_employment_type'] ?? ''));
     $sectionPosition = trim((string) ($input['section_or_position'] ?? ''));
     $academicYear = trim((string) ($input['academic_year'] ?? ''));
+
+    if ($type === 'student') {
+        $programDepartment = normalize_student_program_code($programDepartment);
+        $yearEmployment = normalize_student_year_level($yearEmployment);
+        $sectionCode = normalize_student_section_code($sectionPosition);
+        $sectionPosition = "{$programDepartment} {$yearEmployment} {$sectionCode}";
+    } elseif ($type === 'faculty') {
+        $yearEmployment = normalize_faculty_employment_type($yearEmployment);
+        $sectionPosition = strtoupper($sectionPosition);
+    }
 
     if (!is_valid_id_number($idNumber)) {
         throw new InvalidArgumentException(id_number_validation_message());
@@ -101,6 +178,17 @@ function create_inactive_patient_account(array $input): array
         } elseif ($type === 'faculty') {
             $profile = $db->prepare('
                 INSERT INTO faculty (person_id, department, employment_type, position_title)
+                VALUES (?, ?, ?, ?)
+            ');
+            $profile->execute([
+                $personId,
+                $programDepartment !== '' ? $programDepartment : null,
+                $yearEmployment !== '' ? $yearEmployment : null,
+                $sectionPosition !== '' ? $sectionPosition : null,
+            ]);
+        } elseif ($type === 'school_personnel') {
+            $profile = $db->prepare('
+                INSERT INTO school_personnel (person_id, department_or_office, employment_type, position_title)
                 VALUES (?, ?, ?, ?)
             ');
             $profile->execute([
@@ -174,13 +262,13 @@ function create_bulk_inactive_patient_accounts(array $rows): array
         } catch (Throwable $e) {
             $results[] = [
                 'row' => (string) $rowNumber,
-                'id_number' => trim((string) (($row['id_number'] ?? '') ?: '—')),
+                'id_number' => strtoupper(trim((string) (($row['id_number'] ?? '') ?: '—'))),
                 'name' => trim(implode(' ', array_filter([
                     $row['first_name'] ?? '',
                     $row['middle_name'] ?? '',
                     $row['last_name'] ?? '',
                 ]))) ?: '—',
-                'type' => patient_account_type((string) ($row['patient_type'] ?? $row['category'] ?? 'patient')),
+                'type' => patient_account_type((string) ($row['patient_type'] ?? $row['category'] ?? 'school_personnel')),
                 'temporary_password' => '',
                 'status' => $e->getMessage(),
             ];
@@ -204,6 +292,7 @@ function recent_patient_accounts(int $limit = 100): array
             CASE
                 WHEN s.person_id IS NOT NULL THEN 'Student'
                 WHEN f.person_id IS NOT NULL THEN 'Faculty'
+                WHEN sp.person_id IS NOT NULL THEN 'School Personnel'
                 ELSE 'Patient'
             END AS patient_type
         FROM people p
@@ -211,6 +300,7 @@ function recent_patient_accounts(int $limit = 100): array
         JOIN patients pt ON pt.person_id = p.id
         LEFT JOIN students s ON s.person_id = p.id
         LEFT JOIN faculty f ON f.person_id = p.id
+        LEFT JOIN school_personnel sp ON sp.person_id = p.id
         ORDER BY a.created_at DESC, p.id DESC
         LIMIT {$limit}
     ")->fetchAll();

@@ -78,16 +78,17 @@ render_clinic_command_header(
             <input type="hidden" name="action" value="create_individual">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                    <label class="clinic-label" for="id_number">ID Number</label>
-                    <input class="clinic-input" id="id_number" name="id_number" placeholder="23-00262" required>
-                </div>
-                <div>
                     <label class="clinic-label" for="patient_type">Patient Type</label>
                     <select class="clinic-input" id="patient_type" name="patient_type" required>
                         <option value="student">Student</option>
                         <option value="faculty">Faculty</option>
-                        <option value="patient">Other Patient</option>
+                        <option value="school_personnel">School Personnel</option>
                     </select>
+                </div>
+                <div>
+                    <label class="clinic-label" for="id_number">ID Number</label>
+                    <input class="clinic-input uppercase" id="id_number" name="id_number" placeholder="23-00262" aria-describedby="id_number_hint" autocapitalize="characters" required>
+                    <p class="text-[11px] font-bold text-slate-500 mt-1" id="id_number_hint">Student example: 23-00262</p>
                 </div>
                 <div>
                     <label class="clinic-label" for="first_name">First Name</label>
@@ -106,16 +107,39 @@ render_clinic_command_header(
                     <input class="clinic-input" id="birthdate" name="birthdate" type="date" required>
                 </div>
                 <div>
-                    <label class="clinic-label" for="program_or_department">Program or Department</label>
-                    <input class="clinic-input" id="program_or_department" name="program_or_department">
+                    <label class="clinic-label" id="program_or_department_label" for="program_or_department">Program Code</label>
+                    <input class="clinic-input" id="program_or_department" name="program_or_department" placeholder="BSIT" aria-describedby="program_or_department_hint">
+                    <p class="text-[11px] font-bold text-slate-500 mt-1" id="program_or_department_hint">Example: BSIT</p>
                 </div>
                 <div>
-                    <label class="clinic-label" for="year_level_or_employment_type">Year Level or Employment Type</label>
-                    <input class="clinic-input" id="year_level_or_employment_type" name="year_level_or_employment_type">
+                    <label class="clinic-label" id="year_level_or_employment_type_label" for="year_level_or_employment_type">Year Level</label>
+                    <input class="clinic-input hidden" id="year_level_or_employment_type" name="year_level_or_employment_type" placeholder="Full-time" aria-describedby="year_level_or_employment_type_hint" disabled>
+                    <select class="clinic-input" id="student_year_level" name="year_level_or_employment_type" aria-describedby="year_level_or_employment_type_hint" required>
+                        <option value="">Select year level</option>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                    </select>
+                    <select class="clinic-input hidden" id="faculty_employment_type" name="year_level_or_employment_type" aria-describedby="year_level_or_employment_type_hint" disabled>
+                        <option value="">Select employment type</option>
+                        <option value="Full-time">Full-time</option>
+                        <option value="Part-time">Part-time</option>
+                    </select>
+                    <p class="text-[11px] font-bold text-slate-500 mt-1" id="year_level_or_employment_type_hint">Choose 1 to 4.</p>
                 </div>
                 <div class="sm:col-span-2">
-                    <label class="clinic-label" for="section_or_position">Section or Position</label>
-                    <input class="clinic-input" id="section_or_position" name="section_or_position">
+                    <label class="clinic-label" id="section_or_position_label" for="student_section_code">Section Code</label>
+                    <input class="clinic-input hidden" id="section_or_position" name="section_or_position" placeholder="Position" aria-describedby="section_or_position_hint" disabled>
+                    <select class="clinic-input" id="student_section_code" name="section_or_position" aria-describedby="section_or_position_hint" required>
+                        <option value="">Select section code</option>
+                        <option value="A">A</option>
+                        <option value="B">B</option>
+                        <option value="C">C</option>
+                        <option value="D">D</option>
+                        <option value="E">E</option>
+                    </select>
+                    <p class="text-[11px] font-bold text-slate-500 mt-1" id="section_or_position_hint">Choose A to E. Saved format example: BSIT 3 D.</p>
                 </div>
             </div>
             <div class="rounded-xl bg-slate-50 border border-slate-100 px-4 py-3 text-xs font-bold text-slate-600">
@@ -203,7 +227,7 @@ render_clinic_command_header(
                             <td class="p-3"><?= e($result['row']) ?></td>
                             <td class="p-3 font-bold"><?= e($result['id_number']) ?></td>
                             <td class="p-3"><?= e($result['name']) ?></td>
-                            <td class="p-3"><?= e(ucfirst($result['type'])) ?></td>
+                            <td class="p-3"><?= e(patient_account_type_label($result['type'])) ?></td>
                             <td class="p-3"><code><?= e($result['temporary_password'] ?: '—') ?></code></td>
                             <td class="p-3">
                                 <span class="badge <?= $result['status'] === 'created' ? 'badge-completed' : 'badge-high' ?>">
@@ -253,6 +277,164 @@ render_clinic_command_header(
 
 <script src="<?= app_url('assets/vendor/sheetjs/xlsx.full.min.js?v=0.20.3') ?>"></script>
 <script>
+const patientType = document.getElementById('patient_type');
+const accountFieldHints = {
+    student: {
+        idPlaceholder: '23-00262',
+        idHint: 'Student example: 23-00262',
+        programLabel: 'Program Code',
+        programPlaceholder: 'BSIT',
+        programHint: 'Example: BSIT',
+        yearLabel: 'Year Level',
+        yearPlaceholder: '3',
+        yearHint: 'Choose 1 to 4.',
+        sectionLabel: 'Section Code',
+        sectionPlaceholder: 'D',
+        sectionHint: 'Choose A to E. Saved format example: BSIT 3 D.',
+    },
+    faculty: {
+        idPlaceholder: 'FAC-0001',
+        idHint: 'Faculty example: FAC-0001',
+        programLabel: 'Department',
+        programPlaceholder: 'College of Computer Studies',
+        programHint: 'Example: College of Computer Studies',
+        yearLabel: 'Employment Type',
+        yearPlaceholder: 'Full-time',
+        yearHint: 'Choose Full-time or Part-time.',
+        sectionLabel: 'Title',
+        sectionPlaceholder: 'DIT or MIT',
+        sectionHint: 'Example: DIT or MIT',
+    },
+    school_personnel: {
+        idPlaceholder: 'SP-0001',
+        idHint: 'School personnel example: SP-0001',
+        programLabel: 'Department or Office',
+        programPlaceholder: 'Registrar Office',
+        programHint: 'Example: Registrar Office',
+        yearLabel: 'Employment Type',
+        yearPlaceholder: 'Full-time',
+        yearHint: 'Example: Full-time',
+        sectionLabel: 'Position',
+        sectionPlaceholder: 'Administrative Assistant',
+        sectionHint: 'Example: Administrative Assistant',
+    },
+};
+
+function updateIndividualAccountHints() {
+    const hints = accountFieldHints[patientType?.value] || accountFieldHints.student;
+    const studentSelected = patientType?.value === 'student';
+    const facultySelected = patientType?.value === 'faculty';
+    const programInput = document.getElementById('program_or_department');
+    const employmentInput = document.getElementById('year_level_or_employment_type');
+    const studentYearSelect = document.getElementById('student_year_level');
+    const facultyEmploymentSelect = document.getElementById('faculty_employment_type');
+    const employmentLabel = document.getElementById('year_level_or_employment_type_label');
+    const sectionPositionInput = document.getElementById('section_or_position');
+    const studentSectionSelect = document.getElementById('student_section_code');
+    const sectionLabel = document.getElementById('section_or_position_label');
+    const fieldMappings = [
+        ['id_number', null, 'id_number_hint', hints.idPlaceholder, hints.idHint],
+        ['program_or_department', 'program_or_department_label', 'program_or_department_hint', hints.programPlaceholder, hints.programHint, hints.programLabel],
+    ];
+
+    fieldMappings.forEach(([inputId, labelId, hintId, placeholder, hint, label]) => {
+        const input = document.getElementById(inputId);
+        const labelElement = labelId ? document.getElementById(labelId) : null;
+        const hintElement = document.getElementById(hintId);
+        if (input) input.placeholder = placeholder;
+        if (labelElement && label) labelElement.textContent = label;
+        if (hintElement) hintElement.textContent = hint;
+    });
+
+    if (programInput) {
+        programInput.required = studentSelected;
+        if (studentSelected) {
+            programInput.value = programInput.value.toUpperCase();
+        }
+    }
+
+    if (employmentInput && studentYearSelect && facultyEmploymentSelect && employmentLabel) {
+        employmentInput.classList.toggle('hidden', studentSelected || facultySelected);
+        employmentInput.disabled = studentSelected || facultySelected;
+        studentYearSelect.classList.toggle('hidden', !studentSelected);
+        studentYearSelect.disabled = !studentSelected;
+        studentYearSelect.required = studentSelected;
+        facultyEmploymentSelect.classList.toggle('hidden', !facultySelected);
+        facultyEmploymentSelect.disabled = !facultySelected;
+        facultyEmploymentSelect.required = facultySelected;
+        employmentInput.placeholder = hints.yearPlaceholder;
+        employmentLabel.textContent = hints.yearLabel;
+        employmentLabel.htmlFor = studentSelected
+            ? 'student_year_level'
+            : (facultySelected ? 'faculty_employment_type' : 'year_level_or_employment_type');
+    }
+
+    const employmentHint = document.getElementById('year_level_or_employment_type_hint');
+    if (employmentHint) employmentHint.textContent = hints.yearHint;
+
+    if (sectionPositionInput && studentSectionSelect && sectionLabel) {
+        sectionPositionInput.classList.toggle('hidden', studentSelected);
+        sectionPositionInput.disabled = studentSelected;
+        sectionPositionInput.placeholder = hints.sectionPlaceholder;
+        studentSectionSelect.classList.toggle('hidden', !studentSelected);
+        studentSectionSelect.disabled = !studentSelected;
+        studentSectionSelect.required = studentSelected;
+        sectionLabel.textContent = hints.sectionLabel;
+        sectionLabel.htmlFor = studentSelected ? 'student_section_code' : 'section_or_position';
+    }
+
+    const sectionHint = document.getElementById('section_or_position_hint');
+    if (sectionHint) sectionHint.textContent = hints.sectionHint;
+    if (facultySelected && sectionPositionInput) {
+        sectionPositionInput.value = sectionPositionInput.value.toUpperCase();
+    }
+
+    updateStudentSectionPreview();
+}
+
+patientType?.addEventListener('change', updateIndividualAccountHints);
+updateIndividualAccountHints();
+
+const idNumberInput = document.getElementById('id_number');
+idNumberInput?.addEventListener('input', () => {
+    idNumberInput.value = idNumberInput.value.toUpperCase();
+});
+
+const programOrDepartmentInput = document.getElementById('program_or_department');
+programOrDepartmentInput?.addEventListener('input', () => {
+    if (patientType?.value === 'student') {
+        programOrDepartmentInput.value = programOrDepartmentInput.value.toUpperCase();
+        updateStudentSectionPreview();
+    }
+});
+
+const sectionOrPositionInput = document.getElementById('section_or_position');
+sectionOrPositionInput?.addEventListener('input', () => {
+    if (patientType?.value === 'faculty') {
+        sectionOrPositionInput.value = sectionOrPositionInput.value.toUpperCase();
+    }
+});
+
+const studentYearLevel = document.getElementById('student_year_level');
+const studentSectionCode = document.getElementById('student_section_code');
+
+function updateStudentSectionPreview() {
+    if (patientType?.value !== 'student') return;
+
+    const program = String(document.getElementById('program_or_department')?.value || '').trim().toUpperCase();
+    const year = String(document.getElementById('student_year_level')?.value || '').trim();
+    const section = String(document.getElementById('student_section_code')?.value || '').trim().toUpperCase();
+    const hint = document.getElementById('section_or_position_hint');
+    if (!hint) return;
+
+    hint.textContent = program && year && section
+        ? `Saved section: ${program} ${year} ${section}`
+        : 'Choose A to E. Saved format example: BSIT 3 D.';
+}
+
+studentYearLevel?.addEventListener('change', updateStudentSectionPreview);
+studentSectionCode?.addEventListener('change', updateStudentSectionPreview);
+
 const excelFile = document.getElementById('excelFile');
 const excelMessage = document.getElementById('excelMessage');
 const excelPreview = document.getElementById('excelPreview');
@@ -286,8 +468,33 @@ excelFile?.addEventListener('change', async () => {
         const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
         const sourceRows = XLSX.utils.sheet_to_json(worksheet, { defval: '', raw: false, dateNF: 'yyyy-mm-dd' });
+        const importHeaderAliases = {
+            program_code_department_or_office: 'program_or_department',
+            program_code_department: 'program_or_department',
+            year_level_employment_type: 'year_level_or_employment_type',
+            section_code_title_position: 'section_or_position',
+            section_title_position: 'section_or_position',
+            section_title_or_position: 'section_or_position',
+            section_or_title: 'section_or_position',
+        };
         const rows = sourceRows
-            .map(row => Object.fromEntries(Object.entries(row).map(([key, value]) => [normalizeHeader(key), String(value).trim()])))
+            .map(row => Object.fromEntries(Object.entries(row).map(([key, value]) => {
+                const normalizedKey = normalizeHeader(key);
+                return [importHeaderAliases[normalizedKey] || normalizedKey, String(value).trim()];
+            })))
+            .map(row => {
+                const importType = normalizeHeader(row.patient_type);
+                return {
+                    ...row,
+                    id_number: String(row.id_number || '').toUpperCase(),
+                    program_or_department: importType === 'student'
+                        ? String(row.program_or_department || '').toUpperCase()
+                        : String(row.program_or_department || ''),
+                    section_or_position: ['student', 'faculty'].includes(importType)
+                        ? String(row.section_or_position || '').toUpperCase()
+                        : String(row.section_or_position || ''),
+                };
+            })
             .filter(row => Object.values(row).some(value => value !== ''));
 
         if (!rows.length) throw new Error('The first worksheet contains no account rows.');

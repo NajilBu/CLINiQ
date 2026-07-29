@@ -70,6 +70,7 @@ function student_profile_from_identity(array $identity, ?array $legacyPatient): 
         'course' => (string) (
             $identity['program']
             ?? $identity['faculty_department']
+            ?? $identity['personnel_department']
             ?? $legacyPatient['course_section']
             ?? 'Not recorded'
         ),
@@ -116,6 +117,7 @@ function student_current_profile(): ?array
             a.temporary_password_hash,
             s.program,
             f.department AS faculty_department,
+            sp.department_or_office AS personnel_department,
             pt.blood_type,
             pt.allergies,
             pt.existing_conditions,
@@ -126,12 +128,14 @@ function student_current_profile(): ?array
             CASE
                 WHEN s.person_id IS NOT NULL THEN "student"
                 WHEN f.person_id IS NOT NULL THEN "faculty"
+                WHEN sp.person_id IS NOT NULL THEN "school_personnel"
                 ELSE "patient"
             END AS account_type
         FROM people p
         JOIN accounts a ON a.person_id = p.id
         LEFT JOIN students s ON s.person_id = p.id
         LEFT JOIN faculty f ON f.person_id = p.id
+        LEFT JOIN school_personnel sp ON sp.person_id = p.id
         LEFT JOIN patients pt ON pt.person_id = p.id
         WHERE p.id = ?
         LIMIT 1
@@ -226,12 +230,14 @@ function student_find_patient_by_number(string $studentNumber): ?array
             CASE
                 WHEN s.person_id IS NOT NULL THEN "student"
                 WHEN f.person_id IS NOT NULL THEN "faculty"
+                WHEN sp.person_id IS NOT NULL THEN "school_personnel"
                 ELSE "patient"
             END AS account_type
         FROM accounts a
         JOIN people p ON p.id = a.person_id
         LEFT JOIN students s ON s.person_id = p.id
         LEFT JOIN faculty f ON f.person_id = p.id
+        LEFT JOIN school_personnel sp ON sp.person_id = p.id
         WHERE p.id_number = ?
           AND (
             EXISTS (SELECT 1 FROM students s WHERE s.person_id = p.id)
