@@ -14,7 +14,7 @@ entry.getRange("A1:J1").values = [[
   "Middle Name",
   "Last Name",
   "Birthdate",
-  "Program Code / Department or Office",
+  "Program Code / Department Code",
   "Year Level / Employment Type",
   "Section Code / Title / Position",
   "Academic Year",
@@ -63,9 +63,9 @@ instructions.getRange("A3:B11").values = [
   ["Patient Type", "Required: student, faculty, or school personnel."],
   ["Names", "First and last name are required. Middle name is optional."],
   ["Birthdate", "Required. Use YYYY-MM-DD."],
-  ["Student details", "Use an uppercase Program Code such as BSIT, Year Level 1 to 4, and Section Code A to E. CLINiQ stores the combined Section, for example BSIT 3 D."],
-  ["Faculty details", "Use Department, Employment Type (Full-time or Part-time), and Title (for example DIT or MIT). Faculty titles are stored in uppercase."],
-  ["School personnel details", "Use Department or Office, Employment Type, and Position."],
+  ["Student details", "Use an active Program Code (BSIT, BSCS, BSBA, BSA, BSED, BEED, or BSN), Year Level 1 to 4, and Section Code A to E. Program, year level, and section are stored separately."],
+  ["Faculty details", "Use an active Department Code (CCS, CBA, COE, CAS, CON, or UHS), Employment Type (Full-time or Part-time), and Title (for example DIT or MIT)."],
+  ["School personnel details", "Use an active Department Code (CCS, CBA, COE, CAS, CON, or UHS), Employment Type, and Position."],
 ];
 instructions.getRange("A3:B3").format = {
   fill: "#E8F6EC",

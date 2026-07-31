@@ -4,6 +4,49 @@ CREATE DATABASE IF NOT EXISTS Cliniq_db
 
 USE Cliniq_db;
 
+-- Academic reference data used by student, faculty, and school personnel profiles.
+CREATE TABLE departments (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  department_code VARCHAR(20) NOT NULL UNIQUE,
+  department_name VARCHAR(160) NOT NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_departments_name (department_name),
+  INDEX idx_departments_active (is_active)
+);
+
+CREATE TABLE programs (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  department_id BIGINT UNSIGNED NOT NULL,
+  program_code VARCHAR(20) NOT NULL UNIQUE,
+  program_name VARCHAR(200) NOT NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (department_id) REFERENCES departments(id),
+  INDEX idx_programs_department (department_id),
+  INDEX idx_programs_name (program_name),
+  INDEX idx_programs_active (is_active)
+);
+
+INSERT INTO departments (department_code, department_name) VALUES
+  ('CCS', 'College of Computer Studies'),
+  ('CBA', 'College of Business Administration'),
+  ('COE', 'College of Education'),
+  ('CAS', 'College of Arts and Sciences'),
+  ('CON', 'College of Nursing'),
+  ('UHS', 'University Health Services');
+
+INSERT INTO programs (department_id, program_code, program_name) VALUES
+  ((SELECT id FROM departments WHERE department_code = 'CCS'), 'BSIT', 'Bachelor of Science in Information Technology'),
+  ((SELECT id FROM departments WHERE department_code = 'CCS'), 'BSCS', 'Bachelor of Science in Computer Science'),
+  ((SELECT id FROM departments WHERE department_code = 'CBA'), 'BSBA', 'Bachelor of Science in Business Administration'),
+  ((SELECT id FROM departments WHERE department_code = 'CBA'), 'BSA', 'Bachelor of Science in Accountancy'),
+  ((SELECT id FROM departments WHERE department_code = 'COE'), 'BSED', 'Bachelor of Secondary Education'),
+  ((SELECT id FROM departments WHERE department_code = 'COE'), 'BEED', 'Bachelor of Elementary Education'),
+  ((SELECT id FROM departments WHERE department_code = 'CON'), 'BSN', 'Bachelor of Science in Nursing');
+
 -- Shared identity. The profile tables below contain category-specific data.
 CREATE TABLE people (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -35,37 +78,49 @@ CREATE TABLE accounts (
 
 CREATE TABLE students (
   person_id BIGINT UNSIGNED PRIMARY KEY,
+  program_id BIGINT UNSIGNED NULL,
   program VARCHAR(160) NULL,
   year_level VARCHAR(40) NULL,
   section VARCHAR(80) NULL,
   academic_year VARCHAR(20) NULL,
-  FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE CASCADE
+  FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE CASCADE,
+  FOREIGN KEY (program_id) REFERENCES programs(id),
+  INDEX idx_students_program (program_id)
 );
 
 CREATE TABLE faculty (
   person_id BIGINT UNSIGNED PRIMARY KEY,
+  department_id BIGINT UNSIGNED NULL,
   department VARCHAR(160) NULL,
   employment_type VARCHAR(80) NULL,
   position_title VARCHAR(160) NULL,
   office VARCHAR(160) NULL,
-  FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE CASCADE
+  FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE CASCADE,
+  FOREIGN KEY (department_id) REFERENCES departments(id),
+  INDEX idx_faculty_department (department_id)
 );
 
 CREATE TABLE school_personnel (
   person_id BIGINT UNSIGNED PRIMARY KEY,
+  department_id BIGINT UNSIGNED NULL,
   department_or_office VARCHAR(160) NULL,
   employment_type VARCHAR(80) NULL,
   position_title VARCHAR(160) NULL,
-  FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE CASCADE
+  FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE CASCADE,
+  FOREIGN KEY (department_id) REFERENCES departments(id),
+  INDEX idx_school_personnel_department (department_id)
 );
 
 CREATE TABLE clinic_staff (
   person_id BIGINT UNSIGNED PRIMARY KEY,
+  department_id BIGINT UNSIGNED NULL,
   staff_role ENUM('admin', 'doctor', 'nurse', 'staff', 'it_expert')
     NOT NULL DEFAULT 'staff',
   department VARCHAR(160) NULL DEFAULT 'University Health Services',
   position_title VARCHAR(160) NULL,
   FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE CASCADE,
+  FOREIGN KEY (department_id) REFERENCES departments(id),
+  INDEX idx_clinic_staff_department (department_id),
   INDEX idx_clinic_staff_role (staff_role)
 );
 

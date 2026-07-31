@@ -54,6 +54,126 @@ function normalize_student_program_code(string $value): string
     return $code;
 }
 
+/**
+ * @return array<int,array{code:string,name:string,department_code:string}>
+ */
+function patient_account_active_programs(): array
+{
+    return auth_db()->query('
+        SELECT
+            p.program_code AS code,
+            p.program_name AS name,
+            d.department_code
+        FROM programs p
+        JOIN departments d ON d.id = p.department_id
+        WHERE p.is_active = 1
+          AND d.is_active = 1
+        ORDER BY p.program_code
+    ')->fetchAll();
+}
+
+/**
+ * @return array<int,array{code:string,name:string}>
+ */
+function patient_account_active_departments(): array
+{
+    return auth_db()->query('
+        SELECT
+            department_code AS code,
+            department_name AS name
+        FROM departments
+        WHERE is_active = 1
+        ORDER BY department_code
+    ')->fetchAll();
+}
+
+function patient_account_active_program_code(string $value): string
+{
+    $code = normalize_student_program_code($value);
+    $statement = auth_db()->prepare('
+        SELECT 1
+        FROM programs p
+        JOIN departments d ON d.id = p.department_id
+        WHERE p.program_code = ?
+          AND p.is_active = 1
+          AND d.is_active = 1
+        LIMIT 1
+    ');
+    $statement->execute([$code]);
+
+    if (!$statement->fetchColumn()) {
+        throw new InvalidArgumentException('Select an active student program from the list.');
+    }
+
+    return $code;
+}
+
+function patient_account_active_program_id(string $code): int
+{
+    $statement = auth_db()->prepare('
+        SELECT p.id
+        FROM programs p
+        JOIN departments d ON d.id = p.department_id
+        WHERE p.program_code = ?
+          AND p.is_active = 1
+          AND d.is_active = 1
+        LIMIT 1
+    ');
+    $statement->execute([strtoupper(trim($code))]);
+    $programId = (int) $statement->fetchColumn();
+
+    if ($programId < 1) {
+        throw new InvalidArgumentException('Select an active student program from the list.');
+    }
+
+    return $programId;
+}
+
+function patient_account_active_department_code(string $value): string
+{
+    $code = strtoupper(trim($value));
+    if ($code === '') {
+        throw new InvalidArgumentException('Select an active department from the list.');
+    }
+    if (!preg_match('/^[A-Z0-9]+(?:-[A-Z0-9]+)*$/', $code)) {
+        throw new InvalidArgumentException('Select an active department from the list.');
+    }
+
+    $statement = auth_db()->prepare('
+        SELECT 1
+        FROM departments
+        WHERE department_code = ?
+          AND is_active = 1
+        LIMIT 1
+    ');
+    $statement->execute([$code]);
+
+    if (!$statement->fetchColumn()) {
+        throw new InvalidArgumentException('Select an active department from the list.');
+    }
+
+    return $code;
+}
+
+function patient_account_active_department_id(string $code): int
+{
+    $statement = auth_db()->prepare('
+        SELECT id
+        FROM departments
+        WHERE department_code = ?
+          AND is_active = 1
+        LIMIT 1
+    ');
+    $statement->execute([strtoupper(trim($code))]);
+    $departmentId = (int) $statement->fetchColumn();
+
+    if ($departmentId < 1) {
+        throw new InvalidArgumentException('Select an active department from the list.');
+    }
+
+    return $departmentId;
+}
+
 function normalize_student_year_level(string $value): string
 {
     $normalized = preg_replace('/[^a-z0-9]+/', '', strtolower(trim($value))) ?? '';
@@ -117,15 +237,23 @@ function create_inactive_patient_account(array $input): array
     $yearEmployment = trim((string) ($input['year_level_or_employment_type'] ?? ''));
     $sectionPosition = trim((string) ($input['section_or_position'] ?? ''));
     $academicYear = trim((string) ($input['academic_year'] ?? ''));
+    $programId = null;
+    $departmentId = null;
 
     if ($type === 'student') {
-        $programDepartment = normalize_student_program_code($programDepartment);
+        $programDepartment = patient_account_active_program_code($programDepartment);
+        $programId = patient_account_active_program_id($programDepartment);
         $yearEmployment = normalize_student_year_level($yearEmployment);
         $sectionCode = normalize_student_section_code($sectionPosition);
-        $sectionPosition = "{$programDepartment} {$yearEmployment} {$sectionCode}";
+        $sectionPosition = $sectionCode;
     } elseif ($type === 'faculty') {
+        $programDepartment = patient_account_active_department_code($programDepartment);
+        $departmentId = patient_account_active_department_id($programDepartment);
         $yearEmployment = normalize_faculty_employment_type($yearEmployment);
         $sectionPosition = strtoupper($sectionPosition);
+    } else {
+        $programDepartment = patient_account_active_department_code($programDepartment);
+        $departmentId = patient_account_active_department_id($programDepartment);
     }
 
     if (!is_valid_id_number($idNumber)) {
@@ -165,11 +293,12 @@ function create_inactive_patient_account(array $input): array
 
         if ($type === 'student') {
             $profile = $db->prepare('
-                INSERT INTO students (person_id, program, year_level, section, academic_year)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO students (person_id, program_id, program, year_level, section, academic_year)
+                VALUES (?, ?, ?, ?, ?, ?)
             ');
             $profile->execute([
                 $personId,
+                $programId,
                 $programDepartment !== '' ? $programDepartment : null,
                 $yearEmployment !== '' ? $yearEmployment : null,
                 $sectionPosition !== '' ? $sectionPosition : null,
@@ -177,22 +306,24 @@ function create_inactive_patient_account(array $input): array
             ]);
         } elseif ($type === 'faculty') {
             $profile = $db->prepare('
-                INSERT INTO faculty (person_id, department, employment_type, position_title)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO faculty (person_id, department_id, department, employment_type, position_title)
+                VALUES (?, ?, ?, ?, ?)
             ');
             $profile->execute([
                 $personId,
+                $departmentId,
                 $programDepartment !== '' ? $programDepartment : null,
                 $yearEmployment !== '' ? $yearEmployment : null,
                 $sectionPosition !== '' ? $sectionPosition : null,
             ]);
         } elseif ($type === 'school_personnel') {
             $profile = $db->prepare('
-                INSERT INTO school_personnel (person_id, department_or_office, employment_type, position_title)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO school_personnel (person_id, department_id, department_or_office, employment_type, position_title)
+                VALUES (?, ?, ?, ?, ?)
             ');
             $profile->execute([
                 $personId,
+                $departmentId,
                 $programDepartment !== '' ? $programDepartment : null,
                 $yearEmployment !== '' ? $yearEmployment : null,
                 $sectionPosition !== '' ? $sectionPosition : null,

@@ -33,6 +33,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+$programOptions = patient_account_active_programs();
+$departmentOptions = patient_account_active_departments();
 $recentAccounts = recent_patient_accounts();
 
 render_header('Patient Accounts');
@@ -108,8 +110,15 @@ render_clinic_command_header(
                 </div>
                 <div>
                     <label class="clinic-label" id="program_or_department_label" for="program_or_department">Program Code</label>
-                    <input class="clinic-input" id="program_or_department" name="program_or_department" placeholder="BSIT" aria-describedby="program_or_department_hint">
-                    <p class="text-[11px] font-bold text-slate-500 mt-1" id="program_or_department_hint">Example: BSIT</p>
+                    <select class="clinic-input" id="program_or_department" name="program_or_department" aria-describedby="program_or_department_hint" required>
+                        <option value="">Select program</option>
+                        <?php foreach ($programOptions as $program): ?>
+                            <option value="<?= e($program['code']) ?>">
+                                <?= e($program['code'] . ' — ' . $program['name']) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <p class="text-[11px] font-bold text-slate-500 mt-1" id="program_or_department_hint">Select an active program from the database.</p>
                 </div>
                 <div>
                     <label class="clinic-label" id="year_level_or_employment_type_label" for="year_level_or_employment_type">Year Level</label>
@@ -139,7 +148,7 @@ render_clinic_command_header(
                         <option value="D">D</option>
                         <option value="E">E</option>
                     </select>
-                    <p class="text-[11px] font-bold text-slate-500 mt-1" id="section_or_position_hint">Choose A to E. Saved format example: BSIT 3 D.</p>
+                    <p class="text-[11px] font-bold text-slate-500 mt-1" id="section_or_position_hint">Choose A to E. Program, year level, and section are stored separately.</p>
                 </div>
             </div>
             <div class="rounded-xl bg-slate-50 border border-slate-100 px-4 py-3 text-xs font-bold text-slate-600">
@@ -278,26 +287,28 @@ render_clinic_command_header(
 <script src="<?= app_url('assets/vendor/sheetjs/xlsx.full.min.js?v=0.20.3') ?>"></script>
 <script>
 const patientType = document.getElementById('patient_type');
+const activePrograms = <?= json_encode($programOptions, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+const activeDepartments = <?= json_encode($departmentOptions, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
 const accountFieldHints = {
     student: {
         idPlaceholder: '23-00262',
         idHint: 'Student example: 23-00262',
         programLabel: 'Program Code',
-        programPlaceholder: 'BSIT',
-        programHint: 'Example: BSIT',
+        programPlaceholder: 'Select program',
+        programHint: 'Select an active program from the database.',
         yearLabel: 'Year Level',
         yearPlaceholder: '3',
         yearHint: 'Choose 1 to 4.',
         sectionLabel: 'Section Code',
         sectionPlaceholder: 'D',
-        sectionHint: 'Choose A to E. Saved format example: BSIT 3 D.',
+        sectionHint: 'Choose A to E. Program, year level, and section are stored separately.',
     },
     faculty: {
         idPlaceholder: 'FAC-0001',
         idHint: 'Faculty example: FAC-0001',
         programLabel: 'Department',
-        programPlaceholder: 'College of Computer Studies',
-        programHint: 'Example: College of Computer Studies',
+        programPlaceholder: 'Select department',
+        programHint: 'Select an active department from the database.',
         yearLabel: 'Employment Type',
         yearPlaceholder: 'Full-time',
         yearHint: 'Choose Full-time or Part-time.',
@@ -309,8 +320,8 @@ const accountFieldHints = {
         idPlaceholder: 'SP-0001',
         idHint: 'School personnel example: SP-0001',
         programLabel: 'Department or Office',
-        programPlaceholder: 'Registrar Office',
-        programHint: 'Example: Registrar Office',
+        programPlaceholder: 'Select department',
+        programHint: 'Select an active department from the database.',
         yearLabel: 'Employment Type',
         yearPlaceholder: 'Full-time',
         yearHint: 'Example: Full-time',
@@ -319,6 +330,27 @@ const accountFieldHints = {
         sectionHint: 'Example: Administrative Assistant',
     },
 };
+
+function updateProgramDepartmentOptions(select, options, placeholder) {
+    const currentValue = String(select.value || '').toUpperCase();
+    select.replaceChildren();
+
+    const emptyOption = document.createElement('option');
+    emptyOption.value = '';
+    emptyOption.textContent = placeholder;
+    select.appendChild(emptyOption);
+
+    options.forEach(option => {
+        const element = document.createElement('option');
+        element.value = option.code;
+        element.textContent = `${option.code} — ${option.name}`;
+        select.appendChild(element);
+    });
+
+    select.value = options.some(option => option.code === currentValue)
+        ? currentValue
+        : '';
+}
 
 function updateIndividualAccountHints() {
     const hints = accountFieldHints[patientType?.value] || accountFieldHints.student;
@@ -347,10 +379,12 @@ function updateIndividualAccountHints() {
     });
 
     if (programInput) {
-        programInput.required = studentSelected;
-        if (studentSelected) {
-            programInput.value = programInput.value.toUpperCase();
-        }
+        updateProgramDepartmentOptions(
+            programInput,
+            studentSelected ? activePrograms : activeDepartments,
+            hints.programPlaceholder
+        );
+        programInput.required = true;
     }
 
     if (employmentInput && studentYearSelect && facultyEmploymentSelect && employmentLabel) {
@@ -401,12 +435,7 @@ idNumberInput?.addEventListener('input', () => {
 });
 
 const programOrDepartmentInput = document.getElementById('program_or_department');
-programOrDepartmentInput?.addEventListener('input', () => {
-    if (patientType?.value === 'student') {
-        programOrDepartmentInput.value = programOrDepartmentInput.value.toUpperCase();
-        updateStudentSectionPreview();
-    }
-});
+programOrDepartmentInput?.addEventListener('change', updateStudentSectionPreview);
 
 const sectionOrPositionInput = document.getElementById('section_or_position');
 sectionOrPositionInput?.addEventListener('input', () => {
@@ -428,8 +457,8 @@ function updateStudentSectionPreview() {
     if (!hint) return;
 
     hint.textContent = program && year && section
-        ? `Saved section: ${program} ${year} ${section}`
-        : 'Choose A to E. Saved format example: BSIT 3 D.';
+        ? `Program: ${program} · Year: ${year} · Section: ${section}`
+        : 'Choose A to E. Program, year level, and section are stored separately.';
 }
 
 studentYearLevel?.addEventListener('change', updateStudentSectionPreview);
@@ -487,9 +516,7 @@ excelFile?.addEventListener('change', async () => {
                 return {
                     ...row,
                     id_number: String(row.id_number || '').toUpperCase(),
-                    program_or_department: importType === 'student'
-                        ? String(row.program_or_department || '').toUpperCase()
-                        : String(row.program_or_department || ''),
+                    program_or_department: String(row.program_or_department || '').toUpperCase(),
                     section_or_position: ['student', 'faculty'].includes(importType)
                         ? String(row.section_or_position || '').toUpperCase()
                         : String(row.section_or_position || ''),
