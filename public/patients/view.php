@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/VisitWorkflow.php';
+require_once __DIR__ . '/../../app/services/CliniqVisitWorkflow.php';
 require_login();
 ensure_visit_workflow_schema();
 
@@ -27,25 +28,10 @@ if (!$patient) {
 
 $fullName = trim($patient['first_name'] . ' ' . $patient['last_name']);
 
-$visitStmt = db()->prepare("
-    SELECT v.*, u.name AS recorded_by_name, au.name AS attended_by_name
-    FROM clinic_visits v
-    LEFT JOIN users u ON u.id = v.recorded_by
-    LEFT JOIN users au ON au.id = v.attended_by
-    WHERE v.patient_id = ?
-    ORDER BY
-        CASE v.status
-            WHEN 'Unaddressed' THEN 0
-            WHEN 'Active' THEN 1
-            WHEN 'Completed' THEN 2
-            WHEN 'Cancelled' THEN 3
-            ELSE 4
-        END,
-        v.visit_datetime DESC
-    LIMIT 50
-");
-$visitStmt->execute([$id]);
-$visits = $visitStmt->fetchAll();
+$cliniqPatient = cliniq_visit_patient_by_id_number((string) $patient['id_number']);
+$visits = $cliniqPatient
+    ? cliniq_visit_timeline((int) $cliniqPatient['person_id'])
+    : [];
 
 $apeStmt = db()->prepare("
     SELECT a.*, u.name AS verified_by_name
@@ -331,7 +317,7 @@ render_header($fullName . ' - Patient Profile');
                     <p class="text-xs font-bold text-slate-500 m-0"><?= count($visits) ?> visit record(s), newest priority records shown first.</p>
                 </div>
             </div>
-            <a class="btn btn-sm btn-outline text-decoration-none" href="<?= app_url('visits/index.php?patient=' . $id) ?>">
+            <a class="btn btn-sm btn-outline text-decoration-none" href="<?= app_url('visits/index.php?q=' . rawurlencode((string) $patient['id_number']) . '&status=all') ?>">
                 <span class="material-symbols-outlined text-[16px]">list</span>
                 Clinic Logbook
             </a>

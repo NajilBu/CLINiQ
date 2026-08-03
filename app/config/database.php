@@ -29,8 +29,8 @@ function db(): PDO
 /**
  * Authentication database connection.
  *
- * Clinical modules continue using db() and the original cliniq database.
- * Login and account activation use this separate connection.
+ * The redesigned account and visit modules use this Cliniq_db connection.
+ * Legacy modules that have not been migrated yet continue using db().
  */
 function auth_db(): PDO
 {

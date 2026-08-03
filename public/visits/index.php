@@ -2,8 +2,8 @@
 
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/VisitWorkflow.php';
+require_once __DIR__ . '/../../app/services/CliniqVisitWorkflow.php';
 require_login();
-ensure_visit_workflow_schema();
 
 $filters = [
     'q' => trim($_GET['q'] ?? ''),
@@ -36,7 +36,7 @@ $buildWhere = function (bool $includeStatus = true) use ($filters): array {
     $params = [];
 
     if ($filters['q'] !== '') {
-        $where[] = "(p.first_name LIKE ? OR p.last_name LIKE ? OR p.id_number LIKE ? OR v.chief_complaint LIKE ? OR v.symptoms LIKE ? OR v.action_taken LIKE ? OR v.visit_purpose LIKE ?)";
+        $where[] = "(p.first_name LIKE ? OR p.last_name LIKE ? OR p.id_number LIKE ? OR v.chief_complaint LIKE ? OR EXISTS (SELECT 1 FROM visit_entries se WHERE se.visit_id = v.visit_id AND se.symptoms LIKE ?) OR v.action_taken LIKE ? OR v.visit_purpose LIKE ?)";
         $like = '%' . $filters['q'] . '%';
         array_push($params, $like, $like, $like, $like, $like, $like, $like);
     }
@@ -52,7 +52,7 @@ $buildWhere = function (bool $includeStatus = true) use ($filters): array {
     }
 
     if ($filters['staff'] !== 'all') {
-        $where[] = 'v.attended_by = ?';
+        $where[] = 'v.attended_by_person_id = ?';
         $params[] = (int) $filters['staff'];
     }
 
@@ -71,16 +71,25 @@ $buildWhere = function (bool $includeStatus = true) use ($filters): array {
 
 [$whereSQL, $params] = $buildWhere();
 
-$countStmt = db()->prepare("SELECT COUNT(*) AS total FROM clinic_visits v JOIN patients p ON p.id = v.patient_id WHERE {$whereSQL}");
+$countStmt = cliniq_visit_db()->prepare("SELECT COUNT(*) AS total FROM visits v JOIN people p ON p.id = v.patient_person_id WHERE {$whereSQL}");
 $countStmt->execute($params);
 $totalRows = (int) $countStmt->fetch()['total'];
 $totalPages = max(1, (int) ceil($totalRows / $perPage));
 
-$stmt = db()->prepare("
-    SELECT v.*, p.first_name, p.last_name, p.id_number, p.course_section, au.name AS attended_by_name
-    FROM clinic_visits v
-    JOIN patients p ON p.id = v.patient_id
-    LEFT JOIN users au ON au.id = v.attended_by
+$stmt = cliniq_visit_db()->prepare("
+    SELECT v.*, v.visit_id AS id, p.first_name, p.last_name, p.id_number,
+           COALESCE(NULLIF(TRIM(CONCAT_WS(' ', pr.program_code, s.year_level, s.section)), ''), fd.department_code, sd.department_code, 'Patient') AS course_section,
+           TRIM(CONCAT_WS(' ', au.first_name, au.middle_name, au.last_name)) AS attended_by_name
+    FROM visits v
+    JOIN patients pt ON pt.person_id = v.patient_person_id
+    JOIN people p ON p.id = pt.person_id
+    LEFT JOIN students s ON s.person_id = p.id
+    LEFT JOIN programs pr ON pr.id = s.program_id
+    LEFT JOIN faculty f ON f.person_id = p.id
+    LEFT JOIN departments fd ON fd.id = f.department_id
+    LEFT JOIN school_personnel sp ON sp.person_id = p.id
+    LEFT JOIN departments sd ON sd.id = sp.department_id
+    LEFT JOIN people au ON au.id = v.attended_by_person_id
     WHERE {$whereSQL}
     ORDER BY CASE COALESCE(v.status, 'Unaddressed')
         WHEN 'Unaddressed' THEN 0
@@ -96,10 +105,10 @@ $visits = $stmt->fetchAll();
 
 [$statusWhereSQL, $statusParams] = $buildWhere(false);
 $statusCounts = ['all' => 0, 'Unaddressed' => 0, 'Active' => 0, 'Completed' => 0, 'Cancelled' => 0];
-$statusCountQuery = db()->prepare("
+$statusCountQuery = cliniq_visit_db()->prepare("
     SELECT v.status, COUNT(*) AS cnt
-    FROM clinic_visits v
-    JOIN patients p ON p.id = v.patient_id
+    FROM visits v
+    JOIN people p ON p.id = v.patient_person_id
     WHERE {$statusWhereSQL}
     GROUP BY v.status
 ");
@@ -110,16 +119,11 @@ foreach ($statusCountQuery->fetchAll() as $row) {
     $statusCounts['all'] += (int) $row['cnt'];
 }
 
-$staffMembers = db()->query("
-    SELECT DISTINCT u.id, u.name
-    FROM users u
-    JOIN clinic_visits v ON v.attended_by = u.id
-    ORDER BY u.name
-")->fetchAll();
+$staffMembers = cliniq_visit_staff_members();
 
-$purposeRows = db()->query("
+$purposeRows = cliniq_visit_db()->query("
     SELECT DISTINCT visit_purpose
-    FROM clinic_visits
+    FROM visits
     WHERE visit_purpose IS NOT NULL AND visit_purpose <> ''
     ORDER BY visit_purpose
 ")->fetchAll();

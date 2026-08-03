@@ -2,14 +2,12 @@
 
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/VisitWorkflow.php';
-require_once __DIR__ . '/../../app/services/InventoryWorkflow.php';
+require_once __DIR__ . '/../../app/services/CliniqVisitWorkflow.php';
 require_login();
-ensure_visit_workflow_schema();
-ensure_inventory_workflow_schema();
 
-$patients = db()->query('SELECT id, id_number, first_name, last_name, course_section, sex FROM patients ORDER BY last_name, first_name')->fetchAll();
-$medicineInventory = visit_medicine_inventory_options();
-$equipmentInventory = visit_equipment_inventory_options();
+$patients = cliniq_visit_patients();
+$medicineInventory = [];
+$equipmentInventory = [];
 $preselectedPatientId = (int) ($_GET['patient_id'] ?? 0);
 $preselectedPatient = null;
 foreach ($patients as $patient) {
@@ -20,7 +18,6 @@ foreach ($patients as $patient) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $db = db();
     try {
         $postedStudentNumber = trim($_POST['id_number'] ?? '');
         $patientId = 0;
@@ -29,14 +26,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new InvalidArgumentException(id_number_validation_message());
             }
 
-            $patientCheck = $db->prepare('SELECT id FROM patients WHERE id_number = ? LIMIT 1');
-            $patientCheck->execute([$postedStudentNumber]);
-            $patientId = (int) ($patientCheck->fetchColumn() ?: 0);
+            $patient = cliniq_visit_patient_by_id_number($postedStudentNumber);
+            $patientId = (int) ($patient['person_id'] ?? 0);
         } else {
             $patientId = (int) ($_POST['patient_id'] ?? 0);
-            $patientCheck = $db->prepare('SELECT id FROM patients WHERE id = ? LIMIT 1');
-            $patientCheck->execute([$patientId]);
-            $patientId = (int) ($patientCheck->fetchColumn() ?: 0);
+            if (!cliniq_visit_patient_exists($patientId)) {
+                $patientId = 0;
+            }
         }
 
         if ($patientId <= 0) {
@@ -44,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $actionTaken = trim($_POST['action_taken'] ?? '');
-        $status = normalize_visit_status($_POST['status'] ?? 'Active', 'Active');
+        $status = cliniq_visit_status($_POST['status'] ?? 'Active', 'Active');
         if ($status === 'Unaddressed' || $status === 'Cancelled') {
             $status = 'Active';
         }
@@ -53,67 +49,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($referralType === 'None') {
             $referralType = '';
         }
-        $dispensingRequest = visit_dispensing_request($_POST);
-
-        $db->beginTransaction();
-        $stmt = $db->prepare(
-            'INSERT INTO clinic_visits (patient_id, visit_datetime, chief_complaint, symptoms, temperature, blood_pressure, pulse_rate, status, visit_purpose, visit_source, action_taken, recorded_by, attended_by)
-             VALUES (?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-        );
-        $stmt->execute([
-            $patientId,
-            trim($_POST['chief_complaint'] ?? ''),
-            trim($_POST['symptoms'] ?? ''),
-            $_POST['temperature'] ?: null,
-            trim($_POST['blood_pressure'] ?? ''),
-            $_POST['pulse_rate'] ?: null,
-            $status,
-            $purpose,
-            'Staff Recorded',
-            $actionTaken ?: null,
-            current_user()['id'],
-            current_user()['id'],
-        ]);
-        $visitId = (int) $db->lastInsertId();
-
-        $borrower = visit_patient_borrower($db, $patientId);
-        $dispensed = process_visit_inventory_request($db, $dispensingRequest, $borrower['name'], $borrower['identifier']);
-        $remarks = trim($_POST['remarks'] ?? '');
-        $entry = [
-            'symptoms_note' => trim($_POST['symptoms'] ?? ''),
+        $staffPersonId = cliniq_visit_staff_person_id();
+        $visitId = cliniq_visit_create([
+            'patient_person_id' => $patientId,
+            'chief_complaint' => trim($_POST['chief_complaint'] ?? ''),
+            'status' => $status,
+            'visit_purpose' => $purpose,
+            'visit_source' => 'Staff Recorded',
+            'action_taken' => $actionTaken,
+            'recorded_by_person_id' => $staffPersonId,
+            'attended_by_person_id' => $staffPersonId,
+        ], [
+            'symptoms' => trim($_POST['symptoms'] ?? ''),
             'diagnosis' => trim($_POST['diagnosis'] ?? ''),
-            'management_treatment' => $actionTaken,
-            'referral_type' => $referralType,
-            'remarks' => $remarks,
-        ];
+            'treatment' => $actionTaken,
+            'referral' => $referralType,
+            'remarks' => trim($_POST['remarks'] ?? ''),
+        ], [
+            'temperature' => $_POST['temperature'] ?? '',
+            'blood_pressure' => trim($_POST['blood_pressure'] ?? ''),
+            'pulse_rate' => $_POST['pulse_rate'] ?? '',
+        ]);
 
-        if (treatment_entry_has_content($entry) || $dispensed) {
-            $treatmentStmt = $db->prepare(
-                'INSERT INTO visit_treatment_entries (visit_id, symptoms_note, diagnosis, management_treatment, referral_type, remarks, dispensed_inventory_item_id, dispensed_quantity, created_by)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-            );
-            $firstDispensed = $dispensed[0] ?? [];
-            $treatmentStmt->execute([
-                $visitId,
-                $entry['symptoms_note'] ?: null,
-                $entry['diagnosis'] ?: null,
-                $entry['management_treatment'] ?: null,
-                $entry['referral_type'] ?: null,
-                $entry['remarks'] ?: null,
-                $firstDispensed['item_id'] ?? null,
-                $firstDispensed['quantity'] ?? null,
-                current_user()['id'],
-            ]);
-            save_visit_treatment_dispensings($db, (int) $db->lastInsertId(), $visitId, $dispensed);
-        }
-
-        $db->commit();
-        flash_message('success', $dispensed ? 'Manual visit recorded and inventory updated.' : 'Manual visit recorded.');
+        flash_message('success', 'Manual visit recorded in Cliniq_db.');
         header('Location: view.php?id=' . $visitId . '&from=logbook');
     } catch (Throwable $e) {
-        if ($db->inTransaction()) {
-            $db->rollBack();
-        }
         flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $e->getMessage());
         header('Location: create.php' . ((int) ($_POST['patient_id'] ?? 0) > 0 ? '?patient_id=' . (int) $_POST['patient_id'] : ''));
     }
@@ -126,7 +86,7 @@ render_header('Record Visit');
 render_clinic_command_header(
     'Manual Nurse Station Flow',
     'Manual Record Visit',
-    'Record a walk-in visit directly with vitals, treatment, dispensing, and clinical notes.'
+    'Record a walk-in visit directly with vitals, treatment, and clinical notes.'
 );
 ?>
 
@@ -243,19 +203,22 @@ render_clinic_command_header(
             <span class="material-symbols-outlined text-primary text-[19px]">inventory_2</span>
             Inventory & Dispensing
         </h2>
+        <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800 mb-4">
+            Dispensing is visible for the planned workflow but is not connected to Cliniq_db yet.
+        </div>
         <div class="space-y-3" data-dispensing-list>
             <div class="grid grid-cols-1 md:grid-cols-[0.7fr_1.6fr_0.55fr_auto] gap-4 items-end" data-dispensing-row>
                 <div>
                     <label class="clinic-label">Type</label>
-                    <select class="record-sheet-field px-4 js-dispensing-type" name="dispensing_type[]">
+                    <select class="record-sheet-field px-4 js-dispensing-type" name="dispensing_type[]" disabled>
                         <option value="Medicine">Medicine</option>
                         <option value="Equipment">Equipment</option>
                     </select>
                 </div>
                 <div>
                     <label class="clinic-label">Medicine / Equipment</label>
-                    <select class="record-sheet-field px-4 js-visit-inventory-item" name="dispensed_inventory_item_id[]">
-                        <option value="" data-type="Medicine">No item selected</option>
+                    <select class="record-sheet-field px-4 js-visit-inventory-item" name="dispensed_inventory_item_id[]" disabled>
+                        <option value="" data-type="Medicine">Not connected</option>
                         <?php foreach ($medicineInventory as $medicine): ?>
                             <option value="<?= (int) $medicine['id'] ?>" data-type="Medicine" <?= (int) $medicine['quantity'] <= 0 ? 'disabled' : '' ?>>
                                 <?= e($medicine['item_name']) ?> (<?= (int) $medicine['quantity'] ?> <?= e($medicine['unit']) ?>)
@@ -270,18 +233,18 @@ render_clinic_command_header(
                 </div>
                 <div>
                     <label class="clinic-label">Quantity</label>
-                    <input class="record-sheet-field px-4" name="dispensed_quantity[]" type="number" min="1" placeholder="0">
+                    <input class="record-sheet-field px-4" name="dispensed_quantity[]" type="number" min="1" placeholder="0" disabled>
                 </div>
-                <button type="button" class="btn btn-ghost js-remove-dispensing-row" title="Remove item" aria-label="Remove item">
+                <button type="button" class="btn btn-ghost js-remove-dispensing-row" title="Dispensing not connected" aria-label="Dispensing not connected" disabled>
                     <span class="material-symbols-outlined text-[18px]">delete</span>
                 </button>
             </div>
         </div>
-        <button type="button" class="btn btn-outline mt-4 js-add-dispensing-row">
+        <button type="button" class="btn btn-outline mt-4 js-add-dispensing-row" disabled>
             <span class="material-symbols-outlined text-[18px]">add</span>
             Add Item
         </button>
-        <p class="settings-help mt-3 mb-0">Add multiple rows to dispense any combination of medicines and equipment.</p>
+        <p class="settings-help mt-3 mb-0">Medicine and equipment controls will be enabled after the new inventory tables are connected.</p>
     </section>
 
     <section class="clinic-card p-6">
@@ -321,7 +284,7 @@ render_clinic_command_header(
                     <span class="material-symbols-outlined">cancel</span>
                     Cancel
                 </a>
-                <button class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save this manual visit?" data-confirm-message="This will create a staff-recorded visit and update inventory for any dispensed medicines or equipment." data-confirm-toast="Saving visit...">
+                <button class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save this manual visit?" data-confirm-message="This will create a staff-recorded visit in Cliniq_db. Dispensing is not active yet." data-confirm-toast="Saving visit...">
                     <span class="material-symbols-outlined text-[18px]">save</span>
                     Save Visit
                 </button>

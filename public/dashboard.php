@@ -4,6 +4,7 @@ require_once __DIR__ . '/../app/helpers/view.php';
 require_once __DIR__ . '/../app/services/ApeWorkflow.php';
 require_once __DIR__ . '/../app/services/AlertWorkflow.php';
 require_once __DIR__ . '/../app/services/AppointmentWorkflow.php';
+require_once __DIR__ . '/../app/services/CliniqVisitWorkflow.php';
 require_login();
 
 $firstRegistrationError = '';
@@ -78,7 +79,7 @@ ensure_appointment_schema();
 
 // --- 1. Metrics & Analytics ---
 $metrics = [
-    'visits_today' => (int) (db()->query('SELECT COUNT(*) AS total FROM clinic_visits WHERE DATE(visit_datetime) = CURDATE()')->fetch()['total'] ?? 0),
+    'visits_today' => (int) (cliniq_visit_db()->query('SELECT COUNT(*) AS total FROM visits WHERE DATE(visit_datetime) = CURDATE()')->fetch()['total'] ?? 0),
     'pending_alerts' => (int) (db()->query("SELECT COUNT(*) AS total FROM nurse_alerts WHERE status = 'Pending'")->fetch()['total'] ?? 0),
     'low_stock' => (int) (db()->query('SELECT COUNT(*) AS total FROM inventory_items WHERE quantity <= reorder_level')->fetch()['total'] ?? 0),
     'appointment_requests' => (int) (db()->query("SELECT COUNT(*) AS total FROM appointments WHERE status = 'Pending'")->fetch()['total'] ?? 0),
@@ -132,10 +133,18 @@ $pendingAppointments = db()->query("
 ")->fetchAll();
 
 // --- 4. Real-time Visitor Log (Clinic Visits Today) ---
-$visitorLogs = db()->query("
-    SELECT v.*, p.first_name, p.last_name, p.id_number, p.course_section
-    FROM clinic_visits v
-    JOIN patients p ON p.id = v.patient_id
+$visitorLogs = cliniq_visit_db()->query("
+    SELECT v.*, v.visit_id AS id, p.first_name, p.last_name, p.id_number,
+           COALESCE(NULLIF(TRIM(CONCAT_WS(' ', pr.program_code, s.year_level, s.section)), ''), fd.department_code, sd.department_code, 'Patient') AS course_section
+    FROM visits v
+    JOIN patients pt ON pt.person_id = v.patient_person_id
+    JOIN people p ON p.id = pt.person_id
+    LEFT JOIN students s ON s.person_id = p.id
+    LEFT JOIN programs pr ON pr.id = s.program_id
+    LEFT JOIN faculty f ON f.person_id = p.id
+    LEFT JOIN departments fd ON fd.id = f.department_id
+    LEFT JOIN school_personnel sp ON sp.person_id = p.id
+    LEFT JOIN departments sd ON sd.id = sp.department_id
     WHERE DATE(v.visit_datetime) = CURDATE()
     ORDER BY v.visit_datetime DESC
 ")->fetchAll();

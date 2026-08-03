@@ -2,8 +2,8 @@
 
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/VisitWorkflow.php';
+require_once __DIR__ . '/../../app/services/CliniqVisitWorkflow.php';
 require_login();
-ensure_visit_workflow_schema();
 
 $user = current_user();
 if (!in_array($user['role'] ?? '', ['admin', 'doctor', 'nurse'], true)) {
@@ -17,68 +17,33 @@ if (!in_array($user['role'] ?? '', ['admin', 'doctor', 'nurse'], true)) {
     exit;
 }
 
-function split_emergency_patient_name(string $fullName): array
-{
-    $parts = preg_split('/\s+/', trim($fullName));
-    if (!$parts || count($parts) === 1) {
-        return [$fullName, 'Emergency Patient'];
-    }
-
-    $lastName = array_pop($parts);
-    return [implode(' ', $parts), $lastName];
-}
-
 $search = trim($_GET['q'] ?? '');
-$patientOptions = [];
-if ($search !== '') {
-    $like = '%' . $search . '%';
-    $stmt = db()->prepare("
-        SELECT id, id_number, first_name, last_name, course_section
-        FROM patients
-        WHERE first_name LIKE ? OR last_name LIKE ? OR id_number LIKE ?
-        ORDER BY last_name, first_name
-        LIMIT 30
-    ");
-    $stmt->execute([$like, $like, $like]);
-    $patientOptions = $stmt->fetchAll();
-}
+$patientOptions = $search !== '' ? cliniq_visit_patients($search, 30) : [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $patientId = (int) ($_POST['patient_id'] ?? 0);
 
     if (!$patientId) {
         $identifier = trim($_POST['identifier'] ?? '');
-        $fullName = trim($_POST['full_name'] ?? '');
-        $category = trim($_POST['category'] ?? 'Student');
-        $department = trim($_POST['department'] ?? '');
-
-        if ($identifier === '' || $fullName === '') {
-            flash_message('error', 'Provide an existing patient or enter a patient name and ID.');
+        if ($identifier === '') {
+            flash_message('error', 'Select an existing patient or enter an ID listed in Cliniq_db.');
             header('Location: emergency_create.php');
             exit;
         }
 
-        if ($category === 'Student' && !is_valid_id_number($identifier)) {
+        if (!is_valid_id_number($identifier)) {
             flash_message('error', id_number_validation_message());
             header('Location: emergency_create.php');
             exit;
         }
 
-        $existing = db()->prepare('SELECT id FROM patients WHERE id_number = ? LIMIT 1');
-        $existing->execute([$identifier]);
-        $patientId = (int) $existing->fetchColumn();
+        $existing = cliniq_visit_patient_by_id_number($identifier);
+        $patientId = (int) ($existing['person_id'] ?? 0);
 
         if (!$patientId) {
-            [$firstName, $lastName] = split_emergency_patient_name($fullName);
-            $courseSection = trim(implode(' - ', array_filter([$category, $department])));
-            $token = hash('sha256', 'emergency-' . $identifier . '-' . microtime(true));
-
-            $insertPatient = db()->prepare(
-                'INSERT INTO patients (id_number, first_name, last_name, course_section, emergency_token)
-                 VALUES (?, ?, ?, ?, ?)'
-            );
-            $insertPatient->execute([$identifier, $firstName, $lastName, $courseSection ?: null, $token]);
-            $patientId = (int) db()->lastInsertId();
+            flash_message('error', 'This ID is not listed as a patient in Cliniq_db. Create the inactive patient account first.');
+            header('Location: emergency_create.php');
+            exit;
         }
     }
 
@@ -88,49 +53,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $referralType = '';
     }
 
-    $visitStmt = db()->prepare(
-        'INSERT INTO clinic_visits (patient_id, visit_datetime, chief_complaint, symptoms, temperature, blood_pressure, pulse_rate, status, visit_purpose, visit_source, action_taken, recorded_by, attended_by)
-         VALUES (?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    );
-    $visitStmt->execute([
-        $patientId,
-        trim($_POST['chief_complaint'] ?? ''),
-        trim($_POST['symptoms'] ?? ''),
-        $_POST['temperature'] ?: null,
-        trim($_POST['blood_pressure'] ?? ''),
-        $_POST['pulse_rate'] ?: null,
-        normalize_visit_status($_POST['status'] ?? 'Active', 'Active'),
-        'Emergency',
-        'Nurse Emergency',
-        $management ?: 'Emergency visit recorded by nurse.',
-        $user['id'],
-        $user['id'],
-    ]);
-    $visitId = (int) db()->lastInsertId();
-
-    $entry = [
-        'symptoms_note' => trim($_POST['symptoms'] ?? ''),
+    $staffPersonId = cliniq_visit_staff_person_id($user);
+    $visitId = cliniq_visit_create([
+        'patient_person_id' => $patientId,
+        'chief_complaint' => trim($_POST['chief_complaint'] ?? ''),
+        'status' => cliniq_visit_status($_POST['status'] ?? 'Active', 'Active'),
+        'visit_purpose' => 'Emergency',
+        'visit_source' => 'Nurse Emergency',
+        'action_taken' => $management ?: 'Emergency visit recorded by nurse.',
+        'recorded_by_person_id' => $staffPersonId,
+        'attended_by_person_id' => $staffPersonId,
+    ], [
+        'symptoms' => trim($_POST['symptoms'] ?? ''),
         'diagnosis' => trim($_POST['diagnosis'] ?? ''),
-        'management_treatment' => $management,
-        'referral_type' => $referralType,
+        'treatment' => $management,
+        'referral' => $referralType,
         'remarks' => trim($_POST['remarks'] ?? ''),
-    ];
-
-    if (treatment_entry_has_content($entry)) {
-        $treatmentStmt = db()->prepare(
-            'INSERT INTO visit_treatment_entries (visit_id, symptoms_note, diagnosis, management_treatment, referral_type, remarks, created_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?)'
-        );
-        $treatmentStmt->execute([
-            $visitId,
-            $entry['symptoms_note'] ?: null,
-            $entry['diagnosis'] ?: null,
-            $entry['management_treatment'] ?: null,
-            $entry['referral_type'] ?: null,
-            $entry['remarks'] ?: null,
-            $user['id'],
-        ]);
-    }
+    ], [
+        'temperature' => $_POST['temperature'] ?? '',
+        'blood_pressure' => trim($_POST['blood_pressure'] ?? ''),
+        'pulse_rate' => $_POST['pulse_rate'] ?? '',
+    ]);
 
     flash_message('success', 'Emergency visit recorded and opened for treatment.');
     header('Location: view.php?id=' . $visitId);
@@ -166,35 +109,19 @@ render_header('Emergency Visit');
                 <div class="md:col-span-2">
                     <label class="clinic-label">Existing Patient</label>
                     <select class="clinic-select" name="patient_id">
-                        <option value="">Create minimal emergency patient instead</option>
+                        <option value="">Use an existing patient ID below</option>
                         <?php foreach ($patientOptions as $patient): ?>
                             <?php $name = trim($patient['last_name'] . ', ' . $patient['first_name']); ?>
                             <option value="<?= (int) $patient['id'] ?>"><?= e($name . ' - ' . $patient['id_number'] . ' - ' . ($patient['course_section'] ?: 'No section')) ?></option>
                         <?php endforeach; ?>
                     </select>
                     <?php if ($search !== '' && !$patientOptions): ?>
-                        <p class="text-xs font-bold text-amber-600 mt-2 mb-0">No matching patient found. Complete the minimal patient fields below.</p>
+                        <p class="text-xs font-bold text-amber-600 mt-2 mb-0">No matching patient was found in Cliniq_db. Create the inactive patient account first.</p>
                     <?php endif; ?>
                 </div>
-                <div>
-                    <label class="clinic-label">Full Name for New Emergency Patient</label>
-                    <input class="clinic-input" name="full_name" placeholder="Required only if no existing patient is selected">
-                </div>
-                <div>
-                    <label class="clinic-label">Student / Staff ID</label>
-                    <input class="clinic-input" name="identifier" value="<?= e($search) ?>" placeholder="Enter ID number" data-id-number-format data-student-category-source="emergencyPatientCategory">
-                </div>
-                <div>
-                    <label class="clinic-label">Category</label>
-                    <select class="clinic-select" name="category" id="emergencyPatientCategory">
-                        <?php foreach (dropdown_options('person_category') as $category): ?>
-                            <option value="<?= e($category) ?>"><?= e($category) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div>
-                    <label class="clinic-label">Course / Department</label>
-                    <input class="clinic-input" name="department" placeholder="Example: College of Nursing">
+                <div class="md:col-span-2">
+                    <label class="clinic-label">Existing Student / Faculty / Personnel ID</label>
+                    <input class="clinic-input" name="identifier" value="<?= e($search) ?>" placeholder="Enter ID number" data-id-number-format>
                 </div>
             </div>
         </div>

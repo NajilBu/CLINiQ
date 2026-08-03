@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../app/helpers/view.php';
 require_once __DIR__ . '/../app/services/VisitWorkflow.php';
 require_once __DIR__ . '/../app/services/InventoryWorkflow.php';
+require_once __DIR__ . '/../app/services/CliniqVisitWorkflow.php';
 ensure_visit_workflow_schema();
 ensure_inventory_workflow_schema();
 
@@ -66,9 +67,7 @@ if (isset($_GET['lookup_identifier'])) {
         exit;
     }
 
-    $stmt = db()->prepare('SELECT first_name, last_name, course_section FROM patients WHERE id_number = ? LIMIT 1');
-    $stmt->execute([$identifier]);
-    $patient = $stmt->fetch();
+    $patient = cliniq_visit_patient_by_id_number($identifier);
 
     if (!$patient) {
         echo json_encode(['found' => false]);
@@ -79,6 +78,7 @@ if (isset($_GET['lookup_identifier'])) {
         'found' => true,
         'name' => trim($patient['first_name'] . ' ' . $patient['last_name']),
         'course' => $patient['course_section'] ?: '',
+        'category' => $patient['patient_type'] ?: 'Patient',
         'yearLevel' => infer_year_level($patient['course_section'] ?? ''),
     ]);
     exit;
@@ -103,12 +103,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $matchedPatient = null;
     if ($form['identifier'] !== '') {
-        $matchedPatientStmt = db()->prepare('SELECT id, first_name, last_name, course_section FROM patients WHERE id_number = ? LIMIT 1');
-        $matchedPatientStmt->execute([$form['identifier']]);
-        $matchedPatient = $matchedPatientStmt->fetch() ?: null;
+        $matchedPatient = cliniq_visit_patient_by_id_number($form['identifier']);
         if ($matchedPatient) {
             $form['full_name'] = trim($matchedPatient['first_name'] . ' ' . $matchedPatient['last_name']);
-            $form['category'] = 'Student';
+            $form['category'] = $matchedPatient['patient_type'] ?: 'Patient';
             $form['department'] = $matchedPatient['course_section'] ?: $form['department'];
             if ($form['year_level'] === '') {
                 $form['year_level'] = infer_year_level($matchedPatient['course_section'] ?? '');
@@ -123,6 +121,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($form['category'] === 'Student' && !is_valid_id_number($form['identifier'])) {
         $errors['identifier'] = 'Use the format ' . ID_NUMBER_FORMAT_LABEL;
+    }
+
+    if (!$isBorrowingEquipment && !$matchedPatient) {
+        $errors['identifier'] = 'This ID number is not in the Cliniq_db patient list.';
     }
 
     if ($isBorrowingEquipment) {
@@ -207,27 +209,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (!$errors && !$success) {
-        [$firstName, $lastName] = split_visitor_name($form['full_name']);
-        $courseSection = trim(implode(' - ', array_filter([
-            $form['category'],
-            $form['year_level'],
-            $form['department'],
-        ])));
-
-        $patientStmt = db()->prepare('SELECT id FROM patients WHERE id_number = ? LIMIT 1');
-        $patientStmt->execute([$form['identifier']]);
-        $patientId = (int) $patientStmt->fetchColumn();
-
-        if (!$patientId) {
-            $token = hash('sha256', 'visitor-' . $form['identifier'] . '-' . microtime(true));
-            $insertStmt = db()->prepare(
-                'INSERT INTO patients (id_number, first_name, last_name, course_section, emergency_token)
-                 VALUES (?, ?, ?, ?, ?)'
-            );
-            $insertStmt->execute([$form['identifier'], $firstName, $lastName, $courseSection, $token]);
-            $patientId = (int) db()->lastInsertId();
-        }
-
         $symptoms = trim(
             'Submitted Name: ' . $form['full_name'] . "\n" .
             'Category: ' . $form['category'] . "\n" .
@@ -236,18 +217,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'Reason: ' . $form['reason'] . "\n" .
             'Visitor notes: ' . $form['chief_complaint']
         );
-        $visitStmt = db()->prepare(
-            'INSERT INTO clinic_visits (patient_id, visit_datetime, chief_complaint, symptoms, status, visit_purpose, visit_source, action_taken, recorded_by)
-             VALUES (?, NOW(), ?, ?, ?, ?, ?, ?, NULL)'
-        );
-        $visitStmt->execute([
-            $patientId,
-            mb_substr($form['reason'] . ' - ' . $form['chief_complaint'], 0, 255),
-            $symptoms,
-            'Unaddressed',
-            normalize_visit_purpose($form['reason']),
-            'Self Logbook',
-            'Visitor/patient self-registration. Awaiting clinic assessment.',
+        cliniq_visit_create([
+            'patient_person_id' => (int) $matchedPatient['person_id'],
+            'chief_complaint' => mb_substr($form['reason'] . ' - ' . $form['chief_complaint'], 0, 255),
+            'status' => 'Unaddressed',
+            'visit_purpose' => normalize_visit_purpose($form['reason']),
+            'visit_source' => 'Self Logbook',
+            'action_taken' => 'Visitor/patient self-registration. Awaiting clinic assessment.',
+        ], [
+            'symptoms' => $symptoms,
         ]);
 
         $success = [
@@ -594,7 +572,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <span class="material-symbols-outlined">badge</span>
                                 <input class="visit-input <?= isset($errors['identifier']) ? 'input-error' : '' ?>" id="identifier" name="identifier" value="<?= e($form['identifier']) ?>" placeholder="Enter ID number" data-id-number-format data-student-category-source="category" autocomplete="off" required>
                             </div>
-                            <div id="visitorLookupStatus" class="visit-lookup-status">Type your ID to load existing student details.</div>
+                            <div id="visitorLookupStatus" class="visit-lookup-status">Type your ID to load the existing patient details from Cliniq_db.</div>
                         </div>
 
                         <div>
@@ -611,7 +589,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <span class="material-symbols-outlined">group</span>
                                 <select class="visit-input <?= isset($errors['category']) ? 'input-error' : '' ?>" id="category" name="category" required>
                                     <option value="">Select Category</option>
-                                    <?php foreach (dropdown_options('person_category') as $category): ?>
+                                    <?php foreach (array_values(array_unique(array_merge(dropdown_options('person_category'), ['School Personnel', 'Patient']))) as $category): ?>
                                         <option <?= $form['category'] === $category ? 'selected' : '' ?>><?= e($category) ?></option>
                                     <?php endforeach; ?>
                                 </select>
@@ -880,20 +858,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     identifier.dataset.autofilled = '';
                     syncYearLevel();
                 }
-                setVisitorLookupStatus('No existing student record found. Continue filling the form manually.', 'missing');
+                setVisitorLookupStatus('This ID is not in the Cliniq_db patient list.', 'missing');
                 return;
             }
 
             identifier.dataset.autofilled = '1';
             fullName.value = patient.name || '';
-            category.value = 'Student';
+            category.value = patient.category || 'Patient';
             department.value = patient.course || '';
             yearLevel.value = patient.yearLevel || '';
             syncYearLevel();
-            setVisitorLookupStatus('Existing student details loaded.', 'found');
+            setVisitorLookupStatus('Existing patient details loaded from Cliniq_db.', 'found');
         } catch (error) {
             if (sequence === visitorLookupSequence) {
-                setVisitorLookupStatus('Unable to check the ID right now. Continue filling the form manually.', 'missing');
+                setVisitorLookupStatus('Unable to check Cliniq_db right now. Please try again.', 'missing');
             }
         }
     }

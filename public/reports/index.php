@@ -2,29 +2,31 @@
 
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/VisitWorkflow.php';
+require_once __DIR__ . '/../../app/services/CliniqVisitWorkflow.php';
 require_login();
 
 // ── Date range filter ───────────────────────────────────────
 $dateFrom = $_GET['from'] ?? date('Y-m-01');
 $dateTo = $_GET['to'] ?? date('Y-m-d');
+$visitDb = cliniq_visit_db();
 
 $stats = [
-    'visits_today'   => db()->query('SELECT COUNT(*) AS total FROM clinic_visits WHERE DATE(visit_datetime) = CURDATE()')->fetch()['total'] ?? 0,
+    'visits_today'   => $visitDb->query('SELECT COUNT(*) AS total FROM visits WHERE DATE(visit_datetime) = CURDATE()')->fetch()['total'] ?? 0,
     'visits_range'   => 0,
     'alerts_pending' => db()->query("SELECT COUNT(*) AS total FROM nurse_alerts WHERE status = 'Pending'")->fetch()['total'] ?? 0,
     'low_stock'      => db()->query('SELECT COUNT(*) AS total FROM inventory_items WHERE quantity <= reorder_level')->fetch()['total'] ?? 0,
-    'total_patients'  => db()->query('SELECT COUNT(*) AS total FROM patients')->fetch()['total'] ?? 0,
+    'total_patients'  => $visitDb->query('SELECT COUNT(*) AS total FROM patients')->fetch()['total'] ?? 0,
 ];
 
 // Visits in date range
-$rangeStmt = db()->prepare('SELECT COUNT(*) AS total FROM clinic_visits WHERE DATE(visit_datetime) BETWEEN ? AND ?');
+$rangeStmt = $visitDb->prepare('SELECT COUNT(*) AS total FROM visits WHERE DATE(visit_datetime) BETWEEN ? AND ?');
 $rangeStmt->execute([$dateFrom, $dateTo]);
 $stats['visits_range'] = (int)$rangeStmt->fetch()['total'];
 
 // Common complaints in range
-$complaints = db()->prepare("
+$complaints = $visitDb->prepare("
     SELECT chief_complaint, COUNT(*) AS total
-    FROM clinic_visits
+    FROM visits
     WHERE DATE(visit_datetime) BETWEEN ? AND ?
     GROUP BY chief_complaint
     ORDER BY total DESC, chief_complaint ASC
@@ -35,9 +37,9 @@ $complaints = $complaints->fetchAll();
 $maxComplaint = $complaints ? max(array_column($complaints, 'total')) : 1;
 
 // Visit status distribution
-$statusDist = db()->prepare("
+$statusDist = $visitDb->prepare("
     SELECT COALESCE(status, 'Unaddressed') AS status, COUNT(*) AS total
-    FROM clinic_visits
+    FROM visits
     WHERE DATE(visit_datetime) BETWEEN ? AND ?
     GROUP BY COALESCE(status, 'Unaddressed')
     ORDER BY FIELD(COALESCE(status, 'Unaddressed'), 'Unaddressed', 'Active', 'Completed', 'Cancelled')
@@ -46,11 +48,11 @@ $statusDist->execute([$dateFrom, $dateTo]);
 $statusDist = $statusDist->fetchAll();
 
 // Monthly trend (last 6 months)
-$monthlyTrend = db()->query("
+$monthlyTrend = $visitDb->query("
     SELECT DATE_FORMAT(visit_datetime, '%Y-%m') AS month_key,
            DATE_FORMAT(visit_datetime, '%b %Y') AS month_label,
            COUNT(*) AS total
-    FROM clinic_visits
+    FROM visits
     WHERE visit_datetime >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
     GROUP BY month_key, month_label
     ORDER BY month_key ASC
