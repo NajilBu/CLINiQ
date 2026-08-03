@@ -107,71 +107,63 @@ DROP PROCEDURE add_cliniq_reference_foreign_keys;
 
 UPDATE students
 SET program_id = (SELECT id FROM programs WHERE program_code = 'BEED'),
-    program = 'BEED', year_level = '1', section = 'A'
+    year_level = '1', section = 'A'
 WHERE person_id = 17;
 
 UPDATE students
 SET program_id = (SELECT id FROM programs WHERE program_code = 'BSN'),
-    program = 'BSN', year_level = '1', section = 'A'
+    year_level = '1', section = 'A'
 WHERE person_id = 18;
 
 UPDATE students
 SET program_id = (SELECT id FROM programs WHERE program_code = 'BSIT'),
-    program = 'BSIT', year_level = '1', section = 'C'
+    year_level = '1', section = 'C'
 WHERE person_id = 19;
 
 UPDATE students
 SET program_id = (SELECT id FROM programs WHERE program_code = 'BSED'),
-    program = 'BSED', year_level = '1', section = 'A'
+    year_level = '1', section = 'A'
 WHERE person_id = 20;
 
 UPDATE students
 SET program_id = (SELECT id FROM programs WHERE program_code = 'BSED'),
-    program = 'BSED', year_level = '1', section = 'B'
+    year_level = '1', section = 'B'
 WHERE person_id = 21;
 
 UPDATE students
 SET program_id = (SELECT id FROM programs WHERE program_code = 'BSBA'),
-    program = 'BSBA', year_level = '1', section = 'D'
+    year_level = '1', section = 'D'
 WHERE person_id = 22;
 
 UPDATE students
 SET program_id = (SELECT id FROM programs WHERE program_code = 'BSBA'),
-    program = 'BSBA', year_level = '1', section = 'A'
+    year_level = '1', section = 'A'
 WHERE person_id = 23;
 
 UPDATE students
 SET program_id = (SELECT id FROM programs WHERE program_code = 'BSCS'),
-    program = 'BSCS', year_level = '1', section = 'B'
+    year_level = '1', section = 'B'
 WHERE person_id = 24;
 
 UPDATE students
 SET program_id = (SELECT id FROM programs WHERE program_code = 'BSA'),
-    program = 'BSA', year_level = '1', section = 'A'
+    year_level = '1', section = 'A'
 WHERE person_id = 25;
 
 UPDATE students
 SET program_id = (SELECT id FROM programs WHERE program_code = 'BSCS'),
-    program = 'BSCS', year_level = '1', section = 'C'
+    year_level = '1', section = 'C'
 WHERE person_id = 26;
 
 UPDATE students
 SET program_id = (SELECT id FROM programs WHERE program_code = 'BSIT'),
-    program = 'BSIT', year_level = '4', section = 'D'
+    year_level = '4', section = 'D'
 WHERE person_id IN (27, 28, 29, 55);
 
-UPDATE faculty
-SET department_id = (SELECT id FROM departments WHERE department_code = 'CCS'),
-    department = 'CCS'
-WHERE department = 'College of Information Technology'
-   OR department = 'CCS';
-
-UPDATE school_personnel sp
-JOIN departments d ON d.department_code = UPPER(sp.department_or_office)
-SET sp.department_id = d.id,
-    sp.department_or_office = d.department_code
-WHERE sp.department_or_office IS NOT NULL;
+UPDATE faculty f
+JOIN people p ON p.id = f.person_id
+SET f.department_id = (SELECT id FROM departments WHERE department_code = 'CCS')
+WHERE p.id_number = 'FAC-0001';
 
 UPDATE clinic_staff
-SET department_id = (SELECT id FROM departments WHERE department_code = 'UHS'),
-    department = 'UHS';
+SET department_id = (SELECT id FROM departments WHERE department_code = 'UHS');

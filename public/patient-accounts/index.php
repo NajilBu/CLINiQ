@@ -319,7 +319,7 @@ const accountFieldHints = {
     school_personnel: {
         idPlaceholder: 'SP-0001',
         idHint: 'School personnel example: SP-0001',
-        programLabel: 'Department or Office',
+        programLabel: 'Department',
         programPlaceholder: 'Select department',
         programHint: 'Select an active department from the database.',
         yearLabel: 'Employment Type',
@@ -498,7 +498,6 @@ excelFile?.addEventListener('change', async () => {
         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
         const sourceRows = XLSX.utils.sheet_to_json(worksheet, { defval: '', raw: false, dateNF: 'yyyy-mm-dd' });
         const importHeaderAliases = {
-            program_code_department_or_office: 'program_or_department',
             program_code_department: 'program_or_department',
             year_level_employment_type: 'year_level_or_employment_type',
             section_code_title_position: 'section_or_position',

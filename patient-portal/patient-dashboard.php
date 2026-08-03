@@ -153,7 +153,7 @@ $apeNeedsAction = ($latestApe['clearance_status'] ?? 'Pending') !== 'Cleared';
 $requiredActionCount = ($passportComplete ? 0 : 1) + ($apeNeedsAction ? 1 : 0);
 $profileDetailLabel = match ($profile['account_type'] ?? 'patient') {
     'student' => 'Program',
-    'faculty', 'school_personnel' => 'Department or Office',
+    'faculty', 'school_personnel' => 'Department',
     default => 'Affiliation',
 };
 $accountBadgeLabel = ($profile['account_type'] ?? '') === 'student' ? 'Enrolled' : 'Active';

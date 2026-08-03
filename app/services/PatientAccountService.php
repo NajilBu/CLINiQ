@@ -293,38 +293,35 @@ function create_inactive_patient_account(array $input): array
 
         if ($type === 'student') {
             $profile = $db->prepare('
-                INSERT INTO students (person_id, program_id, program, year_level, section, academic_year)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO students (person_id, program_id, year_level, section, academic_year)
+                VALUES (?, ?, ?, ?, ?)
             ');
             $profile->execute([
                 $personId,
                 $programId,
-                $programDepartment !== '' ? $programDepartment : null,
                 $yearEmployment !== '' ? $yearEmployment : null,
                 $sectionPosition !== '' ? $sectionPosition : null,
                 $academicYear !== '' ? $academicYear : null,
             ]);
         } elseif ($type === 'faculty') {
             $profile = $db->prepare('
-                INSERT INTO faculty (person_id, department_id, department, employment_type, position_title)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO faculty (person_id, department_id, employment_type, position_title)
+                VALUES (?, ?, ?, ?)
             ');
             $profile->execute([
                 $personId,
                 $departmentId,
-                $programDepartment !== '' ? $programDepartment : null,
                 $yearEmployment !== '' ? $yearEmployment : null,
                 $sectionPosition !== '' ? $sectionPosition : null,
             ]);
         } elseif ($type === 'school_personnel') {
             $profile = $db->prepare('
-                INSERT INTO school_personnel (person_id, department_id, department_or_office, employment_type, position_title)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO school_personnel (person_id, department_id, employment_type, position_title)
+                VALUES (?, ?, ?, ?)
             ');
             $profile->execute([
                 $personId,
                 $departmentId,
-                $programDepartment !== '' ? $programDepartment : null,
                 $yearEmployment !== '' ? $yearEmployment : null,
                 $sectionPosition !== '' ? $sectionPosition : null,
             ]);

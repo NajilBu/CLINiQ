@@ -78,8 +78,8 @@ function student_profile_from_identity(array $identity, ?array $legacyPatient): 
         'birthdate' => $identity['birthdate'] ?? null,
         'sex' => $legacyPatient['sex'] ?? null,
         'blood_type' => $legacyPatient['blood_type'] ?? $identity['blood_type'] ?? null,
-        'allergies' => $legacyPatient['allergies'] ?? $identity['allergies'] ?? null,
-        'existing_conditions' => $legacyPatient['existing_conditions'] ?? $identity['existing_conditions'] ?? null,
+        'allergies' => $legacyPatient['allergies'] ?? null,
+        'existing_conditions' => $legacyPatient['existing_conditions'] ?? null,
         'emergency_instructions' => $legacyPatient['emergency_instructions'] ?? $identity['emergency_instructions'] ?? null,
         'guardian_name' => $legacyPatient['guardian_name'] ?? $identity['guardian_or_contact_name'] ?? null,
         'guardian_contact' => $legacyPatient['guardian_contact'] ?? $identity['guardian_or_contact_number'] ?? null,
@@ -115,12 +115,10 @@ function student_current_profile(): ?array
             a.account_status,
             a.password_hash,
             a.temporary_password_hash,
-            s.program,
-            f.department AS faculty_department,
-            sp.department_or_office AS personnel_department,
+            pr.program_code AS program,
+            fd.department_code AS faculty_department,
+            sd.department_code AS personnel_department,
             pt.blood_type,
-            pt.allergies,
-            pt.existing_conditions,
             pt.emergency_instructions,
             pt.guardian_or_contact_name,
             pt.guardian_or_contact_number,
@@ -134,8 +132,11 @@ function student_current_profile(): ?array
         FROM people p
         JOIN accounts a ON a.person_id = p.id
         LEFT JOIN students s ON s.person_id = p.id
+        LEFT JOIN programs pr ON pr.id = s.program_id
         LEFT JOIN faculty f ON f.person_id = p.id
+        LEFT JOIN departments fd ON fd.id = f.department_id
         LEFT JOIN school_personnel sp ON sp.person_id = p.id
+        LEFT JOIN departments sd ON sd.id = sp.department_id
         LEFT JOIN patients pt ON pt.person_id = p.id
         WHERE p.id = ?
         LIMIT 1

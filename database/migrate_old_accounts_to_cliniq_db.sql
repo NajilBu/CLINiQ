@@ -9,10 +9,10 @@ SELECT
 FROM cliniq.patients
 ORDER BY id;
 
--- Student academic profiles. The old schema stores the program and section
--- together, so the original value is preserved in program.
-INSERT INTO Cliniq_db.students (person_id, program)
-SELECT np.id, op.course_section
+-- Student academic profiles. Program, year, and section are assigned by the
+-- normalization migration after these people are imported.
+INSERT INTO Cliniq_db.students (person_id)
+SELECT np.id
 FROM cliniq.patients op
 JOIN Cliniq_db.people np
   ON np.id_number COLLATE utf8mb4_general_ci = op.id_number;
@@ -21,8 +21,6 @@ JOIN Cliniq_db.people np
 INSERT INTO Cliniq_db.patients (
   person_id,
   blood_type,
-  allergies,
-  existing_conditions,
   emergency_instructions,
   guardian_or_contact_name,
   guardian_or_contact_number,
@@ -32,8 +30,6 @@ INSERT INTO Cliniq_db.patients (
 SELECT
   np.id,
   op.blood_type,
-  op.allergies,
-  op.existing_conditions,
   op.emergency_instructions,
   op.guardian_name,
   op.guardian_contact,
@@ -66,12 +62,12 @@ INSERT INTO Cliniq_db.people (
   ('STAFF-0006', 'IT', NULL, 'Support', NULL);
 
 INSERT INTO Cliniq_db.clinic_staff (
-  person_id, staff_role, department, position_title
+  person_id, department_id, staff_role, position_title
 )
 SELECT
   np.id,
+  (SELECT id FROM Cliniq_db.departments WHERE department_code = 'UHS'),
   ou.role,
-  'University Health Services',
   ou.name
 FROM cliniq.users ou
 JOIN Cliniq_db.people np
@@ -97,14 +93,13 @@ INSERT INTO Cliniq_db.people (
 );
 
 INSERT INTO Cliniq_db.faculty (
-  person_id, department, employment_type, position_title, office
+  person_id, department_id, employment_type, position_title
 )
 SELECT
   id,
-  'College of Information Technology',
+  (SELECT id FROM Cliniq_db.departments WHERE department_code = 'CCS'),
   'Full-time',
-  'Instructor',
-  'Faculty Room 2'
+  'Instructor'
 FROM Cliniq_db.people
 WHERE id_number = 'FAC-0001';
 

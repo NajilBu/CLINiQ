@@ -79,7 +79,6 @@ CREATE TABLE accounts (
 CREATE TABLE students (
   person_id BIGINT UNSIGNED PRIMARY KEY,
   program_id BIGINT UNSIGNED NULL,
-  program VARCHAR(160) NULL,
   year_level VARCHAR(40) NULL,
   section VARCHAR(80) NULL,
   academic_year VARCHAR(20) NULL,
@@ -91,10 +90,8 @@ CREATE TABLE students (
 CREATE TABLE faculty (
   person_id BIGINT UNSIGNED PRIMARY KEY,
   department_id BIGINT UNSIGNED NULL,
-  department VARCHAR(160) NULL,
   employment_type VARCHAR(80) NULL,
   position_title VARCHAR(160) NULL,
-  office VARCHAR(160) NULL,
   FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE CASCADE,
   FOREIGN KEY (department_id) REFERENCES departments(id),
   INDEX idx_faculty_department (department_id)
@@ -103,7 +100,6 @@ CREATE TABLE faculty (
 CREATE TABLE school_personnel (
   person_id BIGINT UNSIGNED PRIMARY KEY,
   department_id BIGINT UNSIGNED NULL,
-  department_or_office VARCHAR(160) NULL,
   employment_type VARCHAR(80) NULL,
   position_title VARCHAR(160) NULL,
   FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE CASCADE,
@@ -116,7 +112,6 @@ CREATE TABLE clinic_staff (
   department_id BIGINT UNSIGNED NULL,
   staff_role ENUM('admin', 'doctor', 'nurse', 'staff', 'it_expert')
     NOT NULL DEFAULT 'staff',
-  department VARCHAR(160) NULL DEFAULT 'University Health Services',
   position_title VARCHAR(160) NULL,
   FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE CASCADE,
   FOREIGN KEY (department_id) REFERENCES departments(id),
@@ -129,8 +124,6 @@ CREATE TABLE clinic_staff (
 CREATE TABLE patients (
   person_id BIGINT UNSIGNED PRIMARY KEY,
   blood_type VARCHAR(10) NULL,
-  allergies TEXT NULL,
-  existing_conditions TEXT NULL,
   emergency_instructions TEXT NULL,
   guardian_or_contact_name VARCHAR(160) NULL,
   guardian_or_contact_number VARCHAR(50) NULL,
