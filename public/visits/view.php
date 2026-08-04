@@ -18,6 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $existingVisit = cliniq_visit_fetch($id);
     $visitDb = cliniq_visit_db();
     $staffPersonId = cliniq_visit_staff_person_id();
+    $dispensings = cliniq_inventory_dispensing_rows($_POST);
 
     if ($existingVisit && $mode === 'begin_visit' && ($existingVisit['status'] ?? 'Unaddressed') === 'Unaddressed') {
         $update = $visitDb->prepare("UPDATE visits SET status = 'Active', recorded_by_person_id = COALESCE(recorded_by_person_id, ?), attended_by_person_id = ? WHERE visit_id = ?");
@@ -119,11 +120,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'remarks' => $remarks,
             ];
             $entryId = cliniq_visit_insert_entry($visitDb, $id, $entry, $staffPersonId);
+            if ($dispensings && !$entryId) {
+                $entryId = cliniq_visit_insert_entry($visitDb, $id, ['remarks' => 'Medicine dispensing recorded.'], $staffPersonId);
+            }
             cliniq_visit_insert_vitals($visitDb, $id, $entryId, [
                 'temperature' => $temperature,
                 'blood_pressure' => $bloodPressure,
                 'pulse_rate' => $pulseRate,
             ], $staffPersonId);
+            cliniq_inventory_dispense_medicines($visitDb, (int) $entryId, $dispensings, $staffPersonId);
 
             $visitDb->commit();
             flash_message('success', 'Visit addressed in Cliniq_db.');
@@ -150,12 +155,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ];
             $newStatus = cliniq_visit_status($_POST['status'] ?? '', $existingVisit['status'] ?: 'Active');
             $statusChanged = $newStatus !== ($existingVisit['status'] ?: 'Unaddressed');
+            $hasDispensing = !empty($dispensings);
 
-            if ((cliniq_visit_entry_has_content($entry) || $statusChanged) && $entry['amendment_reason'] === '') {
+            if ((cliniq_visit_entry_has_content($entry) || $statusChanged || $hasDispensing) && $entry['amendment_reason'] === '') {
                 flash_message('warning', 'Enter the reason for the amendment before saving.');
-            } elseif (cliniq_visit_entry_has_content($entry) || $statusChanged) {
+            } elseif (cliniq_visit_entry_has_content($entry) || $statusChanged || $hasDispensing) {
                 $visitDb->beginTransaction();
-                cliniq_visit_insert_entry($visitDb, $id, $entry, $staffPersonId);
+                $entryId = cliniq_visit_insert_entry($visitDb, $id, $entry, $staffPersonId);
+                if ($dispensings && !$entryId) {
+                    $entryId = cliniq_visit_insert_entry($visitDb, $id, ['remarks' => 'Medicine dispensing amendment.'], $staffPersonId);
+                }
+                cliniq_inventory_dispense_medicines($visitDb, (int) $entryId, $dispensings, $staffPersonId);
                 $update = $visitDb->prepare('UPDATE visits SET status = ?, attended_by_person_id = COALESCE(attended_by_person_id, ?) WHERE visit_id = ?');
                 $update->execute([$newStatus, $staffPersonId, $id]);
                 $visitDb->commit();
@@ -198,8 +208,8 @@ if (!$visit) {
 }
 
 $entries = cliniq_visit_entries($id);
-$entryDispensings = [];
-$medicineInventory = [];
+$entryDispensings = cliniq_inventory_entry_dispensings(array_column($entries, 'id'));
+$medicineInventory = cliniq_inventory_available_medicines();
 $equipmentInventory = [];
 
 $fullName = trim($visit['first_name'] . ' ' . $visit['last_name']);
@@ -564,9 +574,7 @@ render_header($pageTitle);
             <span class="material-symbols-outlined text-primary text-[19px]">inventory_2</span>
             Inventory & Dispensing
         </h2>
-        <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800 mb-4">
-            Dispensing is visible for the planned workflow but is not connected to Cliniq_db yet.
-        </div>
+        <p class="settings-help mb-4">Append optional medicines to this visit. Saving deducts them from Cliniq_db stock.</p>
         <?php if ($sheetDispensings): ?>
             <div class="mb-4 rounded-xl border border-slate-100 bg-slate-50 p-4">
                 <p class="clinic-label mb-2">Previously Recorded Dispensing</p>
@@ -583,13 +591,12 @@ render_header($pageTitle);
                     <label class="clinic-label">Type</label>
                     <select class="record-sheet-field px-4 js-dispensing-type" name="dispensing_type[]" disabled>
                         <option value="Medicine">Medicine</option>
-                        <option value="Equipment">Equipment</option>
                     </select>
                 </div>
                 <div>
-                    <label class="clinic-label">Medicine / Equipment</label>
-                    <select class="record-sheet-field px-4 js-visit-inventory-item" name="dispensed_inventory_item_id[]" disabled>
-                        <option value="" data-type="Medicine">Not connected</option>
+                    <label class="clinic-label">Medicine</label>
+                    <select class="record-sheet-field px-4 js-visit-inventory-item" name="dispensed_inventory_item_id[]" disabled data-amendable>
+                        <option value="" data-type="Medicine">No medicine selected</option>
                         <?php foreach ($medicineInventory as $medicine): ?>
                             <option value="<?= (int) $medicine['id'] ?>" data-type="Medicine" <?= (int) $medicine['quantity'] <= 0 ? 'disabled' : '' ?>>
                                 <?= e($medicine['item_name']) ?> (<?= (int) $medicine['quantity'] ?> <?= e($medicine['unit']) ?>)
@@ -604,14 +611,14 @@ render_header($pageTitle);
                 </div>
                 <div>
                     <label class="clinic-label">Quantity</label>
-                    <input class="record-sheet-field px-4" name="dispensed_quantity[]" type="number" min="1" placeholder="0" disabled>
+                    <input class="record-sheet-field px-4" name="dispensed_quantity[]" type="number" min="1" placeholder="0" disabled data-amendable>
                 </div>
-                <button type="button" class="btn btn-ghost js-remove-dispensing-row amendment-only" title="Dispensing not connected" aria-label="Dispensing not connected" disabled>
+                <button type="button" class="btn btn-ghost js-remove-dispensing-row amendment-only" title="Remove medicine" aria-label="Remove medicine">
                     <span class="material-symbols-outlined text-[18px]">delete</span>
                 </button>
             </div>
         </div>
-        <button type="button" class="btn btn-outline mt-4 js-add-dispensing-row amendment-only" disabled>
+        <button type="button" class="btn btn-outline mt-4 js-add-dispensing-row amendment-only">
             <span class="material-symbols-outlined text-[18px]">add</span>
             Add Item
         </button>
@@ -895,9 +902,7 @@ render_header($pageTitle);
             <span class="material-symbols-outlined text-primary text-[19px]">inventory_2</span>
             Inventory & Dispensing
         </h2>
-        <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800 mb-4">
-            Dispensing is visible for the planned workflow but is not connected to Cliniq_db yet.
-        </div>
+        <p class="settings-help mb-4">Medicines saved with treatment are deducted from Cliniq_db inventory.</p>
         <?php if ($isReadOnlyLogbook): ?>
             <?php if ($sheetDispensings): ?>
                 <div class="rounded-xl border border-slate-100 bg-slate-50 p-4">
@@ -918,13 +923,12 @@ render_header($pageTitle);
                         <label class="clinic-label">Type</label>
                         <select class="record-sheet-field px-4 js-dispensing-type" name="dispensing_type[]" disabled>
                             <option value="Medicine">Medicine</option>
-                            <option value="Equipment">Equipment</option>
                         </select>
                     </div>
                     <div>
-                        <label class="clinic-label">Medicine / Equipment</label>
-                        <select class="record-sheet-field px-4 js-visit-inventory-item" name="dispensed_inventory_item_id[]" disabled>
-                            <option value="" data-type="Medicine">Not connected</option>
+                        <label class="clinic-label">Medicine</label>
+                        <select class="record-sheet-field px-4 js-visit-inventory-item" name="dispensed_inventory_item_id[]">
+                            <option value="" data-type="Medicine">No medicine selected</option>
                             <?php foreach ($medicineInventory as $medicine): ?>
                                 <option value="<?= (int) $medicine['id'] ?>" data-type="Medicine" <?= (int) $medicine['quantity'] <= 0 ? 'disabled' : '' ?>>
                                     <?= e($medicine['item_name']) ?> (<?= (int) $medicine['quantity'] ?> <?= e($medicine['unit']) ?>)
@@ -939,18 +943,18 @@ render_header($pageTitle);
                     </div>
                     <div>
                         <label class="clinic-label">Quantity</label>
-                        <input class="record-sheet-field px-4" name="dispensed_quantity[]" type="number" min="1" placeholder="0" disabled>
+                        <input class="record-sheet-field px-4" name="dispensed_quantity[]" type="number" min="1" placeholder="0">
                     </div>
-                    <button type="button" class="btn btn-ghost js-remove-dispensing-row" title="Dispensing not connected" aria-label="Dispensing not connected" disabled>
+                    <button type="button" class="btn btn-ghost js-remove-dispensing-row" title="Remove medicine" aria-label="Remove medicine">
                         <span class="material-symbols-outlined text-[18px]">delete</span>
                     </button>
                 </div>
             </div>
-            <button type="button" class="btn btn-outline mt-4 js-add-dispensing-row" disabled>
+            <button type="button" class="btn btn-outline mt-4 js-add-dispensing-row">
                 <span class="material-symbols-outlined text-[18px]">add</span>
                 Add Item
             </button>
-            <p class="settings-help mt-3 mb-0">Medicine and equipment controls will be enabled after the new inventory tables are connected.</p>
+            <p class="settings-help mt-3 mb-0">Equipment borrowing is recorded separately in Inventory &amp; Tracking.</p>
         <?php endif; ?>
     </section>
 

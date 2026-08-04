@@ -985,7 +985,11 @@ html&gt;body{padding:0}&lt;/style&gt;
       {n:&#x27;patients&#x27;,x:1260,y:760,c:[&#x27;person_id PK FK&#x27;,&#x27;blood_type&#x27;,&#x27;emergency_instructions&#x27;,&#x27;guardian_or_contact_name&#x27;,&#x27;guardian_or_contact_number&#x27;,&#x27;emergency_token UNIQUE&#x27;,&#x27;token_enabled&#x27;]},
       {n:&#x27;visits&#x27;,x:1260,y:1120,c:[&#x27;visit_id PK&#x27;,&#x27;patient_person_id FK&#x27;,&#x27;visit_datetime&#x27;,&#x27;chief_complaint&#x27;,&#x27;status&#x27;,&#x27;visit_purpose&#x27;,&#x27;visit_source&#x27;,&#x27;action_taken&#x27;,&#x27;recorded_by_person_id FK&#x27;,&#x27;attended_by_person_id FK&#x27;,&#x27;created_at&#x27;,&#x27;updated_at&#x27;]},
       {n:&#x27;visit_entries&#x27;,x:840,y:1520,c:[&#x27;entry_id PK&#x27;,&#x27;visit_id FK&#x27;,&#x27;diagnosis&#x27;,&#x27;symptoms&#x27;,&#x27;treatment&#x27;,&#x27;referral&#x27;,&#x27;remarks&#x27;,&#x27;amendment_reason&#x27;,&#x27;addressed_by_person_id FK&#x27;,&#x27;created_at&#x27;]},
-      {n:&#x27;vital_signs&#x27;,x:1260,y:1520,c:[&#x27;vital_id PK&#x27;,&#x27;visit_id FK&#x27;,&#x27;entry_id FK NULL&#x27;,&#x27;temperature&#x27;,&#x27;blood_pressure&#x27;,&#x27;pulse_rate&#x27;,&#x27;measured_by_person_id FK&#x27;,&#x27;measured_at&#x27;]}
+      {n:&#x27;vital_signs&#x27;,x:1260,y:1520,c:[&#x27;vital_id PK&#x27;,&#x27;visit_id FK&#x27;,&#x27;entry_id FK NULL&#x27;,&#x27;temperature&#x27;,&#x27;blood_pressure&#x27;,&#x27;pulse_rate&#x27;,&#x27;measured_by_person_id FK&#x27;,&#x27;measured_at&#x27;]},
+      {n:&#x27;inventory_items&#x27;,x:60,y:1920,c:[&#x27;item_id PK&#x27;,&#x27;item_code UNIQUE&#x27;,&#x27;item_name&#x27;,&#x27;item_type&#x27;,&#x27;description&#x27;,&#x27;unit&#x27;,&#x27;quantity&#x27;,&#x27;reorder_level&#x27;,&#x27;expiration_date&#x27;,&#x27;is_active&#x27;,&#x27;created_at&#x27;,&#x27;updated_at&#x27;]},
+      {n:&#x27;medicine_dispensings&#x27;,x:420,y:1920,c:[&#x27;dispensing_id PK&#x27;,&#x27;entry_id FK&#x27;,&#x27;item_id FK&#x27;,&#x27;quantity&#x27;,&#x27;remarks&#x27;,&#x27;dispensed_by_person_id FK&#x27;,&#x27;dispensed_at&#x27;]},
+      {n:&#x27;equipment_loans&#x27;,x:780,y:1920,c:[&#x27;loan_id PK&#x27;,&#x27;item_id FK&#x27;,&#x27;borrower_person_id FK&#x27;,&#x27;visit_id FK NULL&#x27;,&#x27;quantity&#x27;,&#x27;borrowed_at&#x27;,&#x27;due_at&#x27;,&#x27;returned_at&#x27;,&#x27;status&#x27;,&#x27;released_by_person_id FK&#x27;,&#x27;received_by_person_id FK&#x27;,&#x27;remarks&#x27;,&#x27;created_at&#x27;,&#x27;updated_at&#x27;]},
+      {n:&#x27;inventory_transactions&#x27;,x:1140,y:1920,c:[&#x27;transaction_id PK&#x27;,&#x27;item_id FK&#x27;,&#x27;transaction_type&#x27;,&#x27;quantity_change&#x27;,&#x27;balance_after&#x27;,&#x27;dispensing_id FK NULL&#x27;,&#x27;loan_id FK NULL&#x27;,&#x27;notes&#x27;,&#x27;performed_by_person_id FK&#x27;,&#x27;created_at&#x27;]}
     ];
     const newRels = [
       [&#x27;programs&#x27;,&#x27;departments&#x27;,&#x27;department_id&#x27;,&#x27;id&#x27;],
@@ -1006,7 +1010,19 @@ html&gt;body{padding:0}&lt;/style&gt;
       [&#x27;visit_entries&#x27;,&#x27;clinic_staff&#x27;,&#x27;addressed_by_person_id&#x27;,&#x27;person_id&#x27;],
       [&#x27;vital_signs&#x27;,&#x27;visits&#x27;,&#x27;visit_id&#x27;,&#x27;visit_id&#x27;],
       [&#x27;vital_signs&#x27;,&#x27;visit_entries&#x27;,&#x27;entry_id&#x27;,&#x27;entry_id&#x27;],
-      [&#x27;vital_signs&#x27;,&#x27;clinic_staff&#x27;,&#x27;measured_by_person_id&#x27;,&#x27;person_id&#x27;]
+      [&#x27;vital_signs&#x27;,&#x27;clinic_staff&#x27;,&#x27;measured_by_person_id&#x27;,&#x27;person_id&#x27;],
+      [&#x27;medicine_dispensings&#x27;,&#x27;visit_entries&#x27;,&#x27;entry_id&#x27;,&#x27;entry_id&#x27;],
+      [&#x27;medicine_dispensings&#x27;,&#x27;inventory_items&#x27;,&#x27;item_id&#x27;,&#x27;item_id&#x27;],
+      [&#x27;medicine_dispensings&#x27;,&#x27;clinic_staff&#x27;,&#x27;dispensed_by_person_id&#x27;,&#x27;person_id&#x27;],
+      [&#x27;equipment_loans&#x27;,&#x27;inventory_items&#x27;,&#x27;item_id&#x27;,&#x27;item_id&#x27;],
+      [&#x27;equipment_loans&#x27;,&#x27;patients&#x27;,&#x27;borrower_person_id&#x27;,&#x27;person_id&#x27;],
+      [&#x27;equipment_loans&#x27;,&#x27;visits&#x27;,&#x27;visit_id&#x27;,&#x27;visit_id&#x27;],
+      [&#x27;equipment_loans&#x27;,&#x27;clinic_staff&#x27;,&#x27;released_by_person_id&#x27;,&#x27;person_id&#x27;],
+      [&#x27;equipment_loans&#x27;,&#x27;clinic_staff&#x27;,&#x27;received_by_person_id&#x27;,&#x27;person_id&#x27;],
+      [&#x27;inventory_transactions&#x27;,&#x27;inventory_items&#x27;,&#x27;item_id&#x27;,&#x27;item_id&#x27;],
+      [&#x27;inventory_transactions&#x27;,&#x27;medicine_dispensings&#x27;,&#x27;dispensing_id&#x27;,&#x27;dispensing_id&#x27;],
+      [&#x27;inventory_transactions&#x27;,&#x27;equipment_loans&#x27;,&#x27;loan_id&#x27;,&#x27;loan_id&#x27;],
+      [&#x27;inventory_transactions&#x27;,&#x27;clinic_staff&#x27;,&#x27;performed_by_person_id&#x27;,&#x27;person_id&#x27;]
     ];
     let tables = oldTables;
     let rels = oldRels;

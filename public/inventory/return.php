@@ -1,9 +1,8 @@
 <?php
 
 require_once __DIR__ . '/../../app/helpers/view.php';
-require_once __DIR__ . '/../../app/services/InventoryWorkflow.php';
+require_once __DIR__ . '/../../app/services/CliniqInventoryWorkflow.php';
 require_login();
-ensure_inventory_workflow_schema();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Location: index.php?tab=equipment');
@@ -13,108 +12,56 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $loanId = (int) ($_POST['loan_id'] ?? 0);
 $condition = trim((string) ($_POST['return_condition'] ?? 'Good'));
 $notes = trim((string) ($_POST['return_notes'] ?? ''));
-$validConditions = dropdown_options('inventory_return_condition');
-$user = current_user();
-
-if (!in_array($condition, $validConditions, true)) {
-    $condition = $validConditions[0] ?? 'Good';
-}
-
-$db = db();
+$db = cliniq_inventory_db();
 
 try {
+    $staffId = cliniq_inventory_staff_person_id();
     $db->beginTransaction();
-
     $stmt = $db->prepare('
-        SELECT
-            l.*,
-            i.item_name,
-            i.category,
-            i.unit,
-            i.reorder_level,
-            i.expiration_date,
-            i.archived_at
-        FROM inventory_loans l
-        INNER JOIN inventory_items i ON i.id = l.item_id
-        WHERE l.id = ? AND l.status = "Borrowed"
+        SELECT l.*, i.item_name, i.quantity AS available_quantity, i.unit
+        FROM equipment_loans l
+        JOIN inventory_items i ON i.item_id = l.item_id
+        WHERE l.loan_id = ? AND l.status IN ("Borrowed", "Overdue")
         FOR UPDATE
     ');
     $stmt->execute([$loanId]);
     $loan = $stmt->fetch();
-
     if (!$loan) {
-        throw new RuntimeException('Active loan was not found.');
+        throw new RuntimeException('Active equipment loan was not found.');
     }
 
-    $status = $condition === 'Lost' ? 'Lost' : 'Returned';
-
+    $loanRemarks = trim('Condition: ' . $condition . ($notes !== '' ? "\n" . $notes : ''));
+    $status = $condition === 'Lost' ? 'Cancelled' : 'Returned';
     $db->prepare('
-        UPDATE inventory_loans
-        SET status = ?, return_condition = ?, return_notes = ?, returned_at = NOW(), returned_by = ?
-        WHERE id = ?
-    ')->execute([
-        $status,
-        $condition,
-        $notes !== '' ? $notes : null,
-        (int) ($user['id'] ?? 0) ?: null,
-        $loanId,
-    ]);
+        UPDATE equipment_loans
+        SET status = ?, returned_at = NOW(), received_by_person_id = ?, remarks = ?
+        WHERE loan_id = ?
+    ')->execute([$status, $staffId, $loanRemarks, $loanId]);
 
-    if ($condition === 'Good') {
-        $returnedQuantity = (int) $loan['borrowed_quantity'];
+    if ($condition !== 'Lost') {
+        $returnedBalance = (int) $loan['available_quantity'] + (int) $loan['quantity'];
+        $db->prepare('UPDATE inventory_items SET quantity = ? WHERE item_id = ?')
+            ->execute([$returnedBalance, (int) $loan['item_id']]);
+        cliniq_inventory_record_transaction(
+            $db, (int) $loan['item_id'], 'Returned', (int) $loan['quantity'],
+            $returnedBalance, $staffId, null, $loanId, $loanRemarks
+        );
 
-        if (empty($loan['archived_at'])) {
-            $db->prepare('UPDATE inventory_items SET quantity = quantity + ? WHERE id = ?')
-                ->execute([$returnedQuantity, (int) $loan['item_id']]);
-        } else {
-            $activeItem = $db->prepare('
-                SELECT id
-                FROM inventory_items
-                WHERE archived_at IS NULL
-                  AND item_name = ?
-                  AND category <=> ?
-                  AND unit <=> ?
-                  AND reorder_level = ?
-                  AND expiration_date <=> ?
-                LIMIT 1
-            ');
-            $activeItem->execute([
-                $loan['item_name'],
-                $loan['category'],
-                $loan['unit'],
-                (int) $loan['reorder_level'],
-                $loan['expiration_date'] ?: null,
-            ]);
-            $activeMatch = $activeItem->fetch();
-
-            if ($activeMatch) {
-                $db->prepare('UPDATE inventory_items SET quantity = quantity + ? WHERE id = ?')
-                    ->execute([$returnedQuantity, (int) $activeMatch['id']]);
-            } else {
-                $db->prepare('
-                    INSERT INTO inventory_items
-                        (item_name, category, quantity, unit, reorder_level, expiration_date)
-                    VALUES
-                        (?, ?, ?, ?, ?, ?)
-                ')->execute([
-                    $loan['item_name'],
-                    $loan['category'],
-                    $returnedQuantity,
-                    $loan['unit'],
-                    (int) $loan['reorder_level'],
-                    $loan['expiration_date'] ?: null,
-                ]);
-            }
+        if ($condition === 'Defective') {
+            $finalBalance = $returnedBalance - (int) $loan['quantity'];
+            $db->prepare('UPDATE inventory_items SET quantity = ? WHERE item_id = ?')
+                ->execute([$finalBalance, (int) $loan['item_id']]);
+            cliniq_inventory_record_transaction(
+                $db, (int) $loan['item_id'], 'Damaged', -(int) $loan['quantity'],
+                $finalBalance, $staffId, null, $loanId, $loanRemarks
+            );
         }
     }
 
     $db->commit();
-    flash_message(
-        'success',
-        $condition === 'Good'
-            ? '"' . $loan['item_name'] . '" returned to available equipment.'
-            : '"' . $loan['item_name'] . '" return recorded as ' . strtolower($condition) . '.'
-    );
+    flash_message('success', $condition === 'Good'
+        ? '"' . $loan['item_name'] . '" returned to available equipment.'
+        : '"' . $loan['item_name'] . '" return recorded as ' . strtolower($condition) . '.');
 } catch (Throwable $e) {
     if ($db->inTransaction()) {
         $db->rollBack();

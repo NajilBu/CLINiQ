@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/CliniqInventoryWorkflow.php';
 
 function cliniq_visit_db(): PDO
 {
@@ -201,7 +202,7 @@ function cliniq_visit_insert_vitals(
     return (int) $db->lastInsertId();
 }
 
-function cliniq_visit_create(array $visit, array $entry = [], array $vitals = []): int
+function cliniq_visit_create(array $visit, array $entry = [], array $vitals = [], array $dispensings = []): int
 {
     $db = cliniq_visit_db();
     $patientPersonId = (int) ($visit['patient_person_id'] ?? 0);
@@ -239,7 +240,13 @@ function cliniq_visit_create(array $visit, array $entry = [], array $vitals = []
             ? (int) $visit['attended_by_person_id']
             : (!empty($visit['recorded_by_person_id']) ? (int) $visit['recorded_by_person_id'] : null);
         $entryId = cliniq_visit_insert_entry($db, $visitId, $entry, $staffId);
+        if ($dispensings && !$entryId) {
+            $entryId = cliniq_visit_insert_entry($db, $visitId, [
+                'remarks' => 'Medicine dispensing recorded.',
+            ], $staffId);
+        }
         cliniq_visit_insert_vitals($db, $visitId, $entryId, $vitals, $staffId);
+        cliniq_inventory_dispense_medicines($db, (int) $entryId, $dispensings, $staffId);
         $db->commit();
         return $visitId;
     } catch (Throwable $e) {

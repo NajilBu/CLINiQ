@@ -81,7 +81,7 @@ ensure_appointment_schema();
 $metrics = [
     'visits_today' => (int) (cliniq_visit_db()->query('SELECT COUNT(*) AS total FROM visits WHERE DATE(visit_datetime) = CURDATE()')->fetch()['total'] ?? 0),
     'pending_alerts' => (int) (db()->query("SELECT COUNT(*) AS total FROM nurse_alerts WHERE status = 'Pending'")->fetch()['total'] ?? 0),
-    'low_stock' => (int) (db()->query('SELECT COUNT(*) AS total FROM inventory_items WHERE quantity <= reorder_level')->fetch()['total'] ?? 0),
+    'low_stock' => (int) (cliniq_inventory_db()->query('SELECT COUNT(*) AS total FROM inventory_items WHERE is_active = 1 AND quantity <= reorder_level')->fetch()['total'] ?? 0),
     'appointment_requests' => (int) (db()->query("SELECT COUNT(*) AS total FROM appointments WHERE status = 'Pending'")->fetch()['total'] ?? 0),
 ];
 

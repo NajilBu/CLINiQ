@@ -14,7 +14,7 @@ $stats = [
     'visits_today'   => $visitDb->query('SELECT COUNT(*) AS total FROM visits WHERE DATE(visit_datetime) = CURDATE()')->fetch()['total'] ?? 0,
     'visits_range'   => 0,
     'alerts_pending' => db()->query("SELECT COUNT(*) AS total FROM nurse_alerts WHERE status = 'Pending'")->fetch()['total'] ?? 0,
-    'low_stock'      => db()->query('SELECT COUNT(*) AS total FROM inventory_items WHERE quantity <= reorder_level')->fetch()['total'] ?? 0,
+    'low_stock'      => cliniq_inventory_db()->query('SELECT COUNT(*) AS total FROM inventory_items WHERE is_active = 1 AND quantity <= reorder_level')->fetch()['total'] ?? 0,
     'total_patients'  => $visitDb->query('SELECT COUNT(*) AS total FROM patients')->fetch()['total'] ?? 0,
 ];
 
@@ -86,7 +86,7 @@ render_header('Reports');
 </form>
 
 <!-- ═══ Stats Cards ═══ -->
-<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
     <div class="bg-white p-6 rounded-[2rem] border border-outline-variant/20 shadow-sm">
         <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Visits in Range</p>
         <p class="text-3xl font-headline font-extrabold text-slate-800 mt-2"><?= (int) $stats['visits_range'] ?></p>
@@ -104,6 +104,10 @@ render_header('Reports');
         <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Patients</p>
         <p class="text-3xl font-headline font-extrabold text-slate-800 mt-2"><?= (int) $stats['total_patients'] ?></p>
     </div>
+    <a href="<?= app_url('inventory/index.php?tab=medicine&highlight=low-stock') ?>" class="bg-white p-6 rounded-[2rem] border border-outline-variant/20 shadow-sm text-decoration-none">
+        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Low Stock</p>
+        <p class="text-3xl font-headline font-extrabold text-slate-800 mt-2"><?= (int) $stats['low_stock'] ?></p>
+    </a>
 </div>
 
 <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">

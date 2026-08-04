@@ -1,93 +1,51 @@
 <?php
 
 require_once __DIR__ . '/../../app/helpers/view.php';
-require_once __DIR__ . '/../../app/services/InventoryWorkflow.php';
+require_once __DIR__ . '/../../app/services/CliniqInventoryWorkflow.php';
 require_login();
-ensure_inventory_workflow_schema();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Location: index.php?tab=medicine');
     exit;
 }
 
-$sourceId = (int) ($_POST['source_id'] ?? 0);
+$itemId = (int) ($_POST['source_id'] ?? 0);
 $quantity = max(0, (int) ($_POST['quantity'] ?? 0));
 $expirationDate = trim((string) ($_POST['expiration_date'] ?? ''));
-$expirationTimestamp = $expirationDate !== '' ? strtotime($expirationDate) : false;
-
-if ($sourceId <= 0 || $quantity < 1 || $expirationTimestamp === false) {
-    flash_message('error', 'Choose a medicine, quantity, and expiration date before restocking.');
-    header('Location: index.php?tab=medicine');
-    exit;
-}
-
-$db = db();
+$db = cliniq_inventory_db();
 
 try {
+    if ($itemId < 1 || $quantity < 1) {
+        throw new InvalidArgumentException('Choose a medicine and enter a restock quantity.');
+    }
+    $staffId = cliniq_inventory_staff_person_id();
     $db->beginTransaction();
-
-    $sourceStmt = $db->prepare('
-        SELECT *
+    $stmt = $db->prepare("
+        SELECT item_id, item_name, quantity, unit
         FROM inventory_items
-        WHERE id = ?
-          AND LOWER(COALESCE(category, "")) NOT LIKE "%equipment%"
-        LIMIT 1
-    ');
-    $sourceStmt->execute([$sourceId]);
-    $source = $sourceStmt->fetch();
-
-    if (!$source) {
-        throw new RuntimeException('Medicine record was not found.');
+        WHERE item_id = ? AND item_type = 'Medicine' AND is_active = 1
+        FOR UPDATE
+    ");
+    $stmt->execute([$itemId]);
+    $item = $stmt->fetch();
+    if (!$item) {
+        throw new RuntimeException('Active medicine record was not found.');
     }
 
-    $expirationValue = date('Y-m-d', $expirationTimestamp);
-    $batchStmt = $db->prepare('
-        SELECT id
-        FROM inventory_items
-        WHERE archived_at IS NULL
-          AND LOWER(COALESCE(category, "")) NOT LIKE "%equipment%"
-          AND item_name = ?
-          AND category <=> ?
-          AND unit <=> ?
-          AND reorder_level = ?
-          AND expiration_date <=> ?
-        LIMIT 1
-    ');
-    $batchStmt->execute([
-        $source['item_name'],
-        $source['category'],
-        $source['unit'],
-        (int) $source['reorder_level'],
-        $expirationValue,
-    ]);
-    $batch = $batchStmt->fetch();
-
-    if ($batch) {
-        $db->prepare('UPDATE inventory_items SET quantity = quantity + ? WHERE id = ?')
-            ->execute([$quantity, (int) $batch['id']]);
-    } else {
-        $db->prepare('
-            INSERT INTO inventory_items
-                (item_name, category, quantity, unit, reorder_level, expiration_date)
-            VALUES
-                (?, ?, ?, ?, ?, ?)
-        ')->execute([
-            $source['item_name'],
-            $source['category'],
-            $quantity,
-            $source['unit'],
-            (int) $source['reorder_level'],
-            $expirationValue,
-        ]);
-    }
-
+    $newBalance = (int) $item['quantity'] + $quantity;
+    $db->prepare('UPDATE inventory_items SET quantity = ?, expiration_date = COALESCE(?, expiration_date) WHERE item_id = ?')
+        ->execute([$newBalance, $expirationDate !== '' ? $expirationDate : null, $itemId]);
+    cliniq_inventory_record_transaction(
+        $db, $itemId, 'Stock In', $quantity, $newBalance, $staffId, null, null,
+        'Medicine restock'
+    );
     $db->commit();
-    flash_message('success', $quantity . ' ' . ($source['unit'] ?: 'unit') . ' of "' . $source['item_name'] . '" added as a medicine batch.');
+    flash_message('success', $quantity . ' ' . $item['unit'] . ' added to "' . $item['item_name'] . '".');
 } catch (Throwable $e) {
     if ($db->inTransaction()) {
         $db->rollBack();
     }
-    flash_message('error', $e->getMessage());
+    flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $e->getMessage());
 }
 
 header('Location: index.php?tab=medicine');

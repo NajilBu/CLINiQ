@@ -2,21 +2,18 @@
 
 require_once __DIR__ . '/../app/helpers/view.php';
 require_once __DIR__ . '/../app/services/VisitWorkflow.php';
-require_once __DIR__ . '/../app/services/InventoryWorkflow.php';
 require_once __DIR__ . '/../app/services/CliniqVisitWorkflow.php';
-ensure_visit_workflow_schema();
-ensure_inventory_workflow_schema();
+require_once __DIR__ . '/../app/services/CliniqInventoryWorkflow.php';
 
 const VISITOR_REASON_BORROW_EQUIPMENT = 'Borrow Equipment';
 
 $errors = [];
 $success = null;
 $reasonOptions = array_values(array_unique(array_merge(visit_purposes(), [VISITOR_REASON_BORROW_EQUIPMENT])));
-$equipmentItems = db()->query("
-    SELECT id, item_name, quantity, unit
+$equipmentItems = cliniq_inventory_db()->query("
+    SELECT item_id AS id, item_name, quantity, unit
     FROM inventory_items
-    WHERE archived_at IS NULL
-      AND LOWER(COALESCE(category, '')) LIKE '%equipment%'
+    WHERE is_active = 1 AND item_type = 'Equipment'
     ORDER BY item_name
 ")->fetchAll();
 
@@ -123,7 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors['identifier'] = 'Use the format ' . ID_NUMBER_FORMAT_LABEL;
     }
 
-    if (!$isBorrowingEquipment && !$matchedPatient) {
+    if (!$matchedPatient) {
         $errors['identifier'] = 'This ID number is not in the Cliniq_db patient list.';
     }
 
@@ -147,18 +144,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ])));
 
         if ($isBorrowingEquipment) {
-            $db = db();
+            $db = cliniq_inventory_db();
             $borrowedQuantity = max(1, (int) $form['borrowed_quantity']);
 
             try {
                 $db->beginTransaction();
 
                 $itemStmt = $db->prepare("
-                    SELECT id, item_name, quantity, unit
+                    SELECT item_id AS id, item_name, quantity, unit
                     FROM inventory_items
-                    WHERE id = ?
-                      AND archived_at IS NULL
-                      AND LOWER(COALESCE(category, '')) LIKE '%equipment%'
+                    WHERE item_id = ? AND is_active = 1 AND item_type = 'Equipment'
                     FOR UPDATE
                 ");
                 $itemStmt->execute([(int) $form['borrow_item_id']]);
@@ -172,20 +167,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new RuntimeException('Not enough available equipment to lend. Available: ' . (int) $item['quantity'] . ' ' . ($item['unit'] ?: 'unit') . '.');
                 }
 
-                $db->prepare('UPDATE inventory_items SET quantity = quantity - ? WHERE id = ?')
-                    ->execute([$borrowedQuantity, (int) $item['id']]);
-                $user = current_user();
+                $newBalance = (int) $item['quantity'] - $borrowedQuantity;
+                $db->prepare('UPDATE inventory_items SET quantity = ? WHERE item_id = ?')
+                    ->execute([$newBalance, (int) $item['id']]);
                 $db->prepare('
-                    INSERT INTO inventory_loans (
-                        item_id, borrower_name, borrower_identifier, borrowed_quantity, borrowed_by
-                    ) VALUES (?, ?, ?, ?, ?)
+                    INSERT INTO equipment_loans (
+                        item_id, borrower_person_id, quantity, remarks
+                    ) VALUES (?, ?, ?, ?)
                 ')->execute([
                     (int) $item['id'],
-                    $form['full_name'],
-                    $form['identifier'] !== '' ? $form['identifier'] : null,
+                    (int) $matchedPatient['person_id'],
                     $borrowedQuantity,
-                    (int) ($user['id'] ?? 0) ?: null,
+                    trim((string) $form['chief_complaint']) ?: null,
                 ]);
+                $loanId = (int) $db->lastInsertId();
+                cliniq_inventory_record_transaction(
+                    $db,
+                    (int) $item['id'],
+                    'Loaned',
+                    -$borrowedQuantity,
+                    $newBalance,
+                    null,
+                    null,
+                    $loanId,
+                    'Self-service equipment loan by ' . $form['full_name'] . ' (' . $form['identifier'] . ')'
+                );
 
                 $db->commit();
                 $success = [

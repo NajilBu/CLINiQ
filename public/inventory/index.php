@@ -2,15 +2,10 @@
 
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/InventoryWorkflow.php';
+require_once __DIR__ . '/../../app/services/CliniqInventoryWorkflow.php';
 require_login();
-ensure_inventory_workflow_schema();
 
-$allItems = db()->query('
-    SELECT i.*, u.name AS archived_by_name
-    FROM inventory_items i
-    LEFT JOIN users u ON u.id = i.archived_by
-    ORDER BY COALESCE(i.archived_at, i.updated_at, i.created_at) DESC, i.item_name
-')->fetchAll();
+$allItems = cliniq_inventory_items();
 
 $activeItems = array_values(array_filter($allItems, fn(array $item): bool => empty($item['archived_at'])));
 $archivedItems = array_values(array_filter($allItems, fn(array $item): bool => !empty($item['archived_at'])));
@@ -47,28 +42,40 @@ foreach ($allItems as $item) {
 }
 uasort($medicineRestockOptions, fn(array $a, array $b): int => strcasecmp((string) $a['item_name'], (string) $b['item_name']));
 
-$loanRowsRaw = db()->query('
+$loanRowsRaw = cliniq_inventory_db()->query('
     SELECT
-        l.*,
+        l.*, l.loan_id AS id, l.quantity AS borrowed_quantity,
         i.item_name,
-        i.category,
+        i.item_type AS category,
         i.unit,
-        borrower.name AS borrowed_by_name,
-        returner.name AS returned_by_name
-    FROM inventory_loans l
-    INNER JOIN inventory_items i ON i.id = l.item_id
-    LEFT JOIN users borrower ON borrower.id = l.borrowed_by
-    LEFT JOIN users returner ON returner.id = l.returned_by
+        TRIM(CONCAT_WS(" ", bp.first_name, bp.middle_name, bp.last_name)) AS borrower_name,
+        bp.id_number AS borrower_identifier,
+        TRIM(CONCAT_WS(" ", released.first_name, released.middle_name, released.last_name)) AS borrowed_by_name,
+        TRIM(CONCAT_WS(" ", received.first_name, received.middle_name, received.last_name)) AS returned_by_name,
+        CASE
+            WHEN l.remarks LIKE "Condition: %" THEN SUBSTRING_INDEX(SUBSTRING_INDEX(l.remarks, "\n", 1), ": ", -1)
+            ELSE NULL
+        END AS return_condition,
+        CASE
+            WHEN LOCATE("\n", COALESCE(l.remarks, "")) > 0 THEN SUBSTRING(l.remarks, LOCATE("\n", l.remarks) + 1)
+            ELSE l.remarks
+        END AS return_notes
+    FROM equipment_loans l
+    INNER JOIN inventory_items i ON i.item_id = l.item_id
+    INNER JOIN people bp ON bp.id = l.borrower_person_id
+    LEFT JOIN people released ON released.id = l.released_by_person_id
+    LEFT JOIN people received ON received.id = l.received_by_person_id
     ORDER BY
-        CASE WHEN l.status = "Borrowed" THEN 0 ELSE 1 END,
+        CASE WHEN l.status IN ("Borrowed", "Overdue") THEN 0 ELSE 1 END,
         COALESCE(l.returned_at, l.borrowed_at) DESC
     LIMIT 50
 ')->fetchAll();
-$activeLoans = array_values(array_filter($loanRowsRaw, fn(array $loan): bool => ($loan['status'] ?? '') === 'Borrowed'));
+$activeLoans = array_values(array_filter($loanRowsRaw, fn(array $loan): bool => in_array(($loan['status'] ?? ''), ['Borrowed', 'Overdue'], true)));
 $returnedToday = array_values(array_filter($loanRowsRaw, fn(array $loan): bool => !empty($loan['returned_at']) && date('Y-m-d', strtotime($loan['returned_at'])) === date('Y-m-d')));
+$inventoryTransactions = cliniq_inventory_transactions(200);
 
 $activeTab = $_GET['tab'] ?? 'medicine';
-if (!in_array($activeTab, ['medicine', 'equipment', 'expiring', 'archived'], true)) {
+if (!in_array($activeTab, ['medicine', 'equipment', 'expiring', 'archived', 'activity'], true)) {
     $activeTab = 'medicine';
 }
 $highlightTarget = $_GET['highlight'] ?? '';
@@ -92,7 +99,6 @@ $archivedColumns = [
     ['headerName' => 'Final Stock', 'field' => 'quantityHtml', 'cellRenderer' => 'html', 'minWidth' => 140, 'flex' => 0.7],
     ['headerName' => 'Expiration', 'field' => 'expirationHtml', 'cellRenderer' => 'html', 'minWidth' => 140, 'flex' => 0.7],
     ['headerName' => 'Archived', 'field' => 'archivedHtml', 'cellRenderer' => 'html', 'minWidth' => 180, 'flex' => 0.9],
-    ['headerName' => 'Reason', 'field' => 'reasonHtml', 'cellRenderer' => 'html', 'minWidth' => 220, 'flex' => 1.1],
     ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'minWidth' => 120, 'flex' => 0.55],
 ];
 
@@ -113,6 +119,16 @@ $loanColumns = [
     ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'minWidth' => 130, 'flex' => 0.6],
     ['headerName' => 'Condition', 'field' => 'conditionHtml', 'cellRenderer' => 'html', 'minWidth' => 140, 'flex' => 0.65],
     ['headerName' => 'Actions / Notes', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'minWidth' => 210, 'flex' => 1],
+];
+
+$activityColumns = [
+    ['headerName' => 'Date / Time', 'field' => 'date', 'minWidth' => 175, 'flex' => 0.8],
+    ['headerName' => 'Item', 'field' => 'itemHtml', 'cellRenderer' => 'html', 'minWidth' => 220, 'flex' => 1.1],
+    ['headerName' => 'Activity', 'field' => 'typeHtml', 'cellRenderer' => 'html', 'minWidth' => 140, 'flex' => 0.7],
+    ['headerName' => 'Change', 'field' => 'changeHtml', 'cellRenderer' => 'html', 'minWidth' => 110, 'flex' => 0.5],
+    ['headerName' => 'Balance', 'field' => 'balance', 'minWidth' => 100, 'flex' => 0.45],
+    ['headerName' => 'Staff', 'field' => 'staff', 'minWidth' => 170, 'flex' => 0.8],
+    ['headerName' => 'Notes', 'field' => 'notes', 'minWidth' => 240, 'flex' => 1.2],
 ];
 
 $visibleItems = match ($activeTab) {
@@ -144,8 +160,10 @@ foreach ($visibleItems as $item) {
     $expirationClass = $isExpiring && !$isArchived ? 'text-red-600' : 'text-slate-600';
     $editArgs = implode(', ', [
         (int) $item['id'],
+        e(json_encode($item['item_code'])),
         e(json_encode($item['item_name'])),
         e(json_encode($item['category'])),
+        e(json_encode($item['description'])),
         (int) $item['quantity'],
         e(json_encode($item['unit'])),
         (int) $item['reorder_level'],
@@ -189,7 +207,7 @@ foreach ($visibleItems as $item) {
     if ($activeTab === 'equipment' && $isEquipment && (int) $item['quantity'] > 0) {
         $actionsHtml .= '<button onclick="openBorrowItem(' . $borrowArgs . ')" class="btn-icon btn-icon-primary" title="Borrow equipment"><span class="material-symbols-outlined">assignment_ind</span></button>';
     }
-    $actionsHtml .= '<button onclick="editItem(' . $editArgs . ')" class="btn-icon btn-icon-primary" title="Edit item"><span class="material-symbols-outlined">edit</span></button><button onclick="openArchiveItem(' . $archiveArgs . ')" class="btn-icon btn-icon-slate" title="Archive item"><span class="material-symbols-outlined">archive</span></button></div>';
+    $actionsHtml .= '<button onclick="editItem(' . $editArgs . ')" class="btn-icon btn-icon-primary" title="Edit item"><span class="material-symbols-outlined">edit</span></button><button onclick="openArchiveItem(' . $archiveArgs . ')" class="btn-icon btn-icon-slate" title="Deactivate item"><span class="material-symbols-outlined">archive</span></button></div>';
     $highlightKeys = [];
     if ($isLow && !$isEquipment && !isset($highlightedLowStockKeys[$stockKey])) {
         $highlightKeys[] = 'low-stock';
@@ -201,7 +219,7 @@ foreach ($visibleItems as $item) {
 
     $inventoryRows[] = [
         'highlightKeys' => $highlightKeys,
-        'itemHtml' => '<div><strong class="text-sm text-slate-800">' . e($item['item_name']) . '</strong><p class="text-xs font-bold text-slate-400 mb-0">' . e($category !== '' ? $category : 'No category') . '</p></div>',
+        'itemHtml' => '<div><strong class="text-sm text-slate-800">' . e($item['item_name']) . '</strong><p class="text-xs font-bold text-slate-400 mb-0">' . e($item['item_code'] . ' / ' . ($category !== '' ? $category : 'No type')) . '</p></div>',
         'categoryHtml' => '<span class="text-sm font-bold text-slate-600">' . e($category !== '' ? $category : '-') . '</span>',
         'stockHtml' => '<div class="flex items-center gap-2"><span class="stock-bar"><span class="stock-bar-fill ' . e($barClass) . '" style="width: ' . (int) $pct . '%"></span></span><span class="text-sm font-bold ' . ($isLow ? 'text-amber-600' : 'text-slate-600') . '">' . (int) $item['quantity'] . ' ' . e($item['unit']) . '</span></div>',
         'reorderLevel' => (int) $item['reorder_level'],
@@ -211,9 +229,23 @@ foreach ($visibleItems as $item) {
     ];
 }
 
+$activityRows = [];
+foreach ($inventoryTransactions as $transaction) {
+    $change = (int) $transaction['quantity_change'];
+    $activityRows[] = [
+        'date' => date('M d, Y g:i A', strtotime($transaction['created_at'])),
+        'itemHtml' => '<div><strong class="text-sm text-slate-800">' . e($transaction['item_name']) . '</strong><p class="text-xs font-bold text-slate-400 mb-0">' . e($transaction['item_code'] . ' / ' . $transaction['item_type']) . '</p></div>',
+        'typeHtml' => '<span class="badge ' . ($change < 0 ? 'badge-pending' : 'badge-completed') . '">' . e($transaction['transaction_type']) . '</span>',
+        'changeHtml' => '<strong class="text-sm ' . ($change < 0 ? 'text-red-600' : 'text-emerald-700') . '">' . ($change > 0 ? '+' : '') . $change . ' ' . e($transaction['unit']) . '</strong>',
+        'balance' => (int) $transaction['balance_after'] . ' ' . $transaction['unit'],
+        'staff' => $transaction['performed_by_name'] ?: 'System',
+        'notes' => $transaction['notes'] ?: '-',
+    ];
+}
+
 $loanRows = [];
 foreach ($loanRowsRaw as $loan) {
-    $isBorrowed = ($loan['status'] ?? '') === 'Borrowed';
+    $isBorrowed = in_array(($loan['status'] ?? ''), ['Borrowed', 'Overdue'], true);
     $returnArgs = implode(', ', [
         (int) $loan['id'],
         e(json_encode($loan['item_name'])),
@@ -246,19 +278,25 @@ $tableTitle = match ($activeTab) {
     'equipment' => 'Equipment Tracking',
     'expiring' => 'Expiring Soon',
     'archived' => 'Archived Inventory',
+    'activity' => 'Inventory Activity',
     default => 'Medicine Inventory',
 };
 $tableDescription = match ($activeTab) {
     'equipment' => count($equipmentItems) . ' active equipment item(s) available for clinic use.',
     'expiring' => count($expiring) . ' active item(s) expiring within 30 days.',
     'archived' => count($archivedItems) . ' item(s) removed from active inventory.',
+    'activity' => count($inventoryTransactions) . ' recent stock transaction(s).',
     default => count($medicineItems) . ' active medicine item(s).',
 };
 $gridColumns = match ($activeTab) {
     'archived' => $archivedColumns,
     'equipment' => $equipmentColumns,
+    'activity' => $activityColumns,
     default => $activeColumns,
 };
+if ($activeTab === 'activity') {
+    $inventoryRows = $activityRows;
+}
 
 $inventoryNotices = [];
 if (count($lowStock) > 0) {
@@ -376,6 +414,11 @@ render_clinic_command_header(
                 Archived
                 <span class="ml-1.5 px-2 py-0.5 rounded-full <?= $activeTab === 'archived' ? 'bg-primary-fixed text-primary' : 'bg-slate-100 text-slate-500' ?> text-[10px]"><?= count($archivedItems) ?></span>
             </a>
+            <a href="?tab=activity" data-inventory-nav class="status-tab <?= $activeTab === 'activity' ? 'active' : '' ?> text-decoration-none">
+                <span class="material-symbols-outlined text-[18px] align-middle mr-1">history</span>
+                Activity
+                <span class="ml-1.5 px-2 py-0.5 rounded-full <?= $activeTab === 'activity' ? 'bg-primary-fixed text-primary' : 'bg-slate-100 text-slate-500' ?> text-[10px]"><?= count($inventoryTransactions) ?></span>
+            </a>
         </div>
     </div>
 
@@ -385,12 +428,14 @@ render_clinic_command_header(
             'equipment' => 'No equipment items',
             'expiring' => 'No expiring items',
             'archived' => 'No archived records',
+            'activity' => 'No inventory activity',
             default => 'No inventory items',
         },
         'emptyText' => match ($activeTab) {
             'equipment' => 'Add clinic equipment to track active stock and availability.',
             'expiring' => 'No active items are expiring within the next 30 days.',
             'archived' => 'Archived medicine and equipment records will appear here.',
+            'activity' => 'Stock-in, dispensing, borrowing, returns, and adjustments will appear here.',
             default => 'Add medicines to start tracking stock.',
         },
     ]); ?>
@@ -616,14 +661,19 @@ render_clinic_command_header(
             </button>
         </div>
         <form method="post" action="create.php" data-inventory-form>
+            <input type="hidden" name="category" value="Medicine">
             <div data-medicine-panel="new" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div class="md:col-span-2">
+                <div>
+                    <label class="clinic-label">Item Code</label>
+                    <input class="clinic-input uppercase" name="item_code" required placeholder="e.g. MED-001">
+                </div>
+                <div>
                     <label class="clinic-label">Item Name</label>
                     <input class="clinic-input" name="item_name" required placeholder="e.g. Paracetamol 500mg">
                 </div>
-                <div>
-                    <label class="clinic-label">Category</label>
-                    <input class="clinic-input" name="category" placeholder="e.g. Analgesic">
+                <div class="md:col-span-2">
+                    <label class="clinic-label">Description</label>
+                    <input class="clinic-input" name="description" placeholder="Optional medicine description">
                 </div>
                 <div>
                     <label class="clinic-label">Unit</label>
@@ -676,7 +726,7 @@ render_clinic_command_header(
             </div>
             <div class="mt-6 flex justify-end gap-3">
                 <button type="button" onclick="closeModal('addMedicineModal')" class="btn btn-ghost">Cancel</button>
-                <button type="submit" class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Restock this medicine?" data-confirm-message="Matching expiry batches will be updated. Different expiry dates will create a new batch row." data-confirm-toast="Restocking medicine...">
+                <button type="submit" class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Restock this medicine?" data-confirm-message="This will add the received quantity and record a Stock In transaction." data-confirm-toast="Restocking medicine...">
                     <span class="material-symbols-outlined text-[18px]">add_box</span>
                     Restock Medicine
                 </button>
@@ -697,9 +747,17 @@ render_clinic_command_header(
             <input type="hidden" name="category" value="Equipment">
             <input type="hidden" name="expiration_date" value="">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div class="md:col-span-2">
+                <div>
+                    <label class="clinic-label">Item Code</label>
+                    <input class="clinic-input uppercase" name="item_code" required placeholder="e.g. EQP-001">
+                </div>
+                <div>
                     <label class="clinic-label">Equipment Name</label>
                     <input class="clinic-input" name="item_name" required placeholder="e.g. Pulse Oximeter">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="clinic-label">Description</label>
+                    <input class="clinic-input" name="description" placeholder="Optional equipment description">
                 </div>
                 <div>
                     <label class="clinic-label">Unit</label>
@@ -736,13 +794,18 @@ render_clinic_command_header(
         <form method="post" action="update.php" id="editItemForm" data-inventory-form>
             <input type="hidden" name="id" id="editItemId">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div class="md:col-span-2">
+                <div>
+                    <label class="clinic-label">Item Code</label>
+                    <input class="clinic-input uppercase" name="item_code" id="editItemCode" required>
+                </div>
+                <div>
                     <label class="clinic-label">Item Name</label>
                     <input class="clinic-input" name="item_name" id="editItemName" required>
                 </div>
-                <div>
-                    <label class="clinic-label">Category</label>
-                    <input class="clinic-input" name="category" id="editItemCategory">
+                <input type="hidden" name="category" id="editItemCategory">
+                <div class="md:col-span-2">
+                    <label class="clinic-label">Description</label>
+                    <input class="clinic-input" name="description" id="editItemDescription">
                 </div>
                 <div>
                     <label class="clinic-label">Unit</label>
@@ -776,8 +839,8 @@ render_clinic_command_header(
     <div class="modal-content bg-white rounded-[2rem] p-8 w-full max-w-lg shadow-2xl">
         <div class="flex items-center justify-between mb-6">
             <div>
-                <h3 class="font-headline text-xl font-extrabold text-[#1c2a59]">Archive Inventory Item</h3>
-                <p class="text-sm font-bold text-slate-500 mt-1" id="archiveItemName">Move this item out of active inventory.</p>
+                <h3 class="font-headline text-xl font-extrabold text-[#1c2a59]">Deactivate Inventory Item</h3>
+                <p class="text-sm font-bold text-slate-500 mt-1" id="archiveItemName">Remove this item from active inventory selections.</p>
             </div>
             <button onclick="closeModal('archiveItemModal')" class="btn-icon btn-icon-slate">
                 <span class="material-symbols-outlined">close</span>
@@ -785,21 +848,14 @@ render_clinic_command_header(
         </div>
         <form method="post" action="archive.php" id="archiveItemForm" data-inventory-form>
             <input type="hidden" name="id" id="archiveItemId">
-            <div class="mb-4">
-                <label class="clinic-label">Archive Quantity</label>
-                <div class="flex items-center gap-3">
-                    <input class="clinic-input" name="archive_quantity" id="archiveItemQuantity" type="number" min="1" value="1" required>
-                    <span class="text-xs font-bold text-slate-500 shrink-0" id="archiveItemAvailable">Available: -</span>
-                    <button type="button" class="btn btn-sm btn-outline shrink-0" onclick="selectAllArchiveQuantity()">All</button>
-                </div>
+            <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
+                The item and its history will remain in Cliniq_db, but it will no longer be selectable for dispensing or loans.
             </div>
-            <label class="clinic-label">Archive Reason</label>
-            <textarea class="clinic-textarea" name="archived_reason" rows="4" required placeholder="e.g. Expired batch, damaged item, duplicate record, depleted supply"></textarea>
             <div class="mt-6 flex justify-end gap-3">
                 <button type="button" onclick="closeModal('archiveItemModal')" class="btn btn-ghost">Cancel</button>
-                <button type="submit" class="btn btn-danger" data-confirm-submit data-confirm-type="danger" data-confirm-title="Archive selected quantity?" data-confirm-message="This will move only the selected quantity to archived records and keep any remaining stock active." data-confirm-toast="Archiving inventory item...">
+                <button type="submit" class="btn btn-danger" data-confirm-submit data-confirm-type="danger" data-confirm-title="Deactivate this inventory item?" data-confirm-message="This will hide the item from active dispensing and equipment loan selections." data-confirm-toast="Deactivating inventory item...">
                     <span class="material-symbols-outlined text-[18px]">archive</span>
-                    Archive Item
+                    Deactivate Item
                 </button>
             </div>
         </form>
@@ -821,12 +877,9 @@ render_clinic_command_header(
             <input type="hidden" name="item_id" id="borrowItemId">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="md:col-span-2">
-                    <label class="clinic-label">Borrower Name</label>
-                    <input class="clinic-input" name="borrower_name" required placeholder="Student, staff, or department name">
-                </div>
-                <div>
-                    <label class="clinic-label">Borrower ID / Contact</label>
-                    <input class="clinic-input" name="borrower_identifier" placeholder="ID Number, staff ID, or contact">
+                    <label class="clinic-label">Existing Patient ID</label>
+                    <input class="clinic-input uppercase" name="borrower_identifier" required placeholder="Student, faculty, or personnel ID">
+                    <p class="settings-help mt-2 mb-0">The ID must already exist in the Cliniq_db patient list.</p>
                 </div>
                 <div>
                     <label class="clinic-label">Quantity</label>
@@ -901,10 +954,12 @@ render_clinic_command_header(
 </div>
 
 <script>
-function editItem(id, name, category, quantity, unit, reorder, expiry) {
+function editItem(id, code, name, category, description, quantity, unit, reorder, expiry) {
     document.getElementById('editItemId').value = id;
+    document.getElementById('editItemCode').value = code || '';
     document.getElementById('editItemName').value = name;
     document.getElementById('editItemCategory').value = category || '';
+    document.getElementById('editItemDescription').value = description || '';
     document.getElementById('editItemQuantity').value = quantity;
     document.getElementById('editItemUnit').value = unit;
     document.getElementById('editItemReorder').value = reorder;
@@ -923,20 +978,8 @@ function openAddMedicineModal() {
 
 function openArchiveItem(id, name, quantity, unit) {
     document.getElementById('archiveItemId').value = id;
-    const quantityInput = document.getElementById('archiveItemQuantity');
-    const availableText = document.getElementById('archiveItemAvailable');
-    const available = Math.max(0, Number(quantity || 0));
-    quantityInput.max = String(available);
-    quantityInput.value = available > 0 ? '1' : '0';
-    availableText.textContent = `Available: ${available} ${unit || 'unit'}`;
-    document.getElementById('archiveItemName').textContent = name ? `Archive damaged, broken, expired, or removed quantity from ${name}.` : 'Move quantity out of active inventory.';
+    document.getElementById('archiveItemName').textContent = name ? `Deactivate ${name} from active inventory.` : 'Remove this item from active inventory selections.';
     showModal('archiveItemModal');
-}
-
-function selectAllArchiveQuantity() {
-    const quantityInput = document.getElementById('archiveItemQuantity');
-    if (!quantityInput) return;
-    quantityInput.value = quantityInput.max || quantityInput.value || '1';
 }
 
 function openRestockMedicine(id, name) {
