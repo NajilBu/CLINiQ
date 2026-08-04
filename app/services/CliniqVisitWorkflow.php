@@ -56,19 +56,19 @@ function cliniq_visit_patients(string $search = '', int $limit = 500): array
             pe.birthdate,
             NULL AS sex,
             COALESCE(
-                NULLIF(TRIM(CONCAT_WS(' ', pr.program_code, s.year_level, s.section)), ''),
-                fd.department_code,
-                sd.department_code,
+                NULLIF(TRIM(CONCAT(pr.program_code, '-', s.year_level, UPPER(s.section))), ''),
+                ed.department_code,
+                cd.department_code,
                 'Patient'
             ) AS course_section
         FROM patients pt
         JOIN people pe ON pe.id = pt.person_id
         LEFT JOIN students s ON s.person_id = pe.id
         LEFT JOIN programs pr ON pr.id = s.program_id
-        LEFT JOIN faculty f ON f.person_id = pe.id
-        LEFT JOIN departments fd ON fd.id = f.department_id
-        LEFT JOIN school_personnel sp ON sp.person_id = pe.id
-        LEFT JOIN departments sd ON sd.id = sp.department_id
+        LEFT JOIN school_employees se ON se.person_id = pe.id
+        LEFT JOIN departments ed ON ed.id = se.department_id
+        LEFT JOIN clinic_staff cs ON cs.person_id = pe.id
+        LEFT JOIN departments cd ON cd.id = cs.department_id
         {$where}
         ORDER BY pe.last_name, pe.first_name, pe.id_number
         LIMIT {$limit}
@@ -83,25 +83,25 @@ function cliniq_visit_patient_by_id_number(string $idNumber): ?array
         SELECT pe.id AS person_id, pe.id_number, pe.first_name, pe.middle_name, pe.last_name,
                CASE
                    WHEN s.person_id IS NOT NULL THEN 'Student'
-                   WHEN f.person_id IS NOT NULL THEN 'Faculty'
-                   WHEN sp.person_id IS NOT NULL THEN 'School Personnel'
+                   WHEN se.person_id IS NOT NULL THEN se.role_classification
+                   WHEN cs.person_id IS NOT NULL THEN 'Staff'
                    ELSE 'Patient'
                END AS patient_type,
                s.year_level,
                COALESCE(
-                   NULLIF(TRIM(CONCAT_WS(' ', pr.program_code, s.year_level, s.section)), ''),
-                   fd.department_code,
-                   sd.department_code,
+                   NULLIF(TRIM(CONCAT(pr.program_code, '-', s.year_level, UPPER(s.section))), ''),
+                   ed.department_code,
+                   cd.department_code,
                    'Patient'
                ) AS course_section
         FROM patients pt
         JOIN people pe ON pe.id = pt.person_id
         LEFT JOIN students s ON s.person_id = pe.id
         LEFT JOIN programs pr ON pr.id = s.program_id
-        LEFT JOIN faculty f ON f.person_id = pe.id
-        LEFT JOIN departments fd ON fd.id = f.department_id
-        LEFT JOIN school_personnel sp ON sp.person_id = pe.id
-        LEFT JOIN departments sd ON sd.id = sp.department_id
+        LEFT JOIN school_employees se ON se.person_id = pe.id
+        LEFT JOIN departments ed ON ed.id = se.department_id
+        LEFT JOIN clinic_staff cs ON cs.person_id = pe.id
+        LEFT JOIN departments cd ON cd.id = cs.department_id
         WHERE pe.id_number = ?
         LIMIT 1
     ");
@@ -286,9 +286,9 @@ function cliniq_visit_fetch(int $visitId): ?array
             pe.birthdate,
             NULL AS sex,
             COALESCE(
-                NULLIF(TRIM(CONCAT_WS(' ', pr.program_code, s.year_level, s.section)), ''),
-                fd.department_code,
-                sd.department_code,
+                NULLIF(TRIM(CONCAT(pr.program_code, '-', s.year_level, UPPER(s.section))), ''),
+                ed.department_code,
+                cd.department_code,
                 'Patient'
             ) AS course_section,
             pt.blood_type,
@@ -303,10 +303,10 @@ function cliniq_visit_fetch(int $visitId): ?array
         JOIN people pe ON pe.id = pt.person_id
         LEFT JOIN students s ON s.person_id = pe.id
         LEFT JOIN programs pr ON pr.id = s.program_id
-        LEFT JOIN faculty f ON f.person_id = pe.id
-        LEFT JOIN departments fd ON fd.id = f.department_id
-        LEFT JOIN school_personnel sp ON sp.person_id = pe.id
-        LEFT JOIN departments sd ON sd.id = sp.department_id
+        LEFT JOIN school_employees se ON se.person_id = pe.id
+        LEFT JOIN departments ed ON ed.id = se.department_id
+        LEFT JOIN clinic_staff cs ON cs.person_id = pe.id
+        LEFT JOIN departments cd ON cd.id = cs.department_id
         LEFT JOIN people rp ON rp.id = v.recorded_by_person_id
         LEFT JOIN people ap ON ap.id = v.attended_by_person_id
         LEFT JOIN visit_entries le ON le.entry_id = (

@@ -92,12 +92,13 @@ INSERT INTO Cliniq_db.people (
   'FAC-0001', 'Maria', 'Reyes', 'Santos', '1985-06-20'
 );
 
-INSERT INTO Cliniq_db.faculty (
-  person_id, department_id, employment_type, position_title
+INSERT INTO Cliniq_db.school_employees (
+  person_id, department_id, role_classification, employment_type, position_title
 )
 SELECT
   id,
   (SELECT id FROM Cliniq_db.departments WHERE department_code = 'CCS'),
+  'Faculty',
   'Full-time',
   'Instructor'
 FROM Cliniq_db.people

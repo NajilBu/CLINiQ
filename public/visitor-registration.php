@@ -10,6 +10,7 @@ const VISITOR_REASON_BORROW_EQUIPMENT = 'Borrow Equipment';
 $errors = [];
 $success = null;
 $reasonOptions = array_values(array_unique(array_merge(visit_purposes(), [VISITOR_REASON_BORROW_EQUIPMENT])));
+$categoryOptions = ['Student', 'Staff', 'Faculty', 'School Personnel'];
 $equipmentItems = cliniq_inventory_db()->query("
     SELECT item_id AS id, item_name, quantity, unit
     FROM inventory_items
@@ -21,7 +22,6 @@ $form = [
     'full_name' => '',
     'identifier' => '',
     'category' => '',
-    'year_level' => '',
     'department' => '',
     'reason' => '',
     'chief_complaint' => '',
@@ -40,21 +40,6 @@ function split_visitor_name(string $fullName): array
     return [implode(' ', $parts), $lastName];
 }
 
-function infer_year_level(string $courseSection): string
-{
-    if (preg_match('/(?:^|\s)([1-4])(?:st|nd|rd|th)?(?:\s*year|\-\d+|\s|$)/i', $courseSection, $match)) {
-        return match ($match[1]) {
-            '1' => '1st Year',
-            '2' => '2nd Year',
-            '3' => '3rd Year',
-            '4' => '4th Year',
-            default => '',
-        };
-    }
-
-    return '';
-}
-
 if (isset($_GET['lookup_identifier'])) {
     $identifier = trim((string) $_GET['lookup_identifier']);
     header('Content-Type: application/json');
@@ -71,12 +56,20 @@ if (isset($_GET['lookup_identifier'])) {
         exit;
     }
 
+    $patientCategory = (string) ($patient['patient_type'] ?? '');
+    if (!in_array($patientCategory, $categoryOptions, true)) {
+        echo json_encode([
+            'found' => false,
+            'message' => 'This ID is not registered as a student, staff, faculty, or school personnel account.',
+        ]);
+        exit;
+    }
+
     echo json_encode([
         'found' => true,
         'name' => trim($patient['first_name'] . ' ' . $patient['last_name']),
         'course' => $patient['course_section'] ?: '',
-        'category' => $patient['patient_type'] ?: 'Patient',
-        'yearLevel' => infer_year_level($patient['course_section'] ?? ''),
+        'category' => $patientCategory,
     ]);
     exit;
 }
@@ -103,17 +96,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $matchedPatient = cliniq_visit_patient_by_id_number($form['identifier']);
         if ($matchedPatient) {
             $form['full_name'] = trim($matchedPatient['first_name'] . ' ' . $matchedPatient['last_name']);
-            $form['category'] = $matchedPatient['patient_type'] ?: 'Patient';
-            $form['department'] = $matchedPatient['course_section'] ?: $form['department'];
-            if ($form['year_level'] === '') {
-                $form['year_level'] = infer_year_level($matchedPatient['course_section'] ?? '');
+            $matchedCategory = (string) ($matchedPatient['patient_type'] ?? '');
+            if (in_array($matchedCategory, $categoryOptions, true)) {
+                $form['category'] = $matchedCategory;
+                $form['department'] = $matchedPatient['course_section'] ?: $form['department'];
+                unset($errors['full_name'], $errors['category'], $errors['department']);
+            } else {
+                $errors['category'] = 'This ID is not registered as a student, staff, faculty, or school personnel account.';
             }
-            unset($errors['full_name'], $errors['category'], $errors['department'], $errors['year_level']);
         }
     }
 
-    if ($form['category'] === 'Student' && $form['year_level'] === '') {
-        $errors['year_level'] = 'Required';
+    if ($form['category'] !== '' && !in_array($form['category'], $categoryOptions, true)) {
+        $errors['category'] = 'Select a valid category.';
     }
 
     if ($form['category'] === 'Student' && !is_valid_id_number($form['identifier'])) {
@@ -137,12 +132,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!$errors) {
         [$firstName, $lastName] = split_visitor_name($form['full_name']);
-        $courseSection = trim(implode(' - ', array_filter([
-            $form['category'],
-            $form['year_level'],
-            $form['department'],
-        ])));
-
         if ($isBorrowingEquipment) {
             $db = cliniq_inventory_db();
             $borrowedQuantity = max(1, (int) $form['borrowed_quantity']);
@@ -218,8 +207,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $symptoms = trim(
             'Submitted Name: ' . $form['full_name'] . "\n" .
             'Category: ' . $form['category'] . "\n" .
-            ($form['year_level'] ? 'Year Level: ' . $form['year_level'] . "\n" : '') .
-            'Course/Department: ' . $form['department'] . "\n" .
+            ($form['category'] === 'Student' ? 'Section: ' : 'Department: ') . $form['department'] . "\n" .
             'Reason: ' . $form['reason'] . "\n" .
             'Visitor notes: ' . $form['chief_complaint']
         );
@@ -573,10 +561,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     <div class="visit-form-grid grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-5">
                         <div>
-                            <label class="visit-label" for="identifier">Student / Staff ID</label>
+                            <label class="visit-label" for="identifier">ID Number</label>
                             <div class="visit-field">
                                 <span class="material-symbols-outlined">badge</span>
-                                <input class="visit-input <?= isset($errors['identifier']) ? 'input-error' : '' ?>" id="identifier" name="identifier" value="<?= e($form['identifier']) ?>" placeholder="Enter ID number" data-id-number-format data-student-category-source="category" autocomplete="off" required>
+                                <input class="visit-input <?= isset($errors['identifier']) ? 'input-error' : '' ?>" id="identifier" name="identifier" value="<?= e($form['identifier']) ?>" placeholder="Enter ID number" data-id-number-format autocomplete="off" required>
                             </div>
                             <div id="visitorLookupStatus" class="visit-lookup-status">Type your ID to load the existing patient details from Cliniq_db.</div>
                         </div>
@@ -595,31 +583,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <span class="material-symbols-outlined">group</span>
                                 <select class="visit-input <?= isset($errors['category']) ? 'input-error' : '' ?>" id="category" name="category" required>
                                     <option value="">Select Category</option>
-                                    <?php foreach (array_values(array_unique(array_merge(dropdown_options('person_category'), ['School Personnel', 'Patient']))) as $category): ?>
+                                    <?php foreach ($categoryOptions as $category): ?>
                                         <option <?= $form['category'] === $category ? 'selected' : '' ?>><?= e($category) ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
                         </div>
 
-                        <div id="year-level-wrap" class="<?= $form['category'] === 'Student' ? '' : 'hidden' ?>">
-                            <label class="visit-label" for="year_level">Year Level</label>
-                            <div class="visit-field">
-                                <span class="material-symbols-outlined">grade</span>
-                                <select class="visit-input <?= isset($errors['year_level']) ? 'input-error' : '' ?>" id="year_level" name="year_level">
-                                    <option value="">Select Year</option>
-                                    <?php foreach (dropdown_options('year_level') as $year): ?>
-                                        <option <?= $form['year_level'] === $year ? 'selected' : '' ?>><?= e($year) ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                        </div>
-
                         <div>
-                            <label class="visit-label" for="department">Course / Department</label>
+                            <label class="visit-label" for="department" id="studentDetailLabel"><?= $form['category'] === 'Student' ? 'Section' : 'Department' ?></label>
                             <div class="visit-field">
                                 <span class="material-symbols-outlined">school</span>
-                                <input class="visit-input <?= isset($errors['department']) ? 'input-error' : '' ?>" id="department" name="department" value="<?= e($form['department']) ?>" list="departmentOptions" placeholder="Course, section, or department" required>
+                                <input class="visit-input <?= isset($errors['department']) ? 'input-error' : '' ?>" id="department" name="department" value="<?= e($form['department']) ?>" list="departmentOptions" placeholder="<?= $form['category'] === 'Student' ? 'e.g. BSIT-4D' : 'Select department' ?>" required>
                                 <datalist id="departmentOptions">
                                     <?php foreach (dropdown_options('department') as $department): ?>
                                         <option value="<?= e($department) ?>"></option>
@@ -727,9 +702,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     const category = document.getElementById('category');
     const reason = document.getElementById('reason');
     const visitMain = document.querySelector('.visit-main');
-    const yearLevelWrap = document.getElementById('year-level-wrap');
-    const yearLevel = document.getElementById('year_level');
     const department = document.getElementById('department');
+    const studentDetailLabel = document.getElementById('studentDetailLabel');
     const chiefComplaint = document.getElementById('chief_complaint');
     const chiefComplaintLabel = document.getElementById('chiefComplaintLabel');
     const borrowEquipmentWrap = document.getElementById('borrow-equipment-wrap');
@@ -740,9 +714,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     const visitorSubmitLabel = document.getElementById('visitorSubmitLabel');
     const lookupStatus = document.getElementById('visitorLookupStatus');
     let visitorLookupSequence = 0;
+    let visitorLookupTimer = null;
 
     function shouldFormatAsStudentId(value) {
-        return (category && category.value === 'Student') || /^[\d-]*$/.test(String(value || ''));
+        return /^[\d-]*$/.test(String(value || ''));
     }
 
     function normalizeVisitorId(value) {
@@ -762,12 +737,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         lookupStatus.classList.toggle('is-missing', state === 'missing');
     }
 
-    function syncYearLevel() {
+    function syncStudentDetail() {
         const isStudent = category && category.value === 'Student';
-        yearLevelWrap?.classList.toggle('hidden', !isStudent);
-        if (yearLevel) {
-            yearLevel.required = isStudent;
-            if (!isStudent) yearLevel.value = '';
+        if (studentDetailLabel) {
+            studentDetailLabel.textContent = isStudent ? 'Section' : 'Department';
+        }
+        if (department) {
+            department.placeholder = isStudent ? 'e.g. BSIT-4D' : 'Select department';
         }
     }
 
@@ -827,18 +803,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!identifier) return;
 
         const rawValue = identifier.value;
-        const formatted = shouldFormatAsStudentId(rawValue) ? normalizeVisitorId(rawValue) : rawValue.trim();
+        const formatted = shouldFormatAsStudentId(rawValue)
+            ? normalizeVisitorId(rawValue)
+            : rawValue.trim().toUpperCase();
         if (identifier.value !== formatted) {
             identifier.value = formatted;
         }
 
         if (formatted === '') {
             identifier.dataset.autofilled = '';
-            setVisitorLookupStatus('Type your ID to load existing student details.');
+            setVisitorLookupStatus('Type your ID number to load your registered details.');
             return;
         }
 
-        if (!/^\d{2}-\d{5}$/.test(formatted)) {
+        const isNumericStudentId = /^[\d-]+$/.test(formatted);
+        if ((isNumericStudentId && !/^\d{2}-\d{5}$/.test(formatted)) || formatted.length < 3) {
             setVisitorLookupStatus('Continue typing your ID.');
             return;
         }
@@ -860,21 +839,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (identifier.dataset.autofilled === '1') {
                     fullName.value = '';
                     department.value = '';
-                    yearLevel.value = '';
                     identifier.dataset.autofilled = '';
-                    syncYearLevel();
+                    syncStudentDetail();
                 }
-                setVisitorLookupStatus('This ID is not in the Cliniq_db patient list.', 'missing');
+                setVisitorLookupStatus(patient.message || 'This ID number is not in the Cliniq_db account list.', 'missing');
                 return;
             }
 
             identifier.dataset.autofilled = '1';
             fullName.value = patient.name || '';
-            category.value = patient.category || 'Patient';
+            category.value = patient.category || '';
             department.value = patient.course || '';
-            yearLevel.value = patient.yearLevel || '';
-            syncYearLevel();
-            setVisitorLookupStatus('Existing patient details loaded from Cliniq_db.', 'found');
+            syncStudentDetail();
+            setVisitorLookupStatus('Registered account details loaded from Cliniq_db.', 'found');
         } catch (error) {
             if (sequence === visitorLookupSequence) {
                 setVisitorLookupStatus('Unable to check Cliniq_db right now. Please try again.', 'missing');
@@ -882,16 +859,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    function scheduleVisitorPatientLookup() {
+        window.clearTimeout(visitorLookupTimer);
+        visitorLookupTimer = window.setTimeout(syncVisitorPatientLookup, 250);
+    }
+
     category?.addEventListener('change', () => {
-        syncYearLevel();
-        syncVisitorPatientLookup();
+        syncStudentDetail();
     });
     reason?.addEventListener('change', syncBorrowFlow);
     borrowItem?.addEventListener('change', syncBorrowEquipmentStatus);
     borrowedQuantity?.addEventListener('input', syncBorrowEquipmentStatus);
-    identifier?.addEventListener('input', syncVisitorPatientLookup);
+    identifier?.addEventListener('input', scheduleVisitorPatientLookup);
     identifier?.addEventListener('change', syncVisitorPatientLookup);
-    syncYearLevel();
+    syncStudentDetail();
     syncBorrowFlow();
     syncVisitorPatientLookup();
 

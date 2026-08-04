@@ -55,6 +55,7 @@ CREATE TABLE people (
   middle_name VARCHAR(80) NULL,
   last_name VARCHAR(80) NOT NULL,
   birthdate DATE NULL,
+  sex ENUM('Male', 'Female', 'Other') NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_people_name (last_name, first_name)
@@ -87,24 +88,16 @@ CREATE TABLE students (
   INDEX idx_students_program (program_id)
 );
 
-CREATE TABLE faculty (
+CREATE TABLE school_employees (
   person_id BIGINT UNSIGNED PRIMARY KEY,
   department_id BIGINT UNSIGNED NULL,
+  role_classification ENUM('Faculty', 'School Personnel') NOT NULL,
   employment_type VARCHAR(80) NULL,
   position_title VARCHAR(160) NULL,
   FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE CASCADE,
   FOREIGN KEY (department_id) REFERENCES departments(id),
-  INDEX idx_faculty_department (department_id)
-);
-
-CREATE TABLE school_personnel (
-  person_id BIGINT UNSIGNED PRIMARY KEY,
-  department_id BIGINT UNSIGNED NULL,
-  employment_type VARCHAR(80) NULL,
-  position_title VARCHAR(160) NULL,
-  FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE CASCADE,
-  FOREIGN KEY (department_id) REFERENCES departments(id),
-  INDEX idx_school_personnel_department (department_id)
+  INDEX idx_school_employees_department (department_id),
+  INDEX idx_school_employees_classification (role_classification)
 );
 
 CREATE TABLE clinic_staff (
@@ -119,7 +112,7 @@ CREATE TABLE clinic_staff (
   INDEX idx_clinic_staff_role (staff_role)
 );
 
--- A patient profile may belong to a student, faculty member, school personnel,
+-- A patient profile may belong to a student, school employee,
 -- clinic employee, or another authorized person. It contains health information.
 CREATE TABLE patients (
   person_id BIGINT UNSIGNED PRIMARY KEY,

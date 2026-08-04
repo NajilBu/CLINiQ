@@ -109,6 +109,15 @@ render_clinic_command_header(
                     <input class="clinic-input" id="birthdate" name="birthdate" type="date" required>
                 </div>
                 <div>
+                    <label class="clinic-label" for="sex">Sex</label>
+                    <select class="clinic-input" id="sex" name="sex" required>
+                        <option value="">Select sex</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div>
                     <label class="clinic-label" id="program_or_department_label" for="program_or_department">Program Code</label>
                     <select class="clinic-input" id="program_or_department" name="program_or_department" aria-describedby="program_or_department_hint" required>
                         <option value="">Select program</option>
@@ -469,7 +478,7 @@ const excelMessage = document.getElementById('excelMessage');
 const excelPreview = document.getElementById('excelPreview');
 const bulkPayload = document.getElementById('bulkPayload');
 const bulkImportButton = document.getElementById('bulkImportButton');
-const requiredColumns = ['id_number', 'patient_type', 'first_name', 'last_name', 'birthdate'];
+const requiredColumns = ['id_number', 'patient_type', 'first_name', 'last_name', 'birthdate', 'sex'];
 
 function normalizeHeader(value) {
     return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
@@ -515,6 +524,7 @@ excelFile?.addEventListener('change', async () => {
                 return {
                     ...row,
                     id_number: String(row.id_number || '').toUpperCase(),
+                    sex: String(row.sex || '').trim(),
                     program_or_department: String(row.program_or_department || '').toUpperCase(),
                     section_or_position: ['student', 'faculty'].includes(importType)
                         ? String(row.section_or_position || '').toUpperCase()
@@ -535,8 +545,8 @@ excelFile?.addEventListener('change', async () => {
 
         const previewRows = rows.slice(0, 20);
         excelPreview.innerHTML = `<table class="w-full text-xs">
-            <thead class="bg-slate-50"><tr><th class="p-2 text-left">ID</th><th class="p-2 text-left">Type</th><th class="p-2 text-left">Name</th><th class="p-2 text-left">Birthdate</th></tr></thead>
-            <tbody>${previewRows.map(row => `<tr class="border-t border-slate-100"><td class="p-2">${escapeHtml(row.id_number)}</td><td class="p-2">${escapeHtml(row.patient_type)}</td><td class="p-2">${escapeHtml([row.first_name,row.middle_name,row.last_name].filter(Boolean).join(' '))}</td><td class="p-2">${escapeHtml(row.birthdate)}</td></tr>`).join('')}</tbody>
+            <thead class="bg-slate-50"><tr><th class="p-2 text-left">ID</th><th class="p-2 text-left">Type</th><th class="p-2 text-left">Name</th><th class="p-2 text-left">Birthdate</th><th class="p-2 text-left">Sex</th></tr></thead>
+            <tbody>${previewRows.map(row => `<tr class="border-t border-slate-100"><td class="p-2">${escapeHtml(row.id_number)}</td><td class="p-2">${escapeHtml(row.patient_type)}</td><td class="p-2">${escapeHtml([row.first_name,row.middle_name,row.last_name].filter(Boolean).join(' '))}</td><td class="p-2">${escapeHtml(row.birthdate)}</td><td class="p-2">${escapeHtml(row.sex)}</td></tr>`).join('')}</tbody>
         </table>${rows.length > 20 ? `<p class="text-xs font-bold text-slate-500 mt-2">Showing 20 of ${rows.length} rows.</p>` : ''}`;
     } catch (error) {
         excelMessage.textContent = error instanceof Error ? error.message : 'Unable to read the Excel workbook.';

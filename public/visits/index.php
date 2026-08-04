@@ -78,17 +78,15 @@ $totalPages = max(1, (int) ceil($totalRows / $perPage));
 
 $stmt = cliniq_visit_db()->prepare("
     SELECT v.*, v.visit_id AS id, p.first_name, p.last_name, p.id_number,
-           COALESCE(NULLIF(TRIM(CONCAT_WS(' ', pr.program_code, s.year_level, s.section)), ''), fd.department_code, sd.department_code, 'Patient') AS course_section,
+           COALESCE(NULLIF(TRIM(CONCAT(pr.program_code, '-', s.year_level, UPPER(s.section))), ''), ed.department_code, 'Patient') AS course_section,
            TRIM(CONCAT_WS(' ', au.first_name, au.middle_name, au.last_name)) AS attended_by_name
     FROM visits v
     JOIN patients pt ON pt.person_id = v.patient_person_id
     JOIN people p ON p.id = pt.person_id
     LEFT JOIN students s ON s.person_id = p.id
     LEFT JOIN programs pr ON pr.id = s.program_id
-    LEFT JOIN faculty f ON f.person_id = p.id
-    LEFT JOIN departments fd ON fd.id = f.department_id
-    LEFT JOIN school_personnel sp ON sp.person_id = p.id
-    LEFT JOIN departments sd ON sd.id = sp.department_id
+    LEFT JOIN school_employees se ON se.person_id = p.id
+    LEFT JOIN departments ed ON ed.id = se.department_id
     LEFT JOIN people au ON au.id = v.attended_by_person_id
     WHERE {$whereSQL}
     ORDER BY CASE COALESCE(v.status, 'Unaddressed')

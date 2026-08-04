@@ -220,6 +220,16 @@ function patient_account_valid_birthdate(string $value): bool
     return $date instanceof DateTimeImmutable && $date->format('Y-m-d') === $value;
 }
 
+function normalize_person_sex(string $value): string
+{
+    return match (strtolower(trim($value))) {
+        'male' => 'Male',
+        'female' => 'Female',
+        'other' => 'Other',
+        default => throw new InvalidArgumentException('Sex must be Male, Female, or Other.'),
+    };
+}
+
 /**
  * Create one inactive patient account and category profile.
  *
@@ -233,6 +243,7 @@ function create_inactive_patient_account(array $input): array
     $middleName = trim((string) ($input['middle_name'] ?? ''));
     $lastName = trim((string) ($input['last_name'] ?? ''));
     $birthdate = trim((string) ($input['birthdate'] ?? ''));
+    $sex = normalize_person_sex((string) ($input['sex'] ?? ''));
     $programDepartment = trim((string) ($input['program_or_department'] ?? ''));
     $yearEmployment = trim((string) ($input['year_level_or_employment_type'] ?? ''));
     $sectionPosition = trim((string) ($input['section_or_position'] ?? ''));
@@ -279,8 +290,8 @@ function create_inactive_patient_account(array $input): array
         }
 
         $personStmt = $db->prepare('
-            INSERT INTO people (id_number, first_name, middle_name, last_name, birthdate)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO people (id_number, first_name, middle_name, last_name, birthdate, sex)
+            VALUES (?, ?, ?, ?, ?, ?)
         ');
         $personStmt->execute([
             $idNumber,
@@ -288,6 +299,7 @@ function create_inactive_patient_account(array $input): array
             $middleName !== '' ? $middleName : null,
             $lastName,
             $birthdate,
+            $sex,
         ]);
         $personId = (int) $db->lastInsertId();
 
@@ -303,25 +315,16 @@ function create_inactive_patient_account(array $input): array
                 $sectionPosition !== '' ? $sectionPosition : null,
                 $academicYear !== '' ? $academicYear : null,
             ]);
-        } elseif ($type === 'faculty') {
+        } elseif (in_array($type, ['faculty', 'school_personnel'], true)) {
             $profile = $db->prepare('
-                INSERT INTO faculty (person_id, department_id, employment_type, position_title)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO school_employees (
+                    person_id, department_id, role_classification, employment_type, position_title
+                ) VALUES (?, ?, ?, ?, ?)
             ');
             $profile->execute([
                 $personId,
                 $departmentId,
-                $yearEmployment !== '' ? $yearEmployment : null,
-                $sectionPosition !== '' ? $sectionPosition : null,
-            ]);
-        } elseif ($type === 'school_personnel') {
-            $profile = $db->prepare('
-                INSERT INTO school_personnel (person_id, department_id, employment_type, position_title)
-                VALUES (?, ?, ?, ?)
-            ');
-            $profile->execute([
-                $personId,
-                $departmentId,
+                $type === 'faculty' ? 'Faculty' : 'School Personnel',
                 $yearEmployment !== '' ? $yearEmployment : null,
                 $sectionPosition !== '' ? $sectionPosition : null,
             ]);
@@ -419,16 +422,14 @@ function recent_patient_accounts(int $limit = 100): array
             a.created_at,
             CASE
                 WHEN s.person_id IS NOT NULL THEN 'Student'
-                WHEN f.person_id IS NOT NULL THEN 'Faculty'
-                WHEN sp.person_id IS NOT NULL THEN 'School Personnel'
+                WHEN se.person_id IS NOT NULL THEN se.role_classification
                 ELSE 'Patient'
             END AS patient_type
         FROM people p
         JOIN accounts a ON a.person_id = p.id
         JOIN patients pt ON pt.person_id = p.id
         LEFT JOIN students s ON s.person_id = p.id
-        LEFT JOIN faculty f ON f.person_id = p.id
-        LEFT JOIN school_personnel sp ON sp.person_id = p.id
+        LEFT JOIN school_employees se ON se.person_id = p.id
         ORDER BY a.created_at DESC, p.id DESC
         LIMIT {$limit}
     ")->fetchAll();
