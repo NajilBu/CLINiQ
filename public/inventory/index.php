@@ -221,7 +221,7 @@ foreach ($visibleItems as $item) {
         'highlightKeys' => $highlightKeys,
         'itemHtml' => '<div><strong class="text-sm text-slate-800">' . e($item['item_name']) . '</strong><p class="text-xs font-bold text-slate-400 mb-0">' . e($item['item_code'] . ' / ' . ($category !== '' ? $category : 'No type')) . '</p></div>',
         'categoryHtml' => '<span class="text-sm font-bold text-slate-600">' . e($category !== '' ? $category : '-') . '</span>',
-        'stockHtml' => '<div class="flex items-center gap-2"><span class="stock-bar"><span class="stock-bar-fill ' . e($barClass) . '" style="width: ' . (int) $pct . '%"></span></span><span class="text-sm font-bold ' . ($isLow ? 'text-amber-600' : 'text-slate-600') . '">' . (int) $item['quantity'] . ' ' . e($item['unit']) . '</span></div>',
+        'stockHtml' => '<div class="flex flex-col items-start gap-1"><span class="text-sm font-bold ' . ($isLow ? 'text-amber-600' : 'text-slate-600') . '">' . (int) $item['quantity'] . ' ' . e($item['unit']) . '</span><span class="stock-bar"><span class="stock-bar-fill ' . e($barClass) . '" style="width: ' . (int) $pct . '%"></span></span></div>',
         'reorderLevel' => (int) $item['reorder_level'],
         'expirationHtml' => '<span class="text-sm font-bold ' . $expirationClass . '">' . e($expirationLabel) . '</span>',
         'statusHtml' => inventory_status_badge($displayQuantityForStatus),
@@ -720,7 +720,7 @@ render_clinic_command_header(
                     </div>
                     <div>
                         <label class="clinic-label">Expiration Date</label>
-                        <input class="clinic-input" name="expiration_date" type="date" required>
+                        <input class="clinic-input" name="expiration_date" type="date">
                     </div>
                 </div>
             </div>

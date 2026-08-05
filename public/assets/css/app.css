@@ -2413,6 +2413,7 @@ textarea.record-sheet-field {
 }
 
 .pagination a,
+.pagination button,
 .pagination span {
     display: inline-flex;
     align-items: center;
@@ -2425,13 +2426,18 @@ textarea.record-sheet-field {
     font-weight: 700;
     text-decoration: none;
     transition: all 0.15s ease;
+    border: 0;
+    background: transparent;
 }
 
-.pagination a {
+.pagination a,
+.pagination button {
     color: #64748b;
+    cursor: pointer;
 }
 
-.pagination a:hover {
+.pagination a:hover,
+.pagination button:hover:not(:disabled) {
     background: #f1f5f9;
     color: #1e293b;
 }
@@ -2444,6 +2450,25 @@ textarea.record-sheet-field {
 .pagination .page-disabled {
     color: #cbd5e1;
     pointer-events: none;
+}
+
+#recentPatientAccounts .pagination {
+    gap: 0.55rem;
+    padding: 1.35rem 1.5rem;
+}
+
+#recentPatientAccounts .pagination button {
+    min-width: 2.5rem;
+    height: 2.5rem;
+    padding: 0 0.85rem;
+    border-radius: 9999px;
+    line-height: 1;
+}
+
+#recentPatientAccounts .pagination .page-active {
+    background: var(--cliniq-primary);
+    color: #ffffff;
+    box-shadow: 0 5px 14px rgba(var(--cliniq-focus-rgb), 0.2);
 }
 
 /* ============================================================

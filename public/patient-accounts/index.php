@@ -36,6 +36,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $programOptions = patient_account_active_programs();
 $departmentOptions = patient_account_active_departments();
 $recentAccounts = recent_patient_accounts();
+$recentAccountPageSize = 10;
+$recentAccountPageCount = max(1, (int) ceil(count($recentAccounts) / $recentAccountPageSize));
 
 render_header('Patient Accounts');
 render_clinic_command_header(
@@ -260,7 +262,7 @@ render_clinic_command_header(
     </section>
 <?php endif; ?>
 
-<section class="clinic-card overflow-hidden">
+<section class="clinic-card overflow-hidden" id="recentPatientAccounts">
     <div class="p-5 border-b border-slate-100">
         <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Recent Patient Accounts</h2>
         <p class="text-xs font-bold text-slate-500 mb-0"><?= count($recentAccounts) ?> account(s) shown</p>
@@ -278,8 +280,8 @@ render_clinic_command_header(
                 </tr>
             </thead>
             <tbody>
-                <?php foreach ($recentAccounts as $account): ?>
-                    <tr class="border-t border-slate-100">
+                <?php foreach ($recentAccounts as $accountIndex => $account): ?>
+                    <tr class="border-t border-slate-100" style="height: 49px<?= $accountIndex >= $recentAccountPageSize ? '; display: none' : '' ?>" data-recent-account-row>
                         <td class="p-3 font-bold"><?= e($account['id_number']) ?></td>
                         <td class="p-3"><?= e($account['full_name']) ?></td>
                         <td class="p-3"><?= e($account['patient_type']) ?></td>
@@ -288,13 +290,81 @@ render_clinic_command_header(
                         <td class="p-3"><?= e(date('M d, Y', strtotime($account['created_at']))) ?></td>
                     </tr>
                 <?php endforeach; ?>
+                <?php for ($emptyRow = 0; $emptyRow < $recentAccountPageSize; $emptyRow++): ?>
+                    <tr class="border-t border-slate-100" style="height: 49px<?= $emptyRow < max(0, $recentAccountPageSize - min($recentAccountPageSize, count($recentAccounts))) ? '' : '; display: none' ?>" aria-hidden="true" data-recent-account-empty-row>
+                        <td colspan="6" class="p-3">&nbsp;</td>
+                    </tr>
+                <?php endfor; ?>
             </tbody>
         </table>
     </div>
+    <nav class="pagination border-t border-slate-100" aria-label="Recent patient accounts pages">
+        <button type="button" class="page-disabled" aria-label="Previous page" data-recent-account-previous disabled>‹</button>
+
+        <?php for ($pageNumber = 1; $pageNumber <= $recentAccountPageCount; $pageNumber++): ?>
+            <button type="button" class="<?= $pageNumber === 1 ? 'page-active' : '' ?>" data-recent-account-page="<?= $pageNumber ?>"<?= $pageNumber === 1 ? ' aria-current="page"' : '' ?>><?= $pageNumber ?></button>
+        <?php endfor; ?>
+
+        <button type="button" class="<?= $recentAccountPageCount === 1 ? 'page-disabled' : '' ?>" aria-label="Next page" data-recent-account-next<?= $recentAccountPageCount === 1 ? ' disabled' : '' ?>>›</button>
+    </nav>
 </section>
 
 <script src="<?= app_url('assets/vendor/sheetjs/xlsx.full.min.js?v=0.20.3') ?>"></script>
 <script>
+function initRecentPatientAccountPagination() {
+    const section = document.getElementById('recentPatientAccounts');
+    if (!section || section.dataset.paginationReady === 'true') return;
+    section.dataset.paginationReady = 'true';
+
+    const pageSize = 10;
+    const rows = Array.from(section.querySelectorAll('[data-recent-account-row]'));
+    const emptyRows = Array.from(section.querySelectorAll('[data-recent-account-empty-row]'));
+    const pageButtons = Array.from(section.querySelectorAll('[data-recent-account-page]'));
+    const previousButton = section.querySelector('[data-recent-account-previous]');
+    const nextButton = section.querySelector('[data-recent-account-next]');
+    const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+    let currentPage = 1;
+
+    function showPage(page) {
+        currentPage = Math.max(1, Math.min(pageCount, page));
+        const pageStart = (currentPage - 1) * pageSize;
+        const visibleCount = Math.max(0, Math.min(pageSize, rows.length - pageStart));
+
+        rows.forEach((row, index) => {
+            row.hidden = index < pageStart || index >= pageStart + pageSize;
+            row.style.display = row.hidden ? 'none' : '';
+        });
+        emptyRows.forEach((row, index) => {
+            row.hidden = index >= pageSize - visibleCount;
+            row.style.display = row.hidden ? 'none' : '';
+        });
+        pageButtons.forEach((button) => {
+            const active = Number(button.dataset.recentAccountPage) === currentPage;
+            button.classList.toggle('page-active', active);
+            if (active) {
+                button.setAttribute('aria-current', 'page');
+            } else {
+                button.removeAttribute('aria-current');
+            }
+        });
+
+        previousButton.disabled = currentPage === 1;
+        previousButton.classList.toggle('page-disabled', previousButton.disabled);
+        nextButton.disabled = currentPage === pageCount;
+        nextButton.classList.toggle('page-disabled', nextButton.disabled);
+    }
+
+    pageButtons.forEach((button) => {
+        button.addEventListener('click', () => showPage(Number(button.dataset.recentAccountPage)));
+    });
+    previousButton.addEventListener('click', () => showPage(currentPage - 1));
+    nextButton.addEventListener('click', () => showPage(currentPage + 1));
+    showPage(1);
+}
+
+document.addEventListener('DOMContentLoaded', initRecentPatientAccountPagination);
+document.addEventListener('cliniq:page-content-replaced', initRecentPatientAccountPagination);
+
 const patientType = document.getElementById('patient_type');
 const activePrograms = <?= json_encode($programOptions, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
 const activeDepartments = <?= json_encode($departmentOptions, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;

@@ -216,7 +216,7 @@ function render_header(string $title): void
         <link rel="stylesheet" href="<?= app_url('assets/vendor/ag-grid/ag-grid.css?v=31') ?>">
         <link rel="stylesheet" href="<?= app_url('assets/vendor/ag-grid/ag-theme-quartz.css?v=31') ?>">
         <script src="<?= app_url('assets/vendor/ag-grid/ag-grid-community.min.js?v=31') ?>"></script>
-        <link href="<?= app_url('assets/css/app.css?v=critical-alert-frame-1') ?>" rel="stylesheet">
+        <link href="<?= app_url('assets/css/app.css?v=patient-account-pagination-1') ?>" rel="stylesheet">
         <style>
             :root {
                 --cliniq-primary: <?= e($theme['primary']) ?>;
