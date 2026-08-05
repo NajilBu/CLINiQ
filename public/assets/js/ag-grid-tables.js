@@ -22,7 +22,7 @@
                 nextColumn.cellRenderer = htmlRenderer;
             }
 
-            if (shouldFitColumns) {
+            if (shouldFitColumns && nextColumn.suppressSizeToFit !== true) {
                 const basis = Number(nextColumn.flex || nextColumn.width || nextColumn.minWidth || 140);
                 nextColumn.flex = Math.max(0.7, Math.min(2.25, basis / 140));
                 nextColumn.minWidth = Math.min(Number(nextColumn.minWidth || 92), 140);
@@ -54,6 +54,9 @@
 
         const rowData = readGridJson(grid, '[data-grid-rows]', []);
         const pageSize = Number(grid.dataset.pageSize || 25);
+        const paginationEnabled = grid.dataset.pagination === 'true';
+        const paginationControlsId = grid.dataset.paginationControls || '';
+        const rowHeight = Number(grid.dataset.rowHeight || 70);
         const shouldFitColumns = grid.dataset.fitColumns !== 'false';
         const columnDefs = normalizeColumns(readGridJson(grid, '[data-grid-columns]', []), shouldFitColumns);
 
@@ -75,6 +78,38 @@
             window.location.assign(rowUrl);
         }
 
+        function renderPaginationControls(api) {
+            if (!paginationEnabled || !paginationControlsId || !api) return;
+            const controls = document.getElementById(paginationControlsId);
+            if (!controls) return;
+
+            const totalPages = Math.max(1, Number(api.paginationGetTotalPages ? api.paginationGetTotalPages() : 1));
+            const currentPage = Math.min(totalPages, Number(api.paginationGetCurrentPage ? api.paginationGetCurrentPage() : 0) + 1);
+            let html = `<button type="button" data-page-action="previous" aria-label="Previous page" ${currentPage === 1 ? 'class="page-disabled" disabled' : ''}>‹</button>`;
+            for (let page = 1; page <= totalPages; page += 1) {
+                const active = page === currentPage;
+                html += `<button type="button" data-page-number="${page}"${active ? ' class="page-active" aria-current="page"' : ''}>${page}</button>`;
+            }
+            html += `<button type="button" data-page-action="next" aria-label="Next page" ${currentPage === totalPages ? 'class="page-disabled" disabled' : ''}>›</button>`;
+            controls.innerHTML = html;
+
+            if (controls.dataset.paginationReady !== 'true') {
+                controls.dataset.paginationReady = 'true';
+                controls.addEventListener('click', (event) => {
+                    const button = event.target.closest('button');
+                    if (!button || button.disabled) return;
+
+                    if (button.dataset.pageNumber) {
+                        api.paginationGoToPage(Number(button.dataset.pageNumber) - 1);
+                    } else if (button.dataset.pageAction === 'previous') {
+                        api.paginationGoToPage(Math.max(0, api.paginationGetCurrentPage() - 1));
+                    } else if (button.dataset.pageAction === 'next') {
+                        api.paginationGoToPage(Math.min(api.paginationGetTotalPages() - 1, api.paginationGetCurrentPage() + 1));
+                    }
+                });
+            }
+        }
+
         function fitColumns(api) {
             if (shouldFitColumns && api && api.sizeColumnsToFit) {
                 api.sizeColumnsToFit();
@@ -93,10 +128,13 @@
                 wrapHeaderText: true,
                 autoHeaderHeight: true
             },
-            pagination: false,
+            pagination: paginationEnabled,
+            paginationPageSize: pageSize,
+            paginationPageSizeSelector: false,
+            suppressPaginationPanel: paginationEnabled && Boolean(paginationControlsId),
             animateRows: true,
             suppressCellFocus: true,
-            rowHeight: 70,
+            rowHeight,
             headerHeight: 48,
             overlayNoRowsTemplate: makeEmptyOverlay(grid.dataset.emptyTitle, grid.dataset.emptyText),
             getRowClass: (params) => {
@@ -106,7 +144,8 @@
                 return classes.join(' ');
             },
             onCellClicked: navigateRow,
-            onRowClicked: navigateRow
+            onRowClicked: navigateRow,
+            onPaginationChanged: (params) => renderPaginationControls(params.api)
         };
 
         function announceGridReady(params) {
@@ -136,6 +175,7 @@
 
         const api = window.agGrid.createGrid(grid, gridOptions);
         fitColumns(api);
+        renderPaginationControls(api);
 
         if (shouldFitColumns && window.ResizeObserver) {
             const observer = new ResizeObserver(() => fitColumns(api));
@@ -154,7 +194,19 @@
                 } else if (api.setQuickFilter) {
                     api.setQuickFilter(searchInput.value);
                 }
+                if (paginationEnabled && api.paginationGoToFirstPage) {
+                    api.paginationGoToFirstPage();
+                    window.requestAnimationFrame(() => renderPaginationControls(api));
+                }
             });
+
+            if (searchInput.value) {
+                if (api.setGridOption) {
+                    api.setGridOption('quickFilterText', searchInput.value);
+                } else if (api.setQuickFilter) {
+                    api.setQuickFilter(searchInput.value);
+                }
+            }
         }
     }
 

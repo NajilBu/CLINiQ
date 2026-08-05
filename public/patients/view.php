@@ -2,15 +2,22 @@
 
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/VisitWorkflow.php';
-require_once __DIR__ . '/../../app/services/CliniqVisitWorkflow.php';
+require_once __DIR__ . '/../../app/services/CliniqPatientProfile.php';
 require_login();
-ensure_visit_workflow_schema();
 
 $id = (int) ($_GET['id'] ?? 0);
-
-$stmt = db()->prepare('SELECT * FROM patients WHERE id = ? LIMIT 1');
-$stmt->execute([$id]);
-$patient = $stmt->fetch();
+$patient = cliniq_patient_profile_find($id);
+if (!$patient && $id > 0) {
+    $legacyLookupStmt = db()->prepare('SELECT id_number FROM patients WHERE id = ? LIMIT 1');
+    $legacyLookupStmt->execute([$id]);
+    $legacyIdNumber = (string) ($legacyLookupStmt->fetchColumn() ?: '');
+    if ($legacyIdNumber !== '') {
+        $patient = cliniq_patient_profile_find_by_id_number($legacyIdNumber);
+        if ($patient) {
+            $id = (int) $patient['person_id'];
+        }
+    }
+}
 
 if (!$patient) {
     render_header('Patient Not Found');
@@ -26,26 +33,34 @@ if (!$patient) {
     exit;
 }
 
-$fullName = trim($patient['first_name'] . ' ' . $patient['last_name']);
+$fullName = trim(implode(' ', array_filter([
+    $patient['first_name'] ?? '',
+    $patient['middle_name'] ?? '',
+    $patient['last_name'] ?? '',
+])));
+$visits = cliniq_patient_profile_history((int) $patient['person_id']);
 
-$cliniqPatient = cliniq_visit_patient_by_id_number((string) $patient['id_number']);
-$visits = $cliniqPatient
-    ? cliniq_visit_timeline((int) $cliniqPatient['person_id'])
-    : [];
+$legacyPatientStmt = db()->prepare('SELECT id FROM patients WHERE id_number = ? LIMIT 1');
+$legacyPatientStmt->execute([(string) $patient['id_number']]);
+$legacyPatientId = (int) ($legacyPatientStmt->fetchColumn() ?: 0);
 
-$apeStmt = db()->prepare("
-    SELECT a.*, u.name AS verified_by_name
-    FROM ape_records a
-    LEFT JOIN users u ON u.id = a.verified_by
-    WHERE a.patient_id = ?
-    ORDER BY a.exam_date DESC
-");
-$apeStmt->execute([$id]);
-$apeRecords = $apeStmt->fetchAll();
+$apeRecords = [];
+$referrals = [];
+if ($legacyPatientId > 0) {
+    $apeStmt = db()->prepare("
+        SELECT a.*, u.name AS verified_by_name
+        FROM ape_records a
+        LEFT JOIN users u ON u.id = a.verified_by
+        WHERE a.patient_id = ?
+        ORDER BY a.exam_date DESC
+    ");
+    $apeStmt->execute([$legacyPatientId]);
+    $apeRecords = $apeStmt->fetchAll();
 
-$refStmt = db()->prepare('SELECT * FROM referrals WHERE patient_id = ? ORDER BY referral_date DESC');
-$refStmt->execute([$id]);
-$referrals = $refStmt->fetchAll();
+    $refStmt = db()->prepare('SELECT * FROM referrals WHERE patient_id = ? ORDER BY referral_date DESC');
+    $refStmt->execute([$legacyPatientId]);
+    $referrals = $refStmt->fetchAll();
+}
 
 $latestVisit = null;
 foreach ($visits as $visit) {
@@ -65,8 +80,47 @@ if ($patient['birthdate']) {
 }
 $sexLabel = $patient['sex'] ?: 'Not specified';
 $bloodTypeLabel = $patient['blood_type'] ?: 'Not specified';
-$courseLabel = $patient['course_section'] ?: 'No course set';
+$courseLabel = $patient['course_section'] ?: $patient['patient_type'];
 $lastVisitLabel = $latestVisit ? date('M d, Y g:i A', strtotime($latestVisit['visit_datetime'])) : 'No visits yet';
+$affiliationLabel = 'Classification';
+$affiliationValue = $patient['patient_type'];
+$profileDetailLabel = 'Profile Details';
+$profileDetailValue = 'No additional profile details recorded';
+if ($patient['patient_type'] === 'Student') {
+    $affiliationLabel = 'Program';
+    $affiliationValue = trim(implode(' — ', array_filter([
+        $patient['program_code'] ?? '',
+        $patient['program_name'] ?? '',
+    ]))) ?: 'Not specified';
+    $profileDetailLabel = 'Year / Section / Academic Year';
+    $profileDetailValue = trim(implode(' / ', array_filter([
+        ($patient['year_level'] ?? '') !== '' ? 'Year ' . $patient['year_level'] : '',
+        ($patient['section'] ?? '') !== '' ? 'Section ' . strtoupper((string) $patient['section']) : '',
+        $patient['academic_year'] ?? '',
+    ]))) ?: 'Not specified';
+} elseif (in_array($patient['patient_type'], ['Faculty', 'School Personnel'], true)) {
+    $affiliationLabel = 'Department';
+    $affiliationValue = trim(implode(' — ', array_filter([
+        $patient['employee_department_code'] ?? '',
+        $patient['employee_department_name'] ?? '',
+    ]))) ?: 'Not specified';
+    $profileDetailLabel = 'Employment / Position';
+    $profileDetailValue = trim(implode(' / ', array_filter([
+        $patient['employment_type'] ?? '',
+        $patient['employee_position_title'] ?? '',
+    ]))) ?: 'Not specified';
+} elseif ($patient['patient_type'] === 'Clinic Staff') {
+    $affiliationLabel = 'Clinic Department';
+    $affiliationValue = trim(implode(' — ', array_filter([
+        $patient['staff_department_code'] ?? '',
+        $patient['staff_department_name'] ?? '',
+    ]))) ?: 'Not specified';
+    $profileDetailLabel = 'Staff Role / Position';
+    $profileDetailValue = trim(implode(' / ', array_filter([
+        isset($patient['staff_role']) ? ucwords(str_replace('_', ' ', (string) $patient['staff_role'])) : '',
+        $patient['staff_position_title'] ?? '',
+    ]))) ?: 'Not specified';
+}
 
 render_header($fullName . ' - Patient Profile');
 ?>
@@ -176,14 +230,12 @@ render_header($fullName . ' - Patient Profile');
                 </div>
             </div>
             <div class="flex flex-wrap gap-3">
-                <a class="btn btn-ghost text-decoration-none" href="edit.php?id=<?= $id ?>">
-                    <span class="material-symbols-outlined text-[18px]">edit</span>
-                    Edit
-                </a>
-                <a class="btn btn-outline text-decoration-none" href="emergency_profile.php?id=<?= $id ?>">
-                    <span class="material-symbols-outlined text-[18px]">emergency</span>
-                    Emergency Profile
-                </a>
+                <?php if ($legacyPatientId > 0): ?>
+                    <a class="btn btn-outline text-decoration-none" href="emergency_profile.php?id=<?= $legacyPatientId ?>">
+                        <span class="material-symbols-outlined text-[18px]">emergency</span>
+                        Emergency Profile
+                    </a>
+                <?php endif; ?>
                 <a class="btn btn-primary text-decoration-none" href="<?= app_url('visits/create.php?patient_id=' . $id) ?>">
                     <span class="material-symbols-outlined text-[18px]">add_notes</span>
                     Record Visit
@@ -285,21 +337,26 @@ render_header($fullName . ' - Patient Profile');
 
             <div class="patient-profile-card p-5">
                 <div class="flex items-center gap-2 mb-5">
-                    <span class="material-symbols-outlined text-red-600">medical_information</span>
-                    <h3 class="font-headline text-lg font-extrabold text-slate-900 m-0">Health Alerts</h3>
+                    <span class="material-symbols-outlined text-primary">badge</span>
+                    <h3 class="font-headline text-lg font-extrabold text-slate-900 m-0">School / Employment Profile</h3>
                 </div>
                 <div class="grid grid-cols-1 gap-4">
-                    <div class="patient-profile-note <?= trim((string) $patient['allergies']) !== '' ? 'warning' : '' ?>">
-                        <span class="clinic-label">Critical Allergies</span>
-                        <strong class="whitespace-pre-wrap"><?= e(trim((string) $patient['allergies']) !== '' ? $patient['allergies'] : 'None recorded') ?></strong>
+                    <div class="patient-profile-note">
+                        <span class="clinic-label">Patient Classification</span>
+                        <strong><?= e($patient['patient_type']) ?></strong>
                     </div>
                     <div class="patient-profile-note">
-                        <span class="clinic-label">Existing Conditions</span>
-                        <strong class="whitespace-pre-wrap"><?= e(trim((string) $patient['existing_conditions']) !== '' ? $patient['existing_conditions'] : 'None recorded') ?></strong>
+                        <span class="clinic-label"><?= e($affiliationLabel) ?></span>
+                        <strong><?= e($affiliationValue) ?></strong>
                     </div>
                     <div class="patient-profile-note">
-                        <span class="clinic-label">Emergency Instructions</span>
-                        <strong class="whitespace-pre-wrap"><?= e(trim((string) $patient['emergency_instructions']) !== '' ? $patient['emergency_instructions'] : 'None recorded') ?></strong>
+                        <span class="clinic-label"><?= e($profileDetailLabel) ?></span>
+                        <strong><?= e($profileDetailValue) ?></strong>
+                    </div>
+                    <div class="patient-profile-note">
+                        <span class="clinic-label">Account Status / Emergency Instructions</span>
+                        <strong><?= e(ucfirst((string) ($patient['account_status'] ?: 'Not specified'))) ?></strong>
+                        <strong class="whitespace-pre-wrap text-slate-600"><?= e(trim((string) $patient['emergency_instructions']) !== '' ? $patient['emergency_instructions'] : 'No emergency instructions recorded') ?></strong>
                     </div>
                 </div>
             </div>
@@ -314,7 +371,7 @@ render_header($fullName . ' - Patient Profile');
                 </div>
                 <div>
                     <h2 class="font-headline text-xl font-extrabold text-[#17261d] m-0">Care Timeline</h2>
-                    <p class="text-xs font-bold text-slate-500 m-0"><?= count($visits) ?> visit record(s), newest priority records shown first.</p>
+                    <p class="text-xs font-bold text-slate-500 m-0"><?= count($visits) ?> visit record(s), newest records shown first.</p>
                 </div>
             </div>
             <a class="btn btn-sm btn-outline text-decoration-none" href="<?= app_url('visits/index.php?q=' . rawurlencode((string) $patient['id_number']) . '&status=all') ?>">
@@ -330,21 +387,26 @@ render_header($fullName . ' - Patient Profile');
                     $visitStatus = $visit['status'] ?? 'Unaddressed';
                     $visitPurpose = $visit['visit_purpose'] ?: 'General Visit';
                     $visitSource = $visit['visit_source'] ?: 'Staff Recorded';
+                    $latestSymptoms = $visit['entries'][0]['symptoms'] ?? '';
+                    $allVisitVitals = $visit['vitals'] ?? [];
+                    foreach ($visit['entries'] as $entry) {
+                        $allVisitVitals = array_merge($allVisitVitals, $entry['vitals'] ?? []);
+                    }
                     $vitalBits = [];
-                    if ($visit['temperature'] !== null && $visit['temperature'] !== '') {
-                        $vitalBits[] = 'Temp ' . $visit['temperature'] . ' C';
-                    }
-                    if ($visit['blood_pressure']) {
-                        $vitalBits[] = 'BP ' . $visit['blood_pressure'];
-                    }
-                    if ($visit['pulse_rate']) {
-                        $vitalBits[] = 'Pulse ' . (int) $visit['pulse_rate'] . ' BPM';
-                    }
-                    if (($visit['spo2'] ?? '') !== '') {
-                        $vitalBits[] = 'SpO2 ' . $visit['spo2'] . '%';
+                    $latestVital = $allVisitVitals[0] ?? null;
+                    if ($latestVital) {
+                        if ($latestVital['temperature'] !== null && $latestVital['temperature'] !== '') {
+                            $vitalBits[] = 'Temp ' . $latestVital['temperature'] . ' C';
+                        }
+                        if ($latestVital['blood_pressure']) {
+                            $vitalBits[] = 'BP ' . $latestVital['blood_pressure'];
+                        }
+                        if ($latestVital['pulse_rate']) {
+                            $vitalBits[] = 'Pulse ' . (int) $latestVital['pulse_rate'] . ' BPM';
+                        }
                     }
                     ?>
-                    <a class="patient-profile-event" href="<?= e(app_url('visits/view.php?id=' . (int) $visit['id'] . '&from=profile')) ?>">
+                    <article class="patient-profile-event">
                         <div class="patient-profile-event-icon">
                             <span class="material-symbols-outlined">medical_information</span>
                         </div>
@@ -354,8 +416,8 @@ render_header($fullName . ' - Patient Profile');
                                 <span class="text-[11px] font-black uppercase tracking-widest text-slate-400"><?= e($visitPurpose) ?> / <?= e($visitSource) ?></span>
                             </div>
                             <h3 class="text-base font-extrabold text-slate-900 mb-1"><?= e($visit['chief_complaint'] ?: 'No complaint recorded') ?></h3>
-                            <?php if ($visit['symptoms']): ?>
-                                <p class="text-sm font-bold text-slate-500 mb-2 whitespace-pre-wrap"><?= e($visit['symptoms']) ?></p>
+                            <?php if ($latestSymptoms): ?>
+                                <p class="text-sm font-bold text-slate-500 mb-2 whitespace-pre-wrap"><?= e($latestSymptoms) ?></p>
                             <?php endif; ?>
                             <?php if ($vitalBits): ?>
                                 <p class="text-xs font-bold text-slate-500 mb-2"><?= e(implode(' / ', $vitalBits)) ?></p>
@@ -366,18 +428,109 @@ render_header($fullName . ' - Patient Profile');
                                 <span>Attended by <?= e($visit['attended_by_name'] ?: 'Not assigned') ?></span>
                             </div>
                             <?php if ($visit['action_taken']): ?>
-                                <p class="text-xs font-extrabold text-primary mt-2 whitespace-pre-wrap"><?= e($visit['action_taken']) ?></p>
+                                <div class="mt-3 rounded-xl border border-primary/10 bg-primary-fixed/40 px-4 py-3">
+                                    <p class="clinic-label mb-1">Visit Action Taken</p>
+                                    <p class="text-sm font-bold text-slate-700 m-0 whitespace-pre-wrap"><?= e($visit['action_taken']) ?></p>
+                                </div>
+                            <?php endif; ?>
+
+                            <?php if ($visit['entries']): ?>
+                                <div class="grid gap-3 mt-4">
+                                    <?php foreach ($visit['entries'] as $entry): ?>
+                                        <section class="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                                            <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                                                <p class="text-[11px] font-black uppercase tracking-widest text-primary m-0">Clinical Entry #<?= (int) $entry['entry_id'] ?></p>
+                                                <p class="text-[11px] font-bold text-slate-400 m-0">
+                                                    <?= e(date('M d, Y g:i A', strtotime($entry['created_at']))) ?>
+                                                    &bull; <?= e($entry['addressed_by_name'] ?: 'Clinic staff') ?>
+                                                </p>
+                                            </div>
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                <?php foreach ([
+                                                    'Symptoms' => $entry['symptoms'],
+                                                    'Diagnosis' => $entry['diagnosis'],
+                                                    'Treatment' => $entry['treatment'],
+                                                    'Referral' => $entry['referral'],
+                                                    'Remarks' => $entry['remarks'],
+                                                    'Amendment Reason' => $entry['amendment_reason'],
+                                                ] as $entryLabel => $entryValue): ?>
+                                                    <?php if (trim((string) $entryValue) !== ''): ?>
+                                                        <div class="patient-profile-field">
+                                                            <span class="clinic-label"><?= e($entryLabel) ?></span>
+                                                            <strong class="whitespace-pre-wrap"><?= e($entryValue) ?></strong>
+                                                        </div>
+                                                    <?php endif; ?>
+                                                <?php endforeach; ?>
+                                            </div>
+
+                                            <?php if ($entry['vitals']): ?>
+                                                <div class="mt-3">
+                                                    <p class="clinic-label mb-2">Vital Signs</p>
+                                                    <div class="flex flex-wrap gap-2">
+                                                        <?php foreach ($entry['vitals'] as $vital): ?>
+                                                            <?php
+                                                            $entryVitalBits = [];
+                                                            if ($vital['temperature'] !== null && $vital['temperature'] !== '') $entryVitalBits[] = 'Temp ' . $vital['temperature'] . ' C';
+                                                            if ($vital['blood_pressure']) $entryVitalBits[] = 'BP ' . $vital['blood_pressure'];
+                                                            if ($vital['pulse_rate']) $entryVitalBits[] = 'Pulse ' . (int) $vital['pulse_rate'] . ' BPM';
+                                                            ?>
+                                                            <span class="badge badge-pending"><?= e(implode(' / ', $entryVitalBits) ?: 'Vitals recorded') ?></span>
+                                                        <?php endforeach; ?>
+                                                    </div>
+                                                </div>
+                                            <?php endif; ?>
+
+                                            <?php if ($entry['dispensings']): ?>
+                                                <div class="mt-3">
+                                                    <p class="clinic-label mb-2">Medicines Dispensed</p>
+                                                    <div class="grid gap-2">
+                                                        <?php foreach ($entry['dispensings'] as $dispensing): ?>
+                                                            <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white border border-slate-200 px-3 py-2">
+                                                                <strong class="text-sm text-slate-700"><?= e($dispensing['item_name']) ?> &bull; <?= (int) $dispensing['quantity'] ?> <?= e($dispensing['unit']) ?></strong>
+                                                                <span class="text-[11px] font-bold text-slate-400"><?= e($dispensing['dispensed_by_name'] ?: 'Clinic staff') ?></span>
+                                                                <?php if (trim((string) $dispensing['remarks']) !== ''): ?>
+                                                                    <p class="w-full text-xs font-bold text-slate-500 m-0 whitespace-pre-wrap"><?= e($dispensing['remarks']) ?></p>
+                                                                <?php endif; ?>
+                                                            </div>
+                                                        <?php endforeach; ?>
+                                                    </div>
+                                                </div>
+                                            <?php endif; ?>
+                                        </section>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php elseif (!$visit['vitals'] && !$visit['action_taken']): ?>
+                                <div class="mt-3 rounded-xl border border-dashed border-slate-200 px-4 py-3 text-xs font-bold text-slate-400">
+                                    No clinical entry or vital signs have been added to this visit yet.
+                                </div>
+                            <?php endif; ?>
+
+                            <?php if ($visit['vitals']): ?>
+                                <div class="mt-3">
+                                    <p class="clinic-label mb-2">Visit-level Vital Signs</p>
+                                    <div class="flex flex-wrap gap-2">
+                                        <?php foreach ($visit['vitals'] as $vital): ?>
+                                            <?php
+                                            $visitVitalBits = [];
+                                            if ($vital['temperature'] !== null && $vital['temperature'] !== '') $visitVitalBits[] = 'Temp ' . $vital['temperature'] . ' C';
+                                            if ($vital['blood_pressure']) $visitVitalBits[] = 'BP ' . $vital['blood_pressure'];
+                                            if ($vital['pulse_rate']) $visitVitalBits[] = 'Pulse ' . (int) $vital['pulse_rate'] . ' BPM';
+                                            ?>
+                                            <span class="badge badge-pending"><?= e(implode(' / ', $visitVitalBits) ?: 'Vitals recorded') ?></span>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
                             <?php endif; ?>
                         </div>
                         <div class="patient-profile-event-meta text-right shrink-0">
                             <p class="text-xs font-extrabold text-slate-500 mb-0"><?= e(date('M d, Y', strtotime($visit['visit_datetime']))) ?></p>
                             <p class="text-[11px] font-bold text-slate-400 mb-2"><?= e(date('g:i A', strtotime($visit['visit_datetime']))) ?></p>
-                            <span class="text-xs font-black text-primary inline-flex items-center gap-1">
+                            <a href="<?= e(app_url('visits/view.php?id=' . (int) $visit['id'] . '&from=profile')) ?>" class="text-xs font-black text-primary inline-flex items-center gap-1 text-decoration-none">
                                 Open record
                                 <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
-                            </span>
+                            </a>
                         </div>
-                    </a>
+                    </article>
                 <?php endforeach; ?>
             </div>
         <?php else: ?>

@@ -2452,12 +2452,14 @@ textarea.record-sheet-field {
     pointer-events: none;
 }
 
-#recentPatientAccounts .pagination {
+#recentPatientAccounts .pagination,
+#patientsPagination {
     gap: 0.55rem;
     padding: 1.35rem 1.5rem;
 }
 
-#recentPatientAccounts .pagination button {
+#recentPatientAccounts .pagination button,
+#patientsPagination button {
     min-width: 2.5rem;
     height: 2.5rem;
     padding: 0 0.85rem;
@@ -2465,7 +2467,8 @@ textarea.record-sheet-field {
     line-height: 1;
 }
 
-#recentPatientAccounts .pagination .page-active {
+#recentPatientAccounts .pagination .page-active,
+#patientsPagination .page-active {
     background: var(--cliniq-primary);
     color: #ffffff;
     box-shadow: 0 5px 14px rgba(var(--cliniq-focus-rgb), 0.2);
@@ -2575,6 +2578,11 @@ textarea.record-sheet-field {
 .cliniq-ag-grid-compact {
     height: 390px;
     min-height: 340px;
+}
+
+.cliniq-ag-grid-patient-registry {
+    height: 888px;
+    min-height: 888px;
 }
 
 .cliniq-ag-grid-fill {

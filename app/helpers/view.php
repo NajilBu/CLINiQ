@@ -216,7 +216,7 @@ function render_header(string $title): void
         <link rel="stylesheet" href="<?= app_url('assets/vendor/ag-grid/ag-grid.css?v=31') ?>">
         <link rel="stylesheet" href="<?= app_url('assets/vendor/ag-grid/ag-theme-quartz.css?v=31') ?>">
         <script src="<?= app_url('assets/vendor/ag-grid/ag-grid-community.min.js?v=31') ?>"></script>
-        <link href="<?= app_url('assets/css/app.css?v=patient-account-pagination-1') ?>" rel="stylesheet">
+        <link href="<?= app_url('assets/css/app.css?v=patient-registry-pagination-1') ?>" rel="stylesheet">
         <style>
             :root {
                 --cliniq-primary: <?= e($theme['primary']) ?>;
@@ -330,7 +330,7 @@ function render_footer(): void
         <?php endif; ?>
     <?php render_flash_toasts(); ?>
     <script src="<?= app_url('assets/js/app.js?v=form-action-fix-1') ?>"></script>
-    <script src="<?= app_url('assets/js/ag-grid-tables.js?v=6') ?>"></script>
+    <script src="<?= app_url('assets/js/ag-grid-tables.js?v=patient-number-column-1') ?>"></script>
     </body>
     </html>
     <?php
@@ -341,19 +341,53 @@ function render_footer(): void
  */
 function render_ag_grid(string $gridId, array $columns, array $rows, array $options = []): void
 {
+    $hasRowNumberColumn = false;
+    foreach ($columns as $column) {
+        if (($column['field'] ?? '') === 'rowNumber') {
+            $hasRowNumberColumn = true;
+            break;
+        }
+    }
+    if (!$hasRowNumberColumn) {
+        array_unshift($columns, [
+            'headerName' => 'No.',
+            'field' => 'rowNumber',
+            'width' => 70,
+            'minWidth' => 70,
+            'maxWidth' => 70,
+            'flex' => 0,
+            'suppressSizeToFit' => true,
+            'sortable' => false,
+            'filter' => false,
+        ]);
+    }
+    foreach ($rows as $rowIndex => &$row) {
+        if (!array_key_exists('rowNumber', $row)) {
+            $row['rowNumber'] = $rowIndex + 1;
+        }
+    }
+    unset($row);
+
     $pageSize = $options['pageSize'] ?? 25;
     $height = $options['height'] ?? 'standard';
     $heightClass = match ($height) {
         'compact' => 'cliniq-ag-grid-compact',
         'fill' => 'cliniq-ag-grid-fill',
+        'patient-registry' => 'cliniq-ag-grid-patient-registry',
         default => 'cliniq-ag-grid-standard',
     };
     $searchInput = $options['searchInput'] ?? '';
     $fitColumns = $options['fitColumns'] ?? true;
+    $pagination = !empty($options['pagination']);
+    $paginationControls = (string) ($options['paginationControls'] ?? '');
+    $rowHeight = max(40, (int) ($options['rowHeight'] ?? 70));
 
     echo '<div id="' . e($gridId) . '" class="cliniq-ag-grid ag-theme-quartz ' . $heightClass . '" data-ag-grid ' .
          ($searchInput ? 'data-search-input="' . e($searchInput) . '" ' : '') .
+         ($paginationControls ? 'data-pagination-controls="' . e($paginationControls) . '" ' : '') .
          ($fitColumns ? 'data-fit-columns="true" ' : 'data-fit-columns="false" ') .
+         ($pagination ? 'data-pagination="true" ' : 'data-pagination="false" ') .
+         'data-row-height="' . $rowHeight . '" ' .
          'data-page-size="' . (int)$pageSize . '" ' .
          'data-empty-title="' . e($options['emptyTitle'] ?? '') . '" ' .
          'data-empty-text="' . e($options['emptyText'] ?? '') . '">';

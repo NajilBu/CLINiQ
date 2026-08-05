@@ -54,7 +54,7 @@ function cliniq_visit_patients(string $search = '', int $limit = 500): array
             pe.middle_name,
             pe.last_name,
             pe.birthdate,
-            NULL AS sex,
+            pe.sex,
             COALESCE(
                 NULLIF(TRIM(CONCAT(pr.program_code, '-', s.year_level, UPPER(s.section))), ''),
                 ed.department_code,
@@ -284,7 +284,7 @@ function cliniq_visit_fetch(int $visitId): ?array
             pe.last_name,
             pe.id_number,
             pe.birthdate,
-            NULL AS sex,
+            pe.sex,
             COALESCE(
                 NULLIF(TRIM(CONCAT(pr.program_code, '-', s.year_level, UPPER(s.section))), ''),
                 ed.department_code,

@@ -278,11 +278,8 @@ $logbookRemarksValue = $isReadOnlyLogbook ? $sheetRemarks : '';
 $readOnlyAttr = $isReadOnlyLogbook ? ' readonly' : '';
 $disabledAttr = $isReadOnlyLogbook ? ' disabled' : '';
 $pageTitle = $canAddressFromLogbook ? 'Address Clinic Visit' : ($canEndFromLogbook ? 'End Clinic Visit' : 'Visit Treatment');
-$legacyPatientStmt = db()->prepare('SELECT id FROM patients WHERE id_number = ? LIMIT 1');
-$legacyPatientStmt->execute([$visit['id_number']]);
-$legacyPatientId = (int) $legacyPatientStmt->fetchColumn();
-$patientProfileUrl = $legacyPatientId > 0
-    ? app_url('patients/view.php?id=' . $legacyPatientId)
+$patientProfileUrl = (int) ($visit['patient_id'] ?? 0) > 0
+    ? app_url('patients/view.php?id=' . (int) $visit['patient_id'])
     : app_url('patients/index.php');
 $visitBackUrl = $isProfileMode ? $patientProfileUrl : 'index.php';
 set_page_back_link($visitBackUrl, $isProfileMode ? 'Profile' : 'Logbook');

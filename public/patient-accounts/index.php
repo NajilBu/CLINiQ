@@ -233,7 +233,8 @@ render_clinic_command_header(
             <table class="w-full text-sm">
                 <thead class="bg-slate-50 text-left">
                     <tr>
-                        <th class="p-3">Row</th>
+                        <th class="p-3">No.</th>
+                        <th class="p-3">Source Row</th>
                         <th class="p-3">ID Number</th>
                         <th class="p-3">Name</th>
                         <th class="p-3">Type</th>
@@ -242,8 +243,9 @@ render_clinic_command_header(
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($bulkResults as $result): ?>
+                    <?php foreach ($bulkResults as $resultIndex => $result): ?>
                         <tr class="border-t border-slate-100">
+                            <td class="p-3 font-bold text-slate-500"><?= $resultIndex + 1 ?></td>
                             <td class="p-3"><?= e($result['row']) ?></td>
                             <td class="p-3 font-bold"><?= e($result['id_number']) ?></td>
                             <td class="p-3"><?= e($result['name']) ?></td>
@@ -271,6 +273,7 @@ render_clinic_command_header(
         <table class="w-full text-sm">
             <thead class="bg-slate-50 text-left">
                 <tr>
+                    <th class="p-3">No.</th>
                     <th class="p-3">ID Number</th>
                     <th class="p-3">Patient</th>
                     <th class="p-3">Type</th>
@@ -282,6 +285,7 @@ render_clinic_command_header(
             <tbody>
                 <?php foreach ($recentAccounts as $accountIndex => $account): ?>
                     <tr class="border-t border-slate-100" style="height: 49px<?= $accountIndex >= $recentAccountPageSize ? '; display: none' : '' ?>" data-recent-account-row>
+                        <td class="p-3 font-bold text-slate-500"><?= $accountIndex + 1 ?></td>
                         <td class="p-3 font-bold"><?= e($account['id_number']) ?></td>
                         <td class="p-3"><?= e($account['full_name']) ?></td>
                         <td class="p-3"><?= e($account['patient_type']) ?></td>
@@ -292,7 +296,7 @@ render_clinic_command_header(
                 <?php endforeach; ?>
                 <?php for ($emptyRow = 0; $emptyRow < $recentAccountPageSize; $emptyRow++): ?>
                     <tr class="border-t border-slate-100" style="height: 49px<?= $emptyRow < max(0, $recentAccountPageSize - min($recentAccountPageSize, count($recentAccounts))) ? '' : '; display: none' ?>" aria-hidden="true" data-recent-account-empty-row>
-                        <td colspan="6" class="p-3">&nbsp;</td>
+                        <td colspan="7" class="p-3">&nbsp;</td>
                     </tr>
                 <?php endfor; ?>
             </tbody>
@@ -615,8 +619,8 @@ excelFile?.addEventListener('change', async () => {
 
         const previewRows = rows.slice(0, 20);
         excelPreview.innerHTML = `<table class="w-full text-xs">
-            <thead class="bg-slate-50"><tr><th class="p-2 text-left">ID</th><th class="p-2 text-left">Type</th><th class="p-2 text-left">Name</th><th class="p-2 text-left">Birthdate</th><th class="p-2 text-left">Sex</th></tr></thead>
-            <tbody>${previewRows.map(row => `<tr class="border-t border-slate-100"><td class="p-2">${escapeHtml(row.id_number)}</td><td class="p-2">${escapeHtml(row.patient_type)}</td><td class="p-2">${escapeHtml([row.first_name,row.middle_name,row.last_name].filter(Boolean).join(' '))}</td><td class="p-2">${escapeHtml(row.birthdate)}</td><td class="p-2">${escapeHtml(row.sex)}</td></tr>`).join('')}</tbody>
+            <thead class="bg-slate-50"><tr><th class="p-2 text-left">No.</th><th class="p-2 text-left">ID</th><th class="p-2 text-left">Type</th><th class="p-2 text-left">Name</th><th class="p-2 text-left">Birthdate</th><th class="p-2 text-left">Sex</th></tr></thead>
+            <tbody>${previewRows.map((row, index) => `<tr class="border-t border-slate-100"><td class="p-2 font-bold text-slate-500">${index + 1}</td><td class="p-2">${escapeHtml(row.id_number)}</td><td class="p-2">${escapeHtml(row.patient_type)}</td><td class="p-2">${escapeHtml([row.first_name,row.middle_name,row.last_name].filter(Boolean).join(' '))}</td><td class="p-2">${escapeHtml(row.birthdate)}</td><td class="p-2">${escapeHtml(row.sex)}</td></tr>`).join('')}</tbody>
         </table>${rows.length > 20 ? `<p class="text-xs font-bold text-slate-500 mt-2">Showing 20 of ${rows.length} rows.</p>` : ''}`;
     } catch (error) {
         excelMessage.textContent = error instanceof Error ? error.message : 'Unable to read the Excel workbook.';
