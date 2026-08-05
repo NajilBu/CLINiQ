@@ -15,11 +15,55 @@
         return params.value || '';
     }
 
+    function compareSortValues(left, right, type) {
+        const leftMissing = left === null || left === undefined || left === '';
+        const rightMissing = right === null || right === undefined || right === '';
+        if (leftMissing || rightMissing) {
+            if (leftMissing && rightMissing) return 0;
+            return leftMissing ? 1 : -1;
+        }
+
+        if (type === 'number') {
+            return Number(left) - Number(right);
+        }
+
+        if (type === 'date') {
+            const leftTime = Date.parse(String(left));
+            const rightTime = Date.parse(String(right));
+            if (Number.isFinite(leftTime) && Number.isFinite(rightTime)) {
+                return leftTime - rightTime;
+            }
+        }
+
+        return String(left).localeCompare(String(right), undefined, {
+            numeric: true,
+            sensitivity: 'base'
+        });
+    }
+
     function normalizeColumns(columns, shouldFitColumns) {
         return columns.map((column) => {
             const nextColumn = { ...column };
             if (nextColumn.cellRenderer === 'html') {
                 nextColumn.cellRenderer = htmlRenderer;
+            }
+
+            if (nextColumn.sortField) {
+                const sortField = nextColumn.sortField;
+                const sortType = nextColumn.sortType || 'text';
+                nextColumn.comparator = (left, right, leftNode, rightNode) => compareSortValues(
+                    leftNode && leftNode.data ? leftNode.data[sortField] : left,
+                    rightNode && rightNode.data ? rightNode.data[sortField] : right,
+                    sortType
+                );
+                delete nextColumn.sortField;
+                delete nextColumn.sortType;
+            }
+
+            if (nextColumn.field === 'rowNumber') {
+                nextColumn.valueGetter = (params) => params.node && params.node.rowIndex !== null
+                    ? params.node.rowIndex + 1
+                    : '';
             }
 
             if (shouldFitColumns && nextColumn.suppressSizeToFit !== true) {
@@ -116,6 +160,12 @@
             }
         }
 
+        function refreshRowNumbers(api) {
+            if (api && api.refreshCells) {
+                api.refreshCells({ columns: ['rowNumber'], force: true });
+            }
+        }
+
         const gridOptions = {
             rowData,
             columnDefs,
@@ -145,7 +195,12 @@
             },
             onCellClicked: navigateRow,
             onRowClicked: navigateRow,
-            onPaginationChanged: (params) => renderPaginationControls(params.api)
+            onPaginationChanged: (params) => {
+                renderPaginationControls(params.api);
+                refreshRowNumbers(params.api);
+            },
+            onSortChanged: (params) => refreshRowNumbers(params.api),
+            onFilterChanged: (params) => refreshRowNumbers(params.api)
         };
 
         function announceGridReady(params) {

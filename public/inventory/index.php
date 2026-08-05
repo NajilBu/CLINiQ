@@ -84,49 +84,49 @@ if (!in_array($highlightTarget, ['low-stock', 'expiring', 'active-loans'], true)
 }
 
 $activeColumns = [
-    ['headerName' => 'Item', 'field' => 'itemHtml', 'cellRenderer' => 'html', 'minWidth' => 230, 'flex' => 1.2],
-    ['headerName' => 'Category', 'field' => 'categoryHtml', 'cellRenderer' => 'html', 'minWidth' => 150, 'flex' => 0.8],
-    ['headerName' => 'Stock Level', 'field' => 'stockHtml', 'cellRenderer' => 'html', 'minWidth' => 220, 'flex' => 1],
+    ['headerName' => 'Item', 'field' => 'itemHtml', 'cellRenderer' => 'html', 'sortField' => 'itemSort', 'minWidth' => 230, 'flex' => 1.2],
+    ['headerName' => 'Category', 'field' => 'categoryHtml', 'cellRenderer' => 'html', 'sortField' => 'categorySort', 'minWidth' => 150, 'flex' => 0.8],
+    ['headerName' => 'Stock Level', 'field' => 'stockHtml', 'cellRenderer' => 'html', 'sortField' => 'stockSort', 'sortType' => 'number', 'minWidth' => 220, 'flex' => 1],
     ['headerName' => 'Reorder At', 'field' => 'reorderLevel', 'minWidth' => 120, 'flex' => 0.6],
-    ['headerName' => 'Expiration', 'field' => 'expirationHtml', 'cellRenderer' => 'html', 'minWidth' => 140, 'flex' => 0.7],
-    ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'minWidth' => 160, 'flex' => 0.8],
+    ['headerName' => 'Expiration', 'field' => 'expirationHtml', 'cellRenderer' => 'html', 'sortField' => 'expirationSort', 'sortType' => 'date', 'minWidth' => 140, 'flex' => 0.7],
+    ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'sortField' => 'statusSort', 'sortType' => 'number', 'minWidth' => 160, 'flex' => 0.8],
     ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'minWidth' => 150, 'flex' => 0.65],
 ];
 
 $archivedColumns = [
-    ['headerName' => 'Item', 'field' => 'itemHtml', 'cellRenderer' => 'html', 'minWidth' => 230, 'flex' => 1.2],
-    ['headerName' => 'Category', 'field' => 'categoryHtml', 'cellRenderer' => 'html', 'minWidth' => 150, 'flex' => 0.8],
-    ['headerName' => 'Final Stock', 'field' => 'quantityHtml', 'cellRenderer' => 'html', 'minWidth' => 140, 'flex' => 0.7],
-    ['headerName' => 'Expiration', 'field' => 'expirationHtml', 'cellRenderer' => 'html', 'minWidth' => 140, 'flex' => 0.7],
-    ['headerName' => 'Archived', 'field' => 'archivedHtml', 'cellRenderer' => 'html', 'minWidth' => 180, 'flex' => 0.9],
+    ['headerName' => 'Item', 'field' => 'itemHtml', 'cellRenderer' => 'html', 'sortField' => 'itemSort', 'minWidth' => 230, 'flex' => 1.2],
+    ['headerName' => 'Category', 'field' => 'categoryHtml', 'cellRenderer' => 'html', 'sortField' => 'categorySort', 'minWidth' => 150, 'flex' => 0.8],
+    ['headerName' => 'Final Stock', 'field' => 'quantityHtml', 'cellRenderer' => 'html', 'sortField' => 'quantitySort', 'sortType' => 'number', 'minWidth' => 140, 'flex' => 0.7],
+    ['headerName' => 'Expiration', 'field' => 'expirationHtml', 'cellRenderer' => 'html', 'sortField' => 'expirationSort', 'sortType' => 'date', 'minWidth' => 140, 'flex' => 0.7],
+    ['headerName' => 'Archived', 'field' => 'archivedHtml', 'cellRenderer' => 'html', 'sortField' => 'archivedSort', 'sortType' => 'date', 'minWidth' => 180, 'flex' => 0.9],
     ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'minWidth' => 120, 'flex' => 0.55],
 ];
 
 $equipmentColumns = [
-    ['headerName' => 'Equipment', 'field' => 'itemHtml', 'cellRenderer' => 'html', 'minWidth' => 260, 'flex' => 1.3],
-    ['headerName' => 'Category', 'field' => 'categoryHtml', 'cellRenderer' => 'html', 'minWidth' => 160, 'flex' => 0.8],
-    ['headerName' => 'Available', 'field' => 'stockHtml', 'cellRenderer' => 'html', 'minWidth' => 220, 'flex' => 1],
+    ['headerName' => 'Equipment', 'field' => 'itemHtml', 'cellRenderer' => 'html', 'sortField' => 'itemSort', 'minWidth' => 260, 'flex' => 1.3],
+    ['headerName' => 'Category', 'field' => 'categoryHtml', 'cellRenderer' => 'html', 'sortField' => 'categorySort', 'minWidth' => 160, 'flex' => 0.8],
+    ['headerName' => 'Available', 'field' => 'stockHtml', 'cellRenderer' => 'html', 'sortField' => 'stockSort', 'sortType' => 'number', 'minWidth' => 220, 'flex' => 1],
     ['headerName' => 'Minimum Available', 'field' => 'reorderLevel', 'minWidth' => 170, 'flex' => 0.75],
-    ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'minWidth' => 160, 'flex' => 0.8],
+    ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'sortField' => 'statusSort', 'sortType' => 'number', 'minWidth' => 160, 'flex' => 0.8],
     ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'minWidth' => 120, 'flex' => 0.55],
 ];
 
 $loanColumns = [
-    ['headerName' => 'Item', 'field' => 'itemHtml', 'cellRenderer' => 'html', 'minWidth' => 220, 'flex' => 1.1],
-    ['headerName' => 'Borrower', 'field' => 'borrowerHtml', 'cellRenderer' => 'html', 'minWidth' => 220, 'flex' => 1],
-    ['headerName' => 'Borrowed', 'field' => 'borrowedHtml', 'cellRenderer' => 'html', 'minWidth' => 150, 'flex' => 0.7],
-    ['headerName' => 'Qty', 'field' => 'quantityHtml', 'cellRenderer' => 'html', 'minWidth' => 90, 'flex' => 0.4],
-    ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'minWidth' => 130, 'flex' => 0.6],
-    ['headerName' => 'Condition', 'field' => 'conditionHtml', 'cellRenderer' => 'html', 'minWidth' => 140, 'flex' => 0.65],
+    ['headerName' => 'Item', 'field' => 'itemHtml', 'cellRenderer' => 'html', 'sortField' => 'itemSort', 'minWidth' => 220, 'flex' => 1.1],
+    ['headerName' => 'Borrower', 'field' => 'borrowerHtml', 'cellRenderer' => 'html', 'sortField' => 'borrowerSort', 'minWidth' => 220, 'flex' => 1],
+    ['headerName' => 'Borrowed', 'field' => 'borrowedHtml', 'cellRenderer' => 'html', 'sortField' => 'borrowedSort', 'sortType' => 'date', 'minWidth' => 150, 'flex' => 0.7],
+    ['headerName' => 'Qty', 'field' => 'quantityHtml', 'cellRenderer' => 'html', 'sortField' => 'quantitySort', 'sortType' => 'number', 'minWidth' => 90, 'flex' => 0.4],
+    ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'sortField' => 'statusSort', 'sortType' => 'number', 'minWidth' => 130, 'flex' => 0.6],
+    ['headerName' => 'Condition', 'field' => 'conditionHtml', 'cellRenderer' => 'html', 'sortField' => 'conditionSort', 'minWidth' => 140, 'flex' => 0.65],
     ['headerName' => 'Actions / Notes', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'minWidth' => 210, 'flex' => 1],
 ];
 
 $activityColumns = [
-    ['headerName' => 'Date / Time', 'field' => 'date', 'minWidth' => 175, 'flex' => 0.8],
-    ['headerName' => 'Item', 'field' => 'itemHtml', 'cellRenderer' => 'html', 'minWidth' => 220, 'flex' => 1.1],
-    ['headerName' => 'Activity', 'field' => 'typeHtml', 'cellRenderer' => 'html', 'minWidth' => 140, 'flex' => 0.7],
-    ['headerName' => 'Change', 'field' => 'changeHtml', 'cellRenderer' => 'html', 'minWidth' => 110, 'flex' => 0.5],
-    ['headerName' => 'Balance', 'field' => 'balance', 'minWidth' => 100, 'flex' => 0.45],
+    ['headerName' => 'Date / Time', 'field' => 'date', 'sortField' => 'dateSort', 'sortType' => 'date', 'minWidth' => 175, 'flex' => 0.8],
+    ['headerName' => 'Item', 'field' => 'itemHtml', 'cellRenderer' => 'html', 'sortField' => 'itemSort', 'minWidth' => 220, 'flex' => 1.1],
+    ['headerName' => 'Activity', 'field' => 'typeHtml', 'cellRenderer' => 'html', 'sortField' => 'typeSort', 'minWidth' => 140, 'flex' => 0.7],
+    ['headerName' => 'Change', 'field' => 'changeHtml', 'cellRenderer' => 'html', 'sortField' => 'changeSort', 'sortType' => 'number', 'minWidth' => 110, 'flex' => 0.5],
+    ['headerName' => 'Balance', 'field' => 'balance', 'sortField' => 'balanceSort', 'sortType' => 'number', 'minWidth' => 100, 'flex' => 0.45],
     ['headerName' => 'Staff', 'field' => 'staff', 'minWidth' => 170, 'flex' => 0.8],
     ['headerName' => 'Notes', 'field' => 'notes', 'minWidth' => 240, 'flex' => 1.2],
 ];
@@ -189,10 +189,15 @@ foreach ($visibleItems as $item) {
         $restoreMessage = e('Restore ' . $item['item_name'] . ' to active inventory?');
         $inventoryRows[] = [
             'highlightKeys' => [],
+            'itemSort' => $item['item_name'],
             'itemHtml' => '<div><strong class="text-sm text-slate-800">' . e($item['item_name']) . '</strong><p class="text-xs font-bold text-slate-400 mb-0">Archived inventory record</p></div>',
+            'categorySort' => $category,
             'categoryHtml' => '<span class="badge badge-cancelled">' . e($category !== '' ? $category : 'Uncategorized') . '</span>',
+            'quantitySort' => (int) $item['quantity'],
             'quantityHtml' => '<span class="text-sm font-bold text-slate-700">' . (int) $item['quantity'] . ' ' . e($item['unit']) . '</span>',
+            'expirationSort' => $item['expiration_date'],
             'expirationHtml' => '<span class="text-sm font-bold text-slate-500">' . e($expirationLabel) . '</span>',
+            'archivedSort' => $item['archived_at'],
             'archivedHtml' => '<div><strong class="text-sm text-slate-700">' . e(date('M d, Y', strtotime($item['archived_at']))) . '</strong><p class="text-xs font-bold text-slate-400 mb-0">' . e($item['archived_by_name'] ?: 'System') . '</p></div>',
             'reasonHtml' => '<span class="text-sm font-bold text-slate-500">' . e($item['archived_reason'] ?: 'No reason recorded') . '</span>',
             'actionsHtml' => '<form method="post" action="restore.php" class="flex justify-end" data-inventory-form><input type="hidden" name="id" value="' . (int) $item['id'] . '"><button type="submit" class="btn btn-sm btn-outline" data-confirm-submit data-confirm-type="primary" data-confirm-title="Restore inventory item?" data-confirm-message="' . $restoreMessage . '" data-confirm-toast="Restoring inventory item..."><span class="material-symbols-outlined text-[14px]">restore</span>Restore</button></form>',
@@ -219,11 +224,16 @@ foreach ($visibleItems as $item) {
 
     $inventoryRows[] = [
         'highlightKeys' => $highlightKeys,
+        'itemSort' => $item['item_name'],
         'itemHtml' => '<div><strong class="text-sm text-slate-800">' . e($item['item_name']) . '</strong><p class="text-xs font-bold text-slate-400 mb-0">' . e($item['item_code'] . ' / ' . ($category !== '' ? $category : 'No type')) . '</p></div>',
+        'categorySort' => $category,
         'categoryHtml' => '<span class="text-sm font-bold text-slate-600">' . e($category !== '' ? $category : '-') . '</span>',
+        'stockSort' => (int) $item['quantity'],
         'stockHtml' => '<div class="flex flex-col items-start gap-1"><span class="text-sm font-bold ' . ($isLow ? 'text-amber-600' : 'text-slate-600') . '">' . (int) $item['quantity'] . ' ' . e($item['unit']) . '</span><span class="stock-bar"><span class="stock-bar-fill ' . e($barClass) . '" style="width: ' . (int) $pct . '%"></span></span></div>',
         'reorderLevel' => (int) $item['reorder_level'],
+        'expirationSort' => $item['expiration_date'],
         'expirationHtml' => '<span class="text-sm font-bold ' . $expirationClass . '">' . e($expirationLabel) . '</span>',
+        'statusSort' => $isLow ? 0 : ($isExpiring ? 1 : 2),
         'statusHtml' => inventory_status_badge($displayQuantityForStatus),
         'actionsHtml' => $actionsHtml,
     ];
@@ -233,10 +243,15 @@ $activityRows = [];
 foreach ($inventoryTransactions as $transaction) {
     $change = (int) $transaction['quantity_change'];
     $activityRows[] = [
+        'dateSort' => $transaction['created_at'],
         'date' => date('M d, Y g:i A', strtotime($transaction['created_at'])),
+        'itemSort' => $transaction['item_name'],
         'itemHtml' => '<div><strong class="text-sm text-slate-800">' . e($transaction['item_name']) . '</strong><p class="text-xs font-bold text-slate-400 mb-0">' . e($transaction['item_code'] . ' / ' . $transaction['item_type']) . '</p></div>',
+        'typeSort' => $transaction['transaction_type'],
         'typeHtml' => '<span class="badge ' . ($change < 0 ? 'badge-pending' : 'badge-completed') . '">' . e($transaction['transaction_type']) . '</span>',
+        'changeSort' => $change,
         'changeHtml' => '<strong class="text-sm ' . ($change < 0 ? 'text-red-600' : 'text-emerald-700') . '">' . ($change > 0 ? '+' : '') . $change . ' ' . e($transaction['unit']) . '</strong>',
+        'balanceSort' => (int) $transaction['balance_after'],
         'balance' => (int) $transaction['balance_after'] . ' ' . $transaction['unit'],
         'staff' => $transaction['performed_by_name'] ?: 'System',
         'notes' => $transaction['notes'] ?: '-',
@@ -262,11 +277,17 @@ foreach ($loanRowsRaw as $loan) {
 
     $loanRows[] = [
         'highlightKeys' => $isBorrowed ? ['active-loans'] : [],
+        'itemSort' => $loan['item_name'],
         'itemHtml' => '<div><strong class="text-sm text-slate-800">' . e($loan['item_name']) . '</strong><p class="text-xs font-bold text-slate-400 mb-0">' . e($loan['category'] ?: 'Equipment') . '</p></div>',
+        'borrowerSort' => $loan['borrower_name'],
         'borrowerHtml' => '<div><strong class="text-sm text-slate-700">' . e($loan['borrower_name']) . '</strong><p class="text-xs font-bold text-slate-400 mb-0">' . e($loan['borrower_identifier'] ?: 'No ID recorded') . '</p></div>',
+        'borrowedSort' => $loan['borrowed_at'],
         'borrowedHtml' => '<div><strong class="text-sm text-slate-700">' . e(date('M d, g:i A', strtotime($loan['borrowed_at']))) . '</strong><p class="text-xs font-bold text-slate-400 mb-0">' . e($loan['borrowed_by_name'] ?: 'System') . '</p></div>',
+        'quantitySort' => (int) $loan['borrowed_quantity'],
         'quantityHtml' => '<span class="text-sm font-bold text-slate-700">' . (int) $loan['borrowed_quantity'] . ' ' . e($loan['unit'] ?: 'unit') . '</span>',
+        'statusSort' => array_search((string) $loan['status'], ['Overdue', 'Borrowed', 'Returned', 'Cancelled'], true),
         'statusHtml' => inventory_loan_status_badge((string) $loan['status']),
+        'conditionSort' => $loan['return_condition'] ?? '',
         'conditionHtml' => inventory_return_condition_badge($loan['return_condition'] ?? null),
         'actionsHtml' => $isBorrowed
             ? '<button onclick="openReturnLoan(' . $returnArgs . ')" class="btn btn-sm btn-outline"><span class="material-symbols-outlined text-[14px]">assignment_return</span>Return</button>'

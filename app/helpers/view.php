@@ -330,7 +330,7 @@ function render_footer(): void
         <?php endif; ?>
     <?php render_flash_toasts(); ?>
     <script src="<?= app_url('assets/js/app.js?v=form-action-fix-1') ?>"></script>
-    <script src="<?= app_url('assets/js/ag-grid-tables.js?v=patient-number-column-1') ?>"></script>
+    <script src="<?= app_url('assets/js/ag-grid-tables.js?v=correct-column-sorting-1') ?>"></script>
     </body>
     </html>
     <?php

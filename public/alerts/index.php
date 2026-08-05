@@ -29,13 +29,13 @@ foreach ($statusCountQuery->fetchAll() as $sc) {
 }
 
 $alertColumns = [
-    ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'width' => 150],
-    ['headerName' => 'Risk', 'field' => 'riskHtml', 'cellRenderer' => 'html', 'width' => 130],
+    ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'sortField' => 'statusSort', 'sortType' => 'number', 'width' => 150],
+    ['headerName' => 'Risk', 'field' => 'riskHtml', 'cellRenderer' => 'html', 'sortField' => 'riskSort', 'sortType' => 'number', 'width' => 130],
     ['headerName' => 'Patient', 'field' => 'patient', 'width' => 180],
-    ['headerName' => 'Reporter', 'field' => 'reporterHtml', 'cellRenderer' => 'html', 'minWidth' => 190],
+    ['headerName' => 'Reporter', 'field' => 'reporterHtml', 'cellRenderer' => 'html', 'sortField' => 'reporterSort', 'minWidth' => 190],
     ['headerName' => 'Location', 'field' => 'location'],
-    ['headerName' => 'Concern', 'field' => 'concernHtml', 'cellRenderer' => 'html', 'minWidth' => 240],
-    ['headerName' => 'Created', 'field' => 'created', 'width' => 150],
+    ['headerName' => 'Concern', 'field' => 'concernHtml', 'cellRenderer' => 'html', 'sortField' => 'concernSort', 'minWidth' => 240],
+    ['headerName' => 'Created', 'field' => 'created', 'sortField' => 'createdSort', 'sortType' => 'date', 'width' => 150],
     ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 220],
 ];
 $alertRows = [];
@@ -60,13 +60,18 @@ foreach ($alerts as $alert) {
 
     $alertRows[] = [
         'rowUrl' => 'view.php?id=' . (int)$alert['id'],
+        'statusSort' => array_search($alert['status'], ['Pending', 'In Progress', 'Resolved', 'Cancelled'], true),
         'statusHtml' => '<span class="badge ' . e(status_badge_class($alert['status'])) . '">' . e($alert['status']) . '</span>',
+        'riskSort' => array_search($riskLevel, ['Critical', 'High', 'Moderate', 'Low'], true),
         'riskHtml' => '<span class="badge ' . e(risk_badge_class($riskLevel)) . '">' . e($riskLevel) . '</span><p class="text-[10px] font-bold text-slate-400 mb-0 mt-1">Score ' . $riskScore . '</p>',
         'patient' => $patientName !== '' ? $patientName : 'Unlisted',
+        'reporterSort' => $alert['reporter_name'],
         'reporterHtml' => '<p class="text-sm font-bold text-slate-600 mb-0">' . e($alert['reporter_name']) . '</p>' . ($alert['reporter_role'] ? '<p class="text-xs font-bold text-slate-400 mb-0">' . e($alert['reporter_role']) . '</p>' : ''),
         'location' => $alert['location'],
+        'concernSort' => $alert['concern'],
         'concernHtml' => '<a href="view.php?id=' . (int)$alert['id'] . '" class="block text-decoration-none"><p class="text-sm font-bold text-slate-800 mb-0">' . e($alert['concern']) . '</p>' . (!empty($alert['incident_type']) ? '<p class="text-[10px] font-black text-red-500 uppercase tracking-widest mt-0.5 mb-0">' . e($alert['incident_type']) . '</p>' : '') . ($alert['report_answers'] ? '<p class="text-xs font-bold text-slate-400 mt-0.5 mb-0 truncate">' . e($alert['report_answers']) . '</p>' : ($alert['details'] ? '<p class="text-xs font-bold text-slate-400 mt-0.5 mb-0 truncate">' . e($alert['details']) . '</p>' : '')) . '</a>',
         'created' => date('M d, g:i A', strtotime($alert['created_at'])),
+        'createdSort' => $alert['created_at'],
         'actionsHtml' => $actions,
     ];
 }

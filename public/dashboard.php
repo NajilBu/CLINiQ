@@ -174,30 +174,35 @@ foreach (['document_review', 'digital_submission', 'follow_up'] as $queueKey) {
 $apeQueue = array_slice($apeQueue, 0, 5); // Limit to 5 for condensed view
 
 $visitorColumns = [
-    ['headerName' => 'Arrived', 'field' => 'arrivedTime', 'width' => 105, 'minWidth' => 100, 'maxWidth' => 115, 'flex' => 0],
-    ['headerName' => 'Addressed', 'field' => 'addressedTime', 'width' => 110, 'minWidth' => 105, 'maxWidth' => 120, 'flex' => 0],
-    ['headerName' => 'Completed', 'field' => 'completedTime', 'width' => 110, 'minWidth' => 105, 'maxWidth' => 120, 'flex' => 0],
-    ['headerName' => 'Patient', 'field' => 'patientHtml', 'cellRenderer' => 'html', 'minWidth' => 150, 'flex' => 1],
+    ['headerName' => 'Arrived', 'field' => 'arrivedTime', 'sortField' => 'arrivedSort', 'sortType' => 'date', 'width' => 105, 'minWidth' => 100, 'maxWidth' => 115, 'flex' => 0],
+    ['headerName' => 'Addressed', 'field' => 'addressedTime', 'sortField' => 'addressedSort', 'sortType' => 'date', 'width' => 110, 'minWidth' => 105, 'maxWidth' => 120, 'flex' => 0],
+    ['headerName' => 'Completed', 'field' => 'completedTime', 'sortField' => 'completedSort', 'sortType' => 'date', 'width' => 110, 'minWidth' => 105, 'maxWidth' => 120, 'flex' => 0],
+    ['headerName' => 'Patient', 'field' => 'patientHtml', 'cellRenderer' => 'html', 'sortField' => 'patientSort', 'minWidth' => 150, 'flex' => 1],
     ['headerName' => 'Complaint', 'field' => 'complaint', 'minWidth' => 170, 'flex' => 1.2],
-    ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'width' => 128, 'minWidth' => 120, 'maxWidth' => 140, 'flex' => 0],
+    ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'sortField' => 'statusSort', 'sortType' => 'number', 'width' => 128, 'minWidth' => 120, 'maxWidth' => 140, 'flex' => 0],
 ];
 $visitorRows = [];
 foreach ($visitorLogs as $visit) {
     $fullName = trim($visit['first_name'] . ' ' . $visit['last_name']);
     $visitorRows[] = [
         'rowUrl' => app_url('visits/view.php?id=' . (int) $visit['id'] . '&from=dashboard'),
+        'arrivedSort' => $visit['visit_datetime'],
         'arrivedTime' => date('h:i A', strtotime($visit['visit_datetime'])),
+        'addressedSort' => $visit['addressed_at'],
         'addressedTime' => $visit['addressed_at'] ? date('h:i A', strtotime($visit['addressed_at'])) : '-',
+        'completedSort' => $visit['completed_at'],
         'completedTime' => $visit['completed_at'] ? date('h:i A', strtotime($visit['completed_at'])) : '-',
+        'patientSort' => trim($visit['last_name'] . ' ' . $visit['first_name']),
         'patientHtml' => '<div class="font-bold text-slate-800 text-sm">' . e($fullName) . '</div><div class="text-[10px] text-slate-400">' . e($visit['id_number']) . '</div>',
         'complaint' => $visit['chief_complaint'],
         'statusHtml' => '<span class="badge ' . e(status_badge_class($visit['status'])) . ' text-[9px]">' . e($visit['status']) . '</span>',
+        'statusSort' => array_search($visit['status'], ['Unaddressed', 'Active', 'Completed', 'Cancelled'], true),
     ];
 }
 
 $dashboardApeColumns = [
-    ['headerName' => 'Student', 'field' => 'studentHtml', 'cellRenderer' => 'html', 'minWidth' => 230],
-    ['headerName' => 'Work Queue', 'field' => 'queueHtml', 'cellRenderer' => 'html', 'width' => 170],
+    ['headerName' => 'Student', 'field' => 'studentHtml', 'cellRenderer' => 'html', 'sortField' => 'studentSort', 'minWidth' => 230],
+    ['headerName' => 'Work Queue', 'field' => 'queueHtml', 'cellRenderer' => 'html', 'sortField' => 'queueSort', 'minWidth' => 170],
     ['headerName' => 'Missing / Waiting For', 'field' => 'missing', 'minWidth' => 240],
     ['headerName' => 'Action', 'field' => 'actionHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 210],
 ];
@@ -209,8 +214,10 @@ foreach ($apeQueue as $rec) {
     $next = ape_next_action($rec);
     $dashboardApeRows[] = [
         'rowUrl' => app_url('ape/view.php?id=' . (int) $rec['id']),
+        'studentSort' => trim($rec['last_name'] . ' ' . $rec['first_name']),
         'studentHtml' => '<div class="flex items-center gap-3"><div class="avatar ' . e(avatar_color($fullName)) . '">' . e(initials($fullName)) . '</div><div><strong class="text-sm text-slate-800">' . e($fullName) . '</strong><div class="text-[10px] font-bold text-slate-400">' . e($rec['id_number']) . '</div></div></div>',
         'queueHtml' => '<span class="badge ' . ($queueKey === 'follow_up' ? 'badge-high' : 'badge-in-progress') . '">' . e($queue['short_title'] ?? $queue['title']) . '</span>',
+        'queueSort' => $queue['short_title'] ?? $queue['title'],
         'missing' => ape_missing_item($rec),
         'actionHtml' => '<a href="' . e(app_url('ape/view.php?id=' . (int) $rec['id'])) . '" class="btn btn-sm btn-ghost border border-slate-200 hover:border-primary hover:text-primary text-decoration-none"><span class="material-symbols-outlined text-[14px]">' . e($next['icon']) . '</span>' . e($next['label']) . '</a>',
     ];

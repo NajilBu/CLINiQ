@@ -66,11 +66,11 @@ foreach ($allRecords as $rec) {
 }
 
 $apeQueueColumns = [
-    ['headerName' => 'Priority', 'field' => 'priorityHtml', 'cellRenderer' => 'html', 'width' => 140],
-    ['headerName' => 'Student', 'field' => 'studentHtml', 'cellRenderer' => 'html', 'minWidth' => 250],
-    ['headerName' => 'Program', 'field' => 'programHtml', 'cellRenderer' => 'html', 'minWidth' => 220],
-    ['headerName' => 'Waiting', 'field' => 'waiting', 'width' => 140],
-    ['headerName' => 'Next Action', 'field' => 'nextActionHtml', 'cellRenderer' => 'html', 'minWidth' => 260],
+    ['headerName' => 'Priority', 'field' => 'priorityHtml', 'cellRenderer' => 'html', 'sortField' => 'prioritySort', 'sortType' => 'number', 'width' => 140],
+    ['headerName' => 'Student', 'field' => 'studentHtml', 'cellRenderer' => 'html', 'sortField' => 'studentSort', 'minWidth' => 250],
+    ['headerName' => 'Program', 'field' => 'programHtml', 'cellRenderer' => 'html', 'sortField' => 'programSort', 'minWidth' => 220],
+    ['headerName' => 'Waiting', 'field' => 'waiting', 'sortField' => 'waitingSort', 'sortType' => 'number', 'width' => 140],
+    ['headerName' => 'Next Action', 'field' => 'nextActionHtml', 'cellRenderer' => 'html', 'sortField' => 'nextActionSort', 'minWidth' => 260],
     ['headerName' => 'Action', 'field' => 'actionHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 210],
 ];
 
@@ -195,10 +195,15 @@ render_clinic_command_header(
                 $priority = ape_priority_badge($rec);
                 $apeRows[] = [
                     'rowUrl' => 'view.php?id=' . (int)$rec['id'],
+                    'prioritySort' => array_search($priority['label'], ['Overdue', 'Urgent', 'Clinical', 'Waiting', 'Ready', 'Done'], true),
                     'priorityHtml' => '<span class="badge ' . e($priority['class']) . '">' . e($priority['label']) . '</span>',
+                    'studentSort' => trim($rec['last_name'] . ' ' . $rec['first_name']),
                     'studentHtml' => '<div class="flex items-center gap-3"><div class="avatar ' . e(avatar_color($fullName)) . '">' . e(initials($fullName)) . '</div><div><strong class="text-sm text-slate-800">' . e($fullName) . '</strong><div class="text-xs font-bold text-slate-400">' . e($rec['id_number']) . '</div></div></div>',
+                    'programSort' => $rec['course_section'] ?: '',
                     'programHtml' => '<p class="text-sm font-bold text-slate-700 mb-1">' . e($rec['course_section'] ?: 'No course set') . '</p><p class="text-xs font-bold text-slate-400 mb-0">' . e($rec['document_type'] ?: 'APE documents') . '</p>',
                     'waiting' => ape_waiting_label($rec),
+                    'waitingSort' => ape_waiting_days($rec),
+                    'nextActionSort' => $next['label'],
                     'nextActionHtml' => '<div class="flex items-center gap-2"><span class="material-symbols-outlined text-primary text-[18px]">' . e($next['icon']) . '</span><div><strong class="block text-sm text-slate-800">' . e($next['label']) . '</strong><span class="block text-xs font-bold text-slate-400">' . e(ape_missing_item($rec)) . '</span></div></div>',
                     'actionHtml' => $queueKey === 'completed' ? '' : '<a href="view.php?id=' . (int)$rec['id'] . '" class="btn btn-primary btn-sm text-decoration-none"><span class="material-symbols-outlined text-[14px]">' . e($next['icon']) . '</span>' . e($next['label']) . '</a>',
                 ];

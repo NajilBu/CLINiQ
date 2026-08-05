@@ -158,10 +158,10 @@ foreach ([
 }
 
 $visitColumns = [
-    ['headerName' => 'Date/Time', 'field' => 'dateTimeHtml', 'cellRenderer' => 'html', 'width' => 150],
-    ['headerName' => 'Patient', 'field' => 'patientHtml', 'cellRenderer' => 'html', 'minWidth' => 230],
+    ['headerName' => 'Date/Time', 'field' => 'dateTimeHtml', 'cellRenderer' => 'html', 'sortField' => 'dateTimeSort', 'sortType' => 'date', 'width' => 150],
+    ['headerName' => 'Patient', 'field' => 'patientHtml', 'cellRenderer' => 'html', 'sortField' => 'patientSort', 'minWidth' => 230],
     ['headerName' => 'Complaint', 'field' => 'complaint', 'minWidth' => 210],
-    ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'width' => 145],
+    ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'sortField' => 'statusSort', 'sortType' => 'number', 'width' => 145],
     ['headerName' => 'Attended By', 'field' => 'attendedBy', 'minWidth' => 165],
     ['headerName' => 'Open', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 210],
 ];
@@ -192,10 +192,13 @@ foreach ($visits as $visit) {
 
     $visitRows[] = [
         'rowUrl' => $actionUrl,
+        'dateTimeSort' => $visit['visit_datetime'],
         'dateTimeHtml' => '<p class="text-sm font-bold text-slate-700 mb-0">' . e(date('M d, Y', strtotime($visit['visit_datetime']))) . '</p><p class="text-xs font-bold text-slate-400 mb-0">' . e(date('g:i A', strtotime($visit['visit_datetime']))) . '</p>',
+        'patientSort' => trim($visit['last_name'] . ' ' . $visit['first_name']),
         'patientHtml' => '<div class="flex items-center gap-3"><div class="avatar ' . e(avatar_color($fullName)) . '">' . e(initials($fullName)) . '</div><div><strong class="text-sm text-slate-800">' . e($fullName) . '</strong><div class="text-xs font-bold text-slate-400">' . e($visit['id_number']) . '</div></div></div>',
         'complaint' => $visit['chief_complaint'],
         'statusHtml' => '<span class="badge ' . e(visit_status_badge_class($visitStatus)) . '">' . e($visitStatus) . '</span>',
+        'statusSort' => array_search($visitStatus, ['Unaddressed', 'Active', 'Completed', 'Cancelled'], true),
         'attendedBy' => $visit['attended_by_name'] ?: 'Not yet attended',
         'actionsHtml' => $actionsHtml,
     ];

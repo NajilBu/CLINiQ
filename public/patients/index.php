@@ -14,7 +14,7 @@ $patients = cliniq_patient_profile_list('', max(1, $totalRows), 0);
 $patientColumns = [
     ['headerName' => 'No.', 'field' => 'rowNumber', 'width' => 70, 'minWidth' => 70, 'maxWidth' => 70, 'flex' => 0, 'suppressSizeToFit' => true, 'sortable' => false, 'filter' => false],
     ['headerName' => 'ID Number', 'field' => 'idNumber', 'width' => 150],
-    ['headerName' => 'Name', 'field' => 'nameHtml', 'cellRenderer' => 'html', 'minWidth' => 240],
+    ['headerName' => 'Name', 'field' => 'nameHtml', 'cellRenderer' => 'html', 'sortField' => 'nameSort', 'minWidth' => 240],
     ['headerName' => 'Patient Type', 'field' => 'patientType', 'minWidth' => 150],
     ['headerName' => 'Program / Department', 'field' => 'courseSection', 'minWidth' => 190],
     ['headerName' => 'Contact', 'field' => 'guardianContact', 'minWidth' => 170],
@@ -27,6 +27,7 @@ foreach ($patients as $patientIndex => $patient) {
         'rowUrl' => 'view.php?id=' . (int)$patient['id'],
         'rowNumber' => $patientIndex + 1,
         'idNumber' => $patient['id_number'],
+        'nameSort' => trim($patient['last_name'] . ' ' . $patient['first_name'] . ' ' . ($patient['middle_name'] ?? '')),
         'nameHtml' => '<div class="flex items-center gap-3"><div class="avatar ' . e(avatar_color($displayName)) . '">' . e(initials($displayName)) . '</div><strong class="text-sm text-slate-800">' . e($fullName) . '</strong></div>',
         'patientType' => $patient['patient_type'],
         'courseSection' => $patient['course_section'] ?: 'Patient',

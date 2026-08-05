@@ -40,13 +40,13 @@ foreach ($countQuery->fetchAll() as $sc) {
 }
 
 $columns = [
-    ['headerName' => 'Requested Slot', 'field' => 'slotHtml', 'cellRenderer' => 'html', 'minWidth' => 190],
-    ['headerName' => 'Student', 'field' => 'studentHtml', 'cellRenderer' => 'html', 'minWidth' => 240],
+    ['headerName' => 'Requested Slot', 'field' => 'slotHtml', 'cellRenderer' => 'html', 'sortField' => 'slotSort', 'sortType' => 'date', 'minWidth' => 190],
+    ['headerName' => 'Student', 'field' => 'studentHtml', 'cellRenderer' => 'html', 'sortField' => 'studentSort', 'minWidth' => 240],
     ['headerName' => 'Purpose', 'field' => 'purpose', 'minWidth' => 220],
-    ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'width' => 150],
+    ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'sortField' => 'statusSort', 'sortType' => 'number', 'width' => 150],
     ['headerName' => 'Notes', 'field' => 'notes', 'minWidth' => 220],
     ['headerName' => 'Cancellation Reason', 'field' => 'cancelReason', 'minWidth' => 240],
-    ['headerName' => 'Requested', 'field' => 'created', 'width' => 150],
+    ['headerName' => 'Requested', 'field' => 'created', 'sortField' => 'createdSort', 'sortType' => 'date', 'width' => 150],
     ['headerName' => 'Clinic Action', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 280],
 ];
 
@@ -71,13 +71,17 @@ foreach ($appointments as $appointment) {
 
     $rows[] = [
         'rowUrl' => app_url('patients/view.php?id=' . (int)$appointment['patient_id']),
+        'slotSort' => $appointment['appointment_datetime'],
         'slotHtml' => '<p class="text-sm font-bold text-slate-800 mb-0">' . e(date('M d, Y', strtotime($appointment['appointment_datetime']))) . '</p><p class="text-xs font-bold text-slate-400 mb-0">' . e(date('g:i A', strtotime($appointment['appointment_datetime']))) . '</p>',
+        'studentSort' => trim($appointment['last_name'] . ' ' . $appointment['first_name']),
         'studentHtml' => '<div class="flex items-center gap-3"><div class="avatar ' . e(avatar_color($fullName)) . '">' . e(initials($fullName)) . '</div><div><strong class="text-sm text-slate-800">' . e($fullName) . '</strong><div class="text-xs font-bold text-slate-400">' . e($appointment['id_number']) . ' · ' . e($appointment['course_section'] ?: 'No course') . '</div></div></div>',
         'purpose' => $appointment['purpose'],
         'statusHtml' => '<span class="badge ' . e(appointment_status_badge_class($status)) . '">' . e($status) . '</span>',
+        'statusSort' => array_search($status, ['Pending', 'Scheduled', 'Completed', 'No Show', 'Cancelled'], true),
         'notes' => $appointment['notes'] ?: '-',
         'cancelReason' => $appointment['cancellation_reason'] ?: '-',
         'created' => date('M d, g:i A', strtotime($appointment['created_at'])),
+        'createdSort' => $appointment['created_at'],
         'actionsHtml' => $actions,
     ];
 }

@@ -31,11 +31,11 @@ foreach ($countQuery->fetchAll() as $sc) {
 }
 
 $referralColumns = [
-    ['headerName' => 'Patient', 'field' => 'patientHtml', 'cellRenderer' => 'html', 'minWidth' => 240],
+    ['headerName' => 'Patient', 'field' => 'patientHtml', 'cellRenderer' => 'html', 'sortField' => 'patientSort', 'minWidth' => 240],
     ['headerName' => 'Referred To', 'field' => 'referredTo', 'minWidth' => 200],
     ['headerName' => 'Reason', 'field' => 'reason', 'minWidth' => 240],
-    ['headerName' => 'Date', 'field' => 'date', 'width' => 150],
-    ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'width' => 150],
+    ['headerName' => 'Date', 'field' => 'date', 'sortField' => 'dateSort', 'sortType' => 'date', 'width' => 150],
+    ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'sortField' => 'statusSort', 'sortType' => 'number', 'width' => 150],
     ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 170],
 ];
 $referralRows = [];
@@ -47,11 +47,14 @@ foreach ($referrals as $ref) {
     }
     $referralRows[] = [
         'rowUrl' => app_url('patients/view.php?id=' . (int)$ref['patient_id']),
+        'patientSort' => trim($ref['last_name'] . ' ' . $ref['first_name']),
         'patientHtml' => '<div class="flex items-center gap-3"><div class="avatar ' . e(avatar_color($fullName)) . '">' . e(initials($fullName)) . '</div><div><strong class="text-sm text-slate-800">' . e($fullName) . '</strong><div class="text-xs font-bold text-slate-400">' . e($ref['id_number']) . '</div></div></div>',
         'referredTo' => $ref['referred_to'],
         'reason' => $ref['reason'],
         'date' => date('M d, Y', strtotime($ref['referral_date'])),
+        'dateSort' => $ref['referral_date'],
         'statusHtml' => '<span class="badge ' . e(status_badge_class($ref['status'])) . '">' . e($ref['status']) . '</span>',
+        'statusSort' => array_search($ref['status'], ['Pending', 'Completed', 'Cancelled'], true),
         'actionsHtml' => $actions,
     ];
 }
