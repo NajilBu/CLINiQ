@@ -174,7 +174,9 @@ foreach (['document_review', 'digital_submission', 'follow_up'] as $queueKey) {
 $apeQueue = array_slice($apeQueue, 0, 5); // Limit to 5 for condensed view
 
 $visitorColumns = [
-    ['headerName' => 'Time', 'field' => 'time', 'width' => 100, 'minWidth' => 96, 'maxWidth' => 112, 'flex' => 0],
+    ['headerName' => 'Arrived', 'field' => 'arrivedTime', 'width' => 105, 'minWidth' => 100, 'maxWidth' => 115, 'flex' => 0],
+    ['headerName' => 'Addressed', 'field' => 'addressedTime', 'width' => 110, 'minWidth' => 105, 'maxWidth' => 120, 'flex' => 0],
+    ['headerName' => 'Completed', 'field' => 'completedTime', 'width' => 110, 'minWidth' => 105, 'maxWidth' => 120, 'flex' => 0],
     ['headerName' => 'Patient', 'field' => 'patientHtml', 'cellRenderer' => 'html', 'minWidth' => 150, 'flex' => 1],
     ['headerName' => 'Complaint', 'field' => 'complaint', 'minWidth' => 170, 'flex' => 1.2],
     ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'width' => 128, 'minWidth' => 120, 'maxWidth' => 140, 'flex' => 0],
@@ -184,7 +186,9 @@ foreach ($visitorLogs as $visit) {
     $fullName = trim($visit['first_name'] . ' ' . $visit['last_name']);
     $visitorRows[] = [
         'rowUrl' => app_url('visits/view.php?id=' . (int) $visit['id'] . '&from=dashboard'),
-        'time' => date('h:i A', strtotime($visit['visit_datetime'])),
+        'arrivedTime' => date('h:i A', strtotime($visit['visit_datetime'])),
+        'addressedTime' => $visit['addressed_at'] ? date('h:i A', strtotime($visit['addressed_at'])) : '-',
+        'completedTime' => $visit['completed_at'] ? date('h:i A', strtotime($visit['completed_at'])) : '-',
         'patientHtml' => '<div class="font-bold text-slate-800 text-sm">' . e($fullName) . '</div><div class="text-[10px] text-slate-400">' . e($visit['id_number']) . '</div>',
         'complaint' => $visit['chief_complaint'],
         'statusHtml' => '<span class="badge ' . e(status_badge_class($visit['status'])) . ' text-[9px]">' . e($visit['status']) . '</span>',
@@ -399,7 +403,7 @@ render_header('Main Dashboard');
 
 
 
-    <div class="dashboard-activity-grid grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8 items-stretch">
+    <div class="dashboard-activity-grid grid grid-cols-1 gap-6 mb-8 items-stretch">
         <!-- 3. Appointment Requests and Today's Schedule -->
         <section class="dashboard-activity-card clinic-card overflow-hidden flex flex-col max-h-[600px]">
             <div class="p-6 border-b border-slate-100 flex items-center justify-between shrink-0">

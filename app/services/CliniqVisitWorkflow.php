@@ -215,20 +215,27 @@ function cliniq_visit_create(array $visit, array $entry = [], array $vitals = []
         throw new InvalidArgumentException('Chief complaint is required.');
     }
 
+    $status = cliniq_visit_status((string) ($visit['status'] ?? 'Unaddressed'), 'Unaddressed');
+    $markAddressed = !empty($visit['mark_addressed']) || in_array($status, ['Active', 'Completed'], true);
+    $markCompleted = !empty($visit['mark_completed']) || $status === 'Completed';
+
     try {
         $db->beginTransaction();
         $stmt = $db->prepare('
             INSERT INTO visits (
-                patient_person_id, visit_datetime, chief_complaint, status,
+                patient_person_id, visit_datetime, addressed_at, completed_at,
+                chief_complaint, status,
                 visit_purpose, visit_source, action_taken,
                 recorded_by_person_id, attended_by_person_id
-            ) VALUES (?, COALESCE(?, NOW()), ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, COALESCE(?, NOW()), IF(?, NOW(), NULL), IF(?, NOW(), NULL), ?, ?, ?, ?, ?, ?, ?)
         ');
         $stmt->execute([
             $patientPersonId,
             ($visit['visit_datetime'] ?? null) ?: null,
+            $markAddressed ? 1 : 0,
+            $markCompleted ? 1 : 0,
             $chiefComplaint,
-            cliniq_visit_status((string) ($visit['status'] ?? 'Unaddressed'), 'Unaddressed'),
+            $status,
             trim((string) ($visit['visit_purpose'] ?? '')) ?: null,
             trim((string) ($visit['visit_source'] ?? '')) ?: 'Staff Recorded',
             trim((string) ($visit['action_taken'] ?? '')) ?: null,

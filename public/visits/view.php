@@ -21,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $dispensings = cliniq_inventory_dispensing_rows($_POST);
 
     if ($existingVisit && $mode === 'begin_visit' && ($existingVisit['status'] ?? 'Unaddressed') === 'Unaddressed') {
-        $update = $visitDb->prepare("UPDATE visits SET status = 'Active', recorded_by_person_id = COALESCE(recorded_by_person_id, ?), attended_by_person_id = ? WHERE visit_id = ?");
+        $update = $visitDb->prepare("UPDATE visits SET status = 'Active', addressed_at = COALESCE(addressed_at, NOW()), recorded_by_person_id = COALESCE(recorded_by_person_id, ?), attended_by_person_id = ? WHERE visit_id = ?");
         $update->execute([$staffPersonId, $staffPersonId, $id]);
 
         flash_message('success', 'Treatment session started.');
@@ -68,7 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'referral' => $referralType,
                 'remarks' => $finalRemarks,
             ], $staffPersonId);
-            $update = $visitDb->prepare('UPDATE visits SET status = ?, attended_by_person_id = COALESCE(attended_by_person_id, ?) WHERE visit_id = ?');
+            $update = $visitDb->prepare('UPDATE visits SET status = ?, addressed_at = COALESCE(addressed_at, NOW()), completed_at = COALESCE(completed_at, NOW()), attended_by_person_id = COALESCE(attended_by_person_id, ?) WHERE visit_id = ?');
             $update->execute(['Completed', $staffPersonId, $id]);
             $visitDb->commit();
             flash_message('success', 'Patient visit ended.');
@@ -93,7 +93,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $update = $visitDb->prepare("
                 UPDATE visits
-                SET status = ?, visit_purpose = ?, action_taken = ?,
+                SET status = ?, addressed_at = COALESCE(addressed_at, NOW()), visit_purpose = ?, action_taken = ?,
                     recorded_by_person_id = COALESCE(recorded_by_person_id, ?),
                     attended_by_person_id = ?
                 WHERE visit_id = ?
@@ -155,6 +155,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ];
             $newStatus = cliniq_visit_status($_POST['status'] ?? '', $existingVisit['status'] ?: 'Active');
             $statusChanged = $newStatus !== ($existingVisit['status'] ?: 'Unaddressed');
+            $markAddressed = $statusChanged && in_array($newStatus, ['Active', 'Completed'], true);
+            $markCompleted = $statusChanged && $newStatus === 'Completed';
             $hasDispensing = !empty($dispensings);
 
             if ((cliniq_visit_entry_has_content($entry) || $statusChanged || $hasDispensing) && $entry['amendment_reason'] === '') {
@@ -166,8 +168,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $entryId = cliniq_visit_insert_entry($visitDb, $id, ['remarks' => 'Medicine dispensing amendment.'], $staffPersonId);
                 }
                 cliniq_inventory_dispense_medicines($visitDb, (int) $entryId, $dispensings, $staffPersonId);
-                $update = $visitDb->prepare('UPDATE visits SET status = ?, attended_by_person_id = COALESCE(attended_by_person_id, ?) WHERE visit_id = ?');
-                $update->execute([$newStatus, $staffPersonId, $id]);
+                $update = $visitDb->prepare("\n                    UPDATE visits\n                    SET status = ?,\n                        addressed_at = CASE WHEN ? = 1 THEN COALESCE(addressed_at, NOW()) ELSE addressed_at END,\n                        completed_at = CASE WHEN ? = 1 THEN COALESCE(completed_at, NOW()) ELSE completed_at END,\n                        attended_by_person_id = COALESCE(attended_by_person_id, ?)\n                    WHERE visit_id = ?\n                ");
+                $update->execute([$newStatus, $markAddressed ? 1 : 0, $markCompleted ? 1 : 0, $staffPersonId, $id]);
                 $visitDb->commit();
                 flash_message('success', cliniq_visit_entry_has_content($entry) ? 'Treatment information appended.' : 'Visit status updated with amendment reason.');
             } else {
@@ -1031,7 +1033,7 @@ render_header($pageTitle);
 </form>
 
 <?php if ($showBeginTreatmentModal): ?>
-<div class="modal-backdrop show" style="display:flex; align-items:center; justify-content:center;">
+<div id="beginTreatmentModal" class="modal-backdrop show" style="display:flex; align-items:center; justify-content:center;">
     <div class="modal-content bg-white rounded-xl w-full max-w-md p-8 shadow-2xl border border-outline-variant/10">
         <div class="w-12 h-12 rounded-xl bg-primary-fixed text-primary flex items-center justify-center mb-5">
             <span class="material-symbols-outlined">medical_services</span>
@@ -1049,6 +1051,12 @@ render_header($pageTitle);
         </div>
     </div>
 </div>
+<script>
+    const beginTreatmentModal = document.getElementById('beginTreatmentModal');
+    if (beginTreatmentModal && beginTreatmentModal.parentElement !== document.body) {
+        document.body.appendChild(beginTreatmentModal);
+    }
+</script>
 <?php endif; ?>
 
 <script>

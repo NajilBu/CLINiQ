@@ -129,6 +129,8 @@ CREATE TABLE visits (
   visit_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   patient_person_id BIGINT UNSIGNED NOT NULL,
   visit_datetime DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  addressed_at DATETIME NULL,
+  completed_at DATETIME NULL,
   chief_complaint VARCHAR(255) NOT NULL,
   status ENUM('Unaddressed', 'Active', 'Completed', 'Cancelled')
     NOT NULL DEFAULT 'Unaddressed',

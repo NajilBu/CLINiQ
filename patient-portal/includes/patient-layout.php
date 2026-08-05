@@ -116,8 +116,8 @@ function student_current_profile(): ?array
             a.password_hash,
             a.temporary_password_hash,
             pr.program_code AS program,
-            fd.department_code AS faculty_department,
-            sd.department_code AS personnel_department,
+            CASE WHEN se.role_classification = "Faculty" THEN ed.department_code END AS faculty_department,
+            CASE WHEN se.role_classification = "School Personnel" THEN ed.department_code END AS personnel_department,
             pt.blood_type,
             pt.emergency_instructions,
             pt.guardian_or_contact_name,
@@ -125,18 +125,16 @@ function student_current_profile(): ?array
             pt.emergency_token,
             CASE
                 WHEN s.person_id IS NOT NULL THEN "student"
-                WHEN f.person_id IS NOT NULL THEN "faculty"
-                WHEN sp.person_id IS NOT NULL THEN "school_personnel"
+                WHEN se.role_classification = "Faculty" THEN "faculty"
+                WHEN se.role_classification = "School Personnel" THEN "school_personnel"
                 ELSE "patient"
             END AS account_type
         FROM people p
         JOIN accounts a ON a.person_id = p.id
         LEFT JOIN students s ON s.person_id = p.id
         LEFT JOIN programs pr ON pr.id = s.program_id
-        LEFT JOIN faculty f ON f.person_id = p.id
-        LEFT JOIN departments fd ON fd.id = f.department_id
-        LEFT JOIN school_personnel sp ON sp.person_id = p.id
-        LEFT JOIN departments sd ON sd.id = sp.department_id
+        LEFT JOIN school_employees se ON se.person_id = p.id
+        LEFT JOIN departments ed ON ed.id = se.department_id
         LEFT JOIN patients pt ON pt.person_id = p.id
         WHERE p.id = ?
         LIMIT 1
@@ -230,19 +228,18 @@ function student_find_patient_by_number(string $studentNumber): ?array
             p.last_name,
             CASE
                 WHEN s.person_id IS NOT NULL THEN "student"
-                WHEN f.person_id IS NOT NULL THEN "faculty"
-                WHEN sp.person_id IS NOT NULL THEN "school_personnel"
+                WHEN se.role_classification = "Faculty" THEN "faculty"
+                WHEN se.role_classification = "School Personnel" THEN "school_personnel"
                 ELSE "patient"
             END AS account_type
         FROM accounts a
         JOIN people p ON p.id = a.person_id
         LEFT JOIN students s ON s.person_id = p.id
-        LEFT JOIN faculty f ON f.person_id = p.id
-        LEFT JOIN school_personnel sp ON sp.person_id = p.id
+        LEFT JOIN school_employees se ON se.person_id = p.id
         WHERE p.id_number = ?
           AND (
             EXISTS (SELECT 1 FROM students s WHERE s.person_id = p.id)
-            OR EXISTS (SELECT 1 FROM faculty f WHERE f.person_id = p.id)
+            OR EXISTS (SELECT 1 FROM school_employees se WHERE se.person_id = p.id)
             OR EXISTS (SELECT 1 FROM patients pt WHERE pt.person_id = p.id)
           )
         LIMIT 1

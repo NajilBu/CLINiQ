@@ -230,12 +230,10 @@ render_header($fullName . ' - Patient Profile');
                 </div>
             </div>
             <div class="flex flex-wrap gap-3">
-                <?php if ($legacyPatientId > 0): ?>
-                    <a class="btn btn-outline text-decoration-none" href="emergency_profile.php?id=<?= $legacyPatientId ?>">
-                        <span class="material-symbols-outlined text-[18px]">emergency</span>
-                        Emergency Profile
-                    </a>
-                <?php endif; ?>
+                <a class="btn btn-outline text-decoration-none" href="edit.php?id=<?= $id ?>">
+                    <span class="material-symbols-outlined text-[18px]">edit</span>
+                    Edit Profile
+                </a>
                 <a class="btn btn-primary text-decoration-none" href="<?= app_url('visits/create.php?patient_id=' . $id) ?>">
                     <span class="material-symbols-outlined text-[18px]">add_notes</span>
                     Record Visit

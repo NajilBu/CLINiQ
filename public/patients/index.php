@@ -2,7 +2,6 @@
 
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/CliniqPatientProfile.php';
-require_once __DIR__ . '/../../app/services/PatientAccountService.php';
 require_login();
 
 // ── Search & pagination ─────────────────────────────────────
@@ -19,7 +18,6 @@ $patientColumns = [
     ['headerName' => 'Patient Type', 'field' => 'patientType', 'minWidth' => 150],
     ['headerName' => 'Program / Department', 'field' => 'courseSection', 'minWidth' => 190],
     ['headerName' => 'Contact', 'field' => 'guardianContact', 'minWidth' => 170],
-    ['headerName' => 'Profile', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 130],
 ];
 $patientRows = [];
 foreach ($patients as $patientIndex => $patient) {
@@ -33,13 +31,8 @@ foreach ($patients as $patientIndex => $patient) {
         'patientType' => $patient['patient_type'],
         'courseSection' => $patient['course_section'] ?: 'Patient',
         'guardianContact' => $patient['guardian_contact'] ?: '-',
-        'actionsHtml' => '<a class="btn btn-sm btn-outline text-decoration-none" href="view.php?id=' . (int) $patient['id'] . '"><span class="material-symbols-outlined text-[14px]">clinical_notes</span>View</a>',
     ];
 }
-
-$registryAction = can_manage_patient_accounts(current_user())
-    ? '<a class="btn btn-primary text-decoration-none" href="' . e(app_url('patient-accounts/index.php')) . '"><span class="material-symbols-outlined text-[20px]">manage_accounts</span>Manage Patient Accounts</a>'
-    : '';
 
 render_header('Patients');
 ?>
@@ -47,8 +40,7 @@ render_header('Patients');
 <?php render_clinic_command_header(
     'Patient Registry',
     'Patients',
-    $totalRows . ' registered patient(s) in Cliniq_db. Staff profiles contain private health data.',
-    $registryAction
+    $totalRows . ' registered patient(s) in Cliniq_db. Staff profiles contain private health data.'
 ); ?>
 
 <!-- ═══ Patient Registry ═══ -->

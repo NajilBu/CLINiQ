@@ -40,10 +40,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $actionTaken = trim($_POST['action_taken'] ?? '');
-        $status = cliniq_visit_status($_POST['status'] ?? 'Active', 'Active');
-        if ($status === 'Unaddressed' || $status === 'Cancelled') {
-            $status = 'Active';
-        }
         $purpose = normalize_visit_purpose($_POST['visit_purpose'] ?? null);
         $referralType = trim($_POST['referral_type'] ?? '');
         if ($referralType === 'None') {
@@ -54,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $visitId = cliniq_visit_create([
             'patient_person_id' => $patientId,
             'chief_complaint' => trim($_POST['chief_complaint'] ?? ''),
-            'status' => $status,
+            'status' => 'Active',
             'visit_purpose' => $purpose,
             'visit_source' => 'Staff Recorded',
             'action_taken' => $actionTaken,
@@ -141,14 +137,6 @@ render_clinic_command_header(
             <div>
                 <label class="clinic-label">Chief Complaint</label>
                 <textarea class="record-sheet-field p-4" name="chief_complaint" rows="3" placeholder="Patient's main concern..." required></textarea>
-            </div>
-            <div>
-                <label class="clinic-label">Visit Status</label>
-                <select class="record-sheet-field px-4" name="status">
-                    <?php foreach (array_filter(visit_statuses(), fn($status) => $status !== 'Unaddressed') as $status): ?>
-                        <option value="<?= e($status) ?>"><?= e($status) ?></option>
-                    <?php endforeach; ?>
-                </select>
             </div>
             <div>
                 <label class="clinic-label">Time of Arrival</label>

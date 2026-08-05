@@ -43,10 +43,12 @@ function cliniq_patient_profile_select(): string
             se.role_classification,
             se.employment_type,
             se.position_title AS employee_position_title,
+            ed.id AS employee_department_id,
             ed.department_code AS employee_department_code,
             ed.department_name AS employee_department_name,
             cs.staff_role,
             cs.position_title AS staff_position_title,
+            cd.id AS staff_department_id,
             cd.department_code AS staff_department_code,
             cd.department_name AS staff_department_name,
             COALESCE(
@@ -111,6 +113,167 @@ function cliniq_patient_profile_count(string $search = ''): int
     $like = '%' . $search . '%';
     $stmt->execute([$like, $like, $like, $like]);
     return (int) $stmt->fetchColumn();
+}
+
+/** @return array<int,array{id:int,code:string,name:string}> */
+function cliniq_patient_profile_programs(): array
+{
+    return cliniq_patient_profile_db()->query("
+        SELECT id, program_code AS code, program_name AS name
+        FROM programs
+        WHERE is_active = 1
+        ORDER BY program_code
+    ")->fetchAll();
+}
+
+/** @return array<int,array{id:int,code:string,name:string}> */
+function cliniq_patient_profile_departments(): array
+{
+    return cliniq_patient_profile_db()->query("
+        SELECT id, department_code AS code, department_name AS name
+        FROM departments
+        WHERE is_active = 1
+        ORDER BY department_code
+    ")->fetchAll();
+}
+
+function cliniq_patient_profile_valid_date(string $value): bool
+{
+    if ($value === '') {
+        return true;
+    }
+    $date = DateTime::createFromFormat('Y-m-d', $value);
+    return $date !== false && $date->format('Y-m-d') === $value;
+}
+
+function cliniq_patient_profile_update(int $personId, array $data): array
+{
+    $profile = cliniq_patient_profile_find($personId);
+    if (!$profile) {
+        throw new InvalidArgumentException('Patient profile was not found in Cliniq_db.');
+    }
+
+    $idNumber = strtoupper(trim((string) ($data['id_number'] ?? '')));
+    $firstName = trim((string) ($data['first_name'] ?? ''));
+    $middleName = trim((string) ($data['middle_name'] ?? ''));
+    $lastName = trim((string) ($data['last_name'] ?? ''));
+    $birthdate = trim((string) ($data['birthdate'] ?? ''));
+    $sex = trim((string) ($data['sex'] ?? ''));
+    $bloodType = strtoupper(trim((string) ($data['blood_type'] ?? '')));
+    $guardianName = trim((string) ($data['guardian_name'] ?? ''));
+    $guardianContact = trim((string) ($data['guardian_contact'] ?? ''));
+    $emergencyInstructions = trim((string) ($data['emergency_instructions'] ?? ''));
+
+    if ($idNumber === '' || $firstName === '' || $lastName === '') {
+        throw new InvalidArgumentException('ID number, first name, and last name are required.');
+    }
+    if (!preg_match('/^[A-Z0-9][A-Z0-9 _\/-]{0,49}$/', $idNumber)) {
+        throw new InvalidArgumentException('Enter a valid ID number.');
+    }
+    if (!cliniq_patient_profile_valid_date($birthdate)) {
+        throw new InvalidArgumentException('Enter a valid birthdate.');
+    }
+    if ($sex !== '' && !in_array($sex, ['Male', 'Female', 'Other'], true)) {
+        throw new InvalidArgumentException('Select a valid sex.');
+    }
+    if (strlen($bloodType) > 10) {
+        throw new InvalidArgumentException('Blood type must not exceed 10 characters.');
+    }
+
+    $db = cliniq_patient_profile_db();
+    $duplicateStmt = $db->prepare('SELECT id FROM people WHERE id_number = ? AND id <> ? LIMIT 1');
+    $duplicateStmt->execute([$idNumber, $personId]);
+    if ($duplicateStmt->fetchColumn()) {
+        throw new InvalidArgumentException('That ID number already belongs to another account.');
+    }
+
+    try {
+        $db->beginTransaction();
+        $db->prepare('
+            UPDATE people
+            SET id_number = ?, first_name = ?, middle_name = ?, last_name = ?, birthdate = ?, sex = ?
+            WHERE id = ?
+        ')->execute([
+            $idNumber,
+            $firstName,
+            $middleName !== '' ? $middleName : null,
+            $lastName,
+            $birthdate !== '' ? $birthdate : null,
+            $sex !== '' ? $sex : null,
+            $personId,
+        ]);
+        $db->prepare('
+            UPDATE patients
+            SET blood_type = ?, emergency_instructions = ?,
+                guardian_or_contact_name = ?, guardian_or_contact_number = ?
+            WHERE person_id = ?
+        ')->execute([
+            $bloodType !== '' ? $bloodType : null,
+            $emergencyInstructions !== '' ? $emergencyInstructions : null,
+            $guardianName !== '' ? $guardianName : null,
+            $guardianContact !== '' ? $guardianContact : null,
+            $personId,
+        ]);
+
+        if ($profile['patient_type'] === 'Student') {
+            $programId = (int) ($data['program_id'] ?? 0);
+            $yearLevel = trim((string) ($data['year_level'] ?? ''));
+            $section = strtoupper(trim((string) ($data['section'] ?? '')));
+            $academicYear = trim((string) ($data['academic_year'] ?? ''));
+            if ($programId < 1 || !in_array($yearLevel, ['1', '2', '3', '4'], true) || !in_array($section, ['A', 'B', 'C', 'D', 'E'], true)) {
+                throw new InvalidArgumentException('Select a valid program, year level, and section.');
+            }
+            $programStmt = $db->prepare('SELECT 1 FROM programs WHERE id = ? AND is_active = 1 LIMIT 1');
+            $programStmt->execute([$programId]);
+            if (!$programStmt->fetchColumn()) {
+                throw new InvalidArgumentException('The selected program is not active.');
+            }
+            $db->prepare('
+                UPDATE students
+                SET program_id = ?, year_level = ?, section = ?, academic_year = ?
+                WHERE person_id = ?
+            ')->execute([$programId, $yearLevel, $section, $academicYear !== '' ? $academicYear : null, $personId]);
+        } elseif (in_array($profile['patient_type'], ['Faculty', 'School Personnel'], true)) {
+            $departmentId = (int) ($data['department_id'] ?? 0);
+            $employmentType = trim((string) ($data['employment_type'] ?? ''));
+            $positionTitle = trim((string) ($data['position_title'] ?? ''));
+            if ($departmentId < 1 || !in_array($employmentType, ['Full-time', 'Part-time'], true)) {
+                throw new InvalidArgumentException('Select a valid department and employment type.');
+            }
+            $departmentStmt = $db->prepare('SELECT 1 FROM departments WHERE id = ? AND is_active = 1 LIMIT 1');
+            $departmentStmt->execute([$departmentId]);
+            if (!$departmentStmt->fetchColumn()) {
+                throw new InvalidArgumentException('The selected department is not active.');
+            }
+            $db->prepare('
+                UPDATE school_employees
+                SET department_id = ?, employment_type = ?, position_title = ?
+                WHERE person_id = ?
+            ')->execute([$departmentId, $employmentType, $positionTitle !== '' ? $positionTitle : null, $personId]);
+        } elseif ($profile['patient_type'] === 'Clinic Staff') {
+            $departmentId = (int) ($data['department_id'] ?? 0);
+            $positionTitle = trim((string) ($data['position_title'] ?? ''));
+            if ($departmentId > 0) {
+                $departmentStmt = $db->prepare('SELECT 1 FROM departments WHERE id = ? AND is_active = 1 LIMIT 1');
+                $departmentStmt->execute([$departmentId]);
+                if (!$departmentStmt->fetchColumn()) {
+                    throw new InvalidArgumentException('The selected department is not active.');
+                }
+            }
+            $db->prepare('
+                UPDATE clinic_staff SET department_id = ?, position_title = ? WHERE person_id = ?
+            ')->execute([$departmentId ?: null, $positionTitle !== '' ? $positionTitle : null, $personId]);
+        }
+
+        $db->commit();
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        throw $e;
+    }
+
+    return cliniq_patient_profile_find($personId) ?? $profile;
 }
 
 /** @return array<int,array<string,mixed>> */
