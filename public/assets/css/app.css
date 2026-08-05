@@ -2651,6 +2651,31 @@ textarea.record-sheet-field {
     overflow-wrap: anywhere;
 }
 
+.cliniq-cell-overflow-tooltip {
+    position: fixed;
+    z-index: 10050;
+    width: max-content;
+    max-width: min(32rem, calc(100vw - 1rem));
+    max-height: min(18rem, 45vh);
+    overflow: hidden auto;
+    border: 1px solid rgba(199, 220, 205, 0.95);
+    border-radius: 0.8rem;
+    background: #ffffff;
+    box-shadow: 0 16px 38px rgba(15, 23, 42, 0.18);
+    color: #17261d;
+    padding: 0.7rem 0.85rem;
+    font-size: 0.78rem;
+    font-weight: 750;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+    pointer-events: none;
+    white-space: normal;
+}
+
+.cliniq-cell-overflow-tooltip[hidden] {
+    display: none;
+}
+
 .cliniq-ag-grid .ag-paging-panel {
     min-height: 56px;
     border-top-color: oklch(92% .01 230 / .72);

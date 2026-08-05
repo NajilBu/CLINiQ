@@ -15,6 +15,92 @@
         return params.value || '';
     }
 
+    function tableCellTooltipText(cell) {
+        const columnId = String(cell.getAttribute('col-id') || '').toLowerCase();
+        if (/action|profile|control/.test(columnId) || cell.querySelector('button, input, textarea, select, form, .btn')) {
+            return '';
+        }
+
+        const copy = cell.cloneNode(true);
+        copy.querySelectorAll('.material-symbols-outlined, button, input, textarea, select, form, .btn').forEach((node) => node.remove());
+        return String(copy.innerText || copy.textContent || '').replace(/\s+/g, ' ').trim();
+    }
+
+    function tableCellIsOverflowing(cell) {
+        const candidates = [
+            cell,
+            ...cell.querySelectorAll('.ag-cell-wrapper, .ag-cell-value, .ag-cell-value > *, .ag-cell-wrapper > *')
+        ];
+        return candidates.some((node) => (
+            node.clientWidth > 0
+            && node.clientHeight > 0
+            && (node.scrollWidth > node.clientWidth + 1 || node.scrollHeight > node.clientHeight + 1)
+        ));
+    }
+
+    function initOverflowCellTooltips() {
+        if (document.body.dataset.gridOverflowTooltips === 'true') return;
+        document.body.dataset.gridOverflowTooltips = 'true';
+
+        const tooltip = document.createElement('div');
+        tooltip.className = 'cliniq-cell-overflow-tooltip';
+        tooltip.setAttribute('role', 'tooltip');
+        tooltip.hidden = true;
+        document.body.appendChild(tooltip);
+        let activeCell = null;
+
+        function hideTooltip() {
+            tooltip.hidden = true;
+            activeCell = null;
+        }
+
+        function showTooltip(cell) {
+            const text = tableCellTooltipText(cell);
+            if (!text || !tableCellIsOverflowing(cell)) {
+                hideTooltip();
+                return;
+            }
+
+            activeCell = cell;
+            tooltip.textContent = text;
+            tooltip.hidden = false;
+            tooltip.style.left = '0px';
+            tooltip.style.top = '0px';
+
+            const cellRect = cell.getBoundingClientRect();
+            const tooltipRect = tooltip.getBoundingClientRect();
+            const viewportPadding = 8;
+            const left = Math.min(
+                Math.max(viewportPadding, cellRect.left),
+                Math.max(viewportPadding, window.innerWidth - tooltipRect.width - viewportPadding)
+            );
+            let top = cellRect.top - tooltipRect.height - 8;
+            if (top < viewportPadding) {
+                top = Math.min(window.innerHeight - tooltipRect.height - viewportPadding, cellRect.bottom + 8);
+            }
+
+            tooltip.style.left = `${left}px`;
+            tooltip.style.top = `${Math.max(viewportPadding, top)}px`;
+        }
+
+        document.addEventListener('mouseover', (event) => {
+            if (!(event.target instanceof Element)) return;
+            const cell = event.target.closest('.cliniq-ag-grid .ag-cell, table td, table th');
+            if (!cell || cell === activeCell) return;
+            showTooltip(cell);
+        });
+
+        document.addEventListener('mouseout', (event) => {
+            if (!activeCell) return;
+            const nextTarget = event.relatedTarget;
+            if (nextTarget && activeCell.contains(nextTarget)) return;
+            if (!nextTarget || !activeCell.contains(nextTarget)) hideTooltip();
+        });
+
+        document.addEventListener('scroll', hideTooltip, true);
+        window.addEventListener('resize', hideTooltip);
+    }
+
     function compareSortValues(left, right, type) {
         const leftMissing = left === null || left === undefined || left === '';
         const rightMissing = right === null || right === undefined || right === '';
@@ -270,6 +356,7 @@
     };
 
     document.addEventListener('DOMContentLoaded', () => {
+        initOverflowCellTooltips();
         window.cliniqInitAgGrids(document);
     });
 })();

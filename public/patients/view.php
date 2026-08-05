@@ -39,6 +39,11 @@ $fullName = trim(implode(' ', array_filter([
     $patient['last_name'] ?? '',
 ])));
 $visits = cliniq_patient_profile_history((int) $patient['person_id']);
+$visitStatuses = array_values(array_unique(array_map(
+    fn(array $visit): string => (string) ($visit['status'] ?? 'Unaddressed'),
+    $visits
+)));
+sort($visitStatuses, SORT_NATURAL | SORT_FLAG_CASE);
 
 $legacyPatientStmt = db()->prepare('SELECT id FROM patients WHERE id_number = ? LIMIT 1');
 $legacyPatientStmt->execute([(string) $patient['id_number']]);
@@ -172,6 +177,24 @@ render_header($fullName . ' - Patient Profile');
         position: relative;
     }
 
+    .care-timeline-toolbar {
+        display: grid;
+        grid-template-columns: minmax(15rem, 1.7fr) repeat(3, minmax(9rem, 1fr));
+        gap: 0.75rem;
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid rgba(226, 232, 240, 0.85);
+        background: #fbfdfb;
+    }
+
+    .care-timeline-filter {
+        min-width: 0;
+    }
+
+    .care-timeline-filter .clinic-input,
+    .care-timeline-filter .clinic-select {
+        min-height: 2.75rem;
+    }
+
     .patient-profile-event {
         display: grid;
         grid-template-columns: auto minmax(0, 1fr) auto;
@@ -185,6 +208,50 @@ render_header($fullName . ' - Patient Profile');
     .patient-profile-event:hover {
         background: #f8fbf9;
         transform: translateX(2px);
+    }
+
+    .patient-profile-event[hidden] {
+        display: none;
+    }
+
+    .patient-profile-event.is-collapsed [data-care-details] {
+        display: none;
+    }
+
+    .care-timeline-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.3rem;
+        min-height: 2rem;
+        border: 0;
+        border-radius: 0.65rem;
+        background: #e8f6ec;
+        color: #2f6942;
+        padding: 0.35rem 0.55rem;
+        font-size: 0.72rem;
+        font-weight: 900;
+        cursor: pointer;
+        transition: background-color 0.16s ease, color 0.16s ease;
+    }
+
+    .care-timeline-toggle:hover {
+        background: #d8efdf;
+        color: #245535;
+    }
+
+    .care-timeline-toggle .material-symbols-outlined {
+        font-size: 1.05rem;
+        transition: transform 0.18s ease;
+    }
+
+    .patient-profile-event.is-collapsed .care-timeline-toggle .material-symbols-outlined {
+        transform: rotate(180deg);
+    }
+
+    .care-timeline-pagination {
+        min-height: 4.75rem;
+        border-top: 1px solid rgba(226, 232, 240, 0.85);
     }
 
     .patient-profile-event-icon {
@@ -205,6 +272,10 @@ render_header($fullName . ' - Patient Profile');
     }
 
     @media (max-width: 720px) {
+        .care-timeline-toolbar {
+            grid-template-columns: 1fr;
+        }
+
         .patient-profile-event {
             grid-template-columns: auto minmax(0, 1fr);
         }
@@ -379,8 +450,31 @@ render_header($fullName . ' - Patient Profile');
         </div>
 
         <?php if ($visits): ?>
-            <div class="patient-profile-timeline divide-y divide-outline-variant/10">
-                <?php foreach ($visits as $visit): ?>
+            <div class="care-timeline-toolbar" data-care-filters>
+                <label class="care-timeline-filter">
+                    <span class="clinic-label">Search records</span>
+                    <input type="search" class="clinic-input" data-care-search placeholder="Complaint, diagnosis, treatment, medicine...">
+                </label>
+                <label class="care-timeline-filter">
+                    <span class="clinic-label">Status</span>
+                    <select class="clinic-select" data-care-status>
+                        <option value="">All statuses</option>
+                        <?php foreach ($visitStatuses as $statusOption): ?>
+                            <option value="<?= e(strtolower($statusOption)) ?>"><?= e($statusOption) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+                <label class="care-timeline-filter">
+                    <span class="clinic-label">From date</span>
+                    <input type="date" class="clinic-input" data-care-date-from>
+                </label>
+                <label class="care-timeline-filter">
+                    <span class="clinic-label">To date</span>
+                    <input type="date" class="clinic-input" data-care-date-to>
+                </label>
+            </div>
+            <div class="patient-profile-timeline divide-y divide-outline-variant/10" data-care-timeline>
+                <?php foreach ($visits as $visitIndex => $visit): ?>
                     <?php
                     $visitStatus = $visit['status'] ?? 'Unaddressed';
                     $visitPurpose = $visit['visit_purpose'] ?: 'General Visit';
@@ -403,8 +497,22 @@ render_header($fullName . ' - Patient Profile');
                             $vitalBits[] = 'Pulse ' . (int) $latestVital['pulse_rate'] . ' BPM';
                         }
                     }
+                    $visitSearchText = strtolower(implode(' ', [
+                        (string) ($visit['chief_complaint'] ?? ''),
+                        (string) $visitPurpose,
+                        (string) $visitSource,
+                        (string) $visitStatus,
+                        (string) ($visit['action_taken'] ?? ''),
+                        (string) ($visit['recorded_by_name'] ?? ''),
+                        (string) ($visit['attended_by_name'] ?? ''),
+                        (string) json_encode($visit['entries'] ?? [], JSON_UNESCAPED_UNICODE),
+                    ]));
                     ?>
-                    <article class="patient-profile-event">
+                    <article class="patient-profile-event <?= $visitIndex === 0 ? '' : 'is-collapsed' ?>"
+                             data-care-event
+                             data-care-search-text="<?= e($visitSearchText) ?>"
+                             data-care-status-value="<?= e(strtolower((string) $visitStatus)) ?>"
+                             data-care-date-value="<?= e(date('Y-m-d', strtotime($visit['visit_datetime']))) ?>">
                         <div class="patient-profile-event-icon">
                             <span class="material-symbols-outlined">medical_information</span>
                         </div>
@@ -414,6 +522,7 @@ render_header($fullName . ' - Patient Profile');
                                 <span class="text-[11px] font-black uppercase tracking-widest text-slate-400"><?= e($visitPurpose) ?> / <?= e($visitSource) ?></span>
                             </div>
                             <h3 class="text-base font-extrabold text-slate-900 mb-1"><?= e($visit['chief_complaint'] ?: 'No complaint recorded') ?></h3>
+                            <div data-care-details>
                             <?php if ($latestSymptoms): ?>
                                 <p class="text-sm font-bold text-slate-500 mb-2 whitespace-pre-wrap"><?= e($latestSymptoms) ?></p>
                             <?php endif; ?>
@@ -519,10 +628,15 @@ render_header($fullName . ' - Patient Profile');
                                     </div>
                                 </div>
                             <?php endif; ?>
+                            </div>
                         </div>
                         <div class="patient-profile-event-meta text-right shrink-0">
                             <p class="text-xs font-extrabold text-slate-500 mb-0"><?= e(date('M d, Y', strtotime($visit['visit_datetime']))) ?></p>
                             <p class="text-[11px] font-bold text-slate-400 mb-2"><?= e(date('g:i A', strtotime($visit['visit_datetime']))) ?></p>
+                            <button type="button" class="care-timeline-toggle mb-2" data-care-toggle aria-expanded="<?= $visitIndex === 0 ? 'true' : 'false' ?>">
+                                <span data-care-toggle-label><?= $visitIndex === 0 ? 'Collapse' : 'Expand' ?></span>
+                                <span class="material-symbols-outlined" aria-hidden="true">expand_less</span>
+                            </button>
                             <a href="<?= e(app_url('visits/view.php?id=' . (int) $visit['id'] . '&from=profile')) ?>" class="text-xs font-black text-primary inline-flex items-center gap-1 text-decoration-none">
                                 Open record
                                 <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
@@ -531,6 +645,12 @@ render_header($fullName . ' - Patient Profile');
                     </article>
                 <?php endforeach; ?>
             </div>
+            <div class="hidden px-5 py-8 text-center" data-care-no-results>
+                <span class="material-symbols-outlined text-4xl text-slate-300">search_off</span>
+                <p class="text-sm font-extrabold text-slate-600 mt-2 mb-1">No matching visits</p>
+                <p class="text-xs font-bold text-slate-400 m-0">Change or clear the Care Timeline filters.</p>
+            </div>
+            <div class="care-timeline-pagination pagination justify-center" data-care-pagination aria-label="Care Timeline pages"></div>
         <?php else: ?>
             <div class="empty-state">
                 <span class="material-symbols-outlined">clinical_notes</span>
@@ -624,5 +744,113 @@ render_header($fullName . ' - Patient Profile');
         </section>
     </div>
 </div>
+
+<script>
+(function () {
+    const timeline = document.querySelector('[data-care-timeline]');
+    if (!timeline) return;
+
+    const pageSize = 5;
+    const events = Array.from(timeline.querySelectorAll('[data-care-event]'));
+    const searchInput = document.querySelector('[data-care-search]');
+    const statusInput = document.querySelector('[data-care-status]');
+    const fromInput = document.querySelector('[data-care-date-from]');
+    const toInput = document.querySelector('[data-care-date-to]');
+    const pagination = document.querySelector('[data-care-pagination]');
+    const noResults = document.querySelector('[data-care-no-results]');
+    let currentPage = 1;
+
+    function normalized(value) {
+        return String(value || '').trim().toLocaleLowerCase();
+    }
+
+    function matchingEvents() {
+        const query = normalized(searchInput && searchInput.value);
+        const status = normalized(statusInput && statusInput.value);
+        const dateFrom = fromInput ? fromInput.value : '';
+        const dateTo = toInput ? toInput.value : '';
+
+        return events.filter((event) => {
+            const textMatches = !query || normalized(event.dataset.careSearchText).includes(query);
+            const statusMatches = !status || normalized(event.dataset.careStatusValue) === status;
+            const eventDate = event.dataset.careDateValue || '';
+            const fromMatches = !dateFrom || eventDate >= dateFrom;
+            const toMatches = !dateTo || eventDate <= dateTo;
+            return textMatches && statusMatches && fromMatches && toMatches;
+        });
+    }
+
+    function renderPagination(totalPages) {
+        if (!pagination) return;
+
+        let markup = `<button type="button" data-care-page-action="previous" aria-label="Previous page" ${currentPage === 1 ? 'class="page-disabled" disabled' : ''}>&lsaquo;</button>`;
+        for (let page = 1; page <= totalPages; page += 1) {
+            const active = page === currentPage;
+            markup += `<button type="button" data-care-page="${page}"${active ? ' class="page-active" aria-current="page"' : ''}>${page}</button>`;
+        }
+        markup += `<button type="button" data-care-page-action="next" aria-label="Next page" ${currentPage === totalPages ? 'class="page-disabled" disabled' : ''}>&rsaquo;</button>`;
+        pagination.innerHTML = markup;
+    }
+
+    function applyTimelineFilters() {
+        const matches = matchingEvents();
+        const totalPages = Math.max(1, Math.ceil(matches.length / pageSize));
+        currentPage = Math.min(Math.max(1, currentPage), totalPages);
+        const visibleStart = (currentPage - 1) * pageSize;
+        const visibleEvents = new Set(matches.slice(visibleStart, visibleStart + pageSize));
+
+        events.forEach((event) => {
+            event.hidden = !visibleEvents.has(event);
+        });
+
+        if (noResults) {
+            noResults.classList.toggle('hidden', matches.length !== 0);
+        }
+        renderPagination(totalPages);
+    }
+
+    function resetToFirstPage() {
+        currentPage = 1;
+        applyTimelineFilters();
+    }
+
+    [searchInput, statusInput, fromInput, toInput].forEach((input) => {
+        if (!input) return;
+        input.addEventListener(input === searchInput ? 'input' : 'change', resetToFirstPage);
+    });
+
+    timeline.addEventListener('click', (event) => {
+        const toggle = event.target.closest('[data-care-toggle]');
+        if (!toggle) return;
+
+        const visit = toggle.closest('[data-care-event]');
+        if (!visit) return;
+
+        const collapsed = visit.classList.toggle('is-collapsed');
+        toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        const label = toggle.querySelector('[data-care-toggle-label]');
+        if (label) label.textContent = collapsed ? 'Expand' : 'Collapse';
+    });
+
+    if (pagination) {
+        pagination.addEventListener('click', (event) => {
+            const button = event.target.closest('button');
+            if (!button || button.disabled) return;
+
+            if (button.dataset.carePage) {
+                currentPage = Number(button.dataset.carePage);
+            } else if (button.dataset.carePageAction === 'previous') {
+                currentPage = Math.max(1, currentPage - 1);
+            } else if (button.dataset.carePageAction === 'next') {
+                currentPage += 1;
+            }
+            applyTimelineFilters();
+            timeline.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    }
+
+    applyTimelineFilters();
+})();
+</script>
 
 <?php render_footer(); ?>
