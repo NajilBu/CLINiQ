@@ -331,19 +331,52 @@ render_clinic_command_header(
                     </form>
                 </section>
 
+                <section data-logo-placeholder>
+                    <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">System Logo</h2>
+                    <p class="text-xs font-bold text-slate-500 mb-5">Preview how a replacement logo would appear in CLINiQ. Saving will be enabled in a future update.</p>
+                    <div class="settings-section settings-logo-layout">
+                        <div class="settings-logo-preview-card">
+                            <span class="clinic-label">Logo preview</span>
+                            <div class="settings-logo-preview">
+                                <img src="<?= app_url('assets/img/clinic-logo.png') ?>" alt="Current <?= e($clinicProfile['department']) ?> logo" data-logo-preview>
+                            </div>
+                            <p class="settings-help m-0 text-center">Current CLINiQ sidebar logo</p>
+                        </div>
+
+                        <div class="settings-logo-controls">
+                            <label class="settings-logo-dropzone" for="settingsLogoInput" data-logo-dropzone>
+                                <input id="settingsLogoInput" type="file" accept="image/png,image/jpeg,image/webp" data-logo-input>
+                                <span class="material-symbols-outlined">add_photo_alternate</span>
+                                <strong>Drop a logo here or choose an image</strong>
+                                <span>PNG, JPG, or WebP &bull; square image recommended &bull; up to 5 MB</span>
+                            </label>
+                            <p class="settings-logo-file-name" data-logo-file-name>No new image selected.</p>
+                            <div class="flex flex-wrap justify-end gap-3">
+                                <button type="button" class="btn btn-ghost hidden" data-logo-reset>Reset Preview</button>
+                                <label for="settingsLogoInput" class="btn btn-outline cursor-pointer">
+                                    <span class="material-symbols-outlined text-[18px]">folder_open</span>
+                                    Choose Image
+                                </label>
+                                <button type="button" class="btn btn-primary" disabled title="Logo saving is not implemented yet.">
+                                    <span class="material-symbols-outlined text-[18px]">schedule</span>
+                                    Save Logo &mdash; Coming Soon
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
                 <section>
                     <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">System Color Theme</h2>
                     <p class="text-xs font-bold text-slate-500 mb-5">Choose the primary color used by navigation, buttons, focus rings, and active settings controls.</p>
-                    <form method="post" class="settings-section">
+                    <form method="post" class="settings-section" data-no-ajax="true">
                         <input type="hidden" name="action" value="save_theme">
                         <div class="settings-theme-grid">
                             <?php foreach ($themePresets as $themeKey => $theme): ?>
                                 <label class="settings-theme-option <?= $activeTheme === $themeKey ? 'active' : '' ?>">
                                     <input type="radio" name="theme" value="<?= e($themeKey) ?>" <?= $activeTheme === $themeKey ? 'checked' : '' ?> <?= !$canManageSettings ? 'disabled' : '' ?>>
                                     <span class="settings-theme-swatch" style="--theme-swatch: <?= e($theme['primary']) ?>">
-                                        <?php if ($activeTheme === $themeKey): ?>
-                                            <span class="material-symbols-outlined">check</span>
-                                        <?php endif; ?>
+                                        <span class="material-symbols-outlined">check</span>
                                     </span>
                                     <span><?= e($theme['label']) ?></span>
                                 </label>

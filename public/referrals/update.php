@@ -9,7 +9,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $allowed = ['Pending', 'Completed', 'Cancelled'];
 
     if ($id > 0 && in_array($status, $allowed, true)) {
-        $stmt = db()->prepare('UPDATE referrals SET status = ? WHERE id = ?');
+        $stmt = auth_db()->prepare('UPDATE referrals SET status = ? WHERE referral_id = ?');
         $stmt->execute([$status, $id]);
         flash_message('success', 'Referral status updated to "' . $status . '".');
     }

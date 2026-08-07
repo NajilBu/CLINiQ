@@ -429,6 +429,79 @@ function initSettingsTabs() {
     });
 }
 
+function initLogoPlaceholders(root = document) {
+    const scope = root.querySelectorAll ? root : document;
+    scope.querySelectorAll('[data-logo-placeholder]').forEach((section) => {
+        if (section.dataset.logoPlaceholderReady === '1') return;
+        section.dataset.logoPlaceholderReady = '1';
+
+        const input = section.querySelector('[data-logo-input]');
+        const preview = section.querySelector('[data-logo-preview]');
+        const dropzone = section.querySelector('[data-logo-dropzone]');
+        const fileName = section.querySelector('[data-logo-file-name]');
+        const reset = section.querySelector('[data-logo-reset]');
+        if (!(input instanceof HTMLInputElement) || !(preview instanceof HTMLImageElement)) return;
+
+        const originalSource = preview.src;
+        let previewUrl = '';
+
+        function clearPreviewUrl() {
+            if (previewUrl) {
+                URL.revokeObjectURL(previewUrl);
+                previewUrl = '';
+            }
+        }
+
+        function previewFile(file) {
+            if (!file) return;
+            if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+                if (typeof showToast === 'function') showToast('Choose a PNG, JPG, or WebP image.', 'error');
+                return;
+            }
+            if (file.size > 5 * 1024 * 1024) {
+                if (typeof showToast === 'function') showToast('Logo preview files must be 5 MB or smaller.', 'error');
+                return;
+            }
+
+            clearPreviewUrl();
+            previewUrl = URL.createObjectURL(file);
+            preview.src = previewUrl;
+            if (fileName) fileName.textContent = `${file.name} — preview only, not saved`;
+            if (reset) reset.classList.remove('hidden');
+        }
+
+        input.addEventListener('change', () => previewFile(input.files && input.files[0]));
+
+        if (dropzone) {
+            ['dragenter', 'dragover'].forEach((eventName) => {
+                dropzone.addEventListener(eventName, (event) => {
+                    event.preventDefault();
+                    dropzone.classList.add('is-dragging');
+                });
+            });
+            ['dragleave', 'drop'].forEach((eventName) => {
+                dropzone.addEventListener(eventName, (event) => {
+                    event.preventDefault();
+                    dropzone.classList.remove('is-dragging');
+                });
+            });
+            dropzone.addEventListener('drop', (event) => {
+                previewFile(event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0]);
+            });
+        }
+
+        if (reset) {
+            reset.addEventListener('click', () => {
+                clearPreviewUrl();
+                input.value = '';
+                preview.src = originalSource;
+                if (fileName) fileName.textContent = 'No new image selected.';
+                reset.classList.add('hidden');
+            });
+        }
+    });
+}
+
 /**
  * Escape HTML entities to prevent XSS.
  */
@@ -581,6 +654,8 @@ function cliniqAfterContentSwap(root) {
         window.cliniqInitAgGrids(root || document);
     }
     initStudentIdFormatting(root || document);
+    initLogoPlaceholders(root || document);
+    initDragScrolling(root || document);
     initTabsFromURL();
     refreshAlerts();
     document.dispatchEvent(new CustomEvent('cliniq:page-content-replaced', {
@@ -764,6 +839,132 @@ function initStudentIdFormatting(root = document) {
 
 
 // ============================================================
+// HOLD-AND-DRAG SCROLLING
+// ============================================================
+
+function cliniqElementCanScroll(element) {
+    if (!(element instanceof HTMLElement)) return false;
+
+    const style = window.getComputedStyle(element);
+    const canScrollX = element.scrollWidth > element.clientWidth + 1
+        && ['auto', 'scroll', 'overlay'].includes(style.overflowX);
+    const canScrollY = element.scrollHeight > element.clientHeight + 1
+        && ['auto', 'scroll', 'overlay'].includes(style.overflowY);
+
+    return canScrollX || canScrollY;
+}
+
+function cliniqFindDragScroller(target) {
+    let element = target instanceof Element ? target : null;
+    while (element && element !== document.documentElement) {
+        if (cliniqElementCanScroll(element)) return element;
+        element = element.parentElement;
+    }
+
+    const pageScroller = document.scrollingElement;
+    return cliniqElementCanScroll(pageScroller) ? pageScroller : null;
+}
+
+function initDragScrolling(root = document) {
+    const scope = root?.querySelectorAll ? root : document;
+    scope.querySelectorAll([
+        '.overflow-auto', '.overflow-x-auto', '.overflow-y-auto',
+        '.app-main', '.app-content', '.ag-body-viewport',
+        '.ag-center-cols-viewport', '.dashboard-day-calendar',
+        '.appointment-week-scroll'
+    ].join(',')).forEach((element) => {
+        if (cliniqElementCanScroll(element)) element.classList.add('cliniq-drag-scroll');
+    });
+
+    if (document.documentElement.dataset.cliniqDragScrollReady === '1') return;
+    document.documentElement.dataset.cliniqDragScrollReady = '1';
+
+    const blockedStartSelector = [
+        'a', 'button', 'input', 'textarea', 'select', 'option', 'label',
+        '[contenteditable="true"]', '[role="button"]', '[role="link"]',
+        '[data-no-drag-scroll]', '.ag-header-cell', '.ag-paging-panel',
+        '.ag-checkbox-input-wrapper', '.resize-handle'
+    ].join(',');
+    const dragThreshold = 5;
+    let dragState = null;
+    let suppressedClick = null;
+
+    document.addEventListener('pointerover', (event) => {
+        if (event.pointerType && event.pointerType !== 'mouse') return;
+        const scroller = cliniqFindDragScroller(event.target);
+        if (scroller) scroller.classList.add('cliniq-drag-scroll');
+    }, { passive: true });
+
+    document.addEventListener('pointerdown', (event) => {
+        if (event.button !== 0 || (event.pointerType && event.pointerType !== 'mouse')) return;
+        if (!(event.target instanceof Element)) return;
+
+        const protectedControl = event.target.closest(blockedStartSelector);
+        const availabilityDragSurface = event.target.closest('.appointment-week-calendar');
+        if (protectedControl && !availabilityDragSurface) return;
+
+        const scroller = cliniqFindDragScroller(event.target);
+        if (!scroller) return;
+
+        scroller.classList.add('cliniq-drag-scroll');
+        dragState = {
+            pointerId: event.pointerId,
+            scroller,
+            startX: event.clientX,
+            startY: event.clientY,
+            scrollLeft: scroller.scrollLeft,
+            scrollTop: scroller.scrollTop,
+            moved: false,
+        };
+    });
+
+    document.addEventListener('pointermove', (event) => {
+        if (!dragState || event.pointerId !== dragState.pointerId) return;
+
+        const deltaX = event.clientX - dragState.startX;
+        const deltaY = event.clientY - dragState.startY;
+        if (!dragState.moved && Math.hypot(deltaX, deltaY) < dragThreshold) return;
+
+        if (!dragState.moved) {
+            dragState.moved = true;
+            dragState.scroller.classList.add('cliniq-is-dragging');
+            document.body.classList.add('cliniq-drag-scroll-active');
+        }
+
+        event.preventDefault();
+        dragState.scroller.scrollLeft = dragState.scrollLeft - deltaX;
+        dragState.scroller.scrollTop = dragState.scrollTop - deltaY;
+    }, { passive: false });
+
+    const finishDrag = (event) => {
+        if (!dragState || (event.pointerId !== undefined && event.pointerId !== dragState.pointerId)) return;
+        if (dragState.moved) {
+            suppressedClick = { scroller: dragState.scroller, expires: performance.now() + 350 };
+        }
+        dragState.scroller.classList.remove('cliniq-is-dragging');
+        document.body.classList.remove('cliniq-drag-scroll-active');
+        dragState = null;
+    };
+
+    document.addEventListener('pointerup', finishDrag);
+    document.addEventListener('pointercancel', finishDrag);
+    window.addEventListener('blur', () => finishDrag({}));
+
+    document.addEventListener('click', (event) => {
+        if (!suppressedClick || performance.now() > suppressedClick.expires) {
+            suppressedClick = null;
+            return;
+        }
+        if (event.target instanceof Node && suppressedClick.scroller.contains(event.target)) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            suppressedClick = null;
+        }
+    }, true);
+}
+
+
+// ============================================================
 // AUTO-INITIALIZATION
 // ============================================================
 
@@ -777,6 +978,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Settings page vertical tab controls
     initSettingsTabs();
 
+    // UI-only system logo preview in General Settings
+    initLogoPlaceholders();
+
     // Initialize tabs from URL
     initTabsFromURL();
 
@@ -785,6 +989,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ID Numbers use Enter ID number format.
     initStudentIdFormatting();
+
+    // Mouse users can hold and drag any scrollable panel or table.
+    initDragScrolling();
 
     // Start alert polling
     refreshAlerts();

@@ -93,6 +93,47 @@ function appointment_blocks_for_month(DateTimeImmutable $month): array
     return $byDate;
 }
 
+function appointment_week_from_request(?string $value = null): DateTimeImmutable
+{
+    $value = trim((string) $value);
+    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+        $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+        if ($date && $date->format('Y-m-d') === $value) {
+            return $date->modify('monday this week')->setTime(0, 0);
+        }
+    }
+
+    return (new DateTimeImmutable('today'))->modify('monday this week')->setTime(0, 0);
+}
+
+function appointment_week_bounds(DateTimeImmutable $week): array
+{
+    $start = $week->modify('monday this week')->setTime(0, 0);
+    $end = $start->modify('+5 days')->setTime(23, 59, 59);
+
+    return [$start->format('Y-m-d'), $end->format('Y-m-d')];
+}
+
+function appointment_blocks_for_week(DateTimeImmutable $week): array
+{
+    [$start, $end] = appointment_week_bounds($week);
+    $stmt = db()->prepare("
+        SELECT b.*, u.name AS created_by_name
+        FROM appointment_availability_blocks b
+        LEFT JOIN users u ON u.id = b.created_by
+        WHERE b.block_date BETWEEN ? AND ?
+        ORDER BY b.block_date ASC, b.start_time IS NULL DESC, b.start_time ASC
+    ");
+    $stmt->execute([$start, $end]);
+
+    $byDate = [];
+    foreach ($stmt->fetchAll() as $block) {
+        $byDate[$block['block_date']][] = $block;
+    }
+
+    return $byDate;
+}
+
 function appointment_patient_dates_for_month(int $patientId, DateTimeImmutable $month): array
 {
     [$start, $end] = appointment_month_bounds($month);

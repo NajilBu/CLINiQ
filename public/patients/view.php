@@ -50,7 +50,6 @@ $legacyPatientStmt->execute([(string) $patient['id_number']]);
 $legacyPatientId = (int) ($legacyPatientStmt->fetchColumn() ?: 0);
 
 $apeRecords = [];
-$referrals = [];
 if ($legacyPatientId > 0) {
     $apeStmt = db()->prepare("
         SELECT a.*, u.name AS verified_by_name
@@ -62,10 +61,17 @@ if ($legacyPatientId > 0) {
     $apeStmt->execute([$legacyPatientId]);
     $apeRecords = $apeStmt->fetchAll();
 
-    $refStmt = db()->prepare('SELECT * FROM referrals WHERE patient_id = ? ORDER BY referral_date DESC');
-    $refStmt->execute([$legacyPatientId]);
-    $referrals = $refStmt->fetchAll();
 }
+
+$refStmt = auth_db()->prepare('
+    SELECT r.*, TRIM(CONCAT_WS(" ", pe.first_name, pe.middle_name, pe.last_name)) AS referred_by_name
+    FROM referrals r
+    LEFT JOIN people pe ON pe.id = r.referred_by_person_id
+    WHERE r.patient_person_id = ?
+    ORDER BY r.referral_date DESC, r.referral_id DESC
+');
+$refStmt->execute([(int) $patient['person_id']]);
+$referrals = $refStmt->fetchAll();
 
 $latestVisit = null;
 foreach ($visits as $visit) {

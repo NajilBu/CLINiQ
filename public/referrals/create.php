@@ -3,17 +3,39 @@
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_login();
 
-$patients = db()->query('SELECT id, id_number, first_name, last_name FROM patients ORDER BY last_name, first_name')->fetchAll();
+$patients = auth_db()->query('
+    SELECT pe.id AS person_id, pe.id_number, pe.first_name, pe.last_name
+    FROM patients pt
+    JOIN people pe ON pe.id = pt.person_id
+    ORDER BY pe.last_name, pe.first_name
+')->fetchAll();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $stmt = db()->prepare(
-        'INSERT INTO referrals (patient_id, referral_date, referred_to, reason) VALUES (?, ?, ?, ?)'
+    $patientPersonId = (int) ($_POST['patient_person_id'] ?? 0);
+    $referredTo = trim((string) ($_POST['referred_to'] ?? ''));
+    $reason = trim((string) ($_POST['reason'] ?? ''));
+    if ($patientPersonId < 1 || $referredTo === '' || $reason === '') {
+        throw new InvalidArgumentException('Select a patient and complete the referral details.');
+    }
+
+    $referrerPersonId = (int) ((current_user()['person_id'] ?? 0));
+    if ($referrerPersonId > 0) {
+        $staffCheck = auth_db()->prepare('SELECT 1 FROM clinic_staff WHERE person_id = ?');
+        $staffCheck->execute([$referrerPersonId]);
+        if (!$staffCheck->fetchColumn()) {
+            $referrerPersonId = 0;
+        }
+    }
+
+    $stmt = auth_db()->prepare(
+        'INSERT INTO referrals (patient_person_id, referral_date, referred_to, reason, referred_by_person_id) VALUES (?, ?, ?, ?, ?)'
     );
     $stmt->execute([
-        (int)$_POST['patient_id'],
+        $patientPersonId,
         $_POST['referral_date'] ?: date('Y-m-d'),
-        trim($_POST['referred_to'] ?? ''),
-        trim($_POST['reason'] ?? ''),
+        $referredTo,
+        $reason,
+        $referrerPersonId ?: null,
     ]);
 
     flash_message('success', 'Referral created successfully.');
@@ -34,10 +56,10 @@ render_header('New Referral');
     <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
         <div>
             <label class="clinic-label">Patient</label>
-            <select class="clinic-select" name="patient_id" required>
+            <select class="clinic-select" name="patient_person_id" required>
                 <option value="">Select patient</option>
                 <?php foreach ($patients as $p): ?>
-                    <option value="<?= (int)$p['id'] ?>"><?= e($p['last_name'] . ', ' . $p['first_name'] . ' - ' . $p['id_number']) ?></option>
+                    <option value="<?= (int)$p['person_id'] ?>"><?= e($p['last_name'] . ', ' . $p['first_name'] . ' - ' . $p['id_number']) ?></option>
                 <?php endforeach; ?>
             </select>
         </div>

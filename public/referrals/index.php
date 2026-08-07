@@ -3,7 +3,10 @@
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_login();
 
-$filterStatus = $_GET['status'] ?? 'all';
+$filterStatus = strtolower((string) ($_GET['status'] ?? 'all'));
+if (!in_array($filterStatus, ['all', 'pending', 'completed', 'cancelled'], true)) {
+    $filterStatus = 'all';
+}
 
 $where = '1=1';
 $params = [];
@@ -12,19 +15,20 @@ if ($filterStatus !== 'all') {
     $params[] = $filterStatus;
 }
 
-$stmt = db()->prepare("
-    SELECT r.*, p.first_name, p.last_name, p.id_number
+$stmt = auth_db()->prepare("
+    SELECT r.*, pe.first_name, pe.last_name, pe.id_number
     FROM referrals r
-    JOIN patients p ON p.id = r.patient_id
+    JOIN patients pt ON pt.person_id = r.patient_person_id
+    JOIN people pe ON pe.id = pt.person_id
     WHERE {$where}
-    ORDER BY r.created_at DESC
+    ORDER BY r.referral_date DESC, r.referral_id DESC
     LIMIT 100
 ");
 $stmt->execute($params);
 $referrals = $stmt->fetchAll();
 
 $statusCounts = ['all' => 0];
-$countQuery = db()->query("SELECT status, COUNT(*) AS cnt FROM referrals GROUP BY status");
+$countQuery = auth_db()->query("SELECT status, COUNT(*) AS cnt FROM referrals GROUP BY status");
 foreach ($countQuery->fetchAll() as $sc) {
     $statusCounts[strtolower($sc['status'])] = (int)$sc['cnt'];
     $statusCounts['all'] += (int)$sc['cnt'];
@@ -43,10 +47,10 @@ foreach ($referrals as $ref) {
     $fullName = trim($ref['first_name'] . ' ' . $ref['last_name']);
     $actions = '';
     if ($ref['status'] === 'Pending') {
-        $actions = '<form method="post" action="update.php" style="display:inline;"><input type="hidden" name="id" value="' . (int)$ref['id'] . '"><input type="hidden" name="status" value="Completed"><button class="btn btn-sm btn-primary" title="Mark Completed" data-confirm-submit data-confirm-type="primary" data-confirm-title="Complete this referral?" data-confirm-message="This will mark the referral as Completed." data-confirm-toast="Completing referral..."><span class="material-symbols-outlined text-[14px]">check</span> Complete</button></form>';
+        $actions = '<form method="post" action="update.php" style="display:inline;"><input type="hidden" name="id" value="' . (int)$ref['referral_id'] . '"><input type="hidden" name="status" value="Completed"><button class="btn btn-sm btn-primary" title="Mark Completed" data-confirm-submit data-confirm-type="primary" data-confirm-title="Complete this referral?" data-confirm-message="This will mark the referral as Completed." data-confirm-toast="Completing referral..."><span class="material-symbols-outlined text-[14px]">check</span> Complete</button></form>';
     }
     $referralRows[] = [
-        'rowUrl' => app_url('patients/view.php?id=' . (int)$ref['patient_id']),
+        'rowUrl' => app_url('patients/view.php?id=' . (int)$ref['patient_person_id']),
         'patientSort' => trim($ref['last_name'] . ' ' . $ref['first_name']),
         'patientHtml' => '<div class="flex items-center gap-3"><div class="avatar ' . e(avatar_color($fullName)) . '">' . e(initials($fullName)) . '</div><div><strong class="text-sm text-slate-800">' . e($fullName) . '</strong><div class="text-xs font-bold text-slate-400">' . e($ref['id_number']) . '</div></div></div>',
         'referredTo' => $ref['referred_to'],

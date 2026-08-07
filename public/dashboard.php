@@ -123,14 +123,78 @@ $appointmentsStmt = db()->query("
 ");
 $appointments = $appointmentsStmt ? $appointmentsStmt->fetchAll() : [];
 
-$pendingAppointments = db()->query("
-    SELECT a.*, p.first_name, p.last_name, p.id_number, p.course_section
-    FROM appointments a
-    JOIN patients p ON p.id = a.patient_id
-    WHERE a.status = 'Pending'
-    ORDER BY a.created_at DESC, a.appointment_datetime ASC
-    LIMIT 4
-")->fetchAll();
+// Build the dashboard day view without changing the appointment schema. Appointments
+// currently store a start time only, so the dashboard reserves one hour per record.
+$scheduleStartMinutes = 8 * 60;
+$scheduleEndMinutes = 17 * 60;
+$appointmentDurationMinutes = 60;
+$scheduleItems = [];
+$usingAppointmentPlaceholders = count($appointments) === 0;
+
+$appointmentRows = $appointments;
+if ($usingAppointmentPlaceholders) {
+    // UI-only examples make the empty timeline understandable. They are never saved.
+    $today = date('Y-m-d');
+    $appointmentRows = [
+        ['id' => 0, 'patient_id' => 0, 'appointment_datetime' => $today . ' 08:30:00', 'first_name' => 'Sofia', 'last_name' => 'Bautista', 'id_number' => '26-01024', 'purpose' => 'General consultation', 'status' => 'Scheduled', '_placeholder' => true],
+        ['id' => 0, 'patient_id' => 0, 'appointment_datetime' => $today . ' 10:00:00', 'first_name' => 'Najil', 'last_name' => 'Bumacod', 'id_number' => '23-00262', 'purpose' => 'Follow-up checkup', 'status' => 'Scheduled', '_placeholder' => true],
+        ['id' => 0, 'patient_id' => 0, 'appointment_datetime' => $today . ' 13:30:00', 'first_name' => 'Maria', 'last_name' => 'Santos', 'id_number' => 'FAC-0001', 'purpose' => 'Medical consultation', 'status' => 'Scheduled', '_placeholder' => true],
+    ];
+}
+
+foreach ($appointmentRows as $row) {
+    $timestamp = strtotime((string) $row['appointment_datetime']);
+    $startMinute = ((int) date('G', $timestamp) * 60) + (int) date('i', $timestamp);
+    $endMinute = $startMinute + $appointmentDurationMinutes;
+
+    // The day view covers clinic hours only. Keep partially overlapping appointments
+    // visible by clipping their cards to the calendar boundary.
+    if ($endMinute <= $scheduleStartMinutes || $startMinute >= $scheduleEndMinutes) {
+        continue;
+    }
+
+    $row['_start_minute'] = max($startMinute, $scheduleStartMinutes);
+    $row['_end_minute'] = min($endMinute, $scheduleEndMinutes);
+    $row['_actual_start_minute'] = $startMinute;
+    $row['_lane'] = 0;
+    $row['_lane_count'] = 1;
+    $scheduleItems[] = $row;
+}
+
+usort($scheduleItems, static fn(array $a, array $b): int => $a['_start_minute'] <=> $b['_start_minute']);
+
+// Assign overlapping appointments to adjacent lanes so neither card hides the other.
+$overlapGroups = [];
+$currentGroup = [];
+$currentGroupEnd = -1;
+foreach ($scheduleItems as $index => $item) {
+    if ($currentGroup !== [] && $item['_start_minute'] >= $currentGroupEnd) {
+        $overlapGroups[] = $currentGroup;
+        $currentGroup = [];
+        $currentGroupEnd = -1;
+    }
+    $currentGroup[] = $index;
+    $currentGroupEnd = max($currentGroupEnd, $item['_end_minute']);
+}
+if ($currentGroup !== []) {
+    $overlapGroups[] = $currentGroup;
+}
+
+foreach ($overlapGroups as $group) {
+    $laneEnds = [];
+    foreach ($group as $index) {
+        $lane = 0;
+        while (isset($laneEnds[$lane]) && $scheduleItems[$index]['_start_minute'] < $laneEnds[$lane]) {
+            $lane++;
+        }
+        $scheduleItems[$index]['_lane'] = $lane;
+        $laneEnds[$lane] = $scheduleItems[$index]['_end_minute'];
+    }
+    $laneCount = max(1, count($laneEnds));
+    foreach ($group as $index) {
+        $scheduleItems[$index]['_lane_count'] = $laneCount;
+    }
+}
 
 // --- 4. Real-time Visitor Log (Clinic Visits Today) ---
 $visitorLogs = cliniq_visit_db()->query("
@@ -411,8 +475,8 @@ render_header('Main Dashboard');
 
 
     <div class="dashboard-activity-grid grid grid-cols-1 gap-6 mb-8 items-stretch">
-        <!-- 3. Appointment Requests and Today's Schedule -->
-        <section class="dashboard-activity-card clinic-card overflow-hidden flex flex-col max-h-[600px]">
+        <!-- 3. Today's Appointment Schedule -->
+        <section class="dashboard-activity-card dashboard-appointments-card clinic-card overflow-hidden flex flex-col">
             <div class="p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
                 <div class="flex items-center gap-3">
                     <div
@@ -421,8 +485,7 @@ render_header('Main Dashboard');
                     </div>
                     <div>
                         <h2 class="font-headline text-lg font-extrabold text-[#17261d] m-0">Appointments</h2>
-                        <p class="text-xs font-bold text-slate-500 m-0">Approve student requests before they become
-                            scheduled visits.</p>
+                        <p class="text-xs font-bold text-slate-500 m-0">View today's approved clinic schedule by time.</p>
                     </div>
                 </div>
                 <a href="<?= app_url('appointments/index.php') ?>"
@@ -431,105 +494,65 @@ render_header('Main Dashboard');
                 </a>
             </div>
             <div class="flex-1 overflow-y-auto p-4 space-y-5">
-                <div>
+                <div class="dashboard-day-schedule-section">
                     <div class="flex items-center justify-between mb-2 px-1">
-                        <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest m-0">For Clinic
-                            Approval</h3>
-                        <span class="badge badge-pending text-[9px]"><?= count($pendingAppointments) ?>
-                            request(s)</span>
-                    </div>
-                    <?php if (count($pendingAppointments) > 0): ?>
-                        <div class="space-y-2">
-                            <?php foreach ($pendingAppointments as $request):
-                                $time = date('M d, g:i A', strtotime($request['appointment_datetime']));
-                                $fullName = trim($request['first_name'] . ' ' . $request['last_name']);
-                                ?>
-                                <div class="p-3 rounded-xl border border-amber-100 bg-amber-50/50">
-                                    <div class="flex items-start justify-between gap-3">
-                                        <div class="min-w-0">
-                                            <h4 class="font-bold text-slate-800 text-sm mb-0 truncate"><?= e($fullName) ?></h4>
-                                            <p class="text-xs text-slate-500 mb-1 truncate"><?= e($request['id_number']) ?>
-                                                &bull; <?= e($request['purpose']) ?></p>
-                                            <p class="text-[11px] font-bold text-amber-700 mb-0 flex items-center gap-1">
-                                                <span class="material-symbols-outlined text-[13px]">schedule</span>
-                                                Requested <?= e($time) ?>
-                                            </p>
-                                        </div>
-                                        <span class="badge badge-pending text-[9px] shrink-0">Pending</span>
-                                    </div>
-                                    <div class="flex flex-col sm:flex-row gap-2 mt-3">
-                                        <form method="post" action="<?= app_url('appointments/update.php') ?>" class="flex-1">
-                                            <input type="hidden" name="id" value="<?= (int) $request['id'] ?>">
-                                            <input type="hidden" name="status" value="Scheduled">
-                                            <input type="hidden" name="redirect" value="../dashboard.php">
-                                            <button class="btn btn-sm btn-primary w-full" data-confirm-submit
-                                                data-confirm-type="primary" data-confirm-title="Approve this appointment?"
-                                                data-confirm-message="This will schedule the appointment request."
-                                                data-confirm-toast="Approving appointment...">
-                                                <span class="material-symbols-outlined text-[14px]">event_available</span>
-                                                Approve
-                                            </button>
-                                        </form>
-                                        <form method="post" action="<?= app_url('appointments/update.php') ?>" class="flex-1">
-                                            <input type="hidden" name="id" value="<?= (int) $request['id'] ?>">
-                                            <input type="hidden" name="status" value="Cancelled">
-                                            <input type="hidden" name="redirect" value="../dashboard.php">
-                                            <input class="clinic-input mb-2" type="text" name="cancellation_reason" placeholder="Cancellation reason" required maxlength="500">
-                                            <button class="btn btn-sm btn-ghost w-full" data-confirm-submit
-                                                data-confirm-type="danger" data-confirm-title="Cancel this appointment request?"
-                                                data-confirm-message="This will mark the appointment request as Cancelled."
-                                                data-confirm-toast="Cancelling appointment...">
-                                                <span class="material-symbols-outlined text-[14px]">cancel</span>
-                                                Cancel
-                                            </button>
-                                        </form>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
+                        <div>
+                            <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest m-0">Today's Schedule</h3>
+                            <p class="dashboard-day-schedule-date"><?= e(date('l, F j, Y')) ?> &bull; 8:00 AM–5:00 PM</p>
                         </div>
-                    <?php else: ?>
-                        <div class="p-4 rounded-xl bg-slate-50 border border-slate-100 text-center text-slate-400">
-                            <p class="text-xs font-bold m-0">No pending appointment requests.</p>
-                        </div>
-                    <?php endif; ?>
-                </div>
-
-                <div>
-                    <div class="flex items-center justify-between mb-2 px-1">
-                        <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest m-0">Approved Today
-                        </h3>
                         <span class="badge badge-in-progress text-[9px]"><?= count($appointments) ?> scheduled</span>
                     </div>
-                    <?php if (count($appointments) > 0): ?>
-                        <div class="space-y-2">
-                            <?php foreach ($appointments as $apt):
-                                $time = date('h:i A', strtotime($apt['appointment_datetime']));
-                                $fullName = trim($apt['first_name'] . ' ' . $apt['last_name']);
-                                $statusClass = $apt['status'] === 'Completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-white border-slate-200';
-                                ?>
-                                <div
-                                    class="flex items-center gap-4 p-4 rounded-xl border <?= $statusClass ?> hover:shadow-sm transition-shadow">
-                                    <div class="text-center w-16 shrink-0">
-                                        <span class="block text-lg font-headline font-black text-slate-800"><?= $time ?></span>
-                                    </div>
-                                    <div class="w-px h-10 bg-slate-200 shrink-0"></div>
-                                    <div class="flex-1 min-w-0">
-                                        <h4 class="font-bold text-slate-800 text-sm mb-0 truncate"><?= e($fullName) ?></h4>
-                                        <p class="text-xs text-slate-500 mb-1 truncate"><?= e($apt['id_number']) ?> &bull;
-                                            <?= e($apt['purpose']) ?>
-                                        </p>
-                                        <span class="badge badge-in-progress text-[9px]"><?= e($apt['status']) ?></span>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
+                    <?php if ($usingAppointmentPlaceholders): ?>
+                        <div class="dashboard-schedule-placeholder-note" role="note">
+                            <span class="material-symbols-outlined" aria-hidden="true">info</span>
+                            <span>No appointments are scheduled today. The faded cards below are UI-only examples.</span>
                         </div>
-                    <?php else: ?>
-                        <div
-                            class="p-5 flex flex-col items-center justify-center text-slate-400 bg-slate-50 rounded-xl border border-slate-100">
-                            <span class="material-symbols-outlined text-[48px] mb-3 text-slate-200">event_busy</span>
-                            <p class="text-sm font-bold m-0">No approved appointments scheduled for today.</p>
+                    <?php elseif ($scheduleItems === []): ?>
+                        <div class="dashboard-schedule-placeholder-note" role="note">
+                            <span class="material-symbols-outlined" aria-hidden="true">schedule</span>
+                            <span>Today's scheduled appointments fall outside the 8:00 AM–5:00 PM clinic calendar.</span>
                         </div>
                     <?php endif; ?>
+
+                    <div class="dashboard-day-calendar" aria-label="Today's appointment calendar from 8 AM to 5 PM">
+                        <div class="dashboard-day-calendar-canvas">
+                            <?php for ($hour = 8; $hour <= 17; $hour++): ?>
+                                <?php $hourOffset = (($hour * 60) - $scheduleStartMinutes) / ($scheduleEndMinutes - $scheduleStartMinutes) * 100; ?>
+                                <div class="dashboard-calendar-hour" style="top: <?= number_format($hourOffset, 4, '.', '') ?>%;">
+                                    <time><?= e(date('g A', mktime($hour, 0))) ?></time>
+                                    <span aria-hidden="true"></span>
+                                </div>
+                            <?php endfor; ?>
+
+                            <div class="dashboard-calendar-events">
+                                <?php foreach ($scheduleItems as $apt):
+                                    $calendarDuration = $scheduleEndMinutes - $scheduleStartMinutes;
+                                    $top = (($apt['_start_minute'] - $scheduleStartMinutes) / $calendarDuration) * 100;
+                                    $height = (($apt['_end_minute'] - $apt['_start_minute']) / $calendarDuration) * 100;
+                                    $laneCount = max(1, (int) $apt['_lane_count']);
+                                    $lane = (int) $apt['_lane'];
+                                    $width = 100 / $laneCount;
+                                    $left = $lane * $width;
+                                    $time = date('g:i A', strtotime((string) $apt['appointment_datetime']));
+                                    $endTime = date('g:i A', strtotime((string) $apt['appointment_datetime']) + ($appointmentDurationMinutes * 60));
+                                    $fullName = trim($apt['first_name'] . ' ' . $apt['last_name']);
+                                    $isPlaceholder = !empty($apt['_placeholder']);
+                                    ?>
+                                    <article class="dashboard-calendar-event <?= $isPlaceholder ? 'is-placeholder' : '' ?>"
+                                        style="top: calc(<?= number_format($top, 4, '.', '') ?>% + 2px); height: calc(<?= number_format($height, 4, '.', '') ?>% - 4px); left: calc(<?= number_format($left, 4, '.', '') ?>% + 3px); width: calc(<?= number_format($width, 4, '.', '') ?>% - 6px);"
+                                        title="<?= e($fullName . ' — ' . $apt['purpose'] . ' — ' . $time . ' to ' . $endTime) ?>">
+                                        <div class="dashboard-calendar-event-time">
+                                            <span class="material-symbols-outlined" aria-hidden="true">schedule</span>
+                                            <?= e($time) ?>–<?= e($endTime) ?>
+                                            <?php if ($isPlaceholder): ?><span class="dashboard-calendar-sample-badge">Sample</span><?php endif; ?>
+                                        </div>
+                                        <strong><?= e($fullName) ?></strong>
+                                        <span><?= e($apt['id_number']) ?> &bull; <?= e($apt['purpose']) ?></span>
+                                    </article>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>
