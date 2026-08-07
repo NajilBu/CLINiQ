@@ -54,7 +54,7 @@ $clearanceRate = $metrics['total'] > 0 ? round(($metrics['completed'] / $metrics
 
 // Top bar stats
 $activeStudents = $metrics['total'] - $metrics['completed'];
-$appointmentsStmt = db()->query("SELECT COUNT(*) AS total FROM appointments WHERE DATE(appointment_datetime) = CURDATE()");
+$appointmentsStmt = appointment_db()->query("SELECT COUNT(*) AS total FROM appointments WHERE DATE(appointment_datetime) = CURDATE()");
 $appointmentsToday = (int)($appointmentsStmt->fetch()['total'] ?? 0);
 
 $overdueRecords = [];

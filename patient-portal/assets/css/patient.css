@@ -1253,6 +1253,257 @@ html:has(.student-body) body {
     gap: 0.55rem;
 }
 
+.student-calendar-action-hint {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0.7rem 0 0;
+    color: var(--student-muted);
+    font-size: 0.7rem;
+    font-weight: 800;
+}
+
+.student-calendar-action-hint .material-symbols-outlined {
+    color: var(--student-primary);
+    font-size: 1rem;
+}
+
+.student-selected-schedule[hidden] {
+    display: none !important;
+}
+
+.student-selected-schedule {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.85rem;
+    border: 1px solid #cfe6d6;
+    border-radius: 0.8rem;
+    background: var(--student-primary-soft);
+}
+
+.student-selected-schedule > div > span,
+.student-selected-schedule > div > strong {
+    display: block;
+}
+
+.student-selected-schedule > div > span {
+    color: var(--student-muted);
+    font-size: 0.62rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.student-selected-schedule > div > strong {
+    margin-top: 0.15rem;
+    color: var(--student-fg);
+    font-size: 0.82rem;
+    font-weight: 900;
+}
+
+.student-calendar-time-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 120;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: rgba(15, 23, 42, 0.48);
+    backdrop-filter: blur(7px);
+}
+
+.student-calendar-time-modal.active {
+    display: flex;
+}
+
+body.student-time-modal-open {
+    overflow: hidden;
+}
+
+.student-calendar-time-dialog {
+    width: min(100%, 34rem);
+    max-height: min(90vh, 48rem);
+    overflow: hidden;
+    border: 1px solid var(--student-border-soft);
+    border-radius: 1rem;
+    background: #ffffff;
+    box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
+    animation: student-time-panel-in 180ms ease-out;
+}
+
+.student-calendar-time-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.15rem 1.25rem;
+    border-bottom: 1px solid var(--student-border-soft);
+}
+
+.student-calendar-time-header p {
+    margin: 0 0 0.2rem;
+    color: var(--student-primary);
+    font-size: 0.62rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.student-calendar-time-header h2 {
+    margin: 0;
+    color: var(--student-fg);
+    font-family: Manrope, sans-serif;
+    font-size: 1.1rem;
+    font-weight: 900;
+}
+
+.student-calendar-time-header > div > span {
+    display: block;
+    margin-top: 0.2rem;
+    color: var(--student-muted);
+    font-size: 0.7rem;
+    font-weight: 800;
+}
+
+.student-calendar-time-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border: 1px solid var(--student-border-soft);
+    border-radius: 0.65rem;
+    background: #ffffff;
+    color: var(--student-muted);
+    cursor: pointer;
+}
+
+.student-calendar-time-guide {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem 1rem;
+    padding: 0.75rem 1.25rem;
+    border-bottom: 1px solid var(--student-border-soft);
+    background: #f8fafc;
+    color: var(--student-muted);
+    font-size: 0.65rem;
+    font-weight: 800;
+}
+
+.student-calendar-time-guide span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.student-calendar-time-guide i {
+    width: 0.6rem;
+    height: 0.6rem;
+    border-radius: 999px;
+}
+
+.student-calendar-time-guide i.is-open {
+    background: var(--student-primary);
+}
+
+.student-calendar-time-guide i.is-blocked {
+    background: var(--student-danger);
+}
+
+.student-calendar-time-guide i.is-not-offered {
+    background: #94a3b8;
+}
+
+.student-calendar-time-list {
+    display: grid;
+    max-height: min(64vh, 36rem);
+    overflow-y: auto;
+    padding: 0.8rem;
+    background: #f8fafc;
+}
+
+.student-calendar-time-row {
+    display: grid;
+    grid-template-columns: 5.25rem minmax(0, 1fr) auto;
+    justify-content: stretch;
+    min-height: 3.45rem;
+    padding: 0.65rem 0.8rem;
+    border-radius: 0;
+    text-align: left;
+}
+
+.student-calendar-time-row + .student-calendar-time-row {
+    border-top: 0;
+}
+
+.student-calendar-time-row:first-child {
+    border-radius: 0.75rem 0.75rem 0 0;
+}
+
+.student-calendar-time-row:last-child {
+    border-radius: 0 0 0.75rem 0.75rem;
+}
+
+.student-calendar-time-hour {
+    color: var(--student-fg);
+    font-size: 0.76rem;
+    font-weight: 900;
+}
+
+.student-calendar-time-range {
+    color: var(--student-muted);
+    font-size: 0.7rem;
+    font-weight: 800;
+}
+
+.student-calendar-time-status {
+    color: var(--student-primary);
+    font-size: 0.62rem;
+    font-weight: 900;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.student-calendar-time-row.is-blocked {
+    border-color: #fecaca;
+    background: #fff1f2;
+}
+
+.student-calendar-time-row.is-blocked .student-calendar-time-status {
+    color: var(--student-danger);
+}
+
+.student-calendar-time-row.is-not-offered {
+    border-color: #e2e8f0;
+    background: #f1f5f9;
+    color: #94a3b8;
+}
+
+.student-calendar-time-row.is-not-offered .student-calendar-time-hour,
+.student-calendar-time-row.is-not-offered .student-calendar-time-range,
+.student-calendar-time-row.is-not-offered .student-calendar-time-status {
+    color: #94a3b8;
+}
+
+.student-calendar-time-row.selected .student-calendar-time-hour,
+.student-calendar-time-row.selected .student-calendar-time-range,
+.student-calendar-time-row.selected .student-calendar-time-status {
+    color: #ffffff;
+}
+
+@keyframes student-time-panel-in {
+    from {
+        opacity: 0;
+        transform: translateY(-0.35rem);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 .student-modal {
     position: fixed;
     inset: 0;

@@ -76,16 +76,17 @@ if (!empty($profile['first_registration'])) {
 }
 
 $patientId = (int) $profile['patient_id'];
+$appointmentPatientId = (int) $profile['person_id'];
 $db = db();
 
-$appointmentStmt = $db->prepare("
+$appointmentStmt = appointment_db()->prepare("
     SELECT *
     FROM appointments
     WHERE patient_id = ?
     ORDER BY appointment_datetime DESC, created_at DESC
     LIMIT 1
 ");
-$appointmentStmt->execute([$patientId]);
+$appointmentStmt->execute([$appointmentPatientId]);
 $latestAppointment = $appointmentStmt->fetch();
 
 $apeStmt = $db->prepare("

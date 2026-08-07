@@ -18,10 +18,20 @@ if ($filterStatus !== 'all') {
     $params[] = $filterStatus;
 }
 
-$stmt = db()->prepare("
-    SELECT a.*, p.first_name, p.last_name, p.id_number, p.course_section
+$stmt = appointment_db()->prepare("
+    SELECT a.*, p.first_name, p.last_name, p.id_number,
+           COALESCE(
+               NULLIF(TRIM(CONCAT(pr.program_code, '-', s.year_level, UPPER(s.section))), ''),
+               ed.department_code,
+               'Patient'
+           ) AS course_section
     FROM appointments a
-    JOIN patients p ON p.id = a.patient_id
+    JOIN patients pt ON pt.person_id = a.patient_id
+    JOIN people p ON p.id = pt.person_id
+    LEFT JOIN students s ON s.person_id = p.id
+    LEFT JOIN programs pr ON pr.id = s.program_id
+    LEFT JOIN school_employees se ON se.person_id = p.id
+    LEFT JOIN departments ed ON ed.id = se.department_id
     WHERE {$where}
     ORDER BY
         CASE a.status WHEN 'Pending' THEN 0 WHEN 'Scheduled' THEN 1 ELSE 2 END,
@@ -33,7 +43,7 @@ $stmt->execute($params);
 $appointments = $stmt->fetchAll();
 
 $statusCounts = ['all' => 0];
-$countQuery = db()->query("SELECT status, COUNT(*) AS cnt FROM appointments GROUP BY status");
+$countQuery = appointment_db()->query("SELECT status, COUNT(*) AS cnt FROM appointments GROUP BY status");
 foreach ($countQuery->fetchAll() as $sc) {
     $statusCounts[$sc['status']] = (int)$sc['cnt'];
     $statusCounts['all'] += (int)$sc['cnt'];
@@ -58,14 +68,14 @@ foreach ($appointments as $appointment) {
 
     if ($status === 'Pending') {
         $actions = '<div class="appointment-action-group">'
-            . '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['id'] . '"><input type="hidden" name="status" value="Scheduled"><button class="btn btn-sm btn-primary" title="Approve appointment" data-confirm-submit data-confirm-type="primary" data-confirm-title="Approve this appointment?" data-confirm-message="This will schedule the appointment request." data-confirm-toast="Approving appointment..."><span class="material-symbols-outlined text-[14px]">event_available</span> Approve</button></form>'
-            . '<button type="button" class="btn btn-sm btn-ghost btn-cancel-icon" title="Cancel request" aria-label="Cancel request" data-cancel-appointment data-cancel-id="' . (int)$appointment['id'] . '" data-cancel-title="Cancel appointment request"><span class="material-symbols-outlined text-[14px]">cancel</span></button>'
+            . '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['appointment_id'] . '"><input type="hidden" name="status" value="Scheduled"><button class="btn btn-sm btn-primary" title="Approve appointment" data-confirm-submit data-confirm-type="primary" data-confirm-title="Approve this appointment?" data-confirm-message="This will schedule the appointment request." data-confirm-toast="Approving appointment..."><span class="material-symbols-outlined text-[14px]">event_available</span> Approve</button></form>'
+            . '<button type="button" class="btn btn-sm btn-ghost btn-cancel-icon" title="Cancel request" aria-label="Cancel request" data-cancel-appointment data-cancel-id="' . (int)$appointment['appointment_id'] . '" data-cancel-title="Cancel appointment request"><span class="material-symbols-outlined text-[14px]">cancel</span></button>'
             . '</div>';
     } elseif ($status === 'Scheduled') {
         $actions = '<div class="appointment-action-group">'
-            . '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['id'] . '"><input type="hidden" name="status" value="Completed"><button class="btn btn-sm btn-outline" title="Mark completed" data-confirm-submit data-confirm-type="primary" data-confirm-title="Mark appointment completed?" data-confirm-message="This will mark the scheduled appointment as Completed." data-confirm-toast="Completing appointment..."><span class="material-symbols-outlined text-[14px]">check</span> Complete</button></form>'
-            . '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['id'] . '"><input type="hidden" name="status" value="No Show"><button class="btn btn-sm btn-ghost" title="Mark no-show" data-confirm-submit data-confirm-type="danger" data-confirm-title="Mark as no-show?" data-confirm-message="This will mark the scheduled appointment as No Show." data-confirm-toast="Marking no-show..."><span class="material-symbols-outlined text-[14px]">person_cancel</span> No Show</button></form>'
-            . '<button type="button" class="btn btn-sm btn-ghost btn-cancel-icon" title="Cancel appointment" aria-label="Cancel appointment" data-cancel-appointment data-cancel-id="' . (int)$appointment['id'] . '" data-cancel-title="Cancel scheduled appointment"><span class="material-symbols-outlined text-[14px]">cancel</span></button>'
+            . '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['appointment_id'] . '"><input type="hidden" name="status" value="Completed"><button class="btn btn-sm btn-outline" title="Mark completed" data-confirm-submit data-confirm-type="primary" data-confirm-title="Mark appointment completed?" data-confirm-message="This will mark the scheduled appointment as Completed." data-confirm-toast="Completing appointment..."><span class="material-symbols-outlined text-[14px]">check</span> Complete</button></form>'
+            . '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['appointment_id'] . '"><input type="hidden" name="status" value="No Show"><button class="btn btn-sm btn-ghost" title="Mark no-show" data-confirm-submit data-confirm-type="danger" data-confirm-title="Mark as no-show?" data-confirm-message="This will mark the scheduled appointment as No Show." data-confirm-toast="Marking no-show..."><span class="material-symbols-outlined text-[14px]">person_cancel</span> No Show</button></form>'
+            . '<button type="button" class="btn btn-sm btn-ghost btn-cancel-icon" title="Cancel appointment" aria-label="Cancel appointment" data-cancel-appointment data-cancel-id="' . (int)$appointment['appointment_id'] . '" data-cancel-title="Cancel scheduled appointment"><span class="material-symbols-outlined text-[14px]">cancel</span></button>'
             . '</div>';
     }
 

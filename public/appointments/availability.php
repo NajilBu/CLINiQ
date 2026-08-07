@@ -19,7 +19,7 @@ $action = $_POST['action'] ?? 'add';
 if ($action === 'delete') {
     $id = (int) ($_POST['id'] ?? 0);
     if ($id > 0) {
-        $stmt = db()->prepare('DELETE FROM appointment_availability_blocks WHERE id = ?');
+        $stmt = appointment_db()->prepare('DELETE FROM appointment_availability_blocks WHERE availability_block_id = ?');
         $stmt->execute([$id]);
         flash_message('success', 'Availability block removed.');
     }
@@ -38,8 +38,8 @@ if ($action === 'delete') {
     } elseif (!$allDay && ($start === '' || $end === '' || $start >= $end || $start < '08:00' || $end > '17:00')) {
         flash_message('error', 'Choose a valid start and end time between 8:00 AM and 5:00 PM.');
     } else {
-        $stmt = db()->prepare("
-            INSERT INTO appointment_availability_blocks (block_date, start_time, end_time, reason, created_by)
+        $stmt = appointment_db()->prepare("
+            INSERT INTO appointment_availability_blocks (block_date, start_time, end_time, reason, created_by_person_id)
             VALUES (?, ?, ?, ?, ?)
         ");
         $stmt->execute([
@@ -47,7 +47,7 @@ if ($action === 'delete') {
             $allDay ? null : $start,
             $allDay ? null : $end,
             $reason !== '' ? $reason : null,
-            (int) ($user['id'] ?? 0) ?: null,
+            (int) ($user['person_id'] ?? 0) ?: null,
         ]);
         flash_message('success', $allDay ? 'Full-day unavailable block added.' : 'Hourly unavailable block added.');
         $weekParam = $selectedDate->modify('monday this week')->format('Y-m-d');

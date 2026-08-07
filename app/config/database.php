@@ -55,3 +55,11 @@ function auth_db(): PDO
 
     return $pdo;
 }
+
+/**
+ * Appointment data is part of the redesigned Cliniq_db schema.
+ */
+function appointment_db(): PDO
+{
+    return auth_db();
+}

@@ -190,7 +190,7 @@ $availabilityDurationMinutes = $availabilityEndMinutes - $availabilityStartMinut
                                     </div>
                                     <form method="POST" action="availability.php" data-no-ajax="true">
                                         <input type="hidden" name="action" value="delete">
-                                        <input type="hidden" name="id" value="<?= (int) $block['id'] ?>">
+                                        <input type="hidden" name="id" value="<?= (int) $block['availability_block_id'] ?>">
                                         <input type="hidden" name="week" value="<?= e($availabilityWeek->format('Y-m-d')) ?>">
                                         <button class="btn btn-sm btn-ghost btn-cancel-icon" title="Remove block" data-confirm-submit data-confirm-type="danger" data-confirm-title="Remove this unavailable block?" data-confirm-message="This will make the date or time available for appointment requests again." data-confirm-toast="Removing block...">
                                             <span class="material-symbols-outlined">cancel</span>

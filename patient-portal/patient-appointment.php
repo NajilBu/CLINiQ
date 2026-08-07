@@ -6,16 +6,22 @@ require_once __DIR__ . '/includes/patient-layout.php';
 ensure_appointment_schema();
 
 $profile = student_require_login();
-$patientId = (int) $profile['patient_id'];
-$db = db();
+$patientId = (int) $profile['person_id'];
+$db = appointment_db();
+$patientProfileStmt = $db->prepare('SELECT COUNT(*) FROM patients WHERE person_id = ?');
+$patientProfileStmt->execute([$patientId]);
+$hasAppointmentPatientProfile = (int) $patientProfileStmt->fetchColumn() === 1;
 
 $timeSlots = [
     ['value' => '08:00:00', 'label' => '8:00 AM'],
     ['value' => '09:00:00', 'label' => '9:00 AM'],
     ['value' => '10:00:00', 'label' => '10:00 AM'],
+    ['value' => '11:00:00', 'label' => '11:00 AM'],
+    ['value' => '12:00:00', 'label' => '12:00 PM'],
     ['value' => '13:00:00', 'label' => '1:00 PM'],
     ['value' => '14:00:00', 'label' => '2:00 PM'],
     ['value' => '15:00:00', 'label' => '3:00 PM'],
+    ['value' => '16:00:00', 'label' => '4:00 PM'],
 ];
 $allowedTimes = array_column($timeSlots, 'value');
 
@@ -24,7 +30,7 @@ $success = false;
 $successMessage = '';
 $error = '';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patientId <= 0) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!$hasAppointmentPatientProfile || $patientId <= 0)) {
     $error = 'A clinical patient record is required before you can manage appointments.';
 } elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'cancel_appointment') {
     $appointmentId = (int) ($_POST['appointment_id'] ?? 0);
@@ -37,8 +43,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patientId <= 0) {
     } else {
         $stmt = $db->prepare("
             UPDATE appointments
-            SET status = 'Cancelled', cancellation_reason = ?
-            WHERE id = ?
+            SET status = 'Cancelled', cancellation_reason = ?, cancelled_by = 'Patient'
+            WHERE appointment_id = ?
               AND patient_id = ?
               AND status IN ('Pending', 'Scheduled')
         ");
@@ -81,7 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patientId <= 0) {
             $notes .= ' Patient note: ' . $note;
         }
 
-        $stmt = $db->prepare("INSERT INTO appointments (patient_id, appointment_datetime, purpose, status, notes) VALUES (?, ?, ?, 'Pending', ?)");
+        $stmt = $db->prepare("INSERT INTO appointments (patient_id, appointment_datetime, purpose, status, request_source, notes) VALUES (?, ?, ?, 'Pending', 'Patient Portal', ?)");
         $stmt->execute([$patientId, $datetimeStr, $type, $notes]);
         $success = true;
         $successMessage = 'Appointment request sent. Please wait for clinic approval before going to the clinic.';
@@ -229,6 +235,8 @@ render_student_header('Appointments', 'appointment');
                             <button type="button"
                                     class="<?= student_e(implode(' ', $classes)) ?>"
                                     data-date="<?= student_e($date) ?>"
+                                    aria-controls="time-selection-panel"
+                                    aria-expanded="false"
                                     <?= $disabled ? 'disabled' : '' ?>>
                                 <span><?= (int) $day ?></span>
                                 <?php if ($hasAppointment): ?>
@@ -241,16 +249,19 @@ render_student_header('Appointments', 'appointment');
                             </button>
                         <?php endfor; ?>
                     </div>
+                    <p class="student-calendar-action-hint">
+                        <span class="material-symbols-outlined" aria-hidden="true">touch_app</span>
+                        Double-click an available date to choose a time. On touchscreens, tap once.
+                    </p>
                 </div>
 
-                <div class="student-field">
-                    <label class="student-label">Preferred Time</label>
-                    <div class="student-time-grid" id="time-slots">
-                        <?php foreach ($timeSlots as $slot): ?>
-                            <button type="button" class="student-time-slot" data-time="<?= student_e($slot['value']) ?>">
-                                <?= student_e($slot['label']) ?>
-                            </button>
-                        <?php endforeach; ?>
+                <div class="student-field student-selected-schedule" id="selected-schedule-summary" hidden aria-live="polite">
+                    <span class="student-icon-box">
+                        <span class="material-symbols-outlined">event_available</span>
+                    </span>
+                    <div>
+                        <span>Selected Schedule</span>
+                        <strong id="selected-schedule-text"></strong>
                     </div>
                 </div>
 
@@ -319,6 +330,44 @@ render_student_header('Appointments', 'appointment');
     </section>
 </div>
 
+<div class="student-calendar-time-modal" id="appointment-time-modal" aria-hidden="true">
+    <div class="student-calendar-time-dialog" role="dialog" aria-modal="true" aria-labelledby="appointment-time-title">
+        <div class="student-calendar-time-header">
+            <div>
+                <p>Available Appointment Times</p>
+                <h2 id="appointment-time-title">Choose a time</h2>
+                <span id="selected-date-label"></span>
+            </div>
+            <button type="button" class="student-calendar-time-close" data-close-time-modal aria-label="Close time selection">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+
+        <div class="student-calendar-time-guide">
+            <span><i class="is-open"></i>Available</span>
+            <span><i class="is-blocked"></i>Unavailable</span>
+        </div>
+
+        <div class="student-calendar-time-list" id="time-slots">
+            <?php for ($hour = 8; $hour < 17; $hour++): ?>
+                <?php
+                $value = str_pad((string) $hour, 2, '0', STR_PAD_LEFT) . ':00:00';
+                $isOffered = in_array($value, $allowedTimes, true);
+                $startLabel = date('g:i A', mktime($hour, 0));
+                $endLabel = date('g:i A', mktime($hour + 1, 0));
+                ?>
+                <button type="button"
+                        class="student-time-slot student-calendar-time-row <?= $isOffered ? '' : 'is-not-offered' ?>"
+                        <?= $isOffered ? 'data-time="' . student_e($value) . '"' : 'disabled' ?>>
+                    <span class="student-calendar-time-hour"><?= student_e($startLabel) ?></span>
+                    <span class="student-calendar-time-range"><?= student_e($startLabel) ?>–<?= student_e($endLabel) ?></span>
+                    <strong class="student-calendar-time-status"><?= $isOffered ? 'Available' : 'Not Offered' ?></strong>
+                </button>
+            <?php endfor; ?>
+        </div>
+    </div>
+</div>
+
 <section class="student-card mt-4">
     <div class="student-card-header">
         <div>
@@ -364,7 +413,7 @@ render_student_header('Appointments', 'appointment');
                         <?php if ($canCancel): ?>
                             <form method="post" class="student-cancel-form">
                                 <input type="hidden" name="action" value="cancel_appointment">
-                                <input type="hidden" name="appointment_id" value="<?= (int) $appointment['id'] ?>">
+                                <input type="hidden" name="appointment_id" value="<?= (int) $appointment['appointment_id'] ?>">
                                 <input class="student-input student-cancel-input" type="text" name="cancellation_reason" placeholder="Reason for cancellation" required maxlength="500">
                                 <button type="submit" class="student-button-danger">
                                     Cancel
@@ -383,7 +432,21 @@ render_student_header('Appointments', 'appointment');
     const availability = <?= json_encode($availabilityPayload, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
     const dateInput = document.getElementById('appt-date-input');
     const timeInput = document.getElementById('appt-time-input');
-    const timeSlots = Array.from(document.querySelectorAll('.student-time-slot'));
+    const timeSlots = Array.from(document.querySelectorAll('.student-time-slot[data-time]'));
+    const timeModal = document.getElementById('appointment-time-modal');
+    const selectedDateLabel = document.getElementById('selected-date-label');
+    const selectedScheduleSummary = document.getElementById('selected-schedule-summary');
+    const selectedScheduleText = document.getElementById('selected-schedule-text');
+    const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+
+    function formatSelectedDate(date) {
+        const [year, month, day] = date.split('-').map(Number);
+        return new Intl.DateTimeFormat('en-US', {
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric'
+        }).format(new Date(year, month - 1, day));
+    }
 
     function updateTimeSlots(date) {
         const blockedTimes = availability[date]?.blockedTimes || [];
@@ -391,8 +454,10 @@ render_student_header('Appointments', 'appointment');
         timeSlots.forEach((slot) => {
             const isBlocked = blockedTimes.includes(slot.dataset.time);
             slot.classList.toggle('disabled', isBlocked);
+            slot.classList.toggle('is-blocked', isBlocked);
             slot.disabled = isBlocked;
             slot.title = isBlocked ? 'This time is unavailable' : '';
+            slot.querySelector('.student-calendar-time-status').textContent = isBlocked ? 'Unavailable' : 'Available';
 
             if (isBlocked && slot.classList.contains('selected')) {
                 slot.classList.remove('selected');
@@ -401,12 +466,54 @@ render_student_header('Appointments', 'appointment');
         });
     }
 
+    function closeTimeModal() {
+        timeModal.classList.remove('active');
+        timeModal.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('student-time-modal-open');
+    }
+
+    function openTimeModal(focusFirstTime = false) {
+        timeModal.classList.add('active');
+        timeModal.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('student-time-modal-open');
+
+        if (focusFirstTime) {
+            const firstAvailableTime = timeSlots.find((slot) => !slot.disabled);
+            firstAvailableTime?.focus({ preventScroll: true });
+        }
+    }
+
+    function selectAppointmentDate(button, revealTimes = false, focusFirstTime = false) {
+        document.querySelectorAll('.student-date-btn').forEach((item) => {
+            item.classList.remove('selected');
+            item.setAttribute('aria-expanded', 'false');
+        });
+        button.classList.add('selected');
+        button.setAttribute('aria-expanded', revealTimes ? 'true' : 'false');
+        dateInput.value = button.dataset.date;
+        timeInput.value = '';
+        timeSlots.forEach((item) => item.classList.remove('selected'));
+        selectedScheduleSummary.hidden = true;
+        updateTimeSlots(button.dataset.date);
+        selectedDateLabel.textContent = formatSelectedDate(button.dataset.date);
+        closeTimeModal();
+
+        if (!revealTimes) {
+            return;
+        }
+
+        openTimeModal(focusFirstTime);
+    }
+
     document.querySelectorAll('.student-date-btn:not(.disabled)').forEach((button) => {
-        button.addEventListener('click', () => {
-            document.querySelectorAll('.student-date-btn').forEach((item) => item.classList.remove('selected'));
-            button.classList.add('selected');
-            dateInput.value = button.dataset.date;
-            updateTimeSlots(button.dataset.date);
+        button.addEventListener('click', (event) => {
+            const shouldReveal = coarsePointer || event.detail === 0;
+            selectAppointmentDate(button, shouldReveal, event.detail === 0);
+        });
+
+        button.addEventListener('dblclick', (event) => {
+            event.preventDefault();
+            selectAppointmentDate(button, true);
         });
     });
 
@@ -419,7 +526,27 @@ render_student_header('Appointments', 'appointment');
             timeSlots.forEach((item) => item.classList.remove('selected'));
             button.classList.add('selected');
             timeInput.value = button.dataset.time;
+            const chosenTime = button.querySelector('.student-calendar-time-hour').textContent.trim();
+            selectedScheduleText.textContent = formatSelectedDate(dateInput.value) + ' at ' + chosenTime;
+            selectedScheduleSummary.hidden = false;
+            closeTimeModal();
         });
+    });
+
+    document.querySelectorAll('[data-close-time-modal]').forEach((button) => {
+        button.addEventListener('click', closeTimeModal);
+    });
+
+    timeModal.addEventListener('click', (event) => {
+        if (event.target === timeModal) {
+            closeTimeModal();
+        }
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && timeModal.classList.contains('active')) {
+            closeTimeModal();
+        }
     });
 
     document.getElementById('booking-form').addEventListener('submit', function (event) {

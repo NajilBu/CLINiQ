@@ -82,7 +82,7 @@ $metrics = [
     'visits_today' => (int) (cliniq_visit_db()->query('SELECT COUNT(*) AS total FROM visits WHERE DATE(visit_datetime) = CURDATE()')->fetch()['total'] ?? 0),
     'pending_alerts' => (int) (db()->query("SELECT COUNT(*) AS total FROM nurse_alerts WHERE status = 'Pending'")->fetch()['total'] ?? 0),
     'low_stock' => (int) (cliniq_inventory_db()->query('SELECT COUNT(*) AS total FROM inventory_items WHERE is_active = 1 AND quantity <= reorder_level')->fetch()['total'] ?? 0),
-    'appointment_requests' => (int) (db()->query("SELECT COUNT(*) AS total FROM appointments WHERE status = 'Pending'")->fetch()['total'] ?? 0),
+    'appointment_requests' => (int) (appointment_db()->query("SELECT COUNT(*) AS total FROM appointments WHERE status = 'Pending'")->fetch()['total'] ?? 0),
 ];
 
 // APE Metrics (condensed)
@@ -113,10 +113,11 @@ $activeAlerts = db()->query("
 
 // --- 3. Today's Appointments ---
 // We check the new appointments table
-$appointmentsStmt = db()->query("
-    SELECT a.*, p.first_name, p.last_name, p.id_number, p.course_section
+$appointmentsStmt = appointment_db()->query("
+    SELECT a.*, p.first_name, p.last_name, p.id_number
     FROM appointments a
-    JOIN patients p ON p.id = a.patient_id
+    JOIN patients pt ON pt.person_id = a.patient_id
+    JOIN people p ON p.id = pt.person_id
     WHERE DATE(a.appointment_datetime) = CURDATE()
       AND a.status = 'Scheduled'
     ORDER BY a.appointment_datetime ASC

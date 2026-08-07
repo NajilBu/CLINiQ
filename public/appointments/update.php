@@ -12,6 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $allowed = ['Pending', 'Scheduled', 'Completed', 'Cancelled', 'No Show'];
     $redirect = $_POST['redirect'] ?? 'index.php';
     $allowedRedirects = ['index.php', '../dashboard.php'];
+    $reviewedByPersonId = (int) (current_user()['person_id'] ?? 0) ?: null;
 
     if ($id > 0 && in_array($status, $allowed, true)) {
         if ($status === 'Cancelled' && $cancellationReason === '') {
@@ -21,11 +22,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($status === 'Cancelled') {
-            $stmt = db()->prepare('UPDATE appointments SET status = ?, cancellation_reason = ? WHERE id = ?');
-            $stmt->execute([$status, $cancellationReason, $id]);
+            $stmt = appointment_db()->prepare('UPDATE appointments SET status = ?, cancellation_reason = ?, cancelled_by = ?, reviewed_by_person_id = ? WHERE appointment_id = ?');
+            $stmt->execute([$status, $cancellationReason, 'Clinic', $reviewedByPersonId, $id]);
         } else {
-            $stmt = db()->prepare('UPDATE appointments SET status = ?, cancellation_reason = NULL WHERE id = ?');
-            $stmt->execute([$status, $id]);
+            $stmt = appointment_db()->prepare('UPDATE appointments SET status = ?, cancellation_reason = NULL, cancelled_by = NULL, reviewed_by_person_id = ? WHERE appointment_id = ?');
+            $stmt->execute([$status, $reviewedByPersonId, $id]);
         }
 
         $message = match ($status) {
