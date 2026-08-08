@@ -63,6 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!$hasAppointmentPatientProfile || 
     $timeStr = trim($_POST['appt_time']);
     $note = trim($_POST['appt_note'] ?? '');
     $selectedDate = DateTimeImmutable::createFromFormat('!Y-m-d', $dateStr) ?: null;
+    $datetimeStr = $dateStr . ' ' . $timeStr;
 
     if ($selectedDate) {
         $month = appointment_month_from_request($selectedDate->format('Y-m'));
@@ -80,25 +81,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!$hasAppointmentPatientProfile || 
         $error = 'Please choose one of the available appointment times.';
     } elseif (appointment_time_is_blocked($dateStr, $timeStr, $blocksForPostMonth)) {
         $error = 'That date or time is unavailable. Please choose another schedule.';
+    } elseif (appointment_slot_is_reserved($datetimeStr)) {
+        $error = 'That appointment time was already requested by another patient. Please choose another hour.';
     } else {
-        $datetimeStr = $dateStr . ' ' . $timeStr;
         $notes = 'Patient requested this appointment through the patient portal. Awaiting clinic approval.';
         if ($note !== '') {
             $notes .= ' Patient note: ' . $note;
         }
 
-        $stmt = $db->prepare("INSERT INTO appointments (patient_id, appointment_datetime, purpose, status, request_source, notes) VALUES (?, ?, ?, 'Pending', 'Patient Portal', ?)");
-        $stmt->execute([$patientId, $datetimeStr, $type, $notes]);
-        $success = true;
-        $successMessage = 'Appointment request sent. Please wait for clinic approval before going to the clinic.';
+        try {
+            $stmt = $db->prepare("INSERT INTO appointments (patient_id, appointment_datetime, purpose, status, request_source, notes) VALUES (?, ?, ?, 'Pending', 'Patient Portal', ?)");
+            $stmt->execute([$patientId, $datetimeStr, $type, $notes]);
+            $success = true;
+            $successMessage = 'Appointment request sent. Please wait for clinic approval before going to the clinic.';
+        } catch (PDOException $exception) {
+            if ($exception->getCode() === '23000' && (int) ($exception->errorInfo[1] ?? 0) === 1062) {
+                $error = 'That appointment time was just taken. Please choose another hour.';
+            } else {
+                throw $exception;
+            }
+        }
     }
 }
 
 $blocksByDate = appointment_blocks_for_month($month);
 $studentAppointmentDates = appointment_patient_dates_for_month($patientId, $month);
+$reservedTimesByDate = appointment_reserved_times_for_month($month);
 
 $availabilityPayload = [];
-foreach ($blocksByDate as $date => $blocks) {
+$availabilityDates = array_values(array_unique(array_merge(array_keys($blocksByDate), array_keys($reservedTimesByDate))));
+foreach ($availabilityDates as $date) {
+    $blocks = $blocksByDate[$date] ?? [];
     $blockedTimes = [];
     foreach ($timeSlots as $slot) {
         if (appointment_time_is_blocked($date, $slot['value'], $blocksByDate)) {
@@ -109,6 +122,7 @@ foreach ($blocksByDate as $date => $blocks) {
     $availabilityPayload[$date] = [
         'fullDay' => appointment_is_full_day_blocked($blocks),
         'blockedTimes' => $blockedTimes,
+        'reservedTimes' => array_values(array_unique($reservedTimesByDate[$date] ?? [])),
     ];
 }
 
@@ -220,12 +234,17 @@ render_student_header('Appointments', 'appointment');
                             $date = $month->format('Y-m-') . str_pad((string) $day, 2, '0', STR_PAD_LEFT);
                             $blocks = $blocksByDate[$date] ?? [];
                             $fullDay = appointment_is_full_day_blocked($blocks);
+                            $unavailableTimes = array_values(array_unique(array_merge(
+                                $availabilityPayload[$date]['blockedTimes'] ?? [],
+                                $availabilityPayload[$date]['reservedTimes'] ?? []
+                            )));
+                            $allTimesUnavailable = count(array_intersect($allowedTimes, $unavailableTimes)) >= count($allowedTimes);
                             $hasAppointment = !empty($studentAppointmentDates[$date]);
                             $isPast = $date < $today;
-                            $disabled = $fullDay || $isPast;
+                            $disabled = $fullDay || $allTimesUnavailable || $isPast;
                             $classes = ['student-date-btn'];
                             $classes[] = $disabled ? 'disabled' : 'available';
-                            if (!$fullDay && !$isPast && !empty($blocks)) {
+                            if (!$disabled && !empty($unavailableTimes)) {
                                 $classes[] = 'partial';
                             }
                             if ($hasAppointment) {
@@ -241,9 +260,9 @@ render_student_header('Appointments', 'appointment');
                                 <span><?= (int) $day ?></span>
                                 <?php if ($hasAppointment): ?>
                                     <small>Booked</small>
-                                <?php elseif ($fullDay): ?>
+                                <?php elseif ($fullDay || $allTimesUnavailable): ?>
                                     <small>Closed</small>
-                                <?php elseif (!$isPast && !empty($blocks)): ?>
+                                <?php elseif (!$isPast && !empty($unavailableTimes)): ?>
                                     <small>Limited</small>
                                 <?php endif; ?>
                             </button>
@@ -345,6 +364,7 @@ render_student_header('Appointments', 'appointment');
 
         <div class="student-calendar-time-guide">
             <span><i class="is-open"></i>Available</span>
+            <span><i class="is-reserved"></i>Reserved</span>
             <span><i class="is-blocked"></i>Unavailable</span>
         </div>
 
@@ -450,16 +470,24 @@ render_student_header('Appointments', 'appointment');
 
     function updateTimeSlots(date) {
         const blockedTimes = availability[date]?.blockedTimes || [];
+        const reservedTimes = availability[date]?.reservedTimes || [];
 
         timeSlots.forEach((slot) => {
-            const isBlocked = blockedTimes.includes(slot.dataset.time);
-            slot.classList.toggle('disabled', isBlocked);
-            slot.classList.toggle('is-blocked', isBlocked);
-            slot.disabled = isBlocked;
-            slot.title = isBlocked ? 'This time is unavailable' : '';
-            slot.querySelector('.student-calendar-time-status').textContent = isBlocked ? 'Unavailable' : 'Available';
+            const isClinicBlocked = blockedTimes.includes(slot.dataset.time);
+            const isReserved = reservedTimes.includes(slot.dataset.time);
+            const isUnavailable = isClinicBlocked || isReserved;
+            slot.classList.toggle('disabled', isUnavailable);
+            slot.classList.toggle('is-blocked', isClinicBlocked);
+            slot.classList.toggle('is-reserved', isReserved);
+            slot.disabled = isUnavailable;
+            slot.title = isReserved
+                ? 'Another patient has already requested this time'
+                : (isClinicBlocked ? 'This time is unavailable' : '');
+            slot.querySelector('.student-calendar-time-status').textContent = isReserved
+                ? 'Reserved'
+                : (isClinicBlocked ? 'Unavailable' : 'Available');
 
-            if (isBlocked && slot.classList.contains('selected')) {
+            if (isUnavailable && slot.classList.contains('selected')) {
                 slot.classList.remove('selected');
                 timeInput.value = '';
             }

@@ -1412,6 +1412,10 @@ body.student-time-modal-open {
     background: var(--student-danger);
 }
 
+.student-calendar-time-guide i.is-reserved {
+    background: #f59e0b;
+}
+
 .student-calendar-time-guide i.is-not-offered {
     background: #94a3b8;
 }
@@ -1473,6 +1477,15 @@ body.student-time-modal-open {
 
 .student-calendar-time-row.is-blocked .student-calendar-time-status {
     color: var(--student-danger);
+}
+
+.student-calendar-time-row.is-reserved {
+    border-color: #fde68a;
+    background: #fffbeb;
+}
+
+.student-calendar-time-row.is-reserved .student-calendar-time-status {
+    color: #b45309;
 }
 
 .student-calendar-time-row.is-not-offered {

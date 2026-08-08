@@ -345,6 +345,13 @@ CREATE TABLE appointments (
   reviewed_by_person_id BIGINT UNSIGNED NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  reserved_slot DATETIME
+    GENERATED ALWAYS AS (
+      CASE
+        WHEN status IN ('Pending', 'Scheduled') THEN appointment_datetime
+        ELSE NULL
+      END
+    ) STORED,
   CONSTRAINT fk_appointments_patient
     FOREIGN KEY (patient_id) REFERENCES patients(person_id),
   CONSTRAINT fk_appointments_reviewed_by
@@ -353,7 +360,8 @@ CREATE TABLE appointments (
   INDEX idx_appointments_patient_datetime (patient_id, appointment_datetime),
   INDEX idx_appointments_status_datetime (status, appointment_datetime),
   INDEX idx_appointments_datetime (appointment_datetime),
-  INDEX idx_appointments_reviewed_by (reviewed_by_person_id)
+  INDEX idx_appointments_reviewed_by (reviewed_by_person_id),
+  UNIQUE INDEX uq_appointments_reserved_slot (reserved_slot)
 );
 
 CREATE TABLE appointment_availability_blocks (

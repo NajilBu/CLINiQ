@@ -135,6 +135,41 @@ function appointment_patient_dates_for_month(int $patientId, DateTimeImmutable $
     return $dates;
 }
 
+function appointment_reserved_times_for_month(DateTimeImmutable $month): array
+{
+    [$start, $end] = appointment_month_bounds($month);
+    $stmt = appointment_db()->prepare("
+        SELECT DATE_FORMAT(appointment_datetime, '%Y-%m-%d') AS appointment_date,
+               TIME_FORMAT(appointment_datetime, '%H:%i:%s') AS appointment_time
+        FROM appointments
+        WHERE appointment_datetime BETWEEN ? AND ?
+          AND status IN ('Pending', 'Scheduled')
+        ORDER BY appointment_datetime ASC
+    ");
+    $stmt->execute([$start . ' 00:00:00', $end . ' 23:59:59']);
+
+    $timesByDate = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $timesByDate[$row['appointment_date']][] = $row['appointment_time'];
+    }
+
+    return $timesByDate;
+}
+
+function appointment_slot_is_reserved(string $appointmentDatetime): bool
+{
+    $stmt = appointment_db()->prepare("
+        SELECT appointment_id
+        FROM appointments
+        WHERE appointment_datetime = ?
+          AND status IN ('Pending', 'Scheduled')
+        LIMIT 1
+    ");
+    $stmt->execute([$appointmentDatetime]);
+
+    return (bool) $stmt->fetchColumn();
+}
+
 function appointment_is_full_day_blocked(array $blocks): bool
 {
     foreach ($blocks as $block) {
