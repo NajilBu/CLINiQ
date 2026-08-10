@@ -9,37 +9,7 @@ $id = (int)($_GET['id'] ?? 0);
 
 function fetch_ape_record(int $id): ?array
 {
-    $stmt = db()->prepare("
-        SELECT a.*, p.first_name, p.last_name, p.id_number, p.course_section, p.sex, p.birthdate, u.name AS verified_by_name
-        FROM ape_records a
-        JOIN patients p ON p.id = a.patient_id
-        LEFT JOIN users u ON u.id = a.verified_by
-        WHERE a.id = ? LIMIT 1
-    ");
-    $stmt->execute([$id]);
-    $record = $stmt->fetch();
-    return $record ?: null;
-}
-
-function upload_ape_file(string $fieldName, string $prefix): ?string
-{
-    if (empty($_FILES[$fieldName]['name']) || $_FILES[$fieldName]['error'] !== UPLOAD_ERR_OK) {
-        return null;
-    }
-
-    $ext = strtolower(pathinfo($_FILES[$fieldName]['name'], PATHINFO_EXTENSION));
-    if (!in_array($ext, ['pdf', 'jpg', 'jpeg', 'png'], true)) {
-        return null;
-    }
-
-    $uploadDir = dirname(__DIR__, 2) . '/uploads/ape/';
-    if (!is_dir($uploadDir)) {
-        mkdir($uploadDir, 0755, true);
-    }
-
-    $filename = $prefix . '_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
-    move_uploaded_file($_FILES[$fieldName]['tmp_name'], $uploadDir . $filename);
-    return 'uploads/ape/' . $filename;
+    return ape_fetch_record($id);
 }
 
 $record = fetch_ape_record($id);
@@ -52,66 +22,126 @@ if (!$record) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
-    $userId = current_user()['id'];
+    $staffPersonId = (int) (current_user()['person_id'] ?? 0);
     $activityLabel = null;
     $activityNotes = null;
+    $apeDb = auth_db();
 
-    if ($action === 'mark_requirements_complete') {
-        $notes = trim($_POST['clinical_remarks'] ?? '');
-        $stmt = db()->prepare("UPDATE ape_records SET requirement_status = 'Pre-Verified', workflow_status = 'Requirements Checked', follow_up_required = 0, clearance_status = 'Pending', result_status = 'Fit to Proceed', clinical_remarks = ?, missing_items = NULL WHERE id = ?");
-        $stmt->execute([$notes ?: null, $id]);
-        $activityLabel = 'Completed hard-copy document review';
-        $activityNotes = $notes ?: 'No follow-up required';
-    } elseif ($action === 'mark_missing_requirements') {
-        $missingItems = trim($_POST['missing_items'] ?? 'Follow-up requirement not specified.');
-        $notes = trim($_POST['clinical_remarks'] ?? '');
-        $stmt = db()->prepare("UPDATE ape_records SET requirement_status = 'Pre-Verified', missing_items = ?, workflow_status = 'Requirements Checked', follow_up_required = 1, clearance_status = 'For Follow-up', result_status = 'With Finding', clinical_remarks = ?, result_notes = ? WHERE id = ?");
-        $stmt->execute([$missingItems, $notes ?: null, $notes ?: $missingItems, $id]);
-        $activityLabel = 'Recorded finding and follow-up requirement';
-        $activityNotes = $missingItems;
-    } elseif ($action === 'approve_documents') {
-        $documentPath = $record['document_path'];
-        $nextWorkflow = (int)($record['follow_up_required'] ?? 0) === 1 ? 'Follow-up Required' : 'Cleared';
-        $nextClearance = (int)($record['follow_up_required'] ?? 0) === 1 ? 'For Follow-up' : 'Cleared';
-        $stmt = db()->prepare("UPDATE ape_records SET document_path = ?, verification_status = 'Verified', verified_by = ?, workflow_status = ?, clearance_status = ?, missing_items = IF(follow_up_required = 1, missing_items, NULL) WHERE id = ?");
-        $stmt->execute([$documentPath, $userId, $nextWorkflow, $nextClearance, $id]);
-        $activityLabel = 'Archived online APE documents';
-    } elseif ($action === 'request_document_correction') {
-        $missingItems = trim($_POST['missing_items'] ?? 'Online document correction required.');
-        $stmt = db()->prepare("UPDATE ape_records SET verification_status = 'Needs Correction', requirement_status = 'Pre-Verified', missing_items = ?, workflow_status = 'Submitted', verified_by = ? WHERE id = ?");
-        $stmt->execute([$missingItems, $userId, $id]);
-        $activityLabel = 'Requested online document correction';
-        $activityNotes = $missingItems;
-    } elseif ($action === 'keep_follow_up_open') {
-        $followUpNotes = trim($_POST['follow_up_notes'] ?? 'Follow-up remains open.');
-        $stmt = db()->prepare("UPDATE ape_records SET clearance_status = 'For Follow-up', workflow_status = 'Follow-up Required', clinical_remarks = ? WHERE id = ?");
-        $stmt->execute([$followUpNotes, $id]);
-        $activityLabel = 'Kept follow-up open';
-        $activityNotes = $followUpNotes;
-    } elseif ($action === 'approve_clearance') {
-        $stmt = db()->prepare("UPDATE ape_records SET clearance_status = 'Cleared', follow_up_required = 0, workflow_status = 'Cleared' WHERE id = ?");
-        $stmt->execute([$id]);
-        $activityLabel = 'Approved follow-up clearance';
-    } elseif ($action === 'return_clearance') {
-        $missingItems = trim($_POST['missing_items'] ?? 'Clearance correction required.');
-        $stmt = db()->prepare("UPDATE ape_records SET clearance_status = 'For Follow-up', workflow_status = 'Follow-up Required', missing_items = ? WHERE id = ?");
-        $stmt->execute([$missingItems, $id]);
-        $activityLabel = 'Returned clearance for correction';
-        $activityNotes = $missingItems;
-    } elseif ($action === 'save_notes') {
-        $stmt = db()->prepare("UPDATE ape_records SET clinical_remarks = ?, student_visible_note = ?, extracted_text = ? WHERE id = ?");
-        $stmt->execute([
-            array_key_exists('clinical_remarks', $_POST) ? (trim($_POST['clinical_remarks']) ?: null) : ($record['clinical_remarks'] ?: null),
-            trim($_POST['student_visible_note'] ?? '') ?: null,
-            $record['extracted_text'] ?: null,
-            $id,
-        ]);
-        $activityLabel = 'Updated APE notes';
-    }
+    try {
+        if ($staffPersonId <= 0) {
+            throw new RuntimeException('The logged-in staff account is not linked to Cliniq_db.');
+        }
+        $apeDb->beginTransaction();
 
-    if ($activityLabel) {
-        ape_log_activity($id, $userId, $activityLabel, $activityNotes);
-        flash_message('success', $activityLabel . '.');
+        if ($action === 'mark_requirements_complete') {
+            $notes = trim((string) ($_POST['clinical_remarks'] ?? ''));
+            $stmt = $apeDb->prepare("UPDATE ape_records SET requirement_status = 'Pre-Verified', workflow_status = 'Requirements Checked', follow_up_required = 0, clearance_status = 'Pending', clinical_remarks = ?, reviewed_by_person_id = ? WHERE ape_id = ?");
+            $stmt->execute([$notes ?: null, $staffPersonId, $id]);
+            $checked = $apeDb->prepare("UPDATE ape_requirements SET status = 'Verified', checked_by_person_id = ?, checked_at = NOW() WHERE ape_id = ?");
+            $checked->execute([$staffPersonId, $id]);
+            $activityLabel = 'Completed hard-copy document review';
+            $activityNotes = $notes ?: 'No follow-up required';
+        } elseif ($action === 'mark_missing_requirements') {
+            $missingItems = trim((string) ($_POST['missing_items'] ?? '')) ?: 'Follow-up requirement not specified.';
+            $notes = trim((string) ($_POST['clinical_remarks'] ?? ''));
+            $stmt = $apeDb->prepare("UPDATE ape_records SET requirement_status = 'Pre-Verified', workflow_status = 'Requirements Checked', follow_up_required = 1, clearance_status = 'For Follow-up', clinical_remarks = ?, reviewed_by_person_id = ? WHERE ape_id = ?");
+            $stmt->execute([$notes ?: null, $staffPersonId, $id]);
+            $checked = $apeDb->prepare("UPDATE ape_requirements SET status = 'Verified', checked_by_person_id = ?, checked_at = NOW() WHERE ape_id = ?");
+            $checked->execute([$staffPersonId, $id]);
+            $requirement = $apeDb->prepare("INSERT INTO ape_requirements (ape_id, requirement_name, status, remarks) VALUES (?, 'Follow-up clearance', 'Missing', ?) ON DUPLICATE KEY UPDATE status = 'Missing', remarks = VALUES(remarks), checked_by_person_id = NULL, checked_at = NULL");
+            $requirement->execute([$id, $missingItems]);
+            $finding = $apeDb->prepare("INSERT INTO ape_findings (ape_id, finding_type, description, result_status, follow_up_required, recorded_by_person_id) VALUES (?, 'General', ?, 'With Finding', 1, ?)");
+            $finding->execute([$id, $notes ?: $missingItems, $staffPersonId]);
+            $activityLabel = 'Recorded finding and follow-up requirement';
+            $activityNotes = $missingItems;
+        } elseif ($action === 'approve_documents') {
+            $nextWorkflow = (int) ($record['follow_up_required'] ?? 0) === 1 ? 'Follow-up Required' : 'Cleared';
+            $nextClearance = (int) ($record['follow_up_required'] ?? 0) === 1 ? 'For Follow-up' : 'Cleared';
+            $documents = $apeDb->prepare("UPDATE ape_documents SET verification_status = 'Verified', verified_by_person_id = ?, verified_at = NOW() WHERE ape_id = ? AND verification_status <> 'Verified'");
+            $documents->execute([$staffPersonId, $id]);
+            $stmt = $apeDb->prepare('UPDATE ape_records SET workflow_status = ?, clearance_status = ?, reviewed_by_person_id = ? WHERE ape_id = ?');
+            $stmt->execute([$nextWorkflow, $nextClearance, $staffPersonId, $id]);
+            $activityLabel = 'Archived online APE documents';
+        } elseif ($action === 'request_document_correction') {
+            $missingItems = trim((string) ($_POST['missing_items'] ?? '')) ?: 'Online document correction required.';
+            $documents = $apeDb->prepare("UPDATE ape_documents SET verification_status = 'Needs Correction', verified_by_person_id = ?, verified_at = NOW() WHERE ape_id = ? AND document_type <> 'Clearance'");
+            $documents->execute([$staffPersonId, $id]);
+            $stmt = $apeDb->prepare("UPDATE ape_records SET requirement_status = 'Pre-Verified', workflow_status = 'Submitted', reviewed_by_person_id = ? WHERE ape_id = ?");
+            $stmt->execute([$staffPersonId, $id]);
+            $requirement = $apeDb->prepare("INSERT INTO ape_requirements (ape_id, requirement_name, status, remarks) VALUES (?, 'Online document correction', 'Needs Correction', ?) ON DUPLICATE KEY UPDATE status = 'Needs Correction', remarks = VALUES(remarks)");
+            $requirement->execute([$id, $missingItems]);
+            $activityLabel = 'Requested online document correction';
+            $activityNotes = $missingItems;
+        } elseif ($action === 'keep_follow_up_open') {
+            $followUpNotes = trim((string) ($_POST['follow_up_notes'] ?? '')) ?: 'Follow-up remains open.';
+            $stmt = $apeDb->prepare("UPDATE ape_records SET clearance_status = 'For Follow-up', workflow_status = 'Follow-up Required', clinical_remarks = ? WHERE ape_id = ?");
+            $stmt->execute([$followUpNotes, $id]);
+            $activityLabel = 'Kept follow-up open';
+            $activityNotes = $followUpNotes;
+        } elseif ($action === 'approve_clearance') {
+            $stmt = $apeDb->prepare("UPDATE ape_records SET clearance_status = 'Cleared', follow_up_required = 0, workflow_status = 'Cleared', reviewed_by_person_id = ? WHERE ape_id = ?");
+            $stmt->execute([$staffPersonId, $id]);
+            $document = $apeDb->prepare("UPDATE ape_documents SET verification_status = 'Verified', verified_by_person_id = ?, verified_at = NOW() WHERE ape_id = ? AND document_type = 'Clearance'");
+            $document->execute([$staffPersonId, $id]);
+            $requirement = $apeDb->prepare("UPDATE ape_requirements SET status = 'Verified', checked_by_person_id = ?, checked_at = NOW() WHERE ape_id = ? AND requirement_name = 'Follow-up clearance'");
+            $requirement->execute([$staffPersonId, $id]);
+            $activityLabel = 'Approved follow-up clearance';
+        } elseif ($action === 'return_clearance') {
+            $missingItems = trim((string) ($_POST['missing_items'] ?? '')) ?: 'Clearance correction required.';
+            $stmt = $apeDb->prepare("UPDATE ape_records SET clearance_status = 'For Follow-up', workflow_status = 'Follow-up Required' WHERE ape_id = ?");
+            $stmt->execute([$id]);
+            $document = $apeDb->prepare("UPDATE ape_documents SET verification_status = 'Needs Correction', verified_by_person_id = ?, verified_at = NOW() WHERE ape_id = ? AND document_type = 'Clearance'");
+            $document->execute([$staffPersonId, $id]);
+            $requirement = $apeDb->prepare("INSERT INTO ape_requirements (ape_id, requirement_name, status, remarks) VALUES (?, 'Follow-up clearance', 'Needs Correction', ?) ON DUPLICATE KEY UPDATE status = 'Needs Correction', remarks = VALUES(remarks)");
+            $requirement->execute([$id, $missingItems]);
+            $activityLabel = 'Returned clearance for correction';
+            $activityNotes = $missingItems;
+        } elseif ($action === 'save_notes') {
+            $stmt = $apeDb->prepare('UPDATE ape_records SET clinical_remarks = ?, patient_visible_note = ? WHERE ape_id = ?');
+            $stmt->execute([
+                array_key_exists('clinical_remarks', $_POST) ? (trim((string) $_POST['clinical_remarks']) ?: null) : ($record['clinical_remarks'] ?: null),
+                trim((string) ($_POST['student_visible_note'] ?? '')) ?: null,
+                $id,
+            ]);
+            $activityLabel = 'Updated APE notes';
+        } elseif ($action === 'add_requirement') {
+            $requirementName = trim((string) ($_POST['requirement_name'] ?? ''));
+            $requirementStatus = (string) ($_POST['requirement_item_status'] ?? 'Missing');
+            if ($requirementName === '' || !in_array($requirementStatus, ['Missing', 'Submitted', 'Verified', 'Needs Correction'], true)) {
+                throw new InvalidArgumentException('Enter a requirement name and valid status.');
+            }
+            $requirement = $apeDb->prepare("INSERT INTO ape_requirements (ape_id, requirement_name, status, remarks, checked_by_person_id, checked_at) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), remarks = VALUES(remarks), checked_by_person_id = VALUES(checked_by_person_id), checked_at = VALUES(checked_at)");
+            $isChecked = $requirementStatus === 'Verified';
+            $requirement->execute([$id, $requirementName, $requirementStatus, trim((string) ($_POST['requirement_remarks'] ?? '')) ?: null, $isChecked ? $staffPersonId : null, $isChecked ? date('Y-m-d H:i:s') : null]);
+            $activityLabel = 'Updated APE requirement';
+            $activityNotes = $requirementName . ': ' . $requirementStatus;
+        } elseif ($action === 'add_finding') {
+            $findingType = trim((string) ($_POST['finding_type'] ?? ''));
+            $description = trim((string) ($_POST['finding_description'] ?? ''));
+            $resultStatus = (string) ($_POST['finding_result_status'] ?? 'With Finding');
+            $requiresFollowUp = isset($_POST['finding_follow_up']) ? 1 : 0;
+            if ($findingType === '' || $description === '' || !in_array($resultStatus, ['Normal', 'With Finding', 'Referred'], true)) {
+                throw new InvalidArgumentException('Complete the finding type, description, and result.');
+            }
+            $finding = $apeDb->prepare('INSERT INTO ape_findings (ape_id, finding_type, description, result_status, follow_up_required, recorded_by_person_id) VALUES (?, ?, ?, ?, ?, ?)');
+            $finding->execute([$id, $findingType, $description, $resultStatus, $requiresFollowUp, $staffPersonId]);
+            if ($requiresFollowUp) {
+                $apeDb->prepare("UPDATE ape_records SET follow_up_required = 1, clearance_status = 'For Follow-up', workflow_status = 'Follow-up Required' WHERE ape_id = ?")->execute([$id]);
+            }
+            $activityLabel = 'Added APE finding';
+            $activityNotes = $findingType . ': ' . $resultStatus;
+        }
+
+        if ($activityLabel) {
+            ape_log_activity($id, $staffPersonId, $activityLabel, $activityNotes);
+            flash_message('success', $activityLabel . '.');
+        }
+        $apeDb->commit();
+    } catch (Throwable $e) {
+        if ($apeDb->inTransaction()) {
+            $apeDb->rollBack();
+        }
+        flash_message('error', $e->getMessage());
     }
 
     header('Location: view.php?id=' . $id);
@@ -126,16 +156,10 @@ $next = ape_next_action($record);
 $currentStep = ape_record_step_index($record);
 $actionCard = ape_next_action_card($record);
 
-$activityStmt = db()->prepare("
-    SELECT l.*, u.name AS user_name
-    FROM ape_activity_logs l
-    LEFT JOIN users u ON u.id = l.user_id
-    WHERE l.ape_record_id = ?
-    ORDER BY l.created_at DESC
-    LIMIT 20
-");
-$activityStmt->execute([$id]);
-$activities = $activityStmt->fetchAll();
+$requirements = ape_requirements_for_record($id);
+$documents = ape_documents_for_record($id);
+$findings = ape_findings_for_record($id);
+$activities = ape_activities_for_record($id, 20);
 $birthdateLabel = $record['birthdate'] ? date('M d, Y', strtotime($record['birthdate'])) : 'Not recorded';
 $sexLabel = $record['sex'] ?: 'Not specified';
 $documentUrl = !empty($record['document_path']) ? app_url($record['document_path']) : null;
@@ -429,6 +453,133 @@ render_header('APE Record - ' . $fullName);
                     </div>
                 </div>
             <?php endif; ?>
+        </section>
+
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <section class="ape-flow-panel">
+                <div class="flex items-center justify-between gap-3 mb-4">
+                    <div>
+                        <h2 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Requirements Checklist</h2>
+                        <p class="text-xs font-bold text-slate-500 mb-0">Each requirement is stored separately in Cliniq_db.</p>
+                    </div>
+                    <span class="badge badge-pending"><?= count($requirements) ?> item(s)</span>
+                </div>
+                <div class="space-y-2 mb-4">
+                    <?php foreach ($requirements as $requirement): ?>
+                        <div class="ape-flow-field flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                            <div>
+                                <strong class="text-sm text-slate-800 block"><?= e($requirement['requirement_name']) ?></strong>
+                                <?php if ($requirement['remarks']): ?>
+                                    <p class="text-xs font-bold text-slate-500 mt-1 mb-0"><?= e($requirement['remarks']) ?></p>
+                                <?php endif; ?>
+                                <?php if ($requirement['checked_at']): ?>
+                                    <p class="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-2 mb-0">
+                                        Checked by <?= e($requirement['checked_by_name'] ?: 'Clinic staff') ?> · <?= e(date('M d, Y g:i A', strtotime($requirement['checked_at']))) ?>
+                                    </p>
+                                <?php endif; ?>
+                            </div>
+                            <span class="badge <?= ape_status_badge_class($requirement['status']) ?>"><?= e($requirement['status']) ?></span>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+                <form method="post" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <input type="hidden" name="action" value="add_requirement">
+                    <input class="clinic-input sm:col-span-2" name="requirement_name" placeholder="Requirement name" required>
+                    <select class="clinic-select" name="requirement_item_status">
+                        <?php foreach (['Missing', 'Submitted', 'Verified', 'Needs Correction'] as $status): ?>
+                            <option value="<?= e($status) ?>"><?= e($status) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <input class="clinic-input" name="requirement_remarks" placeholder="Optional remarks">
+                    <button class="btn btn-primary sm:col-span-2" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save requirement?" data-confirm-message="This will add or update the named APE requirement." data-confirm-toast="Saving requirement...">
+                        <span class="material-symbols-outlined text-[18px]">playlist_add</span> Save Requirement
+                    </button>
+                </form>
+            </section>
+
+            <section class="ape-flow-panel">
+                <div class="flex items-center justify-between gap-3 mb-4">
+                    <div>
+                        <h2 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Uploaded Documents</h2>
+                        <p class="text-xs font-bold text-slate-500 mb-0">Patient and clinic uploads with verification details.</p>
+                    </div>
+                    <span class="badge badge-in-progress"><?= count($documents) ?> file(s)</span>
+                </div>
+                <div class="space-y-2">
+                    <?php foreach ($documents as $document): ?>
+                        <div class="ape-flow-field">
+                            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                                <div>
+                                    <strong class="text-sm text-slate-800 block"><?= e($document['document_type']) ?></strong>
+                                    <p class="text-xs font-bold text-slate-500 mt-1 mb-0"><?= e($document['original_filename'] ?: basename($document['file_path'])) ?></p>
+                                    <p class="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-2 mb-0">
+                                        Uploaded by <?= e($document['uploaded_by_name'] ?: 'System') ?> · <?= e(date('M d, Y g:i A', strtotime($document['uploaded_at']))) ?>
+                                    </p>
+                                    <?php if ($document['verified_at']): ?>
+                                        <p class="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1 mb-0">
+                                            Reviewed by <?= e($document['verified_by_name'] ?: 'Clinic staff') ?> · <?= e(date('M d, Y g:i A', strtotime($document['verified_at']))) ?>
+                                        </p>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <span class="badge <?= ape_status_badge_class($document['verification_status']) ?>"><?= e($document['verification_status']) ?></span>
+                                    <a class="btn btn-sm btn-outline text-decoration-none" href="<?= e(app_url($document['file_path'])) ?>" target="_blank">
+                                        <span class="material-symbols-outlined text-[14px]">open_in_new</span> Open
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                    <?php if (!$documents): ?>
+                        <div class="ape-flow-field text-center text-sm font-bold text-slate-500">No document has been uploaded.</div>
+                    <?php endif; ?>
+                </div>
+            </section>
+        </div>
+
+        <section class="ape-flow-panel">
+            <div class="flex items-center justify-between gap-3 mb-4">
+                <div>
+                    <h2 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Clinical Findings</h2>
+                    <p class="text-xs font-bold text-slate-500 mb-0">Individual examination findings recorded by authorized clinic staff.</p>
+                </div>
+                <span class="badge <?= $findings ? 'badge-high' : 'badge-completed' ?>"><?= count($findings) ?> finding(s)</span>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-[1fr_0.8fr] gap-4">
+                <div class="space-y-2">
+                    <?php foreach ($findings as $finding): ?>
+                        <div class="ape-flow-field">
+                            <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                                <strong class="text-sm text-slate-800"><?= e($finding['finding_type']) ?></strong>
+                                <span class="badge <?= ape_status_badge_class($finding['result_status']) ?>"><?= e($finding['result_status']) ?></span>
+                            </div>
+                            <p class="text-sm font-bold text-slate-600 whitespace-pre-wrap mb-0"><?= e($finding['description']) ?></p>
+                            <p class="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-2 mb-0">
+                                <?= $finding['follow_up_required'] ? 'Follow-up required' : 'No follow-up' ?> · <?= e($finding['recorded_by_name'] ?: 'Clinic staff') ?> · <?= e(date('M d, Y g:i A', strtotime($finding['recorded_at']))) ?>
+                            </p>
+                        </div>
+                    <?php endforeach; ?>
+                    <?php if (!$findings): ?>
+                        <div class="ape-flow-field text-center text-sm font-bold text-slate-500">No clinical finding has been recorded.</div>
+                    <?php endif; ?>
+                </div>
+                <form method="post" class="ape-flow-action space-y-3">
+                    <input type="hidden" name="action" value="add_finding">
+                    <input class="clinic-input" name="finding_type" placeholder="Finding type, e.g. Vision" required>
+                    <textarea class="clinic-textarea" name="finding_description" rows="4" placeholder="Finding description" required></textarea>
+                    <select class="clinic-select" name="finding_result_status">
+                        <option>Normal</option>
+                        <option selected>With Finding</option>
+                        <option>Referred</option>
+                    </select>
+                    <label class="flex items-center gap-3 text-sm font-bold text-slate-600">
+                        <input type="checkbox" name="finding_follow_up" value="1"> Follow-up required
+                    </label>
+                    <button class="btn btn-primary w-full" data-confirm-submit data-confirm-type="primary" data-confirm-title="Add clinical finding?" data-confirm-message="This finding will become part of the patient's APE record." data-confirm-toast="Saving finding...">
+                        <span class="material-symbols-outlined text-[18px]">medical_information</span> Add Finding
+                    </button>
+                </form>
+            </div>
         </section>
 
         <div class="grid grid-cols-1 lg:grid-cols-[0.95fr_1.05fr] gap-4">

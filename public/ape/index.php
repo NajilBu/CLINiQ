@@ -9,25 +9,7 @@ $activeQueue = $_GET['queue'] ?? 'all';
 $search = trim($_GET['q'] ?? '');
 $queues = ape_work_queues();
 
-$where = '1=1';
-$params = [];
-if ($search !== '') {
-    $where .= ' AND (p.first_name LIKE ? OR p.last_name LIKE ? OR p.id_number LIKE ? OR p.course_section LIKE ? OR a.document_type LIKE ?)';
-    $term = '%' . $search . '%';
-    array_push($params, $term, $term, $term, $term, $term);
-}
-
-$stmt = db()->prepare("
-    SELECT a.*, p.first_name, p.last_name, p.id_number, p.course_section, u.name AS verified_by_name
-    FROM ape_records a
-    JOIN patients p ON p.id = a.patient_id
-    LEFT JOIN users u ON u.id = a.verified_by
-    WHERE {$where}
-    ORDER BY a.updated_at DESC, a.created_at DESC
-    LIMIT 200
-");
-$stmt->execute($params);
-$allRecords = $stmt->fetchAll();
+$allRecords = ape_fetch_records($search);
 
 $recordsByQueue = array_fill_keys(array_keys($queues), []);
 foreach ($allRecords as $record) {

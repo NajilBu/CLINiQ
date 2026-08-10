@@ -1,9 +1,11 @@
 <?php
 require_once __DIR__ . '/../app/config/database.php';
 require_once __DIR__ . '/../app/services/AppointmentWorkflow.php';
+require_once __DIR__ . '/../app/services/ApeWorkflow.php';
 require_once __DIR__ . '/includes/patient-layout.php';
 
 ensure_appointment_schema();
+ensure_ape_workflow_schema();
 
 $profile = student_require_login();
 $firstRegistrationError = '';
@@ -89,15 +91,7 @@ $appointmentStmt = appointment_db()->prepare("
 $appointmentStmt->execute([$appointmentPatientId]);
 $latestAppointment = $appointmentStmt->fetch();
 
-$apeStmt = $db->prepare("
-    SELECT *
-    FROM ape_records
-    WHERE patient_id = ?
-    ORDER BY updated_at DESC, created_at DESC
-    LIMIT 1
-");
-$apeStmt->execute([$patientId]);
-$latestApe = $apeStmt->fetch();
+$latestApe = ape_fetch_patient_record($appointmentPatientId);
 $apeStatus = $latestApe['workflow_status'] ?? 'Not Started';
 $apePercent = match ($apeStatus) {
     'Registered' => 20,

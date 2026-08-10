@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/VisitWorkflow.php';
 require_once __DIR__ . '/../../app/services/CliniqPatientProfile.php';
+require_once __DIR__ . '/../../app/services/ApeWorkflow.php';
 require_login();
 
 $id = (int) ($_GET['id'] ?? 0);
@@ -45,23 +46,8 @@ $visitStatuses = array_values(array_unique(array_map(
 )));
 sort($visitStatuses, SORT_NATURAL | SORT_FLAG_CASE);
 
-$legacyPatientStmt = db()->prepare('SELECT id FROM patients WHERE id_number = ? LIMIT 1');
-$legacyPatientStmt->execute([(string) $patient['id_number']]);
-$legacyPatientId = (int) ($legacyPatientStmt->fetchColumn() ?: 0);
-
-$apeRecords = [];
-if ($legacyPatientId > 0) {
-    $apeStmt = db()->prepare("
-        SELECT a.*, u.name AS verified_by_name
-        FROM ape_records a
-        LEFT JOIN users u ON u.id = a.verified_by
-        WHERE a.patient_id = ?
-        ORDER BY a.exam_date DESC
-    ");
-    $apeStmt->execute([$legacyPatientId]);
-    $apeRecords = $apeStmt->fetchAll();
-
-}
+ensure_ape_workflow_schema();
+$apeRecords = ape_fetch_patient_records((int) $patient['person_id']);
 
 $refStmt = auth_db()->prepare('
     SELECT r.*, TRIM(CONCAT_WS(" ", pe.first_name, pe.middle_name, pe.last_name)) AS referred_by_name

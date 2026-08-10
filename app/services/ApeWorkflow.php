@@ -262,55 +262,280 @@ function ensure_ape_workflow_schema(): void
         return;
     }
 
-    $db = db();
-    $columns = [];
-    $stmt = $db->query("SHOW COLUMNS FROM ape_records");
-    foreach ($stmt->fetchAll() as $column) {
-        $columns[$column['Field']] = true;
-    }
-
-    $addColumn = function (string $name, string $definition) use ($db, &$columns): void {
-        if (!isset($columns[$name])) {
-            $db->exec("ALTER TABLE ape_records ADD COLUMN {$name} {$definition}");
-            $columns[$name] = true;
+    $db = auth_db();
+    foreach (['ape_records', 'ape_requirements', 'ape_documents', 'ape_findings', 'ape_activity_logs'] as $table) {
+        $stmt = $db->prepare('
+            SELECT COUNT(*)
+            FROM information_schema.TABLES
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
+        ');
+        $stmt->execute([$table]);
+        if ((int) $stmt->fetchColumn() !== 1) {
+            throw new RuntimeException("Required Cliniq_db table {$table} is missing. Run the APE migration first.");
         }
-    };
-
-    $addColumn('document_type', "VARCHAR(80) NOT NULL DEFAULT 'APE Form' AFTER exam_date");
-    $addColumn('requirement_status', "ENUM('Not Checked','Pre-Verified','Needs Correction') NOT NULL DEFAULT 'Not Checked' AFTER document_type");
-    $addColumn('workflow_status', "ENUM('Registered','Batch Assigned','Requirements Checked','Submitted','Reviewed','Scheduled','Exam Done','Follow-up Required','Cleared') NOT NULL DEFAULT 'Submitted' AFTER requirement_status");
-    $addColumn('appointment_datetime', "DATETIME NULL AFTER verified_by");
-    $addColumn('appointment_location', "VARCHAR(160) NULL AFTER appointment_datetime");
-    $addColumn('clearance_status', "ENUM('Pending','For Follow-up','Submitted','Cleared') NOT NULL DEFAULT 'Pending' AFTER appointment_location");
-    $addColumn('clinical_remarks', "TEXT NULL AFTER clearance_status");
-    $addColumn('student_visible_note', "TEXT NULL AFTER clinical_remarks");
-    $addColumn('follow_up_required', "TINYINT(1) NOT NULL DEFAULT 0 AFTER student_visible_note");
-    $addColumn('missing_items', "TEXT NULL AFTER follow_up_required");
-    $addColumn('result_status', "ENUM('Pending','Completed','With Finding','Fit to Proceed') NOT NULL DEFAULT 'Pending' AFTER missing_items");
-    $addColumn('result_notes', "TEXT NULL AFTER result_status");
-    $addColumn('clearance_document_path', "VARCHAR(255) NULL AFTER result_notes");
-    $addColumn('updated_at', "TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at");
-
-    $db->exec("
-        CREATE TABLE IF NOT EXISTS ape_activity_logs (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            ape_record_id INT NOT NULL,
-            user_id INT NULL,
-            action_label VARCHAR(160) NOT NULL,
-            notes TEXT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (ape_record_id) REFERENCES ape_records(id) ON DELETE CASCADE,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
-        )
-    ");
+    }
 
     $ready = true;
 }
 
-function ape_log_activity(int $apeRecordId, ?int $userId, string $actionLabel, ?string $notes = null): void
+function ape_record_select_sql(): string
 {
-    $stmt = db()->prepare('INSERT INTO ape_activity_logs (ape_record_id, user_id, action_label, notes) VALUES (?, ?, ?, ?)');
-    $stmt->execute([$apeRecordId, $userId, $actionLabel, $notes]);
+    return "
+        SELECT
+            ar.*,
+            ar.ape_id AS id,
+            p.first_name,
+            p.middle_name,
+            p.last_name,
+            p.id_number,
+            p.sex,
+            p.birthdate,
+            COALESCE(
+                NULLIF(TRIM(CONCAT(pr.program_code, '-', s.year_level, UPPER(s.section))), ''),
+                ed.department_code,
+                'Patient'
+            ) AS course_section,
+            COALESCE((
+                SELECT d.document_type
+                FROM ape_documents d
+                WHERE d.ape_id = ar.ape_id
+                ORDER BY d.uploaded_at DESC, d.document_id DESC
+                LIMIT 1
+            ), 'APE Form') AS document_type,
+            (
+                SELECT d.file_path
+                FROM ape_documents d
+                WHERE d.ape_id = ar.ape_id
+                ORDER BY d.uploaded_at DESC, d.document_id DESC
+                LIMIT 1
+            ) AS document_path,
+            COALESCE((
+                SELECT d.verification_status
+                FROM ape_documents d
+                WHERE d.ape_id = ar.ape_id
+                ORDER BY FIELD(d.verification_status, 'Needs Correction', 'Pending', 'Verified'), d.uploaded_at DESC
+                LIMIT 1
+            ), 'Pending') AS verification_status,
+            COALESCE(
+                TRIM(CONCAT_WS(' ', reviewer.first_name, reviewer.middle_name, reviewer.last_name)),
+                (
+                    SELECT TRIM(CONCAT_WS(' ', verifier.first_name, verifier.middle_name, verifier.last_name))
+                    FROM ape_documents verified_document
+                    JOIN people verifier ON verifier.id = verified_document.verified_by_person_id
+                    WHERE verified_document.ape_id = ar.ape_id
+                    ORDER BY verified_document.verified_at DESC, verified_document.document_id DESC
+                    LIMIT 1
+                )
+            ) AS verified_by_name,
+            ap.appointment_datetime,
+            CASE WHEN ap.appointment_id IS NULL THEN NULL ELSE 'PLP Clinic' END AS appointment_location,
+            (
+                SELECT GROUP_CONCAT(CONCAT(r.requirement_name, ' (', r.status, ')') ORDER BY r.requirement_id SEPARATOR ', ')
+                FROM ape_requirements r
+                WHERE r.ape_id = ar.ape_id AND r.status <> 'Verified'
+            ) AS missing_items,
+            CASE
+                WHEN EXISTS (SELECT 1 FROM ape_findings f WHERE f.ape_id = ar.ape_id AND f.result_status = 'Referred') THEN 'Referred'
+                WHEN EXISTS (SELECT 1 FROM ape_findings f WHERE f.ape_id = ar.ape_id AND f.result_status = 'With Finding') THEN 'With Finding'
+                WHEN EXISTS (SELECT 1 FROM ape_findings f WHERE f.ape_id = ar.ape_id) THEN 'Normal'
+                ELSE 'Pending'
+            END AS result_status,
+            (
+                SELECT GROUP_CONCAT(f.description ORDER BY f.recorded_at DESC SEPARATOR ' | ')
+                FROM ape_findings f
+                WHERE f.ape_id = ar.ape_id
+            ) AS result_notes,
+            (
+                SELECT d.file_path
+                FROM ape_documents d
+                WHERE d.ape_id = ar.ape_id AND d.document_type = 'Clearance'
+                ORDER BY d.uploaded_at DESC, d.document_id DESC
+                LIMIT 1
+            ) AS clearance_document_path,
+            (SELECT COUNT(*) FROM ape_documents d WHERE d.ape_id = ar.ape_id) AS document_count
+        FROM ape_records ar
+        JOIN patients patient_profile ON patient_profile.person_id = ar.patient_id
+        JOIN people p ON p.id = patient_profile.person_id
+        LEFT JOIN students s ON s.person_id = p.id
+        LEFT JOIN programs pr ON pr.id = s.program_id
+        LEFT JOIN school_employees se ON se.person_id = p.id
+        LEFT JOIN departments ed ON ed.id = se.department_id
+        LEFT JOIN clinic_staff reviewer_staff ON reviewer_staff.person_id = ar.reviewed_by_person_id
+        LEFT JOIN people reviewer ON reviewer.id = reviewer_staff.person_id
+        LEFT JOIN appointments ap ON ap.appointment_id = ar.appointment_id
+    ";
+}
+
+function ape_fetch_records(string $search = '', int $limit = 200): array
+{
+    $limit = max(1, min(500, $limit));
+    $sql = ape_record_select_sql();
+    $params = [];
+    if ($search !== '') {
+        $sql .= "
+            WHERE p.first_name LIKE ?
+               OR p.last_name LIKE ?
+               OR p.id_number LIKE ?
+               OR pr.program_code LIKE ?
+               OR ed.department_code LIKE ?
+               OR EXISTS (
+                    SELECT 1 FROM ape_documents search_document
+                    WHERE search_document.ape_id = ar.ape_id
+                      AND search_document.document_type LIKE ?
+               )
+        ";
+        $term = '%' . $search . '%';
+        $params = array_fill(0, 6, $term);
+    }
+    $sql .= " ORDER BY ar.updated_at DESC, ar.created_at DESC LIMIT {$limit}";
+    $stmt = auth_db()->prepare($sql);
+    $stmt->execute($params);
+    return $stmt->fetchAll();
+}
+
+function ape_fetch_record(int $apeId): ?array
+{
+    $stmt = auth_db()->prepare(ape_record_select_sql() . ' WHERE ar.ape_id = ? LIMIT 1');
+    $stmt->execute([$apeId]);
+    return $stmt->fetch() ?: null;
+}
+
+function ape_fetch_patient_record(int $patientId): ?array
+{
+    $stmt = auth_db()->prepare(ape_record_select_sql() . '
+        WHERE ar.patient_id = ?
+        ORDER BY ar.updated_at DESC, ar.created_at DESC
+        LIMIT 1
+    ');
+    $stmt->execute([$patientId]);
+    return $stmt->fetch() ?: null;
+}
+
+function ape_fetch_patient_records(int $patientId): array
+{
+    $stmt = auth_db()->prepare(ape_record_select_sql() . '
+        WHERE ar.patient_id = ?
+        ORDER BY ar.exam_date DESC, ar.created_at DESC
+    ');
+    $stmt->execute([$patientId]);
+    return $stmt->fetchAll();
+}
+
+function ape_requirements_for_record(int $apeId): array
+{
+    $stmt = auth_db()->prepare("
+        SELECT r.*, TRIM(CONCAT_WS(' ', checker.first_name, checker.middle_name, checker.last_name)) AS checked_by_name
+        FROM ape_requirements r
+        LEFT JOIN people checker ON checker.id = r.checked_by_person_id
+        WHERE r.ape_id = ?
+        ORDER BY r.requirement_id ASC
+    ");
+    $stmt->execute([$apeId]);
+    return $stmt->fetchAll();
+}
+
+function ape_documents_for_record(int $apeId): array
+{
+    $stmt = auth_db()->prepare("
+        SELECT d.*,
+               TRIM(CONCAT_WS(' ', uploader.first_name, uploader.middle_name, uploader.last_name)) AS uploaded_by_name,
+               TRIM(CONCAT_WS(' ', verifier.first_name, verifier.middle_name, verifier.last_name)) AS verified_by_name
+        FROM ape_documents d
+        LEFT JOIN people uploader ON uploader.id = d.uploaded_by_person_id
+        LEFT JOIN people verifier ON verifier.id = d.verified_by_person_id
+        WHERE d.ape_id = ?
+        ORDER BY d.uploaded_at DESC, d.document_id DESC
+    ");
+    $stmt->execute([$apeId]);
+    return $stmt->fetchAll();
+}
+
+function ape_findings_for_record(int $apeId): array
+{
+    $stmt = auth_db()->prepare("
+        SELECT f.*, TRIM(CONCAT_WS(' ', recorder.first_name, recorder.middle_name, recorder.last_name)) AS recorded_by_name
+        FROM ape_findings f
+        LEFT JOIN people recorder ON recorder.id = f.recorded_by_person_id
+        WHERE f.ape_id = ?
+        ORDER BY f.recorded_at DESC, f.finding_id DESC
+    ");
+    $stmt->execute([$apeId]);
+    return $stmt->fetchAll();
+}
+
+function ape_activities_for_record(int $apeId, int $limit = 50): array
+{
+    $limit = max(1, min(200, $limit));
+    $stmt = auth_db()->prepare("
+        SELECT l.*, l.action AS action_label,
+               TRIM(CONCAT_WS(' ', actor.first_name, actor.middle_name, actor.last_name)) AS user_name
+        FROM ape_activity_logs l
+        LEFT JOIN people actor ON actor.id = l.performed_by_person_id
+        WHERE l.ape_id = ?
+        ORDER BY l.created_at DESC, l.activity_id DESC
+        LIMIT {$limit}
+    ");
+    $stmt->execute([$apeId]);
+    return $stmt->fetchAll();
+}
+
+function ape_default_requirements(): array
+{
+    return [
+        'Lab Request Form',
+        'UHS Consent Form',
+        'UHS Medical Record',
+        'UHS Dental Record',
+        'Referral Form',
+    ];
+}
+
+function ape_seed_default_requirements(int $apeId, string $status = 'Missing'): void
+{
+    $stmt = auth_db()->prepare('
+        INSERT IGNORE INTO ape_requirements (ape_id, requirement_name, status)
+        VALUES (?, ?, ?)
+    ');
+    foreach (ape_default_requirements() as $requirement) {
+        $stmt->execute([$apeId, $requirement, $status]);
+    }
+}
+
+function ape_log_activity(int $apeRecordId, ?int $personId, string $actionLabel, ?string $notes = null): void
+{
+    $stmt = auth_db()->prepare('INSERT INTO ape_activity_logs (ape_id, performed_by_person_id, action, notes) VALUES (?, ?, ?, ?)');
+    $stmt->execute([$apeRecordId, $personId ?: null, $actionLabel, $notes]);
+}
+
+function ape_store_uploaded_file(array $file, string $prefix): array
+{
+    if (empty($file['name']) || (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        throw new InvalidArgumentException('Choose a valid PDF or image to upload.');
+    }
+    if ((int) ($file['size'] ?? 0) > 10 * 1024 * 1024) {
+        throw new InvalidArgumentException('APE documents must not exceed 10 MB.');
+    }
+
+    $extension = strtolower(pathinfo((string) $file['name'], PATHINFO_EXTENSION));
+    if (!in_array($extension, ['pdf', 'jpg', 'jpeg', 'png'], true)) {
+        throw new InvalidArgumentException('APE documents must be PDF, JPG, JPEG, or PNG files.');
+    }
+
+    $uploadDir = dirname(__DIR__, 2) . '/public/uploads/ape/';
+    if (!is_dir($uploadDir) && !mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)) {
+        throw new RuntimeException('The APE upload folder could not be created.');
+    }
+
+    $filename = preg_replace('/[^a-z0-9_-]+/i', '-', $prefix) . '_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $extension;
+    if (!move_uploaded_file((string) $file['tmp_name'], $uploadDir . $filename)) {
+        throw new RuntimeException('The APE document could not be saved.');
+    }
+
+    return [
+        'original_filename' => basename((string) $file['name']),
+        'file_path' => 'uploads/ape/' . $filename,
+        'absolute_path' => $uploadDir . $filename,
+    ];
 }
 
 function ape_workflow_summary(array $record): string

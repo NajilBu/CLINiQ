@@ -86,10 +86,10 @@ $metrics = [
 ];
 
 // APE Metrics (condensed)
-$apeTotal = (int) (db()->query('SELECT COUNT(*) AS total FROM ape_records')->fetch()['total'] ?? 0);
-$apeCleared = (int) (db()->query("SELECT COUNT(*) AS total FROM ape_records WHERE workflow_status = 'Cleared' OR clearance_status = 'Cleared'")->fetch()['total'] ?? 0);
+$apeTotal = (int) (auth_db()->query('SELECT COUNT(*) AS total FROM ape_records')->fetch()['total'] ?? 0);
+$apeCleared = (int) (auth_db()->query("SELECT COUNT(*) AS total FROM ape_records WHERE workflow_status = 'Cleared' OR clearance_status = 'Cleared'")->fetch()['total'] ?? 0);
 $metrics['ape_clearance_rate'] = $apeTotal > 0 ? round(($apeCleared / $apeTotal) * 100) : 0;
-$metrics['ape_pending_review'] = (int) (db()->query("SELECT COUNT(*) AS total FROM ape_records WHERE COALESCE(requirement_status, '') <> 'Pre-Verified'")->fetch()['total'] ?? 0);
+$metrics['ape_pending_review'] = (int) (auth_db()->query("SELECT COUNT(*) AS total FROM ape_records WHERE COALESCE(requirement_status, '') <> 'Pre-Verified'")->fetch()['total'] ?? 0);
 
 
 // --- 2. Live Alerts (Most Urgent First) ---
@@ -213,13 +213,10 @@ $visitorLogs = cliniq_visit_db()->query("
 ")->fetchAll();
 
 // --- 5. APE Action Queue (Condensed) ---
-$allApeRecords = db()->query("
-    SELECT a.*, p.first_name, p.last_name, p.id_number, p.course_section
-    FROM ape_records a
-    JOIN patients p ON p.id = a.patient_id
-    WHERE a.workflow_status NOT IN ('Cleared')
-    ORDER BY a.updated_at DESC, a.created_at DESC
-")->fetchAll();
+$allApeRecords = array_values(array_filter(
+    ape_fetch_records('', 500),
+    static fn(array $record): bool => ($record['workflow_status'] ?? '') !== 'Cleared'
+));
 
 $dashboardQueues = ape_work_queues();
 $recordsByQueue = array_fill_keys(array_keys($dashboardQueues), []);

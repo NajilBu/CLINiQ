@@ -203,7 +203,7 @@ function normalize_student_section_code(string $value): string
     return $code;
 }
 
-function patient_account_temporary_password(string $idNumber): string
+function patient_account_initial_password(string $idNumber): string
 {
     $digits = preg_replace('/\D+/', '', $idNumber) ?? '';
     if (strlen($digits) < 3) {
@@ -233,7 +233,7 @@ function normalize_person_sex(string $value): string
 /**
  * Create one inactive patient account and category profile.
  *
- * @return array{id_number:string,name:string,type:string,temporary_password:string,status:string}
+ * @return array{id_number:string,name:string,type:string,password:string,status:string}
  */
 function create_inactive_patient_account(array $input): array
 {
@@ -277,7 +277,7 @@ function create_inactive_patient_account(array $input): array
         throw new InvalidArgumentException('Birthdate must use the YYYY-MM-DD format.');
     }
 
-    $temporaryPassword = patient_account_temporary_password($idNumber);
+    $initialPassword = patient_account_initial_password($idNumber);
     $db = auth_db();
 
     try {
@@ -339,14 +339,13 @@ function create_inactive_patient_account(array $input): array
         $account = $db->prepare('
             UPDATE accounts
             SET
-                password_hash = NULL,
-                temporary_password_hash = ?,
+                password_hash = ?,
                 account_status = "inactive",
                 activated_at = NULL
             WHERE person_id = ?
         ');
         $account->execute([
-            password_hash($temporaryPassword, PASSWORD_DEFAULT),
+            password_hash($initialPassword, PASSWORD_DEFAULT),
             $personId,
         ]);
 
@@ -356,7 +355,7 @@ function create_inactive_patient_account(array $input): array
             'id_number' => $idNumber,
             'name' => trim(implode(' ', array_filter([$firstName, $middleName, $lastName]))),
             'type' => $type,
-            'temporary_password' => $temporaryPassword,
+            'password' => $initialPassword,
             'status' => 'created',
         ];
     } catch (Throwable $e) {
@@ -400,7 +399,7 @@ function create_bulk_inactive_patient_accounts(array $rows): array
                     $row['last_name'] ?? '',
                 ]))) ?: '—',
                 'type' => patient_account_type((string) ($row['patient_type'] ?? $row['category'] ?? 'school_personnel')),
-                'temporary_password' => '',
+                'password' => '',
                 'status' => $e->getMessage(),
             ];
         }

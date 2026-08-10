@@ -104,7 +104,7 @@ function complete_first_registration(string $password, string $confirmPassword):
     try {
         $authDb->beginTransaction();
         $stmt = $authDb->prepare('
-            SELECT account_status, password_hash, temporary_password_hash
+            SELECT account_status, password_hash
             FROM accounts
             WHERE id = ? AND person_id = ?
             LIMIT 1
@@ -119,8 +119,7 @@ function complete_first_registration(string $password, string $confirmPassword):
         if (
             !$account
             || $account['account_status'] !== 'inactive'
-            || !empty($account['password_hash'])
-            || empty($account['temporary_password_hash'])
+            || empty($account['password_hash'])
         ) {
             throw new RuntimeException('This account can no longer complete first registration.');
         }
@@ -129,7 +128,6 @@ function complete_first_registration(string $password, string $confirmPassword):
             UPDATE accounts
             SET
                 password_hash = ?,
-                temporary_password_hash = NULL,
                 account_status = "active",
                 activated_at = NOW()
             WHERE id = ?
@@ -170,7 +168,6 @@ function login_attempt(string $idNumber, string $password): bool
         SELECT
             a.id AS account_id,
             a.password_hash,
-            a.temporary_password_hash,
             a.account_status,
             p.id AS person_id,
             p.id_number,
@@ -193,8 +190,8 @@ function login_attempt(string $idNumber, string $password): bool
 
     if ($account['account_status'] === 'inactive') {
         if (
-            empty($account['temporary_password_hash'])
-            || !password_verify($password, $account['temporary_password_hash'])
+            empty($account['password_hash'])
+            || !password_verify($password, $account['password_hash'])
         ) {
             return false;
         }

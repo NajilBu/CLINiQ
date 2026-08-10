@@ -114,7 +114,6 @@ function student_current_profile(): ?array
             a.id AS account_id,
             a.account_status,
             a.password_hash,
-            a.temporary_password_hash,
             pr.program_code AS program,
             CASE WHEN se.role_classification = "Faculty" THEN ed.department_code END AS faculty_department,
             CASE WHEN se.role_classification = "School Personnel" THEN ed.department_code END AS personnel_department,
@@ -149,8 +148,7 @@ function student_current_profile(): ?array
         && (int) ($registration['person_id'] ?? 0) === (int) $identity['person_id']
         && (int) ($registration['account_id'] ?? 0) === (int) $identity['account_id']
         && $identity['account_status'] === 'inactive'
-        && empty($identity['password_hash'])
-        && !empty($identity['temporary_password_hash'])
+        && !empty($identity['password_hash'])
     );
     if (!$identity || ($identity['account_status'] !== 'active' && !$isFirstRegistration)) {
         unset(
@@ -219,7 +217,6 @@ function student_find_patient_by_number(string $studentNumber): ?array
         SELECT
             a.id AS account_id,
             a.password_hash,
-            a.temporary_password_hash,
             a.account_status,
             p.id AS person_id,
             p.id_number,
@@ -259,11 +256,7 @@ function student_find_patient_by_number(string $studentNumber): ?array
 
 function student_password_is_valid(array $patient, string $password): bool
 {
-    $passwordHash = (string) (
-        ($patient['account_status'] ?? '') === 'inactive'
-            ? ($patient['temporary_password_hash'] ?? '')
-            : ($patient['password_hash'] ?? '')
-    );
+    $passwordHash = (string) ($patient['password_hash'] ?? '');
     return $passwordHash !== '' && password_verify($password, $passwordHash);
 }
 

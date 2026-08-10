@@ -59,7 +59,7 @@ render_clinic_command_header(
         <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-2"><?= e($createdAccount['name']) ?></h2>
         <div class="flex flex-wrap gap-3 text-sm font-bold">
             <span>ID: <code><?= e($createdAccount['id_number']) ?></code></span>
-            <span>Password: <code><?= e($createdAccount['temporary_password']) ?></code></span>
+            <span>Password: <code><?= e($createdAccount['password']) ?></code></span>
             <span class="badge badge-pending">Inactive</span>
         </div>
         <p class="text-xs font-bold text-emerald-800 mt-3 mb-0">Give the password privately to the account owner. They will use it on the login page and create their own password in the dashboard.</p>
@@ -250,7 +250,7 @@ render_clinic_command_header(
                             <td class="p-3 font-bold"><?= e($result['id_number']) ?></td>
                             <td class="p-3"><?= e($result['name']) ?></td>
                             <td class="p-3"><?= e(patient_account_type_label($result['type'])) ?></td>
-                            <td class="p-3"><code><?= e($result['temporary_password'] ?: '—') ?></code></td>
+                            <td class="p-3"><code><?= e($result['password'] ?: '—') ?></code></td>
                             <td class="p-3">
                                 <span class="badge <?= $result['status'] === 'created' ? 'badge-completed' : 'badge-high' ?>">
                                     <?= e($result['status'] === 'created' ? 'Created' : $result['status']) ?>
@@ -635,7 +635,7 @@ document.getElementById('downloadImportResults')?.addEventListener('click', () =
         'ID Number': row.id_number,
         'Name': row.name,
         'Patient Type': row.type,
-        'Password': row.temporary_password,
+        'Password': row.password,
         'Result': row.status === 'created' ? 'Created' : row.status,
     })));
     const workbook = XLSX.utils.book_new();
