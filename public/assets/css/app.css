@@ -1712,6 +1712,189 @@ textarea:focus {
     box-shadow: 0 0 0 3px rgba(var(--cliniq-focus-rgb), 0.08);
 }
 
+/* ============================================================
+   FILE AND IMAGE PREVIEW MODAL
+   Shared by staff and patient interfaces.
+   ============================================================ */
+body.file-preview-open {
+    overflow: hidden;
+}
+
+.file-preview-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 14000;
+    display: grid;
+    place-items: center;
+    padding: 1.25rem;
+    background: rgba(15, 23, 42, 0.72);
+    backdrop-filter: blur(8px);
+}
+
+.file-preview-backdrop[hidden] {
+    display: none;
+}
+
+.file-preview-dialog {
+    display: flex;
+    flex-direction: column;
+    width: min(72rem, 96vw);
+    height: min(54rem, 92vh);
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 1.25rem;
+    background: #fff;
+    box-shadow: 0 30px 80px rgba(15, 23, 42, 0.38);
+}
+
+.file-preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.15rem;
+    border-bottom: 1px solid #e2e8f0;
+    background: #fff;
+}
+
+.file-preview-heading,
+.file-preview-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.file-preview-heading > .material-symbols-outlined {
+    display: grid;
+    flex: 0 0 auto;
+    width: 2.5rem;
+    height: 2.5rem;
+    place-items: center;
+    border-radius: 0.75rem;
+    background: var(--cliniq-surface-low, #edf8f0);
+    color: var(--cliniq-primary, #3f7d52);
+}
+
+.file-preview-eyebrow {
+    display: block;
+    margin-bottom: 0.1rem;
+    color: #94a3b8;
+    font-size: 0.62rem;
+    font-weight: 900;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+.file-preview-header h2 {
+    max-width: min(48rem, 55vw);
+    margin: 0;
+    overflow: hidden;
+    color: #17261d;
+    font-size: 0.95rem;
+    font-weight: 800;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.file-preview-download,
+.file-preview-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    min-height: 2.5rem;
+    border: 1px solid #dbe5de;
+    border-radius: 0.7rem;
+    background: #fff;
+    color: #315f40;
+    font-size: 0.78rem;
+    font-weight: 800;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.file-preview-download {
+    padding: 0.55rem 0.85rem;
+}
+
+.file-preview-close {
+    width: 2.5rem;
+    padding: 0;
+}
+
+.file-preview-download:hover,
+.file-preview-close:hover {
+    border-color: #9fc6aa;
+    background: #edf8f0;
+}
+
+.file-preview-download .material-symbols-outlined,
+.file-preview-close .material-symbols-outlined {
+    font-size: 1.15rem;
+}
+
+.file-preview-body {
+    display: grid;
+    flex: 1 1 auto;
+    min-height: 0;
+    place-items: center;
+    overflow: auto;
+    background: #e9eef2;
+}
+
+.file-preview-image {
+    display: block;
+    width: 100%;
+    height: 100%;
+    padding: 1rem;
+    object-fit: contain;
+}
+
+.file-preview-frame {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: #fff;
+}
+
+@media (max-width: 640px) {
+    .file-preview-backdrop {
+        padding: 0.5rem;
+    }
+
+    .file-preview-dialog {
+        width: 100%;
+        height: 96vh;
+        border-radius: 1rem;
+    }
+
+    .file-preview-header {
+        padding: 0.75rem;
+    }
+
+    .file-preview-heading > .material-symbols-outlined,
+    .file-preview-download span,
+    .file-preview-eyebrow {
+        display: none;
+    }
+
+    .file-preview-download {
+        width: 2.5rem;
+        padding: 0;
+        font-size: 0;
+    }
+
+    .file-preview-download::after {
+        content: "↓";
+        font-size: 1.1rem;
+    }
+
+    .file-preview-header h2 {
+        max-width: 52vw;
+    }
+}
+
 .settings-logo-layout {
     display: grid;
     grid-template-columns: minmax(12rem, 0.7fr) minmax(0, 1.8fr);

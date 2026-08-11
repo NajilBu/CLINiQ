@@ -101,7 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $clearanceStatus,
             $followUpRequired,
             $clinicalRemarks,
-            trim((string) ($_POST['student_visible_note'] ?? '')) ?: null,
+            trim((string) ($_POST['patient_visible_note'] ?? '')) ?: null,
             $requirementStatus === 'Not Checked' ? null : $staffPersonId,
         ]);
         $apeId = (int) $apeDb->lastInsertId();
@@ -172,10 +172,10 @@ render_header('Add APE Record');
 <form class="clinic-card p-6 md:p-8" method="post" enctype="multipart/form-data">
     <div class="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-8">
         <section>
-            <h2 class="font-headline text-xl font-extrabold text-[#1c2a59] mb-4">Student & Status</h2>
+            <h2 class="font-headline text-xl font-extrabold text-[#1c2a59] mb-4">Patient & Status</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div class="md:col-span-2">
-                    <label class="clinic-label">Student</label>
+                    <label class="clinic-label">Patient</label>
                     <select class="clinic-select" name="patient_id" required>
                         <option value="">Select student</option>
                         <?php foreach ($patients as $p): ?>
@@ -283,8 +283,8 @@ render_header('Add APE Record');
                     <textarea class="clinic-textarea" name="clinical_remarks" rows="5" placeholder="Visible to authorized clinic staff only. Use for findings, treatment monitoring, and internal follow-up notes."></textarea>
                 </div>
                 <div>
-                    <label class="clinic-label">Student-Visible Note</label>
-                    <textarea class="clinic-textarea" name="student_visible_note" rows="4" placeholder="Example: Please submit follow-up clearance before APE can be completed."></textarea>
+                    <label class="clinic-label">Patient-Visible Note</label>
+                    <textarea class="clinic-textarea" name="patient_visible_note" rows="4" placeholder="Example: Please submit follow-up clearance before APE can be completed."></textarea>
                 </div>
             </div>
         </section>

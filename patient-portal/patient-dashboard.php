@@ -106,7 +106,7 @@ $apeBadgeClass = match ($latestApe['clearance_status'] ?? '') {
     'For Follow-up' => 'student-badge-warning',
     default => $latestApe ? 'student-badge-info' : 'student-badge-warning',
 };
-$apeNote = $latestApe['student_visible_note'] ?? 'Start your APE record with the clinic.';
+$apeNote = trim((string) ($latestApe['patient_visible_note'] ?? ''));
 $apeRequirementStatus = $latestApe['requirement_status'] ?? 'Not Checked';
 $apeRequirementsVerified = $apeRequirementStatus === 'Pre-Verified' || in_array($apeStatus, [
     'Requirements Checked',
@@ -122,13 +122,19 @@ $apeActionTitle = match (true) {
     ($latestApe['clearance_status'] ?? 'Pending') === 'Cleared' => 'APE completed',
     $apeRequirementsNeedCorrection => 'Return corrected hard-copy requirements',
     !$apeRequirementsVerified => 'Wait for clinic hard-copy verification',
+    in_array($apeStatus, ['Reviewed', 'Scheduled'], true) => 'Attend your clinical examination',
+    $apeStatus === 'Exam Done' => 'Wait for the final clinical decision',
+    $apeStatus === 'Follow-up Required' => 'Complete the required follow-up',
     default => 'Upload verified APE documents',
 };
 $apeActionCopy = match (true) {
     ($latestApe['clearance_status'] ?? 'Pending') === 'Cleared' => 'Your APE record is already cleared by the clinic.',
-    $apeRequirementsNeedCorrection => $apeNote,
+    $apeRequirementsNeedCorrection => $apeNote ?: 'Return the corrected hard-copy requirements requested by the clinic.',
     !$apeRequirementsVerified => 'The clinic must verify your physical requirements first. Digital upload will open after that step.',
-    default => $apeNote,
+    in_array($apeStatus, ['Reviewed', 'Scheduled'], true) => $apeNote ?: 'Your documents are archived. Visit the clinic for your APE examination.',
+    $apeStatus === 'Exam Done' => $apeNote ?: 'Your examination is recorded and awaiting final clearance.',
+    $apeStatus === 'Follow-up Required' => $apeNote ?: 'Complete the treatment, clearance, referral, or other follow-up requested by the clinic.',
+    default => $apeNote ?: ($latestApe ? 'Complete the current APE step in your APE status page.' : 'Start your APE record with the clinic.'),
 };
 $passportMissing = [];
 if (empty($profile['blood_type']) || $profile['blood_type'] === 'Unknown') {

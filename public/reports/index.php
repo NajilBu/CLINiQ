@@ -3,11 +3,13 @@
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/VisitWorkflow.php';
 require_once __DIR__ . '/../../app/services/CliniqVisitWorkflow.php';
+require_once __DIR__ . '/../../app/services/SystemReport.php';
+require_once __DIR__ . '/../../app/services/SystemReportRenderer.php';
 require_login();
 
 // ── Date range filter ───────────────────────────────────────
-$dateFrom = $_GET['from'] ?? date('Y-m-01');
-$dateTo = $_GET['to'] ?? date('Y-m-d');
+$dateFrom = normalize_system_report_date($_GET['from'] ?? null, date('Y-m-01'));
+$dateTo = normalize_system_report_date($_GET['to'] ?? null, date('Y-m-d'));
 $visitDb = cliniq_visit_db();
 
 $stats = [
@@ -58,6 +60,7 @@ $monthlyTrend = $visitDb->query("
     ORDER BY month_key ASC
 ")->fetchAll();
 $maxMonthly = $monthlyTrend ? max(array_column($monthlyTrend, 'total')) : 1;
+$mainSystemReport = build_system_report($dateFrom, $dateTo, []);
 
 render_header('Reports');
 ?>
@@ -66,23 +69,24 @@ render_header('Reports');
 <?php render_clinic_command_header(
     'Reports',
     'Reports & Analytics',
-    'Clinic summaries, visit trends, alerts, and inventory warnings.',
-    '<a class="btn btn-primary text-decoration-none" href="export.php?from=' . e($dateFrom) . '&to=' . e($dateTo) . '"><span class="material-symbols-outlined text-[20px]">download</span>Export CSV</a>'
+    'Build, preview, and export consolidated analytics across every CLINiQ module.',
+    '<a class="btn btn-outline text-decoration-none" href="export.php?from=' . e($dateFrom) . '&to=' . e($dateTo) . '"><span class="material-symbols-outlined text-[20px]">table_view</span>Export Visit CSV</a>'
 ); ?>
 
 <!-- ═══ Date Range Filter ═══ -->
-<form method="get" class="clinic-card p-4 flex flex-col sm:flex-row items-end gap-4">
-    <div class="flex-1">
-        <label class="clinic-label">From</label>
-        <input class="clinic-input" type="date" name="from" value="<?= e($dateFrom) ?>">
+<form method="get" class="clinic-card overflow-hidden" data-no-ajax="true">
+    <div class="p-6 border-b border-slate-100">
+        <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">System Analytics Period</h2>
+        <p class="text-xs font-bold text-slate-500 mb-0">All available module graphs are shown below. Choose which sections to export after opening Preview.</p>
     </div>
-    <div class="flex-1">
-        <label class="clinic-label">To</label>
-        <input class="clinic-input" type="date" name="to" value="<?= e($dateTo) ?>">
+    <div class="p-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_auto] items-end gap-4">
+        <div><label class="clinic-label" for="reportFrom">From</label><input class="clinic-input" id="reportFrom" type="date" name="from" value="<?= e($dateFrom) ?>" required></div>
+        <div><label class="clinic-label" for="reportTo">To</label><input class="clinic-input" id="reportTo" type="date" name="to" value="<?= e($dateTo) ?>" required></div>
+        <div class="flex flex-col sm:flex-row gap-3">
+            <button class="btn btn-outline justify-center" type="submit" formaction="index.php"><span class="material-symbols-outlined text-[18px]">filter_list</span>Apply</button>
+            <button class="btn btn-primary justify-center" type="submit" formaction="preview.php"><span class="material-symbols-outlined text-[18px]">preview</span>Preview Report</button>
+        </div>
     </div>
-    <button class="btn btn-outline" type="submit">
-        <span class="material-symbols-outlined text-[18px]">filter_list</span> Apply
-    </button>
 </form>
 
 <!-- ═══ Stats Cards ═══ -->
@@ -198,5 +202,15 @@ render_header('Reports');
         <?php endif; ?>
     </div>
 </section>
+
+<section class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 pt-2">
+    <div>
+        <p class="text-[10px] font-black uppercase tracking-[0.16em] text-primary mb-1">Complete Analytics</p>
+        <h2 class="font-headline text-2xl font-extrabold text-[#17261d] mb-1">All System Graphs</h2>
+        <p class="text-xs font-bold text-slate-500 mb-0">Live summaries from every reporting module for <?= e(date('M j, Y', strtotime($dateFrom))) ?> - <?= e(date('M j, Y', strtotime($dateTo))) ?>.</p>
+    </div>
+</section>
+<style><?= system_report_styles() ?></style>
+<?= render_system_report_document($mainSystemReport, false, ['include_cover' => false]) ?>
 
 <?php render_footer(); ?>

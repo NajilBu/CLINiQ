@@ -308,8 +308,8 @@ function render_student_header(string $title, string $active = ''): void
                 }
             };
         </script>
-        <link href="../public/assets/css/app.css?v=cancel-icon-1" rel="stylesheet">
-        <link href="assets/css/patient.css?v=appointment-double-booking-1" rel="stylesheet">
+        <link href="../public/assets/css/app.css?v=file-preview-2" rel="stylesheet">
+        <link href="assets/css/patient.css?v=ape-batch-upload-1" rel="stylesheet">
     </head>
     <body class="student-body">
         <div class="student-shell">
@@ -362,6 +362,7 @@ function render_student_footer(): void
     ?>
             </main>
         </div>
+        <script src="../public/assets/js/file-preview.js?v=ape-popup-2"></script>
     </body>
     </html>
     <?php
@@ -402,8 +403,8 @@ function render_student_auth_header(string $title): void
                 }
             };
         </script>
-        <link href="../public/assets/css/app.css?v=cancel-icon-1" rel="stylesheet">
-        <link href="assets/css/patient.css?v=appointment-double-booking-1" rel="stylesheet">
+        <link href="../public/assets/css/app.css?v=file-preview-2" rel="stylesheet">
+        <link href="assets/css/patient.css?v=ape-batch-upload-1" rel="stylesheet">
     </head>
     <body class="student-body student-auth-page">
     <?php

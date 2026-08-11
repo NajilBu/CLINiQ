@@ -227,7 +227,7 @@ foreach ($allApeRecords as $record) {
     }
 }
 $apeQueue = [];
-foreach (['document_review', 'digital_submission', 'follow_up'] as $queueKey) {
+foreach (['document_review', 'digital_submission', 'examination', 'follow_up'] as $queueKey) {
     foreach ($recordsByQueue[$queueKey] as $record) {
         $record['_queue_key'] = $queueKey;
         $apeQueue[] = $record;
@@ -263,7 +263,7 @@ foreach ($visitorLogs as $visit) {
 }
 
 $dashboardApeColumns = [
-    ['headerName' => 'Student', 'field' => 'studentHtml', 'cellRenderer' => 'html', 'sortField' => 'studentSort', 'minWidth' => 230],
+    ['headerName' => 'Patient', 'field' => 'studentHtml', 'cellRenderer' => 'html', 'sortField' => 'studentSort', 'minWidth' => 230],
     ['headerName' => 'Work Queue', 'field' => 'queueHtml', 'cellRenderer' => 'html', 'sortField' => 'queueSort', 'minWidth' => 170],
     ['headerName' => 'Missing / Waiting For', 'field' => 'missing', 'minWidth' => 240],
     ['headerName' => 'Action', 'field' => 'actionHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 210],
@@ -436,7 +436,7 @@ render_header('Main Dashboard');
                                     </div>
                                 <?php endif; ?>
                                 <?php if ($alertPhotoUrl): ?>
-                                    <a href="<?= e($alertPhotoUrl) ?>" target="_blank" class="block rounded-xl overflow-hidden border border-slate-100 bg-slate-50 mb-3">
+                                    <a href="<?= e($alertPhotoUrl) ?>" class="block rounded-xl overflow-hidden border border-slate-100 bg-slate-50 mb-3" data-file-preview data-preview-type="image" data-preview-title="Alert evidence - <?= e($alert['concern']) ?>">
                                         <img src="<?= e($alertPhotoUrl) ?>" alt="Alert evidence" class="w-full h-28 object-cover">
                                     </a>
                                 <?php endif; ?>
@@ -590,8 +590,8 @@ render_header('Main Dashboard');
         <div class="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
                 <h2 class="font-headline text-xl font-extrabold text-[#17261d] m-0">APE Action Queue</h2>
-                <p class="text-xs font-bold text-slate-500 m-0">Priority students needing hard-copy review, online
-                    document keeping, or follow-up clearance.</p>
+                <p class="text-xs font-bold text-slate-500 m-0">Priority patients needing hard-copy review, online
+                    document keeping, clinical examination, or follow-up clearance.</p>
             </div>
             <a href="<?= app_url('ape/index.php') ?>" class="btn btn-sm btn-primary shrink-0">
                 <span class="material-symbols-outlined text-[16px]">open_in_new</span>
@@ -603,7 +603,7 @@ render_header('Main Dashboard');
             'pageSize' => 10,
             'height' => 'compact',
             'emptyTitle' => 'No pending APE tasks in the queue.',
-            'emptyText' => 'Students with clinic actions will appear here.',
+            'emptyText' => 'Patients with clinic actions will appear here.',
         ]); ?>
     </section>
 

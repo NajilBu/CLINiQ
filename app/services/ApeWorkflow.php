@@ -7,6 +7,7 @@ function ape_workflow_steps(): array
     return [
         'Document Review',
         'Digital Submission',
+        'Clinical Examination',
         'Follow-up',
         'Completed',
     ];
@@ -39,19 +40,25 @@ function ape_work_queues(): array
         'digital_submission' => [
             'title' => 'Digital Submission',
             'short_title' => 'Digital Keeping',
-            'description' => 'Students submit checked documents online; clinic staff reviews and archives them for paperless record keeping.',
+            'description' => 'Patients submit checked documents online; clinic staff reviews and archives them for paperless record keeping.',
             'icon' => 'upload_file',
         ],
+        'examination' => [
+            'title' => 'Clinical Examination',
+            'short_title' => 'Examination',
+            'description' => 'Authorized clinic staff records the examination, findings, and final clinical decision.',
+            'icon' => 'stethoscope',
+        ],
         'follow_up' => [
-            'title' => 'Follow-up Students',
+            'title' => 'Follow-up Patients',
             'short_title' => 'Follow-up',
-            'description' => 'Students with findings who must submit treatment proof, clearance, or other required follow-up documents.',
+            'description' => 'Patients with findings who must submit treatment proof, clearance, or other required follow-up documents.',
             'icon' => 'medical_information',
         ],
         'completed' => [
             'title' => 'Completed APE Records',
             'short_title' => 'Completed',
-            'description' => 'Students whose checked documents are archived and whose follow-up requirements are cleared.',
+            'description' => 'Patients whose checked documents are archived and whose follow-up requirements are cleared.',
             'icon' => 'task_alt',
         ],
     ];
@@ -75,7 +82,7 @@ function ape_record_queue(array $record): string
         return 'follow_up';
     }
 
-    return 'completed';
+    return 'examination';
 }
 
 function ape_next_action(array $record): array
@@ -83,8 +90,11 @@ function ape_next_action(array $record): array
     return match (ape_record_queue($record)) {
         'document_review' => ['label' => 'Review Hard Copy', 'icon' => 'fact_check'],
         'digital_submission' => empty($record['document_path'])
-            ? ['label' => 'Wait for Student Upload', 'icon' => 'upload_file']
+            ? ['label' => 'Wait for Patient Upload', 'icon' => 'upload_file']
             : ['label' => 'Archive Submission', 'icon' => 'inventory_2'],
+        'examination' => ($record['workflow_status'] ?? '') === 'Exam Done'
+            ? ['label' => 'Finalize Exam', 'icon' => 'clinical_notes']
+            : ['label' => 'Record Examination', 'icon' => 'stethoscope'],
         'follow_up' => ['label' => 'Update Follow-up', 'icon' => 'medical_information'],
         'completed' => ['label' => 'Completed', 'icon' => 'check_circle'],
         default => ['label' => 'Review Record', 'icon' => 'visibility'],
@@ -104,8 +114,9 @@ function ape_record_step_index(array $record): int
     return match (ape_record_queue($record)) {
         'document_review' => 0,
         'digital_submission' => 1,
-        'follow_up' => 2,
-        'completed' => 3,
+        'examination' => 2,
+        'follow_up' => 3,
+        'completed' => 4,
         default => 0,
     };
 }
@@ -164,24 +175,33 @@ function ape_next_action_card(array $record): array
     return match (ape_record_queue($record)) {
         'document_review' => [
             'title' => 'Check the hard-copy medical documents',
-            'body' => 'Record findings, health concerns, missing items, and any required treatment or clearance before the student uploads the checked documents online.',
+            'body' => 'Record findings, health concerns, missing items, and any required treatment or clearance before the patient uploads the checked documents online.',
         ],
         'digital_submission' => empty($record['document_path'])
             ? [
-                'title' => 'Wait for the student to submit checked documents online',
-                'body' => 'The student uploads the checked requirements for clinic record keeping. Expected files include Lab Request Form, UHS Consent Form, UHS Medical Record, UHS Dental Record, and Referral Form.',
+                'title' => 'Wait for the patient to submit checked documents online',
+                'body' => 'The patient uploads the checked requirements for clinic record keeping. Expected files include Lab Request Form, UHS Consent Form, UHS Medical Record, UHS Dental Record, and Referral Form.',
             ]
             : [
                 'title' => 'Archive the digital submission',
-                'body' => 'Confirm that the online files match the checked hard copies, then archive them. If there is no follow-up requirement, this completes the APE record.',
+                'body' => 'Confirm that the online files match the checked hard copies, then archive them so the patient can proceed to clinical examination.',
+            ],
+        'examination' => ($record['workflow_status'] ?? '') === 'Exam Done'
+            ? [
+                'title' => 'Finalize the examination decision',
+                'body' => 'Review the recorded examination, then explicitly clear the patient, require follow-up, or create a referral.',
+            ]
+            : [
+                'title' => 'Record the clinical examination',
+                'body' => 'Enter the examination date and clinical result. The record remains pending until an authorized staff member makes the final decision.',
             ],
         'follow_up' => [
             'title' => 'Track the required follow-up',
-            'body' => 'Keep the record open until the student submits the required treatment proof, medical clearance, or other follow-up document.',
+            'body' => 'Keep the record open until the patient submits the required treatment proof, medical clearance, or other follow-up document.',
         ],
         'completed' => [
             'title' => 'APE process completed',
-            'body' => 'This record is cleared and stored as part of the student clinic file.',
+            'body' => 'This record is cleared and stored as part of the patient clinic file.',
         ],
         default => [
             'title' => 'Review this APE record',
@@ -202,13 +222,19 @@ function ape_missing_item(array $record): string
         return 'Hard-copy requirements need attention';
     }
     if (empty($record['document_path'])) {
-        return 'Waiting for student online submission';
+        return 'Waiting for patient online submission';
     }
     if (($record['verification_status'] ?? '') === 'Pending') {
         return 'Online documents waiting for archive review';
     }
     if (($record['verification_status'] ?? '') === 'Needs Correction') {
         return 'Online submission correction needed';
+    }
+    if (in_array(($record['workflow_status'] ?? ''), ['Reviewed', 'Scheduled'], true)) {
+        return 'Ready for clinical examination';
+    }
+    if (($record['workflow_status'] ?? '') === 'Exam Done') {
+        return 'Final clearance decision required';
     }
     if ((int)($record['follow_up_required'] ?? 0) === 1 && ($record['clearance_status'] ?? '') !== 'Submitted') {
         return 'Waiting for follow-up requirement';
@@ -223,9 +249,10 @@ function ape_workflow_step_index(?string $status): int
 {
     return match ($status) {
         'Registered', 'Batch Assigned' => 0,
-        'Requirements Checked', 'Submitted', 'Reviewed' => 1,
-        'Follow-up Required' => 2,
-        'Cleared' => 3,
+        'Requirements Checked', 'Submitted' => 1,
+        'Reviewed', 'Scheduled', 'Exam Done' => 2,
+        'Follow-up Required' => 3,
+        'Cleared' => 4,
         default => 0,
     };
 }
@@ -263,7 +290,7 @@ function ensure_ape_workflow_schema(): void
     }
 
     $db = auth_db();
-    foreach (['ape_records', 'ape_requirements', 'ape_documents', 'ape_findings', 'ape_activity_logs'] as $table) {
+    foreach (['ape_cycles', 'ape_records', 'ape_requirements', 'ape_documents', 'ape_findings', 'ape_activity_logs'] as $table) {
         $stmt = $db->prepare('
             SELECT COUNT(*)
             FROM information_schema.TABLES
@@ -313,6 +340,12 @@ function ape_record_select_sql(): string
                 SELECT d.verification_status
                 FROM ape_documents d
                 WHERE d.ape_id = ar.ape_id
+                  AND d.document_id = (
+                      SELECT MAX(latest_document.document_id)
+                      FROM ape_documents latest_document
+                      WHERE latest_document.ape_id = d.ape_id
+                        AND latest_document.document_type = d.document_type
+                  )
                 ORDER BY FIELD(d.verification_status, 'Needs Correction', 'Pending', 'Verified'), d.uploaded_at DESC
                 LIMIT 1
             ), 'Pending') AS verification_status,
@@ -541,7 +574,7 @@ function ape_store_uploaded_file(array $file, string $prefix): array
 function ape_workflow_summary(array $record): string
 {
     if (($record['workflow_status'] ?? '') === 'Follow-up Required') {
-        return 'Student needs treatment follow-up and clearance before APE completion.';
+        return 'Patient needs treatment follow-up and clearance before APE completion.';
     }
 
     return match ($record['workflow_status'] ?? '') {

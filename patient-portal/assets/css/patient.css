@@ -1253,6 +1253,53 @@ html:has(.student-body) body {
     gap: 0.55rem;
 }
 
+.ape-document-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.ape-staged-file-name {
+    color: #2f6f45 !important;
+    font-weight: 900 !important;
+    overflow-wrap: anywhere;
+}
+
+.ape-batch-submit-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 1rem;
+    padding: 1rem;
+    border: 1px solid #cfe5d6;
+    border-radius: 0.85rem;
+    background: #f2faf4;
+}
+
+.ape-batch-submit-bar > div {
+    display: grid;
+    gap: 0.2rem;
+}
+
+.ape-batch-submit-bar strong {
+    color: var(--student-fg);
+    font-size: 0.85rem;
+}
+
+.ape-batch-submit-bar span {
+    color: var(--student-muted);
+    font-size: 0.72rem;
+    font-weight: 750;
+}
+
+.ape-batch-submit-bar .student-button span {
+    color: inherit;
+    font-size: inherit;
+}
+
 .student-calendar-action-hint {
     display: flex;
     align-items: center;
@@ -1638,6 +1685,18 @@ body.student-time-modal-open {
 
     .student-appointment-actions {
         justify-items: stretch;
+    }
+
+    .ape-document-actions,
+    .ape-batch-submit-bar {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .ape-document-actions .student-button,
+    .ape-document-actions .student-button-secondary,
+    .ape-batch-submit-bar .student-button {
+        width: 100%;
     }
 
     .student-time-grid {

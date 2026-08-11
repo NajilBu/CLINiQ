@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/SystemSettings.php';
 require_once __DIR__ . '/../../app/services/RiskSettings.php';
+require_once __DIR__ . '/../../app/services/ApeCycleService.php';
 
 require_login();
 ensure_system_settings_schema();
@@ -12,6 +13,7 @@ $user = current_user() ?? [];
 $canManageSettings = in_array($user['role'] ?? '', ['admin', 'nurse', 'it_expert'], true);
 $canManageStaffProfiles = in_array($user['role'] ?? '', ['admin', 'it_expert'], true);
 $canManagePatientAccounts = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
+$canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
 $dropdownCategoryLabels = [
     'students' => 'Students & Visitors',
     'visits' => 'Clinic Visits',
@@ -153,6 +155,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    if (in_array($action, ['start_ape_cycle', 'close_ape_cycle', 'archive_ape_cycle'], true)) {
+        if (!$canManageApeCycles) {
+            flash_message('error', 'Only administrators and doctors can manage annual APE cycles.');
+            header('Location: index.php?tab=general');
+            exit;
+        }
+
+        $actorPersonId = (int) ($user['person_id'] ?? 0) ?: null;
+        try {
+            if ($action === 'start_ape_cycle') {
+                $cycle = start_ape_cycle(
+                    (string) ($_POST['academic_year'] ?? ''),
+                    (string) ($_POST['compliance_start'] ?? ''),
+                    (string) ($_POST['compliance_end'] ?? ''),
+                    $actorPersonId
+                );
+                flash_message('success', sprintf(
+                    'APE cycle %s started. %d active patient record(s) created and %d existing record(s) linked.',
+                    $cycle['academic_year'],
+                    (int) ($cycle['created_records'] ?? 0),
+                    (int) ($cycle['adopted_records'] ?? 0)
+                ));
+            } elseif ($action === 'close_ape_cycle') {
+                $cycle = close_ape_cycle((int) ($_POST['ape_cycle_id'] ?? 0), $actorPersonId);
+                flash_message('success', "APE cycle {$cycle['academic_year']} closed. Its records remain available for reports and patient history.");
+            } else {
+                $cycle = archive_ape_cycle((int) ($_POST['ape_cycle_id'] ?? 0), $actorPersonId);
+                flash_message('success', "APE cycle {$cycle['academic_year']} archived.");
+            }
+        } catch (Throwable $e) {
+            flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $e->getMessage());
+        }
+
+        header('Location: index.php?tab=ape-cycle');
+        exit;
+    }
+
     if (in_array($action, ['add_dropdown_option', 'update_dropdown_option', 'delete_dropdown_option', 'reset_dropdown_group'], true)) {
         if (!$canManageSettings) {
             flash_message('error', 'You do not have permission to manage dropdown options.');
@@ -211,6 +250,43 @@ $activeTheme = cliniq_theme_settings()['theme'];
 $staffProfiles = staff_profiles();
 $staffRoles = staff_profile_roles();
 $settings = risk_settings();
+$activeApePatientCount = 0;
+$excludedApePatientCount = 0;
+$apeCurrentCycle = null;
+if ($canManageApeCycles) {
+    try {
+        ensure_ape_cycle_schema();
+        $apePatientCounts = auth_db()->query("
+            SELECT
+                SUM(CASE WHEN a.account_status = 'active' THEN 1 ELSE 0 END) AS active_count,
+                SUM(CASE WHEN a.account_status <> 'active' THEN 1 ELSE 0 END) AS excluded_count
+            FROM patients pt
+            INNER JOIN accounts a ON a.person_id = pt.person_id
+        ")->fetch() ?: [];
+        $activeApePatientCount = (int) ($apePatientCounts['active_count'] ?? 0);
+        $excludedApePatientCount = (int) ($apePatientCounts['excluded_count'] ?? 0);
+        $apeCurrentCycle = ape_cycle_current();
+    } catch (Throwable $e) {
+        flash_message('error', $e->getMessage());
+    }
+}
+$apeCycleProgress = $apeCurrentCycle['progress'] ?? [
+    'total' => 0,
+    'not_started' => 0,
+    'in_progress' => 0,
+    'completed' => 0,
+    'cleared' => 0,
+    'follow_up' => 0,
+    'compliance_percent' => 0,
+];
+$hasActiveApeCycle = ($apeCurrentCycle['status'] ?? '') === 'Active';
+$apeYearStart = (int) date('Y');
+if ((int) date('n') < 6) {
+    $apeYearStart--;
+}
+$defaultApeSchoolYear = $apeYearStart . '-' . ($apeYearStart + 1);
+$defaultApeStartDate = $apeYearStart . '-06-01';
+$defaultApeEndDate = ($apeYearStart + 1) . '-05-31';
 $dropdownGroups = dropdown_option_groups();
 $currentDropdownGroup = (string) ($_GET['group'] ?? array_key_first($dropdownGroups));
 if (!isset($dropdownGroups[$currentDropdownGroup])) {
@@ -232,7 +308,10 @@ if (!isset($dropdownGroupsByCategory[$currentDropdownCategory][$currentDropdownG
     $currentDropdownGroup = (string) array_key_first($dropdownGroupsByCategory[$currentDropdownCategory]);
 }
 $currentTab = $_GET['tab'] ?? 'general';
-if (!in_array($currentTab, ['general', 'account', 'dropdowns', 'clinical', 'maintenance'], true)) {
+if (!in_array($currentTab, ['general', 'account', 'ape-cycle', 'dropdowns', 'clinical', 'maintenance'], true)) {
+    $currentTab = 'general';
+}
+if ($currentTab === 'ape-cycle' && !$canManageApeCycles) {
     $currentTab = 'general';
 }
 
@@ -276,6 +355,12 @@ render_clinic_command_header(
             <a href="<?= e(app_url('patient-accounts/index.php')) ?>" class="settings-tab-link text-decoration-none" data-no-ajax="true">
                 <span class="material-symbols-outlined">manage_accounts</span>
                 <span>Patient Accounts</span>
+            </a>
+        <?php endif; ?>
+        <?php if ($canManageApeCycles): ?>
+            <a href="index.php?tab=ape-cycle" class="settings-tab-link <?= $currentTab === 'ape-cycle' ? 'active' : '' ?> text-decoration-none" data-settings-tab="ape-cycle" data-no-ajax="true">
+                <span class="material-symbols-outlined">event_repeat</span>
+                <span>APE Cycle</span>
             </a>
         <?php endif; ?>
         <a href="index.php?tab=dropdowns" class="settings-tab-link <?= $currentTab === 'dropdowns' ? 'active' : '' ?> text-decoration-none" data-settings-tab="dropdowns" data-no-ajax="true">
@@ -771,6 +856,150 @@ render_clinic_command_header(
                 </form>
             </div>
 
+            <?php if ($canManageApeCycles): ?>
+                <div id="settings-ape-cycle" class="settings-tab-panel <?= $currentTab === 'ape-cycle' ? 'active' : '' ?> space-y-6">
+                    <section>
+                        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                            <div>
+                                <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Annual Physical Examination Cycle</h2>
+                                <p class="text-xs font-bold text-slate-500 mb-0">Prepare one APE cycle per school year for every patient with an active account.</p>
+                            </div>
+                            <?php
+                            $apeCycleStatus = (string) ($apeCurrentCycle['status'] ?? 'Not Started');
+                            $apeCycleBadgeClass = match ($apeCycleStatus) {
+                                'Active' => 'badge-in-progress',
+                                'Closed' => 'badge-completed',
+                                'Archived' => 'badge-cancelled',
+                                default => 'badge-cancelled',
+                            };
+                            ?>
+                            <span class="badge <?= e($apeCycleBadgeClass) ?>"><?= e($apeCycleStatus) ?></span>
+                        </div>
+                    </section>
+
+                    <?php if ($apeCurrentCycle): ?>
+                        <section class="settings-section space-y-5">
+                            <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                                <div>
+                                    <p class="clinic-label mb-2">Current / Latest Cycle</p>
+                                    <h3 class="font-headline text-2xl font-extrabold text-[#17261d] mb-1">School Year <?= e($apeCurrentCycle['academic_year']) ?></h3>
+                                    <p class="settings-help mb-0">
+                                        <?= e(date('M j, Y', strtotime($apeCurrentCycle['compliance_start']))) ?> to <?= e(date('M j, Y', strtotime($apeCurrentCycle['compliance_end']))) ?>
+                                        &bull; Started <?= e(date('M j, Y g:i A', strtotime($apeCurrentCycle['started_at']))) ?>
+                                        <?php if (!empty($apeCurrentCycle['started_by_name'])): ?>&bull; by <?= e($apeCurrentCycle['started_by_name']) ?><?php endif; ?>
+                                    </p>
+                                </div>
+                                <?php if ($apeCycleStatus === 'Active'): ?>
+                                    <form method="post" data-no-ajax="true">
+                                        <input type="hidden" name="action" value="close_ape_cycle">
+                                        <input type="hidden" name="ape_cycle_id" value="<?= (int) $apeCurrentCycle['ape_cycle_id'] ?>">
+                                        <button class="btn btn-secondary justify-center" data-confirm-submit data-confirm-type="primary" data-confirm-title="Close this APE cycle?" data-confirm-message="No new work should be added after closing. Existing APE records remain available." data-confirm-toast="Closing APE cycle...">
+                                            <span class="material-symbols-outlined text-[18px]">event_busy</span>
+                                            Close Cycle
+                                        </button>
+                                    </form>
+                                <?php elseif ($apeCycleStatus === 'Closed'): ?>
+                                    <form method="post" data-no-ajax="true">
+                                        <input type="hidden" name="action" value="archive_ape_cycle">
+                                        <input type="hidden" name="ape_cycle_id" value="<?= (int) $apeCurrentCycle['ape_cycle_id'] ?>">
+                                        <button class="btn btn-secondary justify-center" data-confirm-submit data-confirm-type="primary" data-confirm-title="Archive this APE cycle?" data-confirm-message="Archived records remain available in patient history and reports." data-confirm-toast="Archiving APE cycle...">
+                                            <span class="material-symbols-outlined text-[18px]">archive</span>
+                                            Archive Cycle
+                                        </button>
+                                    </form>
+                                <?php endif; ?>
+                            </div>
+
+                            <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                                <?php foreach ([
+                                    'not_started' => 'Not Started',
+                                    'in_progress' => 'In Progress',
+                                    'completed' => 'Exam Completed',
+                                    'cleared' => 'Cleared',
+                                    'follow_up' => 'Follow-up',
+                                ] as $progressKey => $progressLabel): ?>
+                                    <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                        <strong class="font-headline text-2xl text-[#17261d] block"><?= number_format((int) $apeCycleProgress[$progressKey]) ?></strong>
+                                        <span class="text-xs font-bold text-slate-500"><?= e($progressLabel) ?></span>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+
+                            <div>
+                                <div class="flex items-center justify-between gap-3 mb-2 text-xs font-bold text-slate-600">
+                                    <span>Clearance compliance</span>
+                                    <span><?= (int) $apeCycleProgress['compliance_percent'] ?>% &bull; <?= number_format((int) $apeCycleProgress['cleared']) ?> of <?= number_format((int) $apeCycleProgress['total']) ?> patient(s)</span>
+                                </div>
+                                <div class="h-3 overflow-hidden rounded-full bg-slate-200" role="progressbar" aria-valuenow="<?= (int) $apeCycleProgress['compliance_percent'] ?>" aria-valuemin="0" aria-valuemax="100">
+                                    <div class="h-full rounded-full bg-[var(--cliniq-primary)] transition-all" style="width: <?= (int) $apeCycleProgress['compliance_percent'] ?>%"></div>
+                                </div>
+                            </div>
+                        </section>
+                    <?php endif; ?>
+
+                    <section class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="settings-section">
+                            <p class="clinic-label mb-2">Patients Included</p>
+                            <div class="flex items-end gap-2">
+                                <strong class="font-headline text-3xl text-[#17261d]" id="apeActivePatientCount"><?= number_format($activeApePatientCount) ?></strong>
+                                <span class="text-xs font-bold text-slate-500 pb-1">active patient(s)</span>
+                            </div>
+                            <p class="settings-help mt-3 mb-0">Starting a cycle creates one APE record for each active patient who does not already have one for that school year.</p>
+                        </div>
+                        <div class="settings-section">
+                            <p class="clinic-label mb-2">Patients Excluded</p>
+                            <div class="flex items-end gap-2">
+                                <strong class="font-headline text-3xl text-slate-500"><?= number_format($excludedApePatientCount) ?></strong>
+                                <span class="text-xs font-bold text-slate-500 pb-1">inactive or suspended</span>
+                            </div>
+                            <p class="settings-help mt-3 mb-0">These accounts are not included until their account status becomes active.</p>
+                        </div>
+                    </section>
+
+                    <section class="settings-section space-y-5">
+                        <div>
+                            <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">School Year and Compliance Period</h3>
+                            <p class="settings-help mb-0">The compliance period tells patients when this school year's APE requirements must be completed.</p>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                            <div class="settings-field">
+                                <label class="clinic-label" for="apeSchoolYear">School Year</label>
+                                <input class="settings-input" id="apeSchoolYear" value="<?= e($defaultApeSchoolYear) ?>" inputmode="numeric" maxlength="9" placeholder="2026-2027" aria-describedby="apeSchoolYearHelp" <?= $hasActiveApeCycle ? 'disabled' : '' ?>>
+                                <p class="settings-help mb-0" id="apeSchoolYearHelp">Use the format YYYY-YYYY.</p>
+                            </div>
+                            <div class="settings-field">
+                                <label class="clinic-label" for="apePeriodStart">Compliance Start</label>
+                                <input class="settings-input" id="apePeriodStart" type="date" value="<?= e($defaultApeStartDate) ?>" <?= $hasActiveApeCycle ? 'disabled' : '' ?>>
+                            </div>
+                            <div class="settings-field">
+                                <label class="clinic-label" for="apePeriodEnd">Compliance End</label>
+                                <input class="settings-input" id="apePeriodEnd" type="date" value="<?= e($defaultApeEndDate) ?>" <?= $hasActiveApeCycle ? 'disabled' : '' ?>>
+                            </div>
+                        </div>
+                        <p class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-bold text-red-700" id="apeCycleError" role="alert"></p>
+                    </section>
+
+                    <section class="settings-section bg-[var(--cliniq-surface-low)]">
+                        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
+                            <div>
+                                <p class="clinic-label mb-2">Cycle Preview</p>
+                                <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1" id="apeCyclePreviewTitle">School Year <?= e($defaultApeSchoolYear) ?></h3>
+                                <p class="settings-help mb-0"><span id="apeCyclePreviewCount"><?= number_format($activeApePatientCount) ?></span> active patient(s) &bull; <span id="apeCyclePreviewDates"><?= e(date('M j, Y', strtotime($defaultApeStartDate))) ?> to <?= e(date('M j, Y', strtotime($defaultApeEndDate))) ?></span></p>
+                            </div>
+                            <button type="button" class="btn btn-primary justify-center shrink-0" id="startApeCycleButton" <?= ($activeApePatientCount < 1 || $hasActiveApeCycle) ? 'disabled' : '' ?>>
+                                <span class="material-symbols-outlined text-[18px]">play_circle</span>
+                                Start This Year&rsquo;s APE
+                            </button>
+                        </div>
+                        <?php if ($activeApePatientCount < 1): ?>
+                            <p class="settings-help mt-3 mb-0">A cycle cannot start because there are no active patient accounts.</p>
+                        <?php elseif ($hasActiveApeCycle): ?>
+                            <p class="settings-help mt-3 mb-0">Close the active <?= e($apeCurrentCycle['academic_year']) ?> cycle before starting another school year.</p>
+                        <?php endif; ?>
+                    </section>
+                </div>
+            <?php endif; ?>
+
             <div id="settings-maintenance" class="settings-tab-panel <?= $currentTab === 'maintenance' ? 'active' : '' ?> space-y-6">
                 <section>
                     <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Maintenance</h2>
@@ -793,5 +1022,92 @@ render_clinic_command_header(
         </div>
     </section>
 </div>
+
+<?php if ($canManageApeCycles): ?>
+    <div id="apeCycleModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="apeCycleModalTitle">
+        <div class="modal-content bg-white rounded-[1.5rem] w-full max-w-lg p-7 shadow-2xl border border-outline-variant/10">
+            <div class="w-12 h-12 rounded-xl bg-[var(--cliniq-surface-low)] text-[var(--cliniq-primary)] flex items-center justify-center mb-5">
+                <span class="material-symbols-outlined text-[26px]">event_available</span>
+            </div>
+            <h3 class="font-headline text-2xl font-extrabold text-[#17261d] mb-2" id="apeCycleModalTitle">Start this year&rsquo;s APE?</h3>
+            <p class="text-sm font-bold text-slate-500 leading-6 mb-5">Review the cycle information before continuing.</p>
+            <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3 text-sm">
+                <div class="flex justify-between gap-4"><span class="font-bold text-slate-500">School Year</span><strong id="apeConfirmSchoolYear"></strong></div>
+                <div class="flex justify-between gap-4"><span class="font-bold text-slate-500">Compliance Period</span><strong class="text-right" id="apeConfirmDates"></strong></div>
+                <div class="flex justify-between gap-4"><span class="font-bold text-slate-500">Active Patients</span><strong><?= number_format($activeApePatientCount) ?></strong></div>
+            </div>
+            <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-bold text-amber-800">
+                This creates the cycle and one APE record for every active patient. The action cannot be repeated for the same school year.
+            </div>
+            <form method="post" data-no-ajax="true" id="apeStartCycleForm">
+                <input type="hidden" name="action" value="start_ape_cycle">
+                <input type="hidden" name="academic_year" id="apeSubmitSchoolYear">
+                <input type="hidden" name="compliance_start" id="apeSubmitPeriodStart">
+                <input type="hidden" name="compliance_end" id="apeSubmitPeriodEnd">
+                <div class="grid grid-cols-2 gap-3 mt-6">
+                    <button type="button" class="btn btn-secondary justify-center" id="cancelApeCycleButton">Cancel</button>
+                    <button type="submit" class="btn btn-primary justify-center" id="confirmApeCycleButton">Start APE Cycle</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        (() => {
+            const schoolYear = document.getElementById('apeSchoolYear');
+            const periodStart = document.getElementById('apePeriodStart');
+            const periodEnd = document.getElementById('apePeriodEnd');
+            const error = document.getElementById('apeCycleError');
+            const startButton = document.getElementById('startApeCycleButton');
+            const patientCount = <?= (int) $activeApePatientCount ?>;
+
+            if (!schoolYear || !periodStart || !periodEnd || !startButton) return;
+
+            const formatDate = (value) => {
+                if (!value) return 'Not set';
+                const parts = value.split('-').map(Number);
+                return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                    .format(new Date(parts[0], parts[1] - 1, parts[2]));
+            };
+
+            const updatePreview = () => {
+                document.getElementById('apeCyclePreviewTitle').textContent = `School Year ${schoolYear.value || 'Not set'}`;
+                document.getElementById('apeCyclePreviewDates').textContent = `${formatDate(periodStart.value)} to ${formatDate(periodEnd.value)}`;
+                error.classList.add('hidden');
+            };
+
+            const validate = () => {
+                const match = schoolYear.value.trim().match(/^(\d{4})-(\d{4})$/);
+                let message = '';
+                if (!match || Number(match[2]) !== Number(match[1]) + 1) {
+                    message = 'Enter a consecutive school year using the format YYYY-YYYY.';
+                } else if (!periodStart.value || !periodEnd.value) {
+                    message = 'Select both the compliance start and end dates.';
+                } else if (periodStart.value > periodEnd.value) {
+                    message = 'The compliance end date must be on or after the start date.';
+                } else if (patientCount < 1) {
+                    message = 'There are no active patient accounts to include.';
+                }
+                error.textContent = message;
+                error.classList.toggle('hidden', !message);
+                return !message;
+            };
+
+            [schoolYear, periodStart, periodEnd].forEach((input) => input.addEventListener('input', updatePreview));
+
+            startButton.addEventListener('click', () => {
+                if (!validate()) return;
+                document.getElementById('apeConfirmSchoolYear').textContent = schoolYear.value.trim();
+                document.getElementById('apeConfirmDates').textContent = `${formatDate(periodStart.value)} to ${formatDate(periodEnd.value)}`;
+                document.getElementById('apeSubmitSchoolYear').value = schoolYear.value.trim();
+                document.getElementById('apeSubmitPeriodStart').value = periodStart.value;
+                document.getElementById('apeSubmitPeriodEnd').value = periodEnd.value;
+                showModal('apeCycleModal');
+            });
+
+            document.getElementById('cancelApeCycleButton').addEventListener('click', () => closeModal('apeCycleModal'));
+        })();
+    </script>
+<?php endif; ?>
 
 <?php render_footer(); ?>

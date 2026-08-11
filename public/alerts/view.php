@@ -114,7 +114,7 @@ render_header('Alert Report');
             <?php if ($photoUrl): ?>
                 <div class="md:col-span-2">
                     <span class="clinic-label">Photo Evidence</span>
-                    <a href="<?= e($photoUrl) ?>" target="_blank" class="block mt-2 rounded-2xl overflow-hidden border border-slate-200 bg-slate-50">
+                    <a href="<?= e($photoUrl) ?>" class="block mt-2 rounded-2xl overflow-hidden border border-slate-200 bg-slate-50" data-file-preview data-preview-type="image" data-preview-title="Alert photo evidence">
                         <img src="<?= e($photoUrl) ?>" alt="Alert report photo" class="w-full max-h-[28rem] object-contain bg-slate-100">
                     </a>
                 </div>

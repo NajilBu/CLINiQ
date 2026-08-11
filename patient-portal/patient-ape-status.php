@@ -8,16 +8,19 @@ ensure_ape_workflow_schema();
 $apeRecord = ape_fetch_patient_record($patientId);
 $uploadError = '';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'upload_ape_document') {
-    $storedFile = null;
+$batchDocumentTypes = [
+    'lab_request_form' => 'Lab Request Form',
+    'uhs_consent_form' => 'UHS Consent Form',
+    'uhs_medical_record' => 'UHS Medical Record',
+    'uhs_dental_record' => 'UHS Dental Record',
+    'referral_form' => 'Referral Form',
+];
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'upload_ape_documents') {
+    $storedFiles = [];
     try {
         if (!$apeRecord) {
             throw new RuntimeException('The clinic must create your APE record before you can upload documents.');
-        }
-        $documentType = trim((string) ($_POST['document_type'] ?? ''));
-        $allowedDocumentTypes = array_merge(ape_default_requirements(), ['Clearance', 'Medical Certificate', 'Other Supporting Document']);
-        if (!in_array($documentType, $allowedDocumentTypes, true)) {
-            throw new InvalidArgumentException('Choose a valid APE document type.');
         }
         $requirementsVerifiedForUpload = ($apeRecord['requirement_status'] ?? '') === 'Pre-Verified'
             || in_array(($apeRecord['workflow_status'] ?? ''), ['Requirements Checked', 'Submitted', 'Reviewed', 'Scheduled', 'Exam Done', 'Follow-up Required'], true);
@@ -25,7 +28,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
             throw new RuntimeException('Document upload is not available at the current APE step.');
         }
 
-        $storedFile = ape_store_uploaded_file($_FILES['document'] ?? [], 'patient-ape');
+        $latestExistingByType = [];
+        foreach (ape_documents_for_record((int) $apeRecord['ape_id']) as $existingDocument) {
+            $latestExistingByType[$existingDocument['document_type']] ??= $existingDocument;
+        }
+        $batchFiles = $_FILES['documents'] ?? [];
+        foreach ($batchDocumentTypes as $documentKey => $documentType) {
+            $error = (int) ($batchFiles['error'][$documentKey] ?? UPLOAD_ERR_NO_FILE);
+            if ($error === UPLOAD_ERR_NO_FILE) {
+                continue;
+            }
+            $latestExisting = $latestExistingByType[$documentType] ?? null;
+            if ($latestExisting && ($latestExisting['verification_status'] ?? '') !== 'Needs Correction') {
+                throw new RuntimeException($documentType . ' cannot be replaced while it is verified or under clinic review.');
+            }
+            $file = [
+                'name' => $batchFiles['name'][$documentKey] ?? '',
+                'type' => $batchFiles['type'][$documentKey] ?? '',
+                'tmp_name' => $batchFiles['tmp_name'][$documentKey] ?? '',
+                'error' => $error,
+                'size' => $batchFiles['size'][$documentKey] ?? 0,
+            ];
+            $storedFiles[$documentType] = ape_store_uploaded_file($file, 'patient-ape');
+        }
+        if (!$storedFiles) {
+            throw new InvalidArgumentException('Select at least one APE document before submitting.');
+        }
+
         $apeDb = auth_db();
         $apeDb->beginTransaction();
         $document = $apeDb->prepare("
@@ -34,33 +63,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
                 verification_status, uploaded_by_person_id
             ) VALUES (?, ?, ?, ?, 'Pending', ?)
         ");
-        $document->execute([
-            (int) $apeRecord['ape_id'],
-            $documentType,
-            $storedFile['original_filename'],
-            $storedFile['file_path'],
-            $patientId,
-        ]);
-
         $requirement = $apeDb->prepare("
             UPDATE ape_requirements
             SET status = 'Submitted', remarks = NULL, checked_by_person_id = NULL, checked_at = NULL
             WHERE ape_id = ? AND requirement_name = ?
         ");
-        $requirement->execute([(int) $apeRecord['ape_id'], $documentType]);
-        $workflowStatus = $documentType === 'Clearance' ? 'Follow-up Required' : 'Submitted';
+        foreach ($storedFiles as $documentType => $storedFile) {
+            $document->execute([
+                (int) $apeRecord['ape_id'],
+                $documentType,
+                $storedFile['original_filename'],
+                $storedFile['file_path'],
+                $patientId,
+            ]);
+            $requirement->execute([(int) $apeRecord['ape_id'], $documentType]);
+        }
+        $nextWorkflowStatus = ($apeRecord['workflow_status'] ?? '') === 'Follow-up Required'
+            ? 'Follow-up Required'
+            : 'Submitted';
         $apeDb->prepare('UPDATE ape_records SET workflow_status = ? WHERE ape_id = ?')
-            ->execute([$workflowStatus, (int) $apeRecord['ape_id']]);
-        ape_log_activity((int) $apeRecord['ape_id'], $patientId, 'Uploaded APE document', $documentType);
+            ->execute([$nextWorkflowStatus, (int) $apeRecord['ape_id']]);
+        ape_log_activity(
+            (int) $apeRecord['ape_id'],
+            $patientId,
+            'Uploaded APE documents',
+            implode(', ', array_keys($storedFiles))
+        );
         $apeDb->commit();
-        header('Location: patient-ape-status.php?uploaded=1');
+        header('Location: patient-ape-status.php?uploaded=' . count($storedFiles));
         exit;
     } catch (Throwable $e) {
         if (isset($apeDb) && $apeDb->inTransaction()) {
             $apeDb->rollBack();
         }
-        if ($storedFile && is_file($storedFile['absolute_path'])) {
-            unlink($storedFile['absolute_path']);
+        foreach ($storedFiles as $storedFile) {
+            if (is_file($storedFile['absolute_path'])) {
+                unlink($storedFile['absolute_path']);
+            }
         }
         $uploadError = $e->getMessage();
     }
@@ -73,7 +112,7 @@ $findings = $apeRecord ? ape_findings_for_record((int) $apeRecord['ape_id']) : [
 $activities = $apeRecord ? ape_activities_for_record((int) $apeRecord['ape_id'], 10) : [];
 $apeStatus = $apeRecord['workflow_status'] ?? 'Not Started';
 $clearanceStatus = $apeRecord['clearance_status'] ?? 'Pending';
-$studentNote = $apeRecord['student_visible_note'] ?? 'No APE record has been opened by the clinic yet.';
+$studentNote = trim((string) ($apeRecord['patient_visible_note'] ?? ''));
 $missingItems = trim((string) ($apeRecord['missing_items'] ?? ''));
 $actionNeeded = $clearanceStatus !== 'Cleared' && $apeStatus !== 'Not Started';
 $requirementStatus = $apeRecord['requirement_status'] ?? 'Not Checked';
@@ -87,19 +126,27 @@ $requirementsVerified = $requirementStatus === 'Pre-Verified' || in_array($apeSt
     'Cleared',
 ], true);
 $requirementsNeedCorrection = $requirementStatus === 'Needs Correction';
-$canUploadDocuments = $requirementsVerified && !$requirementsNeedCorrection && $clearanceStatus !== 'Cleared';
-$primaryUploadType = ($apeRecord['follow_up_required'] ?? 0) ? 'Clearance' : 'Other Supporting Document';
+$canUploadDocuments = $requirementsVerified
+    && !$requirementsNeedCorrection
+    && $clearanceStatus !== 'Cleared'
+    && in_array($apeStatus, ['Requirements Checked', 'Submitted', 'Follow-up Required'], true);
 $nextActionTitle = match (true) {
     $clearanceStatus === 'Cleared' => 'APE completed',
     $requirementsNeedCorrection => 'Return corrected hard-copy requirements',
     !$requirementsVerified => 'Wait for clinic hard-copy verification',
+    in_array($apeStatus, ['Reviewed', 'Scheduled'], true) => 'Attend your clinical examination',
+    $apeStatus === 'Exam Done' => 'Wait for the final clinical decision',
+    $apeStatus === 'Follow-up Required' => 'Complete the required follow-up',
     default => 'Upload verified APE documents',
 };
 $nextActionCopy = match (true) {
     $clearanceStatus === 'Cleared' => 'Your APE record is already cleared by the clinic.',
-    $requirementsNeedCorrection => $studentNote,
+    $requirementsNeedCorrection => $studentNote ?: 'Return the corrected hard-copy requirements requested by the clinic.',
     !$requirementsVerified => 'The clinic must check your physical requirements first. Upload controls will appear after the clinic marks your requirements as verified.',
-    default => $studentNote,
+    in_array($apeStatus, ['Reviewed', 'Scheduled'], true) => $studentNote ?: 'Your uploaded documents are archived. Visit the clinic for your APE examination.',
+    $apeStatus === 'Exam Done' => $studentNote ?: 'Your examination is recorded and awaiting the clinic\'s final clearance decision.',
+    $apeStatus === 'Follow-up Required' => $studentNote ?: 'Complete the treatment, clearance, referral, or other follow-up requested by the clinic.',
+    default => $studentNote ?: ($apeRecord ? 'Complete the current APE step shown below.' : 'No APE record has been opened by the clinic yet.'),
 };
 $apePercent = match ($apeStatus) {
     'Registered' => 20,
@@ -113,7 +160,8 @@ $headerBadge = $clearanceStatus === 'Cleared' ? 'student-badge-success' : ($acti
 $currentStep = match (true) {
     $clearanceStatus === 'Cleared' => 5,
     $apeStatus === 'Follow-up Required' || $clearanceStatus === 'For Follow-up' => 4,
-    in_array($apeStatus, ['Submitted', 'Reviewed', 'Scheduled', 'Exam Done'], true) => 3,
+    in_array($apeStatus, ['Reviewed', 'Scheduled', 'Exam Done'], true) => 3,
+    $apeStatus === 'Submitted' => 2,
     $requirementsVerified => 2,
     default => 1,
 };
@@ -138,14 +186,16 @@ $flowSteps = [
     [
         'number' => 3,
         'icon' => 'manage_search',
-        'title' => 'Clinic review',
-        'copy' => 'Clinic reviews uploaded files and asks for correction if needed.',
+        'title' => 'Clinical examination',
+        'copy' => in_array($apeStatus, ['Reviewed', 'Scheduled', 'Exam Done', 'Follow-up Required', 'Cleared'], true)
+            ? 'Clinic records your examination date, result, and findings.'
+            : 'This begins after the clinic archives all required uploads.',
     ],
     [
         'number' => 4,
         'icon' => 'medical_services',
-        'title' => 'Follow-up, if required',
-        'copy' => 'Treatment proof or clearance may be requested only when the clinic records findings.',
+        'title' => 'Final decision or follow-up',
+        'copy' => 'The clinic clears the record or requests treatment, clearance, or referral follow-up.',
     ],
     [
         'number' => 5,
@@ -172,12 +222,14 @@ $documentIcons = [
 ];
 $documents = [];
 foreach ($documentIcons as $name => $icon) {
+    $documentKey = array_search($name, $batchDocumentTypes, true);
     $requirement = $requirementsByName[$name] ?? null;
     $uploadedDocument = $latestDocumentByType[$name] ?? null;
     if ($uploadedDocument) {
         $verification = $uploadedDocument['verification_status'];
         $documents[] = [
             'name' => $name,
+            'key' => $documentKey,
             'icon' => $icon,
             'status' => $verification,
             'badge' => match ($verification) {
@@ -197,6 +249,7 @@ foreach ($documentIcons as $name => $icon) {
     } elseif ($canUploadDocuments) {
         $documents[] = [
             'name' => $name,
+            'key' => $documentKey,
             'icon' => $icon,
             'status' => $requirement['status'] ?? 'Ready to Upload',
             'badge' => 'student-badge-warning',
@@ -208,6 +261,7 @@ foreach ($documentIcons as $name => $icon) {
     } else {
         $documents[] = [
             'name' => $name,
+            'key' => $documentKey,
             'icon' => $icon,
             'status' => $requirement['status'] ?? ($requirementsNeedCorrection ? 'Needs Correction' : 'Awaiting Clinic Check'),
             'badge' => $requirementsNeedCorrection ? 'student-badge-danger' : 'student-badge-info',
@@ -220,6 +274,7 @@ foreach ($documentIcons as $name => $icon) {
         ];
     }
 }
+$uploadableDocumentCount = count(array_filter($documents, static fn(array $document): bool => !$document['disabled']));
 
 render_student_header('APE Status', 'ape');
 ?>
@@ -239,7 +294,7 @@ render_student_header('APE Status', 'ape');
 <?php if (isset($_GET['uploaded'])): ?>
     <div class="student-note student-note-success mb-4">
         <span class="material-symbols-outlined">check_circle</span>
-        <div>Your APE document was uploaded and is waiting for clinic verification.</div>
+        <div><?= (int) $_GET['uploaded'] ?> APE document(s) were uploaded together and are waiting for clinic verification.</div>
     </div>
 <?php elseif ($uploadError !== ''): ?>
     <div class="student-note student-note-danger mb-4">
@@ -258,23 +313,12 @@ render_student_header('APE Status', 'ape');
             <p><?= student_e($nextActionCopy) ?></p>
         </div>
     </div>
-    <?php if ($canUploadDocuments): ?>
-        <button class="student-button" type="button" onclick="triggerUpload('<?= student_e($primaryUploadType) ?>')">
-            Upload File
-            <span class="material-symbols-outlined">upload</span>
-        </button>
-    <?php else: ?>
+    <?php if (!$canUploadDocuments): ?>
         <span class="student-badge <?= $requirementsNeedCorrection ? 'student-badge-danger' : 'student-badge-info' ?>">
             <?= $requirementsNeedCorrection ? 'Correction Needed' : 'Clinic Verification First' ?>
         </span>
     <?php endif; ?>
 </section>
-
-<form method="post" enctype="multipart/form-data" id="ape-upload-form" class="hidden">
-    <input type="hidden" name="action" value="upload_ape_document">
-    <input type="hidden" name="document_type" id="ape-document-type">
-    <input type="file" name="document" id="file-picker" accept=".pdf,.png,.jpg,.jpeg" onchange="handleFileSelected(this)">
-</form>
 
 <div class="student-grid">
     <section class="student-card student-span-5">
@@ -331,6 +375,8 @@ render_student_header('APE Status', 'ape');
             <span class="student-badge <?= student_e($headerBadge) ?>"><?= student_e($clearanceStatus) ?></span>
         </div>
         <div class="student-card-pad">
+            <form method="post" enctype="multipart/form-data" id="ape-batch-upload-form">
+                <input type="hidden" name="action" value="upload_ape_documents">
             <?php if ($missingItems !== ''): ?>
                 <div class="student-note student-note-warning mb-4">
                     <span class="material-symbols-outlined">info</span>
@@ -349,14 +395,44 @@ render_student_header('APE Status', 'ape');
                                 <span class="student-badge <?= student_e($doc['badge']) ?>"><?= student_e($doc['status']) ?></span>
                             </div>
                             <p><?= student_e($doc['detail']) ?></p>
+                            <?php if (!$doc['disabled']): ?>
+                                <p class="ape-staged-file-name hidden" id="ape-file-name-<?= student_e($doc['key']) ?>"></p>
+                            <?php endif; ?>
                         </div>
-                        <button class="<?= student_e($doc['button']) ?>" type="button" <?= $doc['disabled'] ? 'disabled' : "onclick=\"triggerUpload('" . student_e($doc['name']) . "')\"" ?>>
-                            <span class="material-symbols-outlined"><?= $doc['disabled'] ? 'lock' : 'upload' ?></span>
-                            <?= student_e($doc['action']) ?>
-                        </button>
+                        <?php if ($doc['disabled']): ?>
+                            <button class="<?= student_e($doc['button']) ?>" type="button" disabled>
+                                <span class="material-symbols-outlined">lock</span>
+                                <?= student_e($doc['action']) ?>
+                            </button>
+                        <?php else: ?>
+                            <div class="student-appointment-actions ape-document-actions" data-document-key="<?= student_e($doc['key']) ?>">
+                                <input class="hidden ape-document-input" type="file" name="documents[<?= student_e($doc['key']) ?>]" id="ape-file-<?= student_e($doc['key']) ?>" accept=".pdf,.png,.jpg,.jpeg" data-document-name="<?= student_e($doc['name']) ?>" onchange="handleApeFileSelected(this)">
+                                <button class="<?= student_e($doc['button']) ?> ape-select-file" type="button" onclick="selectApeFile('<?= student_e($doc['key']) ?>')">
+                                    <span class="material-symbols-outlined">upload</span>
+                                    <span><?= $doc['action'] === 'Replace' ? 'Select Replacement' : 'Select File' ?></span>
+                                </button>
+                                <button class="student-button-secondary ape-remove-file hidden" type="button" onclick="removeApeFile('<?= student_e($doc['key']) ?>')">
+                                    <span class="material-symbols-outlined">delete</span>
+                                    Remove
+                                </button>
+                            </div>
+                        <?php endif; ?>
                     </div>
                 <?php endforeach; ?>
             </div>
+            <?php if ($uploadableDocumentCount > 0): ?>
+                <div class="ape-batch-submit-bar">
+                    <div>
+                        <strong id="ape-selected-summary">No files selected</strong>
+                        <span>Select the documents first. You can change or remove them before submitting.</span>
+                    </div>
+                    <button class="student-button" id="ape-submit-all" type="submit" disabled>
+                        <span class="material-symbols-outlined">cloud_upload</span>
+                        Submit All Documents <span id="ape-selected-count"></span>
+                    </button>
+                </div>
+            <?php endif; ?>
+            </form>
         </div>
     </section>
 </div>
@@ -420,7 +496,7 @@ render_student_header('APE Status', 'ape');
                     </div>
                     <div class="student-appointment-actions">
                         <span class="student-badge <?= student_e($documentBadge) ?>"><?= student_e($uploadedDocument['verification_status']) ?></span>
-                        <a class="student-button-secondary text-decoration-none" href="../public/<?= student_e($uploadedDocument['file_path']) ?>" target="_blank">Open</a>
+                        <a class="student-button-secondary text-decoration-none" href="../public/<?= student_e($uploadedDocument['file_path']) ?>" data-file-preview data-preview-title="<?= student_e($uploadedDocument['original_filename'] ?: $uploadedDocument['document_type']) ?>">Open</a>
                     </div>
                 </div>
             <?php endforeach; ?>
@@ -450,7 +526,7 @@ render_student_header('APE Status', 'ape');
             </div>
         <?php endforeach; ?>
         <?php if (!$findings): ?>
-            <div class="student-note student-note-success"><span class="material-symbols-outlined">check_circle</span><div><strong>No active finding recorded.</strong> <?= student_e($studentNote) ?></div></div>
+            <div class="student-note student-note-success"><span class="material-symbols-outlined">check_circle</span><div><strong>No active finding recorded.</strong> <?= student_e($studentNote ?: 'No additional patient instruction has been recorded.') ?></div></div>
         <?php endif; ?>
     </div>
 </section>
@@ -480,19 +556,66 @@ render_student_header('APE Status', 'ape');
 </section>
 
 <script>
-    let activeDocName = '';
-
-    function triggerUpload(docName) {
-        activeDocName = docName;
-        document.getElementById('ape-document-type').value = docName;
-        document.getElementById('file-picker').click();
+    function selectApeFile(documentKey) {
+        document.getElementById(`ape-file-${documentKey}`).click();
     }
 
-    function handleFileSelected(input) {
-        if (input.files && input.files.length > 0) {
-            document.getElementById('ape-upload-form').submit();
+    function handleApeFileSelected(input) {
+        updateApeFileRow(input);
+        refreshApeBatchSummary();
+    }
+
+    function removeApeFile(documentKey) {
+        const input = document.getElementById(`ape-file-${documentKey}`);
+        input.value = '';
+        updateApeFileRow(input);
+        refreshApeBatchSummary();
+    }
+
+    function updateApeFileRow(input) {
+        const documentKey = input.id.replace('ape-file-', '');
+        const actions = input.closest('.ape-document-actions');
+        const filename = document.getElementById(`ape-file-name-${documentKey}`);
+        const selectLabel = actions.querySelector('.ape-select-file span:last-child');
+        const removeButton = actions.querySelector('.ape-remove-file');
+        const selectedFile = input.files && input.files[0] ? input.files[0] : null;
+
+        if (selectedFile) {
+            filename.textContent = `Selected: ${selectedFile.name}`;
+            filename.classList.remove('hidden');
+            selectLabel.textContent = 'Change File';
+            removeButton.classList.remove('hidden');
+        } else {
+            filename.textContent = '';
+            filename.classList.add('hidden');
+            selectLabel.textContent = 'Select File';
+            removeButton.classList.add('hidden');
         }
     }
+
+    function refreshApeBatchSummary() {
+        const selected = Array.from(document.querySelectorAll('.ape-document-input'))
+            .filter((input) => input.files && input.files.length > 0);
+        const count = selected.length;
+        const submitButton = document.getElementById('ape-submit-all');
+        const summary = document.getElementById('ape-selected-summary');
+        const countLabel = document.getElementById('ape-selected-count');
+        if (!submitButton || !summary || !countLabel) return;
+
+        submitButton.disabled = count === 0;
+        summary.textContent = count === 0 ? 'No files selected' : `${count} file${count === 1 ? '' : 's'} ready to submit`;
+        countLabel.textContent = count === 0 ? '' : `(${count})`;
+    }
+
+    document.getElementById('ape-batch-upload-form')?.addEventListener('submit', (event) => {
+        const submitButton = document.getElementById('ape-submit-all');
+        if (!submitButton || submitButton.disabled) {
+            event.preventDefault();
+            return;
+        }
+        submitButton.disabled = true;
+        submitButton.innerHTML = '<span class="material-symbols-outlined">progress_activity</span> Uploading Documents...';
+    });
 </script>
 
 <?php render_student_footer(); ?>

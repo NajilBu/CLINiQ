@@ -21,21 +21,21 @@ $visibleQueues = $activeQueue === 'all'
     : (isset($queues[$activeQueue]) ? [$activeQueue] : array_keys($queues));
 
 $needsAction = 0;
-foreach (['document_review', 'digital_submission', 'follow_up'] as $key) {
+foreach (['document_review', 'digital_submission', 'examination', 'follow_up'] as $key) {
     $needsAction += count($recordsByQueue[$key]);
 }
 
 $metrics = [
     'total' => count($allRecords),
     'clinic_action' => $needsAction,
-    'digitized' => count($recordsByQueue['digital_submission']) + count($recordsByQueue['follow_up']) + count($recordsByQueue['completed']),
+    'digitized' => count($recordsByQueue['digital_submission']) + count($recordsByQueue['examination']) + count($recordsByQueue['follow_up']) + count($recordsByQueue['completed']),
     'follow_up' => count($recordsByQueue['follow_up']),
     'completed' => count($recordsByQueue['completed']),
 ];
 $clearanceRate = $metrics['total'] > 0 ? round(($metrics['completed'] / $metrics['total']) * 100) : 0;
 
 // Top bar stats
-$activeStudents = $metrics['total'] - $metrics['completed'];
+$activePatients = $metrics['total'] - $metrics['completed'];
 $appointmentsStmt = appointment_db()->query("SELECT COUNT(*) AS total FROM appointments WHERE DATE(appointment_datetime) = CURDATE()");
 $appointmentsToday = (int)($appointmentsStmt->fetch()['total'] ?? 0);
 
@@ -49,7 +49,7 @@ foreach ($allRecords as $rec) {
 
 $apeQueueColumns = [
     ['headerName' => 'Priority', 'field' => 'priorityHtml', 'cellRenderer' => 'html', 'sortField' => 'prioritySort', 'sortType' => 'number', 'width' => 140],
-    ['headerName' => 'Student', 'field' => 'studentHtml', 'cellRenderer' => 'html', 'sortField' => 'studentSort', 'minWidth' => 250],
+    ['headerName' => 'Patient', 'field' => 'studentHtml', 'cellRenderer' => 'html', 'sortField' => 'studentSort', 'minWidth' => 250],
     ['headerName' => 'Program', 'field' => 'programHtml', 'cellRenderer' => 'html', 'sortField' => 'programSort', 'minWidth' => 220],
     ['headerName' => 'Waiting', 'field' => 'waiting', 'sortField' => 'waitingSort', 'sortType' => 'number', 'width' => 140],
     ['headerName' => 'Next Action', 'field' => 'nextActionHtml', 'cellRenderer' => 'html', 'sortField' => 'nextActionSort', 'minWidth' => 260],
@@ -63,8 +63,8 @@ $apeDisplayName = trim((string) ($apeUser['name'] ?? '')) ?: 'Nurse';
 $apeHeaderActions = ''
     . '<div class="bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-4 min-w-[140px]">'
     . '<span class="material-symbols-outlined text-slate-400 text-[28px]">group</span>'
-    . '<div><p class="font-headline text-2xl font-extrabold text-[#17261d] leading-none mb-1">' . (int) $activeStudents . '</p>'
-    . '<p class="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Active students</p></div></div>'
+    . '<div><p class="font-headline text-2xl font-extrabold text-[#17261d] leading-none mb-1">' . (int) $activePatients . '</p>'
+    . '<p class="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Active patients</p></div></div>'
     . '<div class="bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-4 min-w-[140px]">'
     . '<span class="material-symbols-outlined text-slate-400 text-[28px]">notification_important</span>'
     . '<div><p class="font-headline text-2xl font-extrabold text-[#17261d] leading-none mb-1">' . count($overdueRecords) . '</p>'
@@ -86,7 +86,7 @@ render_clinic_command_header(
 <div class="bg-red-50 border border-red-200 rounded-2xl p-1 mb-8">
     <div class="px-5 py-4 text-red-700 flex items-center gap-2 border-b border-red-100/50">
         <span class="material-symbols-outlined text-[18px]">error</span>
-        <h2 class="font-headline font-extrabold text-sm m-0"><?= count($overdueRecords) ?> student(s) need immediate attention</h2>
+        <h2 class="font-headline font-extrabold text-sm m-0"><?= count($overdueRecords) ?> patient(s) need immediate attention</h2>
     </div>
     <div class="divide-y divide-red-100/50">
         <?php foreach (array_slice($overdueRecords, 0, 5) as $rec): 
@@ -123,7 +123,7 @@ render_clinic_command_header(
     <div class="flex flex-col lg:flex-row justify-between gap-4 lg:items-center mb-5">
         <div>
             <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Work Queue Map</h2>
-            <p class="text-xs font-bold text-slate-500 mb-0">Click a queue to focus the page. Each student shows one next clinic action.</p>
+            <p class="text-xs font-bold text-slate-500 mb-0">Click a queue to focus the page. Each patient shows one next clinic action.</p>
         </div>
     </div>
     <div class="ape-queue-map-grid">
@@ -193,7 +193,7 @@ render_clinic_command_header(
             render_ag_grid('apeGrid' . preg_replace('/[^A-Za-z0-9_-]/', '', $queueKey), $apeQueueColumns, $apeRows, [
                 'pageSize' => $activeQueue === 'all' ? 10 : 25,
                 'height' => 'compact',
-                'emptyTitle' => 'No students here',
+                'emptyTitle' => 'No patients here',
                 'emptyText' => 'This queue is clear for now.',
             ]);
             ?>
