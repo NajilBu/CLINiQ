@@ -40,27 +40,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $apeDb->beginTransaction();
 
         if ($action === 'mark_requirements_complete') {
+            if (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed') {
+                throw new RuntimeException('The patient must confirm their vitals and BMI before hard-copy review can be completed.');
+            }
             $notes = trim((string) ($_POST['clinical_remarks'] ?? ''));
-            $stmt = $apeDb->prepare("UPDATE ape_records SET requirement_status = 'Pre-Verified', workflow_status = 'Requirements Checked', follow_up_required = 0, clearance_status = 'Pending', clinical_remarks = ?, reviewed_by_person_id = ? WHERE ape_id = ?");
+            $stmt = $apeDb->prepare("UPDATE ape_records SET requirement_status = 'Pre-Verified', workflow_status = 'Requirements Checked', follow_up_required = 0, clearance_status = 'Pending', clinical_remarks = ?, patient_visible_note = NULL, reviewed_by_person_id = ? WHERE ape_id = ?");
             $stmt->execute([$notes ?: null, $staffPersonId, $id]);
             $checked = $apeDb->prepare("UPDATE ape_requirements SET status = 'Verified', checked_by_person_id = ?, checked_at = NOW() WHERE ape_id = ?");
             $checked->execute([$staffPersonId, $id]);
             $activityLabel = 'Completed hard-copy document review';
-            $activityNotes = $notes ?: 'No follow-up required';
+            $activityNotes = $notes ?: 'Hard-copy documents complete; ready for digital submission';
         } elseif ($action === 'mark_missing_requirements') {
-            $missingItems = trim((string) ($_POST['missing_items'] ?? '')) ?: 'Follow-up requirement not specified.';
+            if (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed') {
+                throw new RuntimeException('The patient must confirm their vitals and BMI before hard-copy review can be recorded.');
+            }
+            $documentIssues = trim((string) ($_POST['missing_items'] ?? ''));
+            if ($documentIssues === '') {
+                throw new InvalidArgumentException('Describe the missing, incorrect, or incomplete hard-copy documents.');
+            }
             $notes = trim((string) ($_POST['clinical_remarks'] ?? ''));
-            $stmt = $apeDb->prepare("UPDATE ape_records SET requirement_status = 'Pre-Verified', workflow_status = 'Requirements Checked', follow_up_required = 1, clearance_status = 'For Follow-up', clinical_remarks = ?, reviewed_by_person_id = ? WHERE ape_id = ?");
-            $stmt->execute([$notes ?: null, $staffPersonId, $id]);
-            $checked = $apeDb->prepare("UPDATE ape_requirements SET status = 'Verified', checked_by_person_id = ?, checked_at = NOW() WHERE ape_id = ?");
-            $checked->execute([$staffPersonId, $id]);
-            $requirement = $apeDb->prepare("INSERT INTO ape_requirements (ape_id, requirement_name, status, remarks) VALUES (?, 'Follow-up clearance', 'Missing', ?) ON DUPLICATE KEY UPDATE status = 'Missing', remarks = VALUES(remarks), checked_by_person_id = NULL, checked_at = NULL");
-            $requirement->execute([$id, $missingItems]);
-            $finding = $apeDb->prepare("INSERT INTO ape_findings (ape_id, finding_type, description, result_status, follow_up_required, recorded_by_person_id) VALUES (?, 'General', ?, 'With Finding', 1, ?)");
-            $finding->execute([$id, $notes ?: $missingItems, $staffPersonId]);
-            $activityLabel = 'Recorded finding and follow-up requirement';
-            $activityNotes = $missingItems;
+            $combinedNotes = $notes !== '' ? $documentIssues . "\n\n" . $notes : $documentIssues;
+            $stmt = $apeDb->prepare("UPDATE ape_records SET requirement_status = 'Needs Correction', workflow_status = 'Registered', follow_up_required = 0, clearance_status = 'Pending', clinical_remarks = ?, patient_visible_note = ?, reviewed_by_person_id = ? WHERE ape_id = ?");
+            $stmt->execute([$combinedNotes, $documentIssues, $staffPersonId, $id]);
+            $activityLabel = 'Recorded hard-copy document correction';
+            $activityNotes = $documentIssues;
         } elseif ($action === 'approve_documents') {
+            if (empty($record['exam_date'])) {
+                throw new RuntimeException('Record the clinical examination before archiving digital documents.');
+            }
             $requiredTypes = ape_default_requirements();
             $requiredPlaceholders = implode(',', array_fill(0, count($requiredTypes), '?'));
             $currentDocuments = $apeDb->prepare("
@@ -109,6 +116,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([$nextWorkflow, $nextClearance, $staffPersonId, $id]);
             $activityLabel = 'Archived online APE documents';
         } elseif ($action === 'request_document_correction') {
+            if (empty($record['exam_date'])) {
+                throw new RuntimeException('Record the clinical examination before reviewing digital documents.');
+            }
             $documentIds = array_values(array_unique(array_filter(array_map('intval', (array) ($_POST['document_ids'] ?? [])))));
             if (!$documentIds) {
                 throw new InvalidArgumentException('Select at least one uploaded document that needs correction.');
@@ -148,7 +158,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $activityLabel = 'Requested document correction';
             $activityNotes = implode(', ', $selectedTypes) . ': ' . $missingItems;
         } elseif ($action === 'record_examination') {
-            if (!in_array(($record['workflow_status'] ?? ''), ['Reviewed', 'Scheduled'], true)) {
+            if (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed') {
+                throw new RuntimeException('The patient must confirm their vitals and BMI before the clinical examination can be recorded.');
+            }
+            if (!in_array(($record['workflow_status'] ?? ''), ['Registered', 'Batch Assigned', 'Requirements Checked', 'Scheduled', 'Submitted', 'Reviewed'], true) || !empty($record['exam_date'])) {
                 throw new RuntimeException('This APE record is not ready for examination.');
             }
             $examDate = trim((string) ($_POST['exam_date'] ?? ''));
@@ -157,7 +170,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new InvalidArgumentException('Select a valid examination date that is not in the future.');
             }
             $resultStatus = (string) ($_POST['result_status'] ?? 'Normal');
-            if (!in_array($resultStatus, ['Normal', 'With Finding', 'Referred'], true)) {
+            if (!in_array($resultStatus, ['Normal', 'With Finding'], true)) {
                 throw new InvalidArgumentException('Select a valid examination result.');
             }
             $findingType = trim((string) ($_POST['finding_type'] ?? '')) ?: 'General Examination';
@@ -167,32 +180,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $clinicalRemarks = trim((string) ($_POST['clinical_remarks'] ?? '')) ?: null;
             $patientNote = trim((string) ($_POST['patient_visible_note'] ?? '')) ?: null;
-            $requiresFollowUp = $resultStatus !== 'Normal';
-            $nextWorkflow = $requiresFollowUp ? 'Follow-up Required' : 'Exam Done';
-            $nextClearance = $requiresFollowUp ? 'For Follow-up' : 'Pending';
-
             $updateExam = $apeDb->prepare("UPDATE ape_records SET exam_date = ?, workflow_status = ?, clearance_status = ?, follow_up_required = ?, clinical_remarks = ?, patient_visible_note = ?, reviewed_by_person_id = ? WHERE ape_id = ?");
-            $updateExam->execute([$examDate, $nextWorkflow, $nextClearance, $requiresFollowUp ? 1 : 0, $clinicalRemarks, $patientNote, $staffPersonId, $id]);
+            $updateExam->execute([$examDate, 'Exam Done', 'Pending', 0, $clinicalRemarks, $patientNote, $staffPersonId, $id]);
             $finding = $apeDb->prepare('INSERT INTO ape_findings (ape_id, finding_type, description, result_status, follow_up_required, recorded_by_person_id) VALUES (?, ?, ?, ?, ?, ?)');
-            $finding->execute([$id, $findingType, $findingDescription, $resultStatus, $requiresFollowUp ? 1 : 0, $staffPersonId]);
+            $finding->execute([$id, $findingType, $findingDescription, $resultStatus, 0, $staffPersonId]);
 
-            if ($resultStatus === 'Referred') {
-                $referredTo = trim((string) ($_POST['referred_to'] ?? ''));
-                if ($referredTo === '') {
-                    throw new InvalidArgumentException('Enter the facility or specialist receiving the referral.');
-                }
-                $referral = $apeDb->prepare('INSERT INTO referrals (patient_person_id, referral_date, referred_to, reason, referred_by_person_id, remarks) VALUES (?, ?, ?, ?, ?, ?)');
-                $referral->execute([(int) $record['patient_id'], $examDate, $referredTo, $findingDescription, $staffPersonId, 'Created from APE examination #' . $id]);
-            }
-
-            $activityLabel = $requiresFollowUp ? 'Recorded APE examination requiring follow-up' : 'Recorded APE examination';
+            $activityLabel = 'Recorded APE examination';
             $activityNotes = $findingType . ': ' . $resultStatus;
         } elseif ($action === 'finalize_exam_clear') {
-            if (($record['workflow_status'] ?? '') !== 'Exam Done' || empty($record['exam_date'])) {
-                throw new RuntimeException('Record the clinical examination before clearing the patient.');
+            if (ape_record_queue($record) !== 'final_decision' || empty($record['exam_date'])) {
+                throw new RuntimeException('The examination and document archive must be complete before clearing the patient.');
             }
             $patientNote = trim((string) ($_POST['patient_visible_note'] ?? '')) ?: ($record['patient_visible_note'] ?? null);
-            $stmt = $apeDb->prepare("UPDATE ape_records SET workflow_status = 'Cleared', clearance_status = 'Cleared', follow_up_required = 0, patient_visible_note = ?, reviewed_by_person_id = ? WHERE ape_id = ? AND workflow_status = 'Exam Done'");
+            $stmt = $apeDb->prepare("UPDATE ape_records SET workflow_status = 'Cleared', clearance_status = 'Cleared', follow_up_required = 0, patient_visible_note = ?, reviewed_by_person_id = ? WHERE ape_id = ? AND workflow_status IN ('Exam Done', 'Reviewed')");
             $stmt->execute([$patientNote, $staffPersonId, $id]);
             if ($stmt->rowCount() !== 1) {
                 throw new RuntimeException('The examination status changed before clearance could be saved. Refresh and try again.');
@@ -200,8 +200,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $activityLabel = 'Cleared patient after APE examination';
             $activityNotes = $patientNote ?: 'No additional patient instruction.';
         } elseif ($action === 'finalize_exam_follow_up') {
-            if (($record['workflow_status'] ?? '') !== 'Exam Done') {
-                throw new RuntimeException('Only an examined record can be moved to follow-up.');
+            if (ape_record_queue($record) !== 'final_decision') {
+                throw new RuntimeException('The examination and document archive must be complete before requiring follow-up.');
             }
             $followUpNotes = trim((string) ($_POST['follow_up_notes'] ?? ''));
             if ($followUpNotes === '') {
@@ -215,8 +215,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $activityLabel = 'Required follow-up after APE examination';
             $activityNotes = $followUpNotes;
         } elseif ($action === 'finalize_exam_referral') {
-            if (($record['workflow_status'] ?? '') !== 'Exam Done') {
-                throw new RuntimeException('Only an examined record can be referred from this step.');
+            if (ape_record_queue($record) !== 'final_decision') {
+                throw new RuntimeException('The examination and document archive must be complete before creating a referral.');
             }
             $referredTo = trim((string) ($_POST['referred_to'] ?? ''));
             $referralReason = trim((string) ($_POST['referral_reason'] ?? ''));
@@ -275,21 +275,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $requirement->execute([$id, $requirementName, $requirementStatus, trim((string) ($_POST['requirement_remarks'] ?? '')) ?: null, $isChecked ? $staffPersonId : null, $isChecked ? date('Y-m-d H:i:s') : null]);
             $activityLabel = 'Updated APE requirement';
             $activityNotes = $requirementName . ': ' . $requirementStatus;
-        } elseif ($action === 'add_finding') {
-            $findingType = trim((string) ($_POST['finding_type'] ?? ''));
-            $description = trim((string) ($_POST['finding_description'] ?? ''));
-            $resultStatus = (string) ($_POST['finding_result_status'] ?? 'With Finding');
-            $requiresFollowUp = isset($_POST['finding_follow_up']) ? 1 : 0;
-            if ($findingType === '' || $description === '' || !in_array($resultStatus, ['Normal', 'With Finding', 'Referred'], true)) {
-                throw new InvalidArgumentException('Complete the finding type, description, and result.');
-            }
-            $finding = $apeDb->prepare('INSERT INTO ape_findings (ape_id, finding_type, description, result_status, follow_up_required, recorded_by_person_id) VALUES (?, ?, ?, ?, ?, ?)');
-            $finding->execute([$id, $findingType, $description, $resultStatus, $requiresFollowUp, $staffPersonId]);
-            if ($requiresFollowUp) {
-                $apeDb->prepare("UPDATE ape_records SET follow_up_required = 1, clearance_status = 'For Follow-up', workflow_status = 'Follow-up Required' WHERE ape_id = ?")->execute([$id]);
-            }
-            $activityLabel = 'Added APE finding';
-            $activityNotes = $findingType . ': ' . $resultStatus;
         }
 
         if ($activityLabel) {
@@ -538,6 +523,31 @@ render_header('APE Record - ' . $fullName);
         </div>
 
         <section class="ape-flow-panel">
+            <div class="flex items-center justify-between gap-3 mb-4">
+                <div>
+                    <h2 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Patient-Reported Vitals and BMI</h2>
+                    <p class="text-xs font-bold text-slate-500 mb-0">Entered and confirmed by the patient before presenting hard-copy requirements.</p>
+                </div>
+                <span class="badge <?= ($record['patient_vitals_status'] ?? 'Not Started') === 'Confirmed' ? 'badge-completed' : 'badge-pending' ?>">
+                    <?= e($record['patient_vitals_status'] ?? 'Not Started') ?>
+                </span>
+            </div>
+            <?php if (($record['patient_vitals_status'] ?? 'Not Started') === 'Confirmed'): ?>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div class="ape-flow-field"><p class="clinic-label mb-1">Height</p><strong class="text-sm text-slate-800"><?= e($record['patient_height_cm'] !== null ? number_format((float) $record['patient_height_cm'], 2) . ' cm' : 'Not recorded') ?></strong></div>
+                    <div class="ape-flow-field"><p class="clinic-label mb-1">Weight</p><strong class="text-sm text-slate-800"><?= e($record['patient_weight_kg'] !== null ? number_format((float) $record['patient_weight_kg'], 2) . ' kg' : 'Not recorded') ?></strong></div>
+                    <div class="ape-flow-field"><p class="clinic-label mb-1">BMI</p><strong class="text-sm text-slate-800"><?= e($record['patient_bmi'] !== null ? number_format((float) $record['patient_bmi'], 2) : 'Not recorded') ?></strong></div>
+                    <div class="ape-flow-field"><p class="clinic-label mb-1">Temperature</p><strong class="text-sm text-slate-800"><?= e($record['patient_temperature'] !== null ? number_format((float) $record['patient_temperature'], 1) . ' °C' : 'Not recorded') ?></strong></div>
+                    <div class="ape-flow-field"><p class="clinic-label mb-1">Blood Pressure</p><strong class="text-sm text-slate-800"><?= e($record['patient_blood_pressure'] ?: 'Not recorded') ?></strong></div>
+                    <div class="ape-flow-field"><p class="clinic-label mb-1">Pulse Rate</p><strong class="text-sm text-slate-800"><?= e($record['patient_pulse_rate'] !== null ? (int) $record['patient_pulse_rate'] . ' bpm' : 'Not recorded') ?></strong></div>
+                    <div class="ape-flow-field col-span-2"><p class="clinic-label mb-1">Confirmed</p><strong class="text-sm text-slate-800"><?= e($record['patient_vitals_confirmed_at'] ? date('M d, Y g:i A', strtotime($record['patient_vitals_confirmed_at'])) : 'Not recorded') ?></strong></div>
+                </div>
+            <?php else: ?>
+                <div class="ape-flow-action muted"><p class="text-sm font-bold text-amber-800 mb-0">The patient has not confirmed their height, weight, BMI, temperature, blood pressure, and pulse rate yet.</p></div>
+            <?php endif; ?>
+        </section>
+
+        <section class="ape-flow-panel">
             <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-3">
                 <div class="min-w-0 flex-1">
                     <p class="text-[10px] font-black text-primary uppercase tracking-widest mb-2"><?= e($queue['title']) ?></p>
@@ -571,39 +581,39 @@ render_header('APE Record - ' . $fullName);
                         <input type="hidden" name="action" value="mark_requirements_complete">
                         <div>
                             <h3 class="font-headline text-base font-extrabold text-[#17261d] mb-1">Hard Copy Complete</h3>
-                            <p class="text-xs font-bold text-slate-500 mb-3">Use this when all hard-copy APE documents are checked and no follow-up is needed.</p>
-                            <label class="clinic-label">Clinic Notes</label>
+                            <p class="text-xs font-bold text-slate-500 mb-3">Use this after the clinical examination, when all hard-copy APE documents have been presented and checked.</p>
+                            <label class="clinic-label">Document Review Notes</label>
                             <textarea class="clinic-textarea" name="clinical_remarks" rows="4" placeholder="Optional notes after checking hard-copy documents..."><?= e($record['clinical_remarks']) ?></textarea>
                         </div>
-                        <button class="btn btn-primary w-full" data-confirm-submit data-confirm-type="primary" data-confirm-title="Continue to online submission?" data-confirm-message="This will mark hard-copy requirements complete and move the APE record forward." data-confirm-toast="Updating APE record...">
-                            <span class="material-symbols-outlined text-[18px]">check_circle</span> Continue to Online Submission
+                        <button class="btn btn-primary w-full" data-confirm-submit data-confirm-type="primary" data-confirm-title="Complete the hard-copy review?" data-confirm-message="This will mark the hard-copy review complete and open digital document submission for the patient." data-confirm-toast="Updating APE record...">
+                            <span class="material-symbols-outlined text-[18px]">check_circle</span> Complete Hard-copy Review
                         </button>
                     </form>
                     <form method="post" class="ape-flow-action muted space-y-3">
                         <input type="hidden" name="action" value="mark_missing_requirements">
                         <div>
-                            <h3 class="font-headline text-base font-extrabold text-[#17261d] mb-1">Finding / Follow-up Required</h3>
-                            <p class="text-xs font-bold text-amber-800 mb-3">Use this when the patient needs treatment proof, medical clearance, a repeat requirement, or a corrected hard copy.</p>
-                            <label class="clinic-label">Required Follow-up</label>
-                            <textarea class="clinic-textarea" name="missing_items" rows="3" placeholder="Treatment, clearance, repeat lab, referral, or missing requirement..."><?= e($record['missing_items']) ?></textarea>
+                            <h3 class="font-headline text-base font-extrabold text-[#17261d] mb-1">Hard Copy Incomplete</h3>
+                            <p class="text-xs font-bold text-amber-800 mb-3">Use this only for missing, incorrect, or incomplete hard-copy documents. Clinical findings are recorded during examination.</p>
+                            <label class="clinic-label">Document Issues</label>
+                            <textarea class="clinic-textarea" name="missing_items" rows="3" placeholder="Missing form, incomplete field, unreadable copy, or other document issue..." required><?= e($record['patient_visible_note']) ?></textarea>
                         </div>
                         <div>
-                            <label class="clinic-label">Clinical Notes</label>
-                            <textarea class="clinic-textarea" name="clinical_remarks" rows="3" placeholder="Finding or health concern notes..."><?= e($record['clinical_remarks']) ?></textarea>
+                            <label class="clinic-label">Additional Document Review Notes</label>
+                            <textarea class="clinic-textarea" name="clinical_remarks" rows="3" placeholder="Optional internal notes about the hard-copy review..."></textarea>
                         </div>
-                        <button class="btn btn-outline w-full" style="color:#b45309;border-color:rgba(180,83,9,0.2);" data-confirm-submit data-confirm-type="danger" data-confirm-title="Record finding or follow-up?" data-confirm-message="This will mark the APE record as needing follow-up." data-confirm-toast="Recording follow-up...">
-                            <span class="material-symbols-outlined text-[18px]">medical_information</span> Record Follow-up
+                        <button class="btn btn-outline w-full" style="color:#b45309;border-color:rgba(180,83,9,0.2);" data-confirm-submit data-confirm-type="danger" data-confirm-title="Return the hard-copy documents?" data-confirm-message="This will keep the record in document review until the document issues are corrected." data-confirm-toast="Saving document issues...">
+                            <span class="material-symbols-outlined text-[18px]">assignment_return</span> Record Document Correction
                         </button>
                     </form>
                 </div>
             <?php elseif ($queueKey === 'digital_submission'): ?>
-                <?php if (!$reviewDocuments): ?>
+                <?php if ((int) ($record['required_document_count'] ?? 0) < count(ape_default_requirements())): ?>
                     <div class="ape-flow-action muted">
                         <div class="flex items-start gap-3">
                             <span class="material-symbols-outlined text-amber-700 mt-0.5">hourglass_empty</span>
                             <div>
-                                <h3 class="font-headline text-base font-extrabold text-amber-900 mb-1">Waiting for Patient Upload</h3>
-                                <p class="text-sm font-bold text-amber-800 mb-4">The patient must upload the checked APE documents from the patient portal before clinic archive review can continue.</p>
+                                <h3 class="font-headline text-base font-extrabold text-amber-900 mb-1">Waiting for Complete Patient Upload</h3>
+                                <p class="text-sm font-bold text-amber-800 mb-4">The examination is complete. The patient must now upload the checked APE documents from the patient portal before clinic archive review can continue.</p>
                                 <div class="flex flex-wrap gap-2">
                                     <?php foreach (['Lab Request Form', 'UHS Consent Form', 'UHS Medical Record', 'UHS Dental Record', 'Referral Form'] as $type): ?>
                                         <span class="badge badge-pending"><?= e($type) ?></span>
@@ -665,7 +675,17 @@ render_header('APE Record - ' . $fullName);
                     </div>
                 <?php endif; ?>
             <?php elseif ($queueKey === 'examination'): ?>
-                <?php if (!$canRecordApeExam): ?>
+                <?php if (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed'): ?>
+                    <div class="ape-flow-action muted">
+                        <div class="flex items-start gap-3">
+                            <span class="material-symbols-outlined text-amber-700 mt-0.5">monitor_heart</span>
+                            <div>
+                                <h3 class="font-headline text-base font-extrabold text-amber-900 mb-1">Waiting for patient vitals and BMI</h3>
+                                <p class="text-sm font-bold text-amber-800 mb-0">The patient must enter and confirm their height, weight, BMI, and vital signs in the patient portal before the clinic can record the examination.</p>
+                            </div>
+                        </div>
+                    </div>
+                <?php elseif (!$canRecordApeExam): ?>
                     <div class="ape-flow-action muted">
                         <div class="flex items-start gap-3">
                             <span class="material-symbols-outlined text-amber-700 mt-0.5">lock</span>
@@ -675,13 +695,13 @@ render_header('APE Record - ' . $fullName);
                             </div>
                         </div>
                     </div>
-                <?php elseif (($record['workflow_status'] ?? '') !== 'Exam Done'): ?>
+                <?php else: ?>
                     <form method="post" class="ape-flow-action space-y-5">
                         <input type="hidden" name="action" value="record_examination">
                         <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
                             <div>
                                 <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Clinical Examination</h3>
-                                <p class="text-xs font-bold text-slate-500 mb-0">Saving a normal result moves the record to final decision. A finding or referral moves it directly to follow-up.</p>
+                                <p class="text-xs font-bold text-slate-500 mb-0">Record the examination first. The patient will present hard-copy requirements before digital upload opens.</p>
                             </div>
                             <span class="badge badge-in-progress">Clearance Pending</span>
                         </div>
@@ -694,17 +714,12 @@ render_header('APE Record - ' . $fullName);
                                 <label class="clinic-label" for="apeExamResult">Clinical Result</label>
                                 <select class="clinic-select" id="apeExamResult" name="result_status" required>
                                     <option value="Normal">Normal</option>
-                                    <option value="With Finding">With Finding / Follow-up Required</option>
-                                    <option value="Referred">Referred</option>
+                                    <option value="With Finding">With Finding</option>
                                 </select>
                             </div>
                             <div>
                                 <label class="clinic-label" for="apeFindingType">Finding Type</label>
                                 <input class="clinic-input" id="apeFindingType" name="finding_type" value="General Examination" placeholder="General, vision, dental, laboratory..." required>
-                            </div>
-                            <div>
-                                <label class="clinic-label" for="apeReferredTo">Referral Destination</label>
-                                <input class="clinic-input" id="apeReferredTo" name="referred_to" placeholder="Required only when result is Referred">
                             </div>
                             <div class="md:col-span-2">
                                 <label class="clinic-label" for="apeFindingDescription">Examination Finding / Result</label>
@@ -719,10 +734,22 @@ render_header('APE Record - ' . $fullName);
                                 <textarea class="clinic-textarea" id="apePatientNote" name="patient_visible_note" rows="3" placeholder="Instructions that the patient can see..."><?= e($record['patient_visible_note']) ?></textarea>
                             </div>
                         </div>
-                        <button class="btn btn-primary w-full" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save this APE examination?" data-confirm-message="The clinical result will determine whether this record proceeds to final clearance or follow-up." data-confirm-toast="Saving APE examination...">
+                        <button class="btn btn-primary w-full" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save this APE examination?" data-confirm-message="After saving, the hard-copy review step will open for clinic staff." data-confirm-toast="Saving APE examination...">
                             <span class="material-symbols-outlined text-[18px]">clinical_notes</span> Save Examination
                         </button>
                     </form>
+                <?php endif; ?>
+            <?php elseif ($queueKey === 'final_decision'): ?>
+                <?php if (!$canRecordApeExam): ?>
+                    <div class="ape-flow-action muted">
+                        <div class="flex items-start gap-3">
+                            <span class="material-symbols-outlined text-amber-700 mt-0.5">lock</span>
+                            <div>
+                                <h3 class="font-headline text-base font-extrabold text-amber-900 mb-1">Clinical permission required</h3>
+                                <p class="text-sm font-bold text-amber-800 mb-0">Only administrators, doctors, and nurses can record the final APE decision.</p>
+                            </div>
+                        </div>
+                    </div>
                 <?php else: ?>
                     <div class="ape-flow-action mb-4">
                         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
@@ -909,6 +936,7 @@ render_header('APE Record - ' . $fullName);
             </section>
         </div>
 
+        <?php if (!empty($record['exam_date'])): ?>
         <section class="ape-flow-panel">
             <div class="flex items-center justify-between gap-3 mb-4">
                 <div>
@@ -917,8 +945,7 @@ render_header('APE Record - ' . $fullName);
                 </div>
                 <span class="badge <?= $findings ? 'badge-high' : 'badge-completed' ?>"><?= count($findings) ?> finding(s)</span>
             </div>
-            <div class="grid grid-cols-1 lg:grid-cols-[1fr_0.8fr] gap-4">
-                <div class="space-y-2">
+            <div class="space-y-2">
                     <?php foreach ($findings as $finding): ?>
                         <div class="ape-flow-field">
                             <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
@@ -934,25 +961,9 @@ render_header('APE Record - ' . $fullName);
                     <?php if (!$findings): ?>
                         <div class="ape-flow-field text-center text-sm font-bold text-slate-500">No clinical finding has been recorded.</div>
                     <?php endif; ?>
-                </div>
-                <form method="post" class="ape-flow-action space-y-3">
-                    <input type="hidden" name="action" value="add_finding">
-                    <input class="clinic-input" name="finding_type" placeholder="Finding type, e.g. Vision" required>
-                    <textarea class="clinic-textarea" name="finding_description" rows="4" placeholder="Finding description" required></textarea>
-                    <select class="clinic-select" name="finding_result_status">
-                        <option>Normal</option>
-                        <option selected>With Finding</option>
-                        <option>Referred</option>
-                    </select>
-                    <label class="flex items-center gap-3 text-sm font-bold text-slate-600">
-                        <input type="checkbox" name="finding_follow_up" value="1"> Follow-up required
-                    </label>
-                    <button class="btn btn-primary w-full" data-confirm-submit data-confirm-type="primary" data-confirm-title="Add clinical finding?" data-confirm-message="This finding will become part of the patient's APE record." data-confirm-toast="Saving finding...">
-                        <span class="material-symbols-outlined text-[18px]">medical_information</span> Add Finding
-                    </button>
-                </form>
             </div>
         </section>
+        <?php endif; ?>
 
         <div class="grid grid-cols-1 lg:grid-cols-[0.95fr_1.05fr] gap-4">
             <section class="ape-flow-panel">

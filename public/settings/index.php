@@ -914,7 +914,7 @@ render_clinic_command_header(
                                 <?php foreach ([
                                     'not_started' => 'Not Started',
                                     'in_progress' => 'In Progress',
-                                    'completed' => 'Exam Completed',
+                                    'completed' => 'Ready for Decision',
                                     'cleared' => 'Cleared',
                                     'follow_up' => 'Follow-up',
                                 ] as $progressKey => $progressLabel): ?>

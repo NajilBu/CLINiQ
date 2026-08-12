@@ -21,14 +21,14 @@ $visibleQueues = $activeQueue === 'all'
     : (isset($queues[$activeQueue]) ? [$activeQueue] : array_keys($queues));
 
 $needsAction = 0;
-foreach (['document_review', 'digital_submission', 'examination', 'follow_up'] as $key) {
+foreach (['examination', 'document_review', 'digital_submission', 'final_decision', 'follow_up'] as $key) {
     $needsAction += count($recordsByQueue[$key]);
 }
 
 $metrics = [
     'total' => count($allRecords),
     'clinic_action' => $needsAction,
-    'digitized' => count($recordsByQueue['digital_submission']) + count($recordsByQueue['examination']) + count($recordsByQueue['follow_up']) + count($recordsByQueue['completed']),
+    'digitized' => count(array_filter($allRecords, static fn(array $record): bool => !empty($record['document_path']))),
     'follow_up' => count($recordsByQueue['follow_up']),
     'completed' => count($recordsByQueue['completed']),
 ];

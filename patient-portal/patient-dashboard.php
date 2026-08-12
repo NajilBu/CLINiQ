@@ -95,9 +95,11 @@ $latestApe = ape_fetch_patient_record($appointmentPatientId);
 $apeStatus = $latestApe['workflow_status'] ?? 'Not Started';
 $apePercent = match ($apeStatus) {
     'Registered' => 20,
-    'Batch Assigned', 'Requirements Checked' => 40,
-    'Submitted', 'Reviewed' => 60,
-    'Scheduled', 'Exam Done', 'Follow-up Required' => 80,
+    'Batch Assigned' => 20,
+    'Exam Done' => 40,
+    'Requirements Checked', 'Scheduled' => 60,
+    'Submitted' => 80,
+    'Reviewed', 'Follow-up Required' => 80,
     'Cleared' => 100,
     default => 0,
 };
@@ -113,27 +115,34 @@ $apeRequirementsVerified = $apeRequirementStatus === 'Pre-Verified' || in_array(
     'Submitted',
     'Reviewed',
     'Scheduled',
-    'Exam Done',
     'Follow-up Required',
     'Cleared',
 ], true);
 $apeRequirementsNeedCorrection = $apeRequirementStatus === 'Needs Correction';
+$apeExamCompleted = !empty($latestApe['exam_date']);
+$apePatientVitalsConfirmed = ($latestApe['patient_vitals_status'] ?? 'Not Started') === 'Confirmed';
+$apeAllDocumentsUploaded = (int) ($latestApe['required_document_count'] ?? 0) >= count(ape_default_requirements());
+$apeDocumentsAwaitingReview = $apeAllDocumentsUploaded && (int) ($latestApe['required_unverified_count'] ?? 0) > 0;
 $apeActionTitle = match (true) {
     ($latestApe['clearance_status'] ?? 'Pending') === 'Cleared' => 'APE completed',
     $apeRequirementsNeedCorrection => 'Return corrected hard-copy requirements',
-    !$apeRequirementsVerified => 'Wait for clinic hard-copy verification',
-    in_array($apeStatus, ['Reviewed', 'Scheduled'], true) => 'Attend your clinical examination',
-    $apeStatus === 'Exam Done' => 'Wait for the final clinical decision',
+    !$apePatientVitalsConfirmed => 'Complete your vitals and BMI',
+    !$apeExamCompleted => 'Attend your clinical examination',
+    !$apeRequirementsVerified => 'Present hard-copy requirements to the clinic',
     $apeStatus === 'Follow-up Required' => 'Complete the required follow-up',
+    $apeDocumentsAwaitingReview => 'Wait for clinic document review',
+    $apeStatus === 'Reviewed' => 'Wait for the final clinical decision',
     default => 'Upload verified APE documents',
 };
 $apeActionCopy = match (true) {
     ($latestApe['clearance_status'] ?? 'Pending') === 'Cleared' => 'Your APE record is already cleared by the clinic.',
     $apeRequirementsNeedCorrection => $apeNote ?: 'Return the corrected hard-copy requirements requested by the clinic.',
-    !$apeRequirementsVerified => 'The clinic must verify your physical requirements first. Digital upload will open after that step.',
-    in_array($apeStatus, ['Reviewed', 'Scheduled'], true) => $apeNote ?: 'Your documents are archived. Visit the clinic for your APE examination.',
-    $apeStatus === 'Exam Done' => $apeNote ?: 'Your examination is recorded and awaiting final clearance.',
+    !$apePatientVitalsConfirmed => 'Enter and confirm your vitals and BMI before visiting the clinic for examination.',
+    !$apeExamCompleted => $apeNote ?: 'Your vitals are confirmed. Visit the clinic for examination before presenting hard-copy requirements.',
+    !$apeRequirementsVerified => 'Present your hard-copy requirements to the clinic for review before uploading digital copies.',
     $apeStatus === 'Follow-up Required' => $apeNote ?: 'Complete the treatment, clearance, referral, or other follow-up requested by the clinic.',
+    $apeDocumentsAwaitingReview => 'Your documents are waiting for clinic archive review.',
+    $apeStatus === 'Reviewed' => $apeNote ?: 'Your examination and documents are complete and awaiting the clinic\'s final decision.',
     default => $apeNote ?: ($latestApe ? 'Complete the current APE step in your APE status page.' : 'Start your APE record with the clinic.'),
 };
 $passportMissing = [];

@@ -47,10 +47,10 @@ function ape_cycle_progress(int $cycleId): array
             SUM(CASE WHEN workflow_status = 'Registered' AND clearance_status <> 'Cleared'
                       AND follow_up_required = 0 AND clearance_status <> 'For Follow-up'
                      THEN 1 ELSE 0 END) AS not_started,
-            SUM(CASE WHEN workflow_status = 'Exam Done' AND clearance_status <> 'Cleared'
+            SUM(CASE WHEN workflow_status = 'Reviewed' AND clearance_status <> 'Cleared'
                       AND follow_up_required = 0 AND clearance_status <> 'For Follow-up'
                      THEN 1 ELSE 0 END) AS completed,
-            SUM(CASE WHEN workflow_status NOT IN ('Registered', 'Exam Done', 'Cleared', 'Follow-up Required')
+            SUM(CASE WHEN workflow_status NOT IN ('Registered', 'Reviewed', 'Cleared', 'Follow-up Required')
                       AND clearance_status NOT IN ('Cleared', 'For Follow-up') AND follow_up_required = 0
                      THEN 1 ELSE 0 END) AS in_progress
         FROM ape_records
