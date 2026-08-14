@@ -2578,6 +2578,7 @@ textarea.record-sheet-field {
     height: min(36rem, 72vh);
     min-height: 25rem;
     overflow-y: auto;
+    overflow-x: hidden !important;
     overscroll-behavior: contain;
     border: 1px solid #e2e8f0;
     border-radius: 0.9rem;
@@ -2587,7 +2588,10 @@ textarea.record-sheet-field {
 .dashboard-day-calendar-canvas {
     position: relative;
     height: 40.5rem;
-    min-width: 34rem;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
     background: linear-gradient(90deg, #f8fafc 0, #f8fafc 5.1rem, #ffffff 5.1rem);
 }
 
@@ -2699,11 +2703,7 @@ textarea.record-sheet-field {
     text-transform: uppercase;
 }
 
-@media (max-width: 640px) {
-    .dashboard-day-calendar {
-        overflow-x: auto;
-    }
-}
+
 
 .dashboard-visitor-grid-wrap {
     display: flex;

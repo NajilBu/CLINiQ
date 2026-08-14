@@ -112,8 +112,7 @@ $activeAlerts = auth_db()->query("
     LIMIT 2
 ")->fetchAll();
 
-// --- 3. Today's Appointments ---
-// We check the new appointments table
+// --- 3. Today's Appointments (Scheduled) ---
 $appointmentsStmt = appointment_db()->query("
     SELECT a.*, p.first_name, p.last_name, p.id_number
     FROM appointments a
@@ -124,6 +123,27 @@ $appointmentsStmt = appointment_db()->query("
     ORDER BY a.appointment_datetime ASC
 ");
 $appointments = $appointmentsStmt ? $appointmentsStmt->fetchAll() : [];
+
+// --- 3b. Pending Appointment Requests (awaiting approval) ---
+$pendingAppointmentsStmt = appointment_db()->query("
+    SELECT a.*, p.first_name, p.last_name, p.id_number,
+           COALESCE(
+               NULLIF(TRIM(CONCAT(pr.program_code, '-', s.year_level, UPPER(s.section))), ''),
+               ed.department_code,
+               'Patient'
+           ) AS course_section
+    FROM appointments a
+    JOIN patients pt ON pt.person_id = a.patient_id
+    JOIN people p ON p.id = pt.person_id
+    LEFT JOIN students s ON s.person_id = p.id
+    LEFT JOIN programs pr ON pr.id = s.program_id
+    LEFT JOIN school_employees se ON se.person_id = p.id
+    LEFT JOIN departments ed ON ed.id = se.department_id
+    WHERE a.status = 'Pending'
+    ORDER BY a.appointment_datetime ASC
+    LIMIT 10
+");
+$pendingAppointments = $pendingAppointmentsStmt ? $pendingAppointmentsStmt->fetchAll() : [];
 
 // Build the dashboard day view without changing the appointment schema. Appointments
 // currently store a start time only, so the dashboard reserves one hour per record.
@@ -473,47 +493,131 @@ render_header('Main Dashboard');
 
 
 
-    <div class="dashboard-activity-grid grid grid-cols-1 gap-6 mb-8 items-stretch">
-        <!-- 3. Today's Appointment Schedule -->
-        <section class="dashboard-activity-card dashboard-appointments-card clinic-card overflow-hidden flex flex-col">
+    <div class="dashboard-activity-grid grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8 items-stretch">
+
+        <!-- NEW: Pending Appointment Requests (left panel) -->
+        <section class="clinic-card overflow-hidden flex flex-col h-[520px]" style="height: 520px;">
             <div class="p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
                 <div class="flex items-center gap-3">
-                    <div
-                        class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                    <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                        <span class="material-symbols-outlined">pending_actions</span>
+                    </div>
+                    <div>
+                        <h2 class="font-headline text-lg font-extrabold text-[#17261d] m-0">Appointment Requests</h2>
+                        <p class="text-xs font-bold text-slate-500 m-0">Approve or cancel pending patient booking requests.</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                    <?php if (count($pendingAppointments) > 0): ?>
+                        <span class="badge badge-pending text-[10px]"><?= count($pendingAppointments) ?> pending</span>
+                    <?php endif; ?>
+                    <a href="<?= app_url('appointments/index.php') ?>"
+                        class="btn btn-sm btn-ghost text-slate-400 hover:text-primary text-decoration-none">
+                        <span class="material-symbols-outlined text-[18px]">open_in_new</span>
+                    </a>
+                </div>
+            </div>
+            <div class="flex-1 overflow-y-auto divide-y divide-slate-100">
+                <?php if (empty($pendingAppointments)): ?>
+                    <div class="flex flex-col items-center justify-center py-12 px-6 text-center">
+                        <div class="w-12 h-12 rounded-2xl bg-slate-50 text-slate-300 flex items-center justify-center mb-3">
+                            <span class="material-symbols-outlined text-[26px]">event_available</span>
+                        </div>
+                        <p class="text-sm font-bold text-slate-500 mb-0">No pending requests</p>
+                        <p class="text-xs text-slate-400 mt-1">New appointment requests will appear here.</p>
+                    </div>
+                <?php else: ?>
+                    <?php foreach ($pendingAppointments as $pa):
+                        $paName = trim($pa['first_name'] . ' ' . $pa['last_name']);
+                        $paDate = date('M d, Y', strtotime($pa['appointment_datetime']));
+                        $paTime = date('g:i A', strtotime($pa['appointment_datetime']));
+                        $paId = (int) $pa['appointment_id'];
+                    ?>
+                        <div class="p-4 hover:bg-slate-50 transition-colors">
+                            <div class="flex items-start gap-3">
+                                <div class="avatar <?= e(avatar_color($paName)) ?> shrink-0 mt-0.5" style="width:36px;height:36px;font-size:12px;">
+                                    <?= e(initials($paName)) ?>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-start justify-between gap-2">
+                                        <div class="min-w-0">
+                                            <p class="text-sm font-bold text-slate-800 mb-0 truncate"><?= e($paName) ?></p>
+                                            <p class="text-[11px] font-bold text-slate-400 mb-1"><?= e($pa['id_number']) ?> · <?= e($pa['course_section'] ?? 'Patient') ?></p>
+                                        </div>
+                                        <span class="text-[10px] font-bold text-amber-600 bg-amber-50 rounded-full px-2 py-0.5 whitespace-nowrap shrink-0">For Approval</span>
+                                    </div>
+                                    <div class="flex items-center gap-1 text-xs font-bold text-slate-500 mb-2">
+                                        <span class="material-symbols-outlined text-[13px] text-indigo-400">event</span>
+                                        <?= e($paDate) ?> &bull;
+                                        <span class="material-symbols-outlined text-[13px] text-indigo-400">schedule</span>
+                                        <?= e($paTime) ?>
+                                    </div>
+                                    <?php if (!empty($pa['purpose'])): ?>
+                                        <p class="text-xs text-slate-500 mb-3 line-clamp-1"><?= e($pa['purpose']) ?></p>
+                                    <?php endif; ?>
+                                    <div class="flex items-center gap-2">
+                                        <form method="post" action="<?= app_url('appointments/update.php') ?>" class="flex-1">
+                                            <input type="hidden" name="id" value="<?= $paId ?>">
+                                            <input type="hidden" name="status" value="Scheduled">
+                                            <input type="hidden" name="redirect" value="../dashboard.php">
+                                            <button type="submit" class="btn btn-sm btn-primary w-full justify-center"
+                                                data-confirm-submit
+                                                data-confirm-type="primary"
+                                                data-confirm-title="Approve this appointment?"
+                                                data-confirm-message="This will schedule the appointment for <?= e($paName) ?> on <?= e($paDate . ' at ' . $paTime) ?>."
+                                                data-confirm-toast="Approving appointment...">
+                                                <span class="material-symbols-outlined text-[14px]">event_available</span>
+                                                Approve
+                                            </button>
+                                        </form>
+                                        <form method="post" action="<?= app_url('appointments/update.php') ?>">
+                                            <input type="hidden" name="id" value="<?= $paId ?>">
+                                            <input type="hidden" name="status" value="Cancelled">
+                                            <input type="hidden" name="cancellation_reason" value="Declined by clinic staff.">
+                                            <input type="hidden" name="redirect" value="../dashboard.php">
+                                            <button type="submit" class="btn btn-sm btn-ghost btn-cancel-icon"
+                                                title="Decline request"
+                                                aria-label="Decline appointment request"
+                                                data-confirm-submit
+                                                data-confirm-type="danger"
+                                                data-confirm-title="Decline this request?"
+                                                data-confirm-message="This will cancel the appointment request for <?= e($paName) ?>."
+                                                data-confirm-toast="Declining request...">
+                                                <span class="material-symbols-outlined text-[16px]">cancel</span>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+        </section>
+
+        <!-- Today's Appointment Schedule -->
+        <section class="clinic-card overflow-hidden flex flex-col h-[520px]" style="height: 520px;">
+            <div class="p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
                         <span class="material-symbols-outlined">event</span>
                     </div>
                     <div>
-                        <h2 class="font-headline text-lg font-extrabold text-[#17261d] m-0">Appointments</h2>
-                        <p class="text-xs font-bold text-slate-500 m-0">View today's approved clinic schedule by time.</p>
+                        <h2 class="font-headline text-lg font-extrabold text-[#17261d] m-0">Today's Schedule</h2>
+                        <p class="text-xs font-bold text-slate-500 m-0"><?= e(date('l, F j, Y')) ?> &bull; 8:00 AM–5:00 PM</p>
                     </div>
                 </div>
-                <a href="<?= app_url('appointments/index.php') ?>"
-                    class="btn btn-sm btn-ghost text-slate-400 hover:text-primary text-decoration-none shrink-0">
-                    <span class="material-symbols-outlined text-[18px]">calendar_month</span>
-                </a>
+                <div class="flex items-center gap-2 shrink-0">
+                    <span class="badge badge-in-progress text-[9px]"><?= count($appointments) ?> scheduled</span>
+                    <a href="<?= app_url('appointments/index.php') ?>"
+                        class="btn btn-sm btn-ghost text-slate-400 hover:text-primary text-decoration-none">
+                        <span class="material-symbols-outlined text-[18px]">calendar_month</span>
+                    </a>
+                </div>
             </div>
-            <div class="flex-1 overflow-y-auto p-4 space-y-5">
-                <div class="dashboard-day-schedule-section">
-                    <div class="flex items-center justify-between mb-2 px-1">
-                        <div>
-                            <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest m-0">Today's Schedule</h3>
-                            <p class="dashboard-day-schedule-date"><?= e(date('l, F j, Y')) ?> &bull; 8:00 AM–5:00 PM</p>
-                        </div>
-                        <span class="badge badge-in-progress text-[9px]"><?= count($appointments) ?> scheduled</span>
-                    </div>
-                    <?php if ($usingAppointmentPlaceholders): ?>
-                        <div class="dashboard-schedule-placeholder-note" role="note">
-                            <span class="material-symbols-outlined" aria-hidden="true">info</span>
-                            <span>No appointments are scheduled today. The faded cards below are UI-only examples.</span>
-                        </div>
-                    <?php elseif ($scheduleItems === []): ?>
-                        <div class="dashboard-schedule-placeholder-note" role="note">
-                            <span class="material-symbols-outlined" aria-hidden="true">schedule</span>
-                            <span>Today's scheduled appointments fall outside the 8:00 AM–5:00 PM clinic calendar.</span>
-                        </div>
-                    <?php endif; ?>
-
-                    <div class="dashboard-day-calendar" aria-label="Today's appointment calendar from 8 AM to 5 PM">
+            <div class="flex-1 p-4 flex flex-col min-h-0 overflow-hidden">
+                <div class="dashboard-day-schedule-section flex-1 flex flex-col min-h-0">
+                    <div class="dashboard-day-calendar flex-1 h-full overflow-x-hidden" style="overflow-x: hidden !important;" aria-label="Today's appointment calendar from 8 AM to 5 PM">
                         <div class="dashboard-day-calendar-canvas">
                             <?php for ($hour = 8; $hour <= 17; $hour++): ?>
                                 <?php $hourOffset = (($hour * 60) - $scheduleStartMinutes) / ($scheduleEndMinutes - $scheduleStartMinutes) * 100; ?>
@@ -557,11 +661,10 @@ render_header('Main Dashboard');
         </section>
 
         <!-- 4. Real-time Visitor Log -->
-        <section class="dashboard-activity-card clinic-card overflow-hidden flex flex-col max-h-[600px]">
+        <section class="clinic-card overflow-hidden flex flex-col mb-8 lg:col-span-2">
             <div class="p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
                 <div class="flex items-center gap-3">
-                    <div
-                        class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
                         <span class="material-symbols-outlined">directions_walk</span>
                     </div>
                     <div>
@@ -574,10 +677,10 @@ render_header('Main Dashboard');
                     <span class="material-symbols-outlined text-[18px]">list</span>
                 </a>
             </div>
-            <div class="dashboard-visitor-grid-wrap flex-1 min-h-0 p-0">
+            <div class="dashboard-visitor-grid-wrap p-0" style="height: 380px;">
                 <?php render_ag_grid('dashboardVisitorGrid', $visitorColumns, $visitorRows, [
                     'pageSize' => 10,
-                    'height' => 'fill',
+                    'height' => 'compact',
                     'fitColumns' => true,
                     'emptyTitle' => 'No visitors logged yet today.',
                     'emptyText' => 'Recorded clinic visits will appear here.',
