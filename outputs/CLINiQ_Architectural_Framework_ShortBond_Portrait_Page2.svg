@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="850" height="1100" viewBox="0 0 850 1100" role="img" aria-labelledby="title desc">
+  <title id="title">CLINiQ Architectural Framework - Portrait Page 2</title>
+  <desc id="desc">Portrait short bond page 2 of the CLINiQ architectural framework, showing decision and emergency processing plus data and security layers.</desc>
+  <defs>
+    <style>
+      text { font-family: Arial, Helvetica, sans-serif; fill: #222; }
+      .title { font-size: 27px; font-weight: 700; }
+      .subtitle { font-size: 15px; fill: #333; font-weight: 600; }
+      .page { font-size: 12px; fill: #444; font-weight: 700; }
+      .layer-title { font-size: 22px; font-weight: 700; fill: #111; }
+      .layer-note { font-size: 15px; fill: #333; font-weight: 600; }
+      .tile-title { font-size: 15px; font-weight: 700; }
+      .layer-a { fill: #eceff1; stroke: #333; stroke-width: 2.2; }
+      .layer-b { fill: #fff; stroke: #333; stroke-width: 2.2; }
+      .tile { fill: #fff; stroke: #3f3f3f; stroke-width: 1.7; }
+      .arrow { stroke: #222; stroke-width: 2.5; fill: none; marker-end: url(#arrowhead); }
+      .connector { fill: #fff; stroke: #222; stroke-width: 2.2; }
+      .connector-text { font-size: 14px; font-weight: 700; fill: #222; }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,4 L0,8 Z" fill="#222" />
+    </marker>
+  </defs>
+
+  <text x="425" y="48" text-anchor="middle" class="title">CLINiQ Architectural Framework</text>
+  <text x="425" y="76" text-anchor="middle" class="subtitle">Smart Clinic Information Management System for the Clinic of PLP</text>
+  <text x="790" y="42" text-anchor="end" class="page">Page 2 of 2</text>
+
+  <path d="M365 105 L425 73 L485 105 L485 143 L365 143 Z" class="connector" />
+  <text x="425" y="123" text-anchor="middle" class="connector-text">A</text>
+  <line x1="425" y1="143" x2="425" y2="188" class="arrow" />
+
+  <rect x="55" y="198" width="740" height="292" rx="5" class="layer-b" />
+  <text x="85" y="236" class="layer-title">Decision and Emergency Processing Layer</text>
+  <text x="85" y="264" class="layer-note">Decision-support and emergency workflows for faster clinic response.</text>
+  <g>
+    <rect x="95" y="302" width="210" height="52" rx="4" class="tile" />
+    <text x="200" y="333" text-anchor="middle" class="tile-title">Risk Classification</text>
+    <rect x="320" y="302" width="210" height="52" rx="4" class="tile" />
+    <text x="425" y="333" text-anchor="middle" class="tile-title">Passport Retrieval</text>
+    <rect x="545" y="302" width="210" height="52" rx="4" class="tile" />
+    <text x="650" y="333" text-anchor="middle" class="tile-title">Alert Routing</text>
+    <rect x="205" y="382" width="210" height="52" rx="4" class="tile" />
+    <text x="310" y="413" text-anchor="middle" class="tile-title">Document Validation</text>
+    <rect x="435" y="382" width="210" height="52" rx="4" class="tile" />
+    <text x="540" y="413" text-anchor="middle" class="tile-title">Report Processing</text>
+  </g>
+
+  <line x1="425" y1="490" x2="425" y2="535" class="arrow" />
+
+  <rect x="55" y="535" width="740" height="310" rx="5" class="layer-a" />
+  <text x="85" y="575" class="layer-title">Data and Security Layer</text>
+  <text x="85" y="603" class="layer-note">Data storage, emergency logs, and accountability records.</text>
+  <g>
+    <rect x="95" y="642" width="210" height="54" rx="4" class="tile" />
+    <text x="200" y="674" text-anchor="middle" class="tile-title">EHR Database</text>
+    <rect x="320" y="642" width="210" height="54" rx="4" class="tile" />
+    <text x="425" y="663" text-anchor="middle" class="tile-title">Document</text>
+    <text x="425" y="683" text-anchor="middle" class="tile-title">Repository</text>
+    <rect x="545" y="642" width="210" height="54" rx="4" class="tile" />
+    <text x="650" y="674" text-anchor="middle" class="tile-title">Clinic Transactions</text>
+    <rect x="205" y="730" width="210" height="54" rx="4" class="tile" />
+    <text x="310" y="762" text-anchor="middle" class="tile-title">Emergency Logs</text>
+    <rect x="435" y="730" width="210" height="54" rx="4" class="tile" />
+    <text x="540" y="762" text-anchor="middle" class="tile-title">Audit Records</text>
+  </g>
+
+  <text x="425" y="955" text-anchor="middle" class="subtitle">CLINiQ connects users, clinic services, emergency response, reporting, and secure data management.</text>
+</svg>

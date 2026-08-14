@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="850" height="1100" viewBox="0 0 850 1100" role="img" aria-labelledby="title desc">
+  <title id="title">CLINiQ RAD Methodology Framework - Portrait Page 1</title>
+  <desc id="desc">Portrait short bond page 1 of the CLINiQ RAD methodology framework, showing Requirements Planning and User Design.</desc>
+  <defs>
+    <style>
+      text { font-family: Arial, Helvetica, sans-serif; fill: #222; }
+      .title { font-size: 27px; font-weight: 700; }
+      .subtitle { font-size: 15px; fill: #333; font-weight: 600; }
+      .page { font-size: 12px; fill: #444; font-weight: 700; }
+      .layer-title { font-size: 23px; font-weight: 700; fill: #111; }
+      .layer-note { font-size: 15.5px; fill: #333; font-weight: 600; }
+      .tile-title { font-size: 16px; font-weight: 700; }
+      .tile-note { font-size: 13px; fill: #333; font-weight: 600; }
+      .layer-a { fill: #eceff1; stroke: #333; stroke-width: 2.2; }
+      .layer-b { fill: #fff; stroke: #333; stroke-width: 2.2; }
+      .tile { fill: #fff; stroke: #3f3f3f; stroke-width: 1.7; }
+      .arrow { stroke: #222; stroke-width: 2.5; fill: none; marker-end: url(#arrowhead); }
+      .connector { fill: #fff; stroke: #222; stroke-width: 2.2; }
+      .connector-text { font-size: 14px; font-weight: 700; fill: #222; }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,4 L0,8 Z" fill="#222" />
+    </marker>
+  </defs>
+
+  <text x="425" y="48" text-anchor="middle" class="title">CLINiQ RAD Methodology Framework</text>
+  <text x="425" y="76" text-anchor="middle" class="subtitle">Rapid Application Development process used for CLINiQ</text>
+  <text x="790" y="42" text-anchor="end" class="page">Page 1 of 2</text>
+
+  <path d="M365 88 L485 88 L485 126 L425 158 L365 126 Z" class="connector" />
+  <text x="425" y="115" text-anchor="middle" class="connector-text">B</text>
+  <path d="M425 158 L425 176" class="arrow" />
+
+  <rect x="55" y="176" width="740" height="334" rx="5" class="layer-a" />
+  <text x="85" y="214" class="layer-title">1. Requirements Planning</text>
+  <text x="85" y="241" class="layer-note">Identify clinic needs, existing procedures, users, data, and system requirements.</text>
+  <g>
+    <rect x="95" y="280" width="300" height="74" rx="4" class="tile" />
+    <text x="245" y="309" text-anchor="middle" class="tile-title">Interviews and Observation</text>
+    <text x="245" y="333" text-anchor="middle" class="tile-note">clinic workflow needs</text>
+    <rect x="455" y="280" width="300" height="74" rx="4" class="tile" />
+    <text x="605" y="309" text-anchor="middle" class="tile-title">Document Review</text>
+    <text x="605" y="333" text-anchor="middle" class="tile-note">records, APE, inventory logs</text>
+    <rect x="95" y="382" width="300" height="74" rx="4" class="tile" />
+    <text x="245" y="411" text-anchor="middle" class="tile-title">Requirement Definition</text>
+    <text x="245" y="435" text-anchor="middle" class="tile-note">functional and non-functional</text>
+    <rect x="455" y="382" width="300" height="74" rx="4" class="tile" />
+    <text x="605" y="411" text-anchor="middle" class="tile-title">Scope and Roles</text>
+    <text x="605" y="435" text-anchor="middle" class="tile-note">modules, users, database, security</text>
+  </g>
+
+  <line x1="425" y1="510" x2="425" y2="570" class="arrow" />
+
+  <rect x="55" y="570" width="740" height="390" rx="5" class="layer-b" />
+  <text x="85" y="610" class="layer-title">2. User Design</text>
+  <text x="85" y="637" class="layer-note">Design user interaction, database structure, interfaces, and module workflows.</text>
+  <g>
+    <rect x="95" y="685" width="300" height="82" rx="4" class="tile" />
+    <text x="245" y="717" text-anchor="middle" class="tile-title">System Architecture</text>
+    <text x="245" y="743" text-anchor="middle" class="tile-note">overall structure and modules</text>
+    <rect x="455" y="685" width="300" height="82" rx="4" class="tile" />
+    <text x="605" y="717" text-anchor="middle" class="tile-title">Database Design</text>
+    <text x="605" y="743" text-anchor="middle" class="tile-note">records, logs, transactions</text>
+    <rect x="95" y="810" width="300" height="82" rx="4" class="tile" />
+    <text x="245" y="842" text-anchor="middle" class="tile-title">Interface Prototypes</text>
+    <text x="245" y="868" text-anchor="middle" class="tile-note">dashboards, portals, screens</text>
+    <rect x="455" y="810" width="300" height="82" rx="4" class="tile" />
+    <text x="605" y="842" text-anchor="middle" class="tile-title">Workflow Planning</text>
+    <text x="605" y="868" text-anchor="middle" class="tile-note">EHR, APE, risk, QR/NFC, alerts</text>
+  </g>
+
+  <line x1="425" y1="960" x2="425" y2="990" class="arrow" />
+  <path d="M365 990 L485 990 L485 1028 L425 1060 L365 1028 Z" class="connector" />
+  <text x="425" y="1017" text-anchor="middle" class="connector-text">A</text>
+  <text x="425" y="1078" text-anchor="middle" class="subtitle">Off-page connector to Page 2</text>
+</svg>

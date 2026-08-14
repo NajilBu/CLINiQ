@@ -2,6 +2,11 @@
 uploads/*
 !uploads/.gitkeep
 vendor/
+!public/assets/vendor/
+!public/assets/vendor/ag-grid/
+!public/assets/vendor/ag-grid/ag-grid-community.min.js
+!public/assets/vendor/ag-grid/ag-grid.css
+!public/assets/vendor/ag-grid/ag-theme-quartz.css
 node_modules/
 .DS_Store
 Thumbs.db

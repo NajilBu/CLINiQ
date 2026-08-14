@@ -6,7 +6,7 @@ CLINiQ is a simple PHP and MySQL web application for a school clinic information
 
 - PHP 8+
 - MySQL or MariaDB
-- Bootstrap 5
+- Tailwind CSS
 - JavaScript fetch/AJAX
 - XAMPP for local development
 
