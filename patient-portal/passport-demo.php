@@ -60,7 +60,44 @@ $token = trim($_GET['token'] ?? '');
 $patient = null;
 
 if ($token !== '') {
-    $stmt = db()->prepare('SELECT * FROM patients WHERE emergency_token = ? AND token_enabled = 1 LIMIT 1');
+    $stmt = auth_db()->prepare("
+        SELECT
+            pt.person_id AS id,
+            pt.person_id,
+            pe.id_number,
+            pe.first_name,
+            pe.middle_name,
+            pe.last_name,
+            pe.birthdate,
+            pe.sex,
+            pe.updated_at,
+            pt.blood_type,
+            pt.allergies,
+            pt.existing_conditions,
+            pt.medications,
+            pt.emergency_instructions,
+            pt.guardian_or_contact_name AS guardian_name,
+            pt.guardian_or_contact_number AS guardian_contact,
+            pt.emergency_token,
+            pt.token_enabled,
+            pt.updated_at AS patient_updated_at,
+            COALESCE(
+                NULLIF(TRIM(CONCAT(pr.program_code, '-', s.year_level, UPPER(s.section))), ''),
+                ed.department_code,
+                cd.department_code,
+                'Not recorded'
+            ) AS course_section
+        FROM patients pt
+        JOIN people pe ON pe.id = pt.person_id
+        LEFT JOIN students s ON s.person_id = pe.id
+        LEFT JOIN programs pr ON pr.id = s.program_id
+        LEFT JOIN school_employees se ON se.person_id = pe.id
+        LEFT JOIN departments ed ON ed.id = se.department_id
+        LEFT JOIN clinic_staff cs ON cs.person_id = pe.id
+        LEFT JOIN departments cd ON cd.id = cs.department_id
+        WHERE pt.emergency_token = ? AND pt.token_enabled = 1
+        LIMIT 1
+    ");
     $stmt->execute([$token]);
     $patient = $stmt->fetch();
 }
@@ -166,7 +203,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     try {
-        $stmt = db()->prepare("
+        $stmt = auth_db()->prepare("
             INSERT INTO incident_reports (
                 patient_id, emergency_token, reporter_name, reporter_contact, location, notes, ip_address, user_agent, status
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'New')
@@ -183,7 +220,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
 
         $details = trim("Emergency passport incident report submitted.\nReporter: {$reporterName}\nContact: {$reporterContact}\nPhotos attached: {$photoCount}\n\n{$reportAnswers}");
-        $stmt = db()->prepare("
+        $stmt = auth_db()->prepare("
             INSERT INTO nurse_alerts (
                 patient_id, reporter_name, reporter_role, location, concern, incident_type, details, report_answers,
                 risk_level, risk_score, risk_reasons, response_guidance, photo_path, status

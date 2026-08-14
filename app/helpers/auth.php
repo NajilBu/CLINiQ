@@ -42,20 +42,12 @@ function begin_first_registration(array $account): string
 
     if ($portal === 'staff') {
         $idNumber = (string) ($account['id_number'] ?? '');
-        if (!preg_match('/^STAFF-(\d{4})$/', $idNumber, $matches)) {
-            throw new RuntimeException('This clinic staff account is not linked to a staff profile.');
-        }
-
-        $legacyUserId = (int) $matches[1];
-        $legacyStmt = db()->prepare('SELECT id, email FROM users WHERE id = ? LIMIT 1');
-        $legacyStmt->execute([$legacyUserId]);
-        $legacyUser = $legacyStmt->fetch();
-        if (!$legacyUser) {
+        if ($idNumber === '') {
             throw new RuntimeException('This clinic staff account is not linked to a staff profile.');
         }
 
         $_SESSION['user'] = [
-            'id' => $legacyUserId,
+            'id' => $personId,
             'account_id' => $accountId,
             'person_id' => $personId,
             'id_number' => $idNumber,
@@ -64,13 +56,11 @@ function begin_first_registration(array $account): string
                 $account['middle_name'] ?? '',
                 $account['last_name'] ?? '',
             ]))),
-            'email' => (string) $legacyUser['email'],
+            'email' => strtolower(str_replace(['-', ' '], '', $idNumber)) . '@plpasig.edu.ph',
             'role' => (string) ($account['staff_role'] ?? 'staff'),
         ];
     } else {
-        $legacyStmt = db()->prepare('SELECT id FROM patients WHERE id_number = ? LIMIT 1');
-        $legacyStmt->execute([(string) ($account['id_number'] ?? '')]);
-        $_SESSION['patient_legacy_id'] = (int) ($legacyStmt->fetchColumn() ?: 0);
+        $_SESSION['patient_legacy_id'] = $personId;
         $_SESSION['patient_account_id'] = $accountId;
         $_SESSION['patient_person_id'] = $personId;
     }
@@ -209,18 +199,6 @@ function login_attempt(string $idNumber, string $password): bool
         return false;
     }
 
-    if (!preg_match('/^STAFF-(\d{4})$/', (string) $account['id_number'], $matches)) {
-        return false;
-    }
-
-    $legacyUserId = (int) $matches[1];
-    $legacyStmt = db()->prepare('SELECT id, email FROM users WHERE id = ? LIMIT 1');
-    $legacyStmt->execute([$legacyUserId]);
-    $legacyUser = $legacyStmt->fetch();
-    if (!$legacyUser) {
-        return false;
-    }
-
     $name = trim(implode(' ', array_filter([
         $account['first_name'],
         $account['middle_name'],
@@ -228,13 +206,12 @@ function login_attempt(string $idNumber, string $password): bool
     ])));
 
     $_SESSION['user'] = [
-        // Keep the legacy user ID because clinical tables still reference it.
-        'id' => $legacyUserId,
+        'id' => (int) $account['person_id'],
         'account_id' => (int) $account['account_id'],
         'person_id' => (int) $account['person_id'],
         'id_number' => $account['id_number'],
         'name' => $name,
-        'email' => $legacyUser['email'],
+        'email' => strtolower(str_replace(['-', ' '], '', (string) $account['id_number'])) . '@plpasig.edu.ph',
         'role' => $account['staff_role'],
     ];
 

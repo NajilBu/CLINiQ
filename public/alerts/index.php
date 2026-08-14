@@ -17,12 +17,20 @@ $filterStatus = $allowedStatuses[$filterKey] ?? 'Pending';
 $where = 'a.status = ?';
 $params = [$filterStatus];
 
-$alerts = db()->prepare("SELECT a.*, p.first_name, p.last_name FROM nurse_alerts a LEFT JOIN patients p ON p.id = a.patient_id WHERE {$where} ORDER BY a.created_at DESC LIMIT 100");
+$alerts = auth_db()->prepare("
+    SELECT a.*, pe.first_name, pe.last_name
+    FROM nurse_alerts a
+    LEFT JOIN patients pt ON pt.person_id = a.patient_id
+    LEFT JOIN people pe ON pe.id = pt.person_id
+    WHERE {$where}
+    ORDER BY a.created_at DESC
+    LIMIT 100
+");
 $alerts->execute($params);
 $alerts = $alerts->fetchAll();
 
 // Status counts
-$statusCountQuery = db()->query("SELECT status, COUNT(*) AS cnt FROM nurse_alerts GROUP BY status");
+$statusCountQuery = auth_db()->query("SELECT status, COUNT(*) AS cnt FROM nurse_alerts GROUP BY status");
 $statusCounts = [];
 foreach ($statusCountQuery->fetchAll() as $sc) {
     $statusCounts[strtolower($sc['status'])] = (int)$sc['cnt'];

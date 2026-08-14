@@ -23,11 +23,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $user = current_user();
-            $stmt = db()->prepare('UPDATE nurse_alerts SET status = ?, resolution_report = ?, resolved_by = ?, resolved_at = NOW() WHERE id = ?');
-            $stmt->execute([$status, $resolutionReport, (int) ($user['id'] ?? 0) ?: null, $id]);
+            $stmt = auth_db()->prepare('UPDATE nurse_alerts SET status = ?, resolution_report = ?, resolved_by = ?, resolved_at = NOW() WHERE id = ?');
+            $stmt->execute([$status, $resolutionReport, (int) ($user['person_id'] ?? $user['id'] ?? 0) ?: null, $id]);
             flash_message('success', 'Alert resolved with report.');
         } else {
-            $stmt = db()->prepare('UPDATE nurse_alerts SET status = ? WHERE id = ?');
+            $stmt = auth_db()->prepare('UPDATE nurse_alerts SET status = ? WHERE id = ?');
             $stmt->execute([$status, $id]);
             flash_message('success', 'Alert status updated to "' . $status . '".');
         }

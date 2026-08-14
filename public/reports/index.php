@@ -3,9 +3,11 @@
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/VisitWorkflow.php';
 require_once __DIR__ . '/../../app/services/CliniqVisitWorkflow.php';
+require_once __DIR__ . '/../../app/services/AlertWorkflow.php';
 require_once __DIR__ . '/../../app/services/SystemReport.php';
 require_once __DIR__ . '/../../app/services/SystemReportRenderer.php';
 require_login();
+ensure_alert_workflow_schema();
 
 // ── Date range filter ───────────────────────────────────────
 $dateFrom = normalize_system_report_date($_GET['from'] ?? null, date('Y-m-01'));
@@ -15,7 +17,7 @@ $visitDb = cliniq_visit_db();
 $stats = [
     'visits_today'   => $visitDb->query('SELECT COUNT(*) AS total FROM visits WHERE DATE(visit_datetime) = CURDATE()')->fetch()['total'] ?? 0,
     'visits_range'   => 0,
-    'alerts_pending' => db()->query("SELECT COUNT(*) AS total FROM nurse_alerts WHERE status = 'Pending'")->fetch()['total'] ?? 0,
+    'alerts_pending' => auth_db()->query("SELECT COUNT(*) AS total FROM nurse_alerts WHERE status = 'Pending'")->fetch()['total'] ?? 0,
     'low_stock'      => cliniq_inventory_db()->query('SELECT COUNT(*) AS total FROM inventory_items WHERE is_active = 1 AND quantity <= reorder_level')->fetch()['total'] ?? 0,
     'total_patients'  => $visitDb->query('SELECT COUNT(*) AS total FROM patients')->fetch()['total'] ?? 0,
 ];

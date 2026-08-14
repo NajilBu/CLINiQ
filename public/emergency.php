@@ -5,14 +5,49 @@ require_once __DIR__ . '/../app/services/AlertWorkflow.php';
 ensure_alert_workflow_schema();
 
 $token = $_GET['token'] ?? '';
-$stmt = db()->prepare('SELECT * FROM patients WHERE emergency_token = ? AND token_enabled = 1 LIMIT 1');
+$stmt = auth_db()->prepare("
+    SELECT
+        pt.person_id AS id,
+        pt.person_id,
+        pe.id_number,
+        pe.first_name,
+        pe.middle_name,
+        pe.last_name,
+        pe.birthdate,
+        pe.sex,
+        pt.blood_type,
+        pt.allergies,
+        pt.existing_conditions,
+        pt.medications,
+        pt.emergency_instructions,
+        pt.guardian_or_contact_name AS guardian_name,
+        pt.guardian_or_contact_number AS guardian_contact,
+        pt.emergency_token,
+        pt.token_enabled,
+        COALESCE(
+            NULLIF(TRIM(CONCAT(pr.program_code, '-', s.year_level, UPPER(s.section))), ''),
+            ed.department_code,
+            cd.department_code,
+            'Not recorded'
+        ) AS course_section
+    FROM patients pt
+    JOIN people pe ON pe.id = pt.person_id
+    LEFT JOIN students s ON s.person_id = pe.id
+    LEFT JOIN programs pr ON pr.id = s.program_id
+    LEFT JOIN school_employees se ON se.person_id = pe.id
+    LEFT JOIN departments ed ON ed.id = se.department_id
+    LEFT JOIN clinic_staff cs ON cs.person_id = pe.id
+    LEFT JOIN departments cd ON cd.id = cs.department_id
+    WHERE pt.emergency_token = ? AND pt.token_enabled = 1
+    LIMIT 1
+");
 $stmt->execute([$token]);
 $patient = $stmt->fetch();
 $message = null;
 $error = null;
 
 if ($patient) {
-    $log = db()->prepare('INSERT INTO passport_access_logs (patient_id, ip_address, user_agent) VALUES (?, ?, ?)');
+    $log = auth_db()->prepare('INSERT INTO passport_access_logs (patient_id, ip_address, user_agent) VALUES (?, ?, ?)');
     $log->execute([
         $patient['id'],
         $_SERVER['REMOTE_ADDR'] ?? null,
@@ -44,7 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patient) {
     if ($location === '') {
         $error = 'Please enter the reported location so the clinic knows where to respond.';
     } else {
-        $rate = db()->prepare("
+        $rate = auth_db()->prepare("
             SELECT COUNT(*) AS total
             FROM incident_reports
             WHERE patient_id = ?
@@ -57,7 +92,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patient) {
         if ($recentReports >= 3) {
             $error = 'Too many reports were sent recently for this tag. Please call the clinic directly if this is urgent.';
         } else {
-            $incident = db()->prepare("
+            $incident = auth_db()->prepare("
                 INSERT INTO incident_reports
                     (patient_id, emergency_token, reporter_name, reporter_contact, location, notes, ip_address, user_agent)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -81,7 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patient) {
                 $reportAnswers,
             ])));
 
-            $alert = db()->prepare("
+            $alert = auth_db()->prepare("
                 INSERT INTO nurse_alerts
                     (patient_id, reporter_name, reporter_role, location, concern, incident_type, details, report_answers,
                      risk_level, risk_score, risk_reasons, response_guidance, photo_path, status)

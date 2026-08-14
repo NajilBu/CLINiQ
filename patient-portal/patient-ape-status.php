@@ -176,10 +176,10 @@ $canUploadDocuments = $requirementsVerified
 $nextActionTitle = match (true) {
     $clearanceStatus === 'Cleared' => 'APE completed',
     $requirementsNeedCorrection => 'Return corrected hard-copy requirements',
+    $apeStatus === 'Follow-up Required' => 'Complete the required follow-up',
     !$patientVitalsConfirmed => 'Complete your vitals and BMI',
     !$examCompleted => 'Attend your clinical examination',
     !$requirementsVerified => 'Present hard-copy requirements to the clinic',
-    $apeStatus === 'Follow-up Required' => 'Complete the required follow-up',
     $documentsAwaitingReview => 'Wait for clinic document review',
     $apeStatus === 'Reviewed' => 'Wait for the final clinical decision',
     default => 'Upload verified APE documents',
@@ -187,10 +187,10 @@ $nextActionTitle = match (true) {
 $nextActionCopy = match (true) {
     $clearanceStatus === 'Cleared' => 'Your APE record is already cleared by the clinic.',
     $requirementsNeedCorrection => $studentNote ?: 'Return the corrected hard-copy requirements requested by the clinic.',
+    $apeStatus === 'Follow-up Required' => $studentNote ?: 'Complete the referral or other follow-up requested by the clinic.',
     !$patientVitalsConfirmed => 'Enter and confirm your height, weight, BMI, and vital signs before visiting the clinic for examination.',
     !$examCompleted => $studentNote ?: 'Your vitals are confirmed. Visit the clinic for your APE examination before presenting hard-copy requirements.',
     !$requirementsVerified => 'Present your hard-copy requirements to the clinic for review. Digital upload opens after they are verified.',
-    $apeStatus === 'Follow-up Required' => $studentNote ?: 'Complete the treatment, clearance, referral, or other follow-up requested by the clinic.',
     $documentsAwaitingReview => 'Your documents were submitted and are waiting for clinic archive review.',
     $apeStatus === 'Reviewed' => $studentNote ?: 'Your examination and document archive are complete. The clinic will now record the final decision.',
     default => $studentNote ?: ($apeRecord ? 'Complete the current APE step shown below.' : 'No APE record has been opened by the clinic yet.'),
@@ -208,6 +208,7 @@ $apePercent = match ($apeStatus) {
 $headerBadge = $clearanceStatus === 'Cleared' ? 'student-badge-success' : ($actionNeeded ? 'student-badge-warning' : 'student-badge-info');
 $actionBadgeLabel = match (true) {
     $requirementsNeedCorrection => 'Correction Needed',
+    $apeStatus === 'Follow-up Required' => 'Follow-up Required',
     !$patientVitalsConfirmed => 'Vitals and BMI First',
     !$examCompleted => 'Examination First',
     !$requirementsVerified => 'Hard-copy Review Next',

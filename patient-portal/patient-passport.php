@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/includes/patient-layout.php';
+require_once __DIR__ . '/../app/services/AlertWorkflow.php';
 
+ensure_alert_workflow_schema();
 $profile = student_require_login();
 $patientId = (int) $profile['patient_id'];
 
@@ -12,7 +14,7 @@ $passport = [
     'blood_type'      => $profile['blood_type'] ?: 'Unknown',
     'allergies'       => $profile['allergies'] ?: 'None',
     'conditions'      => $profile['existing_conditions'] ?: 'None reported.',
-    'medications'     => 'No current medications recorded.',
+    'medications'     => $profile['medications'] ?: 'No current medications recorded.',
     'instructions'    => $profile['emergency_instructions'] ?: "If unconscious, place in recovery position and notify the clinic immediately.",
     'guardian_name'   => $profile['guardian_name'] ?: 'Not recorded',
     'relationship'    => 'Guardian',
@@ -39,16 +41,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $passport['primary_contact']  = trim($_POST['primary_contact'] ?? $passport['primary_contact']);
     $passport['secondary_contact']= trim($_POST['secondary_contact'] ?? $passport['secondary_contact']);
 
-    $stmt = db()->prepare("
+    $stmt = auth_db()->prepare("
         UPDATE patients
-        SET blood_type = ?, allergies = ?, existing_conditions = ?, emergency_instructions = ?,
-            guardian_name = ?, guardian_contact = ?
-        WHERE id = ?
+        SET blood_type = ?, allergies = ?, existing_conditions = ?, medications = ?, emergency_instructions = ?,
+            guardian_or_contact_name = ?, guardian_or_contact_number = ?
+        WHERE person_id = ?
     ");
     $stmt->execute([
         $passport['blood_type'],
         $passport['allergies'],
         $passport['conditions'],
+        $passport['medications'],
         $passport['instructions'],
         $passport['guardian_name'],
         $passport['primary_contact'],

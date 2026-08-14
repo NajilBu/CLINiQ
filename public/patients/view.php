@@ -8,17 +8,6 @@ require_login();
 
 $id = (int) ($_GET['id'] ?? 0);
 $patient = cliniq_patient_profile_find($id);
-if (!$patient && $id > 0) {
-    $legacyLookupStmt = db()->prepare('SELECT id_number FROM patients WHERE id = ? LIMIT 1');
-    $legacyLookupStmt->execute([$id]);
-    $legacyIdNumber = (string) ($legacyLookupStmt->fetchColumn() ?: '');
-    if ($legacyIdNumber !== '') {
-        $patient = cliniq_patient_profile_find_by_id_number($legacyIdNumber);
-        if ($patient) {
-            $id = (int) $patient['person_id'];
-        }
-    }
-}
 
 if (!$patient) {
     render_header('Patient Not Found');

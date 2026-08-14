@@ -28,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $activityLabel = null;
     $activityNotes = null;
     $apeDb = auth_db();
-    $clinicalActions = ['record_examination', 'finalize_exam_clear', 'finalize_exam_follow_up', 'finalize_exam_referral'];
+    $clinicalActions = ['record_examination', 'finalize_exam_clear', 'finalize_exam_follow_up'];
 
     try {
         if ($staffPersonId <= 0) {
@@ -170,7 +170,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new InvalidArgumentException('Select a valid examination date that is not in the future.');
             }
             $resultStatus = (string) ($_POST['result_status'] ?? 'Normal');
-            if (!in_array($resultStatus, ['Normal', 'With Finding'], true)) {
+            if (!in_array($resultStatus, ['Normal', 'With Finding', 'Referred'], true)) {
                 throw new InvalidArgumentException('Select a valid examination result.');
             }
             $findingType = trim((string) ($_POST['finding_type'] ?? '')) ?: 'General Examination';
@@ -180,13 +180,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $clinicalRemarks = trim((string) ($_POST['clinical_remarks'] ?? '')) ?: null;
             $patientNote = trim((string) ($_POST['patient_visible_note'] ?? '')) ?: null;
+            $referredTo = trim((string) ($_POST['referred_to'] ?? ''));
+            $referralReason = trim((string) ($_POST['referral_reason'] ?? ''));
+            if ($resultStatus === 'Referred' && ($referredTo === '' || $referralReason === '')) {
+                throw new InvalidArgumentException('Enter the referral destination and reason when the examination result is Referred.');
+            }
+            $isReferral = $resultStatus === 'Referred';
             $updateExam = $apeDb->prepare("UPDATE ape_records SET exam_date = ?, workflow_status = ?, clearance_status = ?, follow_up_required = ?, clinical_remarks = ?, patient_visible_note = ?, reviewed_by_person_id = ? WHERE ape_id = ?");
-            $updateExam->execute([$examDate, 'Exam Done', 'Pending', 0, $clinicalRemarks, $patientNote, $staffPersonId, $id]);
+            $updateExam->execute([$examDate, $isReferral ? 'Follow-up Required' : 'Exam Done', $isReferral ? 'For Follow-up' : 'Pending', $isReferral ? 1 : 0, $clinicalRemarks, $patientNote ?: ($isReferral ? $referralReason : null), $staffPersonId, $id]);
             $finding = $apeDb->prepare('INSERT INTO ape_findings (ape_id, finding_type, description, result_status, follow_up_required, recorded_by_person_id) VALUES (?, ?, ?, ?, ?, ?)');
-            $finding->execute([$id, $findingType, $findingDescription, $resultStatus, 0, $staffPersonId]);
-
-            $activityLabel = 'Recorded APE examination';
-            $activityNotes = $findingType . ': ' . $resultStatus;
+            $finding->execute([$id, $isReferral ? 'Referral' : $findingType, $isReferral ? $referralReason : $findingDescription, $resultStatus, $isReferral ? 1 : 0, $staffPersonId]);
+            if ($isReferral) {
+                $referral = $apeDb->prepare('INSERT INTO referrals (patient_person_id, referral_date, referred_to, reason, referred_by_person_id, remarks) VALUES (?, ?, ?, ?, ?, ?)');
+                $referral->execute([(int) $record['patient_id'], $examDate, $referredTo, $referralReason, $staffPersonId, 'Created during APE examination #' . $id]);
+                $activityLabel = 'Recorded APE examination and created referral';
+                $activityNotes = $referredTo . ': ' . $referralReason;
+            } else {
+                $activityLabel = 'Recorded APE examination';
+                $activityNotes = $findingType . ': ' . $resultStatus;
+            }
         } elseif ($action === 'finalize_exam_clear') {
             if (ape_record_queue($record) !== 'final_decision' || empty($record['exam_date'])) {
                 throw new RuntimeException('The examination and document archive must be complete before clearing the patient.');
@@ -214,24 +226,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ->execute([$id, $followUpNotes, $staffPersonId]);
             $activityLabel = 'Required follow-up after APE examination';
             $activityNotes = $followUpNotes;
-        } elseif ($action === 'finalize_exam_referral') {
-            if (ape_record_queue($record) !== 'final_decision') {
-                throw new RuntimeException('The examination and document archive must be complete before creating a referral.');
-            }
-            $referredTo = trim((string) ($_POST['referred_to'] ?? ''));
-            $referralReason = trim((string) ($_POST['referral_reason'] ?? ''));
-            if ($referredTo === '' || $referralReason === '') {
-                throw new InvalidArgumentException('Enter both the referral destination and reason.');
-            }
-            $patientNote = trim((string) ($_POST['patient_visible_note'] ?? '')) ?: $referralReason;
-            $apeDb->prepare("UPDATE ape_records SET workflow_status = 'Follow-up Required', clearance_status = 'For Follow-up', follow_up_required = 1, patient_visible_note = ?, reviewed_by_person_id = ? WHERE ape_id = ?")
-                ->execute([$patientNote, $staffPersonId, $id]);
-            $apeDb->prepare("INSERT INTO ape_findings (ape_id, finding_type, description, result_status, follow_up_required, recorded_by_person_id) VALUES (?, 'Referral', ?, 'Referred', 1, ?)")
-                ->execute([$id, $referralReason, $staffPersonId]);
-            $referral = $apeDb->prepare('INSERT INTO referrals (patient_person_id, referral_date, referred_to, reason, referred_by_person_id, remarks) VALUES (?, ?, ?, ?, ?, ?)');
-            $referral->execute([(int) $record['patient_id'], $record['exam_date'] ?: date('Y-m-d'), $referredTo, $referralReason, $staffPersonId, 'Created from APE examination #' . $id]);
-            $activityLabel = 'Referred patient after APE examination';
-            $activityNotes = $referredTo . ': ' . $referralReason;
         } elseif ($action === 'keep_follow_up_open') {
             $followUpNotes = trim((string) ($_POST['follow_up_notes'] ?? '')) ?: 'Follow-up remains open.';
             $stmt = $apeDb->prepare("UPDATE ape_records SET clearance_status = 'For Follow-up', workflow_status = 'Follow-up Required', clinical_remarks = ? WHERE ape_id = ?");
@@ -321,7 +315,7 @@ $pendingReviewDocuments = array_values(array_filter(
         && ($latestReviewDocumentIdsByType[$document['document_type']] ?? 0) === (int) $document['document_id']
 ));
 $findings = ape_findings_for_record($id);
-$activities = ape_activities_for_record($id, 20);
+$activities = ape_activities_for_patient_record($id, (int) $record['patient_id'], 20);
 $birthdateLabel = $record['birthdate'] ? date('M d, Y', strtotime($record['birthdate'])) : 'Not recorded';
 $sexLabel = $record['sex'] ?: 'Not specified';
 $clearanceUrl = !empty($record['clearance_document_path']) ? app_url($record['clearance_document_path']) : null;
@@ -715,6 +709,7 @@ render_header('APE Record - ' . $fullName);
                                 <select class="clinic-select" id="apeExamResult" name="result_status" required>
                                     <option value="Normal">Normal</option>
                                     <option value="With Finding">With Finding</option>
+                                    <option value="Referred">Referred</option>
                                 </select>
                             </div>
                             <div>
@@ -732,6 +727,20 @@ render_header('APE Record - ' . $fullName);
                             <div>
                                 <label class="clinic-label" for="apePatientNote">Patient-Visible Instructions</label>
                                 <textarea class="clinic-textarea" id="apePatientNote" name="patient_visible_note" rows="3" placeholder="Instructions that the patient can see..."><?= e($record['patient_visible_note']) ?></textarea>
+                            </div>
+                            <div class="md:col-span-2 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                                <p class="clinic-label text-amber-800 mb-1">Immediate Referral (only when result is Referred)</p>
+                                <p class="text-xs font-bold text-amber-700 mb-3">A referral is created immediately with this examination; it will not wait for a separate decision step.</p>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="clinic-label" for="apeReferralDestination">Facility / Specialist</label>
+                                        <input class="clinic-input" id="apeReferralDestination" name="referred_to" placeholder="Referral destination">
+                                    </div>
+                                    <div>
+                                        <label class="clinic-label" for="apeReferralReason">Referral Reason</label>
+                                        <textarea class="clinic-textarea" id="apeReferralReason" name="referral_reason" rows="2" placeholder="Clinical reason for referral..."></textarea>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         <button class="btn btn-primary w-full" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save this APE examination?" data-confirm-message="After saving, the hard-copy review step will open for clinic staff." data-confirm-toast="Saving APE examination...">
@@ -761,7 +770,7 @@ render_header('APE Record - ' . $fullName);
                             <span class="badge badge-pending">Final Decision Required</span>
                         </div>
                     </div>
-                    <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
                         <form method="post" class="ape-flow-action space-y-3">
                             <input type="hidden" name="action" value="finalize_exam_clear">
                             <div>
@@ -784,20 +793,6 @@ render_header('APE Record - ' . $fullName);
                                 <textarea class="clinic-textarea" name="patient_visible_note" rows="2" placeholder="Instructions visible to the patient..."></textarea>
                             </div>
                             <button class="btn btn-outline w-full" style="color:#b45309;border-color:rgba(180,83,9,0.2);" data-confirm-submit data-confirm-type="danger" data-confirm-title="Require patient follow-up?" data-confirm-message="The APE record will remain open until follow-up is cleared." data-confirm-toast="Opening follow-up..."><span class="material-symbols-outlined text-[18px]">schedule</span> Require Follow-up</button>
-                        </form>
-                        <form method="post" class="ape-flow-action muted space-y-3">
-                            <input type="hidden" name="action" value="finalize_exam_referral">
-                            <div>
-                                <span class="material-symbols-outlined text-amber-700 mb-2">send</span>
-                                <h3 class="font-headline text-base font-extrabold text-amber-900 mb-1">Refer Patient</h3>
-                                <label class="clinic-label">Facility / Specialist</label>
-                                <input class="clinic-input" name="referred_to" placeholder="Referral destination" required>
-                                <label class="clinic-label mt-3">Referral Reason</label>
-                                <textarea class="clinic-textarea" name="referral_reason" rows="2" placeholder="Clinical reason for referral..." required></textarea>
-                                <label class="clinic-label mt-3">Patient Instructions</label>
-                                <textarea class="clinic-textarea" name="patient_visible_note" rows="2" placeholder="Referral instructions visible to the patient..."></textarea>
-                            </div>
-                            <button class="btn btn-outline w-full" style="color:#b45309;border-color:rgba(180,83,9,0.2);" data-confirm-submit data-confirm-type="danger" data-confirm-title="Create this APE referral?" data-confirm-message="A referral record will be created and APE clearance will remain pending." data-confirm-toast="Creating referral..."><span class="material-symbols-outlined text-[18px]">send</span> Refer Patient</button>
                         </form>
                     </div>
                 <?php endif; ?>
@@ -980,7 +975,10 @@ render_header('APE Record - ' . $fullName);
 
             <section class="ape-flow-panel overflow-hidden">
                 <div class="p-5 border-b border-slate-100">
-                    <h2 class="font-headline text-lg font-extrabold text-[#17261d] m-0">Activity History</h2>
+                    <div>
+                        <h2 class="font-headline text-lg font-extrabold text-[#17261d] m-0">Activity History</h2>
+                        <p class="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1 mb-0">APE #<?= (int) $record['ape_id'] ?> &bull; Patient ID <?= e($record['id_number']) ?></p>
+                    </div>
                 </div>
                 <div class="ape-flow-activity divide-y divide-slate-100">
                     <?php foreach ($activities as $activity): ?>

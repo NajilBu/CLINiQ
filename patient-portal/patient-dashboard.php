@@ -79,7 +79,6 @@ if (!empty($profile['first_registration'])) {
 
 $patientId = (int) $profile['patient_id'];
 $appointmentPatientId = (int) $profile['person_id'];
-$db = db();
 
 $appointmentStmt = appointment_db()->prepare("
     SELECT *
@@ -123,13 +122,57 @@ $apeExamCompleted = !empty($latestApe['exam_date']);
 $apePatientVitalsConfirmed = ($latestApe['patient_vitals_status'] ?? 'Not Started') === 'Confirmed';
 $apeAllDocumentsUploaded = (int) ($latestApe['required_document_count'] ?? 0) >= count(ape_default_requirements());
 $apeDocumentsAwaitingReview = $apeAllDocumentsUploaded && (int) ($latestApe['required_unverified_count'] ?? 0) > 0;
+$clinicNotes = [];
+if (!$latestApe) {
+    $clinicNotes[] = ['type' => 'info', 'icon' => 'info', 'text' => 'No APE record has been opened by the clinic yet.'];
+} elseif (($latestApe['clearance_status'] ?? '') === 'Cleared') {
+    $clinicNotes[] = ['type' => 'success', 'icon' => 'check_circle', 'text' => 'APE completed and cleared. No outstanding clinic requirements.'];
+    if ($apeNote !== '') {
+        $clinicNotes[] = ['type' => 'success', 'icon' => 'campaign', 'text' => $apeNote];
+    }
+} else {
+    if ($apeRequirementsNeedCorrection) {
+        $clinicNotes[] = ['type' => 'warning', 'icon' => 'assignment_late', 'text' => $apeNote ?: 'Corrected hard-copy requirements are needed.'];
+    }
+    if ($apeStatus === 'Follow-up Required' && $apeNote !== '') {
+        $clinicNotes[] = ['type' => 'warning', 'icon' => 'medical_information', 'text' => $apeNote];
+    }
+    $latestDocuments = [];
+    foreach (ape_documents_for_record((int) $latestApe['ape_id']) as $document) {
+        $latestDocuments[$document['document_type']] ??= $document;
+    }
+    if ($apeRequirementsVerified) {
+        foreach (ape_default_requirements() as $documentType) {
+            $document = $latestDocuments[$documentType] ?? null;
+            if (!$document) {
+                $clinicNotes[] = ['type' => 'warning', 'icon' => 'info', 'text' => $documentType . ' is still missing.'];
+                continue;
+            }
+            $verification = $document['verification_status'] ?? 'Pending';
+            $clinicNotes[] = match ($verification) {
+                'Verified' => ['type' => 'success', 'icon' => 'check_circle', 'text' => $documentType . ' accepted and stored in your clinic record.'],
+                'Needs Correction' => ['type' => 'danger', 'icon' => 'error', 'text' => $documentType . ' needs a corrected upload.'],
+                default => ['type' => 'warning', 'icon' => 'info', 'text' => $documentType . ' was submitted and is waiting for clinic review.'],
+            };
+        }
+    }
+    if (!$clinicNotes) {
+        $clinicNotes[] = ['type' => 'info', 'icon' => 'info', 'text' => 'Complete the current APE step shown above.'];
+    }
+}
+$clinicNoteClass = static fn(string $type): string => match ($type) {
+    'success' => 'student-note-success',
+    'danger' => 'student-note-danger',
+    'warning' => 'student-note-warning',
+    default => 'student-note-info',
+};
 $apeActionTitle = match (true) {
     ($latestApe['clearance_status'] ?? 'Pending') === 'Cleared' => 'APE completed',
     $apeRequirementsNeedCorrection => 'Return corrected hard-copy requirements',
+    $apeStatus === 'Follow-up Required' => 'Complete the required follow-up',
     !$apePatientVitalsConfirmed => 'Complete your vitals and BMI',
     !$apeExamCompleted => 'Attend your clinical examination',
     !$apeRequirementsVerified => 'Present hard-copy requirements to the clinic',
-    $apeStatus === 'Follow-up Required' => 'Complete the required follow-up',
     $apeDocumentsAwaitingReview => 'Wait for clinic document review',
     $apeStatus === 'Reviewed' => 'Wait for the final clinical decision',
     default => 'Upload verified APE documents',
@@ -137,10 +180,10 @@ $apeActionTitle = match (true) {
 $apeActionCopy = match (true) {
     ($latestApe['clearance_status'] ?? 'Pending') === 'Cleared' => 'Your APE record is already cleared by the clinic.',
     $apeRequirementsNeedCorrection => $apeNote ?: 'Return the corrected hard-copy requirements requested by the clinic.',
+    $apeStatus === 'Follow-up Required' => $apeNote ?: 'Complete the referral or other follow-up requested by the clinic.',
     !$apePatientVitalsConfirmed => 'Enter and confirm your vitals and BMI before visiting the clinic for examination.',
     !$apeExamCompleted => $apeNote ?: 'Your vitals are confirmed. Visit the clinic for examination before presenting hard-copy requirements.',
     !$apeRequirementsVerified => 'Present your hard-copy requirements to the clinic for review before uploading digital copies.',
-    $apeStatus === 'Follow-up Required' => $apeNote ?: 'Complete the treatment, clearance, referral, or other follow-up requested by the clinic.',
     $apeDocumentsAwaitingReview => 'Your documents are waiting for clinic archive review.',
     $apeStatus === 'Reviewed' => $apeNote ?: 'Your examination and documents are complete and awaiting the clinic\'s final decision.',
     default => $apeNote ?: ($latestApe ? 'Complete the current APE step in your APE status page.' : 'Start your APE record with the clinic.'),
@@ -400,21 +443,15 @@ render_student_header('Dashboard', 'dashboard');
             <h2 class="student-card-title">Clinic Notes</h2>
             <p class="student-card-copy">Messages from the clinic based on your APE review</p>
         </div>
-        <span class="student-badge student-badge-info">3 Notes</span>
+        <span class="student-badge student-badge-info"><?= count($clinicNotes) ?> Note<?= count($clinicNotes) === 1 ? '' : 's' ?></span>
     </div>
     <div class="student-card-pad grid gap-3">
-        <div class="student-note student-note-warning">
-            <span class="material-symbols-outlined">info</span>
-            <div><strong>UHS Medical Record needed.</strong> Upload a clear scanned copy after clinic verification.</div>
-        </div>
-        <div class="student-note student-note-warning">
-            <span class="material-symbols-outlined">info</span>
-            <div><strong>UHS Dental Record missing.</strong> Submit the checked document online for digital keeping.</div>
-        </div>
-        <div class="student-note student-note-success">
-            <span class="material-symbols-outlined">check_circle</span>
-            <div><strong>Lab Request Form accepted.</strong> This document is already stored in your clinic record.</div>
-        </div>
+        <?php foreach ($clinicNotes as $clinicNote): ?>
+            <div class="student-note <?= student_e($clinicNoteClass($clinicNote['type'])) ?>">
+                <span class="material-symbols-outlined"><?= student_e($clinicNote['icon']) ?></span>
+                <div><?= student_e($clinicNote['text']) ?></div>
+            </div>
+        <?php endforeach; ?>
     </div>
 </section>
 

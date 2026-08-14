@@ -7,16 +7,6 @@ require_login();
 $id = (int) ($_GET['id'] ?? 0);
 $patient = cliniq_patient_profile_find($id);
 
-// Resolve older bookmarked patient IDs to the matching Cliniq_db person.
-if (!$patient && $id > 0) {
-    $legacyStmt = db()->prepare('SELECT id_number FROM patients WHERE id = ? LIMIT 1');
-    $legacyStmt->execute([$id]);
-    $legacyIdNumber = (string) ($legacyStmt->fetchColumn() ?: '');
-    if ($legacyIdNumber !== '') {
-        $patient = cliniq_patient_profile_find_by_id_number($legacyIdNumber);
-    }
-}
-
 if (!$patient) {
     flash_message('error', 'Patient not found in Cliniq_db.');
     header('Location: index.php');

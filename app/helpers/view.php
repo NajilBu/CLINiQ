@@ -132,7 +132,7 @@ function render_header(string $title): void
     $pendingAlertTitle = 'View pending alerts';
     if ($user) {
         try {
-            $alertSummary = db()->query("
+            $alertSummary = auth_db()->query("
                 SELECT
                     COUNT(*) AS total,
                     SUM(CASE WHEN risk_level = 'Critical' THEN 1 ELSE 0 END) AS critical_total
@@ -143,7 +143,7 @@ function render_header(string $title): void
             $criticalAlertCount = (int) ($alertSummary['critical_total'] ?? 0);
 
             if ($activeAlertCount === 1) {
-                $latestAlert = db()->query("SELECT id FROM nurse_alerts WHERE status = 'Pending' ORDER BY created_at DESC, id DESC LIMIT 1")->fetch();
+                $latestAlert = auth_db()->query("SELECT id FROM nurse_alerts WHERE status = 'Pending' ORDER BY created_at DESC, id DESC LIMIT 1")->fetch();
                 $latestAlertId = (int) ($latestAlert['id'] ?? 0);
                 if ($latestAlertId > 0) {
                     $pendingAlertUrl = app_url('alerts/view.php?id=' . $latestAlertId);

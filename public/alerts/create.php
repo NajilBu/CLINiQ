@@ -21,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $riskReasons = incident_risk_reasons_text($classification);
     $details = trim((string) ($_POST['details'] ?? ''));
     $details = trim($details . ($details !== '' ? "\n\n" : '') . $reportAnswers);
-    $stmt = db()->prepare(
+    $stmt = auth_db()->prepare(
         'INSERT INTO nurse_alerts (
             reporter_name, reporter_role, location, concern, incident_type, details, report_answers,
             risk_level, risk_score, risk_reasons, response_guidance, photo_path

@@ -9,7 +9,71 @@ function ensure_alert_workflow_schema(): void
         return;
     }
 
-    $db = db();
+    $db = auth_db();
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS passport_access_logs (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            patient_id BIGINT UNSIGNED NOT NULL,
+            ip_address VARCHAR(45) NULL,
+            user_agent VARCHAR(255) NULL,
+            accessed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT fk_cliniq_passport_access_logs_patient
+                FOREIGN KEY (patient_id) REFERENCES patients(person_id) ON DELETE CASCADE,
+            INDEX idx_passport_access_logs_patient_accessed (patient_id, accessed_at)
+        )
+    ");
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS incident_reports (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            patient_id BIGINT UNSIGNED NOT NULL,
+            emergency_token CHAR(64) NOT NULL,
+            reporter_name VARCHAR(120) NULL,
+            reporter_contact VARCHAR(80) NULL,
+            location VARCHAR(160) NOT NULL,
+            notes TEXT NULL,
+            ip_address VARCHAR(45) NULL,
+            user_agent VARCHAR(255) NULL,
+            status VARCHAR(40) NOT NULL DEFAULT 'New',
+            reported_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            acknowledged_at DATETIME NULL,
+            CONSTRAINT fk_cliniq_incident_reports_patient
+                FOREIGN KEY (patient_id) REFERENCES patients(person_id) ON DELETE CASCADE,
+            INDEX idx_incident_reports_patient_reported (patient_id, reported_at),
+            INDEX idx_incident_reports_status_reported (status, reported_at)
+        )
+    ");
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS nurse_alerts (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            patient_id BIGINT UNSIGNED NULL,
+            reporter_name VARCHAR(120) NOT NULL,
+            reporter_role VARCHAR(80) NULL,
+            location VARCHAR(160) NOT NULL,
+            concern VARCHAR(255) NOT NULL,
+            incident_type VARCHAR(120) NULL,
+            details TEXT NULL,
+            report_answers MEDIUMTEXT NULL,
+            risk_level VARCHAR(40) NOT NULL DEFAULT 'Low',
+            risk_score INT NOT NULL DEFAULT 0,
+            risk_reasons TEXT NULL,
+            response_guidance TEXT NULL,
+            photo_path VARCHAR(255) NULL,
+            status VARCHAR(40) NOT NULL DEFAULT 'Pending',
+            resolution_report TEXT NULL,
+            resolved_by BIGINT UNSIGNED NULL,
+            resolved_at DATETIME NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            CONSTRAINT fk_cliniq_nurse_alerts_patient
+                FOREIGN KEY (patient_id) REFERENCES patients(person_id) ON DELETE SET NULL,
+            CONSTRAINT fk_cliniq_nurse_alerts_resolved_by
+                FOREIGN KEY (resolved_by) REFERENCES people(id) ON DELETE SET NULL,
+            INDEX idx_nurse_alerts_status_created (status, created_at),
+            INDEX idx_nurse_alerts_risk_created (risk_level, risk_score, created_at),
+            INDEX idx_nurse_alerts_patient (patient_id)
+        )
+    ");
+    ensure_passport_patient_columns($db);
     $stmt = $db->query('SHOW COLUMNS FROM nurse_alerts');
     $columns = [];
     foreach ($stmt->fetchAll() as $column) {
@@ -31,10 +95,32 @@ function ensure_alert_workflow_schema(): void
     $addColumn('risk_reasons', 'TEXT NULL AFTER risk_score');
     $addColumn('response_guidance', 'TEXT NULL AFTER risk_reasons');
     $addColumn('resolution_report', 'TEXT NULL AFTER status');
-    $addColumn('resolved_by', 'INT NULL AFTER resolution_report');
+    $addColumn('resolved_by', 'BIGINT UNSIGNED NULL AFTER resolution_report');
     $addColumn('resolved_at', 'DATETIME NULL AFTER resolved_by');
 
     $ready = true;
+}
+
+function ensure_passport_patient_columns(PDO $db): void
+{
+    $stmt = $db->query('SHOW COLUMNS FROM patients');
+    $columns = [];
+    foreach ($stmt->fetchAll() as $column) {
+        $columns[$column['Field']] = $column;
+    }
+
+    $addColumn = function (string $name, string $definition) use ($db, &$columns): void {
+        if (!isset($columns[$name])) {
+            $db->exec("ALTER TABLE patients ADD COLUMN {$name} {$definition}");
+            $columns[$name] = ['Field' => $name];
+        }
+    };
+
+    $addColumn('allergies', 'TEXT NULL AFTER blood_type');
+    $addColumn('existing_conditions', 'TEXT NULL AFTER allergies');
+    $addColumn('medications', 'TEXT NULL AFTER existing_conditions');
+    $addColumn('created_at', 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+    $addColumn('updated_at', 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP');
 }
 
 function save_alert_photo_upload(array $file): ?string

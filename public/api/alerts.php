@@ -6,7 +6,7 @@ ensure_alert_workflow_schema();
 
 header('Content-Type: application/json');
 
-$alerts = db()->query("
+$alerts = auth_db()->query("
     SELECT id, reporter_name, location, concern, incident_type, risk_level, risk_score, response_guidance, status, created_at
     FROM nurse_alerts
     WHERE status = 'Pending'
@@ -22,7 +22,7 @@ $alerts = db()->query("
         id DESC
     LIMIT 5
 ")->fetchAll();
-$summary = db()->query("
+$summary = auth_db()->query("
     SELECT
         COUNT(*) AS total,
         SUM(CASE WHEN risk_level = 'Critical' THEN 1 ELSE 0 END) AS critical_total

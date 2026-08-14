@@ -46,7 +46,7 @@ function student_nav_items(): array
     ];
 }
 
-function student_profile_from_identity(array $identity, ?array $legacyPatient): array
+function student_profile_from_identity(array $identity): array
 {
     $fullName = trim(implode(' ', array_filter([
         $identity['first_name'] ?? '',
@@ -57,13 +57,13 @@ function student_profile_from_identity(array $identity, ?array $legacyPatient): 
     $emailId = strtolower(str_replace(['-', ' '], '', $idNumber));
 
     return [
-        'patient_id' => (int) ($legacyPatient['id'] ?? 0),
+        'patient_id' => (int) ($identity['person_id'] ?? 0),
         'person_id' => (int) ($identity['person_id'] ?? 0),
         'account_id' => (int) ($identity['account_id'] ?? 0),
         'account_status' => (string) ($identity['account_status'] ?? ''),
         'first_registration' => !empty($identity['first_registration']),
         'account_type' => (string) ($identity['account_type'] ?? 'patient'),
-        'has_clinical_record' => $legacyPatient !== null,
+        'has_clinical_record' => !empty($identity['has_clinical_record']),
         'name' => $fullName !== '' ? $fullName : 'Patient',
         'first_name' => (string) ($identity['first_name'] ?? 'Patient'),
         'student_id' => $idNumber,
@@ -71,20 +71,20 @@ function student_profile_from_identity(array $identity, ?array $legacyPatient): 
             $identity['program']
             ?? $identity['faculty_department']
             ?? $identity['personnel_department']
-            ?? $legacyPatient['course_section']
             ?? 'Not recorded'
         ),
         'email' => ($emailId !== '' ? $emailId : 'patient') . '@plpasig.edu.ph',
         'birthdate' => $identity['birthdate'] ?? null,
-        'sex' => $legacyPatient['sex'] ?? null,
-        'blood_type' => $legacyPatient['blood_type'] ?? $identity['blood_type'] ?? null,
-        'allergies' => $legacyPatient['allergies'] ?? null,
-        'existing_conditions' => $legacyPatient['existing_conditions'] ?? null,
-        'emergency_instructions' => $legacyPatient['emergency_instructions'] ?? $identity['emergency_instructions'] ?? null,
-        'guardian_name' => $legacyPatient['guardian_name'] ?? $identity['guardian_or_contact_name'] ?? null,
-        'guardian_contact' => $legacyPatient['guardian_contact'] ?? $identity['guardian_or_contact_number'] ?? null,
-        'emergency_token' => $legacyPatient['emergency_token'] ?? $identity['emergency_token'] ?? null,
-        'updated_at' => $legacyPatient['updated_at'] ?? $identity['updated_at'] ?? null,
+        'sex' => $identity['sex'] ?? null,
+        'blood_type' => $identity['blood_type'] ?? null,
+        'allergies' => $identity['allergies'] ?? null,
+        'existing_conditions' => $identity['existing_conditions'] ?? null,
+        'medications' => $identity['medications'] ?? null,
+        'emergency_instructions' => $identity['emergency_instructions'] ?? null,
+        'guardian_name' => $identity['guardian_or_contact_name'] ?? null,
+        'guardian_contact' => $identity['guardian_or_contact_number'] ?? null,
+        'emergency_token' => $identity['emergency_token'] ?? null,
+        'updated_at' => $identity['patient_updated_at'] ?? $identity['updated_at'] ?? null,
     ];
 }
 
@@ -110,6 +110,7 @@ function student_current_profile(): ?array
             p.middle_name,
             p.last_name,
             p.birthdate,
+            p.sex,
             p.updated_at,
             a.id AS account_id,
             a.account_status,
@@ -118,10 +119,15 @@ function student_current_profile(): ?array
             CASE WHEN se.role_classification = "Faculty" THEN ed.department_code END AS faculty_department,
             CASE WHEN se.role_classification = "School Personnel" THEN ed.department_code END AS personnel_department,
             pt.blood_type,
+            pt.allergies,
+            pt.existing_conditions,
+            pt.medications,
             pt.emergency_instructions,
             pt.guardian_or_contact_name,
             pt.guardian_or_contact_number,
             pt.emergency_token,
+            pt.updated_at AS patient_updated_at,
+            CASE WHEN pt.person_id IS NULL THEN 0 ELSE 1 END AS has_clinical_record,
             CASE
                 WHEN s.person_id IS NOT NULL THEN "student"
                 WHEN se.role_classification = "Faculty" THEN "faculty"
@@ -162,10 +168,7 @@ function student_current_profile(): ?array
     }
     $identity['first_registration'] = $isFirstRegistration;
 
-    $legacyStmt = db()->prepare('SELECT * FROM patients WHERE id_number = ? LIMIT 1');
-    $legacyStmt->execute([$identity['id_number']]);
-    $legacyPatient = $legacyStmt->fetch() ?: null;
-    $profile = student_profile_from_identity($identity, $legacyPatient);
+    $profile = student_profile_from_identity($identity);
     return $profile;
 }
 
@@ -247,10 +250,7 @@ function student_find_patient_by_number(string $studentNumber): ?array
         return null;
     }
 
-    $legacyStmt = db()->prepare('SELECT id FROM patients WHERE id_number = ? LIMIT 1');
-    $legacyStmt->execute([$studentNumber]);
-    $legacyPatientId = (int) ($legacyStmt->fetchColumn() ?: 0);
-    $account['legacy_patient_id'] = $legacyPatientId;
+    $account['legacy_patient_id'] = (int) ($account['person_id'] ?? 0);
     return $account;
 }
 

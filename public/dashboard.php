@@ -80,7 +80,7 @@ ensure_appointment_schema();
 // --- 1. Metrics & Analytics ---
 $metrics = [
     'visits_today' => (int) (cliniq_visit_db()->query('SELECT COUNT(*) AS total FROM visits WHERE DATE(visit_datetime) = CURDATE()')->fetch()['total'] ?? 0),
-    'pending_alerts' => (int) (db()->query("SELECT COUNT(*) AS total FROM nurse_alerts WHERE status = 'Pending'")->fetch()['total'] ?? 0),
+    'pending_alerts' => (int) (auth_db()->query("SELECT COUNT(*) AS total FROM nurse_alerts WHERE status = 'Pending'")->fetch()['total'] ?? 0),
     'low_stock' => (int) (cliniq_inventory_db()->query('SELECT COUNT(*) AS total FROM inventory_items WHERE is_active = 1 AND quantity <= reorder_level')->fetch()['total'] ?? 0),
     'appointment_requests' => (int) (appointment_db()->query("SELECT COUNT(*) AS total FROM appointments WHERE status = 'Pending'")->fetch()['total'] ?? 0),
 ];
@@ -93,10 +93,11 @@ $metrics['ape_pending_review'] = (int) (auth_db()->query("SELECT COUNT(*) AS tot
 
 
 // --- 2. Live Alerts (Most Urgent First) ---
-$activeAlerts = db()->query("
+$activeAlerts = auth_db()->query("
     SELECT a.*, p.first_name, p.last_name
     FROM nurse_alerts a
-    LEFT JOIN patients p ON p.id = a.patient_id
+    LEFT JOIN patients pt ON pt.person_id = a.patient_id
+    LEFT JOIN people p ON p.id = pt.person_id
     WHERE a.status = 'Pending'
     ORDER BY
         CASE COALESCE(a.risk_level, 'Low')

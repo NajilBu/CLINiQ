@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/AlertWorkflow.php';
 
 function system_report_module_labels(): array
 {
@@ -71,7 +72,7 @@ function system_report_chart(string $title, array $rows, string $empty = 'No dat
 function build_system_report(string $dateFrom, string $dateTo, array $modules): array
 {
     $newDb = auth_db();
-    $legacyDb = db();
+    ensure_alert_workflow_schema();
     $dateFrom = normalize_system_report_date($dateFrom, date('Y-m-01'));
     $dateTo = normalize_system_report_date($dateTo, date('Y-m-d'));
     if ($dateFrom > $dateTo) {
@@ -264,16 +265,16 @@ function build_system_report(string $dateFrom, string $dateTo, array $modules): 
             'title' => 'Alerts and Incidents',
             'description' => 'Emergency reports, assessed risk, and resolution status in the selected period.',
             'metrics' => [
-                system_report_metric('Alerts', system_report_scalar($legacyDb, 'SELECT COUNT(*) FROM nurse_alerts WHERE DATE(created_at) BETWEEN ? AND ?', $range)),
-                system_report_metric('Pending', system_report_scalar($legacyDb, "SELECT COUNT(*) FROM nurse_alerts WHERE status = 'Pending' AND DATE(created_at) BETWEEN ? AND ?", $range)),
-                system_report_metric('Resolved', system_report_scalar($legacyDb, "SELECT COUNT(*) FROM nurse_alerts WHERE status = 'Resolved' AND DATE(created_at) BETWEEN ? AND ?", $range)),
-                system_report_metric('High or Critical Risk', system_report_scalar($legacyDb, "SELECT COUNT(*) FROM nurse_alerts WHERE risk_level IN ('High', 'Critical') AND DATE(created_at) BETWEEN ? AND ?", $range)),
+                system_report_metric('Alerts', system_report_scalar($newDb, 'SELECT COUNT(*) FROM nurse_alerts WHERE DATE(created_at) BETWEEN ? AND ?', $range)),
+                system_report_metric('Pending', system_report_scalar($newDb, "SELECT COUNT(*) FROM nurse_alerts WHERE status = 'Pending' AND DATE(created_at) BETWEEN ? AND ?", $range)),
+                system_report_metric('Resolved', system_report_scalar($newDb, "SELECT COUNT(*) FROM nurse_alerts WHERE status = 'Resolved' AND DATE(created_at) BETWEEN ? AND ?", $range)),
+                system_report_metric('High or Critical Risk', system_report_scalar($newDb, "SELECT COUNT(*) FROM nurse_alerts WHERE risk_level IN ('High', 'Critical') AND DATE(created_at) BETWEEN ? AND ?", $range)),
             ],
             'charts' => [
-                system_report_chart('Risk Level', system_report_rows($legacyDb, "SELECT COALESCE(NULLIF(risk_level, ''), 'Not specified') label, COUNT(*) value FROM nurse_alerts WHERE DATE(created_at) BETWEEN ? AND ? GROUP BY label ORDER BY FIELD(label, 'Critical', 'High', 'Moderate', 'Low')", $range)),
-                system_report_chart('Alert Status', system_report_rows($legacyDb, "SELECT COALESCE(NULLIF(status, ''), 'Not specified') label, COUNT(*) value FROM nurse_alerts WHERE DATE(created_at) BETWEEN ? AND ? GROUP BY label ORDER BY value DESC", $range)),
-                system_report_chart('Incident Type', system_report_rows($legacyDb, "SELECT COALESCE(NULLIF(incident_type, ''), 'Not specified') label, COUNT(*) value FROM nurse_alerts WHERE DATE(created_at) BETWEEN ? AND ? GROUP BY label ORDER BY value DESC LIMIT 10", $range)),
-                system_report_chart('Alerts by Day', system_report_rows($legacyDb, "SELECT DATE_FORMAT(created_at, '%b %e') label, COUNT(*) value FROM nurse_alerts WHERE DATE(created_at) BETWEEN ? AND ? GROUP BY DATE(created_at), label ORDER BY DATE(created_at)", $range)),
+                system_report_chart('Risk Level', system_report_rows($newDb, "SELECT COALESCE(NULLIF(risk_level, ''), 'Not specified') label, COUNT(*) value FROM nurse_alerts WHERE DATE(created_at) BETWEEN ? AND ? GROUP BY label ORDER BY FIELD(label, 'Critical', 'High', 'Moderate', 'Low')", $range)),
+                system_report_chart('Alert Status', system_report_rows($newDb, "SELECT COALESCE(NULLIF(status, ''), 'Not specified') label, COUNT(*) value FROM nurse_alerts WHERE DATE(created_at) BETWEEN ? AND ? GROUP BY label ORDER BY value DESC", $range)),
+                system_report_chart('Incident Type', system_report_rows($newDb, "SELECT COALESCE(NULLIF(incident_type, ''), 'Not specified') label, COUNT(*) value FROM nurse_alerts WHERE DATE(created_at) BETWEEN ? AND ? GROUP BY label ORDER BY value DESC LIMIT 10", $range)),
+                system_report_chart('Alerts by Day', system_report_rows($newDb, "SELECT DATE_FORMAT(created_at, '%b %e') label, COUNT(*) value FROM nurse_alerts WHERE DATE(created_at) BETWEEN ? AND ? GROUP BY DATE(created_at), label ORDER BY DATE(created_at)", $range)),
             ],
         ];
     }

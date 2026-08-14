@@ -52,7 +52,7 @@ function ape_work_queues(): array
         'final_decision' => [
             'title' => 'Final Decision',
             'short_title' => 'Final Decision',
-            'description' => 'Clinic staff reviews the completed examination and archived documents, then clears, follows up, or refers the patient.',
+            'description' => 'Clinic staff reviews the completed examination and archived documents, then clears the patient or records follow-up.',
             'icon' => 'clinical_notes',
         ],
         'follow_up' => [
@@ -76,6 +76,10 @@ function ape_record_queue(array $record): string
         return 'completed';
     }
 
+    if ((int)($record['follow_up_required'] ?? 0) === 1 || in_array(($record['clearance_status'] ?? ''), ['For Follow-up', 'Submitted'], true)) {
+        return 'follow_up';
+    }
+
     if (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed' || empty($record['exam_date'])) {
         return 'examination';
     }
@@ -92,10 +96,6 @@ function ape_record_queue(array $record): string
         : (in_array(($record['verification_status'] ?? 'Pending'), ['Pending', 'Needs Correction'], true) ? 1 : 0);
     if ($requiredDocumentCount < count(ape_default_requirements()) || $unverifiedDocumentCount > 0) {
         return 'digital_submission';
-    }
-
-    if ((int)($record['follow_up_required'] ?? 0) === 1 || in_array(($record['clearance_status'] ?? ''), ['For Follow-up', 'Submitted'], true)) {
-        return 'follow_up';
     }
 
     return 'final_decision';
@@ -243,6 +243,9 @@ function ape_missing_item(array $record): string
     }
     if (($record['requirement_status'] ?? '') === 'Needs Correction') {
         return 'Hard-copy requirements need attention';
+    }
+    if ((int)($record['follow_up_required'] ?? 0) === 1 || ($record['clearance_status'] ?? '') === 'For Follow-up') {
+        return 'Follow-up action required';
     }
     if ((int) ($record['required_document_count'] ?? 0) < count(ape_default_requirements())) {
         return 'Waiting for patient online submission';
@@ -567,6 +570,23 @@ function ape_activities_for_record(int $apeId, int $limit = 50): array
         LIMIT {$limit}
     ");
     $stmt->execute([$apeId]);
+    return $stmt->fetchAll();
+}
+
+function ape_activities_for_patient_record(int $apeId, int $patientId, int $limit = 50): array
+{
+    $limit = max(1, min(200, $limit));
+    $stmt = auth_db()->prepare("
+        SELECT l.*, l.action AS action_label,
+               TRIM(CONCAT_WS(' ', actor.first_name, actor.middle_name, actor.last_name)) AS user_name
+        FROM ape_activity_logs l
+        INNER JOIN ape_records ar ON ar.ape_id = l.ape_id AND ar.patient_id = ?
+        LEFT JOIN people actor ON actor.id = l.performed_by_person_id
+        WHERE l.ape_id = ?
+        ORDER BY l.created_at DESC, l.activity_id DESC
+        LIMIT {$limit}
+    ");
+    $stmt->execute([$patientId, $apeId]);
     return $stmt->fetchAll();
 }
 
