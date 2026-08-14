@@ -8,7 +8,7 @@ require_once __DIR__ . '/../app/config/env.php';
 require_once __DIR__ . '/../app/config/database.php';
 require_once __DIR__ . '/../app/helpers/student_id.php';
 
-$db = db();
+$db = auth_db();
 $databaseName = env_value('DB_NAME', 'cliniq');
 $oldStudentIdPattern = '/20(\d{2})-(\d{5})/';
 

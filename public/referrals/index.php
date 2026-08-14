@@ -4,7 +4,7 @@ require_once __DIR__ . '/../../app/helpers/view.php';
 require_login();
 
 $filterStatus = strtolower((string) ($_GET['status'] ?? 'all'));
-if (!in_array($filterStatus, ['all', 'pending', 'completed', 'cancelled'], true)) {
+if (!in_array($filterStatus, ['all', 'completed', 'cancelled'], true)) {
     $filterStatus = 'all';
 }
 
@@ -88,7 +88,7 @@ render_clinic_command_header(
 
         <div class="flex items-center gap-2 mt-4 border-t border-slate-100 pt-4 overflow-x-auto scrollbar-hide">
             <?php
-            $tabs = ['all' => 'All', 'pending' => 'Pending', 'completed' => 'Completed', 'cancelled' => 'Cancelled'];
+            $tabs = ['all' => 'All', 'completed' => 'Completed', 'cancelled' => 'Cancelled'];
             foreach ($tabs as $key => $label):
                 $isActive = $filterStatus === $key;
                 $count = $statusCounts[$key] ?? 0;

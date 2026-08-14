@@ -1,7 +1,6 @@
 <?php
 
 require_once __DIR__ . '/../../app/helpers/view.php';
-require_once __DIR__ . '/../../app/services/VisitWorkflow.php';
 require_once __DIR__ . '/../../app/services/CliniqVisitWorkflow.php';
 require_once __DIR__ . '/../../app/services/AlertWorkflow.php';
 require_once __DIR__ . '/../../app/services/SystemReport.php';

@@ -90,7 +90,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 update_staff_profile($_POST);
                 if ((int) ($_POST['user_id'] ?? 0) === (int) ($user['id'] ?? 0)) {
                     $_SESSION['user']['name'] = trim((string) ($_POST['name'] ?? $user['name']));
-                    $_SESSION['user']['email'] = mb_strtolower(trim((string) ($_POST['email'] ?? $user['email'])));
+                    $_SESSION['user']['id_number'] = strtoupper(trim((string) ($_POST['id_number'] ?? $user['id_number'])));
+                    $_SESSION['user']['email'] = strtolower(str_replace(['-', ' '], '', (string) ($_SESSION['user']['id_number'] ?? 'staff'))) . '@plpasig.edu.ph';
                     $_SESSION['user']['role'] = normalize_staff_profile_role((string) ($_POST['role'] ?? $user['role']));
                 }
                 flash_message('success', 'Staff profile updated.');
@@ -99,7 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 flash_message('success', 'Staff password reset. Share the new password only with that staff member.');
             }
         } catch (Throwable $e) {
-            $message = str_contains(strtolower($e->getMessage()), 'duplicate') ? 'That email address is already assigned to another staff profile.' : $e->getMessage();
+            $message = str_contains(strtolower($e->getMessage()), 'duplicate') ? 'That staff login ID is already assigned to another profile.' : $e->getMessage();
             flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $message);
         }
 
@@ -108,7 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'update_password') {
-        $stmt = db()->prepare('SELECT password_hash FROM users WHERE id = ? LIMIT 1');
+        $stmt = auth_db()->prepare('SELECT password_hash FROM accounts WHERE person_id = ? LIMIT 1');
         $stmt->execute([(int) $user['id']]);
         $passwordHash = (string) ($stmt->fetchColumn() ?: '');
         $currentPassword = (string) ($_POST['current_password'] ?? '');
@@ -122,7 +123,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($newPassword !== $confirmPassword) {
             flash_message('error', 'New password confirmation does not match.');
         } else {
-            $update = db()->prepare('UPDATE users SET password_hash = ? WHERE id = ?');
+            $update = auth_db()->prepare('UPDATE accounts SET password_hash = ? WHERE person_id = ?');
             $update->execute([password_hash($newPassword, PASSWORD_DEFAULT), (int) $user['id']]);
             flash_message('success', 'Your password has been updated.');
         }
@@ -495,8 +496,8 @@ render_clinic_command_header(
                                 <input class="settings-input" id="new_staff_name" name="name" placeholder="Dr. Maria Santos" <?= !$canManageStaffProfiles ? 'readonly' : '' ?> required>
                             </div>
                             <div class="settings-field">
-                                <label class="clinic-label" for="new_staff_email">Login Email</label>
-                                <input class="settings-input" id="new_staff_email" name="email" type="email" placeholder="doctor@cliniq.local" <?= !$canManageStaffProfiles ? 'readonly' : '' ?> required>
+                                <label class="clinic-label" for="new_staff_id_number">Login ID Number</label>
+                                <input class="settings-input" id="new_staff_id_number" name="id_number" placeholder="STAFF-0006" pattern="STAFF-[0-9]{4}" style="text-transform:uppercase;" <?= !$canManageStaffProfiles ? 'readonly' : '' ?>>
                             </div>
                             <div class="settings-field">
                                 <label class="clinic-label" for="new_staff_role">Role</label>
@@ -534,8 +535,8 @@ render_clinic_command_header(
                                                 <input class="settings-input" id="staff_name_<?= $staffId ?>" name="name" value="<?= e($staffProfile['name']) ?>" <?= !$canManageStaffProfiles ? 'readonly' : '' ?> required>
                                             </div>
                                             <div class="settings-field">
-                                                <label class="clinic-label" for="staff_email_<?= $staffId ?>">Email</label>
-                                                <input class="settings-input" id="staff_email_<?= $staffId ?>" name="email" type="email" value="<?= e($staffProfile['email']) ?>" <?= !$canManageStaffProfiles ? 'readonly' : '' ?> required>
+                                                <label class="clinic-label" for="staff_id_number_<?= $staffId ?>">ID Number</label>
+                                                <input class="settings-input" id="staff_id_number_<?= $staffId ?>" name="id_number" value="<?= e($staffProfile['id_number']) ?>" pattern="STAFF-[0-9]{4}" style="text-transform:uppercase;" <?= !$canManageStaffProfiles ? 'readonly' : '' ?> required>
                                             </div>
                                             <div class="settings-field">
                                                 <label class="clinic-label" for="staff_role_<?= $staffId ?>">Role</label>

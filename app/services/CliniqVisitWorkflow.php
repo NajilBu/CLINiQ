@@ -402,3 +402,69 @@ function cliniq_visit_timeline(int $patientPersonId, int $limit = 50): array
     $stmt->execute([$patientPersonId]);
     return $stmt->fetchAll();
 }
+
+if (!function_exists('visit_statuses')) {
+    function visit_statuses(): array
+    {
+        return dropdown_options('visit_status');
+    }
+}
+
+if (!function_exists('visit_purposes')) {
+    function visit_purposes(): array
+    {
+        return dropdown_options('visit_purpose');
+    }
+}
+
+if (!function_exists('visit_sources')) {
+    function visit_sources(): array
+    {
+        return dropdown_options('visit_source');
+    }
+}
+
+if (!function_exists('visit_referral_options')) {
+    function visit_referral_options(): array
+    {
+        return dropdown_options('referral_type');
+    }
+}
+
+if (!function_exists('normalize_visit_purpose')) {
+    function normalize_visit_purpose(?string $purpose): ?string
+    {
+        $purpose = trim((string) $purpose);
+        return $purpose !== '' ? mb_substr($purpose, 0, 80) : null;
+    }
+}
+
+if (!function_exists('visit_status_badge_class')) {
+    function visit_status_badge_class(string $status): string
+    {
+        return match ($status) {
+            'Completed' => 'badge-completed',
+            'Active' => 'badge-in-progress',
+            'Cancelled' => 'badge-critical',
+            default => 'badge-pending',
+        };
+    }
+}
+
+if (!function_exists('visit_status_badge')) {
+    function visit_status_badge(string $status): string
+    {
+        return '<span class="badge ' . visit_status_badge_class($status) . '">' . e($status) . '</span>';
+    }
+}
+
+if (!function_exists('visit_source_badge')) {
+    function visit_source_badge(string $source): string
+    {
+        return match ($source) {
+            'Self Logbook' => '<span class="badge badge-completed">Self Logbook</span>',
+            'Nurse Emergency' => '<span class="badge badge-critical">Nurse Emergency</span>',
+            default => '<span class="badge badge-in-progress">Staff Recorded</span>',
+        };
+    }
+}

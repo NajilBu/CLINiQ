@@ -11,7 +11,7 @@ require_once __DIR__ . '/../app/services/AlertWorkflow.php';
 
 echo "Starting CLINiQ Database Seeder...\n";
 
-$db = db();
+$db = auth_db();
 ensure_alert_workflow_schema();
 
 // Clear existing data (optional, but good for a fresh seed. Let's not delete users.)

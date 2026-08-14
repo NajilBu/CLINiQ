@@ -191,7 +191,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $finding = $apeDb->prepare('INSERT INTO ape_findings (ape_id, finding_type, description, result_status, follow_up_required, recorded_by_person_id) VALUES (?, ?, ?, ?, ?, ?)');
             $finding->execute([$id, $isReferral ? 'Referral' : $findingType, $isReferral ? $referralReason : $findingDescription, $resultStatus, $isReferral ? 1 : 0, $staffPersonId]);
             if ($isReferral) {
-                $referral = $apeDb->prepare('INSERT INTO referrals (patient_person_id, referral_date, referred_to, reason, referred_by_person_id, remarks) VALUES (?, ?, ?, ?, ?, ?)');
+                $referral = $apeDb->prepare('INSERT INTO referrals (patient_person_id, referral_date, referred_to, reason, status, referred_by_person_id, remarks) VALUES (?, ?, ?, ?, "Completed", ?, ?)');
                 $referral->execute([(int) $record['patient_id'], $examDate, $referredTo, $referralReason, $staffPersonId, 'Created during APE examination #' . $id]);
                 $activityLabel = 'Recorded APE examination and created referral';
                 $activityNotes = $referredTo . ': ' . $referralReason;

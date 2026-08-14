@@ -28,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $stmt = auth_db()->prepare(
-        'INSERT INTO referrals (patient_person_id, referral_date, referred_to, reason, referred_by_person_id) VALUES (?, ?, ?, ?, ?)'
+        'INSERT INTO referrals (patient_person_id, referral_date, referred_to, reason, status, referred_by_person_id) VALUES (?, ?, ?, ?, "Completed", ?)'
     );
     $stmt->execute([
         $patientPersonId,

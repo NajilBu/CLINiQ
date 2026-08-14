@@ -9,7 +9,7 @@ require_once __DIR__ . '/../app/config/database.php';
 require_once __DIR__ . '/../app/services/VisitWorkflow.php';
 require_once __DIR__ . '/../app/services/AlertWorkflow.php';
 
-$db = db();
+$db = auth_db();
 ensure_visit_workflow_schema();
 ensure_alert_workflow_schema();
 

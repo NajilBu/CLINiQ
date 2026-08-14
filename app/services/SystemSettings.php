@@ -9,13 +9,13 @@ function ensure_system_settings_schema(): void
         return;
     }
 
-    db()->exec("
+    auth_db()->exec("
         CREATE TABLE IF NOT EXISTS system_settings (
             setting_key VARCHAR(120) PRIMARY KEY,
             setting_value MEDIUMTEXT NOT NULL,
-            updated_by INT NULL,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
+            updated_by BIGINT UNSIGNED NULL,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (updated_by) REFERENCES people(id) ON DELETE SET NULL
         )
     ");
 
@@ -29,16 +29,7 @@ function ensure_staff_profiles_schema(): void
         return;
     }
 
-    try {
-        $column = db()->query("SHOW COLUMNS FROM users LIKE 'role'")->fetch();
-        $type = strtolower((string) ($column['Type'] ?? ''));
-        if ($type !== '' && !str_contains($type, "'doctor'")) {
-            db()->exec("ALTER TABLE users MODIFY role ENUM('admin','doctor','nurse','staff','it_expert') NOT NULL DEFAULT 'staff'");
-        }
-    } catch (Throwable $e) {
-        // Existing installs should keep working even if the DB user cannot alter metadata.
-    }
-
+    ensure_system_settings_schema();
     $ready = true;
 }
 
@@ -62,10 +53,20 @@ function staff_profiles(): array
 {
     ensure_staff_profiles_schema();
 
-    return db()->query('
-        SELECT id, name, email, role, created_at
-        FROM users
-        ORDER BY FIELD(role, "doctor", "nurse", "staff", "admin", "it_expert"), name
+    return auth_db()->query('
+        SELECT
+            pe.id,
+            pe.id_number,
+            TRIM(CONCAT_WS(" ", pe.first_name, pe.middle_name, pe.last_name)) AS name,
+            LOWER(CONCAT(REPLACE(REPLACE(pe.id_number, "-", ""), " ", ""), "@plpasig.edu.ph")) AS email,
+            cs.staff_role AS role,
+            cs.position_title,
+            a.account_status,
+            a.created_at
+        FROM clinic_staff cs
+        JOIN people pe ON pe.id = cs.person_id
+        JOIN accounts a ON a.person_id = pe.id
+        ORDER BY FIELD(cs.staff_role, "doctor", "nurse", "staff", "admin", "it_expert"), pe.last_name, pe.first_name, pe.id_number
     ')->fetchAll();
 }
 
@@ -79,22 +80,71 @@ function create_staff_profile(array $input): void
     ensure_staff_profiles_schema();
 
     $name = trim((string) ($input['name'] ?? ''));
-    $email = mb_strtolower(trim((string) ($input['email'] ?? '')));
+    $idNumber = strtoupper(trim((string) ($input['id_number'] ?? $input['email'] ?? '')));
     $role = normalize_staff_profile_role((string) ($input['role'] ?? 'staff'));
     $password = (string) ($input['password'] ?? '');
 
     if ($name === '') {
         throw new InvalidArgumentException('Enter the staff member name.');
     }
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        throw new InvalidArgumentException('Enter a valid email address.');
+    if ($idNumber === '') {
+        $idNumber = next_staff_profile_id_number();
+    }
+    if (!preg_match('/^STAFF-[0-9]{4}$/', $idNumber)) {
+        throw new InvalidArgumentException('Staff login ID must use the format STAFF-0001.');
     }
     if (strlen($password) < 8) {
         throw new InvalidArgumentException('Password must be at least 8 characters.');
     }
 
-    $stmt = db()->prepare('INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)');
-    $stmt->execute([$name, $email, password_hash($password, PASSWORD_DEFAULT), $role]);
+    [$firstName, $middleName, $lastName] = split_staff_profile_name($name);
+    $db = auth_db();
+    try {
+        $db->beginTransaction();
+
+        $duplicate = $db->prepare('SELECT id FROM people WHERE id_number = ? LIMIT 1');
+        $duplicate->execute([$idNumber]);
+        if ($duplicate->fetchColumn()) {
+            throw new InvalidArgumentException('That staff login ID already exists.');
+        }
+
+        $stmt = $db->prepare('
+            INSERT INTO people (id_number, first_name, middle_name, last_name)
+            VALUES (?, ?, ?, ?)
+        ');
+        $stmt->execute([$idNumber, $firstName, $middleName, $lastName]);
+        $personId = (int) $db->lastInsertId();
+
+        $departmentId = staff_profile_default_department_id();
+        $stmt = $db->prepare('
+            INSERT INTO clinic_staff (person_id, department_id, staff_role, position_title)
+            VALUES (?, ?, ?, ?)
+        ');
+        $stmt->execute([$personId, $departmentId, $role, staff_profile_role_label($role)]);
+
+        $stmt = $db->prepare('
+            INSERT INTO patients (person_id, emergency_token, token_enabled)
+            VALUES (?, ?, 1)
+        ');
+        $stmt->execute([$personId, bin2hex(random_bytes(32))]);
+
+        $stmt = $db->prepare('
+            INSERT INTO accounts (person_id, password_hash, account_status, activated_at)
+            VALUES (?, ?, "active", NOW())
+            ON DUPLICATE KEY UPDATE
+                password_hash = VALUES(password_hash),
+                account_status = VALUES(account_status),
+                activated_at = VALUES(activated_at)
+        ');
+        $stmt->execute([$personId, password_hash($password, PASSWORD_DEFAULT)]);
+
+        $db->commit();
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        throw $e;
+    }
 }
 
 function update_staff_profile(array $input): void
@@ -103,7 +153,7 @@ function update_staff_profile(array $input): void
 
     $id = (int) ($input['user_id'] ?? 0);
     $name = trim((string) ($input['name'] ?? ''));
-    $email = mb_strtolower(trim((string) ($input['email'] ?? '')));
+    $idNumber = strtoupper(trim((string) ($input['id_number'] ?? $input['email'] ?? '')));
     $role = normalize_staff_profile_role((string) ($input['role'] ?? 'staff'));
 
     if ($id <= 0) {
@@ -112,12 +162,38 @@ function update_staff_profile(array $input): void
     if ($name === '') {
         throw new InvalidArgumentException('Enter the staff member name.');
     }
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        throw new InvalidArgumentException('Enter a valid email address.');
+    if (!preg_match('/^STAFF-[0-9]{4}$/', $idNumber)) {
+        throw new InvalidArgumentException('Staff login ID must use the format STAFF-0001.');
     }
 
-    $stmt = db()->prepare('UPDATE users SET name = ?, email = ?, role = ? WHERE id = ?');
-    $stmt->execute([$name, $email, $role, $id]);
+    [$firstName, $middleName, $lastName] = split_staff_profile_name($name);
+    $db = auth_db();
+    try {
+        $db->beginTransaction();
+
+        $duplicate = $db->prepare('SELECT id FROM people WHERE id_number = ? AND id <> ? LIMIT 1');
+        $duplicate->execute([$idNumber, $id]);
+        if ($duplicate->fetchColumn()) {
+            throw new InvalidArgumentException('That staff login ID already exists.');
+        }
+
+        $stmt = $db->prepare('
+            UPDATE people
+            SET id_number = ?, first_name = ?, middle_name = ?, last_name = ?
+            WHERE id = ?
+        ');
+        $stmt->execute([$idNumber, $firstName, $middleName, $lastName, $id]);
+
+        $stmt = $db->prepare('UPDATE clinic_staff SET staff_role = ?, position_title = ? WHERE person_id = ?');
+        $stmt->execute([$role, staff_profile_role_label($role), $id]);
+
+        $db->commit();
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        throw $e;
+    }
 }
 
 function reset_staff_profile_password(array $input): void
@@ -134,15 +210,47 @@ function reset_staff_profile_password(array $input): void
         throw new InvalidArgumentException('New password must be at least 8 characters.');
     }
 
-    $stmt = db()->prepare('UPDATE users SET password_hash = ? WHERE id = ?');
+    $stmt = auth_db()->prepare('UPDATE accounts SET password_hash = ? WHERE person_id = ?');
     $stmt->execute([password_hash($password, PASSWORD_DEFAULT), $id]);
+}
+
+function split_staff_profile_name(string $name): array
+{
+    $parts = array_values(array_filter(preg_split('/\s+/', trim($name)) ?: []));
+    if (count($parts) === 1) {
+        return [$parts[0], null, $parts[0]];
+    }
+
+    $firstName = array_shift($parts);
+    $lastName = array_pop($parts);
+    $middleName = $parts ? implode(' ', $parts) : null;
+    return [$firstName, $middleName, $lastName];
+}
+
+function next_staff_profile_id_number(): string
+{
+    $next = (int) auth_db()->query("
+        SELECT COALESCE(MAX(CAST(SUBSTRING(id_number, 7) AS UNSIGNED)), 0) + 1
+        FROM people
+        WHERE id_number REGEXP '^STAFF-[0-9]{4}$'
+    ")->fetchColumn();
+
+    return 'STAFF-' . str_pad((string) $next, 4, '0', STR_PAD_LEFT);
+}
+
+function staff_profile_default_department_id(): ?int
+{
+    $stmt = auth_db()->prepare('SELECT id FROM departments WHERE department_code = ? LIMIT 1');
+    $stmt->execute(['UHS']);
+    $departmentId = (int) $stmt->fetchColumn();
+    return $departmentId > 0 ? $departmentId : null;
 }
 
 function cliniq_setting_read(string $key, array $default = []): array
 {
     try {
         ensure_system_settings_schema();
-        $stmt = db()->prepare('SELECT setting_value FROM system_settings WHERE setting_key = ? LIMIT 1');
+        $stmt = auth_db()->prepare('SELECT setting_value FROM system_settings WHERE setting_key = ? LIMIT 1');
         $stmt->execute([$key]);
         $raw = $stmt->fetchColumn();
         if (!$raw) {
@@ -160,7 +268,7 @@ function cliniq_setting_write(string $key, array $value, ?int $updatedBy = null)
 {
     ensure_system_settings_schema();
 
-    $stmt = db()->prepare('
+    $stmt = auth_db()->prepare('
         INSERT INTO system_settings (setting_key, setting_value, updated_by)
         VALUES (?, ?, ?)
         ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by = VALUES(updated_by)
@@ -179,7 +287,7 @@ function ensure_dropdown_options_schema(): void
         return;
     }
 
-    $db = db();
+    $db = auth_db();
     $columns = [
         ['patients', 'sex', "VARCHAR(20) NULL"],
         ['clinic_visits', 'status', "VARCHAR(40) NOT NULL DEFAULT 'Unaddressed'"],
@@ -189,7 +297,7 @@ function ensure_dropdown_options_schema(): void
         ['incident_reports', 'status', "VARCHAR(40) NOT NULL DEFAULT 'New'"],
         ['inventory_loans', 'status', "VARCHAR(40) NOT NULL DEFAULT 'Borrowed'"],
         ['inventory_loans', 'return_condition', "VARCHAR(40) NULL"],
-        ['referrals', 'status', "VARCHAR(40) NOT NULL DEFAULT 'Pending'"],
+        ['referrals', 'status', "VARCHAR(40) NOT NULL DEFAULT 'Completed'"],
         ['appointments', 'status', "VARCHAR(40) NOT NULL DEFAULT 'Pending'"],
         ['ape_records', 'requirement_status', "VARCHAR(80) NOT NULL DEFAULT 'Not Checked'"],
         ['ape_records', 'workflow_status', "VARCHAR(80) NOT NULL DEFAULT 'Submitted'"],

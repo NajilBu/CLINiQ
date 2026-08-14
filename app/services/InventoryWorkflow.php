@@ -1,65 +1,20 @@
 <?php
 
-function ensure_inventory_workflow_schema(): void
-{
-    static $ready = false;
-    if ($ready) {
-        return;
-    }
-
-    $db = db();
-    $stmt = $db->query('SHOW COLUMNS FROM inventory_items');
-    $columns = [];
-    foreach ($stmt->fetchAll() as $column) {
-        $columns[$column['Field']] = $column;
-    }
-
-    $addColumn = function (string $name, string $definition) use ($db, &$columns): void {
-        if (!isset($columns[$name])) {
-            $db->exec("ALTER TABLE inventory_items ADD COLUMN {$name} {$definition}");
-            $columns[$name] = ['Field' => $name];
-        }
-    };
-
-    $addColumn('archived_at', 'DATETIME NULL AFTER expiration_date');
-    $addColumn('archived_reason', 'VARCHAR(255) NULL AFTER archived_at');
-    $addColumn('archived_by', 'INT NULL AFTER archived_reason');
-    $addColumn('updated_at', 'TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at');
-
-    $db->exec("
-        CREATE TABLE IF NOT EXISTS inventory_loans (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            item_id INT NOT NULL,
-            borrower_name VARCHAR(160) NOT NULL,
-            borrower_identifier VARCHAR(80) NULL,
-            borrowed_quantity INT NOT NULL DEFAULT 1,
-            borrowed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            due_at DATETIME NULL,
-            status ENUM('Borrowed','Returned','Lost') NOT NULL DEFAULT 'Borrowed',
-            return_condition ENUM('Good','Defective','Lost') NULL,
-            return_notes TEXT NULL,
-            returned_at DATETIME NULL,
-            borrowed_by INT NULL,
-            returned_by INT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            INDEX idx_inventory_loans_item_status (item_id, status),
-            CONSTRAINT fk_inventory_loans_item FOREIGN KEY (item_id) REFERENCES inventory_items(id) ON DELETE CASCADE,
-            CONSTRAINT fk_inventory_loans_borrowed_by FOREIGN KEY (borrowed_by) REFERENCES users(id) ON DELETE SET NULL,
-            CONSTRAINT fk_inventory_loans_returned_by FOREIGN KEY (returned_by) REFERENCES users(id) ON DELETE SET NULL
-        )
-    ");
-
-    $ready = true;
-}
+/**
+ * Legacy InventoryWorkflow shim.
+ *
+ * All inventory functionality has been migrated to CliniqInventoryWorkflow.php
+ * using the Cliniq_db database connection and schema.
+ */
+require_once __DIR__ . '/CliniqInventoryWorkflow.php';
 
 function inventory_status_badge(array $item): string
 {
     $quantity = (int) ($item['quantity'] ?? 0);
     $reorderLevel = (int) ($item['reorder_level'] ?? 0);
     $expirationDate = $item['expiration_date'] ?? null;
-    $isExpiring = $expirationDate && strtotime($expirationDate) <= strtotime('+30 days');
-    $isEquipment = str_contains(strtolower((string) ($item['category'] ?? '')), 'equipment');
+    $isExpiring = $expirationDate && strtotime((string) $expirationDate) <= strtotime('+30 days');
+    $isEquipment = str_contains(strtolower((string) ($item['category'] ?? $item['item_type'] ?? '')), 'equipment');
 
     if ($quantity === 0) {
         return '<span class="badge badge-critical">Out of Stock</span>';

@@ -14,7 +14,7 @@ ensure_ape_workflow_schema();
 ensure_alert_workflow_schema();
 ensure_appointment_schema();
 
-$db = db();
+$db = auth_db();
 $adminId = (int)($db->query("SELECT id FROM users ORDER BY id LIMIT 1")->fetchColumn() ?: 1);
 $demoToday = (string)$db->query('SELECT CURDATE()')->fetchColumn();
 
