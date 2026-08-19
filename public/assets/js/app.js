@@ -751,10 +751,16 @@ function initSamePageAjax() {
         if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
 
         const link = event.target.closest('a[href]');
-        if (!link || link.target || link.hasAttribute('download') || link.dataset.noAjax === 'true') return;
+        if (!link || link.target || link.hasAttribute('download')) return;
 
         const url = new URL(link.href, window.location.href);
-        if (!cliniqIsSamePage(url) || url.hash) return;
+        const isSettingsLink = link.classList.contains('settings-tab-link');
+        const isDifferentPath = url.pathname !== window.location.pathname;
+
+        if (link.dataset.noAjax === 'true' && !(isSettingsLink && isDifferentPath)) return;
+
+        if (!isSettingsLink && (!cliniqIsSamePage(url) || url.hash)) return;
+        if (isSettingsLink && (!cliniqIsSameOrigin(url) || !isDifferentPath)) return;
 
         event.preventDefault();
         cliniqFetchPage(url.href, { pushHistory: true }).catch(() => {

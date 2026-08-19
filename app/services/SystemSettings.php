@@ -30,6 +30,56 @@ function ensure_staff_profiles_schema(): void
     }
 
     ensure_system_settings_schema();
+
+    $db = auth_db();
+    $columns = $db->query("SHOW COLUMNS FROM accounts LIKE 'email'")->fetchAll();
+    if (empty($columns)) {
+        $db->exec("ALTER TABLE accounts ADD COLUMN email VARCHAR(160) NULL");
+        // Populate existing staff emails
+        $db->exec("
+            UPDATE accounts a
+            JOIN people pe ON pe.id = a.person_id
+            SET a.email = LOWER(CONCAT(REPLACE(pe.last_name, ' ', ''), '_', REPLACE(pe.first_name, ' ', ''), '@plpasig.edu.ph'))
+            WHERE a.email IS NULL OR a.email = ''
+        ");
+    }
+
+    $ready = true;
+}
+
+function ensure_patients_vitals_schema(): void
+{
+    static $ready = false;
+    if ($ready) {
+        return;
+    }
+
+    $db = auth_db();
+    
+    // 1. Check & Update patients table
+    $columnsPatients = $db->query("SHOW COLUMNS FROM patients LIKE 'height_cm'")->fetchAll();
+    if (empty($columnsPatients)) {
+        $db->exec("
+            ALTER TABLE patients 
+            ADD COLUMN height_cm DECIMAL(5,2) NULL,
+            ADD COLUMN weight_kg DECIMAL(5,2) NULL,
+            ADD COLUMN bmi DECIMAL(4,1) NULL
+        ");
+    }
+
+    // 2. Check & Update vital_signs table
+    $columnsVitals = $db->query("SHOW COLUMNS FROM vital_signs LIKE 'patient_id'")->fetchAll();
+    if (empty($columnsVitals)) {
+        $db->exec("
+            ALTER TABLE vital_signs 
+            MODIFY COLUMN visit_id BIGINT UNSIGNED NULL,
+            ADD COLUMN patient_id BIGINT UNSIGNED NULL,
+            ADD CONSTRAINT fk_vital_signs_patient
+                FOREIGN KEY (patient_id) REFERENCES patients(person_id) ON DELETE CASCADE,
+            ADD INDEX idx_vital_signs_patient (patient_id)
+        ");
+    }
+
     $ready = true;
 }
 
@@ -58,7 +108,7 @@ function staff_profiles(): array
             pe.id,
             pe.id_number,
             TRIM(CONCAT_WS(" ", pe.first_name, pe.middle_name, pe.last_name)) AS name,
-            LOWER(CONCAT(REPLACE(REPLACE(pe.id_number, "-", ""), " ", ""), "@plpasig.edu.ph")) AS email,
+            a.email,
             cs.staff_role AS role,
             cs.position_title,
             a.account_status,
@@ -128,15 +178,17 @@ function create_staff_profile(array $input): void
         ');
         $stmt->execute([$personId, bin2hex(random_bytes(32))]);
 
+        $email = strtolower(str_replace(' ', '', $lastName) . '_' . str_replace(' ', '', $firstName)) . '@plpasig.edu.ph';
         $stmt = $db->prepare('
-            INSERT INTO accounts (person_id, password_hash, account_status, activated_at)
-            VALUES (?, ?, "active", NOW())
+            INSERT INTO accounts (person_id, email, password_hash, account_status, activated_at)
+            VALUES (?, ?, ?, "active", NOW())
             ON DUPLICATE KEY UPDATE
+                email = VALUES(email),
                 password_hash = VALUES(password_hash),
                 account_status = VALUES(account_status),
                 activated_at = VALUES(activated_at)
         ');
-        $stmt->execute([$personId, password_hash($password, PASSWORD_DEFAULT)]);
+        $stmt->execute([$personId, $email, password_hash($password, PASSWORD_DEFAULT)]);
 
         $db->commit();
     } catch (Throwable $e) {
@@ -183,6 +235,10 @@ function update_staff_profile(array $input): void
             WHERE id = ?
         ');
         $stmt->execute([$idNumber, $firstName, $middleName, $lastName, $id]);
+
+        $email = strtolower(str_replace(' ', '', $lastName) . '_' . str_replace(' ', '', $firstName)) . '@plpasig.edu.ph';
+        $stmt = $db->prepare('UPDATE accounts SET email = ? WHERE person_id = ?');
+        $stmt->execute([$email, $id]);
 
         $stmt = $db->prepare('UPDATE clinic_staff SET staff_role = ?, position_title = ? WHERE person_id = ?');
         $stmt->execute([$role, staff_profile_role_label($role), $id]);
