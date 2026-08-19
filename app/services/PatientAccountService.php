@@ -2,6 +2,8 @@
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../helpers/student_id.php';
+require_once __DIR__ . '/ApeWorkflow.php';
+require_once __DIR__ . '/ApeCycleService.php';
 
 function can_manage_patient_accounts(?array $user): bool
 {
@@ -348,6 +350,44 @@ function create_inactive_patient_account(array $input): array
             password_hash($initialPassword, PASSWORD_DEFAULT),
             $personId,
         ]);
+
+        // Auto-enroll the new patient into an active APE cycle if one exists.
+        try {
+            ensure_ape_cycle_schema();
+            $activeCycle = auth_db()->query("
+                SELECT ape_cycle_id, academic_year
+                FROM ape_cycles
+                WHERE status = 'Active'
+                ORDER BY started_at DESC
+                LIMIT 1
+            ")->fetch();
+            if ($activeCycle) {
+                // Only create the record if one doesn't already exist for this patient + cycle.
+                $existsCheck = $db->prepare('
+                    SELECT COUNT(*) FROM ape_records
+                    WHERE patient_id = ? AND ape_cycle_id = ?
+                ');
+                $existsCheck->execute([$personId, (int) $activeCycle['ape_cycle_id']]);
+                if ((int) $existsCheck->fetchColumn() === 0) {
+                    $apeStmt = $db->prepare("
+                        INSERT INTO ape_records (
+                            patient_id, academic_year, ape_cycle_id,
+                            requirement_status, workflow_status, clearance_status,
+                            follow_up_required
+                        ) VALUES (?, ?, ?, 'Not Checked', 'Registered', 'Pending', 0)
+                    ");
+                    $apeStmt->execute([
+                        $personId,
+                        $activeCycle['academic_year'],
+                        (int) $activeCycle['ape_cycle_id'],
+                    ]);
+                    $apeId = (int) $db->lastInsertId();
+                    ape_seed_default_requirements($apeId, 'Missing');
+                }
+            }
+        } catch (Throwable) {
+            // Non-fatal: APE cycle schema may not be ready yet; skip silently.
+        }
 
         $db->commit();
 

@@ -56,7 +56,7 @@ function begin_first_registration(array $account): string
                 $account['middle_name'] ?? '',
                 $account['last_name'] ?? '',
             ]))),
-            'email' => strtolower(str_replace(['-', ' '], '', $idNumber)) . '@plpasig.edu.ph',
+            'email' => $account['email'] ?? (strtolower(str_replace(' ', '', $account['last_name'] ?? '') . '_' . str_replace(' ', '', $account['first_name'] ?? '')) . '@plpasig.edu.ph'),
             'role' => (string) ($account['staff_role'] ?? 'staff'),
         ];
     } else {
@@ -154,11 +154,15 @@ function require_login(): void
 
 function login_attempt(string $idNumber, string $password): bool
 {
+    require_once __DIR__ . '/../services/SystemSettings.php';
+    ensure_staff_profiles_schema();
+
     $stmt = auth_db()->prepare('
         SELECT
             a.id AS account_id,
             a.password_hash,
             a.account_status,
+            a.email,
             p.id AS person_id,
             p.id_number,
             p.first_name,
@@ -211,7 +215,7 @@ function login_attempt(string $idNumber, string $password): bool
         'person_id' => (int) $account['person_id'],
         'id_number' => $account['id_number'],
         'name' => $name,
-        'email' => strtolower(str_replace(['-', ' '], '', (string) $account['id_number'])) . '@plpasig.edu.ph',
+        'email' => $account['email'] ?? (strtolower(str_replace(' ', '', $account['last_name'] ?? '') . '_' . str_replace(' ', '', $account['first_name'] ?? '')) . '@plpasig.edu.ph'),
         'role' => $account['staff_role'],
     ];
 

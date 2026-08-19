@@ -409,6 +409,53 @@ render_header($fullName . ' - Patient Profile');
                     </div>
                 </div>
             </div>
+            
+            <?php if (!empty($patient['height_cm']) || !empty($patient['weight_kg']) || !empty($patient['temperature']) || !empty($patient['blood_pressure']) || !empty($patient['pulse_rate'])): ?>
+            <div class="patient-profile-card p-5 xl:col-span-2">
+                <div class="flex items-center gap-2 mb-5">
+                    <span class="material-symbols-outlined text-primary">monitor_heart</span>
+                    <h3 class="font-headline text-lg font-extrabold text-slate-900 m-0">Standing Vitals & Measurements</h3>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-6 gap-4">
+                    <?php if (!empty($patient['height_cm'])): ?>
+                    <div class="patient-profile-field">
+                        <span class="clinic-label">Height</span>
+                        <strong><?= e($patient['height_cm']) ?> cm</strong>
+                    </div>
+                    <?php endif; ?>
+                    <?php if (!empty($patient['weight_kg'])): ?>
+                    <div class="patient-profile-field">
+                        <span class="clinic-label">Weight</span>
+                        <strong><?= e($patient['weight_kg']) ?> kg</strong>
+                    </div>
+                    <?php endif; ?>
+                    <?php if (!empty($patient['bmi'])): ?>
+                    <div class="patient-profile-field">
+                        <span class="clinic-label">BMI</span>
+                        <strong><?= e($patient['bmi']) ?></strong>
+                    </div>
+                    <?php endif; ?>
+                    <?php if (!empty($patient['temperature'])): ?>
+                    <div class="patient-profile-field">
+                        <span class="clinic-label">Temperature</span>
+                        <strong><?= e(number_format((float) $patient['temperature'], 2)) ?> °C</strong>
+                    </div>
+                    <?php endif; ?>
+                    <?php if (!empty($patient['blood_pressure'])): ?>
+                    <div class="patient-profile-field">
+                        <span class="clinic-label">Blood Pressure</span>
+                        <strong><?= e($patient['blood_pressure']) ?></strong>
+                    </div>
+                    <?php endif; ?>
+                    <?php if (!empty($patient['pulse_rate'])): ?>
+                    <div class="patient-profile-field">
+                        <span class="clinic-label">Pulse Rate</span>
+                        <strong><?= e($patient['pulse_rate']) ?> bpm</strong>
+                    </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <?php endif; ?>
         </div>
     </section>
 

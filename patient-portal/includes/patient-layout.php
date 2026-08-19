@@ -85,6 +85,12 @@ function student_profile_from_identity(array $identity): array
         'guardian_contact' => $identity['guardian_or_contact_number'] ?? null,
         'emergency_token' => $identity['emergency_token'] ?? null,
         'updated_at' => $identity['patient_updated_at'] ?? $identity['updated_at'] ?? null,
+        'height_cm' => $identity['height_cm'] ?? null,
+        'weight_kg' => $identity['weight_kg'] ?? null,
+        'bmi' => $identity['bmi'] ?? null,
+        'temperature' => $identity['temperature'] ?? null,
+        'blood_pressure' => $identity['blood_pressure'] ?? null,
+        'pulse_rate' => $identity['pulse_rate'] ?? null,
     ];
 }
 
@@ -101,6 +107,8 @@ function student_current_profile(): ?array
     if (is_array($profile) && (int) ($profile['person_id'] ?? 0) === $personId) {
         return $profile;
     }
+
+    ensure_patients_vitals_schema();
 
     $stmt = auth_db()->prepare('
         SELECT
@@ -127,6 +135,12 @@ function student_current_profile(): ?array
             pt.guardian_or_contact_number,
             pt.emergency_token,
             pt.updated_at AS patient_updated_at,
+            pt.height_cm,
+            pt.weight_kg,
+            pt.bmi,
+            vs.temperature,
+            vs.blood_pressure,
+            vs.pulse_rate,
             CASE WHEN pt.person_id IS NULL THEN 0 ELSE 1 END AS has_clinical_record,
             CASE
                 WHEN s.person_id IS NOT NULL THEN "student"
@@ -141,6 +155,16 @@ function student_current_profile(): ?array
         LEFT JOIN school_employees se ON se.person_id = p.id
         LEFT JOIN departments ed ON ed.id = se.department_id
         LEFT JOIN patients pt ON pt.person_id = p.id
+        LEFT JOIN (
+            SELECT vs1.*
+            FROM vital_signs vs1
+            INNER JOIN (
+                SELECT patient_id, MAX(measured_at) AS max_measured_at
+                FROM vital_signs
+                WHERE patient_id IS NOT NULL
+                GROUP BY patient_id
+            ) vs2 ON vs1.patient_id = vs2.patient_id AND vs1.measured_at = vs2.max_measured_at
+        ) vs ON vs.patient_id = p.id
         WHERE p.id = ?
         LIMIT 1
     ');

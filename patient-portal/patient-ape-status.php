@@ -625,16 +625,42 @@ render_student_header('APE Status', 'ape');
                 <div class="ape-flow-field"><p class="clinic-label mb-1">Pulse Rate</p><strong><?= (int) $apeRecord['patient_pulse_rate'] ?> bpm</strong></div>
             </div>
         <?php elseif ($canEnterPatientVitals): ?>
-            <form method="post" class="grid grid-cols-1 md:grid-cols-2 gap-4" id="ape-vitals-form">
+            <form method="post" class="grid grid-cols-1 md:grid-cols-3 gap-4" id="ape-vitals-form">
                 <input type="hidden" name="action" value="confirm_ape_vitals">
-                <div><label class="clinic-label" for="patient_height_cm">Height (cm)</label><input class="student-input" id="patient_height_cm" name="patient_height_cm" type="number" min="30" max="250" step="0.01" placeholder="165" required></div>
-                <div><label class="clinic-label" for="patient_weight_kg">Weight (kg)</label><input class="student-input" id="patient_weight_kg" name="patient_weight_kg" type="number" min="1" max="500" step="0.01" placeholder="60" required></div>
-                <div><label class="clinic-label" for="patient_bmi">BMI (calculated)</label><input class="student-input" id="patient_bmi" name="patient_bmi_display" type="text" placeholder="Enter height and weight" readonly></div>
-                <div><label class="clinic-label" for="patient_temperature">Temperature (°C)</label><input class="student-input" id="patient_temperature" name="patient_temperature" type="number" min="30" max="45" step="0.1" placeholder="36.7" required></div>
-                <div><label class="clinic-label" for="patient_blood_pressure">Blood Pressure</label><input class="student-input" id="patient_blood_pressure" name="patient_blood_pressure" type="text" pattern="\d{2,3}\s*/\s*\d{2,3}" placeholder="120/80" required></div>
-                <div><label class="clinic-label" for="patient_pulse_rate">Pulse Rate (bpm)</label><input class="student-input" id="patient_pulse_rate" name="patient_pulse_rate" type="number" min="20" max="250" placeholder="72" required></div>
-                <div class="md:col-span-2 student-note student-note-warning"><span class="material-symbols-outlined">info</span><div>Review your entries carefully. After confirmation, these patient-entered values will be locked and shown to clinic staff.</div></div>
-                <button class="student-button md:col-span-2" type="submit" data-confirm-submit data-confirm-type="primary" data-confirm-title="Confirm vitals and BMI?" data-confirm-message="These patient-entered values will be locked and shared with the clinic for review." data-confirm-toast="Confirming vitals and BMI..."><span class="material-symbols-outlined">verified</span> Confirm Vitals and BMI</button>
+                <div>
+                    <label class="student-label" for="patient_height_cm">Height (cm)</label>
+                    <input class="student-input" id="patient_height_cm" name="patient_height_cm" type="number" min="30" max="250" step="0.01" placeholder="e.g. 170" required>
+                </div>
+                <div>
+                    <label class="student-label" for="patient_weight_kg">Weight (kg)</label>
+                    <input class="student-input" id="patient_weight_kg" name="patient_weight_kg" type="number" min="1" max="500" step="0.01" placeholder="e.g. 60" required>
+                </div>
+                <div>
+                    <label class="student-label" for="patient_bmi">BMI (calculated)</label>
+                    <input class="student-input" id="patient_bmi" name="patient_bmi_display" type="text" placeholder="Enter height/weight" readonly>
+                </div>
+                <div>
+                    <label class="student-label" for="patient_temperature">Temperature (°C)</label>
+                    <input class="student-input" id="patient_temperature" name="patient_temperature" type="number" min="30" max="45" step="0.01" placeholder="e.g. 36.6" required>
+                </div>
+                <div>
+                    <label class="student-label" for="patient_blood_pressure">Blood Pressure</label>
+                    <input class="student-input" id="patient_blood_pressure" name="patient_blood_pressure" type="text" pattern="\d{2,3}\s*/\s*\d{2,3}" placeholder="e.g. 120/80" required>
+                </div>
+                <div>
+                    <label class="student-label" for="patient_pulse_rate">Pulse Rate (bpm)</label>
+                    <input class="student-input" id="patient_pulse_rate" name="patient_pulse_rate" type="number" min="20" max="250" placeholder="e.g. 72" required>
+                </div>
+                
+                <div class="md:col-span-3 student-note student-note-warning">
+                    <span class="material-symbols-outlined">info</span>
+                    <div>Review your entries carefully. After confirmation, these values will be locked and shown to clinic staff.</div>
+                </div>
+                
+                <button class="student-button md:col-span-3" type="submit" data-confirm-submit data-confirm-type="primary" data-confirm-title="Confirm vitals and BMI?" data-confirm-message="These values will be locked and shared with the clinic for review." data-confirm-toast="Confirming vitals and BMI...">
+                    <span class="material-symbols-outlined">verified</span>
+                    Confirm Vitals and BMI
+                </button>
             </form>
         <?php else: ?>
             <div class="student-note student-note-info"><span class="material-symbols-outlined">info</span><div>This completed APE record predates the patient vitals profile step. No new patient-entered values are required.</div></div>

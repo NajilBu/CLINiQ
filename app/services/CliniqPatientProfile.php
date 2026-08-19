@@ -44,6 +44,12 @@ function cliniq_patient_profile_select(): string
             pt.existing_conditions,
             pt.medications,
             pt.updated_at,
+            pt.height_cm,
+            pt.weight_kg,
+            pt.bmi,
+            vs.temperature,
+            vs.blood_pressure,
+            vs.pulse_rate,
             se.role_classification,
             se.employment_type,
             se.position_title AS employee_position_title,
@@ -71,6 +77,16 @@ function cliniq_patient_profile_select(): string
         LEFT JOIN departments ed ON ed.id = se.department_id
         LEFT JOIN clinic_staff cs ON cs.person_id = pe.id
         LEFT JOIN departments cd ON cd.id = cs.department_id
+        LEFT JOIN (
+            SELECT vs1.*
+            FROM vital_signs vs1
+            INNER JOIN (
+                SELECT patient_id, MAX(measured_at) AS max_measured_at
+                FROM vital_signs
+                WHERE patient_id IS NOT NULL
+                GROUP BY patient_id
+            ) vs2 ON vs1.patient_id = vs2.patient_id AND vs1.measured_at = vs2.max_measured_at
+        ) vs ON vs.patient_id = pt.person_id
     SQL;
 }
 

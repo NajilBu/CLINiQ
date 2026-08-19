@@ -45,7 +45,46 @@ render_clinic_command_header(
     'Patient Accounts',
     'Create inactive patient accounts individually or import an official list from Excel.'
 );
+
+$canManageSettings = in_array($user['role'] ?? '', ['admin', 'nurse', 'it_expert'], true);
+$canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
 ?>
+<div class="settings-shell">
+    <aside class="settings-tabs">
+        <a href="<?= app_url('settings/index.php?tab=general') ?>" class="settings-tab-link text-decoration-none" data-no-ajax="true">
+            <span class="material-symbols-outlined">corporate_fare</span>
+            <span>Clinic Profile</span>
+        </a>
+        <a href="<?= app_url('settings/index.php?tab=account') ?>" class="settings-tab-link text-decoration-none" data-no-ajax="true">
+            <span class="material-symbols-outlined">admin_panel_settings</span>
+            <span>Staff Profiles</span>
+        </a>
+        <a href="<?= app_url('patient-accounts/index.php') ?>" class="settings-tab-link active text-decoration-none" data-no-ajax="true">
+            <span class="material-symbols-outlined">manage_accounts</span>
+            <span>Patient Accounts</span>
+        </a>
+        <?php if ($canManageApeCycles): ?>
+            <a href="<?= app_url('settings/index.php?tab=ape-cycle') ?>" class="settings-tab-link text-decoration-none" data-no-ajax="true">
+                <span class="material-symbols-outlined">event_repeat</span>
+                <span>APE Cycle</span>
+            </a>
+        <?php endif; ?>
+        <a href="<?= app_url('settings/index.php?tab=dropdowns') ?>" class="settings-tab-link text-decoration-none" data-no-ajax="true">
+            <span class="material-symbols-outlined">list_alt</span>
+            <span>Dropdowns</span>
+        </a>
+        <a href="<?= app_url('settings/index.php?tab=clinical') ?>" class="settings-tab-link text-decoration-none" data-no-ajax="true">
+            <span class="material-symbols-outlined">emergency</span>
+            <span>Incident Risk</span>
+        </a>
+        <a href="<?= app_url('settings/index.php?tab=maintenance') ?>" class="settings-tab-link text-decoration-none" data-no-ajax="true">
+            <span class="material-symbols-outlined">restart_alt</span>
+            <span>Maintenance</span>
+        </a>
+    </aside>
+
+    <section class="settings-panel">
+        <div class="settings-panel-body">
 
 <?php if ($pageError !== ''): ?>
     <div class="rounded-xl bg-red-50 border border-red-100 text-red-700 px-4 py-3 text-sm font-bold mb-5">
@@ -66,7 +105,7 @@ render_clinic_command_header(
     </section>
 <?php endif; ?>
 
-<div class="grid grid-cols-1 xl:grid-cols-2 gap-5 mb-5">
+<div class="grid grid-cols-1 gap-5 mb-5">
     <section class="clinic-card p-5">
         <div class="flex items-start gap-3 mb-5">
             <span class="w-11 h-11 rounded-xl bg-primary-fixed text-primary flex items-center justify-center">
@@ -148,7 +187,7 @@ render_clinic_command_header(
                     </select>
                     <p class="text-[11px] font-bold text-slate-500 mt-1" id="year_level_or_employment_type_hint">Choose 1 to 4.</p>
                 </div>
-                <div class="sm:col-span-2">
+                <div>
                     <label class="clinic-label" id="section_or_position_label" for="student_section_code">Section Code</label>
                     <input class="clinic-input hidden" id="section_or_position" name="section_or_position" placeholder="Position" aria-describedby="section_or_position_hint" disabled>
                     <select class="clinic-input" id="student_section_code" name="section_or_position" aria-describedby="section_or_position_hint" required>
@@ -312,6 +351,10 @@ render_clinic_command_header(
         <button type="button" class="<?= $recentAccountPageCount === 1 ? 'page-disabled' : '' ?>" aria-label="Next page" data-recent-account-next<?= $recentAccountPageCount === 1 ? ' disabled' : '' ?>>›</button>
     </nav>
 </section>
+
+        </div>
+    </section>
+</div>
 
 <script src="<?= app_url('assets/vendor/sheetjs/xlsx.full.min.js?v=0.20.3') ?>"></script>
 <script>

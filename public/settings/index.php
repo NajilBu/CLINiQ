@@ -91,7 +91,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ((int) ($_POST['user_id'] ?? 0) === (int) ($user['id'] ?? 0)) {
                     $_SESSION['user']['name'] = trim((string) ($_POST['name'] ?? $user['name']));
                     $_SESSION['user']['id_number'] = strtoupper(trim((string) ($_POST['id_number'] ?? $user['id_number'])));
-                    $_SESSION['user']['email'] = strtolower(str_replace(['-', ' '], '', (string) ($_SESSION['user']['id_number'] ?? 'staff'))) . '@plpasig.edu.ph';
+                    [$firstName, $middleName, $lastName] = split_staff_profile_name($_SESSION['user']['name']);
+                    $_SESSION['user']['email'] = strtolower(str_replace(' ', '', $lastName) . '_' . str_replace(' ', '', $firstName)) . '@plpasig.edu.ph';
                     $_SESSION['user']['role'] = normalize_staff_profile_role((string) ($_POST['role'] ?? $user['role']));
                 }
                 flash_message('success', 'Staff profile updated.');
@@ -490,10 +491,14 @@ render_clinic_command_header(
 
                     <form method="post" class="settings-section space-y-5 mb-6" autocomplete="off">
                         <input type="hidden" name="action" value="create_staff_profile">
-                        <div class="grid grid-cols-1 lg:grid-cols-[1fr_1fr_0.75fr_0.85fr] gap-4">
+                        <div class="grid grid-cols-1 lg:grid-cols-[1fr_1.2fr_0.8fr_0.75fr_0.85fr] gap-4">
                             <div class="settings-field">
                                 <label class="clinic-label" for="new_staff_name">Full Name</label>
                                 <input class="settings-input" id="new_staff_name" name="name" placeholder="Dr. Maria Santos" <?= !$canManageStaffProfiles ? 'readonly' : '' ?> required>
+                            </div>
+                            <div class="settings-field">
+                                <label class="clinic-label" for="new_staff_email">Email Address</label>
+                                <input class="settings-input" id="new_staff_email" name="email" placeholder="santos_maria@plpasig.edu.ph" readonly>
                             </div>
                             <div class="settings-field">
                                 <label class="clinic-label" for="new_staff_id_number">Login ID Number</label>
@@ -529,10 +534,14 @@ render_clinic_command_header(
                                     <form method="post" class="settings-profile-form">
                                         <input type="hidden" name="action" value="update_staff_profile">
                                         <input type="hidden" name="user_id" value="<?= $staffId ?>">
-                                        <div class="grid grid-cols-1 lg:grid-cols-[1fr_1fr_0.7fr_auto] gap-3 items-end">
+                                        <div class="grid grid-cols-1 lg:grid-cols-[1fr_1.2fr_0.8fr_0.7fr_auto] gap-3 items-end">
                                             <div class="settings-field">
                                                 <label class="clinic-label" for="staff_name_<?= $staffId ?>">Name</label>
-                                                <input class="settings-input" id="staff_name_<?= $staffId ?>" name="name" value="<?= e($staffProfile['name']) ?>" <?= !$canManageStaffProfiles ? 'readonly' : '' ?> required>
+                                                <input class="settings-input staff-name-input" id="staff_name_<?= $staffId ?>" name="name" value="<?= e($staffProfile['name']) ?>" <?= !$canManageStaffProfiles ? 'readonly' : '' ?> required>
+                                            </div>
+                                            <div class="settings-field">
+                                                <label class="clinic-label" for="staff_email_<?= $staffId ?>">Email</label>
+                                                <input class="settings-input staff-email-input" id="staff_email_<?= $staffId ?>" name="email" value="<?= e($staffProfile['email']) ?>" readonly>
                                             </div>
                                             <div class="settings-field">
                                                 <label class="clinic-label" for="staff_id_number_<?= $staffId ?>">ID Number</label>
@@ -1055,6 +1064,42 @@ render_clinic_command_header(
 
     <script>
         (() => {
+            const generateEmailInput = (fullName) => {
+                const trimmed = fullName.trim();
+                if (!trimmed) return "";
+                const parts = trimmed.split(/\s+/).filter(Boolean);
+                let firstName = "";
+                let lastName = "";
+                if (parts.length === 1) {
+                    firstName = parts[0];
+                    lastName = parts[0];
+                } else {
+                    firstName = parts[0];
+                    lastName = parts[parts.length - 1];
+                }
+                const cleanFirst = firstName.toLowerCase().replace(/\s+/g, "");
+                const cleanLast = lastName.toLowerCase().replace(/\s+/g, "");
+                return `${cleanLast}_${cleanFirst}@plpasig.edu.ph`;
+            };
+
+            const newStaffName = document.getElementById('new_staff_name');
+            const newStaffEmail = document.getElementById('new_staff_email');
+            if (newStaffName && newStaffEmail) {
+                newStaffName.addEventListener('input', () => {
+                    newStaffEmail.value = generateEmailInput(newStaffName.value);
+                });
+            }
+
+            document.querySelectorAll('.staff-name-input').forEach((input) => {
+                const form = input.closest('form');
+                if (!form) return;
+                const emailInput = form.querySelector('.staff-email-input');
+                if (!emailInput) return;
+                input.addEventListener('input', () => {
+                    emailInput.value = generateEmailInput(input.value);
+                });
+            });
+
             const schoolYear = document.getElementById('apeSchoolYear');
             const periodStart = document.getElementById('apePeriodStart');
             const periodEnd = document.getElementById('apePeriodEnd');

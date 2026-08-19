@@ -75,6 +75,7 @@ CREATE TABLE accounts (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   person_id BIGINT UNSIGNED NOT NULL UNIQUE,
   password_hash VARCHAR(255) NULL,
+  email VARCHAR(160) NULL,
   account_status ENUM('inactive', 'active', 'suspended')
     NOT NULL DEFAULT 'inactive',
   activated_at DATETIME NULL,
@@ -131,6 +132,9 @@ CREATE TABLE patients (
   emergency_instructions TEXT NULL,
   guardian_or_contact_name VARCHAR(160) NULL,
   guardian_or_contact_number VARCHAR(50) NULL,
+  height_cm DECIMAL(5,2) NULL,
+  weight_kg DECIMAL(5,2) NULL,
+  bmi DECIMAL(4,1) NULL,
   emergency_token CHAR(64) NULL UNIQUE,
   token_enabled TINYINT(1) NOT NULL DEFAULT 1,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -250,7 +254,8 @@ CREATE TABLE visit_entries (
 
 CREATE TABLE vital_signs (
   vital_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  visit_id BIGINT UNSIGNED NOT NULL,
+  visit_id BIGINT UNSIGNED NULL,
+  patient_id BIGINT UNSIGNED NULL,
   entry_id BIGINT UNSIGNED NULL,
   temperature DECIMAL(4,1) NULL,
   blood_pressure VARCHAR(20) NULL,
@@ -259,12 +264,15 @@ CREATE TABLE vital_signs (
   measured_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_vital_signs_visit
     FOREIGN KEY (visit_id) REFERENCES visits(visit_id) ON DELETE CASCADE,
+  CONSTRAINT fk_vital_signs_patient
+    FOREIGN KEY (patient_id) REFERENCES patients(person_id) ON DELETE CASCADE,
   CONSTRAINT fk_vital_signs_entry
     FOREIGN KEY (entry_id) REFERENCES visit_entries(entry_id) ON DELETE SET NULL,
   CONSTRAINT fk_vital_signs_measured_by
     FOREIGN KEY (measured_by_person_id) REFERENCES clinic_staff(person_id)
     ON DELETE SET NULL,
   INDEX idx_vital_signs_visit_measured (visit_id, measured_at),
+  INDEX idx_vital_signs_patient (patient_id),
   INDEX idx_vital_signs_entry (entry_id),
   INDEX idx_vital_signs_measured_by (measured_by_person_id)
 );
