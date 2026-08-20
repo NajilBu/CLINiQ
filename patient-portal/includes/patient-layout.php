@@ -212,11 +212,35 @@ function student_require_login(): array
 {
     $profile = student_current_profile();
     if ($profile === null) {
+        // Allow re-enrollment sessions (school-year reset) through even while account is inactive.
+        if (re_enrollment_pending()) {
+            return [
+                'patient_id'       => 0,
+                'person_id'        => (int) (re_enrollment_context()['person_id'] ?? 0),
+                'name'             => '',
+                'first_name'       => '',
+                'student_id'       => '',
+                'course'           => '',
+                'email'            => '',
+                'account_status'   => 'inactive',
+                'first_registration' => false,
+                're_enrollment'    => true,
+                'account_type'     => (string) (re_enrollment_context()['type'] ?? 'patient'),
+            ];
+        }
         header('Location: patient-login.php');
         exit;
     }
 
     if (!empty($profile['first_registration'])) {
+        $script = basename((string) ($_SERVER['SCRIPT_NAME'] ?? ''));
+        if (!in_array($script, ['patient-dashboard.php', 'patient-login.php'], true)) {
+            header('Location: patient-dashboard.php');
+            exit;
+        }
+    }
+
+    if (re_enrollment_pending()) {
         $script = basename((string) ($_SERVER['SCRIPT_NAME'] ?? ''));
         if (!in_array($script, ['patient-dashboard.php', 'patient-login.php'], true)) {
             header('Location: patient-dashboard.php');
@@ -245,6 +269,7 @@ function student_find_patient_by_number(string $studentNumber): ?array
             a.id AS account_id,
             a.password_hash,
             a.account_status,
+            a.activated_at,
             p.id AS person_id,
             p.id_number,
             p.first_name,

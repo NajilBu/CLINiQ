@@ -157,7 +157,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    if (in_array($action, ['start_ape_cycle', 'close_ape_cycle', 'archive_ape_cycle'], true)) {
+    if (in_array($action, ['start_ape_cycle', 'close_ape_cycle', 'archive_ape_cycle', 'reset_school_year', 'update_ape_cycle_schedule'], true)) {
         if (!$canManageApeCycles) {
             flash_message('error', 'Only administrators and doctors can manage annual APE cycles.');
             header('Location: index.php?tab=general');
@@ -171,7 +171,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     (string) ($_POST['academic_year'] ?? ''),
                     (string) ($_POST['compliance_start'] ?? ''),
                     (string) ($_POST['compliance_end'] ?? ''),
-                    $actorPersonId
+                    $actorPersonId,
+                    (string) ($_POST['exam_schedule_date'] ?? '')
                 );
                 flash_message('success', sprintf(
                     'APE cycle %s started. %d active patient record(s) created and %d existing record(s) linked.',
@@ -182,9 +183,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } elseif ($action === 'close_ape_cycle') {
                 $cycle = close_ape_cycle((int) ($_POST['ape_cycle_id'] ?? 0), $actorPersonId);
                 flash_message('success', "APE cycle {$cycle['academic_year']} closed. Its records remain available for reports and patient history.");
-            } else {
+            } elseif ($action === 'archive_ape_cycle') {
                 $cycle = archive_ape_cycle((int) ($_POST['ape_cycle_id'] ?? 0), $actorPersonId);
                 flash_message('success', "APE cycle {$cycle['academic_year']} archived.");
+            } elseif ($action === 'update_ape_cycle_schedule') {
+                update_ape_cycle_schedule((int) ($_POST['ape_cycle_id'] ?? 0), (string) ($_POST['exam_schedule_date'] ?? ''));
+                flash_message('success', 'Exam schedule date updated.');
+            } elseif ($action === 'reset_school_year') {
+                $count = reset_school_year_accounts();
+                flash_message('success', "{$count} patient account(s) reset to inactive. They will be prompted to confirm re-enrollment or re-employment on next login.");
             }
         } catch (Throwable $e) {
             flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $e->getMessage());
@@ -985,6 +992,11 @@ render_clinic_command_header(
                                 <label class="clinic-label" for="apePeriodEnd">Compliance End</label>
                                 <input class="settings-input" id="apePeriodEnd" type="date" value="<?= e($defaultApeEndDate) ?>" <?= $hasActiveApeCycle ? 'disabled' : '' ?>>
                             </div>
+                            <div class="settings-field md:col-span-3">
+                                <label class="clinic-label" for="apeExamScheduleDate">Exam Schedule Date <span class="font-normal text-slate-400">(optional)</span></label>
+                                <input class="settings-input" id="apeExamScheduleDate" type="date" <?= $hasActiveApeCycle ? 'disabled' : '' ?>>
+                                <p class="settings-help mb-0">The single day patients are scheduled for examination. If they miss this date without confirming vitals, their status will show as <strong>Missed</strong>.</p>
+                            </div>
                         </div>
                         <p class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-bold text-red-700" id="apeCycleError" role="alert"></p>
                     </section>
@@ -1007,6 +1019,48 @@ render_clinic_command_header(
                             <p class="settings-help mt-3 mb-0">Close the active <?= e($apeCurrentCycle['academic_year']) ?> cycle before starting another school year.</p>
                         <?php endif; ?>
                     </section>
+
+                    <?php if ($hasActiveApeCycle): ?>
+                    <section class="settings-section space-y-4">
+                        <div>
+                            <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Exam Schedule Date</h3>
+                            <p class="settings-help mb-0">
+                                <?php if (!empty($apeCurrentCycle['exam_schedule_date'])): ?>
+                                    Currently set to <strong><?= e(date('F j, Y', strtotime($apeCurrentCycle['exam_schedule_date']))) ?></strong>. Update below to change.
+                                <?php else: ?>
+                                    No exam date set yet. Set one to let patients know when to present for examination.
+                                <?php endif; ?>
+                            </p>
+                        </div>
+                        <form method="post" data-no-ajax="true" class="flex flex-col sm:flex-row gap-3 items-end">
+                            <input type="hidden" name="action" value="update_ape_cycle_schedule">
+                            <input type="hidden" name="ape_cycle_id" value="<?= (int) $apeCurrentCycle['ape_cycle_id'] ?>">
+                            <div class="settings-field mb-0 flex-1">
+                                <label class="clinic-label" for="updateExamScheduleDate">Exam Schedule Date</label>
+                                <input class="settings-input" id="updateExamScheduleDate" name="exam_schedule_date" type="date" value="<?= e($apeCurrentCycle['exam_schedule_date'] ?? '') ?>" required>
+                            </div>
+                            <button class="btn btn-primary justify-center shrink-0" data-confirm-submit data-confirm-type="primary" data-confirm-title="Set exam schedule date?" data-confirm-message="Patients who miss this date without confirming vitals will be marked as Missed." data-confirm-toast="Saving exam schedule...">
+                                <span class="material-symbols-outlined text-[18px]">event_available</span>
+                                Set Schedule
+                            </button>
+                        </form>
+                    </section>
+                    <?php endif; ?>
+
+                    <section class="settings-section border-2 border-red-200 bg-red-50 space-y-4">
+                        <div>
+                            <h3 class="font-headline text-lg font-extrabold text-red-800 mb-1">Start New School Year</h3>
+                            <p class="settings-help mb-0 text-red-700">This resets <strong>all active patient accounts</strong> (students, faculty, and personnel) to inactive. On their next login, each person will be asked to confirm they are still enrolled or employed before regaining access.</p>
+                        </div>
+                        <form method="post" data-no-ajax="true">
+                            <input type="hidden" name="action" value="reset_school_year">
+                            <button class="btn btn-danger justify-center" data-confirm-submit data-confirm-type="danger" data-confirm-title="Reset all patient accounts?" data-confirm-message="All active student, faculty, and personnel accounts will be set to inactive. Each person must confirm re-enrollment or re-employment on their next login. This cannot be undone." data-confirm-toast="Resetting accounts...">
+                                <span class="material-symbols-outlined text-[18px]">restart_alt</span>
+                                Start New School Year
+                            </button>
+                        </form>
+                    </section>
+
                 </div>
             <?php endif; ?>
 
@@ -1044,6 +1098,7 @@ render_clinic_command_header(
             <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3 text-sm">
                 <div class="flex justify-between gap-4"><span class="font-bold text-slate-500">School Year</span><strong id="apeConfirmSchoolYear"></strong></div>
                 <div class="flex justify-between gap-4"><span class="font-bold text-slate-500">Compliance Period</span><strong class="text-right" id="apeConfirmDates"></strong></div>
+                <div class="flex justify-between gap-4"><span class="font-bold text-slate-500">Exam Date</span><strong id="apeConfirmExamDate">Not set</strong></div>
                 <div class="flex justify-between gap-4"><span class="font-bold text-slate-500">Active Patients</span><strong><?= number_format($activeApePatientCount) ?></strong></div>
             </div>
             <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-bold text-amber-800">
@@ -1054,6 +1109,7 @@ render_clinic_command_header(
                 <input type="hidden" name="academic_year" id="apeSubmitSchoolYear">
                 <input type="hidden" name="compliance_start" id="apeSubmitPeriodStart">
                 <input type="hidden" name="compliance_end" id="apeSubmitPeriodEnd">
+                <input type="hidden" name="exam_schedule_date" id="apeSubmitExamDate">
                 <div class="grid grid-cols-2 gap-3 mt-6">
                     <button type="button" class="btn btn-secondary justify-center" id="cancelApeCycleButton">Cancel</button>
                     <button type="submit" class="btn btn-primary justify-center" id="confirmApeCycleButton">Start APE Cycle</button>
@@ -1145,6 +1201,13 @@ render_clinic_command_header(
                 if (!validate()) return;
                 document.getElementById('apeConfirmSchoolYear').textContent = schoolYear.value.trim();
                 document.getElementById('apeConfirmDates').textContent = `${formatDate(periodStart.value)} to ${formatDate(periodEnd.value)}`;
+                const examDateEl = document.getElementById('apeExamScheduleDate');
+                const examDateConfirmEl = document.getElementById('apeConfirmExamDate');
+                const examDateSubmitEl = document.getElementById('apeSubmitExamDate');
+                if (examDateEl && examDateConfirmEl && examDateSubmitEl) {
+                    examDateConfirmEl.textContent = examDateEl.value ? formatDate(examDateEl.value) : 'Not set';
+                    examDateSubmitEl.value = examDateEl.value;
+                }
                 document.getElementById('apeSubmitSchoolYear').value = schoolYear.value.trim();
                 document.getElementById('apeSubmitPeriodStart').value = periodStart.value;
                 document.getElementById('apeSubmitPeriodEnd').value = periodEnd.value;

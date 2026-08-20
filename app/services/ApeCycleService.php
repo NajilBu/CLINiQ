@@ -14,6 +14,11 @@ function ensure_ape_cycle_schema(): void
     if ((int) $table !== 1 || (int) $column !== 1) {
         throw new RuntimeException('APE cycle schema is missing. Run database/migrations/20260811_create_ape_cycles.sql.');
     }
+    // Auto-add exam_schedule_date column if missing.
+    $scheduleCol = $db->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ape_cycles' AND COLUMN_NAME = 'exam_schedule_date'")->fetchColumn();
+    if ((int) $scheduleCol === 0) {
+        $db->exec("ALTER TABLE ape_cycles ADD COLUMN exam_schedule_date DATE NULL AFTER compliance_end");
+    }
     $ready = true;
 }
 
@@ -103,7 +108,7 @@ function ape_cycle_current(): ?array
     return $cycleId ? ape_cycle_fetch((int) $cycleId) : null;
 }
 
-function start_ape_cycle(string $academicYear, string $complianceStart, string $complianceEnd, ?int $actorPersonId): array
+function start_ape_cycle(string $academicYear, string $complianceStart, string $complianceEnd, ?int $actorPersonId, ?string $examScheduleDate = null): array
 {
     ensure_ape_cycle_schema();
     $academicYear = normalize_ape_academic_year($academicYear);
@@ -126,8 +131,12 @@ function start_ape_cycle(string $academicYear, string $complianceStart, string $
             throw new RuntimeException("Close the active {$active} APE cycle before starting another school year.");
         }
 
-        $insertCycle = $db->prepare('INSERT INTO ape_cycles (academic_year, compliance_start, compliance_end, started_by_person_id) VALUES (?, ?, ?, ?)');
-        $insertCycle->execute([$academicYear, $complianceStart, $complianceEnd, $actorPersonId]);
+        $examDate = null;
+        if ($examScheduleDate !== null && $examScheduleDate !== '') {
+            $examDate = normalize_ape_cycle_date($examScheduleDate, 'exam schedule');
+        }
+        $insertCycle = $db->prepare('INSERT INTO ape_cycles (academic_year, compliance_start, compliance_end, exam_schedule_date, started_by_person_id) VALUES (?, ?, ?, ?, ?)');
+        $insertCycle->execute([$academicYear, $complianceStart, $complianceEnd, $examDate, $actorPersonId]);
         $cycleId = (int) $db->lastInsertId();
 
         $insertRecords = $db->prepare("
@@ -229,4 +238,37 @@ function archive_ape_cycle(int $cycleId, ?int $actorPersonId): array
         if ($db->inTransaction()) $db->rollBack();
         throw $e;
     }
+}
+
+/**
+ * Update the exam schedule date on an active APE cycle.
+ */
+function update_ape_cycle_schedule(int $cycleId, string $examScheduleDate): void
+{
+    ensure_ape_cycle_schema();
+    $examDate = $examScheduleDate !== '' ? normalize_ape_cycle_date($examScheduleDate, 'exam schedule') : null;
+    $stmt = auth_db()->prepare("UPDATE ape_cycles SET exam_schedule_date = ? WHERE ape_cycle_id = ? AND status = 'Active'");
+    $stmt->execute([$examDate, $cycleId]);
+    if ($stmt->rowCount() !== 1) {
+        throw new RuntimeException('The exam schedule could not be updated. Make sure the cycle is still active.');
+    }
+}
+
+/**
+ * Reset all patient accounts to inactive at the start of a new school year.
+ * Students must confirm re-enrollment; faculty/personnel must confirm re-employment.
+ * Returns the number of accounts deactivated.
+ */
+function reset_school_year_accounts(): int
+{
+    $db = auth_db();
+    $stmt = $db->prepare("
+        UPDATE accounts a
+        INNER JOIN patients pt ON pt.person_id = a.person_id
+        SET a.account_status = 'inactive',
+            a.activated_at = NULL
+        WHERE a.account_status = 'active'
+    ");
+    $stmt->execute();
+    return $stmt->rowCount();
 }

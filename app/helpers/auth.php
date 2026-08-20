@@ -136,6 +136,59 @@ function complete_first_registration(string $password, string $confirmPassword):
     }
 }
 
+/**
+ * Begin the re-enrollment/re-employment confirmation flow for a returning patient
+ * whose account was reset at the start of a new school year.
+ * Unlike first_registration, no password change is required.
+ */
+function begin_re_enrollment(array $account): void
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        session_start();
+    }
+    session_regenerate_id(true);
+    $_SESSION['patient_legacy_id'] = (int) ($account['person_id'] ?? 0);
+    $_SESSION['patient_account_id'] = (int) ($account['account_id'] ?? 0);
+    $_SESSION['patient_person_id'] = (int) ($account['person_id'] ?? 0);
+    $_SESSION['re_enrollment'] = [
+        'account_id' => (int) ($account['account_id'] ?? 0),
+        'person_id'  => (int) ($account['person_id'] ?? 0),
+        'type'       => (string) ($account['account_type'] ?? 'patient'),
+    ];
+}
+
+function re_enrollment_pending(): bool
+{
+    return isset($_SESSION['re_enrollment']) && is_array($_SESSION['re_enrollment']);
+}
+
+function re_enrollment_context(): ?array
+{
+    $ctx = $_SESSION['re_enrollment'] ?? null;
+    return is_array($ctx) ? $ctx : null;
+}
+
+/**
+ * Confirm re-enrollment/re-employment: reactivates the account.
+ */
+function complete_re_enrollment(): void
+{
+    $ctx = re_enrollment_context();
+    if ($ctx === null) {
+        throw new RuntimeException('Re-enrollment session has expired. Please log in again.');
+    }
+    $db = auth_db();
+    $stmt = $db->prepare("
+        UPDATE accounts SET account_status = 'active', activated_at = NOW()
+        WHERE id = ? AND person_id = ? AND account_status = 'inactive'
+    ");
+    $stmt->execute([(int) $ctx['account_id'], (int) $ctx['person_id']]);
+    if ($stmt->rowCount() !== 1) {
+        throw new RuntimeException('Your account could not be reactivated. Please contact the clinic.');
+    }
+    unset($_SESSION['re_enrollment']);
+}
+
 function require_login(): void
 {
     if (!current_user()) {
