@@ -1,0 +1,126 @@
+<?php
+
+require_once __DIR__ . '/../config/env.php';
+require_once __DIR__ . '/../services/SystemSettings.php';
+require_once __DIR__ . '/../vendor/phpmailer/src/Exception.php';
+require_once __DIR__ . '/../vendor/phpmailer/src/PHPMailer.php';
+require_once __DIR__ . '/../vendor/phpmailer/src/SMTP.php';
+
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception as MailException;
+
+/**
+ * Send an HTML email via SMTP.
+ * Config is read from the DB (mail_settings()) first; falls back to .env values.
+ */
+function send_cliniq_email(string $toEmail, string $toName, string $subject, string $htmlBody): bool
+{
+    // Prefer DB-stored settings; fall back to .env.
+    $dbSettings  = mail_settings_configured() ? mail_settings() : [];
+    $host        = $dbSettings['host']       ?? env_value('MAIL_HOST', 'smtp.gmail.com');
+    $port        = (int) ($dbSettings['port']      ?? env_value('MAIL_PORT', '587'));
+    $encryption  = strtolower((string) ($dbSettings['encryption'] ?? env_value('MAIL_ENCRYPTION', 'tls')));
+    $user        = $dbSettings['username']   ?? env_value('MAIL_USER', '');
+    $pass        = $dbSettings['password']   ?? env_value('MAIL_PASS', '');
+    $fromEmail   = $dbSettings['from_email'] ?? env_value('MAIL_FROM', $user);
+    $fromName    = $dbSettings['from_name']  ?? env_value('MAIL_FROM_NAME', 'CLINiQ Clinic');
+
+    $mail = new PHPMailer(true);
+    try {
+        $mail->isSMTP();
+        $mail->Host       = $host;
+        $mail->SMTPAuth   = true;
+        $mail->Username   = $user;
+        $mail->Password   = $pass;
+        $mail->SMTPSecure = $encryption === 'ssl' ? PHPMailer::ENCRYPTION_SMTPS : PHPMailer::ENCRYPTION_STARTTLS;
+        $mail->Port       = $port;
+
+        $mail->setFrom($fromEmail, $fromName);
+        $mail->addAddress($toEmail, $toName);
+
+        $mail->isHTML(true);
+        $mail->Subject = $subject;
+        $mail->Body    = $htmlBody;
+        $mail->AltBody = strip_tags(
+            str_replace(['<br>', '<br/>', '<br />', '</p>', '</li>'], "\n", $htmlBody)
+        );
+
+        $mail->send();
+        return true;
+    } catch (MailException $e) {
+        error_log('[CLINiQ Mail] Failed to send to ' . $toEmail . ': ' . $mail->ErrorInfo);
+        return false;
+    }
+}
+
+/**
+ * Build the re-enrollment / re-employment HTML email body.
+ *
+ * @param string $firstName   Patient first name
+ * @param string $accountType 'student' | 'faculty' | 'school_personnel'
+ * @param string $clinicName  Clinic display name for the email header
+ * @param string $loginUrl    Full URL to the patient portal login page
+ */
+function cliniq_re_enrollment_email_body(
+    string $firstName,
+    string $accountType,
+    string $clinicName,
+    string $loginUrl
+): string {
+    $isStudent    = $accountType === 'student';
+    $actionVerb   = $isStudent ? 'enrolled' : 'employed';
+    $confirmLabel = $isStudent ? 'Confirm Enrollment' : 'Confirm Employment';
+    $clinicSafe   = htmlspecialchars($clinicName, ENT_QUOTES);
+    $firstSafe    = htmlspecialchars($firstName, ENT_QUOTES);
+    $loginSafe    = htmlspecialchars($loginUrl, ENT_QUOTES);
+    $message      = $isStudent
+        ? "A new school year has started at {$clinicSafe}. To continue accessing your health records and clinic services, please log in and confirm that you are still enrolled."
+        : "A new school year has started at {$clinicSafe}. To continue accessing your health records and clinic services, please log in and confirm that you are still employed.";
+
+    $primaryColor = '#1e6e4f';
+
+    return <<<HTML
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>{$confirmLabel} — {$clinicSafe}</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f6f3;font-family:'Helvetica Neue',Arial,sans-serif;color:#1a2e22;">
+<table width="100%" cellpadding="0" cellspacing="0" style="padding:32px 16px;">
+  <tr><td align="center">
+    <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
+      <tr><td style="background:{$primaryColor};padding:28px 36px;">
+        <p style="margin:0;font-size:13px;font-weight:700;letter-spacing:.08em;color:rgba(255,255,255,.7);text-transform:uppercase;">Patient Health Portal</p>
+        <h1 style="margin:6px 0 0;font-size:24px;font-weight:800;color:#fff;">{$clinicSafe}</h1>
+      </td></tr>
+      <tr><td style="padding:36px;">
+        <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#6b7c73;text-transform:uppercase;letter-spacing:.06em;">New School Year</p>
+        <h2 style="margin:0 0 20px;font-size:22px;font-weight:800;color:#17261d;">{$confirmLabel}, {$firstSafe}</h2>
+        <p style="margin:0 0 28px;font-size:15px;line-height:1.7;color:#374a3d;">{$message}</p>
+        <table cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
+          <tr><td style="background:{$primaryColor};border-radius:10px;">
+            <a href="{$loginSafe}" target="_blank"
+               style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:700;color:#fff;text-decoration:none;">
+              {$confirmLabel} &rarr;
+            </a>
+          </td></tr>
+        </table>
+        <p style="margin:0;font-size:13px;color:#8a9e90;line-height:1.6;">
+          If you are no longer {$actionVerb}, simply ignore this email — your account will remain inactive.<br>
+          If you have questions, contact the clinic directly.
+        </p>
+      </td></tr>
+      <tr><td style="background:#f4f6f3;padding:20px 36px;border-top:1px solid #e2ebe5;">
+        <p style="margin:0;font-size:12px;color:#8a9e90;text-align:center;">
+          This is an automated message from {$clinicSafe}. Please do not reply to this email.
+        </p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>
+HTML;
+}

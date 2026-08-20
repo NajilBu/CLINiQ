@@ -782,3 +782,90 @@ function active_cliniq_theme(): array
     $key = cliniq_theme_settings()['theme'];
     return ['key' => $key] + $themes[$key];
 }
+
+// ── Mail / SMTP Settings ─────────────────────────────────────────────────────
+
+function default_mail_settings(): array
+{
+    return [
+        'host'       => '',
+        'port'       => '587',
+        'encryption' => 'tls',
+        'username'   => '',
+        'password'   => '',   // stored encrypted
+        'from_email' => '',
+        'from_name'  => 'CLINiQ Clinic',
+    ];
+}
+
+/**
+ * Simple reversible encryption for the SMTP password stored in the DB.
+ * Uses APP_KEY from .env (falls back to a static salt if not set).
+ */
+function cliniq_mail_encrypt(string $value): string
+{
+    if ($value === '') {
+        return '';
+    }
+    $key = substr(hash('sha256', env_value('APP_KEY', 'cliniq-secret-key-change-me'), true), 0, 32);
+    $iv  = openssl_random_pseudo_bytes(16);
+    $enc = openssl_encrypt($value, 'AES-256-CBC', $key, 0, $iv);
+    return base64_encode($iv . '::' . $enc);
+}
+
+function cliniq_mail_decrypt(string $encoded): string
+{
+    if ($encoded === '') {
+        return '';
+    }
+    try {
+        $decoded = base64_decode($encoded, true);
+        if ($decoded === false || !str_contains($decoded, '::')) {
+            return '';
+        }
+        [$iv, $enc] = explode('::', $decoded, 2);
+        $key = substr(hash('sha256', env_value('APP_KEY', 'cliniq-secret-key-change-me'), true), 0, 32);
+        $plain = openssl_decrypt($enc, 'AES-256-CBC', $key, 0, $iv);
+        return $plain !== false ? $plain : '';
+    } catch (Throwable) {
+        return '';
+    }
+}
+
+function mail_settings(): array
+{
+    $saved = cliniq_setting_read('mail.smtp', default_mail_settings());
+    // Decrypt the stored password for use at runtime.
+    if (!empty($saved['password'])) {
+        $saved['password'] = cliniq_mail_decrypt((string) $saved['password']);
+    }
+    return $saved;
+}
+
+function save_mail_settings(array $input, ?int $updatedBy = null): void
+{
+    $defaults = default_mail_settings();
+    $data = [];
+    foreach ($defaults as $key => $default) {
+        $data[$key] = trim((string) ($input[$key] ?? $default));
+    }
+    $data['port'] = max(1, min(65535, (int) ($data['port'] ?: 587)));
+    if (!in_array($data['encryption'], ['tls', 'ssl'], true)) {
+        $data['encryption'] = 'tls';
+    }
+    // Encrypt password before storing. If the form sent an empty password,
+    // keep the existing encrypted one.
+    if ($data['password'] !== '') {
+        $data['password'] = cliniq_mail_encrypt($data['password']);
+    } else {
+        $existing = cliniq_setting_read('mail.smtp', $defaults);
+        $data['password'] = $existing['password'] ?? '';
+    }
+    cliniq_setting_write('mail.smtp', $data, $updatedBy);
+}
+
+function mail_settings_configured(): bool
+{
+    $s = cliniq_setting_read('mail.smtp', []);
+    return !empty($s['host']) && !empty($s['username']) && !empty($s['password']);
+}

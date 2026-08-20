@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../helpers/mail.php';
 
 function ensure_ape_cycle_schema(): void
 {
@@ -257,18 +258,81 @@ function update_ape_cycle_schedule(int $cycleId, string $examScheduleDate): void
 /**
  * Reset all patient accounts to inactive at the start of a new school year.
  * Students must confirm re-enrollment; faculty/personnel must confirm re-employment.
- * Returns the number of accounts deactivated.
+ * Sends an email to each affected patient.
+ *
+ * Returns an array: ['reset' => int, 'emailed' => int, 'failed' => int]
  */
-function reset_school_year_accounts(): int
+function reset_school_year_accounts(): array
 {
     $db = auth_db();
-    $stmt = $db->prepare("
+
+    // Fetch all patients that will be deactivated BEFORE the reset, so we have their info.
+    $fetch = $db->query("
+        SELECT
+            a.id AS account_id,
+            a.email,
+            p.first_name,
+            p.last_name,
+            CASE
+                WHEN s.person_id IS NOT NULL THEN 'student'
+                WHEN se.role_classification = 'Faculty' THEN 'faculty'
+                ELSE 'school_personnel'
+            END AS account_type
+        FROM accounts a
+        INNER JOIN patients pt ON pt.person_id = a.person_id
+        INNER JOIN people p ON p.id = a.person_id
+        LEFT JOIN students s ON s.person_id = p.id
+        LEFT JOIN school_employees se ON se.person_id = p.id
+        WHERE a.account_status = 'active'
+          AND a.email IS NOT NULL
+          AND a.email <> ''
+    ");
+    $patients = $fetch->fetchAll();
+
+    // Now perform the reset.
+    $reset = $db->prepare("
         UPDATE accounts a
         INNER JOIN patients pt ON pt.person_id = a.person_id
         SET a.account_status = 'inactive',
             a.activated_at = NULL
         WHERE a.account_status = 'active'
     ");
-    $stmt->execute();
-    return $stmt->rowCount();
+    $reset->execute();
+    $resetCount = $reset->rowCount();
+
+    // Send re-enrollment emails.
+    require_once __DIR__ . '/../services/SystemSettings.php';
+    $clinicProfile = clinic_profile_settings();
+    $clinicName    = $clinicProfile['system_name'] ?? 'CLINiQ Clinic';
+    $loginUrl      = rtrim(env_value('APP_URL', 'http://localhost/CLINiQ/patient-portal'), '/') . '/patient-login.php';
+
+    $emailed = 0;
+    $failed  = 0;
+    foreach ($patients as $patient) {
+        $firstName   = (string) ($patient['first_name'] ?? '');
+        $accountType = (string) ($patient['account_type'] ?? 'student');
+        $isStudent   = $accountType === 'student';
+        $subject     = $isStudent
+            ? "[{$clinicName}] Confirm you are still enrolled — new school year"
+            : "[{$clinicName}] Confirm you are still employed — new school year";
+
+        $body = cliniq_re_enrollment_email_body(
+            $firstName,
+            $accountType,
+            $clinicName,
+            $loginUrl
+        );
+
+        $fullName = trim($firstName . ' ' . ($patient['last_name'] ?? ''));
+        $sent = send_cliniq_email(
+            (string) $patient['email'],
+            $fullName ?: 'Patient',
+            $subject,
+            $body
+        );
+
+        $sent ? $emailed++ : $failed++;
+    }
+
+    return ['reset' => $resetCount, 'emailed' => $emailed, 'failed' => $failed];
 }

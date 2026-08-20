@@ -190,8 +190,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 update_ape_cycle_schedule((int) ($_POST['ape_cycle_id'] ?? 0), (string) ($_POST['exam_schedule_date'] ?? ''));
                 flash_message('success', 'Exam schedule date updated.');
             } elseif ($action === 'reset_school_year') {
-                $count = reset_school_year_accounts();
-                flash_message('success', "{$count} patient account(s) reset to inactive. They will be prompted to confirm re-enrollment or re-employment on next login.");
+                $result = reset_school_year_accounts();
+                $msg = "{$result['reset']} account(s) reset to inactive.";
+                if ($result['emailed'] > 0) {
+                    $msg .= " {$result['emailed']} notification email(s) sent.";
+                }
+                if ($result['failed'] > 0) {
+                    $msg .= " {$result['failed']} email(s) failed (check server mail config).";
+                }
+                flash_message('success', $msg);
             }
         } catch (Throwable $e) {
             flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $e->getMessage());
@@ -248,6 +255,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    if ($action === 'save_mail_settings') {
+        if (!$canManageSettings) {
+            flash_message('error', 'Only administrators, nurses, or IT experts can update mail settings.');
+            header('Location: index.php?tab=email');
+            exit;
+        }
+        try {
+            save_mail_settings($_POST, (int) ($user['person_id'] ?? 0) ?: null);
+            flash_message('success', 'SMTP settings saved.');
+        } catch (Throwable $e) {
+            flash_message('error', $e->getMessage());
+        }
+        header('Location: index.php?tab=email');
+        exit;
+    }
+
+    if ($action === 'send_test_email') {
+        if (!$canManageSettings) {
+            flash_message('error', 'Only administrators, nurses, or IT experts can send test emails.');
+            header('Location: index.php?tab=email');
+            exit;
+        }
+        require_once __DIR__ . '/../../app/helpers/mail.php';
+        $toEmail = trim((string) ($_POST['test_email'] ?? ($user['email'] ?? '')));
+        if (!filter_var($toEmail, FILTER_VALIDATE_EMAIL)) {
+            flash_message('error', 'Enter a valid email address to send the test to.');
+        } else {
+            $sent = send_cliniq_email(
+                $toEmail,
+                'CLINiQ Admin',
+                '[CLINiQ] SMTP Test Email',
+                '<p style="font-family:sans-serif;">Your CLINiQ SMTP configuration is working correctly! This is a test message.</p>'
+            );
+            if ($sent) {
+                flash_message('success', "Test email sent to {$toEmail}. Check the inbox.");
+            } else {
+                flash_message('error', 'Failed to send test email. Check your SMTP credentials and server error log.');
+            }
+        }
+        header('Location: index.php?tab=email');
+        exit;
+    }
+
     flash_message('warning', 'Unknown settings action.');
     header('Location: index.php?tab=general');
     exit;
@@ -259,6 +309,8 @@ $activeTheme = cliniq_theme_settings()['theme'];
 $staffProfiles = staff_profiles();
 $staffRoles = staff_profile_roles();
 $settings = risk_settings();
+$mailSettings = mail_settings();
+$mailConfigured = mail_settings_configured();
 $activeApePatientCount = 0;
 $excludedApePatientCount = 0;
 $apeCurrentCycle = null;
@@ -317,7 +369,7 @@ if (!isset($dropdownGroupsByCategory[$currentDropdownCategory][$currentDropdownG
     $currentDropdownGroup = (string) array_key_first($dropdownGroupsByCategory[$currentDropdownCategory]);
 }
 $currentTab = $_GET['tab'] ?? 'general';
-if (!in_array($currentTab, ['general', 'account', 'ape-cycle', 'dropdowns', 'clinical', 'maintenance'], true)) {
+if (!in_array($currentTab, ['general', 'account', 'ape-cycle', 'dropdowns', 'clinical', 'email', 'maintenance'], true)) {
     $currentTab = 'general';
 }
 if ($currentTab === 'ape-cycle' && !$canManageApeCycles) {
@@ -379,6 +431,10 @@ render_clinic_command_header(
         <a href="index.php?tab=clinical" class="settings-tab-link <?= $currentTab === 'clinical' ? 'active' : '' ?> text-decoration-none" data-settings-tab="clinical" data-no-ajax="true">
             <span class="material-symbols-outlined">emergency</span>
             <span>Incident Risk</span>
+        </a>
+        <a href="index.php?tab=email" class="settings-tab-link <?= $currentTab === 'email' ? 'active' : '' ?> text-decoration-none" data-settings-tab="email" data-no-ajax="true">
+            <span class="material-symbols-outlined">mail</span>
+            <span>Email / SMTP</span>
         </a>
         <a href="index.php?tab=maintenance" class="settings-tab-link <?= $currentTab === 'maintenance' ? 'active' : '' ?> text-decoration-none" data-settings-tab="maintenance" data-no-ajax="true">
             <span class="material-symbols-outlined">restart_alt</span>
@@ -1063,6 +1119,128 @@ render_clinic_command_header(
 
                 </div>
             <?php endif; ?>
+            <div id="settings-email" class="settings-tab-panel <?= $currentTab === 'email' ? 'active' : '' ?> space-y-6">
+                <section>
+                    <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Email / SMTP Settings</h2>
+                    <p class="text-xs font-bold text-slate-500 mb-0">Configure the SMTP server CLINiQ uses to send email notifications to patients.</p>
+                </section>
+
+                <?php if ($mailConfigured): ?>
+                    <div class="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-700">
+                        <span class="material-symbols-outlined text-[16px]">check_circle</span>
+                        SMTP is configured. Emails will use the credentials below.
+                    </div>
+                <?php else: ?>
+                    <div class="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-bold text-amber-700">
+                        <span class="material-symbols-outlined text-[16px]">warning</span>
+                        SMTP is not configured yet. Fill in the fields below to enable email notifications.
+                    </div>
+                <?php endif; ?>
+
+                <form method="post" data-no-ajax="true">
+                    <input type="hidden" name="action" value="save_mail_settings">
+                    <div class="settings-section space-y-5">
+                        <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">SMTP Server</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                            <div class="settings-field md:col-span-2">
+                                <label class="clinic-label" for="mailHost">SMTP Host</label>
+                                <input class="settings-input" id="mailHost" name="host" type="text"
+                                    placeholder="smtp.gmail.com or sandbox.smtp.mailtrap.io"
+                                    value="<?= e($mailSettings['host'] ?? '') ?>"
+                                    <?= !$canManageSettings ? 'disabled' : '' ?>>
+                            </div>
+                            <div class="settings-field">
+                                <label class="clinic-label" for="mailPort">Port</label>
+                                <input class="settings-input" id="mailPort" name="port" type="number"
+                                    min="1" max="65535" placeholder="587"
+                                    value="<?= e((string) ($mailSettings['port'] ?? '587')) ?>"
+                                    <?= !$canManageSettings ? 'disabled' : '' ?>>
+                            </div>
+                            <div class="settings-field">
+                                <label class="clinic-label" for="mailEncryption">Encryption</label>
+                                <select class="settings-input" id="mailEncryption" name="encryption"
+                                    <?= !$canManageSettings ? 'disabled' : '' ?>>
+                                    <option value="tls" <?= ($mailSettings['encryption'] ?? 'tls') === 'tls' ? 'selected' : '' ?>>TLS (recommended — port 587)</option>
+                                    <option value="ssl" <?= ($mailSettings['encryption'] ?? '') === 'ssl' ? 'selected' : '' ?>>SSL (port 465)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1 pt-2">Authentication</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div class="settings-field">
+                                <label class="clinic-label" for="mailUsername">SMTP Username</label>
+                                <input class="settings-input" id="mailUsername" name="username" type="email"
+                                    placeholder="your-email@gmail.com"
+                                    value="<?= e($mailSettings['username'] ?? '') ?>"
+                                    <?= !$canManageSettings ? 'disabled' : '' ?>>
+                            </div>
+                            <div class="settings-field">
+                                <label class="clinic-label" for="mailPassword">
+                                    SMTP Password / App Password
+                                    <?php if (!empty($mailSettings['password'])): ?>
+                                        <span class="font-normal text-emerald-600 ml-1">— saved</span>
+                                    <?php endif; ?>
+                                </label>
+                                <input class="settings-input" id="mailPassword" name="password" type="password"
+                                    placeholder="<?= !empty($mailSettings['password']) ? '••••••••••••••••' : 'Enter SMTP password or Gmail App Password' ?>"
+                                    autocomplete="new-password"
+                                    <?= !$canManageSettings ? 'disabled' : '' ?>>
+                                <p class="settings-help mb-0">Leave blank to keep the existing saved password.</p>
+                            </div>
+                        </div>
+
+                        <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1 pt-2">Sender Identity</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div class="settings-field">
+                                <label class="clinic-label" for="mailFromEmail">From Email Address</label>
+                                <input class="settings-input" id="mailFromEmail" name="from_email" type="email"
+                                    placeholder="cliniq@plpasig.edu.ph"
+                                    value="<?= e($mailSettings['from_email'] ?? '') ?>"
+                                    <?= !$canManageSettings ? 'disabled' : '' ?>>
+                            </div>
+                            <div class="settings-field">
+                                <label class="clinic-label" for="mailFromName">From Name</label>
+                                <input class="settings-input" id="mailFromName" name="from_name" type="text"
+                                    placeholder="CLINiQ Clinic"
+                                    value="<?= e($mailSettings['from_name'] ?? 'CLINiQ Clinic') ?>"
+                                    <?= !$canManageSettings ? 'disabled' : '' ?>>
+                            </div>
+                        </div>
+
+                        <?php if ($canManageSettings): ?>
+                            <div class="flex justify-end pt-2">
+                                <button type="submit" class="btn btn-primary justify-center">
+                                    <span class="material-symbols-outlined text-[18px]">save</span>
+                                    Save SMTP Settings
+                                </button>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </form>
+
+                <?php if ($mailConfigured && $canManageSettings): ?>
+                <section class="settings-section space-y-4">
+                    <div>
+                        <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Send Test Email</h3>
+                        <p class="settings-help mb-0">Send a test email to verify your SMTP configuration is working correctly.</p>
+                    </div>
+                    <form method="post" data-no-ajax="true" class="flex flex-col sm:flex-row gap-3 items-end">
+                        <input type="hidden" name="action" value="send_test_email">
+                        <div class="settings-field mb-0 flex-1">
+                            <label class="clinic-label" for="testEmailAddress">Send Test To</label>
+                            <input class="settings-input" id="testEmailAddress" name="test_email" type="email"
+                                placeholder="your-email@example.com"
+                                value="<?= e($user['email'] ?? '') ?>" required>
+                        </div>
+                        <button type="submit" class="btn btn-secondary justify-center shrink-0">
+                            <span class="material-symbols-outlined text-[18px]">send</span>
+                            Send Test Email
+                        </button>
+                    </form>
+                </section>
+                <?php endif; ?>
+            </div>
 
             <div id="settings-maintenance" class="settings-tab-panel <?= $currentTab === 'maintenance' ? 'active' : '' ?> space-y-6">
                 <section>
