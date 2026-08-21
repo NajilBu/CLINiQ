@@ -283,3 +283,41 @@ function logout_user(): void
     $_SESSION = [];
     session_destroy();
 }
+
+/**
+ * Update password for a logged-in patient account after validating their current password.
+ */
+function change_patient_password(int $accountId, string $currentPassword, string $newPassword, string $confirmPassword): void
+{
+    if ($accountId <= 0) {
+        throw new InvalidArgumentException('Invalid patient account session.');
+    }
+    if ($currentPassword === '') {
+        throw new InvalidArgumentException('Please enter your current password.');
+    }
+    if (strlen($newPassword) < 8) {
+        throw new InvalidArgumentException('New password must be at least 8 characters long.');
+    }
+    if ($newPassword !== $confirmPassword) {
+        throw new InvalidArgumentException('New password and confirmation password do not match.');
+    }
+
+    $db = auth_db();
+    $stmt = $db->prepare('SELECT password_hash FROM accounts WHERE id = ? LIMIT 1');
+    $stmt->execute([$accountId]);
+    $currentHash = (string) $stmt->fetchColumn();
+
+    if ($currentHash === '' || !password_verify($currentPassword, $currentHash)) {
+        throw new InvalidArgumentException('Incorrect current password. Please try again.');
+    }
+
+    if (password_verify($newPassword, $currentHash)) {
+        throw new InvalidArgumentException('New password must be different from your current password.');
+    }
+
+    $update = $db->prepare('UPDATE accounts SET password_hash = ?, updated_at = NOW() WHERE id = ?');
+    $update->execute([
+        password_hash($newPassword, PASSWORD_DEFAULT),
+        $accountId,
+    ]);
+}

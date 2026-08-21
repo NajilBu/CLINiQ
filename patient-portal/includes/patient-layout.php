@@ -323,6 +323,27 @@ function render_student_header(string $title, string $active = ''): void
     if (!empty($profile['first_registration'])) {
         $navItems = array_intersect_key($navItems, ['dashboard' => true]);
     }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'change_patient_password') {
+        student_start_session();
+        try {
+            $accountId = (int) ($profile['account_id'] ?? 0);
+            $currPw = (string) ($_POST['current_password'] ?? '');
+            $newPw  = (string) ($_POST['new_password'] ?? '');
+            $confPw = (string) ($_POST['confirm_password'] ?? '');
+            change_patient_password($accountId, $currPw, $newPw, $confPw);
+            $_SESSION['student_flash_success'] = 'Your password has been changed successfully.';
+        } catch (Throwable $e) {
+            $_SESSION['student_flash_error'] = $e->getMessage();
+        }
+        header('Location: ' . ($_SERVER['REQUEST_URI'] ?? 'patient-dashboard.php'));
+        exit;
+    }
+
+    student_start_session();
+    $flashSuccess = $_SESSION['student_flash_success'] ?? null;
+    $flashError   = $_SESSION['student_flash_error'] ?? null;
+    unset($_SESSION['student_flash_success'], $_SESSION['student_flash_error']);
     ?>
     <!DOCTYPE html>
     <html lang="en">
@@ -387,6 +408,11 @@ function render_student_header(string $title, string $active = ''): void
                         <strong><?= student_e($profile['name']) ?></strong>
                         <span><?= student_e($profile['student_id']) ?></span>
                     </div>
+                    <?php if (empty($profile['first_registration'])): ?>
+                        <button type="button" onclick="document.getElementById('change-password-modal').classList.remove('hidden')" class="student-logout text-decoration-none" title="Change Password">
+                            <span class="material-symbols-outlined">key</span>
+                        </button>
+                    <?php endif; ?>
                     <a href="patient-login.php?logout=1" onclick="localStorage.clear();" class="student-logout text-decoration-none" title="Logout">
                         <span class="material-symbols-outlined">logout</span>
                     </a>
@@ -394,6 +420,24 @@ function render_student_header(string $title, string $active = ''): void
             </header>
 
             <main class="student-main">
+                <?php if ($flashSuccess): ?>
+                    <div class="student-note student-note-success mb-4 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined">check_circle</span>
+                            <div><?= student_e($flashSuccess) ?></div>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
+                <?php if ($flashError): ?>
+                    <div class="student-note student-note-danger mb-4 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined">error</span>
+                            <div><?= student_e($flashError) ?></div>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
                 <?php if (empty($profile['has_clinical_record'])): ?>
                     <div class="student-note student-note-warning mb-4">
                         <span class="material-symbols-outlined">info</span>
@@ -411,6 +455,69 @@ function render_student_footer(): void
     ?>
             </main>
         </div>
+
+        <!-- Change Password Modal -->
+        <div id="change-password-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs hidden">
+            <div class="student-card w-full max-w-md p-6 shadow-xl relative animate-in fade-in zoom-in duration-150">
+                <div class="flex items-center justify-between pb-4 mb-4 border-b border-slate-100">
+                    <div class="flex items-center gap-2">
+                        <span class="material-symbols-outlined text-[#3F7D52]">key</span>
+                        <h3 class="font-headline text-lg font-extrabold text-[#17261d]">Change Password</h3>
+                    </div>
+                    <button type="button" onclick="document.getElementById('change-password-modal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+
+                <form method="post" autocomplete="off" class="space-y-4">
+                    <input type="hidden" name="action" value="change_patient_password">
+
+                    <div class="student-field">
+                        <label class="student-label" for="modal_current_password">Current Password</label>
+                        <div class="relative">
+                            <input id="modal_current_password" name="current_password" class="student-input pr-10" type="password" required placeholder="Enter current password">
+                            <button type="button" onclick="toggleModalPwVisibility('modal_current_password', this)" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold hover:text-slate-600">Show</button>
+                        </div>
+                    </div>
+
+                    <div class="student-field">
+                        <label class="student-label" for="modal_new_password">New Password</label>
+                        <div class="relative">
+                            <input id="modal_new_password" name="new_password" class="student-input pr-10" type="password" minlength="8" required placeholder="Enter new password (min. 8 chars)">
+                            <button type="button" onclick="toggleModalPwVisibility('modal_new_password', this)" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold hover:text-slate-600">Show</button>
+                        </div>
+                    </div>
+
+                    <div class="student-field">
+                        <label class="student-label" for="modal_confirm_password">Confirm New Password</label>
+                        <div class="relative">
+                            <input id="modal_confirm_password" name="confirm_password" class="student-input pr-10" type="password" minlength="8" required placeholder="Confirm new password">
+                            <button type="button" onclick="toggleModalPwVisibility('modal_confirm_password', this)" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold hover:text-slate-600">Show</button>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                        <button type="button" onclick="document.getElementById('change-password-modal').classList.add('hidden')" class="student-button bg-slate-100 text-slate-700 hover:bg-slate-200">
+                            Cancel
+                        </button>
+                        <button type="submit" class="student-button">
+                            Update Password
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <script>
+            function toggleModalPwVisibility(inputId, btn) {
+                const inp = document.getElementById(inputId);
+                if (inp) {
+                    const isPw = inp.type === 'password';
+                    inp.type = isPw ? 'text' : 'password';
+                    btn.textContent = isPw ? 'Hide' : 'Show';
+                }
+            }
+        </script>
         <script src="../public/assets/js/file-preview.js?v=ape-popup-2"></script>
     </body>
     </html>
