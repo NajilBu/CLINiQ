@@ -304,7 +304,7 @@ function reset_school_year_accounts(): array
     require_once __DIR__ . '/../services/SystemSettings.php';
     $clinicProfile = clinic_profile_settings();
     $clinicName    = $clinicProfile['system_name'] ?? 'CLINiQ Clinic';
-    $loginUrl      = rtrim(env_value('APP_URL', 'http://localhost/CLINiQ/patient-portal'), '/') . '/patient-login.php';
+    $loginUrl      = rtrim(env_value('PATIENT_PORTAL_URL', 'http://localhost/CLINiQ/patient-portal'), '/') . '/patient-login.php';
 
     $emailed = 0;
     $failed  = 0;
