@@ -1857,6 +1857,65 @@ body.student-time-modal-open {
     overflow: hidden;
 }
 
+.passport-accordion {
+    overflow: hidden;
+}
+
+.passport-accordion summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 1rem 1.15rem;
+    cursor: pointer;
+    color: var(--student-fg);
+    font-size: 0.9rem;
+    font-weight: 800;
+    list-style: none;
+}
+
+.passport-accordion summary::-webkit-details-marker {
+    display: none;
+}
+
+.passport-accordion summary > span:first-child {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    min-width: 0;
+}
+
+.passport-accordion summary .material-symbols-outlined {
+    color: var(--student-primary);
+    font-size: 1.1rem;
+}
+
+.passport-accordion-caret {
+    transition: transform 0.15s ease;
+}
+
+.passport-accordion[open] .passport-accordion-caret {
+    transform: rotate(180deg);
+}
+
+.passport-accordion-body {
+    padding: 0 1rem 1rem;
+    border-top: 1px solid var(--student-border-soft);
+}
+
+.passport-accordion:not([open]) .passport-accordion-body {
+    display: none;
+}
+
+.passport-accordion .pv-guidance-card {
+    margin: 0.75rem 0 0;
+}
+
+.passport-incident-card {
+    padding: 16px;
+    margin-top: 0.85rem;
+}
+
 /* Preview header — mirrors passport-demo red gradient */
 .pv-head {
     background: linear-gradient(135deg, #7f1d1d 0%, #dc2626 100%);
@@ -2309,5 +2368,15 @@ body.student-time-modal-open {
     .pv-card {
         margin-left: 14px;
         margin-right: 14px;
+    }
+
+    .passport-accordion-body {
+        padding: 0 0.85rem 0.85rem;
+    }
+
+    .passport-accordion .pv-guidance-card,
+    .passport-accordion .pv-card {
+        margin-left: 0;
+        margin-right: 0;
     }
 }
