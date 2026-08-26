@@ -72,22 +72,18 @@ render_header('Reports');
     'Reports',
     'Reports & Analytics',
     'Build, preview, and export consolidated analytics across every CLINiQ module.',
-    '<a class="btn btn-outline text-decoration-none" href="export.php?from=' . e($dateFrom) . '&to=' . e($dateTo) . '"><span class="material-symbols-outlined text-[20px]">table_view</span>Export Visit CSV</a>'
+    '<a class="btn btn-primary text-decoration-none" id="reportHeaderPreviewLink" href="preview.php?from=' . e($dateFrom) . '&to=' . e($dateTo) . '"><span class="material-symbols-outlined text-[20px]">preview</span>Preview Report</a>'
 ); ?>
 
 <!-- ═══ Date Range Filter ═══ -->
-<form method="get" class="clinic-card overflow-hidden" data-no-ajax="true">
+<form method="get" class="clinic-card overflow-hidden" data-no-ajax="true" id="reportDateForm">
     <div class="p-6 border-b border-slate-100">
         <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">System Analytics Period</h2>
-        <p class="text-xs font-bold text-slate-500 mb-0">All available module graphs are shown below. Choose which sections to export after opening Preview.</p>
+        <p class="text-xs font-bold text-slate-500 mb-0">All available module graphs update automatically when the date range changes.</p>
     </div>
-    <div class="p-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_auto] items-end gap-4">
+    <div class="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div><label class="clinic-label" for="reportFrom">From</label><input class="clinic-input" id="reportFrom" type="date" name="from" value="<?= e($dateFrom) ?>" required></div>
         <div><label class="clinic-label" for="reportTo">To</label><input class="clinic-input" id="reportTo" type="date" name="to" value="<?= e($dateTo) ?>" required></div>
-        <div class="flex flex-col sm:flex-row gap-3">
-            <button class="btn btn-outline justify-center" type="submit" formaction="index.php"><span class="material-symbols-outlined text-[18px]">filter_list</span>Apply</button>
-            <button class="btn btn-primary justify-center" type="submit" formaction="preview.php"><span class="material-symbols-outlined text-[18px]">preview</span>Preview Report</button>
-        </div>
     </div>
 </form>
 
@@ -217,5 +213,46 @@ render_header('Reports');
 </section>
 <style><?= system_report_styles() ?></style>
 <?= render_system_report_document($mainSystemReport, false, ['include_cover' => false]) ?>
+
+<script>
+(() => {
+    const form = document.getElementById('reportDateForm');
+    const fromInput = document.getElementById('reportFrom');
+    const toInput = document.getElementById('reportTo');
+    const previewLink = document.getElementById('reportHeaderPreviewLink');
+    if (!form || !fromInput || !toInput) return;
+
+    let submitTimer = null;
+    const currentUrl = new URL(window.location.href);
+
+    const syncPreviewLink = () => {
+        if (!previewLink) return;
+        const previewUrl = new URL(previewLink.href, window.location.href);
+        previewUrl.searchParams.set('from', fromInput.value);
+        previewUrl.searchParams.set('to', toInput.value);
+        previewLink.href = previewUrl.pathname.split('/').pop() + '?' + previewUrl.searchParams.toString();
+    };
+
+    const submitWhenComplete = () => {
+        syncPreviewLink();
+        if (!fromInput.value || !toInput.value) return;
+        clearTimeout(submitTimer);
+        submitTimer = setTimeout(() => {
+            const nextUrl = new URL(window.location.href);
+            nextUrl.searchParams.set('from', fromInput.value);
+            nextUrl.searchParams.set('to', toInput.value);
+            if (nextUrl.search === currentUrl.search) return;
+            window.location.assign(nextUrl.href);
+        }, 250);
+    };
+
+    [fromInput, toInput].forEach((input) => {
+        input.addEventListener('change', submitWhenComplete);
+        input.addEventListener('input', syncPreviewLink);
+    });
+
+    syncPreviewLink();
+})();
+</script>
 
 <?php render_footer(); ?>
