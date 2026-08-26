@@ -656,6 +656,9 @@ function cliniqAfterContentSwap(root) {
     initStudentIdFormatting(root || document);
     initLogoPlaceholders(root || document);
     initDragScrolling(root || document);
+    if (typeof window.initRecentPatientAccountPagination === 'function') {
+        window.initRecentPatientAccountPagination();
+    }
     initTabsFromURL();
     refreshAlerts();
     document.dispatchEvent(new CustomEvent('cliniq:page-content-replaced', {

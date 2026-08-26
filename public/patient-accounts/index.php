@@ -105,18 +105,48 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
     </section>
 <?php endif; ?>
 
-<div class="grid grid-cols-1 gap-5 mb-5">
-    <section class="clinic-card p-5">
-        <div class="flex items-start gap-3 mb-5">
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+    <button type="button" class="clinic-card p-5 text-left transition hover:-translate-y-0.5 hover:shadow-lg" onclick="showModal('individualAccountModal')">
+        <div class="flex items-start gap-3">
             <span class="w-11 h-11 rounded-xl bg-primary-fixed text-primary flex items-center justify-center">
                 <span class="material-symbols-outlined">person_add</span>
             </span>
             <div>
-                <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Individual Account</h2>
+                <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Create Individual Account</h2>
                 <p class="text-xs font-bold text-slate-500 mb-0">Enter information from the clinic’s official list.</p>
             </div>
         </div>
+    </button>
 
+    <button type="button" class="clinic-card p-5 text-left transition hover:-translate-y-0.5 hover:shadow-lg" onclick="showModal('bulkImportModal')">
+        <div class="flex items-start gap-3">
+            <span class="w-11 h-11 rounded-xl bg-primary-fixed text-primary flex items-center justify-center">
+                <span class="material-symbols-outlined">table_view</span>
+            </span>
+            <div>
+                <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Bulk Excel Import</h2>
+                <p class="text-xs font-bold text-slate-500 mb-0">Preview the first worksheet before importing.</p>
+            </div>
+        </div>
+    </button>
+</div>
+
+<div class="modal-backdrop" id="individualAccountModal" aria-hidden="true">
+    <div class="modal-content bg-white rounded-[2rem] p-6 w-full max-w-4xl shadow-2xl">
+        <div class="flex items-start justify-between gap-3 mb-5">
+            <div class="flex items-start gap-3">
+                <span class="w-11 h-11 rounded-xl bg-primary-fixed text-primary flex items-center justify-center">
+                    <span class="material-symbols-outlined">person_add</span>
+                </span>
+                <div>
+                    <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Create Individual Account</h2>
+                    <p class="text-xs font-bold text-slate-500 mb-0">Enter information from the clinic’s official list.</p>
+                </div>
+            </div>
+            <button type="button" class="btn btn-ghost" onclick="closeModal('individualAccountModal')" aria-label="Close individual account popup">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
         <form method="post" class="space-y-4" autocomplete="off">
             <input type="hidden" name="action" value="create_individual">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -212,9 +242,11 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
                 Create Inactive Account
             </button>
         </form>
-    </section>
+    </div>
+</div>
 
-    <section class="clinic-card p-5">
+<div class="modal-backdrop" id="bulkImportModal" aria-hidden="true">
+    <div class="modal-content bg-white rounded-[2rem] p-6 w-full max-w-5xl shadow-2xl">
         <div class="flex items-start justify-between gap-3 mb-5">
             <div class="flex items-start gap-3">
                 <span class="w-11 h-11 rounded-xl bg-primary-fixed text-primary flex items-center justify-center">
@@ -225,10 +257,15 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
                     <p class="text-xs font-bold text-slate-500 mb-0">Preview the first worksheet before importing.</p>
                 </div>
             </div>
-            <a class="btn btn-ghost text-decoration-none" href="<?= app_url('assets/templates/cliniq-patient-account-import.xlsx') ?>" download>
-                <span class="material-symbols-outlined">download</span>
-                Template
-            </a>
+            <div class="flex flex-wrap gap-2">
+                <a class="btn btn-ghost text-decoration-none" href="<?= app_url('assets/templates/cliniq-patient-account-import.xlsx') ?>" download>
+                    <span class="material-symbols-outlined">download</span>
+                    Template
+                </a>
+                <button type="button" class="btn btn-ghost" onclick="closeModal('bulkImportModal')" aria-label="Close bulk import popup">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
         </div>
 
         <form method="post" id="bulkImportForm">
@@ -249,7 +286,7 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
                 Import Valid Rows
             </button>
         </form>
-    </section>
+    </div>
 </div>
 
 <?php if ($bulkResults): ?>
@@ -305,26 +342,109 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
 
 <section class="clinic-card overflow-hidden" id="recentPatientAccounts">
     <div class="p-5 border-b border-slate-100">
-        <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Recent Patient Accounts</h2>
-        <p class="text-xs font-bold text-slate-500 mb-0"><?= count($recentAccounts) ?> account(s) shown</p>
+        <div class="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-4">
+            <div>
+                <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Recent Patient Accounts</h2>
+                <p class="text-xs font-bold text-slate-500 mb-0">
+                    <span data-recent-account-count><?= count($recentAccounts) ?></span> account(s) shown
+                </p>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-[minmax(18rem,1fr)_10rem_10rem] gap-3 w-full xl:max-w-4xl">
+                <div>
+                    <label class="clinic-label" for="recentAccountSearch">Search</label>
+                    <div class="relative">
+                        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[20px]">search</span>
+                        <input class="clinic-input pl-10" id="recentAccountSearch" type="search" placeholder="Search ID, name, type..." data-recent-account-search>
+                    </div>
+                </div>
+                <div>
+                    <label class="clinic-label" for="recentAccountTypeFilter">Patient Type</label>
+                    <select class="clinic-input" id="recentAccountTypeFilter" data-recent-account-type-filter>
+                        <option value="">All</option>
+                        <option value="student">Student</option>
+                        <option value="faculty">Faculty</option>
+                        <option value="school personnel">Personnel</option>
+                        <option value="patient">Patient</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="clinic-label" for="recentAccountStatusFilter">Account Status</label>
+                    <select class="clinic-input" id="recentAccountStatusFilter" data-recent-account-status-filter>
+                        <option value="">All</option>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
+                </div>
+            </div>
+        </div>
     </div>
     <div class="overflow-x-auto">
         <table class="w-full text-sm">
             <thead class="bg-slate-50 text-left">
                 <tr>
-                    <th class="p-3">No.</th>
-                    <th class="p-3">ID Number</th>
-                    <th class="p-3">Patient</th>
-                    <th class="p-3">Type</th>
-                    <th class="p-3">Birthdate</th>
-                    <th class="p-3">Account Status</th>
-                    <th class="p-3">Created</th>
+                    <th class="p-3 text-[11px] uppercase tracking-widest">No.</th>
+                    <th class="p-0">
+                        <button type="button" class="sort-header w-full h-full p-3 flex items-center justify-between gap-2 text-left text-[11px] uppercase tracking-widest" data-recent-account-sort="id" data-sort-type="text">
+                            ID No.
+                            <span class="material-symbols-outlined sort-icon">unfold_more</span>
+                        </button>
+                    </th>
+                    <th class="p-0">
+                        <button type="button" class="sort-header w-full h-full p-3 flex items-center justify-between gap-2 text-left text-[11px] uppercase tracking-widest" data-recent-account-sort="patient" data-sort-type="text">
+                            Patient
+                            <span class="material-symbols-outlined sort-icon">unfold_more</span>
+                        </button>
+                    </th>
+                    <th class="p-0">
+                        <button type="button" class="sort-header w-full h-full p-3 flex items-center justify-between gap-2 text-left text-[11px] uppercase tracking-widest" data-recent-account-sort="type" data-sort-type="text">
+                            Type
+                            <span class="material-symbols-outlined sort-icon">unfold_more</span>
+                        </button>
+                    </th>
+                    <th class="p-0">
+                        <button type="button" class="sort-header w-full h-full p-3 flex items-center justify-between gap-2 text-left text-[11px] uppercase tracking-widest" data-recent-account-sort="birthdate" data-sort-type="date">
+                            Birthdate
+                            <span class="material-symbols-outlined sort-icon">unfold_more</span>
+                        </button>
+                    </th>
+                    <th class="p-0">
+                        <button type="button" class="sort-header w-full h-full p-3 flex items-center justify-between gap-2 text-left text-[11px] uppercase tracking-widest" data-recent-account-sort="status" data-sort-type="text">
+                            Account Status
+                            <span class="material-symbols-outlined sort-icon">unfold_more</span>
+                        </button>
+                    </th>
+                    <th class="p-0">
+                        <button type="button" class="sort-header w-full h-full p-3 flex items-center justify-between gap-2 text-left text-[11px] uppercase tracking-widest" data-recent-account-sort="created" data-sort-type="date">
+                            Created
+                            <span class="material-symbols-outlined sort-icon">unfold_more</span>
+                        </button>
+                    </th>
                 </tr>
             </thead>
             <tbody>
                 <?php foreach ($recentAccounts as $accountIndex => $account): ?>
-                    <tr class="border-t border-slate-100" style="height: 49px<?= $accountIndex >= $recentAccountPageSize ? '; display: none' : '' ?>" data-recent-account-row>
-                        <td class="p-3 font-bold text-slate-500"><?= $accountIndex + 1 ?></td>
+                    <?php
+                    $accountSearchText = strtolower(trim(implode(' ', [
+                        $account['id_number'] ?? '',
+                        $account['full_name'] ?? '',
+                        $account['patient_type'] ?? '',
+                        $account['birthdate'] ?? '',
+                        $account['account_status'] ?? '',
+                        !empty($account['created_at']) ? date('M d, Y', strtotime($account['created_at'])) : '',
+                    ])));
+                    ?>
+                    <tr class="border-t border-slate-100" style="height: 49px<?= $accountIndex >= $recentAccountPageSize ? '; display: none' : '' ?>"
+                        data-recent-account-row
+                        data-sort-id="<?= e(strtolower((string) $account['id_number'])) ?>"
+                        data-sort-patient="<?= e(strtolower((string) $account['full_name'])) ?>"
+                        data-sort-type="<?= e(strtolower((string) $account['patient_type'])) ?>"
+                        data-sort-birthdate="<?= e((string) ($account['birthdate'] ?? '')) ?>"
+                        data-sort-status="<?= e(strtolower((string) $account['account_status'])) ?>"
+                        data-sort-created="<?= e((string) ($account['created_at'] ?? '')) ?>"
+                        data-search-text="<?= e($accountSearchText) ?>"
+                        data-patient-type="<?= e(strtolower((string) $account['patient_type'])) ?>"
+                        data-account-status="<?= e(strtolower((string) $account['account_status'])) ?>">
+                        <td class="p-3 font-bold text-slate-500" data-recent-account-number><?= $accountIndex + 1 ?></td>
                         <td class="p-3 font-bold"><?= e($account['id_number']) ?></td>
                         <td class="p-3"><?= e($account['full_name']) ?></td>
                         <td class="p-3"><?= e($account['patient_type']) ?></td>
@@ -333,6 +453,9 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
                         <td class="p-3"><?= e(date('M d, Y', strtotime($account['created_at']))) ?></td>
                     </tr>
                 <?php endforeach; ?>
+                <tr class="border-t border-slate-100" style="height: 49px; display: none" data-recent-account-no-results>
+                    <td colspan="7" class="p-3 text-center text-sm font-bold text-slate-500">No patient accounts match the current filters.</td>
+                </tr>
                 <?php for ($emptyRow = 0; $emptyRow < $recentAccountPageSize; $emptyRow++): ?>
                     <tr class="border-t border-slate-100" style="height: 49px<?= $emptyRow < max(0, $recentAccountPageSize - min($recentAccountPageSize, count($recentAccounts))) ? '' : '; display: none' ?>" aria-hidden="true" data-recent-account-empty-row>
                         <td colspan="7" class="p-3">&nbsp;</td>
@@ -344,9 +467,7 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
     <nav class="pagination border-t border-slate-100" aria-label="Recent patient accounts pages">
         <button type="button" class="page-disabled" aria-label="Previous page" data-recent-account-previous disabled>‹</button>
 
-        <?php for ($pageNumber = 1; $pageNumber <= $recentAccountPageCount; $pageNumber++): ?>
-            <button type="button" class="<?= $pageNumber === 1 ? 'page-active' : '' ?>" data-recent-account-page="<?= $pageNumber ?>"<?= $pageNumber === 1 ? ' aria-current="page"' : '' ?>><?= $pageNumber ?></button>
-        <?php endfor; ?>
+        <span class="inline-flex items-center gap-1" data-recent-account-pages></span>
 
         <button type="button" class="<?= $recentAccountPageCount === 1 ? 'page-disabled' : '' ?>" aria-label="Next page" data-recent-account-next<?= $recentAccountPageCount === 1 ? ' disabled' : '' ?>>›</button>
     </nav>
@@ -360,32 +481,95 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
 <script>
 function initRecentPatientAccountPagination() {
     const section = document.getElementById('recentPatientAccounts');
-    if (!section || section.dataset.paginationReady === 'true') return;
+    if (!section) return;
+    if (section.dataset.paginationReady === 'true' && section.dataset.boundNodeCount === String(section.querySelectorAll('[data-recent-account-row]').length)) {
+        return;
+    }
     section.dataset.paginationReady = 'true';
 
     const pageSize = 10;
     const rows = Array.from(section.querySelectorAll('[data-recent-account-row]'));
+    section.dataset.boundNodeCount = String(rows.length);
+    const tableBody = section.querySelector('tbody');
     const emptyRows = Array.from(section.querySelectorAll('[data-recent-account-empty-row]'));
-    const pageButtons = Array.from(section.querySelectorAll('[data-recent-account-page]'));
+    const noResultsRow = section.querySelector('[data-recent-account-no-results]');
+    const countLabel = section.querySelector('[data-recent-account-count]');
+    const searchInput = section.querySelector('[data-recent-account-search]');
+    const typeFilter = section.querySelector('[data-recent-account-type-filter]');
+    const statusFilter = section.querySelector('[data-recent-account-status-filter]');
+    const pageList = section.querySelector('[data-recent-account-pages]');
     const previousButton = section.querySelector('[data-recent-account-previous]');
     const nextButton = section.querySelector('[data-recent-account-next]');
-    const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+    const sortButtons = Array.from(section.querySelectorAll('[data-recent-account-sort]'));
+    let filteredRows = rows;
+    let pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize));
     let currentPage = 1;
+    let sortField = '';
+    let sortDirection = 'asc';
 
-    function showPage(page) {
-        currentPage = Math.max(1, Math.min(pageCount, page));
-        const pageStart = (currentPage - 1) * pageSize;
-        const visibleCount = Math.max(0, Math.min(pageSize, rows.length - pageStart));
+    function compareRows(leftRow, rightRow) {
+        if (sortField === '') return rows.indexOf(leftRow) - rows.indexOf(rightRow);
 
-        rows.forEach((row, index) => {
-            row.hidden = index < pageStart || index >= pageStart + pageSize;
-            row.style.display = row.hidden ? 'none' : '';
+        const activeButton = sortButtons.find((button) => button.dataset.recentAccountSort === sortField);
+        const sortType = activeButton?.dataset.sortType || 'text';
+        const leftValue = leftRow.dataset[`sort${sortField.charAt(0).toUpperCase()}${sortField.slice(1)}`] || '';
+        const rightValue = rightRow.dataset[`sort${sortField.charAt(0).toUpperCase()}${sortField.slice(1)}`] || '';
+        let result = 0;
+
+        if (sortType === 'number') {
+            result = (Number(leftValue) || 0) - (Number(rightValue) || 0);
+        } else if (sortType === 'date') {
+            const leftTime = leftValue ? Date.parse(leftValue) : 0;
+            const rightTime = rightValue ? Date.parse(rightValue) : 0;
+            result = leftTime - rightTime;
+        } else {
+            result = leftValue.localeCompare(rightValue, undefined, { numeric: true, sensitivity: 'base' });
+        }
+
+        if (result === 0) {
+            result = rows.indexOf(leftRow) - rows.indexOf(rightRow);
+        }
+
+        return sortDirection === 'asc' ? result : -result;
+    }
+
+    function syncSortHeaders() {
+        const hasActiveFilter = Boolean(
+            (searchInput?.value || '').trim() ||
+            (typeFilter?.value || '').trim() ||
+            (statusFilter?.value || '').trim()
+        );
+        section.classList.toggle('has-active-account-filter', hasActiveFilter);
+        section.classList.toggle('has-active-account-sort', sortField !== '');
+        sortButtons.forEach((button) => {
+            const active = button.dataset.recentAccountSort === sortField;
+            const icon = button.querySelector('.sort-icon');
+            button.classList.toggle('is-active', active);
+            button.setAttribute('aria-sort', active ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none');
+            if (icon) {
+                icon.textContent = active ? (sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward') : 'unfold_more';
+                icon.style.opacity = active ? '1' : '';
+                icon.style.visibility = active ? 'visible' : '';
+            }
         });
-        emptyRows.forEach((row, index) => {
-            row.hidden = index >= pageSize - visibleCount;
-            row.style.display = row.hidden ? 'none' : '';
-        });
-        pageButtons.forEach((button) => {
+    }
+
+    function buildPageButtons() {
+        if (!pageList) return;
+        pageList.innerHTML = '';
+        for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.dataset.recentAccountPage = String(pageNumber);
+            button.textContent = String(pageNumber);
+            button.addEventListener('click', () => showPage(pageNumber));
+            pageList.appendChild(button);
+        }
+    }
+
+    function syncPageButtons() {
+        if (!pageList) return;
+        Array.from(pageList.querySelectorAll('[data-recent-account-page]')).forEach((button) => {
             const active = Number(button.dataset.recentAccountPage) === currentPage;
             button.classList.toggle('page-active', active);
             if (active) {
@@ -394,6 +578,40 @@ function initRecentPatientAccountPagination() {
                 button.removeAttribute('aria-current');
             }
         });
+    }
+
+    function showPage(page) {
+        currentPage = Math.max(1, Math.min(pageCount, page));
+        const pageStart = (currentPage - 1) * pageSize;
+        const visibleCount = Math.max(0, Math.min(pageSize, filteredRows.length - pageStart));
+        const visibleRows = new Set(filteredRows.slice(pageStart, pageStart + pageSize));
+
+        if (tableBody) {
+            const filteredSet = new Set(filteredRows);
+            const orderedRows = filteredRows.concat(rows.filter((row) => !filteredSet.has(row)));
+            const insertionPoint = noResultsRow || emptyRows[0] || null;
+            orderedRows.forEach((row) => tableBody.insertBefore(row, insertionPoint));
+        }
+
+        rows.forEach((row) => {
+            row.hidden = !visibleRows.has(row);
+            row.style.display = row.hidden ? 'none' : '';
+        });
+        filteredRows.forEach((row, index) => {
+            const numberCell = row.querySelector('[data-recent-account-number]');
+            if (numberCell) {
+                numberCell.textContent = String(index + 1);
+            }
+        });
+        if (noResultsRow) {
+            noResultsRow.hidden = filteredRows.length > 0;
+            noResultsRow.style.display = filteredRows.length > 0 ? 'none' : '';
+        }
+        emptyRows.forEach((row, index) => {
+            row.hidden = index >= pageSize - visibleCount;
+            row.style.display = row.hidden ? 'none' : '';
+        });
+        syncPageButtons();
 
         previousButton.disabled = currentPage === 1;
         previousButton.classList.toggle('page-disabled', previousButton.disabled);
@@ -401,14 +619,59 @@ function initRecentPatientAccountPagination() {
         nextButton.classList.toggle('page-disabled', nextButton.disabled);
     }
 
-    pageButtons.forEach((button) => {
-        button.addEventListener('click', () => showPage(Number(button.dataset.recentAccountPage)));
+    function applyFilters() {
+        const query = (searchInput?.value || '').trim().toLowerCase();
+        const selectedType = (typeFilter?.value || '').trim().toLowerCase();
+        const selectedStatus = (statusFilter?.value || '').trim().toLowerCase();
+
+        filteredRows = rows.filter((row) => {
+            const searchText = row.dataset.searchText || '';
+            const patientType = row.dataset.patientType || '';
+            const accountStatus = row.dataset.accountStatus || '';
+            const matchesSearch = query === '' || searchText.includes(query);
+            const matchesType = selectedType === '' || patientType === selectedType;
+            const matchesStatus = selectedStatus === '' || accountStatus === selectedStatus;
+            return matchesSearch && matchesType && matchesStatus;
+        });
+        filteredRows.sort(compareRows);
+
+        pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+        if (countLabel) {
+            countLabel.textContent = String(filteredRows.length);
+        }
+        syncSortHeaders();
+        buildPageButtons();
+        showPage(1);
+    }
+
+    previousButton?.addEventListener('click', () => showPage(currentPage - 1));
+    nextButton?.addEventListener('click', () => showPage(currentPage + 1));
+    searchInput?.addEventListener('input', applyFilters);
+    typeFilter?.addEventListener('change', applyFilters);
+    statusFilter?.addEventListener('change', applyFilters);
+    sortButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+            const nextField = button.dataset.recentAccountSort || '';
+            if (sortField === nextField) {
+                if (sortDirection === 'asc') {
+                    sortDirection = 'desc';
+                } else {
+                    sortField = '';
+                    sortDirection = 'asc';
+                }
+            } else {
+                sortField = nextField;
+                sortDirection = 'asc';
+            }
+            syncSortHeaders();
+            applyFilters();
+        });
     });
-    previousButton.addEventListener('click', () => showPage(currentPage - 1));
-    nextButton.addEventListener('click', () => showPage(currentPage + 1));
-    showPage(1);
+    syncSortHeaders();
+    applyFilters();
 }
 
+window.initRecentPatientAccountPagination = initRecentPatientAccountPagination;
 document.addEventListener('DOMContentLoaded', initRecentPatientAccountPagination);
 document.addEventListener('cliniq:page-content-replaced', initRecentPatientAccountPagination);
 

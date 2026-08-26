@@ -1352,6 +1352,13 @@ h6,
     opacity: 1;
 }
 
+.sort-header.is-active .sort-icon,
+.has-active-account-filter .sort-header.is-active .sort-icon,
+.has-active-account-sort .sort-header.is-active .sort-icon {
+    opacity: 1;
+    visibility: visible;
+}
+
 /* ============================================================
    SEARCH INPUT
    Icon-prefixed search field matching wireframe style

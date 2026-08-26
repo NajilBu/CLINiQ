@@ -469,6 +469,8 @@ function recent_patient_accounts(int $limit = 100): array
         JOIN patients pt ON pt.person_id = p.id
         LEFT JOIN students s ON s.person_id = p.id
         LEFT JOIN school_employees se ON se.person_id = p.id
+        LEFT JOIN clinic_staff cs ON cs.person_id = p.id
+        WHERE cs.person_id IS NULL
         ORDER BY a.created_at DESC, p.id DESC
         LIMIT {$limit}
     ")->fetchAll();
