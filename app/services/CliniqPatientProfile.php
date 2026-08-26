@@ -25,6 +25,7 @@ function cliniq_patient_profile_select(): string
             pt.guardian_or_contact_number AS guardian_contact,
             pt.emergency_token,
             pt.token_enabled,
+            a.email,
             a.account_status,
             CASE
                 WHEN s.person_id IS NOT NULL THEN 'Student'

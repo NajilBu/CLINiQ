@@ -22,7 +22,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif (!student_password_is_valid($patient, $password)) {
             $error = 'Invalid ID number or password. Please try again.';
         } elseif ($patient['account_status'] === 'inactive') {
-            begin_first_registration($patient);
+            // Distinguish: was this account previously activated (school year reset) or brand new?
+            $wasActivated = !empty($patient['activated_at']);
+            if ($wasActivated) {
+                begin_re_enrollment($patient);
+            } else {
+                begin_first_registration($patient);
+            }
             header('Location: patient-dashboard.php');
             exit;
         } else {

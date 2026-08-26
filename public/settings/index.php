@@ -157,7 +157,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    if (in_array($action, ['start_ape_cycle', 'close_ape_cycle', 'archive_ape_cycle'], true)) {
+    if (in_array($action, ['start_ape_cycle', 'close_ape_cycle', 'archive_ape_cycle', 'reset_school_year', 'update_ape_cycle_schedule'], true)) {
         if (!$canManageApeCycles) {
             flash_message('error', 'Only administrators and doctors can manage annual APE cycles.');
             header('Location: index.php?tab=general');
@@ -171,7 +171,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     (string) ($_POST['academic_year'] ?? ''),
                     (string) ($_POST['compliance_start'] ?? ''),
                     (string) ($_POST['compliance_end'] ?? ''),
-                    $actorPersonId
+                    $actorPersonId,
+                    (string) ($_POST['exam_schedule_date'] ?? '')
                 );
                 flash_message('success', sprintf(
                     'APE cycle %s started. %d active patient record(s) created and %d existing record(s) linked.',
@@ -182,9 +183,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } elseif ($action === 'close_ape_cycle') {
                 $cycle = close_ape_cycle((int) ($_POST['ape_cycle_id'] ?? 0), $actorPersonId);
                 flash_message('success', "APE cycle {$cycle['academic_year']} closed. Its records remain available for reports and patient history.");
-            } else {
+            } elseif ($action === 'archive_ape_cycle') {
                 $cycle = archive_ape_cycle((int) ($_POST['ape_cycle_id'] ?? 0), $actorPersonId);
                 flash_message('success', "APE cycle {$cycle['academic_year']} archived.");
+            } elseif ($action === 'update_ape_cycle_schedule') {
+                update_ape_cycle_schedule((int) ($_POST['ape_cycle_id'] ?? 0), (string) ($_POST['exam_schedule_date'] ?? ''));
+                flash_message('success', 'Exam schedule date updated.');
+            } elseif ($action === 'reset_school_year') {
+                $result = reset_school_year_accounts();
+                $msg = "{$result['reset']} account(s) reset to inactive.";
+                if ($result['emailed'] > 0) {
+                    $msg .= " {$result['emailed']} notification email(s) sent.";
+                }
+                if ($result['failed'] > 0) {
+                    $msg .= " {$result['failed']} email(s) failed (check server mail config).";
+                }
+                flash_message('success', $msg);
             }
         } catch (Throwable $e) {
             flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $e->getMessage());
@@ -241,6 +255,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    if ($action === 'save_mail_settings') {
+        if (!$canManageSettings) {
+            flash_message('error', 'Only administrators, nurses, or IT experts can update mail settings.');
+            header('Location: index.php?tab=email');
+            exit;
+        }
+        try {
+            save_mail_settings($_POST, (int) ($user['person_id'] ?? 0) ?: null);
+            flash_message('success', 'SMTP settings saved.');
+        } catch (Throwable $e) {
+            flash_message('error', $e->getMessage());
+        }
+        header('Location: index.php?tab=email');
+        exit;
+    }
+
+    if ($action === 'send_test_email') {
+        if (!$canManageSettings) {
+            flash_message('error', 'Only administrators, nurses, or IT experts can send test emails.');
+            header('Location: index.php?tab=email');
+            exit;
+        }
+        require_once __DIR__ . '/../../app/helpers/mail.php';
+        $toEmail = trim((string) ($_POST['test_email'] ?? ($user['email'] ?? '')));
+        if (!filter_var($toEmail, FILTER_VALIDATE_EMAIL)) {
+            flash_message('error', 'Enter a valid email address to send the test to.');
+        } else {
+            $sent = send_cliniq_email(
+                $toEmail,
+                'CLINiQ Admin',
+                '[CLINiQ] SMTP Test Email',
+                '<p style="font-family:sans-serif;">Your CLINiQ SMTP configuration is working correctly! This is a test message.</p>'
+            );
+            if ($sent) {
+                flash_message('success', "Test email sent to {$toEmail}. Check the inbox.");
+            } else {
+                flash_message('error', 'Failed to send test email. Check your SMTP credentials and server error log.');
+            }
+        }
+        header('Location: index.php?tab=email');
+        exit;
+    }
+
     flash_message('warning', 'Unknown settings action.');
     header('Location: index.php?tab=general');
     exit;
@@ -252,6 +309,8 @@ $activeTheme = cliniq_theme_settings()['theme'];
 $staffProfiles = staff_profiles();
 $staffRoles = staff_profile_roles();
 $settings = risk_settings();
+$mailSettings = mail_settings();
+$mailConfigured = mail_settings_configured();
 $activeApePatientCount = 0;
 $excludedApePatientCount = 0;
 $apeCurrentCycle = null;
@@ -310,7 +369,7 @@ if (!isset($dropdownGroupsByCategory[$currentDropdownCategory][$currentDropdownG
     $currentDropdownGroup = (string) array_key_first($dropdownGroupsByCategory[$currentDropdownCategory]);
 }
 $currentTab = $_GET['tab'] ?? 'general';
-if (!in_array($currentTab, ['general', 'account', 'ape-cycle', 'dropdowns', 'clinical', 'maintenance'], true)) {
+if (!in_array($currentTab, ['general', 'account', 'ape-cycle', 'dropdowns', 'clinical', 'email', 'maintenance'], true)) {
     $currentTab = 'general';
 }
 if ($currentTab === 'ape-cycle' && !$canManageApeCycles) {
@@ -372,6 +431,10 @@ render_clinic_command_header(
         <a href="index.php?tab=clinical" class="settings-tab-link <?= $currentTab === 'clinical' ? 'active' : '' ?> text-decoration-none" data-settings-tab="clinical" data-no-ajax="true">
             <span class="material-symbols-outlined">emergency</span>
             <span>Incident Risk</span>
+        </a>
+        <a href="index.php?tab=email" class="settings-tab-link <?= $currentTab === 'email' ? 'active' : '' ?> text-decoration-none" data-settings-tab="email" data-no-ajax="true">
+            <span class="material-symbols-outlined">mail</span>
+            <span>Email</span>
         </a>
         <a href="index.php?tab=maintenance" class="settings-tab-link <?= $currentTab === 'maintenance' ? 'active' : '' ?> text-decoration-none" data-settings-tab="maintenance" data-no-ajax="true">
             <span class="material-symbols-outlined">restart_alt</span>
@@ -622,7 +685,13 @@ render_clinic_command_header(
                     <nav class="settings-dropdown-category-list mb-5" aria-label="Dropdown categories">
                         <?php foreach ($dropdownCategoryLabels as $categoryKey => $categoryLabel): ?>
                             <?php $categoryCount = count($dropdownGroupsByCategory[$categoryKey] ?? []); ?>
-                            <a href="index.php?tab=dropdowns&category=<?= urlencode($categoryKey) ?>" class="settings-dropdown-category-link <?= $currentDropdownCategory === $categoryKey ? 'active' : '' ?> text-decoration-none" data-no-ajax="true">
+                            <?php $defaultCategoryGroup = array_key_first($dropdownGroupsByCategory[$categoryKey] ?? []); ?>
+                            <a href="index.php?tab=dropdowns&category=<?= urlencode($categoryKey) ?><?= $defaultCategoryGroup ? '&group=' . urlencode((string) $defaultCategoryGroup) : '' ?>"
+                               class="settings-dropdown-category-link <?= $currentDropdownCategory === $categoryKey ? 'active' : '' ?> text-decoration-none"
+                               data-dropdown-category-link
+                               data-dropdown-category="<?= e($categoryKey) ?>"
+                               data-dropdown-default-group="<?= e((string) $defaultCategoryGroup) ?>"
+                               data-no-ajax="true">
                                 <span><?= e($categoryLabel) ?></span>
                                 <small><?= $categoryCount ?></small>
                             </a>
@@ -631,82 +700,98 @@ render_clinic_command_header(
 
                     <div class="grid grid-cols-1 xl:grid-cols-[0.42fr_0.58fr] gap-5">
                         <nav class="settings-section settings-dropdown-group-list" aria-label="Dropdown groups">
-                            <div class="settings-dropdown-group-heading">
-                                <strong><?= e($dropdownCategoryLabels[$currentDropdownCategory] ?? 'Dropdowns') ?></strong>
-                                <small><?= count($dropdownGroupsByCategory[$currentDropdownCategory] ?? []) ?> dropdown groups</small>
-                            </div>
-                            <?php foreach (($dropdownGroupsByCategory[$currentDropdownCategory] ?? []) as $groupKey => $group): ?>
-                                <a href="index.php?tab=dropdowns&category=<?= urlencode($currentDropdownCategory) ?>&group=<?= urlencode($groupKey) ?>" class="settings-dropdown-group-link <?= $currentDropdownGroup === $groupKey ? 'active' : '' ?> text-decoration-none" data-no-ajax="true">
-                                    <span>
-                                        <strong><?= e($group['label']) ?></strong>
-                                        <small><?= count($group['options']) ?> options</small>
-                                    </span>
-                                    <span class="material-symbols-outlined">chevron_right</span>
-                                </a>
+                            <?php foreach ($dropdownCategoryLabels as $categoryKey => $categoryLabel): ?>
+                                <?php $categoryGroups = $dropdownGroupsByCategory[$categoryKey] ?? []; ?>
+                                <div data-dropdown-category-panel="<?= e($categoryKey) ?>" <?= $currentDropdownCategory === $categoryKey ? '' : 'hidden' ?>>
+                                    <div class="settings-dropdown-group-heading">
+                                        <strong><?= e($categoryLabel) ?></strong>
+                                        <small><?= count($categoryGroups) ?> dropdown groups</small>
+                                    </div>
+                                    <?php foreach ($categoryGroups as $groupKey => $group): ?>
+                                        <a href="index.php?tab=dropdowns&category=<?= urlencode($categoryKey) ?>&group=<?= urlencode($groupKey) ?>"
+                                           class="settings-dropdown-group-link <?= $currentDropdownGroup === $groupKey ? 'active' : '' ?> text-decoration-none"
+                                           data-dropdown-group-link
+                                           data-dropdown-category="<?= e($categoryKey) ?>"
+                                           data-dropdown-group="<?= e($groupKey) ?>"
+                                           data-no-ajax="true">
+                                            <span>
+                                                <strong><?= e($group['label']) ?></strong>
+                                                <small><?= count($group['options']) ?> options</small>
+                                            </span>
+                                            <span class="material-symbols-outlined">chevron_right</span>
+                                        </a>
+                                    <?php endforeach; ?>
+                                </div>
                             <?php endforeach; ?>
                         </nav>
 
-                        <div class="space-y-5">
-                            <?php $selectedDropdown = $dropdownGroups[$currentDropdownGroup]; ?>
-                            <section class="settings-section">
-                                <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-5">
-                                    <div>
-                                        <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1"><?= e($selectedDropdown['label']) ?></h3>
-                                        <p class="settings-help mb-0"><?= e($selectedDropdown['description']) ?></p>
-                                    </div>
-                                    <form method="post">
-                                        <input type="hidden" name="action" value="reset_dropdown_group">
-                                        <input type="hidden" name="group_key" value="<?= e($currentDropdownGroup) ?>">
-                                        <button class="btn btn-ghost" <?= !$canManageSettings ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="danger" data-confirm-title="Reset this dropdown?" data-confirm-message="This restores this dropdown group to its default CLINiQ options." data-confirm-toast="Resetting dropdown...">
-                                            <span class="material-symbols-outlined text-[18px]">restart_alt</span>
-                                            Reset Group
-                                        </button>
-                                    </form>
-                                </div>
-
-                                <form method="post" class="settings-dropdown-add-form">
-                                    <input type="hidden" name="action" value="add_dropdown_option">
-                                    <input type="hidden" name="group_key" value="<?= e($currentDropdownGroup) ?>">
-                                    <input class="settings-input" name="label" placeholder="New option label" maxlength="120" <?= !$canManageSettings ? 'readonly' : '' ?> required>
-                                    <button class="btn btn-primary" <?= !$canManageSettings ? 'disabled' : '' ?>>
-                                        <span class="material-symbols-outlined text-[18px]">add</span>
-                                        Add
-                                    </button>
-                                </form>
-                            </section>
-
-                            <div class="settings-dropdown-option-list">
-                                <?php foreach ($selectedDropdown['options'] as $option): ?>
-                                    <article class="settings-section settings-dropdown-option-card">
-                                        <form method="post" class="settings-dropdown-option-form">
-                                            <input type="hidden" name="action" value="update_dropdown_option">
-                                            <input type="hidden" name="group_key" value="<?= e($currentDropdownGroup) ?>">
-                                            <input type="hidden" name="option_id" value="<?= e($option['id']) ?>">
-                                            <label class="clinic-label" for="dropdown_<?= e($currentDropdownGroup . '_' . $option['id']) ?>">Option Label</label>
-                                            <div class="settings-dropdown-option-row">
-                                                <input class="settings-input" id="dropdown_<?= e($currentDropdownGroup . '_' . $option['id']) ?>" name="label" value="<?= e($option['label']) ?>" maxlength="120" <?= !$canManageSettings ? 'readonly' : '' ?> required>
-                                                <label class="settings-switch-inline">
-                                                    <input type="checkbox" name="active" value="1" <?= !empty($option['active']) ? 'checked' : '' ?> <?= !$canManageSettings ? 'disabled' : '' ?>>
-                                                    Active
-                                                </label>
-                                                <button class="btn btn-outline" <?= !$canManageSettings ? 'disabled' : '' ?>>
-                                                    <span class="material-symbols-outlined text-[18px]">save</span>
-                                                    Save
-                                                </button>
+                        <div class="space-y-5" data-dropdown-content-panels>
+                            <?php foreach ($dropdownGroups as $panelGroupKey => $selectedDropdown): ?>
+                                <?php $panelCategory = $dropdownGroupCategories[$panelGroupKey] ?? 'students'; ?>
+                                <div data-dropdown-content-panel="<?= e($panelGroupKey) ?>"
+                                     data-dropdown-category="<?= e($panelCategory) ?>"
+                                     <?= $currentDropdownGroup === $panelGroupKey ? '' : 'hidden' ?>>
+                                    <section class="settings-section">
+                                        <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-5">
+                                            <div>
+                                                <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1"><?= e($selectedDropdown['label']) ?></h3>
+                                                <p class="settings-help mb-0"><?= e($selectedDropdown['description']) ?></p>
                                             </div>
-                                        </form>
-                                        <form method="post">
-                                            <input type="hidden" name="action" value="delete_dropdown_option">
-                                            <input type="hidden" name="group_key" value="<?= e($currentDropdownGroup) ?>">
-                                            <input type="hidden" name="option_id" value="<?= e($option['id']) ?>">
-                                            <button class="btn btn-danger" <?= !$canManageSettings ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="danger" data-confirm-title="Delete dropdown option?" data-confirm-message="This removes the option from future forms. Existing saved records will not be changed." data-confirm-toast="Deleting option...">
-                                                <span class="material-symbols-outlined text-[18px]">delete</span>
-                                                Delete
+                                            <form method="post">
+                                                <input type="hidden" name="action" value="reset_dropdown_group">
+                                                <input type="hidden" name="group_key" value="<?= e($panelGroupKey) ?>">
+                                                <button class="btn btn-ghost" <?= !$canManageSettings ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="danger" data-confirm-title="Reset this dropdown?" data-confirm-message="This restores this dropdown group to its default CLINiQ options." data-confirm-toast="Resetting dropdown...">
+                                                    <span class="material-symbols-outlined text-[18px]">restart_alt</span>
+                                                    Reset Group
+                                                </button>
+                                            </form>
+                                        </div>
+
+                                        <form method="post" class="settings-dropdown-add-form">
+                                            <input type="hidden" name="action" value="add_dropdown_option">
+                                            <input type="hidden" name="group_key" value="<?= e($panelGroupKey) ?>">
+                                            <input class="settings-input" name="label" placeholder="New option label" maxlength="120" <?= !$canManageSettings ? 'readonly' : '' ?> required>
+                                            <button class="btn btn-primary" <?= !$canManageSettings ? 'disabled' : '' ?>>
+                                                <span class="material-symbols-outlined text-[18px]">add</span>
+                                                Add
                                             </button>
                                         </form>
-                                    </article>
-                                <?php endforeach; ?>
-                            </div>
+                                    </section>
+
+                                    <div class="settings-dropdown-option-list">
+                                        <?php foreach ($selectedDropdown['options'] as $option): ?>
+                                            <article class="settings-section settings-dropdown-option-card">
+                                                <form method="post" class="settings-dropdown-option-form">
+                                                    <input type="hidden" name="action" value="update_dropdown_option">
+                                                    <input type="hidden" name="group_key" value="<?= e($panelGroupKey) ?>">
+                                                    <input type="hidden" name="option_id" value="<?= e($option['id']) ?>">
+                                                    <label class="clinic-label" for="dropdown_<?= e($panelGroupKey . '_' . $option['id']) ?>">Option Label</label>
+                                                    <div class="settings-dropdown-option-row">
+                                                        <input class="settings-input" id="dropdown_<?= e($panelGroupKey . '_' . $option['id']) ?>" name="label" value="<?= e($option['label']) ?>" maxlength="120" <?= !$canManageSettings ? 'readonly' : '' ?> required>
+                                                        <label class="settings-switch-inline">
+                                                            <input type="checkbox" name="active" value="1" <?= !empty($option['active']) ? 'checked' : '' ?> <?= !$canManageSettings ? 'disabled' : '' ?>>
+                                                            Active
+                                                        </label>
+                                                        <button class="btn btn-outline" <?= !$canManageSettings ? 'disabled' : '' ?>>
+                                                            <span class="material-symbols-outlined text-[18px]">save</span>
+                                                            Save
+                                                        </button>
+                                                    </div>
+                                                </form>
+                                                <form method="post">
+                                                    <input type="hidden" name="action" value="delete_dropdown_option">
+                                                    <input type="hidden" name="group_key" value="<?= e($panelGroupKey) ?>">
+                                                    <input type="hidden" name="option_id" value="<?= e($option['id']) ?>">
+                                                    <button class="btn btn-danger" <?= !$canManageSettings ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="danger" data-confirm-title="Delete dropdown option?" data-confirm-message="This removes the option from future forms. Existing saved records will not be changed." data-confirm-toast="Deleting option...">
+                                                        <span class="material-symbols-outlined text-[18px]">delete</span>
+                                                        Delete
+                                                    </button>
+                                                </form>
+                                            </article>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
                         </div>
                     </div>
                 </section>
@@ -985,6 +1070,11 @@ render_clinic_command_header(
                                 <label class="clinic-label" for="apePeriodEnd">Compliance End</label>
                                 <input class="settings-input" id="apePeriodEnd" type="date" value="<?= e($defaultApeEndDate) ?>" <?= $hasActiveApeCycle ? 'disabled' : '' ?>>
                             </div>
+                            <div class="settings-field md:col-span-3">
+                                <label class="clinic-label" for="apeExamScheduleDate">Exam Schedule Date <span class="font-normal text-slate-400">(optional)</span></label>
+                                <input class="settings-input" id="apeExamScheduleDate" type="date" <?= $hasActiveApeCycle ? 'disabled' : '' ?>>
+                                <p class="settings-help mb-0">The single day patients are scheduled for examination. If they miss this date without confirming vitals, their status will show as <strong>Missed</strong>.</p>
+                            </div>
                         </div>
                         <p class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-bold text-red-700" id="apeCycleError" role="alert"></p>
                     </section>
@@ -1007,8 +1097,117 @@ render_clinic_command_header(
                             <p class="settings-help mt-3 mb-0">Close the active <?= e($apeCurrentCycle['academic_year']) ?> cycle before starting another school year.</p>
                         <?php endif; ?>
                     </section>
+
+                    <?php if ($hasActiveApeCycle): ?>
+                    <section class="settings-section space-y-4">
+                        <div>
+                            <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Exam Schedule Date</h3>
+                            <p class="settings-help mb-0">
+                                <?php if (!empty($apeCurrentCycle['exam_schedule_date'])): ?>
+                                    Currently set to <strong><?= e(date('F j, Y', strtotime($apeCurrentCycle['exam_schedule_date']))) ?></strong>. Update below to change.
+                                <?php else: ?>
+                                    No exam date set yet. Set one to let patients know when to present for examination.
+                                <?php endif; ?>
+                            </p>
+                        </div>
+                        <form method="post" data-no-ajax="true" class="flex flex-col sm:flex-row gap-3 items-end">
+                            <input type="hidden" name="action" value="update_ape_cycle_schedule">
+                            <input type="hidden" name="ape_cycle_id" value="<?= (int) $apeCurrentCycle['ape_cycle_id'] ?>">
+                            <div class="settings-field mb-0 flex-1">
+                                <label class="clinic-label" for="updateExamScheduleDate">Exam Schedule Date</label>
+                                <input class="settings-input" id="updateExamScheduleDate" name="exam_schedule_date" type="date" value="<?= e($apeCurrentCycle['exam_schedule_date'] ?? '') ?>" required>
+                            </div>
+                            <button class="btn btn-primary justify-center shrink-0" data-confirm-submit data-confirm-type="primary" data-confirm-title="Set exam schedule date?" data-confirm-message="Patients who miss this date without confirming vitals will be marked as Missed." data-confirm-toast="Saving exam schedule...">
+                                <span class="material-symbols-outlined text-[18px]">event_available</span>
+                                Set Schedule
+                            </button>
+                        </form>
+                    </section>
+                    <?php endif; ?>
+
+                    <section class="settings-section border-2 border-red-200 bg-red-50 space-y-4">
+                        <div>
+                            <h3 class="font-headline text-lg font-extrabold text-red-800 mb-1">Start New School Year</h3>
+                            <p class="settings-help mb-0 text-red-700">This resets <strong>all active patient accounts</strong> (students, faculty, and personnel) to inactive. On their next login, each person will be asked to confirm they are still enrolled or employed before regaining access.</p>
+                        </div>
+                        <form method="post" data-no-ajax="true">
+                            <input type="hidden" name="action" value="reset_school_year">
+                            <button class="btn btn-danger justify-center" data-confirm-submit data-confirm-type="danger" data-confirm-title="Reset all patient accounts?" data-confirm-message="All active student, faculty, and personnel accounts will be set to inactive. Each person must confirm re-enrollment or re-employment on their next login. This cannot be undone." data-confirm-toast="Resetting accounts...">
+                                <span class="material-symbols-outlined text-[18px]">restart_alt</span>
+                                Start New School Year
+                            </button>
+                        </form>
+                    </section>
+
                 </div>
             <?php endif; ?>
+            <div id="settings-email" class="settings-tab-panel <?= $currentTab === 'email' ? 'active' : '' ?> space-y-6">
+                <section>
+                    <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Email Settings</h2>
+                    <p class="text-xs font-bold text-slate-500 mb-0">Set the clinic email identity used for patient notifications.</p>
+                </section>
+
+                <section class="settings-section space-y-5">
+                    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+                        <div class="flex items-start gap-4">
+                            <div class="w-14 h-14 rounded-2xl bg-[var(--cliniq-surface-low)] text-[var(--cliniq-primary)] flex items-center justify-center shrink-0">
+                                <span class="material-symbols-outlined text-[28px]">alternate_email</span>
+                            </div>
+                            <div>
+                                <p class="clinic-label mb-2">Clinic Email</p>
+                                <h3 class="font-headline text-2xl font-extrabold text-[#17261d] mb-1">
+                                    <?= e($mailSettings['from_name'] ?: 'CLINiQ Clinic') ?>
+                                </h3>
+                                <p class="text-sm font-bold text-slate-500 mb-0">
+                                    <?= e($mailSettings['from_email'] ?: ($mailSettings['username'] ?: 'No email configured yet')) ?>
+                                </p>
+                            </div>
+                        </div>
+                        <div class="flex flex-col sm:flex-row gap-3">
+                            <?php if ($canManageSettings): ?>
+                                <button type="button" class="btn btn-primary justify-center" id="openEmailConfigButton">
+                                    <span class="material-symbols-outlined text-[18px]">settings</span>
+                                    Configure Email
+                                </button>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+
+                    <?php if ($mailConfigured): ?>
+                        <div class="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-700">
+                            <span class="material-symbols-outlined text-[16px]">check_circle</span>
+                            Email is configured and ready for system notifications.
+                        </div>
+                    <?php else: ?>
+                        <div class="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-bold text-amber-700">
+                            <span class="material-symbols-outlined text-[16px]">warning</span>
+                            Email is not configured yet. Patient notifications will not send until it is configured.
+                        </div>
+                    <?php endif; ?>
+                </section>
+
+                <?php if ($mailConfigured && $canManageSettings): ?>
+                <section class="settings-section space-y-4">
+                    <div>
+                        <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Send Test Email</h3>
+                        <p class="settings-help mb-0">Send a test email to verify your SMTP configuration is working correctly.</p>
+                    </div>
+                    <form method="post" data-no-ajax="true" class="flex flex-col sm:flex-row gap-3 items-end">
+                        <input type="hidden" name="action" value="send_test_email">
+                        <div class="settings-field mb-0 flex-1">
+                            <label class="clinic-label" for="testEmailAddress">Send Test To</label>
+                            <input class="settings-input" id="testEmailAddress" name="test_email" type="email"
+                                placeholder="your-email@example.com"
+                                value="<?= e($user['email'] ?? '') ?>" required>
+                        </div>
+                        <button type="submit" class="btn btn-secondary justify-center shrink-0">
+                            <span class="material-symbols-outlined text-[18px]">send</span>
+                            Send Test Email
+                        </button>
+                    </form>
+                </section>
+                <?php endif; ?>
+            </div>
 
             <div id="settings-maintenance" class="settings-tab-panel <?= $currentTab === 'maintenance' ? 'active' : '' ?> space-y-6">
                 <section>
@@ -1033,6 +1232,181 @@ render_clinic_command_header(
     </section>
 </div>
 
+<?php if ($canManageSettings): ?>
+    <div id="emailConfigModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="emailConfigModalTitle">
+        <div class="modal-content bg-white rounded-[1.5rem] w-full max-w-3xl p-7 shadow-2xl border border-outline-variant/10">
+            <div class="flex items-start justify-between gap-4 mb-6">
+                <div>
+                    <div class="w-12 h-12 rounded-xl bg-[var(--cliniq-surface-low)] text-[var(--cliniq-primary)] flex items-center justify-center mb-5">
+                        <span class="material-symbols-outlined text-[26px]">alternate_email</span>
+                    </div>
+                    <h3 class="font-headline text-2xl font-extrabold text-[#17261d] mb-2" id="emailConfigModalTitle">Configure Email</h3>
+                    <p class="text-sm font-bold text-slate-500 leading-6 mb-0">These details are only needed when setting up the clinic sender account.</p>
+                </div>
+                <button type="button" class="btn btn-ghost justify-center px-3" id="closeEmailConfigButton" aria-label="Close email configuration">
+                    <span class="material-symbols-outlined text-[20px]">close</span>
+                </button>
+            </div>
+
+            <form method="post" data-no-ajax="true" class="space-y-5">
+                <input type="hidden" name="action" value="save_mail_settings">
+
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-5 space-y-5">
+                    <h4 class="font-headline text-lg font-extrabold text-[#17261d] mb-0">Clinic Email Identity</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div class="settings-field">
+                            <label class="clinic-label" for="mailFromName">Email Name</label>
+                            <input class="settings-input" id="mailFromName" name="from_name" type="text"
+                                placeholder="CLINiQ Clinic"
+                                value="<?= e($mailSettings['from_name'] ?? 'CLINiQ Clinic') ?>">
+                        </div>
+                        <div class="settings-field">
+                            <label class="clinic-label" for="mailFromEmail">Email Address</label>
+                            <input class="settings-input" id="mailFromEmail" name="from_email" type="email"
+                                placeholder="cliniq@plpasig.edu.ph"
+                                value="<?= e($mailSettings['from_email'] ?? '') ?>">
+                        </div>
+                    </div>
+                </div>
+
+                <details class="rounded-2xl border border-slate-200 bg-white p-5" open>
+                    <summary class="cursor-pointer font-headline text-lg font-extrabold text-[#17261d]">Connection Details</summary>
+                    <div class="mt-5 space-y-5">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                            <div class="settings-field md:col-span-2">
+                                <label class="clinic-label" for="mailHost">Host</label>
+                                <input class="settings-input" id="mailHost" name="host" type="text"
+                                    placeholder="smtp.gmail.com"
+                                    value="<?= e($mailSettings['host'] ?? '') ?>">
+                            </div>
+                            <div class="settings-field">
+                                <label class="clinic-label" for="mailPort">Port</label>
+                                <input class="settings-input" id="mailPort" name="port" type="number"
+                                    min="1" max="65535" placeholder="587"
+                                    value="<?= e((string) ($mailSettings['port'] ?? '587')) ?>">
+                            </div>
+                            <div class="settings-field">
+                                <label class="clinic-label" for="mailEncryption">Security</label>
+                                <select class="settings-input" id="mailEncryption" name="encryption">
+                                    <option value="tls" <?= ($mailSettings['encryption'] ?? 'tls') === 'tls' ? 'selected' : '' ?>>TLS</option>
+                                    <option value="ssl" <?= ($mailSettings['encryption'] ?? '') === 'ssl' ? 'selected' : '' ?>>SSL</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div class="settings-field">
+                                <label class="clinic-label" for="mailUsername">Login Email</label>
+                                <input class="settings-input" id="mailUsername" name="username" type="email"
+                                    placeholder="your-email@gmail.com"
+                                    value="<?= e($mailSettings['username'] ?? '') ?>">
+                            </div>
+                            <div class="settings-field">
+                                <label class="clinic-label" for="mailPassword">
+                                    Password / App Password
+                                    <?php if (!empty($mailSettings['password'])): ?>
+                                        <span class="font-normal text-emerald-600 ml-1">— saved</span>
+                                    <?php endif; ?>
+                                </label>
+                                <input class="settings-input" id="mailPassword" name="password" type="password"
+                                    placeholder="<?= !empty($mailSettings['password']) ? '••••••••••••••••' : 'Enter password or app password' ?>"
+                                    autocomplete="new-password">
+                                <p class="settings-help mb-0">Leave blank to keep the existing saved password.</p>
+                            </div>
+                        </div>
+                    </div>
+                </details>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <button type="button" class="btn btn-secondary justify-center" id="cancelEmailConfigButton">Cancel</button>
+                    <button type="submit" class="btn btn-primary justify-center">
+                        <span class="material-symbols-outlined text-[18px]">save</span>
+                        Save Email
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        (() => {
+            const openButton = document.getElementById('openEmailConfigButton');
+            const closeButton = document.getElementById('closeEmailConfigButton');
+            const cancelButton = document.getElementById('cancelEmailConfigButton');
+            if (openButton) {
+                openButton.addEventListener('click', () => showModal('emailConfigModal'));
+            }
+            [closeButton, cancelButton].forEach((button) => {
+                if (button) {
+                    button.addEventListener('click', () => closeModal('emailConfigModal'));
+                }
+            });
+        })();
+    </script>
+<?php endif; ?>
+
+<script>
+    (() => {
+        if (document.documentElement.dataset.cliniqDropdownSettingsReady === '1') return;
+        document.documentElement.dataset.cliniqDropdownSettingsReady = '1';
+
+        const switchDropdownPanel = (category, group) => {
+            if (!category) return;
+
+            const categoryPanel = document.querySelector(`[data-dropdown-category-panel="${CSS.escape(category)}"]`);
+            const fallbackGroup = categoryPanel?.querySelector('[data-dropdown-group-link]')?.dataset.dropdownGroup || '';
+            const targetGroup = group || fallbackGroup;
+
+            document.querySelectorAll('[data-dropdown-category-link]').forEach((link) => {
+                link.classList.toggle('active', link.dataset.dropdownCategory === category);
+            });
+
+            document.querySelectorAll('[data-dropdown-category-panel]').forEach((panel) => {
+                panel.hidden = panel.dataset.dropdownCategoryPanel !== category;
+            });
+
+            document.querySelectorAll('[data-dropdown-group-link]').forEach((link) => {
+                link.classList.toggle('active', link.dataset.dropdownGroup === targetGroup);
+            });
+
+            document.querySelectorAll('[data-dropdown-content-panel]').forEach((panel) => {
+                panel.hidden = panel.dataset.dropdownContentPanel !== targetGroup;
+            });
+
+            const url = new URL(window.location.href);
+            url.searchParams.set('tab', 'dropdowns');
+            url.searchParams.set('category', category);
+            if (targetGroup) {
+                url.searchParams.set('group', targetGroup);
+            } else {
+                url.searchParams.delete('group');
+            }
+            window.history.replaceState({}, '', url);
+        };
+
+        document.addEventListener('click', (event) => {
+            const categoryLink = event.target.closest('[data-dropdown-category-link]');
+            if (categoryLink) {
+                event.preventDefault();
+                switchDropdownPanel(
+                    categoryLink.dataset.dropdownCategory || '',
+                    categoryLink.dataset.dropdownDefaultGroup || ''
+                );
+                return;
+            }
+
+            const groupLink = event.target.closest('[data-dropdown-group-link]');
+            if (groupLink) {
+                event.preventDefault();
+                switchDropdownPanel(
+                    groupLink.dataset.dropdownCategory || '',
+                    groupLink.dataset.dropdownGroup || ''
+                );
+            }
+        });
+    })();
+</script>
+
 <?php if ($canManageApeCycles): ?>
     <div id="apeCycleModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="apeCycleModalTitle">
         <div class="modal-content bg-white rounded-[1.5rem] w-full max-w-lg p-7 shadow-2xl border border-outline-variant/10">
@@ -1044,6 +1418,7 @@ render_clinic_command_header(
             <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3 text-sm">
                 <div class="flex justify-between gap-4"><span class="font-bold text-slate-500">School Year</span><strong id="apeConfirmSchoolYear"></strong></div>
                 <div class="flex justify-between gap-4"><span class="font-bold text-slate-500">Compliance Period</span><strong class="text-right" id="apeConfirmDates"></strong></div>
+                <div class="flex justify-between gap-4"><span class="font-bold text-slate-500">Exam Date</span><strong id="apeConfirmExamDate">Not set</strong></div>
                 <div class="flex justify-between gap-4"><span class="font-bold text-slate-500">Active Patients</span><strong><?= number_format($activeApePatientCount) ?></strong></div>
             </div>
             <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-bold text-amber-800">
@@ -1054,6 +1429,7 @@ render_clinic_command_header(
                 <input type="hidden" name="academic_year" id="apeSubmitSchoolYear">
                 <input type="hidden" name="compliance_start" id="apeSubmitPeriodStart">
                 <input type="hidden" name="compliance_end" id="apeSubmitPeriodEnd">
+                <input type="hidden" name="exam_schedule_date" id="apeSubmitExamDate">
                 <div class="grid grid-cols-2 gap-3 mt-6">
                     <button type="button" class="btn btn-secondary justify-center" id="cancelApeCycleButton">Cancel</button>
                     <button type="submit" class="btn btn-primary justify-center" id="confirmApeCycleButton">Start APE Cycle</button>
@@ -1145,6 +1521,13 @@ render_clinic_command_header(
                 if (!validate()) return;
                 document.getElementById('apeConfirmSchoolYear').textContent = schoolYear.value.trim();
                 document.getElementById('apeConfirmDates').textContent = `${formatDate(periodStart.value)} to ${formatDate(periodEnd.value)}`;
+                const examDateEl = document.getElementById('apeExamScheduleDate');
+                const examDateConfirmEl = document.getElementById('apeConfirmExamDate');
+                const examDateSubmitEl = document.getElementById('apeSubmitExamDate');
+                if (examDateEl && examDateConfirmEl && examDateSubmitEl) {
+                    examDateConfirmEl.textContent = examDateEl.value ? formatDate(examDateEl.value) : 'Not set';
+                    examDateSubmitEl.value = examDateEl.value;
+                }
                 document.getElementById('apeSubmitSchoolYear').value = schoolYear.value.trim();
                 document.getElementById('apeSubmitPeriodStart').value = periodStart.value;
                 document.getElementById('apeSubmitPeriodEnd').value = periodEnd.value;

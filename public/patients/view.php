@@ -64,6 +64,7 @@ if ($patient['birthdate']) {
     $ageLabel = $birthdate->diff(new DateTime())->y . ' years old';
 }
 $sexLabel = $patient['sex'] ?: 'Not specified';
+$emailLabel = trim((string) ($patient['email'] ?? '')) !== '' ? trim((string) $patient['email']) : 'Not specified';
 $bloodTypeLabel = $patient['blood_type'] ?: 'Not specified';
 $courseLabel = $patient['course_section'] ?: $patient['patient_type'];
 $lastVisitLabel = $latestVisit ? date('M d, Y g:i A', strtotime($latestVisit['visit_datetime'])) : 'No visits yet';
@@ -371,6 +372,10 @@ render_header($fullName . ' - Patient Profile');
                     <div class="patient-profile-field">
                         <span class="clinic-label">Blood Type</span>
                         <strong><?= e($bloodTypeLabel) ?></strong>
+                    </div>
+                    <div class="patient-profile-field md:col-span-2">
+                        <span class="clinic-label">Email</span>
+                        <strong><?= e($emailLabel) ?></strong>
                     </div>
                     <div class="patient-profile-field md:col-span-2">
                         <span class="clinic-label">Guardian</span>

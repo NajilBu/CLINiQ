@@ -77,6 +77,77 @@ if (!empty($profile['first_registration'])) {
     return;
 }
 
+// Re-enrollment / re-employment confirmation (school-year reset flow)
+if (re_enrollment_pending()) {
+    $reCtx = re_enrollment_context();
+    $reType = (string) ($reCtx['type'] ?? 'patient');
+    $isStudent = $reType === 'student';
+    $reEnrollError = '';
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'complete_re_enrollment') {
+        try {
+            complete_re_enrollment();
+            header('Location: patient-dashboard.php?re_enrolled=1');
+            exit;
+        } catch (Throwable $e) {
+            $reEnrollError = $e->getMessage();
+        }
+    }
+    render_student_header($isStudent ? 'Confirm Re-enrollment' : 'Confirm Re-employment', 'dashboard');
+    ?>
+    <section class="student-page-header">
+        <div>
+            <p class="student-eyebrow">New School Year</p>
+            <h1 class="student-title"><?= $isStudent ? 'Are you still enrolled?' : 'Are you still employed?' ?></h1>
+            <p class="student-subtitle"><?= $isStudent
+                ? 'The clinic has started a new school year. Please confirm you are still enrolled to regain access to your health portal.'
+                : 'The clinic has started a new school year. Please confirm you are still employed to regain access to your health portal.'
+            ?></p>
+        </div>
+        <span class="student-badge student-badge-warning">
+            <span class="material-symbols-outlined text-[14px]">how_to_reg</span>
+            Confirmation Required
+        </span>
+    </section>
+
+    <section class="student-card student-card-pad max-w-2xl mx-auto">
+        <div class="flex items-start gap-4 mb-5">
+            <span class="student-icon-box">
+                <span class="material-symbols-outlined"><?= $isStudent ? 'school' : 'badge' ?></span>
+            </span>
+            <div>
+                <h2 class="student-card-title"><?= $isStudent ? 'Confirm Enrollment' : 'Confirm Employment' ?></h2>
+                <p class="student-card-copy"><?= $isStudent
+                    ? 'By confirming, you declare that you are currently enrolled this school year and should have access to clinic health services.'
+                    : 'By confirming, you declare that you are currently employed this school year and should have access to clinic health services.'
+                ?></p>
+            </div>
+        </div>
+
+        <?php if ($reEnrollError !== ''): ?>
+            <div class="student-note student-note-danger mb-4">
+                <span class="material-symbols-outlined">error</span>
+                <div><?= student_e($reEnrollError) ?></div>
+            </div>
+        <?php endif; ?>
+
+        <div class="student-note student-note-warning mb-5">
+            <span class="material-symbols-outlined">info</span>
+            <div>If you are no longer <?= $isStudent ? 'enrolled' : 'employed' ?>, do <strong>not</strong> confirm. Contact the clinic if you have questions about your account.</div>
+        </div>
+
+        <form method="post">
+            <input type="hidden" name="action" value="complete_re_enrollment">
+            <button type="submit" class="student-button w-full" data-confirm-submit data-confirm-type="primary" data-confirm-title="<?= $isStudent ? 'Confirm you are still enrolled?' : 'Confirm you are still employed?' ?>" data-confirm-message="This will reactivate your account for the new school year." data-confirm-toast="Confirming...">
+                <span class="material-symbols-outlined">how_to_reg</span>
+                <?= $isStudent ? 'Yes, I am Still Enrolled' : 'Yes, I am Still Employed' ?>
+            </button>
+        </form>
+    </section>
+    <?php
+    render_student_footer();
+    return;
+}
+
 $patientId = (int) $profile['patient_id'];
 $appointmentPatientId = (int) $profile['person_id'];
 

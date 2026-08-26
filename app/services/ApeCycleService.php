@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../helpers/mail.php';
 
 function ensure_ape_cycle_schema(): void
 {
@@ -13,6 +14,11 @@ function ensure_ape_cycle_schema(): void
     $column = $db->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ape_records' AND COLUMN_NAME = 'ape_cycle_id'")->fetchColumn();
     if ((int) $table !== 1 || (int) $column !== 1) {
         throw new RuntimeException('APE cycle schema is missing. Run database/migrations/20260811_create_ape_cycles.sql.');
+    }
+    // Auto-add exam_schedule_date column if missing.
+    $scheduleCol = $db->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ape_cycles' AND COLUMN_NAME = 'exam_schedule_date'")->fetchColumn();
+    if ((int) $scheduleCol === 0) {
+        $db->exec("ALTER TABLE ape_cycles ADD COLUMN exam_schedule_date DATE NULL AFTER compliance_end");
     }
     $ready = true;
 }
@@ -103,7 +109,7 @@ function ape_cycle_current(): ?array
     return $cycleId ? ape_cycle_fetch((int) $cycleId) : null;
 }
 
-function start_ape_cycle(string $academicYear, string $complianceStart, string $complianceEnd, ?int $actorPersonId): array
+function start_ape_cycle(string $academicYear, string $complianceStart, string $complianceEnd, ?int $actorPersonId, ?string $examScheduleDate = null): array
 {
     ensure_ape_cycle_schema();
     $academicYear = normalize_ape_academic_year($academicYear);
@@ -126,8 +132,12 @@ function start_ape_cycle(string $academicYear, string $complianceStart, string $
             throw new RuntimeException("Close the active {$active} APE cycle before starting another school year.");
         }
 
-        $insertCycle = $db->prepare('INSERT INTO ape_cycles (academic_year, compliance_start, compliance_end, started_by_person_id) VALUES (?, ?, ?, ?)');
-        $insertCycle->execute([$academicYear, $complianceStart, $complianceEnd, $actorPersonId]);
+        $examDate = null;
+        if ($examScheduleDate !== null && $examScheduleDate !== '') {
+            $examDate = normalize_ape_cycle_date($examScheduleDate, 'exam schedule');
+        }
+        $insertCycle = $db->prepare('INSERT INTO ape_cycles (academic_year, compliance_start, compliance_end, exam_schedule_date, started_by_person_id) VALUES (?, ?, ?, ?, ?)');
+        $insertCycle->execute([$academicYear, $complianceStart, $complianceEnd, $examDate, $actorPersonId]);
         $cycleId = (int) $db->lastInsertId();
 
         $insertRecords = $db->prepare("
@@ -229,4 +239,100 @@ function archive_ape_cycle(int $cycleId, ?int $actorPersonId): array
         if ($db->inTransaction()) $db->rollBack();
         throw $e;
     }
+}
+
+/**
+ * Update the exam schedule date on an active APE cycle.
+ */
+function update_ape_cycle_schedule(int $cycleId, string $examScheduleDate): void
+{
+    ensure_ape_cycle_schema();
+    $examDate = $examScheduleDate !== '' ? normalize_ape_cycle_date($examScheduleDate, 'exam schedule') : null;
+    $stmt = auth_db()->prepare("UPDATE ape_cycles SET exam_schedule_date = ? WHERE ape_cycle_id = ? AND status = 'Active'");
+    $stmt->execute([$examDate, $cycleId]);
+    if ($stmt->rowCount() !== 1) {
+        throw new RuntimeException('The exam schedule could not be updated. Make sure the cycle is still active.');
+    }
+}
+
+/**
+ * Reset all patient accounts to inactive at the start of a new school year.
+ * Students must confirm re-enrollment; faculty/personnel must confirm re-employment.
+ * Sends an email to each affected patient.
+ *
+ * Returns an array: ['reset' => int, 'emailed' => int, 'failed' => int]
+ */
+function reset_school_year_accounts(): array
+{
+    $db = auth_db();
+
+    // Fetch all patients that will be deactivated BEFORE the reset, so we have their info.
+    $fetch = $db->query("
+        SELECT
+            a.id AS account_id,
+            a.email,
+            p.first_name,
+            p.last_name,
+            CASE
+                WHEN s.person_id IS NOT NULL THEN 'student'
+                WHEN se.role_classification = 'Faculty' THEN 'faculty'
+                ELSE 'school_personnel'
+            END AS account_type
+        FROM accounts a
+        INNER JOIN patients pt ON pt.person_id = a.person_id
+        INNER JOIN people p ON p.id = a.person_id
+        LEFT JOIN students s ON s.person_id = p.id
+        LEFT JOIN school_employees se ON se.person_id = p.id
+        WHERE a.account_status = 'active'
+          AND a.email IS NOT NULL
+          AND a.email <> ''
+    ");
+    $patients = $fetch->fetchAll();
+
+    // Now perform the reset.
+    $reset = $db->prepare("
+        UPDATE accounts a
+        INNER JOIN patients pt ON pt.person_id = a.person_id
+        SET a.account_status = 'inactive',
+            a.activated_at = NULL
+        WHERE a.account_status = 'active'
+    ");
+    $reset->execute();
+    $resetCount = $reset->rowCount();
+
+    // Send re-enrollment emails.
+    require_once __DIR__ . '/../services/SystemSettings.php';
+    $clinicProfile = clinic_profile_settings();
+    $clinicName    = $clinicProfile['system_name'] ?? 'CLINiQ Clinic';
+    $loginUrl      = rtrim(env_value('PATIENT_PORTAL_URL', 'http://localhost/CLINiQ/patient-portal'), '/') . '/patient-login.php';
+
+    $emailed = 0;
+    $failed  = 0;
+    foreach ($patients as $patient) {
+        $firstName   = (string) ($patient['first_name'] ?? '');
+        $accountType = (string) ($patient['account_type'] ?? 'student');
+        $isStudent   = $accountType === 'student';
+        $subject     = $isStudent
+            ? "[{$clinicName}] Confirm you are still enrolled — new school year"
+            : "[{$clinicName}] Confirm you are still employed — new school year";
+
+        $body = cliniq_re_enrollment_email_body(
+            $firstName,
+            $accountType,
+            $clinicName,
+            $loginUrl
+        );
+
+        $fullName = trim($firstName . ' ' . ($patient['last_name'] ?? ''));
+        $sent = send_cliniq_email(
+            (string) $patient['email'],
+            $fullName ?: 'Patient',
+            $subject,
+            $body
+        );
+
+        $sent ? $emailed++ : $failed++;
+    }
+
+    return ['reset' => $resetCount, 'emailed' => $emailed, 'failed' => $failed];
 }

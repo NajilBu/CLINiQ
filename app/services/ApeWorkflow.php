@@ -166,6 +166,16 @@ function ape_priority_badge(array $record): array
         return ['label' => $days >= 3 ? 'Urgent' : 'Clinical', 'class' => 'badge-high'];
     }
 
+    // If an exam schedule date is set and has passed and the patient hasn't confirmed vitals, mark as Missed.
+    $examDate = $record['exam_schedule_date'] ?? null;
+    if (
+        $examDate
+        && ($record['patient_vitals_status'] ?? 'Not Started') === 'Not Started'
+        && date('Y-m-d') > $examDate
+    ) {
+        return ['label' => 'Missed', 'class' => 'badge-critical'];
+    }
+
     if ($days >= 7) {
         return ['label' => 'Overdue', 'class' => 'badge-critical'];
     }
@@ -179,7 +189,6 @@ function ape_priority_badge(array $record): array
 
 function ape_waiting_label(array $record): string
 {
-    $queueKey = ape_record_queue($record);
     $days = ape_waiting_days($record);
     if ($days === 0) {
         return 'Updated today';
@@ -187,6 +196,7 @@ function ape_waiting_label(array $record): string
 
     return $days . ' day' . ($days === 1 ? '' : 's') . ' waiting';
 }
+
 
 function ape_next_action_card(array $record): array
 {
@@ -457,6 +467,7 @@ function ape_record_select_sql(): string
         LEFT JOIN clinic_staff reviewer_staff ON reviewer_staff.person_id = ar.reviewed_by_person_id
         LEFT JOIN people reviewer ON reviewer.id = reviewer_staff.person_id
         LEFT JOIN appointments ap ON ap.appointment_id = ar.appointment_id
+        LEFT JOIN ape_cycles ac ON ac.ape_cycle_id = ar.ape_cycle_id
     ";
 }
 
