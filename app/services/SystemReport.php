@@ -228,7 +228,7 @@ function build_system_report(string $dateFrom, string $dateTo, array $modules): 
     if (in_array('ape', $modules, true)) {
         $sections['ape'] = [
             'title' => 'Annual Physical Examination',
-            'description' => 'APE workflow based on the current design: patient vitals/BMI confirmation, clinic examination with hard-copy review, document archive, and final clearance or follow-up.',
+            'description' => 'APE workflow based on the current design: patient vitals/BMI confirmation, clinic examination, document archive, and final clearance or follow-up.',
             'metrics' => [
                 system_report_metric('Cycles Started', system_report_scalar($newDb, 'SELECT COUNT(*) FROM ape_cycles WHERE DATE(started_at) BETWEEN ? AND ?', $range)),
                 system_report_metric('APE Records', system_report_scalar($newDb, 'SELECT COUNT(*) FROM ape_records WHERE DATE(COALESCE(exam_date, created_at)) BETWEEN ? AND ?', $range)),

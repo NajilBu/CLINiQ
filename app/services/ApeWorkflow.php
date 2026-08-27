@@ -40,7 +40,7 @@ function ape_work_queues(): array
         'digital_submission' => [
             'title' => 'Digital Submission',
             'short_title' => 'Digital Keeping',
-            'description' => 'After examination and hard-copy review, patients submit checked documents online for clinic record keeping and archive review.',
+            'description' => 'After examination, patients submit checked documents online for clinic record keeping and archive review.',
             'icon' => 'upload_file',
         ],
         'final_decision' => [
@@ -142,6 +142,70 @@ function ape_waiting_days(array $record): int
     return max(0, (int)floor((time() - $timestamp) / 86400));
 }
 
+function ape_follow_up_due_date(array $record): ?string
+{
+    $rawDate = trim((string) ($record['follow_up_due_date'] ?? ''));
+    if ($rawDate !== '') {
+        $timestamp = strtotime($rawDate);
+        return $timestamp ? date('Y-m-d', $timestamp) : null;
+    }
+
+    return null;
+}
+
+function ape_deadline_status(array $record): ?array
+{
+    $queueKey = ape_record_queue($record);
+    $dueDate = null;
+
+    if ($queueKey === 'digital_submission') {
+        $examDate = $record['exam_date'] ?? null;
+        $examTimestamp = $examDate ? strtotime((string) $examDate) : false;
+        if (!$examTimestamp) {
+            return null;
+        }
+        $dueDate = date('Y-m-d', strtotime('+7 days', $examTimestamp));
+    } elseif ($queueKey === 'follow_up') {
+        $dueDate = ape_follow_up_due_date($record);
+    }
+
+    if (!$dueDate) {
+        return null;
+    }
+
+    $today = new DateTimeImmutable('today');
+    $due = DateTimeImmutable::createFromFormat('Y-m-d', $dueDate);
+    if (!$due) {
+        return null;
+    }
+
+    $diff = (int) $today->diff($due)->format('%r%a');
+    if ($diff < 0) {
+        return [
+            'label' => 'Overdue',
+            'class' => 'badge-critical',
+            'due_date' => $dueDate,
+            'days' => abs($diff),
+        ];
+    }
+
+    if ($diff <= 2) {
+        return [
+            'label' => 'Urgent',
+            'class' => 'badge-high',
+            'due_date' => $dueDate,
+            'days' => $diff,
+        ];
+    }
+
+    return [
+        'label' => 'On Track',
+        'class' => 'badge-in-progress',
+        'due_date' => $dueDate,
+        'days' => $diff,
+    ];
+}
+
 function ape_priority_badge(array $record): array
 {
     $queueKey = ape_record_queue($record);
@@ -149,9 +213,13 @@ function ape_priority_badge(array $record): array
         return ['label' => 'Done', 'class' => 'badge-completed'];
     }
 
-    $days = ape_waiting_days($record);
+    $deadline = ape_deadline_status($record);
+    if ($deadline && in_array($deadline['label'], ['Overdue', 'Urgent'], true)) {
+        return ['label' => $deadline['label'], 'class' => $deadline['class']];
+    }
+
     if ($queueKey === 'follow_up') {
-        return ['label' => $days >= 3 ? 'Urgent' : 'Clinical', 'class' => 'badge-high'];
+        return ['label' => 'Clinical', 'class' => 'badge-high'];
     }
 
     // If an exam schedule date is set and has passed and the patient hasn't confirmed vitals, mark as Missed.
@@ -164,11 +232,7 @@ function ape_priority_badge(array $record): array
         return ['label' => 'Missed', 'class' => 'badge-critical'];
     }
 
-    if ($days >= 7) {
-        return ['label' => 'Overdue', 'class' => 'badge-critical'];
-    }
-
-    if ($days >= 3) {
+    if ($queueKey === 'digital_submission') {
         return ['label' => 'Waiting', 'class' => 'badge-pending'];
     }
 
@@ -327,7 +391,10 @@ function ensure_ape_workflow_schema(): void
         'patient_vitals_status' => "ENUM('Not Started', 'Confirmed') NOT NULL DEFAULT 'Not Started' AFTER patient_pulse_rate",
         'patient_vitals_confirmed_at' => "DATETIME NULL AFTER patient_vitals_status",
     ];
-    foreach ($measurementColumns as $column => $definition) {
+    $workflowColumns = [
+        'follow_up_due_date' => "DATE NULL AFTER follow_up_required",
+    ];
+    foreach (array_merge($measurementColumns, $workflowColumns) as $column => $definition) {
         $columnCheck = $db->prepare('SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = \'ape_records\' AND COLUMN_NAME = ?');
         $columnCheck->execute([$column]);
         if ((int) $columnCheck->fetchColumn() === 0) {

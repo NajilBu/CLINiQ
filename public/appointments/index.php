@@ -11,6 +11,14 @@ $allowedFilters = ['today', 'all', 'Pending', 'Scheduled', 'For Confirmation', '
 if (!in_array($filterStatus, $allowedFilters, true)) {
     $filterStatus = 'today';
 }
+$dateFrom = trim((string) ($_GET['date_from'] ?? ''));
+$dateTo = trim((string) ($_GET['date_to'] ?? ''));
+if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateFrom)) {
+    $dateFrom = '';
+}
+if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateTo)) {
+    $dateTo = '';
+}
 
 $where = '1=1';
 $params = [];
@@ -19,6 +27,14 @@ if ($filterStatus === 'today') {
 } elseif ($filterStatus !== 'all') {
     $where = 'a.status = ?';
     $params[] = $filterStatus;
+}
+if ($dateFrom !== '') {
+    $where .= ' AND DATE(a.appointment_datetime) >= ?';
+    $params[] = $dateFrom;
+}
+if ($dateTo !== '') {
+    $where .= ' AND DATE(a.appointment_datetime) <= ?';
+    $params[] = $dateTo;
 }
 
 $stmt = appointment_db()->prepare("
@@ -121,15 +137,22 @@ render_clinic_command_header(
 ?>
 
 <section class="clinic-card overflow-hidden">
+    <form method="get">
     <div class="p-6 border-b border-slate-100">
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
                 <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Clinic Appointment Queue</h2>
                 <p class="text-xs font-bold text-slate-500 mb-0"><?= (int)$statusCounts['all'] ?> appointment record(s)</p>
             </div>
-            <div class="search-input-wrap w-full md:w-auto shrink-0" style="min-width: 280px;">
-                <span class="search-icon material-symbols-outlined">search</span>
-                <input id="appointmentsGridSearch" type="text" placeholder="Search appointments..." class="search-input">
+            <div class="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+                <div class="search-input-wrap w-full sm:w-80">
+                    <span class="search-icon material-symbols-outlined">search</span>
+                    <input id="appointmentsGridSearch" type="text" placeholder="Search appointments..." class="search-input">
+                </div>
+                <button type="button" onclick="showModal('appointmentAdvancedFilterModal')" class="btn btn-outline w-full sm:w-auto">
+                    <span class="material-symbols-outlined text-[18px]">filter_list</span>
+                    Filters
+                </button>
             </div>
         </div>
 
@@ -157,6 +180,64 @@ render_clinic_command_header(
             <?php endforeach; ?>
         </div>
     </div>
+    <?php if ($filterStatus !== 'today' || $dateFrom !== '' || $dateTo !== ''): ?>
+        <div class="flex flex-wrap items-center gap-2 px-6 py-4 bg-white border-b border-outline-variant/10">
+            <span class="material-symbols-outlined text-slate-400 text-sm">filter_alt</span>
+            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-2">Active Filters</span>
+            <?php if ($filterStatus !== 'today'): ?>
+                <span class="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold border border-slate-200"><?= e($filterStatus === 'all' ? 'All' : $filterStatus) ?></span>
+            <?php endif; ?>
+            <?php if ($dateFrom !== ''): ?>
+                <span class="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold border border-slate-200">From <?= e($dateFrom) ?></span>
+            <?php endif; ?>
+            <?php if ($dateTo !== ''): ?>
+                <span class="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold border border-slate-200">To <?= e($dateTo) ?></span>
+            <?php endif; ?>
+            <a href="index.php" class="ml-auto text-[10px] font-black text-primary uppercase tracking-widest hover:underline text-decoration-none">Clear All</a>
+        </div>
+    <?php endif; ?>
+
+    <div id="appointmentAdvancedFilterModal" class="modal-backdrop">
+        <div class="modal-content bg-white rounded-[2rem] w-full max-w-2xl p-8 shadow-2xl border border-outline-variant/10">
+            <div class="flex items-center justify-between mb-8">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-primary-fixed text-primary rounded-xl flex items-center justify-center">
+                        <span class="material-symbols-outlined">filter_alt</span>
+                    </div>
+                    <h3 class="font-headline text-2xl font-extrabold text-[#1c2a59] m-0">Advanced Filters</h3>
+                </div>
+                <button type="button" onclick="closeModal('appointmentAdvancedFilterModal')" class="btn-icon btn-icon-slate">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                    <label class="clinic-label">Status</label>
+                    <select class="clinic-select" name="status">
+                        <?php foreach ($tabs as $key => $label): ?>
+                            <option value="<?= e($key) ?>" <?= $filterStatus === $key ? 'selected' : '' ?>><?= e($label) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div>
+                    <label class="clinic-label">Date From</label>
+                    <input class="clinic-input" type="date" name="date_from" value="<?= e($dateFrom) ?>">
+                </div>
+                <div>
+                    <label class="clinic-label">Date To</label>
+                    <input class="clinic-input" type="date" name="date_to" value="<?= e($dateTo) ?>">
+                </div>
+            </div>
+            <div class="flex flex-col sm:flex-row gap-3 pt-6 mt-6 border-t border-slate-100">
+                <a href="index.php" class="btn btn-ghost flex-1 text-decoration-none">Reset All</a>
+                <button class="btn btn-primary flex-1">
+                    <span class="material-symbols-outlined text-[18px]">check</span>
+                    Apply Filters
+                </button>
+            </div>
+        </div>
+    </div>
+    </form>
     <?php render_ag_grid('appointmentsGrid', $columns, $rows, [
         'searchInput' => 'appointmentsGridSearch',
         'emptyTitle' => $filterStatus === 'today' ? 'No appointments today' : ($filterStatus === 'Pending' ? 'No appointment requests' : 'No appointments found'),

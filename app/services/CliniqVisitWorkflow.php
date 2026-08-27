@@ -148,6 +148,20 @@ function cliniq_visit_has_vitals(array $vitals): bool
     return false;
 }
 
+function cliniq_visit_extract_patient_concerns(?string $value): string
+{
+    $text = str_replace('Visitor notes:', 'Patient Concerns:', trim((string) $value));
+    if ($text === '') {
+        return '';
+    }
+
+    if (preg_match('/^Patient Concerns:\s*(.+)$/mi', $text, $matches)) {
+        return trim($matches[1]);
+    }
+
+    return $text;
+}
+
 function cliniq_visit_insert_entry(PDO $db, int $visitId, array $entry, ?int $staffPersonId): ?int
 {
     if (!cliniq_visit_entry_has_content($entry)) {

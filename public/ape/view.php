@@ -12,6 +12,21 @@ function fetch_ape_record(int $id): ?array
     return ape_fetch_record($id);
 }
 
+function ape_follow_up_due_date_from_post(): ?string
+{
+    $dueDate = trim((string) ($_POST['follow_up_due_date'] ?? ''));
+
+    if ($dueDate !== '') {
+        $parsed = DateTimeImmutable::createFromFormat('Y-m-d', $dueDate);
+        if (!$parsed || $parsed->format('Y-m-d') !== $dueDate) {
+            throw new InvalidArgumentException('Select a valid follow-up due date.');
+        }
+        return $dueDate;
+    }
+
+    return null;
+}
+
 $record = fetch_ape_record($id);
 $apeUser = current_user() ?? [];
 $canRecordApeExam = in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor', 'nurse'], true);
@@ -41,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($action === 'mark_requirements_complete') {
             if (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed') {
-                throw new RuntimeException('The patient must confirm their vitals and BMI before hard-copy review can be completed.');
+                throw new RuntimeException('The patient must confirm their vitals and BMI before examination can be completed.');
             }
             $notes = trim((string) ($_POST['clinical_remarks'] ?? ''));
             $stmt = $apeDb->prepare("UPDATE ape_records SET requirement_status = 'Pre-Verified', workflow_status = 'Requirements Checked', follow_up_required = 0, clearance_status = 'Pending', clinical_remarks = ?, patient_visible_note = NULL, reviewed_by_person_id = ? WHERE ape_id = ?");
@@ -52,7 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $activityNotes = $notes ?: 'Hard-copy documents complete; ready for digital submission';
         } elseif ($action === 'mark_missing_requirements') {
             if (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed') {
-                throw new RuntimeException('The patient must confirm their vitals and BMI before hard-copy review can be recorded.');
+                throw new RuntimeException('The patient must confirm their vitals and BMI before examination can be recorded.');
             }
             $documentIssues = trim((string) ($_POST['missing_items'] ?? ''));
             if ($documentIssues === '') {
@@ -246,18 +261,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new InvalidArgumentException('Enter the follow-up required from the patient.');
             }
             $patientNote = trim((string) ($_POST['patient_visible_note'] ?? '')) ?: $followUpNotes;
-            $apeDb->prepare("UPDATE ape_records SET workflow_status = 'Follow-up Required', clearance_status = 'For Follow-up', follow_up_required = 1, clinical_remarks = ?, patient_visible_note = ?, reviewed_by_person_id = ? WHERE ape_id = ?")
-                ->execute([$followUpNotes, $patientNote, $staffPersonId, $id]);
+            $followUpDueDate = ape_follow_up_due_date_from_post();
+            $apeDb->prepare("UPDATE ape_records SET workflow_status = 'Follow-up Required', clearance_status = 'For Follow-up', follow_up_required = 1, follow_up_due_date = ?, clinical_remarks = ?, patient_visible_note = ?, reviewed_by_person_id = ? WHERE ape_id = ?")
+                ->execute([$followUpDueDate, $followUpNotes, $patientNote, $staffPersonId, $id]);
             $apeDb->prepare("INSERT INTO ape_findings (ape_id, finding_type, description, result_status, follow_up_required, recorded_by_person_id) VALUES (?, 'Follow-up Decision', ?, 'With Finding', 1, ?)")
                 ->execute([$id, $followUpNotes, $staffPersonId]);
             $activityLabel = 'Required follow-up after APE examination';
-            $activityNotes = $followUpNotes;
+            $activityNotes = $followUpDueDate ? $followUpNotes . ' Due: ' . $followUpDueDate : $followUpNotes;
         } elseif ($action === 'keep_follow_up_open') {
             $followUpNotes = trim((string) ($_POST['follow_up_notes'] ?? '')) ?: 'Follow-up remains open.';
-            $stmt = $apeDb->prepare("UPDATE ape_records SET clearance_status = 'For Follow-up', workflow_status = 'Follow-up Required', clinical_remarks = ? WHERE ape_id = ?");
-            $stmt->execute([$followUpNotes, $id]);
+            $followUpDueDate = ape_follow_up_due_date_from_post();
+            $stmt = $apeDb->prepare("UPDATE ape_records SET clearance_status = 'For Follow-up', workflow_status = 'Follow-up Required', follow_up_due_date = ?, clinical_remarks = ? WHERE ape_id = ?");
+            $stmt->execute([$followUpDueDate, $followUpNotes, $id]);
             $activityLabel = 'Kept follow-up open';
-            $activityNotes = $followUpNotes;
+            $activityNotes = $followUpDueDate ? $followUpNotes . ' Due: ' . $followUpDueDate : $followUpNotes;
         } elseif ($action === 'approve_clearance') {
             $stmt = $apeDb->prepare("UPDATE ape_records SET clearance_status = 'Cleared', follow_up_required = 0, workflow_status = 'Cleared', reviewed_by_person_id = ? WHERE ape_id = ?");
             $stmt->execute([$staffPersonId, $id]);
@@ -605,8 +622,8 @@ render_header('APE Record - ' . $fullName);
                             <label class="clinic-label">Document Review Notes</label>
                             <textarea class="clinic-textarea" name="clinical_remarks" rows="4" placeholder="Optional notes after checking hard-copy documents..."><?= e($record['clinical_remarks']) ?></textarea>
                         </div>
-                        <button class="btn btn-primary w-full" data-confirm-submit data-confirm-type="primary" data-confirm-title="Complete the hard-copy review?" data-confirm-message="This will mark the hard-copy review complete and open digital document submission for the patient." data-confirm-toast="Updating APE record...">
-                            <span class="material-symbols-outlined text-[18px]">check_circle</span> Complete Hard-copy Review
+                        <button class="btn btn-primary w-full" data-confirm-submit data-confirm-type="primary" data-confirm-title="Complete the examination?" data-confirm-message="This will mark the examination complete and open digital document submission for the patient." data-confirm-toast="Updating APE record...">
+                            <span class="material-symbols-outlined text-[18px]">check_circle</span> Complete Examination
                         </button>
                     </form>
                     <form method="post" class="ape-flow-action muted space-y-3">
@@ -619,7 +636,7 @@ render_header('APE Record - ' . $fullName);
                         </div>
                         <div>
                             <label class="clinic-label">Additional Document Review Notes</label>
-                            <textarea class="clinic-textarea" name="clinical_remarks" rows="3" placeholder="Optional internal notes about the hard-copy review..."></textarea>
+                            <textarea class="clinic-textarea" name="clinical_remarks" rows="3" placeholder="Optional internal notes about the examination..."></textarea>
                         </div>
                         <button class="btn btn-outline w-full" style="color:#b45309;border-color:rgba(180,83,9,0.2);" data-confirm-submit data-confirm-type="danger" data-confirm-title="Return the hard-copy documents?" data-confirm-message="This will keep the record in document review until the document issues are corrected." data-confirm-toast="Saving document issues...">
                             <span class="material-symbols-outlined text-[18px]">assignment_return</span> Record Document Correction
@@ -786,7 +803,7 @@ render_header('APE Record - ' . $fullName);
                                 </div>
                             </div>
                         </div>
-                        <button class="btn btn-primary w-full" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save examination and hard-copy review?" data-confirm-message="If the hard-copy documents are complete, digital document upload will open for the patient." data-confirm-toast="Saving APE examination...">
+                        <button class="btn btn-primary w-full" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save examination?" data-confirm-message="If the hard-copy documents are complete, digital document upload will open for the patient." data-confirm-toast="Saving APE examination...">
                             <span class="material-symbols-outlined text-[18px]">clinical_notes</span> Save Examination
                         </button>
                     </form>
@@ -832,6 +849,10 @@ render_header('APE Record - ' . $fullName);
                                 <h3 class="font-headline text-base font-extrabold text-amber-900 mb-1">Require Follow-up</h3>
                                 <label class="clinic-label">Required Follow-up</label>
                                 <textarea class="clinic-textarea" name="follow_up_notes" rows="3" placeholder="Treatment, repeat test, clearance, or other follow-up..." required></textarea>
+                                <div class="mt-3">
+                                    <label class="clinic-label">Due Date</label>
+                                    <input class="clinic-input" type="date" name="follow_up_due_date">
+                                </div>
                                 <label class="clinic-label mt-3">Patient Instructions</label>
                                 <textarea class="clinic-textarea" name="patient_visible_note" rows="2" placeholder="Instructions visible to the patient..."></textarea>
                             </div>
@@ -845,6 +866,10 @@ render_header('APE Record - ' . $fullName);
                         <div>
                             <p class="clinic-label">Required Follow-up</p>
                             <p class="text-sm font-bold text-amber-900 whitespace-pre-wrap mb-0"><?= e($record['missing_items'] ?: 'Follow-up requirement not specified.') ?></p>
+                            <?php $followUpDueDate = ape_follow_up_due_date($record); ?>
+                            <?php if ($followUpDueDate): ?>
+                                <p class="text-xs font-black text-amber-700 uppercase tracking-widest mt-3 mb-0">Due <?= e(date('M d, Y', strtotime($followUpDueDate))) ?></p>
+                            <?php endif; ?>
                         </div>
                         <div>
                             <p class="clinic-label">Clearance File</p>
@@ -862,6 +887,10 @@ render_header('APE Record - ' . $fullName);
                             <input type="hidden" name="action" value="keep_follow_up_open">
                             <label class="clinic-label">Follow-up Notes</label>
                             <textarea class="clinic-textarea" name="follow_up_notes" rows="4" placeholder="Treatment or follow-up notes..."><?= e($record['clinical_remarks']) ?></textarea>
+                            <div>
+                                <label class="clinic-label">Due Date</label>
+                                <input class="clinic-input" type="date" name="follow_up_due_date" value="<?= e($record['follow_up_due_date'] ?? '') ?>">
+                            </div>
                             <button class="btn btn-ghost w-full" data-confirm-submit data-confirm-type="primary" data-confirm-title="Keep follow-up open?" data-confirm-message="This will save the latest follow-up notes without closing the APE record." data-confirm-toast="Saving follow-up notes..."><span class="material-symbols-outlined text-[18px]">history</span> Keep Follow-up Open</button>
                         </form>
                         <?php if ($clearanceUrl || ($record['clearance_status'] ?? '') === 'Submitted'): ?>

@@ -9,45 +9,47 @@ require_login();
 ensure_alert_workflow_schema();
 
 // ── Date range filter ───────────────────────────────────────
-$dateFrom = normalize_system_report_date($_GET['from'] ?? null, date('Y-m-01'));
-$dateTo = normalize_system_report_date($_GET['to'] ?? null, date('Y-m-d'));
-$visitDb = cliniq_visit_db();
-
-// Common complaints in range
-$complaints = $visitDb->prepare("
-    SELECT chief_complaint, COUNT(*) AS total
-    FROM visits
-    WHERE DATE(visit_datetime) BETWEEN ? AND ?
-    GROUP BY chief_complaint
-    ORDER BY total DESC, chief_complaint ASC
-    LIMIT 10
-");
-$complaints->execute([$dateFrom, $dateTo]);
-$complaints = $complaints->fetchAll();
-$maxComplaint = $complaints ? max(array_column($complaints, 'total')) : 1;
-
-// Visit status distribution
-$statusDist = $visitDb->prepare("
-    SELECT COALESCE(status, 'Unaddressed') AS status, COUNT(*) AS total
-    FROM visits
-    WHERE DATE(visit_datetime) BETWEEN ? AND ?
-    GROUP BY COALESCE(status, 'Unaddressed')
-    ORDER BY FIELD(COALESCE(status, 'Unaddressed'), 'Unaddressed', 'Active', 'Completed', 'Cancelled')
-");
-$statusDist->execute([$dateFrom, $dateTo]);
-$statusDist = $statusDist->fetchAll();
-
-// Monthly trend (last 6 months)
-$monthlyTrend = $visitDb->query("
-    SELECT DATE_FORMAT(visit_datetime, '%Y-%m') AS month_key,
-           DATE_FORMAT(visit_datetime, '%b %Y') AS month_label,
-           COUNT(*) AS total
-    FROM visits
-    WHERE visit_datetime >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
-    GROUP BY month_key, month_label
-    ORDER BY month_key ASC
-")->fetchAll();
-$maxMonthly = $monthlyTrend ? max(array_column($monthlyTrend, 'total')) : 1;
+$periodOptions = [
+    'weekly' => 'Weekly',
+    'monthly' => 'Monthly',
+    'semestral' => 'Semestral',
+    'yearly' => 'Yearly',
+];
+$period = strtolower((string) ($_GET['period'] ?? 'monthly'));
+if (!isset($periodOptions[$period])) {
+    $period = 'monthly';
+}
+$semester = (int) ($_GET['semester'] ?? 0);
+if (!in_array($semester, [1, 2], true)) {
+    $semester = (int) date('n') >= 6 && (int) date('n') <= 11 ? 1 : 2;
+}
+if (isset($_GET['from'], $_GET['to'])) {
+    $dateFrom = normalize_system_report_date($_GET['from'] ?? null, date('Y-m-01'));
+    $dateTo = normalize_system_report_date($_GET['to'] ?? null, date('Y-m-d'));
+} else {
+    $anchor = new DateTimeImmutable('today');
+    if ($period === 'weekly') {
+        $dateFrom = $anchor->modify('-7 days')->format('Y-m-d');
+        $dateTo = $anchor->format('Y-m-d');
+    } elseif ($period === 'yearly') {
+        $dateFrom = $anchor->modify('-1 year')->format('Y-m-d');
+        $dateTo = $anchor->format('Y-m-d');
+    } elseif ($period === 'semestral') {
+        $schoolYearStart = (int) $anchor->format('n') >= 6
+            ? (int) $anchor->format('Y')
+            : (int) $anchor->format('Y') - 1;
+        if ($semester === 1) {
+            $dateFrom = sprintf('%04d-06-01', $schoolYearStart);
+            $dateTo = sprintf('%04d-11-30', $schoolYearStart);
+        } else {
+            $dateFrom = sprintf('%04d-12-01', $schoolYearStart);
+            $dateTo = sprintf('%04d-05-31', $schoolYearStart + 1);
+        }
+    } else {
+        $dateFrom = $anchor->modify('-1 month')->format('Y-m-d');
+        $dateTo = $anchor->format('Y-m-d');
+    }
+}
 $mainSystemReport = build_system_report($dateFrom, $dateTo, []);
 
 render_header('Reports');
@@ -58,7 +60,7 @@ render_header('Reports');
     'Reports',
     'Reports & Analytics',
     'Build, preview, and export consolidated analytics across every CLINiQ module.',
-    '<a class="btn btn-primary text-decoration-none" id="reportHeaderPreviewLink" href="preview.php?from=' . e($dateFrom) . '&to=' . e($dateTo) . '"><span class="material-symbols-outlined text-[20px]">preview</span>Preview Report</a>'
+    '<a class="btn btn-primary text-decoration-none" id="reportHeaderPreviewLink" href="preview.php?from=' . e($dateFrom) . '&to=' . e($dateTo) . '&period=' . e($period) . '&semester=' . e((string) $semester) . '"><span class="material-symbols-outlined text-[20px]">preview</span>Preview Report</a>'
 ); ?>
 
 <!-- ═══ Date Range Filter ═══ -->
@@ -67,100 +69,31 @@ render_header('Reports');
         <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">System Analytics Period</h2>
         <p class="text-xs font-bold text-slate-500 mb-0">All available module graphs update automatically when the date range changes.</p>
     </div>
-    <div class="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <div class="p-6 grid grid-cols-1 xl:grid-cols-[1fr_auto] gap-5 items-end">
+        <div class="space-y-3">
+            <span class="clinic-label">Quick period</span>
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3" role="radiogroup" aria-label="Report period">
+                <?php foreach ($periodOptions as $periodValue => $periodLabel): ?>
+                    <label class="report-period-option <?= $period === $periodValue ? 'is-active' : '' ?>">
+                        <input type="radio" name="period" value="<?= e($periodValue) ?>" <?= $period === $periodValue ? 'checked' : '' ?>>
+                        <span><?= e($periodLabel) ?></span>
+                    </label>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <label class="care-timeline-filter min-w-[13rem]" data-semester-wrap <?= $period !== 'semestral' ? 'hidden' : '' ?>>
+            <span class="clinic-label">Semester</span>
+            <select class="clinic-select" name="semester" id="reportSemester" <?= $period !== 'semestral' ? 'disabled' : '' ?>>
+                <option value="1" <?= $semester === 1 ? 'selected' : '' ?>>1st Sem</option>
+                <option value="2" <?= $semester === 2 ? 'selected' : '' ?>>2nd Sem</option>
+            </select>
+        </label>
+    </div>
+    <div class="px-6 pb-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div><label class="clinic-label" for="reportFrom">From</label><input class="clinic-input" id="reportFrom" type="date" name="from" value="<?= e($dateFrom) ?>" required></div>
         <div><label class="clinic-label" for="reportTo">To</label><input class="clinic-input" id="reportTo" type="date" name="to" value="<?= e($dateTo) ?>" required></div>
     </div>
 </form>
-
-<div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
-    <!-- ═══ Common Complaints ═══ -->
-    <section class="bg-white rounded-[2rem] border border-outline-variant/20 shadow-sm overflow-hidden">
-        <div class="p-6 border-b border-slate-100">
-            <h2 class="font-headline text-xl font-extrabold text-[#1c2a59] mb-1">Common Complaints</h2>
-            <p class="text-xs font-bold text-slate-500 mb-0">Most frequent visit reasons in selected period.</p>
-        </div>
-        <div class="p-6 space-y-3">
-            <?php foreach ($complaints as $complaint):
-                $pct = round(((int)$complaint['total'] / $maxComplaint) * 100);
-            ?>
-                <div>
-                    <div class="flex items-center justify-between mb-1">
-                        <span class="text-sm font-bold text-slate-700"><?= e($complaint['chief_complaint']) ?></span>
-                        <strong class="text-sm text-primary"><?= (int) $complaint['total'] ?></strong>
-                    </div>
-                    <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                        <div class="h-full bg-primary/60 rounded-full transition-all" style="width: <?= $pct ?>%"></div>
-                    </div>
-                </div>
-            <?php endforeach; ?>
-            <?php if (!$complaints): ?>
-                <p class="text-sm font-bold text-slate-500 mb-0">No data for this period.</p>
-            <?php endif; ?>
-        </div>
-    </section>
-
-    <!-- Visit Status Breakdown -->
-    <section class="bg-white rounded-[2rem] border border-outline-variant/20 shadow-sm overflow-hidden">
-        <div class="p-6 border-b border-slate-100">
-            <h2 class="font-headline text-xl font-extrabold text-[#1c2a59] mb-1">Visit Status Breakdown</h2>
-            <p class="text-xs font-bold text-slate-500 mb-0">Breakdown of visit workflow states in selected period.</p>
-        </div>
-        <div class="p-6 space-y-4">
-            <?php
-            $statusColors = [
-                'Unaddressed' => ['bg' => 'bg-amber-100', 'fill' => 'bg-amber-400', 'text' => 'text-amber-700'],
-                'Active'      => ['bg' => 'bg-blue-100', 'fill' => 'bg-blue-400', 'text' => 'text-blue-700'],
-                'Completed'   => ['bg' => 'bg-emerald-100', 'fill' => 'bg-emerald-400', 'text' => 'text-emerald-700'],
-                'Cancelled'   => ['bg' => 'bg-slate-100', 'fill' => 'bg-slate-400', 'text' => 'text-slate-700'],
-            ];
-            $totalStatusVisits = array_sum(array_column($statusDist, 'total')) ?: 1;
-            foreach ($statusDist as $statusRow):
-                $status = $statusRow['status'] ?: 'Unaddressed';
-                $colors = $statusColors[$status] ?? $statusColors['Unaddressed'];
-                $pct = round(((int)$statusRow['total'] / $totalStatusVisits) * 100);
-            ?>
-                <div class="flex items-center gap-4">
-                    <span class="badge <?= visit_status_badge_class($status) ?> w-28 justify-center"><?= e($status) ?></span>
-                    <div class="flex-1 h-3 <?= $colors['bg'] ?> rounded-full overflow-hidden">
-                        <div class="h-full <?= $colors['fill'] ?> rounded-full transition-all" style="width: <?= $pct ?>%"></div>
-                    </div>
-                    <span class="text-sm font-extrabold <?= $colors['text'] ?> w-16 text-right"><?= (int)$statusRow['total'] ?> (<?= $pct ?>%)</span>
-                </div>
-            <?php endforeach; ?>
-            <?php if (!$statusDist): ?>
-                <p class="text-sm font-bold text-slate-500 mb-0">No data for this period.</p>
-            <?php endif; ?>
-        </div>
-    </section>
-</div>
-
-<!-- ═══ Monthly Trend ═══ -->
-<section class="bg-white rounded-[2rem] border border-outline-variant/20 shadow-sm overflow-hidden">
-    <div class="p-6 border-b border-slate-100">
-        <h2 class="font-headline text-xl font-extrabold text-[#1c2a59] mb-1">Monthly Visit Trend</h2>
-        <p class="text-xs font-bold text-slate-500 mb-0">Visits per month over the last 6 months.</p>
-    </div>
-    <div class="p-6">
-        <?php if ($monthlyTrend): ?>
-        <div class="flex items-end gap-4 h-48">
-            <?php foreach ($monthlyTrend as $month):
-                $heightPct = round(((int)$month['total'] / $maxMonthly) * 100);
-            ?>
-                <div class="flex-1 flex flex-col items-center gap-2">
-                    <span class="text-xs font-extrabold text-primary"><?= (int)$month['total'] ?></span>
-                    <div class="w-full bg-primary/15 rounded-t-lg relative" style="height: <?= max($heightPct, 5) ?>%;">
-                        <div class="absolute inset-0 bg-primary/60 rounded-t-lg"></div>
-                    </div>
-                    <span class="text-[10px] font-bold text-slate-400"><?= e($month['month_label']) ?></span>
-                </div>
-            <?php endforeach; ?>
-        </div>
-        <?php else: ?>
-            <p class="text-sm font-bold text-slate-500 mb-0">No monthly data available.</p>
-        <?php endif; ?>
-    </div>
-</section>
 
 <section class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 pt-2">
     <div>
@@ -169,6 +102,38 @@ render_header('Reports');
         <p class="text-xs font-bold text-slate-500 mb-0">Live summaries from every reporting module for <?= e(date('M j, Y', strtotime($dateFrom))) ?> - <?= e(date('M j, Y', strtotime($dateTo))) ?>.</p>
     </div>
 </section>
+<style>
+    .report-period-option {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 3rem;
+        border: 1px solid #dbe7df;
+        border-radius: 1rem;
+        background: #fff;
+        color: #475569;
+        font-size: 0.82rem;
+        font-weight: 900;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        cursor: pointer;
+        transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+    }
+
+    .report-period-option input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    .report-period-option.is-active,
+    .report-period-option:has(input:checked) {
+        border-color: rgba(63, 125, 82, 0.45);
+        background: #e9f7ee;
+        color: #1f6b43;
+        box-shadow: 0 10px 22px rgba(63, 125, 82, 0.1);
+    }
+</style>
 <style><?= system_report_styles() ?></style>
 <?= render_system_report_document($mainSystemReport, false, ['include_cover' => false]) ?>
 
@@ -177,17 +142,84 @@ render_header('Reports');
     const form = document.getElementById('reportDateForm');
     const fromInput = document.getElementById('reportFrom');
     const toInput = document.getElementById('reportTo');
+    const semesterInput = document.getElementById('reportSemester');
+    const periodInputs = Array.from(document.querySelectorAll('input[name="period"]'));
     const previewLink = document.getElementById('reportHeaderPreviewLink');
     if (!form || !fromInput || !toInput) return;
 
     let submitTimer = null;
     const currentUrl = new URL(window.location.href);
 
+    const formatDate = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
+    const selectedPeriod = () => {
+        const selected = periodInputs.find((input) => input.checked);
+        return selected ? selected.value : 'monthly';
+    };
+
+    const schoolYearStart = (anchor) => {
+        return anchor.getMonth() + 1 >= 6 ? anchor.getFullYear() : anchor.getFullYear() - 1;
+    };
+
+    const computeRange = (period) => {
+        const anchor = new Date();
+        anchor.setHours(0, 0, 0, 0);
+        if (Number.isNaN(anchor.getTime())) return null;
+
+        if (period === 'weekly') {
+            const from = new Date(anchor);
+            from.setDate(anchor.getDate() - 7);
+            return [formatDate(from), formatDate(anchor)];
+        }
+
+        if (period === 'yearly') {
+            const from = new Date(anchor);
+            from.setFullYear(anchor.getFullYear() - 1);
+            return [formatDate(from), formatDate(anchor)];
+        }
+
+        if (period === 'semestral') {
+            const startYear = schoolYearStart(anchor);
+            const semester = semesterInput && semesterInput.value === '2' ? 2 : 1;
+            return semester === 1
+                ? [`${startYear}-06-01`, `${startYear}-11-30`]
+                : [`${startYear}-12-01`, `${startYear + 1}-05-31`];
+        }
+
+        const from = new Date(anchor);
+        from.setMonth(anchor.getMonth() - 1);
+        return [formatDate(from), formatDate(anchor)];
+    };
+
+    const syncPeriodUi = () => {
+        const period = selectedPeriod();
+        periodInputs.forEach((input) => {
+            input.closest('.report-period-option')?.classList.toggle('is-active', input.checked);
+        });
+        if (semesterInput) {
+            const semesterWrap = semesterInput.closest('[data-semester-wrap]');
+            const isSemestral = period === 'semestral';
+            semesterInput.disabled = !isSemestral;
+            if (semesterWrap) {
+                semesterWrap.hidden = !isSemestral;
+            }
+        }
+    };
+
     const syncPreviewLink = () => {
         if (!previewLink) return;
         const previewUrl = new URL(previewLink.href, window.location.href);
         previewUrl.searchParams.set('from', fromInput.value);
         previewUrl.searchParams.set('to', toInput.value);
+        previewUrl.searchParams.set('period', selectedPeriod());
+        if (semesterInput) {
+            previewUrl.searchParams.set('semester', semesterInput.value);
+        }
         previewLink.href = previewUrl.pathname.split('/').pop() + '?' + previewUrl.searchParams.toString();
     };
 
@@ -199,6 +231,10 @@ render_header('Reports');
             const nextUrl = new URL(window.location.href);
             nextUrl.searchParams.set('from', fromInput.value);
             nextUrl.searchParams.set('to', toInput.value);
+            nextUrl.searchParams.set('period', selectedPeriod());
+            if (semesterInput) {
+                nextUrl.searchParams.set('semester', semesterInput.value);
+            }
             if (nextUrl.search === currentUrl.search) return;
             window.location.assign(nextUrl.href);
         }, 250);
@@ -209,6 +245,30 @@ render_header('Reports');
         input.addEventListener('input', syncPreviewLink);
     });
 
+    periodInputs.forEach((input) => {
+        input.addEventListener('change', () => {
+            syncPeriodUi();
+            const range = computeRange(input.value);
+            if (range) {
+                fromInput.value = range[0];
+                toInput.value = range[1];
+            }
+            submitWhenComplete();
+        });
+    });
+
+    if (semesterInput) {
+        semesterInput.addEventListener('change', () => {
+            const range = computeRange('semestral');
+            if (range) {
+                fromInput.value = range[0];
+                toInput.value = range[1];
+            }
+            submitWhenComplete();
+        });
+    }
+
+    syncPeriodUi();
     syncPreviewLink();
 })();
 </script>

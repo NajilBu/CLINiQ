@@ -203,22 +203,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (!$errors && !$success) {
-        $symptoms = trim(
-            'Submitted Name: ' . $form['full_name'] . "\n" .
-            'Category: ' . $form['category'] . "\n" .
-            ($form['category'] === 'Student' ? 'Section: ' : 'Department: ') . $form['department'] . "\n" .
-            'Reason: ' . $form['reason'] . "\n" .
-            'Patient Concerns: ' . $form['chief_complaint']
-        );
+        $patientConcern = trim((string) $form['chief_complaint']);
         cliniq_visit_create([
             'patient_person_id' => (int) $matchedPatient['person_id'],
-            'chief_complaint' => mb_substr($form['reason'] . ' - ' . $form['chief_complaint'], 0, 255),
+            'chief_complaint' => mb_substr($patientConcern, 0, 255),
             'status' => 'Unaddressed',
             'visit_purpose' => normalize_visit_purpose($form['reason']),
             'visit_source' => 'Self Logbook',
             'action_taken' => 'Visitor/patient self-registration. Awaiting clinic assessment.',
         ], [
-            'symptoms' => $symptoms,
+            'symptoms' => $patientConcern,
         ]);
 
         $success = [

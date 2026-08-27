@@ -18,6 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $visitDb = cliniq_visit_db();
     $staffPersonId = cliniq_visit_staff_person_id();
     $dispensings = cliniq_inventory_dispensing_rows($_POST);
+    $isExistingSelfLogbookVisit = $existingVisit && strcasecmp((string) ($existingVisit['visit_source'] ?? ''), 'Self Logbook') === 0;
 
     if ($existingVisit && $mode === 'begin_visit' && ($existingVisit['status'] ?? 'Unaddressed') === 'Unaddressed') {
         $update = $visitDb->prepare("UPDATE visits SET status = 'Active', addressed_at = COALESCE(addressed_at, NOW()), recorded_by_person_id = COALESCE(recorded_by_person_id, ?), attended_by_person_id = ? WHERE visit_id = ?");
@@ -54,36 +55,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
 
         flash_message('success', 'Treatment cancelled.');
-    } elseif ($existingVisit && $mode === 'end_visit' && ($existingVisit['status'] ?? '') === 'Active') {
-        $finalRemarks = trim($_POST['final_remarks'] ?? '');
-        $referralType = trim($_POST['referral_type'] ?? '');
-        if ($referralType === 'None') {
-            $referralType = '';
-        }
-
-        try {
-            $visitDb->beginTransaction();
-            cliniq_visit_save_primary_entry($visitDb, $id, [
-                'referral' => $referralType,
-                'remarks' => $finalRemarks,
-            ], $staffPersonId);
-            $update = $visitDb->prepare('UPDATE visits SET status = ?, addressed_at = COALESCE(addressed_at, NOW()), completed_at = COALESCE(completed_at, NOW()), attended_by_person_id = COALESCE(attended_by_person_id, ?) WHERE visit_id = ?');
-            $update->execute(['Completed', $staffPersonId, $id]);
-            $visitDb->commit();
-            flash_message('success', 'Patient visit ended.');
-        } catch (Throwable $e) {
-            if ($visitDb->inTransaction()) {
-                $visitDb->rollBack();
-            }
-            flash_message('error', $e->getMessage());
-        }
     } elseif ($existingVisit && in_array($mode, ['intake', 'save_treatment'], true) && in_array(($existingVisit['status'] ?? 'Unaddressed'), ['Unaddressed', 'Active'], true)) {
         $postedSymptoms = trim($_POST['symptoms'] ?? '');
         $symptoms = $postedSymptoms !== '' ? $postedSymptoms : trim((string) ($existingVisit['symptoms'] ?? ''));
+        if ($isExistingSelfLogbookVisit) {
+            $symptoms = cliniq_visit_extract_patient_concerns($symptoms);
+        }
         $temperature = $_POST['temperature'] ?: null;
         $bloodPressure = trim($_POST['blood_pressure'] ?? '');
         $pulseRate = $_POST['pulse_rate'] ?: null;
-        $newStatus = 'Active';
+        $newStatus = $mode === 'save_treatment' ? 'Completed' : 'Active';
         $purpose = normalize_visit_purpose($_POST['visit_purpose'] ?? null);
         $actionTaken = trim($_POST['action_taken'] ?? '');
 
@@ -92,12 +73,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $update = $visitDb->prepare("
                 UPDATE visits
-                SET status = ?, addressed_at = COALESCE(addressed_at, NOW()), visit_purpose = ?, action_taken = ?,
+                SET status = ?, addressed_at = COALESCE(addressed_at, NOW()), completed_at = CASE WHEN ? = 'Completed' THEN COALESCE(completed_at, NOW()) ELSE completed_at END, visit_purpose = ?, action_taken = ?,
                     recorded_by_person_id = COALESCE(recorded_by_person_id, ?),
                     attended_by_person_id = ?
                 WHERE visit_id = ?
             ");
             $update->execute([
+                $newStatus,
                 $newStatus,
                 $purpose,
                 $actionTaken ?: null,
@@ -130,7 +112,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             cliniq_inventory_dispense_medicines($visitDb, (int) $entryId, $dispensings, $staffPersonId);
 
             $visitDb->commit();
-            flash_message('success', 'Visit addressed in Cliniq_db.');
+            if ($newStatus === 'Completed') {
+                $returnTo = 'previous';
+                flash_message('success', 'Treatment saved and visit completed.');
+            } else {
+                flash_message('success', 'Visit addressed in Cliniq_db.');
+            }
         } catch (Throwable $e) {
             if ($visitDb->inTransaction()) {
                 $visitDb->rollBack();
@@ -184,7 +171,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         flash_message('error', 'This action is not available for the current visit status.');
     }
 
-    if ($returnTo === 'index') {
+    if ($returnTo === 'previous') {
+        if ($returnFrom === 'dashboard') {
+            header('Location: ' . app_url('dashboard.php'));
+        } elseif ($returnFrom === 'profile' && $existingVisit && (int) ($existingVisit['patient_id'] ?? 0) > 0) {
+            header('Location: ' . app_url('patients/view.php?id=' . (int) $existingVisit['patient_id']));
+        } else {
+            header('Location: index.php');
+        }
+    } elseif ($returnTo === 'index') {
         header('Location: index.php');
     } else {
         header('Location: view.php?id=' . $id . '&from=' . urlencode($returnFrom));
@@ -218,7 +213,6 @@ $status = $visit['status'] ?: 'Unaddressed';
 $isProfileMode = $entryPoint === 'profile';
 $showLogbookSheet = !$isProfileMode;
 $canAddressFromLogbook = !$isProfileMode && $status === 'Unaddressed';
-$canEndFromLogbook = !$isProfileMode && $status === 'Active';
 $canTreatFromLogbook = !$isProfileMode && $status === 'Active';
 $isReadOnlyLogbook = $showLogbookSheet && !$canAddressFromLogbook && !$canTreatFromLogbook;
 $showBeginTreatmentModal = $canAddressFromLogbook && ($_GET['begin'] ?? '') === '1';
@@ -229,8 +223,8 @@ if (str_contains(strtolower($existingActionForIntake), 'awaiting')) {
 $isSelfLogbookVisit = strcasecmp((string) ($visit['visit_source'] ?? ''), 'Self Logbook') === 0;
 $latestEntry = $entries[0] ?? [];
 $sheetSymptoms = trim((string) ($latestEntry['symptoms_note'] ?? '')) ?: (trim((string) $visit['symptoms']) ?: 'No symptoms recorded.');
-$sheetSymptoms = str_replace('Visitor notes:', 'Patient Concerns:', $sheetSymptoms);
-$sheetSymptomsLabel = $isSelfLogbookVisit && str_contains($sheetSymptoms, 'Submitted Name:') ? 'Patient Concerns' : 'Symptoms';
+$sheetSymptoms = $isSelfLogbookVisit ? cliniq_visit_extract_patient_concerns($sheetSymptoms) : $sheetSymptoms;
+$sheetSymptomsLabel = $isSelfLogbookVisit ? 'Patient Concerns' : 'Symptoms';
 $sheetDiagnosis = trim((string) ($latestEntry['diagnosis'] ?? '')) ?: '';
 $sheetManagement = trim((string) ($latestEntry['management_treatment'] ?? '')) ?: (trim((string) $visit['action_taken']) ?: '');
 $sheetReferral = trim((string) ($latestEntry['referral_type'] ?? '')) ?: 'None';
@@ -281,7 +275,7 @@ $logbookReferralValue = $isReadOnlyLogbook ? $sheetReferral : 'None';
 $logbookRemarksValue = $isReadOnlyLogbook ? $sheetRemarks : '';
 $readOnlyAttr = $isReadOnlyLogbook ? ' readonly' : '';
 $disabledAttr = $isReadOnlyLogbook ? ' disabled' : '';
-$pageTitle = $canAddressFromLogbook ? 'Address Clinic Visit' : ($canEndFromLogbook ? 'End Clinic Visit' : 'Visit Treatment');
+$pageTitle = $canAddressFromLogbook ? 'Address Clinic Visit' : 'Visit Treatment';
 $patientProfileUrl = (int) ($visit['patient_id'] ?? 0) > 0
     ? app_url('patients/view.php?id=' . (int) $visit['patient_id'])
     : app_url('patients/index.php');
@@ -490,12 +484,6 @@ render_header($pageTitle);
                 <span class="material-symbols-outlined text-[16px]">add_notes</span>
                 Append Information
             </button>
-            <?php if ($status === 'Active'): ?>
-                <button type="submit" name="mode" value="end_visit" class="sheet-chip-button danger" data-confirm-submit data-confirm-type="danger" data-confirm-title="End this visit?" data-confirm-message="This will mark the patient visit as completed. You can still append amendments from the student's profile later." data-confirm-toast="Ending visit...">
-                    <span class="material-symbols-outlined">logout</span>
-                    End Visit
-                </button>
-            <?php endif; ?>
         </div>
     </section>
 
@@ -697,10 +685,10 @@ render_header($pageTitle);
                     <?php $dispensedItems = $entryDispensings[(int) $entry['id']] ?? []; ?>
                     <?php $entryAuthor = $entry['created_by_name'] ?: ($isSelfLogbookVisit ? 'Submitted by patient' : 'Clinic Staff'); ?>
                     <?php
-                    $entrySymptomsValue = str_replace('Visitor notes:', 'Patient Concerns:', (string) ($entry['symptoms_note'] ?? ''));
+                    $entrySymptomsValue = cliniq_visit_extract_patient_concerns((string) ($entry['symptoms_note'] ?? ''));
                     $isPatientSubmittedEntry = $isSelfLogbookVisit
                         && trim((string) ($entry['created_by_name'] ?? '')) === ''
-                        && str_contains($entrySymptomsValue, 'Submitted Name:');
+                        && $entrySymptomsValue !== '';
                     ?>
                     <article class="p-6">
                         <div class="flex flex-col md:flex-row md:items-start justify-between gap-3 mb-4">
@@ -797,13 +785,9 @@ render_header($pageTitle);
                     No Visit
                 </button>
             <?php elseif ($canTreatFromLogbook): ?>
-                <button type="submit" form="logbookIntakeForm" class="sheet-chip-button" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save treatment?" data-confirm-message="This will save the current vitals, assessment, diagnosis, treatment, referral, and remarks for this active visit." data-confirm-toast="Saving treatment...">
+                <button type="submit" form="logbookIntakeForm" class="sheet-chip-button" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save and complete treatment?" data-confirm-message="This will save the current vitals, assessment, diagnosis, treatment, referral, and remarks, then mark the visit as completed." data-confirm-toast="Saving treatment...">
                     <span class="material-symbols-outlined">save</span>
                     Save Treatment
-                </button>
-                <button type="submit" form="endLogbookVisitForm" class="sheet-chip-button danger" data-confirm-submit data-confirm-type="danger" data-confirm-title="End this visit?" data-confirm-message="This will mark the active visit as completed." data-confirm-toast="Ending visit...">
-                    <span class="material-symbols-outlined">check_circle</span>
-                    End Visit
                 </button>
             <?php else: ?>
                 <a href="index.php" class="sheet-chip-button">
@@ -1004,7 +988,7 @@ render_header($pageTitle);
                         <span class="material-symbols-outlined text-[18px]">cancel</span>
                         Cancel Treatment
                     </button>
-                    <button class="btn btn-primary justify-center" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save treatment?" data-confirm-message="This will save the current vitals, assessment, diagnosis, treatment, referral, and remarks for this active visit." data-confirm-toast="Saving treatment...">
+                    <button class="btn btn-primary justify-center" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save and complete treatment?" data-confirm-message="This will save the current vitals, assessment, diagnosis, treatment, referral, and remarks, then mark the visit as completed." data-confirm-toast="Saving treatment...">
                         <span class="material-symbols-outlined text-[18px]">save</span>
                         Save Treatment
                     </button>
@@ -1023,11 +1007,6 @@ render_header($pageTitle);
 
 <form id="beginTreatmentForm" method="post" style="display:none;">
     <input type="hidden" name="mode" value="begin_visit">
-    <input type="hidden" name="from" value="<?= e($entryPoint) ?>">
-</form>
-
-<form id="endLogbookVisitForm" method="post" style="display:none;">
-    <input type="hidden" name="mode" value="end_visit">
     <input type="hidden" name="from" value="<?= e($entryPoint) ?>">
 </form>
 

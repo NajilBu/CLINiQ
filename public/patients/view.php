@@ -580,10 +580,10 @@ render_header($fullName . ' - Patient Profile');
                                 <div class="grid gap-3 mt-4">
                                     <?php foreach ($visit['entries'] as $entry): ?>
                                         <?php
-                                        $entrySymptomsValue = str_replace('Visitor notes:', 'Patient Concerns:', (string) ($entry['symptoms'] ?? ''));
+                                        $entrySymptomsValue = cliniq_visit_extract_patient_concerns((string) ($entry['symptoms'] ?? ''));
                                         $isPatientSubmittedEntry = $isSelfLogbookVisit
                                             && trim((string) ($entry['addressed_by_name'] ?? '')) === ''
-                                            && str_contains($entrySymptomsValue, 'Submitted Name:');
+                                            && $entrySymptomsValue !== '';
                                         ?>
                                         <section class="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
                                             <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
