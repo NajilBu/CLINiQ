@@ -7,8 +7,7 @@ function system_report_module_labels(): array
 {
     return [
         'patients' => 'Patients',
-        'accounts' => 'Accounts',
-        'visits' => 'Visits and Vital Signs',
+        'visits' => 'Visits',
         'appointments' => 'Appointments',
         'inventory' => 'Medicine and Inventory',
         'loans' => 'Equipment Loans',
@@ -130,62 +129,10 @@ function build_system_report(string $dateFrom, string $dateTo, array $modules): 
         ];
     }
 
-    if (in_array('accounts', $modules, true)) {
-        $sections['accounts'] = [
-            'title' => 'Accounts',
-            'description' => 'Current account activation and role distribution. Passwords and credentials are never included.',
-            'metrics' => [
-                system_report_metric('All Accounts', system_report_scalar($newDb, 'SELECT COUNT(*) FROM accounts')),
-                system_report_metric('Active', system_report_scalar($newDb, "SELECT COUNT(*) FROM accounts WHERE account_status = 'active'")),
-                system_report_metric('Inactive', system_report_scalar($newDb, "SELECT COUNT(*) FROM accounts WHERE account_status = 'inactive'")),
-                system_report_metric('With Email', system_report_scalar($newDb, "SELECT COUNT(*) FROM accounts WHERE email IS NOT NULL AND email <> ''")),
-                system_report_metric('Without Email', system_report_scalar($newDb, "SELECT COUNT(*) FROM accounts WHERE email IS NULL OR email = ''")),
-            ],
-            'charts' => [
-                system_report_chart('Account Status', system_report_rows($newDb, 'SELECT account_status label, COUNT(*) value FROM accounts GROUP BY account_status ORDER BY value DESC')),
-                system_report_chart('Email Availability', system_report_rows($newDb, "
-                    SELECT CASE WHEN email IS NOT NULL AND email <> '' THEN 'With Email' ELSE 'Without Email' END label, COUNT(*) value
-                    FROM accounts
-                    GROUP BY label ORDER BY value DESC
-                ")),
-                system_report_chart('Account Classification', system_report_rows($newDb, "
-                    SELECT CASE
-                        WHEN s.person_id IS NOT NULL THEN 'Student'
-                        WHEN se.person_id IS NOT NULL THEN se.role_classification
-                        WHEN cs.person_id IS NOT NULL THEN CONCAT('Clinic ', UPPER(LEFT(cs.staff_role, 1)), SUBSTRING(cs.staff_role, 2))
-                        ELSE 'Patient'
-                    END label, COUNT(*) value
-                    FROM accounts a
-                    LEFT JOIN students s ON s.person_id = a.person_id
-                    LEFT JOIN school_employees se ON se.person_id = a.person_id
-                    LEFT JOIN clinic_staff cs ON cs.person_id = a.person_id
-                    GROUP BY label ORDER BY value DESC, label
-                ")),
-                system_report_chart('Active / Inactive by Classification', system_report_rows($newDb, "
-                    SELECT CONCAT(
-                        CASE
-                            WHEN s.person_id IS NOT NULL THEN 'Student'
-                            WHEN se.person_id IS NOT NULL THEN se.role_classification
-                            WHEN cs.person_id IS NOT NULL THEN 'Clinic Staff'
-                            ELSE 'Patient'
-                        END,
-                        ' - ',
-                        COALESCE(NULLIF(a.account_status, ''), 'No status')
-                    ) label, COUNT(*) value
-                    FROM accounts a
-                    LEFT JOIN students s ON s.person_id = a.person_id
-                    LEFT JOIN school_employees se ON se.person_id = a.person_id
-                    LEFT JOIN clinic_staff cs ON cs.person_id = a.person_id
-                    GROUP BY label ORDER BY value DESC, label
-                ")),
-            ],
-        ];
-    }
-
     if (in_array('visits', $modules, true)) {
         $visitCount = system_report_scalar($newDb, 'SELECT COUNT(*) FROM visits WHERE DATE(visit_datetime) BETWEEN ? AND ?', $range);
         $sections['visits'] = [
-            'title' => 'Visits and Vital Signs',
+            'title' => 'Visits',
             'description' => 'Clinic visit activity in the current workflow: Unaddressed means the patient arrived but has not been attended, Active means treatment has started, and Completed means the visit was ended.',
             'metrics' => [
                 system_report_metric('Visits', $visitCount),
@@ -193,9 +140,6 @@ function build_system_report(string $dateFrom, string $dateTo, array $modules): 
                 system_report_metric('Active', system_report_scalar($newDb, "SELECT COUNT(*) FROM visits WHERE status = 'Active' AND DATE(visit_datetime) BETWEEN ? AND ?", $range)),
                 system_report_metric('Completed Visits', system_report_scalar($newDb, "SELECT COUNT(*) FROM visits WHERE status = 'Completed' AND DATE(visit_datetime) BETWEEN ? AND ?", $range)),
                 system_report_metric('Clinical Entries', system_report_scalar($newDb, 'SELECT COUNT(*) FROM visit_entries ve JOIN visits v ON v.visit_id = ve.visit_id WHERE DATE(v.visit_datetime) BETWEEN ? AND ?', $range)),
-                system_report_metric('Vital Measurements', system_report_scalar($newDb, 'SELECT COUNT(*) FROM vital_signs vs JOIN visits v ON v.visit_id = vs.visit_id WHERE DATE(v.visit_datetime) BETWEEN ? AND ?', $range)),
-                system_report_metric('Average Temperature', system_report_scalar($newDb, 'SELECT AVG(vs.temperature) FROM vital_signs vs JOIN visits v ON v.visit_id = vs.visit_id WHERE DATE(v.visit_datetime) BETWEEN ? AND ?', $range), 'Celsius', 1),
-                system_report_metric('Average Pulse Rate', system_report_scalar($newDb, 'SELECT AVG(vs.pulse_rate) FROM vital_signs vs JOIN visits v ON v.visit_id = vs.visit_id WHERE DATE(v.visit_datetime) BETWEEN ? AND ?', $range), 'beats per minute', 1),
             ],
             'charts' => [
                 system_report_chart('Visits by Day', system_report_rows($newDb, "SELECT DATE_FORMAT(visit_datetime, '%b %e') label, COUNT(*) value FROM visits WHERE DATE(visit_datetime) BETWEEN ? AND ? GROUP BY DATE(visit_datetime), label ORDER BY DATE(visit_datetime)", $range)),
@@ -229,6 +173,7 @@ function build_system_report(string $dateFrom, string $dateTo, array $modules): 
                 system_report_metric('Appointments', system_report_scalar($newDb, 'SELECT COUNT(*) FROM appointments WHERE DATE(appointment_datetime) BETWEEN ? AND ?', $range)),
                 system_report_metric('Pending Requests', system_report_scalar($newDb, "SELECT COUNT(*) FROM appointments WHERE status = 'Pending' AND DATE(appointment_datetime) BETWEEN ? AND ?", $range)),
                 system_report_metric('Scheduled', system_report_scalar($newDb, "SELECT COUNT(*) FROM appointments WHERE status IN ('Approved', 'Scheduled') AND DATE(appointment_datetime) BETWEEN ? AND ?", $range)),
+                system_report_metric('For Confirmation', system_report_scalar($newDb, "SELECT COUNT(*) FROM appointments WHERE status = 'For Confirmation' AND DATE(appointment_datetime) BETWEEN ? AND ?", $range)),
                 system_report_metric('Completed', system_report_scalar($newDb, "SELECT COUNT(*) FROM appointments WHERE status = 'Completed' AND DATE(appointment_datetime) BETWEEN ? AND ?", $range)),
                 system_report_metric('Cancelled or No-show', system_report_scalar($newDb, "SELECT COUNT(*) FROM appointments WHERE status IN ('Cancelled', 'No Show', 'No-show') AND DATE(appointment_datetime) BETWEEN ? AND ?", $range)),
             ],
@@ -283,7 +228,7 @@ function build_system_report(string $dateFrom, string $dateTo, array $modules): 
     if (in_array('ape', $modules, true)) {
         $sections['ape'] = [
             'title' => 'Annual Physical Examination',
-            'description' => 'APE workflow based on the current design: patient vitals/BMI confirmation, clinic examination, hard-copy review, document archive, and final clearance or follow-up.',
+            'description' => 'APE workflow based on the current design: patient vitals/BMI confirmation, clinic examination with hard-copy review, document archive, and final clearance or follow-up.',
             'metrics' => [
                 system_report_metric('Cycles Started', system_report_scalar($newDb, 'SELECT COUNT(*) FROM ape_cycles WHERE DATE(started_at) BETWEEN ? AND ?', $range)),
                 system_report_metric('APE Records', system_report_scalar($newDb, 'SELECT COUNT(*) FROM ape_records WHERE DATE(COALESCE(exam_date, created_at)) BETWEEN ? AND ?', $range)),

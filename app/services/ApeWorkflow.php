@@ -5,8 +5,8 @@ require_once __DIR__ . '/SystemSettings.php';
 function ape_workflow_steps(): array
 {
     return [
-        'Clinical Examination',
-        'Hard-copy Review',
+        'Patient Vitals and BMI',
+        'Clinical Examination + Hard-copy Review',
         'Digital Submission',
         'Final Decision / Follow-up',
         'Completed',
@@ -32,21 +32,15 @@ function ape_work_queues(): array
 {
     return [
         'examination' => [
-            'title' => 'Clinical Examination',
-            'short_title' => 'Examination',
-            'description' => 'After the patient confirms vitals and BMI, authorized clinic staff records the examination and findings.',
+            'title' => 'Clinical Examination + Hard-copy Review',
+            'short_title' => 'Exam + Hard Copy',
+            'description' => 'After the patient confirms vitals and BMI, authorized clinic staff examines the patient and checks hard-copy documents together.',
             'icon' => 'stethoscope',
-        ],
-        'document_review' => [
-            'title' => 'Hard-copy Review',
-            'short_title' => 'Hard-copy Review',
-            'description' => 'After examination, clinic staff checks whether the hard-copy documents are complete.',
-            'icon' => 'fact_check',
         ],
         'digital_submission' => [
             'title' => 'Digital Submission',
             'short_title' => 'Digital Keeping',
-            'description' => 'After examination, patients submit checked documents online for clinic record keeping and archive review.',
+            'description' => 'After examination and hard-copy review, patients submit checked documents online for clinic record keeping and archive review.',
             'icon' => 'upload_file',
         ],
         'final_decision' => [
@@ -80,12 +74,8 @@ function ape_record_queue(array $record): string
         return 'follow_up';
     }
 
-    if (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed' || empty($record['exam_date'])) {
+    if (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed' || empty($record['exam_date']) || ($record['requirement_status'] ?? '') !== 'Pre-Verified') {
         return 'examination';
-    }
-
-    if (($record['requirement_status'] ?? '') !== 'Pre-Verified') {
-        return 'document_review';
     }
 
     $requiredDocumentCount = array_key_exists('required_document_count', $record)
@@ -104,10 +94,9 @@ function ape_record_queue(array $record): string
 function ape_next_action(array $record): array
 {
     return match (ape_record_queue($record)) {
-        'document_review' => ['label' => 'Review Hard Copy', 'icon' => 'fact_check'],
         'examination' => (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed'
             ? ['label' => 'Wait for Patient Vitals', 'icon' => 'monitor_heart']
-            : ['label' => 'Record Examination', 'icon' => 'stethoscope']),
+            : ['label' => 'Record Exam + Hard Copy', 'icon' => 'stethoscope']),
         'digital_submission' => (int) ($record['required_document_count'] ?? 0) < count(ape_default_requirements())
             ? ['label' => 'Wait for Patient Upload', 'icon' => 'upload_file']
             : ['label' => 'Archive Submission', 'icon' => 'inventory_2'],
@@ -130,7 +119,6 @@ function ape_record_step_index(array $record): int
 {
     return match (ape_record_queue($record)) {
         'examination' => 0,
-        'document_review' => 1,
         'digital_submission' => 2,
         'final_decision' => 3,
         'follow_up' => 3,
@@ -201,13 +189,9 @@ function ape_waiting_label(array $record): string
 function ape_next_action_card(array $record): array
 {
     return match (ape_record_queue($record)) {
-        'document_review' => [
-            'title' => 'Check the hard-copy medical documents',
-            'body' => 'The examination is complete. Confirm whether the hard-copy documents are complete before online submission.',
-        ],
         'examination' => [
-            'title' => (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed' ? 'Wait for patient vitals and BMI confirmation' : 'Record the clinical examination'),
-            'body' => (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed' ? 'The patient must enter and confirm their height, weight, BMI, and vital signs before the clinic can begin the examination.' : 'Enter the examination date, result, and clinical findings. Hard-copy review follows this examination.'),
+            'title' => (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed' ? 'Wait for patient vitals and BMI confirmation' : 'Record the clinical examination and hard-copy review'),
+            'body' => (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed' ? 'The patient must enter and confirm their height, weight, BMI, and vital signs before the clinic can begin the examination.' : 'Enter the examination result while checking the patient’s hard-copy APE documents in the same step.'),
         ],
         'digital_submission' => (int) ($record['required_document_count'] ?? 0) < count(ape_default_requirements())
             ? [
@@ -245,11 +229,8 @@ function ape_missing_item(array $record): string
     if (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed') {
         return 'Waiting for patient vitals and BMI confirmation';
     }
-    if (empty($record['exam_date'])) {
-        return 'Ready for clinical examination';
-    }
-    if (($record['requirement_status'] ?? '') === 'Not Checked') {
-        return 'Hard-copy documents not reviewed';
+    if (empty($record['exam_date']) || ($record['requirement_status'] ?? '') === 'Not Checked') {
+        return 'Ready for examination and hard-copy review';
     }
     if (($record['requirement_status'] ?? '') === 'Needs Correction') {
         return 'Hard-copy requirements need attention';
@@ -669,7 +650,7 @@ function ape_workflow_summary(array $record): string
     return match ($record['workflow_status'] ?? '') {
         'Registered', 'Batch Assigned' => 'Patient vitals and BMI confirmation are required before clinical examination.',
         'Requirements Checked', 'Scheduled' => 'Clinical examination is complete and hard-copy documents are verified.',
-        'Exam Done' => 'Clinical examination is complete; hard-copy review is next.',
+        'Exam Done' => 'Clinical examination is recorded; hard-copy requirements still need correction or verification.',
         'Submitted' => 'Checked documents were submitted online for clinic record keeping.',
         'Reviewed' => 'Examination and digital archive are complete; final decision is pending.',
         'Cleared' => 'APE process is complete.',

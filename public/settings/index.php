@@ -10,8 +10,8 @@ ensure_system_settings_schema();
 ensure_dropdown_options_schema();
 
 $user = current_user() ?? [];
-$canManageSettings = in_array($user['role'] ?? '', ['admin', 'nurse', 'it_expert'], true);
-$canManageStaffProfiles = in_array($user['role'] ?? '', ['admin', 'it_expert'], true);
+$canManageSettings = in_array($user['role'] ?? '', ['admin', 'doctor', 'it_expert'], true);
+$canManageStaffProfiles = in_array($user['role'] ?? '', ['admin', 'doctor', 'it_expert'], true);
 $canManagePatientAccounts = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
 $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
 $dropdownCategoryLabels = [
@@ -77,7 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (in_array($action, ['create_staff_profile', 'update_staff_profile', 'reset_staff_password'], true)) {
         if (!$canManageStaffProfiles) {
-            flash_message('error', 'Only administrators and IT experts can manage staff profiles.');
+            flash_message('error', 'Only administrators, doctors, or IT experts can manage staff profiles.');
             header('Location: index.php?tab=account');
             exit;
         }
@@ -257,7 +257,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'save_mail_settings') {
         if (!$canManageSettings) {
-            flash_message('error', 'Only administrators, nurses, or IT experts can update mail settings.');
+            flash_message('error', 'Only administrators, doctors, or IT experts can update mail settings.');
             header('Location: index.php?tab=email');
             exit;
         }
@@ -273,7 +273,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'send_test_email') {
         if (!$canManageSettings) {
-            flash_message('error', 'Only administrators, nurses, or IT experts can send test emails.');
+            flash_message('error', 'Only administrators, doctors, or IT experts can send test emails.');
             header('Location: index.php?tab=email');
             exit;
         }
@@ -398,7 +398,7 @@ render_clinic_command_header(
 
 <?php if (!$canManageSettings): ?>
     <div class="rounded-2xl bg-red-50 border border-red-100 text-red-700 px-5 py-4 font-bold">
-        Clinic configuration can be changed only by administrators, nurses, or IT experts. You can still update your own password.
+        Clinic configuration can be changed only by administrators, doctors, or IT experts. You can still update your own password.
     </div>
 <?php endif; ?>
 
@@ -678,7 +678,7 @@ render_clinic_command_header(
                     <p class="text-xs font-bold text-slate-500 mb-5">Edit the options shown in clinic forms. Deleted options disappear from future forms but old records keep their saved text.</p>
                     <?php if (!$canManageSettings): ?>
                         <div class="rounded-xl bg-amber-50 border border-amber-100 text-amber-800 px-4 py-3 text-sm font-bold mb-5">
-                            Dropdown options can be managed only by administrators, nurses, or IT experts.
+                            Dropdown options can be managed only by administrators, doctors, or IT experts.
                         </div>
                     <?php endif; ?>
 

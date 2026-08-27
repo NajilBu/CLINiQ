@@ -1021,6 +1021,121 @@ h6,
     transform: scale(1);
 }
 
+.row-actions-trigger {
+    width: 2.25rem;
+    height: 2.25rem;
+    border: 1px solid oklch(88% .02 160 / .85);
+    border-radius: 999px;
+    background: #ffffff;
+    color: var(--cliniq-primary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 8px 22px rgba(var(--cliniq-shadow-rgb), 0.08);
+    transition: all 0.18s ease;
+}
+
+.row-actions-trigger:hover {
+    transform: translateY(-1px);
+    background: var(--cliniq-primary-fixed);
+    border-color: rgba(var(--cliniq-focus-rgb), 0.32);
+}
+
+.row-actions-trigger .material-symbols-outlined {
+    font-size: 1.25rem;
+    line-height: 1;
+}
+
+.row-actions-modal {
+    width: min(92vw, 26rem);
+    padding: 1.25rem;
+    border-radius: 1.5rem;
+    background: #ffffff;
+    border: 1px solid oklch(90% .02 160 / .8);
+    box-shadow: 0 28px 70px rgba(15, 23, 42, 0.18);
+}
+
+.row-actions-modal-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.row-actions-eyebrow {
+    margin: 0 0 0.25rem;
+    color: #94a3b8;
+    font-size: 0.68rem;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.row-actions-modal h3 {
+    margin: 0;
+    color: #17261d;
+    font-family: Manrope, sans-serif;
+    font-size: 1.2rem;
+    font-weight: 900;
+}
+
+.row-actions-close {
+    width: 2.15rem;
+    height: 2.15rem;
+    border: 0;
+    border-radius: 999px;
+    background: #f8fafc;
+    color: #64748b;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.row-actions-close:hover {
+    background: #eef2f7;
+    color: #17261d;
+}
+
+.row-actions-modal-body,
+.row-actions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.row-actions-modal-body {
+    padding-top: 1rem;
+}
+
+.row-actions-modal-body form,
+.row-actions-modal-body a,
+.row-actions-modal-body button:not(.row-actions-close) {
+    width: 100%;
+}
+
+.row-actions-modal-body form,
+.row-actions-list form {
+    margin: 0;
+}
+
+.row-actions-modal-body .btn,
+.row-actions-list .btn {
+    justify-content: center;
+    min-height: 2.75rem;
+}
+
+.row-actions-modal-body .btn-icon,
+.row-actions-list .btn-icon {
+    width: 100%;
+    height: 2.75rem;
+    border-radius: 0.9rem;
+    gap: 0.45rem;
+}
+
 /* ============================================================
    TOAST NOTIFICATIONS
    Slide-in from right with auto-dismiss

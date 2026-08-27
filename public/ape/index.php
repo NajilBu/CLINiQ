@@ -21,7 +21,7 @@ $visibleQueues = $activeQueue === 'all'
     : (isset($queues[$activeQueue]) ? [$activeQueue] : array_keys($queues));
 
 $needsAction = 0;
-foreach (['examination', 'document_review', 'digital_submission', 'final_decision', 'follow_up'] as $key) {
+foreach (['examination', 'digital_submission', 'final_decision', 'follow_up'] as $key) {
     $needsAction += count($recordsByQueue[$key]);
 }
 
@@ -53,7 +53,7 @@ $apeQueueColumns = [
     ['headerName' => 'Program', 'field' => 'programHtml', 'cellRenderer' => 'html', 'sortField' => 'programSort', 'minWidth' => 220],
     ['headerName' => 'Waiting', 'field' => 'waiting', 'sortField' => 'waitingSort', 'sortType' => 'number', 'width' => 140],
     ['headerName' => 'Next Action', 'field' => 'nextActionHtml', 'cellRenderer' => 'html', 'sortField' => 'nextActionSort', 'minWidth' => 260],
-    ['headerName' => 'Action', 'field' => 'actionHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 210],
+    ['headerName' => 'Actions', 'field' => 'actionHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 100, 'minWidth' => 90],
 ];
 
 render_header('APE Work Queues');
@@ -187,7 +187,7 @@ render_clinic_command_header(
                     'waitingSort' => ape_waiting_days($rec),
                     'nextActionSort' => $next['label'],
                     'nextActionHtml' => '<div class="flex items-center gap-2"><span class="material-symbols-outlined text-primary text-[18px]">' . e($next['icon']) . '</span><div><strong class="block text-sm text-slate-800">' . e($next['label']) . '</strong><span class="block text-xs font-bold text-slate-400">' . e(ape_missing_item($rec)) . '</span></div></div>',
-                    'actionHtml' => $queueKey === 'completed' ? '' : '<a href="view.php?id=' . (int)$rec['id'] . '" class="btn btn-primary btn-sm text-decoration-none"><span class="material-symbols-outlined text-[14px]">' . e($next['icon']) . '</span>' . e($next['label']) . '</a>',
+                    'actionHtml' => row_actions_button('APE actions', $queueKey === 'completed' ? '' : '<a href="view.php?id=' . (int)$rec['id'] . '" class="btn btn-primary btn-sm text-decoration-none"><span class="material-symbols-outlined text-[14px]">' . e($next['icon']) . '</span>' . e($next['label']) . '</a>'),
                 ];
             }
             render_ag_grid('apeGrid' . preg_replace('/[^A-Za-z0-9_-]/', '', $queueKey), $apeQueueColumns, $apeRows, [

@@ -89,7 +89,7 @@ $activeColumns = [
     ['headerName' => 'Reorder At', 'field' => 'reorderLevel', 'minWidth' => 120, 'flex' => 0.6],
     ['headerName' => 'Expiration', 'field' => 'expirationHtml', 'cellRenderer' => 'html', 'sortField' => 'expirationSort', 'sortType' => 'date', 'minWidth' => 140, 'flex' => 0.7],
     ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'sortField' => 'statusSort', 'sortType' => 'number', 'minWidth' => 160, 'flex' => 0.8],
-    ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'minWidth' => 150, 'flex' => 0.65],
+    ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'minWidth' => 90, 'maxWidth' => 110, 'flex' => 0.4],
 ];
 
 $archivedColumns = [
@@ -98,7 +98,7 @@ $archivedColumns = [
     ['headerName' => 'Final Stock', 'field' => 'quantityHtml', 'cellRenderer' => 'html', 'sortField' => 'quantitySort', 'sortType' => 'number', 'minWidth' => 140, 'flex' => 0.7],
     ['headerName' => 'Expiration', 'field' => 'expirationHtml', 'cellRenderer' => 'html', 'sortField' => 'expirationSort', 'sortType' => 'date', 'minWidth' => 140, 'flex' => 0.7],
     ['headerName' => 'Archived', 'field' => 'archivedHtml', 'cellRenderer' => 'html', 'sortField' => 'archivedSort', 'sortType' => 'date', 'minWidth' => 180, 'flex' => 0.9],
-    ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'minWidth' => 120, 'flex' => 0.55],
+    ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'minWidth' => 90, 'maxWidth' => 110, 'flex' => 0.4],
 ];
 
 $equipmentColumns = [
@@ -107,7 +107,7 @@ $equipmentColumns = [
     ['headerName' => 'Available', 'field' => 'stockHtml', 'cellRenderer' => 'html', 'sortField' => 'stockSort', 'sortType' => 'number', 'minWidth' => 220, 'flex' => 1],
     ['headerName' => 'Minimum Available', 'field' => 'reorderLevel', 'minWidth' => 170, 'flex' => 0.75],
     ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'sortField' => 'statusSort', 'sortType' => 'number', 'minWidth' => 160, 'flex' => 0.8],
-    ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'minWidth' => 120, 'flex' => 0.55],
+    ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'minWidth' => 90, 'maxWidth' => 110, 'flex' => 0.4],
 ];
 
 $loanColumns = [
@@ -117,7 +117,7 @@ $loanColumns = [
     ['headerName' => 'Qty', 'field' => 'quantityHtml', 'cellRenderer' => 'html', 'sortField' => 'quantitySort', 'sortType' => 'number', 'minWidth' => 90, 'flex' => 0.4],
     ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'sortField' => 'statusSort', 'sortType' => 'number', 'minWidth' => 130, 'flex' => 0.6],
     ['headerName' => 'Condition', 'field' => 'conditionHtml', 'cellRenderer' => 'html', 'sortField' => 'conditionSort', 'minWidth' => 140, 'flex' => 0.65],
-    ['headerName' => 'Actions / Notes', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'minWidth' => 210, 'flex' => 1],
+    ['headerName' => 'Actions / Notes', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'minWidth' => 160, 'flex' => 0.8],
 ];
 
 $activityColumns = [
@@ -199,19 +199,19 @@ foreach ($visibleItems as $item) {
             'archivedSort' => $item['archived_at'],
             'archivedHtml' => '<div><strong class="text-sm text-slate-700">' . e(date('M d, Y', strtotime($item['archived_at']))) . '</strong><p class="text-xs font-bold text-slate-400 mb-0">' . e($item['archived_by_name'] ?: 'System') . '</p></div>',
             'reasonHtml' => '<span class="text-sm font-bold text-slate-500">' . e($item['archived_reason'] ?: 'No reason recorded') . '</span>',
-            'actionsHtml' => '<form method="post" action="restore.php" class="flex justify-end" data-inventory-form><input type="hidden" name="id" value="' . (int) $item['id'] . '"><button type="submit" class="btn btn-sm btn-outline" data-confirm-submit data-confirm-type="primary" data-confirm-title="Restore inventory item?" data-confirm-message="' . $restoreMessage . '" data-confirm-toast="Restoring inventory item..."><span class="material-symbols-outlined text-[14px]">restore</span>Restore</button></form>',
+            'actionsHtml' => row_actions_button('Inventory actions', '<form method="post" action="restore.php" data-inventory-form><input type="hidden" name="id" value="' . (int) $item['id'] . '"><button type="submit" class="btn btn-sm btn-outline" data-confirm-submit data-confirm-type="primary" data-confirm-title="Restore inventory item?" data-confirm-message="' . $restoreMessage . '" data-confirm-toast="Restoring inventory item..."><span class="material-symbols-outlined text-[14px]">restore</span>Restore</button></form>'),
         ];
         continue;
     }
 
-    $actionsHtml = '<div class="flex justify-end gap-1">';
+    $actionsHtml = '<div class="row-actions-list">';
     if (!$isEquipment) {
-        $actionsHtml .= '<button onclick="openRestockMedicine(' . $restockArgs . ')" class="btn-icon btn-icon-primary" title="Restock medicine"><span class="material-symbols-outlined">add_box</span></button>';
+        $actionsHtml .= '<button onclick="closeModal(\'rowActionsModal\'); openRestockMedicine(' . $restockArgs . ')" class="btn btn-sm btn-primary" title="Restock medicine"><span class="material-symbols-outlined text-[14px]">add_box</span>Restock</button>';
     }
     if ($activeTab === 'equipment' && $isEquipment && (int) $item['quantity'] > 0) {
-        $actionsHtml .= '<button onclick="openBorrowItem(' . $borrowArgs . ')" class="btn-icon btn-icon-primary" title="Borrow equipment"><span class="material-symbols-outlined">assignment_ind</span></button>';
+        $actionsHtml .= '<button onclick="closeModal(\'rowActionsModal\'); openBorrowItem(' . $borrowArgs . ')" class="btn btn-sm btn-primary" title="Borrow equipment"><span class="material-symbols-outlined text-[14px]">assignment_ind</span>Borrow</button>';
     }
-    $actionsHtml .= '<button onclick="editItem(' . $editArgs . ')" class="btn-icon btn-icon-primary" title="Edit item"><span class="material-symbols-outlined">edit</span></button><button onclick="openArchiveItem(' . $archiveArgs . ')" class="btn-icon btn-icon-slate" title="Deactivate item"><span class="material-symbols-outlined">archive</span></button></div>';
+    $actionsHtml .= '<button onclick="closeModal(\'rowActionsModal\'); editItem(' . $editArgs . ')" class="btn btn-sm btn-outline" title="Edit item"><span class="material-symbols-outlined text-[14px]">edit</span>Edit</button><button onclick="closeModal(\'rowActionsModal\'); openArchiveItem(' . $archiveArgs . ')" class="btn btn-sm btn-ghost" title="Deactivate item"><span class="material-symbols-outlined text-[14px]">archive</span>Deactivate</button></div>';
     $highlightKeys = [];
     if ($isLow && !$isEquipment && !isset($highlightedLowStockKeys[$stockKey])) {
         $highlightKeys[] = 'low-stock';
@@ -234,7 +234,7 @@ foreach ($visibleItems as $item) {
         'expirationHtml' => '<span class="text-sm font-bold ' . $expirationClass . '">' . e($expirationLabel) . '</span>',
         'statusSort' => $isLow ? 0 : ($isExpiring ? 1 : 2),
         'statusHtml' => inventory_status_badge($displayQuantityForStatus),
-        'actionsHtml' => $actionsHtml,
+        'actionsHtml' => row_actions_button('Inventory actions', $actionsHtml),
     ];
 }
 
@@ -289,7 +289,7 @@ foreach ($loanRowsRaw as $loan) {
         'conditionSort' => $loan['return_condition'] ?? '',
         'conditionHtml' => inventory_return_condition_badge($loan['return_condition'] ?? null),
         'actionsHtml' => $isBorrowed
-            ? '<button onclick="openReturnLoan(' . $returnArgs . ')" class="btn btn-sm btn-outline"><span class="material-symbols-outlined text-[14px]">assignment_return</span>Return</button>'
+            ? row_actions_button('Loan actions', '<button onclick="closeModal(\'rowActionsModal\'); openReturnLoan(' . $returnArgs . ')" class="btn btn-sm btn-outline"><span class="material-symbols-outlined text-[14px]">assignment_return</span>Return</button>')
             : $returnSummary,
     ];
 }

@@ -346,6 +346,23 @@ document.addEventListener('submit', (event) => {
     }, type);
 });
 
+document.addEventListener('click', (event) => {
+    const trigger = event.target.closest('[data-row-actions-trigger]');
+    if (!trigger) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const modal = document.getElementById('rowActionsModal');
+    const title = document.getElementById('rowActionsModalTitle');
+    const body = document.getElementById('rowActionsModalBody');
+    if (!modal || !title || !body) return;
+
+    title.textContent = trigger.dataset.rowActionsTitle || 'Actions';
+    body.innerHTML = trigger.dataset.rowActionsHtml || '';
+    showModal('rowActionsModal');
+});
+
 
 // ============================================================
 // AVATAR HELPER

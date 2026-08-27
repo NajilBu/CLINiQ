@@ -416,7 +416,7 @@ CREATE TABLE appointments (
   patient_id BIGINT UNSIGNED NOT NULL,
   appointment_datetime DATETIME NOT NULL,
   purpose VARCHAR(255) NOT NULL,
-  status ENUM('Pending', 'Scheduled', 'Completed', 'Cancelled', 'No Show')
+  status ENUM('Pending', 'Scheduled', 'For Confirmation', 'Completed', 'Cancelled', 'No Show')
     NOT NULL DEFAULT 'Pending',
   request_source ENUM('Patient Portal', 'Clinic Staff')
     NOT NULL DEFAULT 'Patient Portal',

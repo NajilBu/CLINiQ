@@ -46,7 +46,7 @@ render_clinic_command_header(
     'Create inactive patient accounts individually or import an official list from Excel.'
 );
 
-$canManageSettings = in_array($user['role'] ?? '', ['admin', 'nurse', 'it_expert'], true);
+$canManageSettings = in_array($user['role'] ?? '', ['admin', 'doctor', 'it_expert'], true);
 $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
 ?>
 <div class="settings-shell">

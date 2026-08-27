@@ -28,7 +28,7 @@ foreach ($patients as $patientIndex => $patient) {
         'rowNumber' => $patientIndex + 1,
         'idNumber' => $patient['id_number'],
         'nameSort' => trim($patient['last_name'] . ' ' . $patient['first_name'] . ' ' . ($patient['middle_name'] ?? '')),
-        'nameHtml' => '<div class="flex items-center gap-3"><div class="avatar ' . e(avatar_color($displayName)) . '">' . e(initials($displayName)) . '</div><strong class="text-sm text-slate-800">' . e($fullName) . '</strong></div>',
+        'nameHtml' => '<div class="flex items-center gap-3" data-tooltip-text="' . e($fullName) . '"><div class="avatar ' . e(avatar_color($displayName)) . '">' . e(initials($displayName)) . '</div><strong class="text-sm text-slate-800">' . e($fullName) . '</strong></div>',
         'patientType' => $patient['patient_type'],
         'courseSection' => $patient['course_section'] ?: 'Patient',
         'guardianContact' => $patient['guardian_contact'] ?: '-',

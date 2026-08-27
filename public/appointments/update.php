@@ -9,7 +9,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $id = (int)($_POST['id'] ?? 0);
     $status = $_POST['status'] ?? '';
     $cancellationReason = trim($_POST['cancellation_reason'] ?? '');
-    $allowed = ['Pending', 'Scheduled', 'Completed', 'Cancelled', 'No Show'];
+    $allowed = ['Pending', 'Scheduled', 'For Confirmation', 'Completed', 'Cancelled', 'No Show'];
     $redirect = $_POST['redirect'] ?? 'index.php';
     $allowedRedirects = ['index.php', '../dashboard.php'];
     $reviewedByPersonId = (int) (current_user()['person_id'] ?? 0) ?: null;
@@ -31,6 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $message = match ($status) {
             'Scheduled' => 'Appointment request approved and added to the clinic schedule.',
+            'For Confirmation' => 'Appointment moved to clinic confirmation.',
             'Cancelled' => 'Appointment request cancelled.',
             'Completed' => 'Appointment marked as completed.',
             'No Show' => 'Appointment marked as no-show.',

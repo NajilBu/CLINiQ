@@ -18,6 +18,8 @@ function ensure_appointment_schema(): void
         }
     }
 
+    $db->exec("ALTER TABLE appointments MODIFY status VARCHAR(40) NOT NULL DEFAULT 'Pending'");
+
     $ready = true;
 }
 
@@ -26,10 +28,34 @@ function appointment_status_badge_class(string $status): string
     return match ($status) {
         'Pending' => 'badge-pending',
         'Scheduled' => 'badge-in-progress',
+        'For Confirmation' => 'badge-pending',
         'Completed' => 'badge-completed',
         'Cancelled', 'No Show' => 'badge-cancelled',
         default => 'badge-pending',
     };
+}
+
+function appointment_duration_minutes(): int
+{
+    return 60;
+}
+
+function appointment_confirmation_cutoff_sql(): string
+{
+    return 'DATE_ADD(appointment_datetime, INTERVAL ' . appointment_duration_minutes() . ' MINUTE)';
+}
+
+function appointment_sync_overdue_confirmations(): int
+{
+    $stmt = appointment_db()->prepare("
+        UPDATE appointments
+        SET status = 'For Confirmation'
+        WHERE status = 'Scheduled'
+          AND " . appointment_confirmation_cutoff_sql() . " <= NOW()
+    ");
+    $stmt->execute();
+
+    return $stmt->rowCount();
 }
 
 function appointment_month_from_request(?string $value = null): DateTimeImmutable
@@ -143,7 +169,7 @@ function appointment_reserved_times_for_month(DateTimeImmutable $month): array
                TIME_FORMAT(appointment_datetime, '%H:%i:%s') AS appointment_time
         FROM appointments
         WHERE appointment_datetime BETWEEN ? AND ?
-          AND status IN ('Pending', 'Scheduled')
+          AND status IN ('Pending', 'Scheduled', 'For Confirmation')
         ORDER BY appointment_datetime ASC
     ");
     $stmt->execute([$start . ' 00:00:00', $end . ' 23:59:59']);

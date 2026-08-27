@@ -47,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confi
         if ($stmt->rowCount() !== 1) {
             throw new RuntimeException('The vitals could not be confirmed. Refresh and try again.');
         }
-        ape_log_activity((int) $apeRecord['ape_id'], $patientId, 'Confirmed patient-entered vitals and BMI', 'Patient completed the vitals profile before presenting hard-copy requirements.');
+        ape_log_activity((int) $apeRecord['ape_id'], $patientId, 'Confirmed patient-entered vitals and BMI', 'Patient completed the vitals profile before clinic examination and hard-copy review.');
         header('Location: patient-ape-status.php?vitals_confirmed=1');
         exit;
     } catch (Throwable $e) {
@@ -178,8 +178,7 @@ $nextActionTitle = match (true) {
     $requirementsNeedCorrection => 'Return corrected hard-copy requirements',
     $apeStatus === 'Follow-up Required' => 'Complete the required follow-up',
     !$patientVitalsConfirmed => 'Complete your vitals and BMI',
-    !$examCompleted => 'Attend your clinical examination',
-    !$requirementsVerified => 'Present hard-copy requirements to the clinic',
+    !$examCompleted || !$requirementsVerified => 'Attend examination and hard-copy review',
     $documentsAwaitingReview => 'Wait for clinic document review',
     $apeStatus === 'Reviewed' => 'Wait for the final clinical decision',
     default => 'Upload verified APE documents',
@@ -189,8 +188,7 @@ $nextActionCopy = match (true) {
     $requirementsNeedCorrection => $studentNote ?: 'Return the corrected hard-copy requirements requested by the clinic.',
     $apeStatus === 'Follow-up Required' => $studentNote ?: 'Complete the referral or other follow-up requested by the clinic.',
     !$patientVitalsConfirmed => 'Enter and confirm your height, weight, BMI, and vital signs before visiting the clinic for examination.',
-    !$examCompleted => $studentNote ?: 'Your vitals are confirmed. Visit the clinic for your APE examination before presenting hard-copy requirements.',
-    !$requirementsVerified => 'Present your hard-copy requirements to the clinic for review. Digital upload opens after they are verified.',
+    !$examCompleted || !$requirementsVerified => $studentNote ?: 'Your vitals are confirmed. Visit the clinic for examination and hard-copy document review.',
     $documentsAwaitingReview => 'Your documents were submitted and are waiting for clinic archive review.',
     $apeStatus === 'Reviewed' => $studentNote ?: 'Your examination and document archive are complete. The clinic will now record the final decision.',
     default => $studentNote ?: ($apeRecord ? 'Complete the current APE step shown below.' : 'No APE record has been opened by the clinic yet.'),
@@ -210,8 +208,7 @@ $actionBadgeLabel = match (true) {
     $requirementsNeedCorrection => 'Correction Needed',
     $apeStatus === 'Follow-up Required' => 'Follow-up Required',
     !$patientVitalsConfirmed => 'Vitals and BMI First',
-    !$examCompleted => 'Examination First',
-    !$requirementsVerified => 'Hard-copy Review Next',
+    !$examCompleted || !$requirementsVerified => 'Exam + Hard Copy',
     $documentsAwaitingReview => 'Under Clinic Review',
     $apeStatus === 'Reviewed' => 'Final Decision Pending',
     default => 'Current Step',
@@ -221,27 +218,26 @@ $currentStep = match (true) {
     $apeStatus === 'Follow-up Required' || $clearanceStatus === 'For Follow-up' => 4,
     $apeStatus === 'Reviewed' => 4,
     !$patientVitalsConfirmed => 1,
-    !$examCompleted => 1,
-    !$requirementsVerified => 2,
+    !$examCompleted || !$requirementsVerified => 2,
     default => 3,
 };
 
 $flowSteps = [
     [
         'number' => 1,
-        'icon' => 'task_alt',
-        'title' => 'Clinical examination',
-        'copy' => $examCompleted
-            ? 'Clinic recorded your examination date, result, and findings.'
-            : ($patientVitalsConfirmed ? 'Visit the clinic for examination after confirming your vitals and BMI.' : 'Confirm your vitals and BMI before visiting the clinic.'),
+        'icon' => 'monitor_heart',
+        'title' => 'Patient vitals and BMI',
+        'copy' => $patientVitalsConfirmed
+            ? 'You confirmed your height, weight, BMI, and vital signs.'
+            : 'Enter and confirm your vitals and BMI before visiting the clinic.',
     ],
     [
         'number' => 2,
-        'icon' => 'manage_search',
-        'title' => 'Hard-copy review',
-        'copy' => $requirementsVerified
-            ? 'Clinic checked your physical requirements and noted findings.'
-            : ($examCompleted ? 'Present your hard-copy requirements to the clinic for review.' : 'This begins after the clinical examination is complete.'),
+        'icon' => 'task_alt',
+        'title' => 'Clinical examination + hard-copy review',
+        'copy' => $examCompleted && $requirementsVerified
+            ? 'Clinic recorded your examination and checked your hard-copy requirements.'
+            : ($patientVitalsConfirmed ? 'Visit the clinic for examination and bring your hard-copy requirements.' : 'Confirm your vitals and BMI before visiting the clinic.'),
     ],
     [
         'number' => 3,
@@ -249,7 +245,7 @@ $flowSteps = [
         'title' => 'Digital document keeping',
         'copy' => $examCompleted
             ? 'Upload the examined and checked forms for the clinic digital record.'
-            : 'This opens only after the examination and hard-copy review.',
+            : 'This opens only after the clinic examination and hard-copy review.',
     ],
     [
         'number' => 4,
@@ -322,8 +318,7 @@ foreach ($documentIcons as $name => $icon) {
         $lockedDetail = match (true) {
             $requirementsNeedCorrection => 'Bring the corrected hard copy back to the clinic before continuing.',
             !$patientVitalsConfirmed => 'Confirm your vitals and BMI before continuing.',
-            !$examCompleted => 'Complete the clinical examination before uploading digital copies.',
-            !$requirementsVerified => 'Clinic staff must verify the hard copy before uploading.',
+            !$examCompleted || !$requirementsVerified => 'Complete the clinic examination and hard-copy review before uploading digital copies.',
             default => 'Document upload is locked at the current APE step.',
         };
         $documents[] = [

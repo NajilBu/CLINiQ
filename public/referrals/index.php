@@ -40,7 +40,7 @@ $referralColumns = [
     ['headerName' => 'Reason', 'field' => 'reason', 'minWidth' => 240],
     ['headerName' => 'Date', 'field' => 'date', 'sortField' => 'dateSort', 'sortType' => 'date', 'width' => 150],
     ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'sortField' => 'statusSort', 'sortType' => 'number', 'width' => 150],
-    ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 170],
+    ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 100, 'minWidth' => 90],
 ];
 $referralRows = [];
 foreach ($referrals as $ref) {
@@ -59,7 +59,7 @@ foreach ($referrals as $ref) {
         'dateSort' => $ref['referral_date'],
         'statusHtml' => '<span class="badge ' . e(status_badge_class($ref['status'])) . '">' . e($ref['status']) . '</span>',
         'statusSort' => array_search($ref['status'], ['Pending', 'Completed', 'Cancelled'], true),
-        'actionsHtml' => $actions,
+        'actionsHtml' => row_actions_button('Referral actions', $actions),
     ];
 }
 

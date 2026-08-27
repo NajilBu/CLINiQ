@@ -12,20 +12,6 @@ ensure_alert_workflow_schema();
 $dateFrom = normalize_system_report_date($_GET['from'] ?? null, date('Y-m-01'));
 $dateTo = normalize_system_report_date($_GET['to'] ?? null, date('Y-m-d'));
 $visitDb = cliniq_visit_db();
-$reportDb = auth_db();
-
-$stats = [
-    'visits_range'   => 0,
-    'pending_appointments' => $reportDb->query("SELECT COUNT(*) AS total FROM appointments WHERE status = 'Pending'")->fetch()['total'] ?? 0,
-    'active_ape_records' => $reportDb->query("SELECT COUNT(*) AS total FROM ape_records ar JOIN ape_cycles ac ON ac.ape_cycle_id = ar.ape_cycle_id WHERE ac.status = 'Active' AND ar.clearance_status <> 'Cleared'")->fetch()['total'] ?? 0,
-    'low_stock'      => $reportDb->query('SELECT COUNT(*) AS total FROM inventory_items WHERE is_active = 1 AND quantity <= reorder_level')->fetch()['total'] ?? 0,
-    'total_patients'  => $reportDb->query('SELECT COUNT(*) AS total FROM patients')->fetch()['total'] ?? 0,
-];
-
-// Visits in date range
-$rangeStmt = $visitDb->prepare('SELECT COUNT(*) AS total FROM visits WHERE DATE(visit_datetime) BETWEEN ? AND ?');
-$rangeStmt->execute([$dateFrom, $dateTo]);
-$stats['visits_range'] = (int)$rangeStmt->fetch()['total'];
 
 // Common complaints in range
 $complaints = $visitDb->prepare("
@@ -86,34 +72,6 @@ render_header('Reports');
         <div><label class="clinic-label" for="reportTo">To</label><input class="clinic-input" id="reportTo" type="date" name="to" value="<?= e($dateTo) ?>" required></div>
     </div>
 </form>
-
-<!-- ═══ Stats Cards ═══ -->
-<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
-    <div class="bg-white p-6 rounded-[2rem] border border-outline-variant/20 shadow-sm">
-        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Patients</p>
-        <p class="text-3xl font-headline font-extrabold text-slate-800 mt-2"><?= (int) $stats['total_patients'] ?></p>
-        <p class="text-xs font-bold text-slate-400 mt-1">Registered in Cliniq_db</p>
-    </div>
-    <div class="bg-white p-6 rounded-[2rem] border border-outline-variant/20 shadow-sm">
-        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Visits in Range</p>
-        <p class="text-3xl font-headline font-extrabold text-slate-800 mt-2"><?= (int) $stats['visits_range'] ?></p>
-        <p class="text-xs font-bold text-slate-400 mt-1"><?= e(date('M d', strtotime($dateFrom))) ?> – <?= e(date('M d, Y', strtotime($dateTo))) ?></p>
-    </div>
-    <div class="bg-white p-6 rounded-[2rem] border border-outline-variant/20 shadow-sm">
-        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pending Appointments</p>
-        <p class="text-3xl font-headline font-extrabold text-slate-800 mt-2"><?= (int) $stats['pending_appointments'] ?></p>
-        <p class="text-xs font-bold text-slate-400 mt-1">Awaiting clinic action</p>
-    </div>
-    <div class="bg-white p-6 rounded-[2rem] border border-outline-variant/20 shadow-sm">
-        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Active APE Records</p>
-        <p class="text-3xl font-headline font-extrabold text-slate-800 mt-2"><?= (int) $stats['active_ape_records'] ?></p>
-        <p class="text-xs font-bold text-slate-400 mt-1">Not yet cleared</p>
-    </div>
-    <a href="<?= app_url('inventory/index.php?tab=medicine&highlight=low-stock') ?>" class="bg-white p-6 rounded-[2rem] border border-outline-variant/20 shadow-sm text-decoration-none">
-        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Low Stock</p>
-        <p class="text-3xl font-headline font-extrabold text-slate-800 mt-2"><?= (int) $stats['low_stock'] ?></p>
-    </a>
-</div>
 
 <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
     <!-- ═══ Common Complaints ═══ -->

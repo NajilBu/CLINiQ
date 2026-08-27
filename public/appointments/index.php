@@ -4,16 +4,19 @@ require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/AppointmentWorkflow.php';
 require_login();
 ensure_appointment_schema();
+appointment_sync_overdue_confirmations();
 
-$filterStatus = $_GET['status'] ?? 'Pending';
-$allowedFilters = ['all', 'Pending', 'Scheduled', 'Completed', 'Cancelled', 'No Show'];
+$filterStatus = $_GET['status'] ?? 'today';
+$allowedFilters = ['today', 'all', 'Pending', 'Scheduled', 'For Confirmation', 'Completed', 'Cancelled', 'No Show'];
 if (!in_array($filterStatus, $allowedFilters, true)) {
-    $filterStatus = 'Pending';
+    $filterStatus = 'today';
 }
 
 $where = '1=1';
 $params = [];
-if ($filterStatus !== 'all') {
+if ($filterStatus === 'today') {
+    $where = 'DATE(a.appointment_datetime) = CURDATE()';
+} elseif ($filterStatus !== 'all') {
     $where = 'a.status = ?';
     $params[] = $filterStatus;
 }
@@ -34,7 +37,7 @@ $stmt = appointment_db()->prepare("
     LEFT JOIN departments ed ON ed.id = se.department_id
     WHERE {$where}
     ORDER BY
-        CASE a.status WHEN 'Pending' THEN 0 WHEN 'Scheduled' THEN 1 ELSE 2 END,
+        CASE a.status WHEN 'Pending' THEN 0 WHEN 'Scheduled' THEN 1 WHEN 'For Confirmation' THEN 2 ELSE 3 END,
         a.appointment_datetime ASC,
         a.created_at DESC
     LIMIT 200
@@ -42,7 +45,8 @@ $stmt = appointment_db()->prepare("
 $stmt->execute($params);
 $appointments = $stmt->fetchAll();
 
-$statusCounts = ['all' => 0];
+$todayCountStmt = appointment_db()->query("SELECT COUNT(*) AS cnt FROM appointments WHERE DATE(appointment_datetime) = CURDATE()");
+$statusCounts = ['today' => (int) ($todayCountStmt->fetch()['cnt'] ?? 0), 'all' => 0];
 $countQuery = appointment_db()->query("SELECT status, COUNT(*) AS cnt FROM appointments GROUP BY status");
 foreach ($countQuery->fetchAll() as $sc) {
     $statusCounts[$sc['status']] = (int)$sc['cnt'];
@@ -55,10 +59,16 @@ $columns = [
     ['headerName' => 'Purpose', 'field' => 'purpose', 'minWidth' => 220],
     ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'sortField' => 'statusSort', 'sortType' => 'number', 'width' => 150],
     ['headerName' => 'Notes', 'field' => 'notes', 'minWidth' => 220],
-    ['headerName' => 'Cancellation Reason', 'field' => 'cancelReason', 'minWidth' => 240],
     ['headerName' => 'Requested', 'field' => 'created', 'sortField' => 'createdSort', 'sortType' => 'date', 'width' => 150],
-    ['headerName' => 'Clinic Action', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 280],
+    ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 100, 'minWidth' => 90],
 ];
+if (in_array($filterStatus, ['Cancelled', 'all'], true)) {
+    array_splice($columns, 5, 0, [[
+        'headerName' => 'Cancellation Reason',
+        'field' => 'cancelReason',
+        'minWidth' => 240,
+    ]]);
+}
 
 $rows = [];
 foreach ($appointments as $appointment) {
@@ -67,15 +77,19 @@ foreach ($appointments as $appointment) {
     $actions = '';
 
     if ($status === 'Pending') {
-        $actions = '<div class="appointment-action-group">'
+        $actions = '<div class="row-actions-list">'
             . '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['appointment_id'] . '"><input type="hidden" name="status" value="Scheduled"><button class="btn btn-sm btn-primary" title="Approve appointment" data-confirm-submit data-confirm-type="primary" data-confirm-title="Approve this appointment?" data-confirm-message="This will schedule the appointment request." data-confirm-toast="Approving appointment..."><span class="material-symbols-outlined text-[14px]">event_available</span> Approve</button></form>'
-            . '<button type="button" class="btn btn-sm btn-ghost btn-cancel-icon" title="Cancel request" aria-label="Cancel request" data-cancel-appointment data-cancel-id="' . (int)$appointment['appointment_id'] . '" data-cancel-title="Cancel appointment request"><span class="material-symbols-outlined text-[14px]">cancel</span></button>'
+            . '<button type="button" class="btn btn-sm btn-ghost" title="Cancel request" aria-label="Cancel request" data-cancel-appointment data-cancel-id="' . (int)$appointment['appointment_id'] . '" data-cancel-title="Cancel appointment request"><span class="material-symbols-outlined text-[14px]">cancel</span> Cancel</button>'
             . '</div>';
     } elseif ($status === 'Scheduled') {
-        $actions = '<div class="appointment-action-group">'
-            . '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['appointment_id'] . '"><input type="hidden" name="status" value="Completed"><button class="btn btn-sm btn-outline" title="Mark completed" data-confirm-submit data-confirm-type="primary" data-confirm-title="Mark appointment completed?" data-confirm-message="This will mark the scheduled appointment as Completed." data-confirm-toast="Completing appointment..."><span class="material-symbols-outlined text-[14px]">check</span> Complete</button></form>'
-            . '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['appointment_id'] . '"><input type="hidden" name="status" value="No Show"><button class="btn btn-sm btn-ghost" title="Mark no-show" data-confirm-submit data-confirm-type="danger" data-confirm-title="Mark as no-show?" data-confirm-message="This will mark the scheduled appointment as No Show." data-confirm-toast="Marking no-show..."><span class="material-symbols-outlined text-[14px]">person_cancel</span> No Show</button></form>'
-            . '<button type="button" class="btn btn-sm btn-ghost btn-cancel-icon" title="Cancel appointment" aria-label="Cancel appointment" data-cancel-appointment data-cancel-id="' . (int)$appointment['appointment_id'] . '" data-cancel-title="Cancel scheduled appointment"><span class="material-symbols-outlined text-[14px]">cancel</span></button>'
+        $actions = '<div class="row-actions-list">'
+            . '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['appointment_id'] . '"><input type="hidden" name="status" value="No Show"><button class="btn btn-sm btn-ghost" title="Mark no-show" data-confirm-submit data-confirm-type="danger" data-confirm-title="Mark as no-show?" data-confirm-message="This confirms the patient did not attend the appointment." data-confirm-toast="Marking no-show..."><span class="material-symbols-outlined text-[14px]">person_cancel</span> No Show</button></form>'
+            . '<button type="button" class="btn btn-sm btn-ghost" title="Cancel appointment" aria-label="Cancel appointment" data-cancel-appointment data-cancel-id="' . (int)$appointment['appointment_id'] . '" data-cancel-title="Cancel scheduled appointment"><span class="material-symbols-outlined text-[14px]">cancel</span> Cancel</button>'
+            . '</div>';
+    } elseif ($status === 'For Confirmation') {
+        $actions = '<div class="row-actions-list">'
+            . '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['appointment_id'] . '"><input type="hidden" name="status" value="Completed"><button class="btn btn-sm btn-outline" title="Confirm completed" data-confirm-submit data-confirm-type="primary" data-confirm-title="Confirm appointment completed?" data-confirm-message="This confirms the patient attended and the passed appointment is completed." data-confirm-toast="Completing appointment..."><span class="material-symbols-outlined text-[14px]">check</span> Confirm Completed</button></form>'
+            . '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['appointment_id'] . '"><input type="hidden" name="status" value="No Show"><button class="btn btn-sm btn-ghost" title="Mark no-show" data-confirm-submit data-confirm-type="danger" data-confirm-title="Mark as no-show?" data-confirm-message="This confirms the patient did not attend the appointment." data-confirm-toast="Marking no-show..."><span class="material-symbols-outlined text-[14px]">person_cancel</span> No Show</button></form>'
             . '</div>';
     }
 
@@ -87,12 +101,12 @@ foreach ($appointments as $appointment) {
         'studentHtml' => '<div class="flex items-center gap-3"><div class="avatar ' . e(avatar_color($fullName)) . '">' . e(initials($fullName)) . '</div><div><strong class="text-sm text-slate-800">' . e($fullName) . '</strong><div class="text-xs font-bold text-slate-400">' . e($appointment['id_number']) . ' · ' . e($appointment['course_section'] ?: 'No course') . '</div></div></div>',
         'purpose' => $appointment['purpose'],
         'statusHtml' => '<span class="badge ' . e(appointment_status_badge_class($status)) . '">' . e($status) . '</span>',
-        'statusSort' => array_search($status, ['Pending', 'Scheduled', 'Completed', 'No Show', 'Cancelled'], true),
+        'statusSort' => array_search($status, ['Pending', 'Scheduled', 'For Confirmation', 'Completed', 'No Show', 'Cancelled'], true),
         'notes' => $appointment['notes'] ?: '-',
         'cancelReason' => $appointment['cancellation_reason'] ?: '-',
         'created' => date('M d, g:i A', strtotime($appointment['created_at'])),
         'createdSort' => $appointment['created_at'],
-        'actionsHtml' => $actions,
+        'actionsHtml' => row_actions_button('Appointment actions', $actions),
     ];
 }
 
@@ -122,8 +136,10 @@ render_clinic_command_header(
         <div class="flex items-center gap-2 mt-4 border-t border-slate-100 pt-4 overflow-x-auto scrollbar-hide">
             <?php
             $tabs = [
+                'today' => 'Today',
                 'Pending' => 'For Approval',
                 'Scheduled' => 'Approved',
+                'For Confirmation' => 'For Confirmation',
                 'Completed' => 'Completed',
                 'Cancelled' => 'Cancelled',
                 'No Show' => 'No Show',
@@ -132,7 +148,7 @@ render_clinic_command_header(
             foreach ($tabs as $key => $label):
                 $isActive = $filterStatus === $key;
                 $count = $statusCounts[$key] ?? 0;
-                $href = $key === 'Pending' ? '?' : '?status=' . urlencode($key);
+                $href = $key === 'today' ? '?' : '?status=' . urlencode($key);
             ?>
                 <a href="<?= e($href) ?>" class="status-tab <?= $isActive ? 'active' : '' ?> text-decoration-none whitespace-nowrap">
                     <?= e($label) ?>
@@ -143,8 +159,8 @@ render_clinic_command_header(
     </div>
     <?php render_ag_grid('appointmentsGrid', $columns, $rows, [
         'searchInput' => 'appointmentsGridSearch',
-        'emptyTitle' => $filterStatus === 'Pending' ? 'No appointment requests' : 'No appointments found',
-        'emptyText' => $filterStatus === 'Pending' ? 'Student appointment requests will appear here for clinic approval.' : 'Try another status filter.',
+        'emptyTitle' => $filterStatus === 'today' ? 'No appointments today' : ($filterStatus === 'Pending' ? 'No appointment requests' : 'No appointments found'),
+        'emptyText' => $filterStatus === 'today' ? 'Today’s appointment schedule is clear.' : ($filterStatus === 'Pending' ? 'Student appointment requests will appear here for clinic approval.' : 'Try another status filter.'),
     ]); ?>
 </section>
 
@@ -187,6 +203,7 @@ render_clinic_command_header(
         }
 
         event.preventDefault();
+        closeModal('rowActionsModal');
         document.getElementById('appointmentCancelId').value = button.dataset.cancelId || '';
         document.getElementById('appointmentCancelTitle').textContent = button.dataset.cancelTitle || 'Cancel appointment';
         document.getElementById('appointmentCancellationReason').value = '';

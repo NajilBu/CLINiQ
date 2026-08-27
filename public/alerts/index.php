@@ -44,7 +44,7 @@ $alertColumns = [
     ['headerName' => 'Location', 'field' => 'location'],
     ['headerName' => 'Concern', 'field' => 'concernHtml', 'cellRenderer' => 'html', 'sortField' => 'concernSort', 'minWidth' => 240],
     ['headerName' => 'Created', 'field' => 'created', 'sortField' => 'createdSort', 'sortType' => 'date', 'width' => 150],
-    ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 220],
+    ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 100, 'minWidth' => 90],
 ];
 $alertRows = [];
 foreach ($alerts as $alert) {
@@ -53,14 +53,14 @@ foreach ($alerts as $alert) {
     $riskScore = (int) ($alert['risk_score'] ?? 0);
     $actions = '';
     if ($alert['status'] === 'Pending') {
-        $actions = '<div class="flex justify-end gap-2">'
+        $actions = '<div class="row-actions-list">'
             . '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$alert['id'] . '"><input type="hidden" name="status" value="In Progress"><button type="submit" class="btn btn-sm btn-outline" title="Acknowledge" data-confirm-submit data-confirm-type="primary" data-confirm-title="Acknowledge this alert?" data-confirm-message="This will move the alert to In Progress so staff can handle it." data-confirm-toast="Acknowledging alert..."><span class="material-symbols-outlined text-[14px]">play_arrow</span> Ack</button></form>'
-            . '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$alert['id'] . '"><input type="hidden" name="status" value="Cancelled"><button type="submit" class="btn btn-sm btn-ghost btn-cancel-icon" title="Cancel alert" aria-label="Cancel alert" data-confirm-submit data-confirm-type="danger" data-confirm-title="Cancel this alert?" data-confirm-message="This will mark the alert as Cancelled and remove it from the active queue." data-confirm-toast="Cancelling alert..."><span class="material-symbols-outlined text-[14px]">cancel</span></button></form>'
+            . '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$alert['id'] . '"><input type="hidden" name="status" value="Cancelled"><button type="submit" class="btn btn-sm btn-ghost" title="Cancel alert" aria-label="Cancel alert" data-confirm-submit data-confirm-type="danger" data-confirm-title="Cancel this alert?" data-confirm-message="This will mark the alert as Cancelled and remove it from the active queue." data-confirm-toast="Cancelling alert..."><span class="material-symbols-outlined text-[14px]">cancel</span> Cancel</button></form>'
             . '</div>';
     } elseif ($alert['status'] === 'In Progress') {
-        $actions = '<div class="flex justify-end gap-2">'
+        $actions = '<div class="row-actions-list">'
             . '<a href="view.php?id=' . (int)$alert['id'] . '" class="btn btn-sm btn-primary text-decoration-none"><span class="material-symbols-outlined text-[14px]">assignment</span> Report</a>'
-            . '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$alert['id'] . '"><input type="hidden" name="status" value="Cancelled"><button type="submit" class="btn btn-sm btn-ghost btn-cancel-icon" title="Cancel alert" aria-label="Cancel alert" data-confirm-submit data-confirm-type="danger" data-confirm-title="Cancel this alert?" data-confirm-message="This will mark the alert as Cancelled and remove it from the active queue." data-confirm-toast="Cancelling alert..."><span class="material-symbols-outlined text-[14px]">cancel</span></button></form>'
+            . '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$alert['id'] . '"><input type="hidden" name="status" value="Cancelled"><button type="submit" class="btn btn-sm btn-ghost" title="Cancel alert" aria-label="Cancel alert" data-confirm-submit data-confirm-type="danger" data-confirm-title="Cancel this alert?" data-confirm-message="This will mark the alert as Cancelled and remove it from the active queue." data-confirm-toast="Cancelling alert..."><span class="material-symbols-outlined text-[14px]">cancel</span> Cancel</button></form>'
             . '</div>';
     } else {
         $actions = '';
@@ -80,7 +80,7 @@ foreach ($alerts as $alert) {
         'concernHtml' => '<a href="view.php?id=' . (int)$alert['id'] . '" class="block text-decoration-none"><p class="text-sm font-bold text-slate-800 mb-0">' . e($alert['concern']) . '</p>' . (!empty($alert['incident_type']) ? '<p class="text-[10px] font-black text-red-500 uppercase tracking-widest mt-0.5 mb-0">' . e($alert['incident_type']) . '</p>' : '') . ($alert['report_answers'] ? '<p class="text-xs font-bold text-slate-400 mt-0.5 mb-0 truncate">' . e($alert['report_answers']) . '</p>' : ($alert['details'] ? '<p class="text-xs font-bold text-slate-400 mt-0.5 mb-0 truncate">' . e($alert['details']) . '</p>' : '')) . '</a>',
         'created' => date('M d, g:i A', strtotime($alert['created_at'])),
         'createdSort' => $alert['created_at'],
-        'actionsHtml' => $actions,
+        'actionsHtml' => row_actions_button('Alert actions', $actions),
     ];
 }
 

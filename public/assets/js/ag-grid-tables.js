@@ -21,8 +21,20 @@
             return '';
         }
 
+        const explicitTooltip = cell.querySelector('[data-tooltip-text]')?.dataset.tooltipText || cell.dataset.tooltipText || '';
+        if (explicitTooltip.trim() !== '') {
+            return explicitTooltip.replace(/\s+/g, ' ').trim();
+        }
+
+        if (cell.querySelector('.avatar')) {
+            const primaryName = cell.querySelector('strong');
+            if (primaryName) {
+                return String(primaryName.innerText || primaryName.textContent || '').replace(/\s+/g, ' ').trim();
+            }
+        }
+
         const copy = cell.cloneNode(true);
-        copy.querySelectorAll('.material-symbols-outlined, button, input, textarea, select, form, .btn').forEach((node) => node.remove());
+        copy.querySelectorAll('.material-symbols-outlined, .avatar, button, input, textarea, select, form, .btn').forEach((node) => node.remove());
         return String(copy.innerText || copy.textContent || '').replace(/\s+/g, ' ').trim();
     }
 

@@ -163,6 +163,9 @@ function system_report_styles(): string
 .report-document { width: min(1120px, calc(100% - 32px)); margin: 28px auto; background: #fff; color: #17261d; font-family: Arial, Helvetica, sans-serif; box-shadow: 0 18px 50px rgba(23, 38, 29, .09); }
 .report-document-dashboard { width: 100%; margin: 0; border: 1px solid #dfe9e2; border-radius: 20px; box-shadow: 0 12px 34px rgba(23,38,29,.05); overflow: hidden; }
 .report-cover { padding: 46px 52px 38px; background: linear-gradient(135deg, #174d32, #2f8553); color: #fff; }
+.report-cover-card { display: contents; }
+.report-cover-details { display: none; }
+.report-cover-footer { display: none; }
 .report-brand { display: flex; align-items: center; gap: 14px; margin-bottom: 46px; }
 .report-logo { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 13px; background: #fff; color: #287548; font-size: 25px; font-weight: 900; }
 .report-brand strong { display: block; font-size: 21px; letter-spacing: -.3px; }
@@ -232,14 +235,54 @@ function system_report_styles(): string
 @page { size: A4 portrait; margin: 11mm 10mm 13mm; }
 @media print {
   body { background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .report-document { width: auto; margin: 0; box-shadow: none; }
-  .report-cover { min-height: 255mm; display: flex; flex-direction: column; justify-content: center; page-break-after: always; }
-  .report-brand { margin-bottom: 54px; }
-  .report-body { padding: 0; }
-  .report-section { page-break-before: always; margin: 0; padding: 5mm 0 0; border: 0; }
-  .report-section:first-child { page-break-before: auto; }
-  .report-metrics { grid-template-columns: repeat(4, 1fr); }
+  .report-document { width: auto !important; max-width: none !important; margin: 0 !important; background: #fff; box-shadow: none !important; }
+  .report-cover { min-height: 250mm !important; display: block; margin: 0 !important; padding: 16mm 18mm 0; background: #fff !important; color: #fff; border: 0; border-radius: 0; box-shadow: none !important; break-after: page; page-break-after: always; }
+  .report-cover-card { display: block; max-width: 145mm; min-height: 118mm; margin: 0 auto; padding: 17mm 14mm; border-radius: 14px; background: #1f6b43 !important; color: #fff; }
+  .report-cover-footer { display: grid; max-width: 145mm; margin: 16mm auto 0; color: #17261d; }
+  .report-confidential-note { padding: 4mm 5mm; border: 1px solid #dfe9e2; border-radius: 10px; color: #475569; font-size: 9px; font-weight: 700; line-height: 1.45; text-align: center; }
+  .report-cover-footer-brand { margin-top: 5mm; color: #64748b; font-size: 8px; font-weight: 900; letter-spacing: .12em; text-align: center; text-transform: uppercase; }
+  .report-brand { margin-bottom: 10mm; }
+  .report-logo { width: 34px; height: 34px; border: 1px solid #b9d1c2; background: #fff; color: #205f3d; font-size: 18px; }
+  .report-brand strong { color: #fff; font-size: 16px; }
+  .report-brand span { color: #d9f1e2; font-size: 8px; }
+  .report-cover h1 { max-width: 125mm; color: #fff; font-size: 24px; }
+  .report-cover p { max-width: 130mm; color: #e0f2e7; font-size: 10px; line-height: 1.45; }
+  .report-meta { grid-template-columns: repeat(3, 1fr); gap: 7px; margin-top: 8mm; }
+  .report-meta div { padding: 7px 8px; border-color: rgba(255,255,255,.26); background: rgba(255,255,255,.1); }
+  .report-meta span { color: #c9e8d5; font-size: 7px; }
+  .report-meta strong { color: #fff; font-size: 9px; }
+  .report-cover-details { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; max-width: 145mm; margin: 7mm auto 0; color: #17261d; }
+  .report-cover-detail { padding: 7px 8px; border: 1px solid #dfe9e2; border-radius: 10px; background: #fff; }
+  .report-cover-detail span { display: block; margin-bottom: 3px; color: #64748b; font-size: 7px; font-weight: 900; letter-spacing: .09em; text-transform: uppercase; }
+  .report-cover-detail strong { display: block; color: #17261d; font-size: 9px; font-weight: 900; line-height: 1.35; }
+  .report-cover-detail-wide { grid-column: 1 / -1; }
+  .report-body { padding: 0 !important; }
+  .report-section { min-height: 0 !important; box-shadow: none !important; break-before: page; page-break-before: always; break-inside: avoid; page-break-inside: avoid; margin: 0 !important; padding: 4mm 0 0 !important; border-top: 1px solid #e5ece7; border-bottom: 0; background: #fff; }
+  .report-section:first-child { break-before: auto; page-break-before: auto; }
+  .report-section-heading { margin-bottom: 9px; }
+  .report-section h2 { font-size: 16px; }
+  .report-section-description { font-size: 9px; }
+  .report-section-number { flex-basis: 24px; height: 24px; border: 1px solid #cfe0d5; background: #fff; font-size: 10px; }
+  .report-metrics { grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 9px; }
+  .report-metric { min-height: 54px; padding: 8px; background: #fff; }
+  .report-metric-label { min-height: 0; margin-bottom: 4px; font-size: 7px; }
+  .report-metric-value { font-size: 17px; }
+  .report-metric-note { font-size: 7px; }
   .report-charts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .report-chart { min-height: 130px; padding: 9px; }
+  .report-chart h3 { margin-bottom: 7px; font-size: 10px; }
+  .report-chart-row { margin: 4px 0; }
+  .report-donut { width: 92px; height: 92px; }
+  .report-donut-layout { grid-template-columns: 96px minmax(0,1fr); }
+  .report-line-chart { height: 102px; }
+  .report-column-chart { height: 106px; }
+  .report-column-item { grid-template-rows: 12px 66px 18px; }
+  .report-column-track { height: 64px; }
+  .report-progress-summary { padding-top: 9px; }
+  .report-progress-track { height: 15px; }
+  .report-progress-legend { margin-top: 10px; }
+  .report-remarks { margin-top: 8px; }
+  .report-remarks-print { min-height: 42px; font-size: 8px; line-height: 15px; background: #fff; }
   .report-footer { display: none; }
 }
 CSS;
@@ -250,6 +293,14 @@ function render_system_report_document(array $report, bool $standalone = false, 
     $includeCover = (bool) ($options['include_cover'] ?? true);
     $remarksMode = (string) ($options['remarks_mode'] ?? 'none');
     $remarks = is_array($options['remarks'] ?? null) ? $options['remarks'] : [];
+    $preparedBy = is_array($options['prepared_by'] ?? null) ? $options['prepared_by'] : [];
+    $preparedByName = trim((string) ($preparedBy['name'] ?? ''));
+    if ($preparedByName === '') {
+        $preparedByName = 'CLINiQ Staff';
+    }
+    $preparedByRole = trim((string) ($preparedBy['role'] ?? ''));
+    $preparedByRole = $preparedByRole !== '' ? ucwords(str_replace('_', ' ', $preparedByRole)) : 'Authorized Staff';
+    $coverage = implode(', ', array_map(static fn(array $section): string => (string) ($section['title'] ?? ''), $report['sections']));
     ob_start();
     if ($standalone): ?>
         <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title><?= system_report_escape($report['title']) ?></title><style><?= system_report_styles() ?></style></head><body class="system-report-standalone">
@@ -257,13 +308,43 @@ function render_system_report_document(array $report, bool $standalone = false, 
     <article class="report-document<?= $includeCover ? '' : ' report-document-dashboard' ?>" id="systemReportDocument">
         <?php if ($includeCover): ?>
             <header class="report-cover">
-                <div class="report-brand"><div class="report-logo">+</div><div><strong>CLINiQ</strong><span>University Health Services</span></div></div>
-                <h1><?= system_report_escape($report['title']) ?></h1>
-                <p>Consolidated operational analytics from the CLINiQ patient, clinical, appointment, inventory, APE, referral, and incident modules.</p>
-                <div class="report-meta">
-                    <div><span>Reporting Period</span><strong><?= system_report_escape(date('M j, Y', strtotime($report['date_from']))) ?> - <?= system_report_escape(date('M j, Y', strtotime($report['date_to']))) ?></strong></div>
-                    <div><span>Included Modules</span><strong data-report-module-total><?= count($report['sections']) ?> module(s)</strong></div>
-                    <div><span>Generated</span><strong><?= system_report_escape(date('M j, Y g:i A', strtotime($report['generated_at']))) ?></strong></div>
+                <div class="report-cover-card">
+                    <div class="report-brand"><div class="report-logo">+</div><div><strong>CLINiQ</strong><span>University Health Services</span></div></div>
+                    <h1><?= system_report_escape($report['title']) ?></h1>
+                    <p>Consolidated operational analytics from the CLINiQ patient, clinical, appointment, inventory, APE, referral, and incident modules.</p>
+                    <div class="report-meta">
+                        <div><span>Reporting Period</span><strong><?= system_report_escape(date('M j, Y', strtotime($report['date_from']))) ?> - <?= system_report_escape(date('M j, Y', strtotime($report['date_to']))) ?></strong></div>
+                        <div><span>Included Modules</span><strong data-report-module-total><?= count($report['sections']) ?> module(s)</strong></div>
+                        <div><span>Generated</span><strong><?= system_report_escape(date('M j, Y g:i A', strtotime($report['generated_at']))) ?></strong></div>
+                    </div>
+                </div>
+                <div class="report-cover-footer">
+                    <div class="report-cover-details">
+                        <div class="report-cover-detail">
+                            <span>Prepared for</span>
+                            <strong>Pamantasan ng Lungsod ng Pasig · University Health Services</strong>
+                        </div>
+                        <div class="report-cover-detail">
+                            <span>Prepared by</span>
+                            <strong><?= system_report_escape($preparedByName) ?> · <?= system_report_escape($preparedByRole) ?></strong>
+                        </div>
+                        <div class="report-cover-detail">
+                            <span>Report type</span>
+                            <strong>System Analytics Report</strong>
+                        </div>
+                        <div class="report-cover-detail">
+                            <span>School office</span>
+                            <strong>University Health Services</strong>
+                        </div>
+                        <div class="report-cover-detail report-cover-detail-wide">
+                            <span>Coverage</span>
+                            <strong><?= system_report_escape($coverage) ?></strong>
+                        </div>
+                    </div>
+                    <div class="report-confidential-note">
+                        This report contains clinic operational data and should be handled only by authorized University Health Services personnel.
+                    </div>
+                    <div class="report-cover-footer-brand">CLINiQ · University Health Services</div>
                 </div>
             </header>
         <?php endif; ?>

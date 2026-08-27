@@ -76,6 +76,7 @@ if (first_registration_pending('staff')) {
 ensure_ape_workflow_schema();
 ensure_alert_workflow_schema();
 ensure_appointment_schema();
+appointment_sync_overdue_confirmations();
 
 // --- 1. Metrics & Analytics ---
 $metrics = [
@@ -119,7 +120,7 @@ $appointmentsStmt = appointment_db()->query("
     JOIN patients pt ON pt.person_id = a.patient_id
     JOIN people p ON p.id = pt.person_id
     WHERE DATE(a.appointment_datetime) = CURDATE()
-      AND a.status = 'Scheduled'
+      AND a.status IN ('Scheduled', 'For Confirmation')
     ORDER BY a.appointment_datetime ASC
 ");
 $appointments = $appointmentsStmt ? $appointmentsStmt->fetchAll() : [];
@@ -248,7 +249,7 @@ foreach ($allApeRecords as $record) {
     }
 }
 $apeQueue = [];
-foreach (['examination', 'document_review', 'digital_submission', 'final_decision', 'follow_up'] as $queueKey) {
+foreach (['examination', 'digital_submission', 'final_decision', 'follow_up'] as $queueKey) {
     foreach ($recordsByQueue[$queueKey] as $record) {
         $record['_queue_key'] = $queueKey;
         $apeQueue[] = $record;
@@ -287,7 +288,7 @@ $dashboardApeColumns = [
     ['headerName' => 'Patient', 'field' => 'studentHtml', 'cellRenderer' => 'html', 'sortField' => 'studentSort', 'minWidth' => 230],
     ['headerName' => 'Work Queue', 'field' => 'queueHtml', 'cellRenderer' => 'html', 'sortField' => 'queueSort', 'minWidth' => 170],
     ['headerName' => 'Missing / Waiting For', 'field' => 'missing', 'minWidth' => 240],
-    ['headerName' => 'Action', 'field' => 'actionHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 210],
+    ['headerName' => 'Actions', 'field' => 'actionHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 100, 'minWidth' => 90],
 ];
 $dashboardApeRows = [];
 foreach ($apeQueue as $rec) {
@@ -302,7 +303,7 @@ foreach ($apeQueue as $rec) {
         'queueHtml' => '<span class="badge ' . ($queueKey === 'follow_up' ? 'badge-high' : 'badge-in-progress') . '">' . e($queue['short_title'] ?? $queue['title']) . '</span>',
         'queueSort' => $queue['short_title'] ?? $queue['title'],
         'missing' => ape_missing_item($rec),
-        'actionHtml' => '<a href="' . e(app_url('ape/view.php?id=' . (int) $rec['id'])) . '" class="btn btn-sm btn-ghost border border-slate-200 hover:border-primary hover:text-primary text-decoration-none"><span class="material-symbols-outlined text-[14px]">' . e($next['icon']) . '</span>' . e($next['label']) . '</a>',
+        'actionHtml' => row_actions_button('APE actions', '<a href="' . e(app_url('ape/view.php?id=' . (int) $rec['id'])) . '" class="btn btn-sm btn-ghost border border-slate-200 hover:border-primary hover:text-primary text-decoration-none"><span class="material-symbols-outlined text-[14px]">' . e($next['icon']) . '</span>' . e($next['label']) . '</a>'),
     ];
 }
 
@@ -386,13 +387,13 @@ render_header('Main Dashboard');
                 </p>
             </div>
         </a>
-        <a href="<?= app_url('ape/index.php?queue=document_review') ?>"
+        <a href="<?= app_url('ape/index.php?queue=examination') ?>"
             class="dashboard-metric-card flex items-center gap-4 text-decoration-none hover:shadow-md hover:border-blue-200 transition-all cursor-pointer col-span-2 sm:col-span-1">
             <div class="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
                 <span class="material-symbols-outlined text-[24px]">pending_actions</span>
             </div>
             <div class="min-w-0">
-                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">APE To Review</p>
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">APE Action</p>
                 <p class="font-headline text-3xl font-extrabold text-slate-800 leading-none m-0">
                     <?= $metrics['ape_pending_review'] ?>
                 </p>
@@ -608,7 +609,7 @@ render_header('Main Dashboard');
                     </div>
                 </div>
                 <div class="flex items-center gap-2 shrink-0">
-                    <span class="badge badge-in-progress text-[9px]"><?= count($appointments) ?> scheduled</span>
+                    <span class="badge badge-in-progress text-[9px]"><?= count($appointments) ?> scheduled / confirmation</span>
                     <a href="<?= app_url('appointments/index.php') ?>"
                         class="btn btn-sm btn-ghost text-slate-400 hover:text-primary text-decoration-none">
                         <span class="material-symbols-outlined text-[18px]">calendar_month</span>
@@ -651,6 +652,9 @@ render_header('Main Dashboard');
                                         </div>
                                         <strong><?= e($fullName) ?></strong>
                                         <span><?= e($apt['id_number']) ?> &bull; <?= e($apt['purpose']) ?></span>
+                                        <?php if (($apt['status'] ?? '') === 'For Confirmation'): ?>
+                                            <span class="badge badge-pending text-[9px] mt-1">For Confirmation</span>
+                                        <?php endif; ?>
                                     </article>
                                 <?php endforeach; ?>
                             </div>
