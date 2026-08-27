@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/CliniqPatientProfile.php';
+require_once __DIR__ . '/../../app/services/CliniqVisitWorkflow.php';
 require_once __DIR__ . '/../../app/services/ApeWorkflow.php';
 require_login();
 
@@ -28,11 +29,6 @@ $fullName = trim(implode(' ', array_filter([
     $patient['last_name'] ?? '',
 ])));
 $visits = cliniq_patient_profile_history((int) $patient['person_id']);
-$visitStatuses = array_values(array_unique(array_map(
-    fn(array $visit): string => (string) ($visit['status'] ?? 'Unaddressed'),
-    $visits
-)));
-sort($visitStatuses, SORT_NATURAL | SORT_FLAG_CASE);
 
 ensure_ape_workflow_schema();
 $apeRecords = ape_fetch_patient_records((int) $patient['person_id']);
@@ -160,7 +156,7 @@ render_header($fullName . ' - Patient Profile');
 
     .care-timeline-toolbar {
         display: grid;
-        grid-template-columns: minmax(15rem, 1.7fr) repeat(3, minmax(9rem, 1fr));
+        grid-template-columns: minmax(15rem, 36rem);
         gap: 0.75rem;
         padding: 1rem 1.25rem;
         border-bottom: 1px solid rgba(226, 232, 240, 0.85);
@@ -179,6 +175,7 @@ render_header($fullName . ' - Patient Profile');
     .patient-profile-event {
         display: grid;
         grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: start;
         gap: 1rem;
         padding: 1.15rem 1.25rem;
         color: inherit;
@@ -197,6 +194,27 @@ render_header($fullName . ' - Patient Profile');
 
     .patient-profile-event.is-collapsed [data-care-details] {
         display: none;
+    }
+
+    .patient-profile-event-content {
+        display: block;
+        min-width: 0;
+        color: #0f172a;
+        overflow: visible;
+    }
+
+    .patient-profile-event-content h3 {
+        display: block;
+        color: #0f172a;
+        line-height: 1.35;
+        overflow-wrap: anywhere;
+    }
+
+    .patient-profile-event-meta {
+        min-width: 7.5rem;
+        justify-self: end;
+        text-align: right;
+        color: #475569;
     }
 
     .care-timeline-toggle {
@@ -263,6 +281,7 @@ render_header($fullName . ' - Patient Profile');
 
         .patient-profile-event-meta {
             grid-column: 2;
+            justify-self: start;
             text-align: left;
         }
     }
@@ -487,23 +506,6 @@ render_header($fullName . ' - Patient Profile');
                     <span class="clinic-label">Search records</span>
                     <input type="search" class="clinic-input" data-care-search placeholder="Complaint, diagnosis, treatment, medicine...">
                 </label>
-                <label class="care-timeline-filter">
-                    <span class="clinic-label">Status</span>
-                    <select class="clinic-select" data-care-status>
-                        <option value="">All statuses</option>
-                        <?php foreach ($visitStatuses as $statusOption): ?>
-                            <option value="<?= e(strtolower($statusOption)) ?>"><?= e($statusOption) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </label>
-                <label class="care-timeline-filter">
-                    <span class="clinic-label">From date</span>
-                    <input type="date" class="clinic-input" data-care-date-from>
-                </label>
-                <label class="care-timeline-filter">
-                    <span class="clinic-label">To date</span>
-                    <input type="date" class="clinic-input" data-care-date-to>
-                </label>
             </div>
             <div class="patient-profile-timeline divide-y divide-outline-variant/10" data-care-timeline>
                 <?php foreach ($visits as $visitIndex => $visit): ?>
@@ -511,6 +513,7 @@ render_header($fullName . ' - Patient Profile');
                     $visitStatus = $visit['status'] ?? 'Unaddressed';
                     $visitPurpose = $visit['visit_purpose'] ?: 'General Visit';
                     $visitSource = $visit['visit_source'] ?: 'Staff Recorded';
+                    $isSelfLogbookVisit = strcasecmp((string) $visitSource, 'Self Logbook') === 0;
                     $latestSymptoms = $visit['entries'][0]['symptoms'] ?? '';
                     $allVisitVitals = $visit['vitals'] ?? [];
                     foreach ($visit['entries'] as $entry) {
@@ -548,7 +551,7 @@ render_header($fullName . ' - Patient Profile');
                         <div class="patient-profile-event-icon">
                             <span class="material-symbols-outlined">medical_information</span>
                         </div>
-                        <div class="min-w-0">
+                        <div class="patient-profile-event-content">
                             <div class="flex flex-wrap items-center gap-2 mb-2">
                                 <span class="badge <?= visit_status_badge_class($visitStatus) ?>"><?= e($visitStatus) ?></span>
                                 <span class="text-[11px] font-black uppercase tracking-widest text-slate-400"><?= e($visitPurpose) ?> / <?= e($visitSource) ?></span>
@@ -576,17 +579,23 @@ render_header($fullName . ' - Patient Profile');
                             <?php if ($visit['entries']): ?>
                                 <div class="grid gap-3 mt-4">
                                     <?php foreach ($visit['entries'] as $entry): ?>
+                                        <?php
+                                        $entrySymptomsValue = str_replace('Visitor notes:', 'Patient Concerns:', (string) ($entry['symptoms'] ?? ''));
+                                        $isPatientSubmittedEntry = $isSelfLogbookVisit
+                                            && trim((string) ($entry['addressed_by_name'] ?? '')) === ''
+                                            && str_contains($entrySymptomsValue, 'Submitted Name:');
+                                        ?>
                                         <section class="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
                                             <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
                                                 <p class="text-[11px] font-black uppercase tracking-widest text-primary m-0">Clinical Entry #<?= (int) $entry['entry_id'] ?></p>
                                                 <p class="text-[11px] font-bold text-slate-400 m-0">
                                                     <?= e(date('M d, Y g:i A', strtotime($entry['created_at']))) ?>
-                                                    &bull; <?= e($entry['addressed_by_name'] ?: 'Clinic staff') ?>
+                                                    &bull; <?= e($entry['addressed_by_name'] ?: ($isSelfLogbookVisit ? 'Submitted by patient' : 'Clinic staff')) ?>
                                                 </p>
                                             </div>
                                             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                                 <?php foreach ([
-                                                    'Symptoms' => $entry['symptoms'],
+                                                    ($isPatientSubmittedEntry ? 'Patient Concerns' : 'Symptoms') => $entrySymptomsValue,
                                                     'Diagnosis' => $entry['diagnosis'],
                                                     'Treatment' => $entry['treatment'],
                                                     'Referral' => $entry['referral'],
@@ -662,7 +671,7 @@ render_header($fullName . ' - Patient Profile');
                             <?php endif; ?>
                             </div>
                         </div>
-                        <div class="patient-profile-event-meta text-right shrink-0">
+                        <div class="patient-profile-event-meta">
                             <p class="text-xs font-extrabold text-slate-500 mb-0"><?= e(date('M d, Y', strtotime($visit['visit_datetime']))) ?></p>
                             <p class="text-[11px] font-bold text-slate-400 mb-2"><?= e(date('g:i A', strtotime($visit['visit_datetime']))) ?></p>
                             <button type="button" class="care-timeline-toggle mb-2" data-care-toggle aria-expanded="<?= $visitIndex === 0 ? 'true' : 'false' ?>">
@@ -680,7 +689,7 @@ render_header($fullName . ' - Patient Profile');
             <div class="hidden px-5 py-8 text-center" data-care-no-results>
                 <span class="material-symbols-outlined text-4xl text-slate-300">search_off</span>
                 <p class="text-sm font-extrabold text-slate-600 mt-2 mb-1">No matching visits</p>
-                <p class="text-xs font-bold text-slate-400 m-0">Change or clear the Care Timeline filters.</p>
+                <p class="text-xs font-bold text-slate-400 m-0">Change or clear the Care Timeline search.</p>
             </div>
             <div class="care-timeline-pagination pagination justify-center" data-care-pagination aria-label="Care Timeline pages"></div>
         <?php else: ?>
@@ -785,9 +794,6 @@ render_header($fullName . ' - Patient Profile');
     const pageSize = 5;
     const events = Array.from(timeline.querySelectorAll('[data-care-event]'));
     const searchInput = document.querySelector('[data-care-search]');
-    const statusInput = document.querySelector('[data-care-status]');
-    const fromInput = document.querySelector('[data-care-date-from]');
-    const toInput = document.querySelector('[data-care-date-to]');
     const pagination = document.querySelector('[data-care-pagination]');
     const noResults = document.querySelector('[data-care-no-results]');
     let currentPage = 1;
@@ -798,17 +804,9 @@ render_header($fullName . ' - Patient Profile');
 
     function matchingEvents() {
         const query = normalized(searchInput && searchInput.value);
-        const status = normalized(statusInput && statusInput.value);
-        const dateFrom = fromInput ? fromInput.value : '';
-        const dateTo = toInput ? toInput.value : '';
 
         return events.filter((event) => {
-            const textMatches = !query || normalized(event.dataset.careSearchText).includes(query);
-            const statusMatches = !status || normalized(event.dataset.careStatusValue) === status;
-            const eventDate = event.dataset.careDateValue || '';
-            const fromMatches = !dateFrom || eventDate >= dateFrom;
-            const toMatches = !dateTo || eventDate <= dateTo;
-            return textMatches && statusMatches && fromMatches && toMatches;
+            return !query || normalized(event.dataset.careSearchText).includes(query);
         });
     }
 
@@ -846,10 +844,9 @@ render_header($fullName . ' - Patient Profile');
         applyTimelineFilters();
     }
 
-    [searchInput, statusInput, fromInput, toInput].forEach((input) => {
-        if (!input) return;
-        input.addEventListener(input === searchInput ? 'input' : 'change', resetToFirstPage);
-    });
+    if (searchInput) {
+        searchInput.addEventListener('input', resetToFirstPage);
+    }
 
     timeline.addEventListener('click', (event) => {
         const toggle = event.target.closest('[data-care-toggle]');

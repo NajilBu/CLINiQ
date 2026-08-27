@@ -6,12 +6,12 @@ require_login();
 
 $id = (int) ($_GET['id'] ?? 0);
 $entryPoint = $_GET['from'] ?? 'logbook';
-$entryPoint = $entryPoint === 'profile' ? 'profile' : 'logbook';
+$entryPoint = in_array($entryPoint, ['profile', 'dashboard'], true) ? $entryPoint : 'logbook';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $mode = $_POST['mode'] ?? 'intake';
     $returnFrom = $_POST['from'] ?? $entryPoint;
-    $returnFrom = $returnFrom === 'profile' ? 'profile' : 'logbook';
+    $returnFrom = in_array($returnFrom, ['profile', 'dashboard'], true) ? $returnFrom : 'logbook';
     $returnTo = $_POST['return_to'] ?? 'view';
 
     $existingVisit = cliniq_visit_fetch($id);
@@ -63,7 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         try {
             $visitDb->beginTransaction();
-            cliniq_visit_insert_entry($visitDb, $id, [
+            cliniq_visit_save_primary_entry($visitDb, $id, [
                 'referral' => $referralType,
                 'remarks' => $finalRemarks,
             ], $staffPersonId);
@@ -118,7 +118,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'referral' => $referralType,
                 'remarks' => $remarks,
             ];
-            $entryId = cliniq_visit_insert_entry($visitDb, $id, $entry, $staffPersonId);
+            $entryId = cliniq_visit_save_primary_entry($visitDb, $id, $entry, $staffPersonId);
             if ($dispensings && !$entryId) {
                 $entryId = cliniq_visit_insert_entry($visitDb, $id, ['remarks' => 'Medicine dispensing recorded.'], $staffPersonId);
             }
@@ -226,8 +226,11 @@ $existingActionForIntake = trim((string) $visit['action_taken']);
 if (str_contains(strtolower($existingActionForIntake), 'awaiting')) {
     $existingActionForIntake = '';
 }
+$isSelfLogbookVisit = strcasecmp((string) ($visit['visit_source'] ?? ''), 'Self Logbook') === 0;
 $latestEntry = $entries[0] ?? [];
 $sheetSymptoms = trim((string) ($latestEntry['symptoms_note'] ?? '')) ?: (trim((string) $visit['symptoms']) ?: 'No symptoms recorded.');
+$sheetSymptoms = str_replace('Visitor notes:', 'Patient Concerns:', $sheetSymptoms);
+$sheetSymptomsLabel = $isSelfLogbookVisit && str_contains($sheetSymptoms, 'Submitted Name:') ? 'Patient Concerns' : 'Symptoms';
 $sheetDiagnosis = trim((string) ($latestEntry['diagnosis'] ?? '')) ?: '';
 $sheetManagement = trim((string) ($latestEntry['management_treatment'] ?? '')) ?: (trim((string) $visit['action_taken']) ?: '');
 $sheetReferral = trim((string) ($latestEntry['referral_type'] ?? '')) ?: 'None';
@@ -282,8 +285,8 @@ $pageTitle = $canAddressFromLogbook ? 'Address Clinic Visit' : ($canEndFromLogbo
 $patientProfileUrl = (int) ($visit['patient_id'] ?? 0) > 0
     ? app_url('patients/view.php?id=' . (int) $visit['patient_id'])
     : app_url('patients/index.php');
-$visitBackUrl = $isProfileMode ? $patientProfileUrl : 'index.php';
-set_page_back_link($visitBackUrl, $isProfileMode ? 'Profile' : 'Logbook');
+$visitBackUrl = $isProfileMode ? $patientProfileUrl : ($entryPoint === 'dashboard' ? app_url('dashboard.php') : 'index.php');
+set_page_back_link($visitBackUrl, $isProfileMode ? 'Profile' : ($entryPoint === 'dashboard' ? 'Dashboard' : 'Logbook'));
 render_header($pageTitle);
 ?>
 
@@ -640,7 +643,7 @@ render_header($pageTitle);
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-                <label class="clinic-label">Symptoms</label>
+                <label class="clinic-label"><?= e($sheetSymptomsLabel) ?></label>
                 <textarea class="record-sheet-field p-4 amendable-field" name="symptoms_note" readonly data-amendable><?= e($sheetSymptoms) ?></textarea>
             </div>
             <div>
@@ -692,10 +695,17 @@ render_header($pageTitle);
             <div class="divide-y divide-outline-variant/10">
                 <?php foreach ($entries as $entry): ?>
                     <?php $dispensedItems = $entryDispensings[(int) $entry['id']] ?? []; ?>
+                    <?php $entryAuthor = $entry['created_by_name'] ?: ($isSelfLogbookVisit ? 'Submitted by patient' : 'Clinic Staff'); ?>
+                    <?php
+                    $entrySymptomsValue = str_replace('Visitor notes:', 'Patient Concerns:', (string) ($entry['symptoms_note'] ?? ''));
+                    $isPatientSubmittedEntry = $isSelfLogbookVisit
+                        && trim((string) ($entry['created_by_name'] ?? '')) === ''
+                        && str_contains($entrySymptomsValue, 'Submitted Name:');
+                    ?>
                     <article class="p-6">
                         <div class="flex flex-col md:flex-row md:items-start justify-between gap-3 mb-4">
                             <div>
-                                <p class="text-sm font-bold text-slate-800 mb-1"><?= e($entry['created_by_name'] ?: 'Clinic Staff') ?></p>
+                                <p class="text-sm font-bold text-slate-800 mb-1"><?= e($entryAuthor) ?></p>
                                 <p class="text-xs font-bold text-slate-400 mb-0"><?= e(date('M d, Y g:i A', strtotime($entry['created_at']))) ?></p>
                             </div>
                             <?php if ($entry['referral_type']): ?>
@@ -704,7 +714,7 @@ render_header($pageTitle);
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <?php foreach ([
-                                'symptoms_note' => 'Symptoms / Follow-up',
+                                'symptoms_note' => $isPatientSubmittedEntry ? 'Patient Concerns' : 'Symptoms / Follow-up',
                                 'diagnosis' => 'Diagnosis',
                                 'management_treatment' => 'Management / Treatment',
                                 'remarks' => 'Remarks',
@@ -713,7 +723,7 @@ render_header($pageTitle);
                                 <?php if (!empty($entry[$field])): ?>
                                     <div>
                                         <p class="clinic-label"><?= e($label) ?></p>
-                                        <p class="text-sm font-bold text-slate-700 leading-relaxed"><?= nl2br(e($entry[$field])) ?></p>
+                                        <p class="text-sm font-bold text-slate-700 leading-relaxed"><?= nl2br(e($field === 'symptoms_note' ? $entrySymptomsValue : $entry[$field])) ?></p>
                                     </div>
                                 <?php endif; ?>
                             <?php endforeach; ?>
@@ -760,7 +770,7 @@ render_header($pageTitle);
 <?php if ($showLogbookSheet): ?>
 <form id="logbookIntakeForm" method="post" class="treatment-sheet mx-auto space-y-5">
     <input type="hidden" name="mode" value="save_treatment">
-    <input type="hidden" name="from" value="logbook">
+    <input type="hidden" name="from" value="<?= e($entryPoint) ?>">
 
     <section class="clinic-card p-6 flex flex-col md:flex-row md:items-center justify-between gap-5">
         <div class="flex items-center gap-4">
@@ -1013,22 +1023,22 @@ render_header($pageTitle);
 
 <form id="beginTreatmentForm" method="post" style="display:none;">
     <input type="hidden" name="mode" value="begin_visit">
-    <input type="hidden" name="from" value="logbook">
+    <input type="hidden" name="from" value="<?= e($entryPoint) ?>">
 </form>
 
 <form id="endLogbookVisitForm" method="post" style="display:none;">
     <input type="hidden" name="mode" value="end_visit">
-    <input type="hidden" name="from" value="logbook">
+    <input type="hidden" name="from" value="<?= e($entryPoint) ?>">
 </form>
 
 <form id="cancelTreatmentForm" method="post" style="display:none;">
     <input type="hidden" name="mode" value="cancel_treatment">
-    <input type="hidden" name="from" value="logbook">
+    <input type="hidden" name="from" value="<?= e($entryPoint) ?>">
 </form>
 
 <form id="logbookNoShowForm" method="post" style="display:none;">
     <input type="hidden" name="mode" value="no_show">
-    <input type="hidden" name="from" value="logbook">
+    <input type="hidden" name="from" value="<?= e($entryPoint) ?>">
 </form>
 
 <?php if ($showBeginTreatmentModal): ?>
@@ -1042,7 +1052,7 @@ render_header($pageTitle);
             This will mark the visit as Active now because the nurse is already attending to the patient while filling out the treatment sheet.
         </p>
         <div class="flex flex-col sm:flex-row gap-3">
-            <a href="index.php" class="btn btn-ghost flex-1 text-decoration-none justify-center">Cancel</a>
+            <a href="<?= e($visitBackUrl) ?>" class="btn btn-ghost flex-1 text-decoration-none justify-center">Cancel</a>
             <button type="submit" form="beginTreatmentForm" class="btn btn-primary flex-1" data-confirm-submit data-confirm-type="primary" data-confirm-title="Begin treatment?" data-confirm-message="This will mark the visit as Active because the nurse is now attending to the patient." data-confirm-toast="Starting treatment...">
                 <span class="material-symbols-outlined text-[18px]">play_arrow</span>
                 Begin Treatment

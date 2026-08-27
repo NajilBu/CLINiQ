@@ -222,7 +222,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $activityLabel = 'Recorded APE examination and created referral';
                 $activityNotes = $referredTo . ': ' . $referralReason;
             } else {
-                $activityLabel = $hardCopyStatus === 'complete' ? 'Recorded APE examination and hard-copy review' : 'Recorded APE examination with hard-copy correction';
+                $activityLabel = $hardCopyStatus === 'complete' ? 'Recorded APE examination' : 'Recorded APE examination with document correction';
                 $activityNotes = $hardCopyStatus === 'complete' ? $findingType . ': ' . $resultStatus : $hardCopyIssues;
             }
         } elseif ($action === 'finalize_exam_clear') {
@@ -546,7 +546,7 @@ render_header('APE Record - ' . $fullName);
             <div class="flex items-center justify-between gap-3 mb-4">
                 <div>
                     <h2 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Patient-Reported Vitals and BMI</h2>
-                    <p class="text-xs font-bold text-slate-500 mb-0">Entered and confirmed by the patient before clinic examination and hard-copy review.</p>
+                    <p class="text-xs font-bold text-slate-500 mb-0">Entered and confirmed by the patient before clinic examination.</p>
                 </div>
                 <span class="badge <?= ($record['patient_vitals_status'] ?? 'Not Started') === 'Confirmed' ? 'badge-completed' : 'badge-pending' ?>">
                     <?= e($record['patient_vitals_status'] ?? 'Not Started') ?>
@@ -720,7 +720,7 @@ render_header('APE Record - ' . $fullName);
                         <input type="hidden" name="action" value="record_examination">
                         <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
                             <div>
-                                <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Clinical Examination + Hard-copy Review</h3>
+                                <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Examination</h3>
                                 <p class="text-xs font-bold text-slate-500 mb-0">Record the examination while checking the patient’s hard-copy APE documents. Digital upload opens only when the hard copies are complete.</p>
                             </div>
                             <span class="badge badge-in-progress">Clearance Pending</span>

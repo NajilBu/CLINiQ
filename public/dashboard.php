@@ -268,8 +268,10 @@ $visitorColumns = [
 $visitorRows = [];
 foreach ($visitorLogs as $visit) {
     $fullName = trim($visit['first_name'] . ' ' . $visit['last_name']);
+    $visitStatus = $visit['status'] ?: 'Unaddressed';
+    $dashboardVisitUrl = app_url('visits/view.php?id=' . (int) $visit['id'] . '&from=dashboard' . ($visitStatus === 'Unaddressed' ? '&begin=1' : ''));
     $visitorRows[] = [
-        'rowUrl' => app_url('visits/view.php?id=' . (int) $visit['id'] . '&from=dashboard'),
+        'rowUrl' => $dashboardVisitUrl,
         'arrivedSort' => $visit['visit_datetime'],
         'arrivedTime' => date('h:i A', strtotime($visit['visit_datetime'])),
         'addressedSort' => $visit['addressed_at'],
@@ -279,8 +281,8 @@ foreach ($visitorLogs as $visit) {
         'patientSort' => trim($visit['last_name'] . ' ' . $visit['first_name']),
         'patientHtml' => '<div class="font-bold text-slate-800 text-sm">' . e($fullName) . '</div><div class="text-[10px] text-slate-400">' . e($visit['id_number']) . '</div>',
         'complaint' => $visit['chief_complaint'],
-        'statusHtml' => '<span class="badge ' . e(status_badge_class($visit['status'])) . ' text-[9px]">' . e($visit['status']) . '</span>',
-        'statusSort' => array_search($visit['status'], ['Unaddressed', 'Active', 'Completed', 'Cancelled'], true),
+        'statusHtml' => '<span class="badge ' . e(status_badge_class($visitStatus)) . ' text-[9px]">' . e($visitStatus) . '</span>',
+        'statusSort' => array_search($visitStatus, ['Unaddressed', 'Active', 'Completed', 'Cancelled'], true),
     ];
 }
 
@@ -698,8 +700,7 @@ render_header('Main Dashboard');
         <div class="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
                 <h2 class="font-headline text-xl font-extrabold text-[#17261d] m-0">APE Action Queue</h2>
-                <p class="text-xs font-bold text-slate-500 m-0">Priority patients needing hard-copy review, clinical
-                    examination, document keeping, final decision, or follow-up clearance.</p>
+                <p class="text-xs font-bold text-slate-500 m-0">Priority patients needing examination, document keeping, final decision, or follow-up clearance.</p>
             </div>
             <a href="<?= app_url('ape/index.php') ?>" class="btn btn-sm btn-primary shrink-0">
                 <span class="material-symbols-outlined text-[16px]">open_in_new</span>

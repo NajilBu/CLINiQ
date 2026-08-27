@@ -243,7 +243,7 @@ $apeActionTitle = match (true) {
     $apeRequirementsNeedCorrection => 'Return corrected hard-copy requirements',
     $apeStatus === 'Follow-up Required' => 'Complete the required follow-up',
     !$apePatientVitalsConfirmed => 'Complete your vitals and BMI',
-    !$apeExamCompleted || !$apeRequirementsVerified => 'Attend examination and hard-copy review',
+    !$apeExamCompleted || !$apeRequirementsVerified => 'Attend examination',
     $apeDocumentsAwaitingReview => 'Wait for clinic document review',
     $apeStatus === 'Reviewed' => 'Wait for the final clinical decision',
     default => 'Upload verified APE documents',

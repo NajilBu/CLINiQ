@@ -1,6 +1,9 @@
 <?php
 require_once __DIR__ . '/../app/config/database.php';
 require_once __DIR__ . '/../app/services/AlertWorkflow.php';
+require_once __DIR__ . '/../app/services/ApeWorkflow.php';
+
+ensure_ape_workflow_schema();
 
 function pp_e(?string $value): string
 {
@@ -81,12 +84,9 @@ if ($token !== '') {
             pt.emergency_token,
             pt.token_enabled,
             pt.updated_at AS patient_updated_at,
-            pt.height_cm,
-            pt.weight_kg,
-            pt.bmi,
-            vs.temperature,
-            vs.blood_pressure,
-            vs.pulse_rate,
+            ape_bmi.patient_height_cm AS height_cm,
+            ape_bmi.patient_weight_kg AS weight_kg,
+            ape_bmi.patient_bmi AS bmi,
             COALESCE(
                 NULLIF(TRIM(CONCAT(pr.program_code, '-', s.year_level, UPPER(s.section))), ''),
                 ed.department_code,
@@ -101,16 +101,15 @@ if ($token !== '') {
         LEFT JOIN departments ed ON ed.id = se.department_id
         LEFT JOIN clinic_staff cs ON cs.person_id = pe.id
         LEFT JOIN departments cd ON cd.id = cs.department_id
-        LEFT JOIN (
-            SELECT vs1.*
-            FROM vital_signs vs1
-            INNER JOIN (
-                SELECT patient_id, MAX(measured_at) AS max_measured_at
-                FROM vital_signs
-                WHERE patient_id IS NOT NULL
-                GROUP BY patient_id
-            ) vs2 ON vs1.patient_id = vs2.patient_id AND vs1.measured_at = vs2.max_measured_at
-        ) vs ON vs.patient_id = pt.person_id
+        LEFT JOIN ape_records ape_bmi ON ape_bmi.ape_id = (
+            SELECT ar_latest.ape_id
+            FROM ape_records ar_latest
+            WHERE ar_latest.patient_id = pt.person_id
+              AND ar_latest.patient_vitals_status = 'Confirmed'
+              AND (ar_latest.patient_height_cm IS NOT NULL OR ar_latest.patient_weight_kg IS NOT NULL OR ar_latest.patient_bmi IS NOT NULL)
+            ORDER BY COALESCE(ar_latest.patient_vitals_confirmed_at, ar_latest.exam_date, ar_latest.created_at) DESC, ar_latest.ape_id DESC
+            LIMIT 1
+        )
         WHERE pt.emergency_token = ? AND pt.token_enabled = 1
         LIMIT 1
     ");
@@ -1401,47 +1400,29 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
             </div>
           </div>
           
-          <?php if (!empty($patient['height_cm']) || !empty($patient['weight_kg']) || !empty($patient['temperature']) || !empty($patient['blood_pressure']) || !empty($patient['pulse_rate'])): ?>
+          <?php if (!empty($patient['height_cm']) || !empty($patient['weight_kg']) || !empty($patient['bmi'])): ?>
           <div class="pp-info-panel pp-priority-card" style="grid-column: span 2; border-color: #e2e8f0; background: #faf5ff; margin-top: 1rem;">
             <div class="pp-label">
               <span class="material-symbols-outlined" aria-hidden="true" style="color:#7c3aed;">monitor_heart</span>
-              Vital Signs & Measurements
+              BMI
             </div>
-            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-top: 0.5rem; font-size: 0.825rem; font-weight: bold; color: #4b5563;">
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 0.5rem; font-size: 0.825rem; font-weight: bold; color: #4b5563;">
               <?php if (!empty($patient['height_cm'])): ?>
                 <div>
                   <div style="font-size: 0.7rem; color: #9ca3af;">Height</div>
-                  <div><?= pp_e($patient['height_cm']) ?> cm</div>
+                  <div><?= pp_e(number_format((float) $patient['height_cm'], 2)) ?> cm</div>
                 </div>
               <?php endif; ?>
               <?php if (!empty($patient['weight_kg'])): ?>
                 <div>
                   <div style="font-size: 0.7rem; color: #9ca3af;">Weight</div>
-                  <div><?= pp_e($patient['weight_kg']) ?> kg</div>
+                  <div><?= pp_e(number_format((float) $patient['weight_kg'], 2)) ?> kg</div>
                 </div>
               <?php endif; ?>
               <?php if (!empty($patient['bmi'])): ?>
                 <div>
                   <div style="font-size: 0.7rem; color: #9ca3af;">BMI</div>
-                  <div><?= pp_e($patient['bmi']) ?></div>
-                </div>
-              <?php endif; ?>
-              <?php if (!empty($patient['temperature'])): ?>
-                <div>
-                  <div style="font-size: 0.7rem; color: #9ca3af;">Temperature</div>
-                  <div><?= pp_e(number_format((float) $patient['temperature'], 2)) ?> °C</div>
-                </div>
-              <?php endif; ?>
-              <?php if (!empty($patient['blood_pressure'])): ?>
-                <div>
-                  <div style="font-size: 0.7rem; color: #9ca3af;">Blood Pressure</div>
-                  <div><?= pp_e($patient['blood_pressure']) ?></div>
-                </div>
-              <?php endif; ?>
-              <?php if (!empty($patient['pulse_rate'])): ?>
-                <div>
-                  <div style="font-size: 0.7rem; color: #9ca3af;">Pulse Rate</div>
-                  <div><?= pp_e($patient['pulse_rate']) ?> bpm</div>
+                  <div><?= pp_e(number_format((float) $patient['bmi'], 2)) ?></div>
                 </div>
               <?php endif; ?>
             </div>

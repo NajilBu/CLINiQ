@@ -208,7 +208,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'Category: ' . $form['category'] . "\n" .
             ($form['category'] === 'Student' ? 'Section: ' : 'Department: ') . $form['department'] . "\n" .
             'Reason: ' . $form['reason'] . "\n" .
-            'Visitor notes: ' . $form['chief_complaint']
+            'Patient Concerns: ' . $form['chief_complaint']
         );
         cliniq_visit_create([
             'patient_person_id' => (int) $matchedPatient['person_id'],
@@ -649,7 +649,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
 
                     <div>
-                        <label class="visit-label" for="chief_complaint" id="chiefComplaintLabel">Chief Complaint</label>
+                        <label class="visit-label" for="chief_complaint" id="chiefComplaintLabel">Patient Concerns</label>
                         <div class="visit-field">
                             <span class="material-symbols-outlined textarea-icon">notes</span>
                             <textarea class="visit-input visit-notes <?= isset($errors['chief_complaint']) ? 'input-error' : '' ?>" id="chief_complaint" name="chief_complaint" rows="2" placeholder="Briefly describe your symptoms or reason for visiting..." required><?= e($form['chief_complaint']) ?></textarea>
@@ -779,10 +779,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             chiefComplaint.required = !isBorrowing;
             chiefComplaint.placeholder = isBorrowing
                 ? 'Optional notes, return reminder, or equipment purpose...'
-                : 'Briefly describe your symptoms or reason for visiting...';
+                : 'Briefly describe your concern, symptoms, or reason for visiting...';
         }
         if (chiefComplaintLabel) {
-            chiefComplaintLabel.textContent = isBorrowing ? 'Notes' : 'Chief Complaint';
+            chiefComplaintLabel.textContent = isBorrowing ? 'Notes' : 'Patient Concerns';
         }
         if (visitorSubmitLabel) {
             visitorSubmitLabel.textContent = isBorrowing ? 'Record Equipment Loan' : 'Register Clinic Visit';
