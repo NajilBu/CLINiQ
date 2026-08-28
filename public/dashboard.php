@@ -647,16 +647,20 @@ render_header('Main Dashboard');
                                     <article class="dashboard-calendar-event <?= $isPlaceholder ? 'is-placeholder' : '' ?>"
                                         style="top: calc(<?= number_format($top, 4, '.', '') ?>% + 2px); height: calc(<?= number_format($height, 4, '.', '') ?>% - 4px); left: calc(<?= number_format($left, 4, '.', '') ?>% + 3px); width: calc(<?= number_format($width, 4, '.', '') ?>% - 6px);"
                                         title="<?= e($fullName . ' — ' . $apt['purpose'] . ' — ' . $time . ' to ' . $endTime) ?>">
-                                        <div class="dashboard-calendar-event-time">
-                                            <span class="material-symbols-outlined" aria-hidden="true">schedule</span>
-                                            <?= e($time) ?>–<?= e($endTime) ?>
-                                            <?php if ($isPlaceholder): ?><span class="dashboard-calendar-sample-badge">Sample</span><?php endif; ?>
+                                        <div class="dashboard-calendar-event-main">
+                                            <div class="dashboard-calendar-event-details">
+                                                <div class="dashboard-calendar-event-time">
+                                                    <span class="material-symbols-outlined" aria-hidden="true">schedule</span>
+                                                    <?= e($time) ?>–<?= e($endTime) ?>
+                                                    <?php if ($isPlaceholder): ?><span class="dashboard-calendar-sample-badge">Sample</span><?php endif; ?>
+                                                </div>
+                                                <strong><?= e($fullName) ?></strong>
+                                                <span><?= e($apt['id_number']) ?> &bull; <?= e($apt['purpose']) ?></span>
+                                            </div>
+                                            <?php if (($apt['status'] ?? '') === 'For Confirmation'): ?>
+                                                <span class="dashboard-calendar-event-status badge badge-pending">For Confirmation</span>
+                                            <?php endif; ?>
                                         </div>
-                                        <strong><?= e($fullName) ?></strong>
-                                        <span><?= e($apt['id_number']) ?> &bull; <?= e($apt['purpose']) ?></span>
-                                        <?php if (($apt['status'] ?? '') === 'For Confirmation'): ?>
-                                            <span class="badge badge-pending text-[9px] mt-1">For Confirmation</span>
-                                        <?php endif; ?>
                                     </article>
                                 <?php endforeach; ?>
                             </div>

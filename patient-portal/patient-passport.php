@@ -344,12 +344,12 @@ render_student_header('Emergency Health Passport', 'passport');
         </section>
 
         <!-- Save button -->
-        <div class="flex gap-3">
-            <button type="submit" class="student-button" style="flex:1;">
+        <div class="passport-action-row">
+            <button type="submit" class="student-button passport-save-button">
                 <span class="material-symbols-outlined">save</span>
                 Save Passport Settings
             </button>
-            <a href="<?= student_e($passportUrl) ?>" target="_blank" class="student-button-secondary text-decoration-none" style="white-space:nowrap;">
+            <a href="<?= student_e($passportUrl) ?>" target="_blank" class="student-button-secondary passport-preview-button text-decoration-none">
                 <span class="material-symbols-outlined">open_in_new</span>
                 View Live Passport
             </a>

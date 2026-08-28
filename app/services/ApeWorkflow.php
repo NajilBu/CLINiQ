@@ -74,6 +74,10 @@ function ape_record_queue(array $record): string
         return 'follow_up';
     }
 
+    if (($record['workflow_status'] ?? '') === 'Reviewed') {
+        return 'final_decision';
+    }
+
     if (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed' || empty($record['exam_date']) || ($record['requirement_status'] ?? '') !== 'Pre-Verified') {
         return 'examination';
     }

@@ -204,6 +204,13 @@ html:has(.student-body) body {
     font-weight: 500;
 }
 
+.student-profile-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex: 0 0 auto;
+}
+
 .student-logout {
     display: inline-flex;
     align-items: center;
@@ -505,6 +512,28 @@ html:has(.student-body) body {
     color: var(--student-danger);
     background: var(--student-danger-soft);
     border-color: #fecaca;
+}
+
+.passport-action-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+}
+
+.passport-action-row .student-button,
+.passport-action-row .student-button-secondary {
+    min-height: 2.75rem;
+    padding-block: 0.72rem;
+}
+
+.passport-save-button {
+    flex: 0 1 19rem;
+}
+
+.passport-preview-button {
+    flex: 0 0 auto;
+    white-space: nowrap;
 }
 
 .student-button-disabled,
@@ -1262,9 +1291,34 @@ html:has(.student-body) body {
 }
 
 .ape-staged-file-name {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
     color: #2f6f45 !important;
     font-weight: 900 !important;
     overflow-wrap: anywhere;
+}
+
+.ape-staged-file-preview {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    padding: 0.18rem 0.5rem;
+    border: 1px solid rgba(47, 111, 69, 0.18);
+    border-radius: 999px;
+    background: #f2faf4;
+    color: #116031;
+    font: inherit;
+    font-size: 0.78rem;
+    line-height: 1.3;
+    text-align: left;
+    cursor: pointer;
+}
+
+.ape-staged-file-preview:hover {
+    border-color: rgba(47, 111, 69, 0.42);
+    background: #e4f5ea;
 }
 
 .ape-batch-submit-bar {
@@ -1595,26 +1649,50 @@ body.student-time-modal-open {
     }
 
     .student-topbar {
-        align-items: stretch;
-        flex-direction: column;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+            "brand actions"
+            "nav nav"
+            "profile profile";
+        align-items: center;
         gap: 0.75rem;
     }
 
-    .student-brand,
-    .student-profile-chip {
-        width: 100%;
+    .student-brand {
+        grid-area: brand;
+        width: auto;
         min-width: 0;
     }
 
     .student-profile-chip {
-        justify-content: space-between;
+        display: contents;
+    }
+
+    .student-profile-actions {
+        grid-area: actions;
+        justify-self: end;
+    }
+
+    .student-profile-text {
+        grid-area: profile;
     }
 
     .student-profile-text {
         align-items: flex-start;
+        min-width: 0;
+    }
+
+    .student-profile-text strong,
+    .student-profile-text span {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
     .student-nav {
+        grid-area: nav;
         width: 100%;
         overflow-x: auto;
         justify-content: flex-start;
@@ -2284,14 +2362,14 @@ body.student-time-modal-open {
         overflow-wrap: anywhere;
     }
 
-    #passport-form .student-span-7 > .flex.gap-3,
+    #passport-form .student-span-7 > .passport-action-row,
     #passport-form .flex.gap-2 {
         align-items: stretch;
         flex-direction: column;
     }
 
-    #passport-form .student-span-7 > .flex.gap-3 .student-button,
-    #passport-form .student-span-7 > .flex.gap-3 .student-button-secondary,
+    #passport-form .student-span-7 > .passport-action-row .student-button,
+    #passport-form .student-span-7 > .passport-action-row .student-button-secondary,
     #passport-form .flex.gap-2 .student-button-secondary {
         width: 100%;
         white-space: normal !important;

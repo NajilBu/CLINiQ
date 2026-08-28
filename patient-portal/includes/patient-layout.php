@@ -408,14 +408,16 @@ function render_student_header(string $title, string $active = ''): void
                         <strong><?= student_e($profile['name']) ?></strong>
                         <span><?= student_e($profile['student_id']) ?></span>
                     </div>
-                    <?php if (empty($profile['first_registration'])): ?>
-                        <button type="button" onclick="document.getElementById('change-password-modal').classList.remove('hidden')" class="student-logout text-decoration-none" title="Change Password">
-                            <span class="material-symbols-outlined">key</span>
-                        </button>
-                    <?php endif; ?>
-                    <a href="patient-login.php?logout=1" onclick="localStorage.clear();" class="student-logout text-decoration-none" title="Logout">
-                        <span class="material-symbols-outlined">logout</span>
-                    </a>
+                    <div class="student-profile-actions">
+                        <?php if (empty($profile['first_registration'])): ?>
+                            <button type="button" onclick="document.getElementById('change-password-modal').classList.remove('hidden')" class="student-logout text-decoration-none" title="Change Password">
+                                <span class="material-symbols-outlined">key</span>
+                            </button>
+                        <?php endif; ?>
+                        <a href="patient-login.php?logout=1" onclick="localStorage.clear();" class="student-logout text-decoration-none" title="Logout">
+                            <span class="material-symbols-outlined">logout</span>
+                        </a>
+                    </div>
                 </div>
             </header>
 

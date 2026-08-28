@@ -161,6 +161,7 @@ $student = [
 
 $allergies = pp_split_lines($patient['allergies'] ?? null, ['No allergies recorded']);
 $conditions = pp_split_lines($patient['existing_conditions'] ?? null, ['No existing conditions recorded']);
+$medications = pp_split_lines($patient['medications'] ?? null, ['No current medications recorded']);
 $instructions = pp_split_lines($patient['emergency_instructions'] ?? null, [
     'Provide immediate first aid as needed.',
     'Notify the school clinic immediately.',
@@ -432,7 +433,7 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
     }
 
     .pp-shell {
-      width: min(100% - 2rem, 88rem);
+      width: min(100% - 2rem, 36rem);
       margin: 0 auto;
       padding: 1.25rem 0 2rem;
     }
@@ -498,7 +499,7 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
 
     .pp-grid {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(26rem, 0.92fr);
+      grid-template-columns: minmax(0, 1fr);
       gap: 1rem;
       align-items: start;
     }
@@ -627,7 +628,7 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
 
     .pp-info-grid {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: 1fr;
       gap: 0.75rem;
       padding: 1rem;
     }
@@ -649,6 +650,7 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
       padding: 1rem;
       border-color: #cfe6d6;
       background: linear-gradient(180deg, #ffffff 0%, #fbfffc 100%);
+      overflow: hidden;
     }
 
     .pp-priority-card::before {
@@ -657,7 +659,7 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
       inset: 0 auto 0 0;
       width: 4px;
       background: var(--primary);
-      border-radius: 0.75rem 0 0 0.75rem;
+      border-radius: 0;
     }
 
     .pp-priority-card.allergy-focus {
@@ -685,6 +687,61 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
 
     .pp-priority-card.medication-focus::before {
       background: var(--primary);
+    }
+
+    .pp-bmi-card {
+      min-height: auto;
+      padding: 1rem 1rem 1.05rem 1.1rem;
+      border-color: #d8c8ff;
+      background:
+        radial-gradient(circle at top right, rgba(124, 58, 237, 0.11), transparent 42%),
+        linear-gradient(180deg, #ffffff 0%, #faf7ff 100%);
+    }
+
+    .pp-bmi-card::before {
+      background: linear-gradient(180deg, var(--primary), #7c3aed);
+    }
+
+    .pp-bmi-card .pp-label {
+      margin-bottom: 0.85rem;
+    }
+
+    .pp-bmi-card .pp-label .material-symbols-outlined {
+      background: linear-gradient(135deg, var(--primary), #7c3aed);
+    }
+
+    .pp-bmi-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.65rem;
+    }
+
+    .pp-bmi-metric {
+      min-width: 0;
+      padding: 0.75rem 0.7rem;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid rgba(216, 200, 255, 0.85);
+      border-radius: 0.75rem;
+      box-shadow: 0 8px 18px rgba(124, 58, 237, 0.06);
+    }
+
+    .pp-bmi-metric span {
+      display: block;
+      margin-bottom: 0.25rem;
+      color: #8b95a7;
+      font-size: 0.62rem;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .pp-bmi-metric strong {
+      display: block;
+      color: #273449;
+      font-size: clamp(0.92rem, 2.5vw, 1.08rem);
+      font-weight: 900;
+      line-height: 1.12;
+      white-space: nowrap;
     }
 
     .pp-label {
@@ -780,20 +837,38 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
 
     .pp-instructions {
       grid-column: 1 / -1;
+      position: relative;
       display: grid;
       grid-template-columns: auto 1fr;
       gap: 0.75rem;
-      padding: 0.95rem;
+      padding: 1rem 1rem 1rem 1.1rem;
       color: var(--warning);
       background: var(--warning-soft);
       border: 1px solid var(--warning-border);
-      border-left: 4px solid #f59e0b;
       border-radius: 0.75rem;
+      overflow: hidden;
+    }
+
+    .pp-instructions::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 4px;
+      background: #f59e0b;
+      border-radius: 0;
     }
 
     .pp-instructions .material-symbols-outlined {
+      position: relative;
+      z-index: 1;
       color: #f59e0b;
       font-size: 1.35rem;
+    }
+
+    .pp-instructions > div {
+      position: relative;
+      z-index: 1;
+      min-width: 0;
     }
 
     .pp-instructions ul {
@@ -807,6 +882,14 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
     .pp-contact-card {
       display: grid;
       gap: 0.9rem;
+    }
+
+    .pp-contact-priority-slot {
+      padding: 1rem 1rem 0;
+    }
+
+    .pp-contact-priority-slot:empty {
+      display: none;
     }
 
     .pp-section-head {
@@ -1169,16 +1252,8 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
     }
 
     @media (max-width: 960px) {
-      .pp-grid {
-        grid-template-columns: 1fr;
-      }
-
       .pp-form {
         grid-template-columns: 1fr;
-      }
-
-      .pp-info-grid {
-        grid-template-columns: 1fr 1fr;
       }
     }
 
@@ -1198,7 +1273,7 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
       }
 
       .pp-shell {
-        width: min(100% - 1rem, 74rem);
+        width: min(100% - 1rem, 36rem);
         padding-top: 0.7rem;
       }
 
@@ -1273,6 +1348,14 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
       .pp-priority-card .pp-tag {
         min-height: 2rem;
         font-size: 0.92rem;
+      }
+
+      .pp-bmi-metrics {
+        gap: 0.5rem;
+      }
+
+      .pp-bmi-metric {
+        padding: 0.65rem 0.55rem;
       }
 
       .pp-contact-card .pp-actions #notifyClinicBtn {
@@ -1351,6 +1434,8 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
             </div>
           </div>
 
+          <div id="ppContactPrioritySlot" class="pp-contact-priority-slot"></div>
+
           <div class="pp-info-grid">
             <div class="pp-info-panel pp-priority-card allergy-focus">
               <div class="pp-label">
@@ -1382,8 +1467,9 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
                 Medication
               </div>
               <ul class="pp-list">
-                <li>Salbutamol inhaler as needed</li>
-                <li>Check bag first</li>
+                <?php foreach ($medications as $medication): ?>
+                  <li><?= pp_e($medication) ?></li>
+                <?php endforeach; ?>
               </ul>
             </div>
 
@@ -1398,36 +1484,36 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
                 </ul>
               </div>
             </div>
-          </div>
           
-          <?php if (!empty($patient['height_cm']) || !empty($patient['weight_kg']) || !empty($patient['bmi'])): ?>
-          <div class="pp-info-panel pp-priority-card" style="grid-column: span 2; border-color: #e2e8f0; background: #faf5ff; margin-top: 1rem;">
-            <div class="pp-label">
-              <span class="material-symbols-outlined" aria-hidden="true" style="color:#7c3aed;">monitor_heart</span>
-              BMI
+            <?php if (!empty($patient['height_cm']) || !empty($patient['weight_kg']) || !empty($patient['bmi'])): ?>
+            <div class="pp-info-panel pp-priority-card pp-bmi-card">
+              <div class="pp-label">
+                <span class="material-symbols-outlined" aria-hidden="true" style="color:#7c3aed;">monitor_heart</span>
+                BMI
+              </div>
+              <div class="pp-bmi-metrics">
+                <?php if (!empty($patient['height_cm'])): ?>
+                  <div class="pp-bmi-metric">
+                    <span>Height</span>
+                    <strong><?= pp_e(number_format((float) $patient['height_cm'], 2)) ?> cm</strong>
+                  </div>
+                <?php endif; ?>
+                <?php if (!empty($patient['weight_kg'])): ?>
+                  <div class="pp-bmi-metric">
+                    <span>Weight</span>
+                    <strong><?= pp_e(number_format((float) $patient['weight_kg'], 2)) ?> kg</strong>
+                  </div>
+                <?php endif; ?>
+                <?php if (!empty($patient['bmi'])): ?>
+                  <div class="pp-bmi-metric">
+                    <span>BMI</span>
+                    <strong><?= pp_e(number_format((float) $patient['bmi'], 2)) ?></strong>
+                  </div>
+                <?php endif; ?>
+              </div>
             </div>
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 0.5rem; font-size: 0.825rem; font-weight: bold; color: #4b5563;">
-              <?php if (!empty($patient['height_cm'])): ?>
-                <div>
-                  <div style="font-size: 0.7rem; color: #9ca3af;">Height</div>
-                  <div><?= pp_e(number_format((float) $patient['height_cm'], 2)) ?> cm</div>
-                </div>
-              <?php endif; ?>
-              <?php if (!empty($patient['weight_kg'])): ?>
-                <div>
-                  <div style="font-size: 0.7rem; color: #9ca3af;">Weight</div>
-                  <div><?= pp_e(number_format((float) $patient['weight_kg'], 2)) ?> kg</div>
-                </div>
-              <?php endif; ?>
-              <?php if (!empty($patient['bmi'])): ?>
-                <div>
-                  <div style="font-size: 0.7rem; color: #9ca3af;">BMI</div>
-                  <div><?= pp_e(number_format((float) $patient['bmi'], 2)) ?></div>
-                </div>
-              <?php endif; ?>
-            </div>
+            <?php endif; ?>
           </div>
-          <?php endif; ?>
         </div>
       </section>
 
@@ -1658,6 +1744,12 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
   </div>
 
   <script>
+    const contactPrioritySlot = document.getElementById('ppContactPrioritySlot');
+    const contactCard = document.querySelector('.pp-contact-card');
+    if (contactPrioritySlot && contactCard) {
+      contactPrioritySlot.appendChild(contactCard);
+    }
+
     const notifyBtn = document.getElementById('notifyClinicBtn');
     const stickyNotifyBtn = document.getElementById('stickyNotifyBtn');
     const drawer = document.getElementById('incidentDrawer');

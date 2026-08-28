@@ -2753,9 +2753,11 @@ textarea.record-sheet-field {
     display: flex;
     flex-direction: column;
     justify-content: center;
+    min-width: 0;
+    max-width: 100%;
     min-height: 2.8rem;
     overflow: hidden;
-    padding: 0.38rem 0.65rem;
+    padding: 0.34rem 0.55rem;
     border: 1px solid color-mix(in srgb, var(--cliniq-primary) 28%, #cbd5e1);
     border-left: 4px solid var(--cliniq-primary);
     border-radius: 0.65rem;
@@ -2768,7 +2770,6 @@ textarea.record-sheet-field {
 
 .dashboard-calendar-event:hover {
     z-index: 2;
-    overflow: visible;
     box-shadow: 0 7px 18px rgba(15, 23, 42, 0.16);
     transform: translateY(-1px);
 }
@@ -2779,11 +2780,30 @@ textarea.record-sheet-field {
     box-shadow: none;
 }
 
+.dashboard-calendar-event-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: 100%;
+    min-width: 0;
+}
+
+.dashboard-calendar-event-details {
+    display: flex;
+    min-width: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+}
+
 .dashboard-calendar-event-time {
     display: flex;
     align-items: center;
     gap: 0.25rem;
     min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
     color: var(--cliniq-primary);
     font-size: 0.64rem;
     font-weight: 900;
@@ -2795,8 +2815,10 @@ textarea.record-sheet-field {
 }
 
 .dashboard-calendar-event strong,
-.dashboard-calendar-event > span {
+.dashboard-calendar-event-details > span:not(.badge) {
     display: block;
+    min-width: 0;
+    max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -2807,11 +2829,24 @@ textarea.record-sheet-field {
     font-size: 0.78rem;
 }
 
-.dashboard-calendar-event > span {
+.dashboard-calendar-event-details > span:not(.badge) {
     margin-top: 0.1rem;
     color: #64748b;
     font-size: 0.65rem;
     font-weight: 700;
+}
+
+.dashboard-calendar-event-status {
+    flex: 0 0 auto;
+    max-width: 42%;
+    margin-top: 0.14rem;
+    padding: 0.12rem 0.45rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.52rem;
+    line-height: 1.05;
+    letter-spacing: 0.16em;
 }
 
 .dashboard-calendar-sample-badge {

@@ -111,25 +111,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new RuntimeException("{$requiredType} still needs a corrected upload before the submission can be archived.");
                 }
             }
-            $approvableIds = array_map(
-                static fn(array $document): int => (int) $document['document_id'],
-                array_values(array_filter($currentRows, static fn(array $document): bool => $document['verification_status'] === 'Pending'))
-            );
             if (!$currentRows) {
                 throw new RuntimeException('All five required APE documents must be uploaded before archiving the submission.');
             }
             $nextWorkflow = (int) ($record['follow_up_required'] ?? 0) === 1 ? 'Follow-up Required' : 'Reviewed';
             $nextClearance = (int) ($record['follow_up_required'] ?? 0) === 1 ? 'For Follow-up' : 'Pending';
-            if ($approvableIds) {
-                $approvePlaceholders = implode(',', array_fill(0, count($approvableIds), '?'));
-                $documents = $apeDb->prepare("UPDATE ape_documents SET verification_status = 'Verified', verified_by_person_id = ?, verified_at = NOW() WHERE ape_id = ? AND document_id IN ({$approvePlaceholders})");
-                $documents->execute(array_merge([$staffPersonId, $id], $approvableIds));
-            }
-            $requirements = $apeDb->prepare("UPDATE ape_requirements SET status = 'Verified', remarks = NULL, checked_by_person_id = ?, checked_at = NOW() WHERE ape_id = ? AND requirement_name IN ({$requiredPlaceholders})");
-            $requirements->execute(array_merge([$staffPersonId, $id], $requiredTypes));
+            $requirements = $apeDb->prepare("UPDATE ape_requirements SET status = 'Submitted', remarks = NULL, checked_by_person_id = NULL, checked_at = NULL WHERE ape_id = ? AND requirement_name IN ({$requiredPlaceholders})");
+            $requirements->execute(array_merge([$id], $requiredTypes));
             $stmt = $apeDb->prepare('UPDATE ape_records SET workflow_status = ?, clearance_status = ?, reviewed_by_person_id = ? WHERE ape_id = ?');
             $stmt->execute([$nextWorkflow, $nextClearance, $staffPersonId, $id]);
-            $activityLabel = 'Archived online APE documents';
+            $activityLabel = 'Moved APE documents to final decision';
         } elseif ($action === 'request_document_correction') {
             if (empty($record['exam_date'])) {
                 throw new RuntimeException('Record the clinical examination before reviewing digital documents.');
@@ -147,11 +138,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                   AND d.document_id IN ({$documentPlaceholders})
                   AND d.document_type <> 'Clearance'
                   AND d.verification_status = 'Pending'
-                  AND d.document_id = (
-                      SELECT MAX(latest.document_id)
-                      FROM ape_documents latest
-                      WHERE latest.ape_id = d.ape_id AND latest.document_type = d.document_type
-                  )
                 FOR UPDATE
             ");
             $selectedDocuments->execute(array_merge([$id], $documentIds));
@@ -244,6 +230,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (ape_record_queue($record) !== 'final_decision' || empty($record['exam_date'])) {
                 throw new RuntimeException('The examination and document archive must be complete before clearing the patient.');
             }
+            $requiredTypes = ape_default_requirements();
+            $requiredPlaceholders = implode(',', array_fill(0, count($requiredTypes), '?'));
+            $documents = $apeDb->prepare("UPDATE ape_documents SET verification_status = 'Verified', verified_by_person_id = ?, verified_at = NOW() WHERE ape_id = ? AND document_type IN ({$requiredPlaceholders}) AND verification_status = 'Pending'");
+            $documents->execute(array_merge([$staffPersonId, $id], $requiredTypes));
+            $requirements = $apeDb->prepare("UPDATE ape_requirements SET status = 'Verified', remarks = NULL, checked_by_person_id = ?, checked_at = NOW() WHERE ape_id = ? AND requirement_name IN ({$requiredPlaceholders})");
+            $requirements->execute(array_merge([$staffPersonId, $id], $requiredTypes));
             $patientNote = trim((string) ($_POST['patient_visible_note'] ?? '')) ?: ($record['patient_visible_note'] ?? null);
             $stmt = $apeDb->prepare("UPDATE ape_records SET workflow_status = 'Cleared', clearance_status = 'Cleared', follow_up_required = 0, patient_visible_note = ?, reviewed_by_person_id = ? WHERE ape_id = ? AND workflow_status IN ('Exam Done', 'Reviewed')");
             $stmt->execute([$patientNote, $staffPersonId, $id]);
@@ -256,6 +248,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (ape_record_queue($record) !== 'final_decision') {
                 throw new RuntimeException('The examination and document archive must be complete before requiring follow-up.');
             }
+            $requiredTypes = ape_default_requirements();
+            $requiredPlaceholders = implode(',', array_fill(0, count($requiredTypes), '?'));
+            $documents = $apeDb->prepare("UPDATE ape_documents SET verification_status = 'Verified', verified_by_person_id = ?, verified_at = NOW() WHERE ape_id = ? AND document_type IN ({$requiredPlaceholders}) AND verification_status = 'Pending'");
+            $documents->execute(array_merge([$staffPersonId, $id], $requiredTypes));
+            $requirements = $apeDb->prepare("UPDATE ape_requirements SET status = 'Verified', remarks = NULL, checked_by_person_id = ?, checked_at = NOW() WHERE ape_id = ? AND requirement_name IN ({$requiredPlaceholders})");
+            $requirements->execute(array_merge([$staffPersonId, $id], $requiredTypes));
             $followUpNotes = trim((string) ($_POST['follow_up_notes'] ?? ''));
             if ($followUpNotes === '') {
                 throw new InvalidArgumentException('Enter the follow-up required from the patient.');
@@ -348,14 +346,9 @@ $reviewDocuments = array_values(array_filter(
     $documents,
     static fn(array $document): bool => ($document['document_type'] ?? '') !== 'Clearance'
 ));
-$latestReviewDocumentIdsByType = [];
-foreach ($reviewDocuments as $reviewDocument) {
-    $latestReviewDocumentIdsByType[$reviewDocument['document_type']] ??= (int) $reviewDocument['document_id'];
-}
 $pendingReviewDocuments = array_values(array_filter(
     $reviewDocuments,
     static fn(array $document): bool => ($document['verification_status'] ?? '') === 'Pending'
-        && ($latestReviewDocumentIdsByType[$document['document_type']] ?? 0) === (int) $document['document_id']
 ));
 $findings = ape_findings_for_record($id);
 $activities = ape_activities_for_patient_record($id, (int) $record['patient_id'], 20);
@@ -671,8 +664,7 @@ render_header('APE Record - ' . $fullName);
                             </div>
                             <div class="ape-document-review-list">
                                 <?php foreach ($reviewDocuments as $document): ?>
-                                    <?php $canRequestCorrection = ($document['verification_status'] ?? '') === 'Pending'
-                                        && ($latestReviewDocumentIdsByType[$document['document_type']] ?? 0) === (int) $document['document_id']; ?>
+                                    <?php $canRequestCorrection = ($document['verification_status'] ?? '') === 'Pending'; ?>
                                     <div class="ape-document-review-card">
                                         <?php if ($canRequestCorrection): ?>
                                             <input type="checkbox" name="document_ids[]" value="<?= (int) $document['document_id'] ?>" form="apeCorrectionForm" aria-label="Select <?= e($document['document_type']) ?> for correction">
