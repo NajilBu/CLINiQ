@@ -47,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confi
         if ($stmt->rowCount() !== 1) {
             throw new RuntimeException('The vitals could not be confirmed. Refresh and try again.');
         }
-        ape_log_activity((int) $apeRecord['ape_id'], $patientId, 'Confirmed patient-entered vitals and BMI', 'Patient completed the vitals profile before presenting hard-copy requirements.');
+        ape_log_activity((int) $apeRecord['ape_id'], $patientId, 'Confirmed patient-entered vitals and BMI', 'Patient completed the vitals profile before clinic examination.');
         header('Location: patient-ape-status.php?vitals_confirmed=1');
         exit;
     } catch (Throwable $e) {
@@ -64,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
         $requirementsVerifiedForUpload = ($apeRecord['requirement_status'] ?? '') === 'Pre-Verified'
             || in_array(($apeRecord['workflow_status'] ?? ''), ['Requirements Checked', 'Submitted', 'Reviewed', 'Scheduled', 'Exam Done', 'Follow-up Required'], true);
         if (!$requirementsVerifiedForUpload || empty($apeRecord['exam_date']) || ($apeRecord['clearance_status'] ?? '') === 'Cleared') {
-            throw new RuntimeException('Document upload opens only after the clinical examination and hard-copy review are complete.');
+            throw new RuntimeException('Document upload opens only after the clinical examination is complete.');
         }
 
         $latestExistingByType = [];
@@ -73,22 +73,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
         }
         $batchFiles = $_FILES['documents'] ?? [];
         foreach ($batchDocumentTypes as $documentKey => $documentType) {
-            $error = (int) ($batchFiles['error'][$documentKey] ?? UPLOAD_ERR_NO_FILE);
-            if ($error === UPLOAD_ERR_NO_FILE) {
+            $errors = $batchFiles['error'][$documentKey] ?? UPLOAD_ERR_NO_FILE;
+            if (!is_array($errors)) {
+                $errors = [$errors];
+            }
+            if (count(array_filter($errors, static fn($error): bool => (int) $error !== UPLOAD_ERR_NO_FILE)) === 0) {
                 continue;
             }
             $latestExisting = $latestExistingByType[$documentType] ?? null;
             if ($latestExisting && ($latestExisting['verification_status'] ?? '') !== 'Needs Correction') {
                 throw new RuntimeException($documentType . ' cannot be replaced while it is verified or under clinic review.');
             }
-            $file = [
-                'name' => $batchFiles['name'][$documentKey] ?? '',
-                'type' => $batchFiles['type'][$documentKey] ?? '',
-                'tmp_name' => $batchFiles['tmp_name'][$documentKey] ?? '',
-                'error' => $error,
-                'size' => $batchFiles['size'][$documentKey] ?? 0,
-            ];
-            $storedFiles[$documentType] = ape_store_uploaded_file($file, 'patient-ape');
+            foreach ($errors as $fileIndex => $error) {
+                if ((int) $error === UPLOAD_ERR_NO_FILE) {
+                    continue;
+                }
+                $file = [
+                    'name' => $batchFiles['name'][$documentKey][$fileIndex] ?? '',
+                    'type' => $batchFiles['type'][$documentKey][$fileIndex] ?? '',
+                    'tmp_name' => $batchFiles['tmp_name'][$documentKey][$fileIndex] ?? '',
+                    'error' => (int) $error,
+                    'size' => $batchFiles['size'][$documentKey][$fileIndex] ?? 0,
+                ];
+                $storedFiles[] = [
+                    'document_type' => $documentType,
+                    'file' => ape_store_uploaded_file($file, 'patient-ape'),
+                ];
+            }
         }
         if (!$storedFiles) {
             throw new InvalidArgumentException('Select at least one APE document before submitting.');
@@ -107,7 +118,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
             SET status = 'Submitted', remarks = NULL, checked_by_person_id = NULL, checked_at = NULL
             WHERE ape_id = ? AND requirement_name = ?
         ");
-        foreach ($storedFiles as $documentType => $storedFile) {
+        $updatedRequirements = [];
+        foreach ($storedFiles as $storedUpload) {
+            $documentType = $storedUpload['document_type'];
+            $storedFile = $storedUpload['file'];
             $document->execute([
                 (int) $apeRecord['ape_id'],
                 $documentType,
@@ -115,7 +129,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
                 $storedFile['file_path'],
                 $patientId,
             ]);
-            $requirement->execute([(int) $apeRecord['ape_id'], $documentType]);
+            if (!isset($updatedRequirements[$documentType])) {
+                $requirement->execute([(int) $apeRecord['ape_id'], $documentType]);
+                $updatedRequirements[$documentType] = true;
+            }
         }
         $nextWorkflowStatus = ($apeRecord['workflow_status'] ?? '') === 'Follow-up Required'
             ? 'Follow-up Required'
@@ -126,7 +143,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
             (int) $apeRecord['ape_id'],
             $patientId,
             'Uploaded APE documents',
-            implode(', ', array_keys($storedFiles))
+            implode(', ', array_keys($updatedRequirements))
         );
         $apeDb->commit();
         header('Location: patient-ape-status.php?uploaded=' . count($storedFiles));
@@ -135,8 +152,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
         if (isset($apeDb) && $apeDb->inTransaction()) {
             $apeDb->rollBack();
         }
-        foreach ($storedFiles as $storedFile) {
-            if (is_file($storedFile['absolute_path'])) {
+        foreach ($storedFiles as $storedUpload) {
+            $storedFile = $storedUpload['file'] ?? [];
+            if (!empty($storedFile['absolute_path']) && is_file($storedFile['absolute_path'])) {
                 unlink($storedFile['absolute_path']);
             }
         }
@@ -172,14 +190,13 @@ $canUploadDocuments = $requirementsVerified
     && !$requirementsNeedCorrection
     && $examCompleted
     && $clearanceStatus !== 'Cleared'
-    && in_array($apeStatus, ['Exam Done', 'Submitted', 'Follow-up Required'], true);
+    && in_array($apeStatus, ['Requirements Checked', 'Exam Done', 'Submitted', 'Follow-up Required'], true);
 $nextActionTitle = match (true) {
     $clearanceStatus === 'Cleared' => 'APE completed',
     $requirementsNeedCorrection => 'Return corrected hard-copy requirements',
     $apeStatus === 'Follow-up Required' => 'Complete the required follow-up',
     !$patientVitalsConfirmed => 'Complete your vitals and BMI',
-    !$examCompleted => 'Attend your clinical examination',
-    !$requirementsVerified => 'Present hard-copy requirements to the clinic',
+    !$examCompleted || !$requirementsVerified => 'Attend examination',
     $documentsAwaitingReview => 'Wait for clinic document review',
     $apeStatus === 'Reviewed' => 'Wait for the final clinical decision',
     default => 'Upload verified APE documents',
@@ -189,8 +206,7 @@ $nextActionCopy = match (true) {
     $requirementsNeedCorrection => $studentNote ?: 'Return the corrected hard-copy requirements requested by the clinic.',
     $apeStatus === 'Follow-up Required' => $studentNote ?: 'Complete the referral or other follow-up requested by the clinic.',
     !$patientVitalsConfirmed => 'Enter and confirm your height, weight, BMI, and vital signs before visiting the clinic for examination.',
-    !$examCompleted => $studentNote ?: 'Your vitals are confirmed. Visit the clinic for your APE examination before presenting hard-copy requirements.',
-    !$requirementsVerified => 'Present your hard-copy requirements to the clinic for review. Digital upload opens after they are verified.',
+    !$examCompleted || !$requirementsVerified => $studentNote ?: 'Your vitals are confirmed. Visit the clinic for examination and hard-copy document review.',
     $documentsAwaitingReview => 'Your documents were submitted and are waiting for clinic archive review.',
     $apeStatus === 'Reviewed' => $studentNote ?: 'Your examination and document archive are complete. The clinic will now record the final decision.',
     default => $studentNote ?: ($apeRecord ? 'Complete the current APE step shown below.' : 'No APE record has been opened by the clinic yet.'),
@@ -210,8 +226,7 @@ $actionBadgeLabel = match (true) {
     $requirementsNeedCorrection => 'Correction Needed',
     $apeStatus === 'Follow-up Required' => 'Follow-up Required',
     !$patientVitalsConfirmed => 'Vitals and BMI First',
-    !$examCompleted => 'Examination First',
-    !$requirementsVerified => 'Hard-copy Review Next',
+    !$examCompleted || !$requirementsVerified => 'Examination',
     $documentsAwaitingReview => 'Under Clinic Review',
     $apeStatus === 'Reviewed' => 'Final Decision Pending',
     default => 'Current Step',
@@ -221,27 +236,26 @@ $currentStep = match (true) {
     $apeStatus === 'Follow-up Required' || $clearanceStatus === 'For Follow-up' => 4,
     $apeStatus === 'Reviewed' => 4,
     !$patientVitalsConfirmed => 1,
-    !$examCompleted => 1,
-    !$requirementsVerified => 2,
+    !$examCompleted || !$requirementsVerified => 2,
     default => 3,
 };
 
 $flowSteps = [
     [
         'number' => 1,
-        'icon' => 'task_alt',
-        'title' => 'Clinical examination',
-        'copy' => $examCompleted
-            ? 'Clinic recorded your examination date, result, and findings.'
-            : ($patientVitalsConfirmed ? 'Visit the clinic for examination after confirming your vitals and BMI.' : 'Confirm your vitals and BMI before visiting the clinic.'),
+        'icon' => 'monitor_heart',
+        'title' => 'Patient vitals and BMI',
+        'copy' => $patientVitalsConfirmed
+            ? 'You confirmed your height, weight, BMI, and vital signs.'
+            : 'Enter and confirm your vitals and BMI before visiting the clinic.',
     ],
     [
         'number' => 2,
-        'icon' => 'manage_search',
-        'title' => 'Hard-copy review',
-        'copy' => $requirementsVerified
-            ? 'Clinic checked your physical requirements and noted findings.'
-            : ($examCompleted ? 'Present your hard-copy requirements to the clinic for review.' : 'This begins after the clinical examination is complete.'),
+        'icon' => 'task_alt',
+        'title' => 'Examination',
+        'copy' => $examCompleted && $requirementsVerified
+            ? 'Clinic recorded your examination and checked your hard-copy requirements.'
+            : ($patientVitalsConfirmed ? 'Visit the clinic for examination and bring your hard-copy requirements.' : 'Confirm your vitals and BMI before visiting the clinic.'),
     ],
     [
         'number' => 3,
@@ -249,7 +263,7 @@ $flowSteps = [
         'title' => 'Digital document keeping',
         'copy' => $examCompleted
             ? 'Upload the examined and checked forms for the clinic digital record.'
-            : 'This opens only after the examination and hard-copy review.',
+            : 'This opens only after the clinic examination.',
     ],
     [
         'number' => 4,
@@ -311,9 +325,9 @@ foreach ($documentIcons as $name => $icon) {
             'name' => $name,
             'key' => $documentKey,
             'icon' => $icon,
-            'status' => $requirement['status'] ?? 'Ready to Upload',
+            'status' => 'Ready to Upload',
             'badge' => 'student-badge-warning',
-            'detail' => $requirement['remarks'] ?? 'Upload the checked digital copy for clinic record keeping.',
+            'detail' => $requirement['remarks'] ?? 'Hard copy checked. Upload one or more digital copies for clinic record keeping.',
             'action' => 'Upload',
             'button' => 'student-button',
             'disabled' => false,
@@ -322,8 +336,7 @@ foreach ($documentIcons as $name => $icon) {
         $lockedDetail = match (true) {
             $requirementsNeedCorrection => 'Bring the corrected hard copy back to the clinic before continuing.',
             !$patientVitalsConfirmed => 'Confirm your vitals and BMI before continuing.',
-            !$examCompleted => 'Complete the clinical examination before uploading digital copies.',
-            !$requirementsVerified => 'Clinic staff must verify the hard copy before uploading.',
+            !$examCompleted || !$requirementsVerified => 'Complete the clinic examination before uploading digital copies.',
             default => 'Document upload is locked at the current APE step.',
         };
         $documents[] = [
@@ -405,8 +418,8 @@ render_student_header('APE Status', 'ape');
                 <span class="text-xs font-black text-slate-500 uppercase tracking-wider">Completion</span>
                 <strong class="font-headline text-3xl font-black text-[#17261d]"><?= (int) $apePercent ?>%</strong>
             </div>
-            <div class="w-full h-3 rounded-full bg-[#edf8f0] overflow-hidden mb-5">
-                <div class="h-full bg-[#3F7D52] rounded-full" style="width: <?= (int) $apePercent ?>%;"></div>
+            <div class="w-full h-3 rounded-full bg-primary-fixed overflow-hidden mb-5">
+                <div class="h-full bg-primary rounded-full" style="width: <?= (int) $apePercent ?>%;"></div>
             </div>
             <div class="student-ape-stepper" aria-label="APE progress steps">
                 <?php foreach ($flowSteps as $step): ?>
@@ -441,7 +454,7 @@ render_student_header('APE Status', 'ape');
         <div class="student-card-header">
             <div>
                 <h2 class="student-card-title">Required Documents</h2>
-                <p class="student-card-copy">Upload only documents already checked by the clinic.</p>
+                <p class="student-card-copy">Upload only documents already checked by the clinic. You can attach multiple files per document, up to 10 MB each.</p>
             </div>
             <span class="student-badge <?= student_e($headerBadge) ?>"><?= student_e($clearanceStatus) ?></span>
         </div>
@@ -477,10 +490,10 @@ render_student_header('APE Status', 'ape');
                             </button>
                         <?php else: ?>
                             <div class="student-appointment-actions ape-document-actions" data-document-key="<?= student_e($doc['key']) ?>">
-                                <input class="hidden ape-document-input" type="file" name="documents[<?= student_e($doc['key']) ?>]" id="ape-file-<?= student_e($doc['key']) ?>" accept=".pdf,.png,.jpg,.jpeg" data-document-name="<?= student_e($doc['name']) ?>" onchange="handleApeFileSelected(this)">
+                                <input class="hidden ape-document-input" type="file" name="documents[<?= student_e($doc['key']) ?>][]" id="ape-file-<?= student_e($doc['key']) ?>" accept=".pdf,.png,.jpg,.jpeg" data-document-name="<?= student_e($doc['name']) ?>" onchange="handleApeFileSelected(this)" multiple>
                                 <button class="<?= student_e($doc['button']) ?> ape-select-file" type="button" onclick="selectApeFile('<?= student_e($doc['key']) ?>')">
                                     <span class="material-symbols-outlined">upload</span>
-                                    <span><?= $doc['action'] === 'Replace' ? 'Select Replacement' : 'Select File' ?></span>
+                                    <span><?= $doc['action'] === 'Replace' ? 'Select Replacement Files' : 'Select Files' ?></span>
                                 </button>
                                 <button class="student-button-secondary ape-remove-file hidden" type="button" onclick="removeApeFile('<?= student_e($doc['key']) ?>')">
                                     <span class="material-symbols-outlined">delete</span>
@@ -495,7 +508,7 @@ render_student_header('APE Status', 'ape');
                 <div class="ape-batch-submit-bar">
                     <div>
                         <strong id="ape-selected-summary">No files selected</strong>
-                        <span>Select the documents first. You can change or remove them before submitting.</span>
+                        <span>Select files first. You can change or remove them before submitting. Each file must be 10 MB or smaller.</span>
                     </div>
                     <button class="student-button" id="ape-submit-all" type="submit" disabled>
                         <span class="material-symbols-outlined">cloud_upload</span>
@@ -506,6 +519,27 @@ render_student_header('APE Status', 'ape');
             </form>
         </div>
     </section>
+</div>
+
+<div id="ape-upload-confirm-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+    <div class="student-card w-full max-w-md p-6 shadow-xl">
+        <div class="flex items-start gap-4 mb-6">
+            <span class="student-icon-box">
+                <span class="material-symbols-outlined">cloud_upload</span>
+            </span>
+            <div>
+                <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-2">Submit selected APE documents?</h2>
+                <p class="text-sm font-bold text-slate-500 mb-0">The selected PDF/image files will be uploaded together and sent to the clinic for review.</p>
+            </div>
+        </div>
+        <div class="flex flex-col sm:flex-row justify-end gap-3">
+            <button type="button" class="student-button-secondary justify-center" id="ape-cancel-upload-confirm">Cancel</button>
+            <button type="button" class="student-button justify-center" id="ape-confirm-upload-submit">
+                <span class="material-symbols-outlined">check</span>
+                Confirm Upload
+            </button>
+        </div>
+    </div>
 </div>
 
 <div class="student-grid mt-4">
@@ -711,6 +745,12 @@ render_student_header('APE Status', 'ape');
     }
 
     function handleApeFileSelected(input) {
+        const maxFileSize = 10 * 1024 * 1024;
+        const oversizedFile = Array.from(input.files || []).find((file) => file.size > maxFileSize);
+        if (oversizedFile) {
+            window.alert(`${oversizedFile.name} is larger than 10 MB. Please choose files that are 10 MB or smaller.`);
+            input.value = '';
+        }
         updateApeFileRow(input);
         refreshApeBatchSummary();
     }
@@ -728,17 +768,31 @@ render_student_header('APE Status', 'ape');
         const filename = document.getElementById(`ape-file-name-${documentKey}`);
         const selectLabel = actions.querySelector('.ape-select-file span:last-child');
         const removeButton = actions.querySelector('.ape-remove-file');
-        const selectedFile = input.files && input.files[0] ? input.files[0] : null;
+        const selectedFiles = input.files ? Array.from(input.files) : [];
 
-        if (selectedFile) {
-            filename.textContent = `Selected: ${selectedFile.name}`;
+        if (selectedFiles.length > 0) {
+            filename.replaceChildren();
+            const label = document.createElement('span');
+            label.textContent = `Selected (${selectedFiles.length}):`;
+            filename.appendChild(label);
+            selectedFiles.forEach((file) => {
+                const previewButton = document.createElement('button');
+                previewButton.type = 'button';
+                previewButton.className = 'ape-staged-file-preview';
+                previewButton.dataset.filePreview = '';
+                previewButton.dataset.previewUrl = URL.createObjectURL(file);
+                previewButton.dataset.previewTitle = file.name;
+                previewButton.dataset.previewType = file.type.startsWith('image/') ? 'image' : (file.type === 'application/pdf' ? 'pdf' : 'file');
+                previewButton.textContent = file.name;
+                filename.appendChild(previewButton);
+            });
             filename.classList.remove('hidden');
-            selectLabel.textContent = 'Change File';
+            selectLabel.textContent = 'Change Files';
             removeButton.classList.remove('hidden');
         } else {
-            filename.textContent = '';
+            filename.replaceChildren();
             filename.classList.add('hidden');
-            selectLabel.textContent = 'Select File';
+            selectLabel.textContent = 'Select Files';
             removeButton.classList.add('hidden');
         }
     }
@@ -746,7 +800,7 @@ render_student_header('APE Status', 'ape');
     function refreshApeBatchSummary() {
         const selected = Array.from(document.querySelectorAll('.ape-document-input'))
             .filter((input) => input.files && input.files.length > 0);
-        const count = selected.length;
+        const count = selected.reduce((total, input) => total + input.files.length, 0);
         const submitButton = document.getElementById('ape-submit-all');
         const summary = document.getElementById('ape-selected-summary');
         const countLabel = document.getElementById('ape-selected-count');
@@ -757,10 +811,55 @@ render_student_header('APE Status', 'ape');
         countLabel.textContent = count === 0 ? '' : `(${count})`;
     }
 
-    document.getElementById('ape-batch-upload-form')?.addEventListener('submit', (event) => {
+    const apeUploadForm = document.getElementById('ape-batch-upload-form');
+    const apeUploadConfirmModal = document.getElementById('ape-upload-confirm-modal');
+    const apeCancelUploadConfirm = document.getElementById('ape-cancel-upload-confirm');
+    const apeConfirmUploadSubmit = document.getElementById('ape-confirm-upload-submit');
+
+    function openApeUploadConfirm() {
+        if (!apeUploadConfirmModal) return;
+        apeUploadConfirmModal.classList.remove('hidden');
+        apeUploadConfirmModal.classList.add('flex');
+        apeConfirmUploadSubmit?.focus();
+    }
+
+    function closeApeUploadConfirm() {
+        if (!apeUploadConfirmModal) return;
+        apeUploadConfirmModal.classList.add('hidden');
+        apeUploadConfirmModal.classList.remove('flex');
+    }
+
+    apeCancelUploadConfirm?.addEventListener('click', closeApeUploadConfirm);
+    apeUploadConfirmModal?.addEventListener('click', (event) => {
+        if (event.target === apeUploadConfirmModal) {
+            closeApeUploadConfirm();
+        }
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            closeApeUploadConfirm();
+        }
+    });
+    apeConfirmUploadSubmit?.addEventListener('click', () => {
+        if (!apeUploadForm) return;
+        apeUploadForm.dataset.uploadConfirmed = '1';
+        closeApeUploadConfirm();
+        if (typeof apeUploadForm.requestSubmit === 'function') {
+            apeUploadForm.requestSubmit();
+        } else {
+            apeUploadForm.submit();
+        }
+    });
+
+    apeUploadForm?.addEventListener('submit', (event) => {
         const submitButton = document.getElementById('ape-submit-all');
         if (!submitButton || submitButton.disabled) {
             event.preventDefault();
+            return;
+        }
+        if (apeUploadForm.dataset.uploadConfirmed !== '1') {
+            event.preventDefault();
+            openApeUploadConfirm();
             return;
         }
         submitButton.disabled = true;

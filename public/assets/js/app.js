@@ -346,6 +346,23 @@ document.addEventListener('submit', (event) => {
     }, type);
 });
 
+document.addEventListener('click', (event) => {
+    const trigger = event.target.closest('[data-row-actions-trigger]');
+    if (!trigger) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const modal = document.getElementById('rowActionsModal');
+    const title = document.getElementById('rowActionsModalTitle');
+    const body = document.getElementById('rowActionsModalBody');
+    if (!modal || !title || !body) return;
+
+    title.textContent = trigger.dataset.rowActionsTitle || 'Actions';
+    body.innerHTML = trigger.dataset.rowActionsHtml || '';
+    showModal('rowActionsModal');
+});
+
 
 // ============================================================
 // AVATAR HELPER
@@ -466,7 +483,7 @@ function initLogoPlaceholders(root = document) {
             clearPreviewUrl();
             previewUrl = URL.createObjectURL(file);
             preview.src = previewUrl;
-            if (fileName) fileName.textContent = `${file.name} — preview only, not saved`;
+            if (fileName) fileName.textContent = `${file.name} — ready to save`;
             if (reset) reset.classList.remove('hidden');
         }
 
@@ -486,7 +503,13 @@ function initLogoPlaceholders(root = document) {
                 });
             });
             dropzone.addEventListener('drop', (event) => {
-                previewFile(event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0]);
+                const file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
+                if (file && window.DataTransfer) {
+                    const transfer = new DataTransfer();
+                    transfer.items.add(file);
+                    input.files = transfer.files;
+                }
+                previewFile(file);
             });
         }
 
@@ -656,6 +679,9 @@ function cliniqAfterContentSwap(root) {
     initStudentIdFormatting(root || document);
     initLogoPlaceholders(root || document);
     initDragScrolling(root || document);
+    if (typeof window.initRecentPatientAccountPagination === 'function') {
+        window.initRecentPatientAccountPagination();
+    }
     initTabsFromURL();
     refreshAlerts();
     document.dispatchEvent(new CustomEvent('cliniq:page-content-replaced', {

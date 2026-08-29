@@ -8,6 +8,7 @@ if (isset($_GET['logout'])) {
 $error = '';
 $studentIdValue = '';
 $clinicProfile = clinic_profile_settings();
+$clinicLogoSrc = student_public_logo_src($clinicProfile);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $studentIdValue = trim($_POST['student_id'] ?? '');
@@ -48,7 +49,7 @@ render_student_auth_header('Patient Login');
 
 <?php render_cliniq_entry_header([
     'homeUrl' => '../public/index.php',
-    'logoUrl' => '../public/assets/img/clinic-logo.png',
+    'logoUrl' => $clinicLogoSrc,
 ]); ?>
 
 <main class="student-auth-wrap">
@@ -56,7 +57,7 @@ render_student_auth_header('Patient Login');
         <aside class="student-auth-side">
             <div>
                 <a href="../public/index.php" class="student-brand-mark text-decoration-none" aria-label="Go to CLINiQ access portal">
-                    <img src="../public/assets/img/clinic-logo.png" alt="<?= student_e($clinicProfile['department']) ?> logo">
+                    <img src="<?= student_e($clinicLogoSrc) ?>" alt="<?= student_e($clinicProfile['department']) ?> logo">
                 </a>
                 <p class="student-auth-brand-line"><?= student_e($clinicProfile['system_name']) ?></p>
                 <h1 class="student-auth-side-title">Patient<br>Health Portal</h1>

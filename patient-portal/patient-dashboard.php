@@ -6,6 +6,7 @@ require_once __DIR__ . '/includes/patient-layout.php';
 
 ensure_appointment_schema();
 ensure_ape_workflow_schema();
+appointment_sync_overdue_confirmations();
 
 $profile = student_require_login();
 $firstRegistrationError = '';
@@ -242,8 +243,7 @@ $apeActionTitle = match (true) {
     $apeRequirementsNeedCorrection => 'Return corrected hard-copy requirements',
     $apeStatus === 'Follow-up Required' => 'Complete the required follow-up',
     !$apePatientVitalsConfirmed => 'Complete your vitals and BMI',
-    !$apeExamCompleted => 'Attend your clinical examination',
-    !$apeRequirementsVerified => 'Present hard-copy requirements to the clinic',
+    !$apeExamCompleted || !$apeRequirementsVerified => 'Attend examination',
     $apeDocumentsAwaitingReview => 'Wait for clinic document review',
     $apeStatus === 'Reviewed' => 'Wait for the final clinical decision',
     default => 'Upload verified APE documents',
@@ -253,8 +253,7 @@ $apeActionCopy = match (true) {
     $apeRequirementsNeedCorrection => $apeNote ?: 'Return the corrected hard-copy requirements requested by the clinic.',
     $apeStatus === 'Follow-up Required' => $apeNote ?: 'Complete the referral or other follow-up requested by the clinic.',
     !$apePatientVitalsConfirmed => 'Enter and confirm your vitals and BMI before visiting the clinic for examination.',
-    !$apeExamCompleted => $apeNote ?: 'Your vitals are confirmed. Visit the clinic for examination before presenting hard-copy requirements.',
-    !$apeRequirementsVerified => 'Present your hard-copy requirements to the clinic for review before uploading digital copies.',
+    !$apeExamCompleted || !$apeRequirementsVerified => $apeNote ?: 'Your vitals are confirmed. Visit the clinic for examination and hard-copy document review.',
     $apeDocumentsAwaitingReview => 'Your documents are waiting for clinic archive review.',
     $apeStatus === 'Reviewed' => $apeNote ?: 'Your examination and documents are complete and awaiting the clinic\'s final decision.',
     default => $apeNote ?: ($latestApe ? 'Complete the current APE step in your APE status page.' : 'Start your APE record with the clinic.'),
@@ -286,27 +285,29 @@ $appointmentStatus = $latestAppointment['status'] ?? 'No Request';
 $appointmentBadgeClass = match ($appointmentStatus) {
     'Scheduled', 'Completed' => 'student-badge-success',
     'Cancelled', 'No Show' => 'student-badge-danger',
-    'Pending' => 'student-badge-warning',
+    'Pending', 'For Confirmation' => 'student-badge-warning',
     default => 'student-badge-info',
 };
 $appointmentNoteClass = match ($appointmentStatus) {
-    'Pending' => 'student-note-warning',
+    'Pending', 'For Confirmation' => 'student-note-warning',
     'Cancelled', 'No Show' => 'student-note-danger',
     default => 'student-note-success',
 };
 $appointmentIcon = match ($appointmentStatus) {
-    'Pending' => 'hourglass_top',
+    'Pending', 'For Confirmation' => 'hourglass_top',
     'Cancelled', 'No Show' => 'event_busy',
     default => 'event_available',
 };
 $appointmentSummary = match ($appointmentStatus) {
     'Pending' => 'Your request was sent to the clinic. Please wait for approval before going to the clinic.',
     'Scheduled' => 'Please arrive 10 minutes before your scheduled time.',
+    'For Confirmation' => 'Your appointment time has passed. Please wait for clinic staff to confirm if it was completed.',
     'Completed' => 'This appointment has been completed.',
     'Cancelled' => 'This appointment was cancelled.',
     'No Show' => 'This appointment was marked as no-show by the clinic.',
     default => 'Manage your appointment request from the appointment page.',
 };
+$appointmentDisplayStatus = $appointmentStatus === 'For Confirmation' ? 'Awaiting clinic confirmation' : $appointmentStatus;
 
 render_student_header('Dashboard', 'dashboard');
 ?>
@@ -426,7 +427,7 @@ render_student_header('Dashboard', 'dashboard');
             </div>
             <div>
                 <span class="student-label">Email</span>
-                <a href="mailto:<?= student_e($profile['email']) ?>" class="text-sm font-black text-[#3F7D52] text-decoration-none"><?= student_e($profile['email']) ?></a>
+                <a href="mailto:<?= student_e($profile['email']) ?>" class="text-sm font-black text-primary text-decoration-none"><?= student_e($profile['email']) ?></a>
             </div>
         </div>
     </section>
@@ -444,8 +445,8 @@ render_student_header('Dashboard', 'dashboard');
                 <span class="text-xs font-black text-slate-500 uppercase tracking-wider">Completion</span>
                 <strong class="font-headline text-3xl font-black text-[#17261d]"><?= (int) $apePercent ?>%</strong>
             </div>
-            <div class="w-full h-3 rounded-full bg-[#edf8f0] overflow-hidden mb-4">
-                <div class="h-full bg-[#3F7D52] rounded-full" style="width: <?= (int) $apePercent ?>%;"></div>
+            <div class="w-full h-3 rounded-full bg-primary-fixed overflow-hidden mb-4">
+                <div class="h-full bg-primary rounded-full" style="width: <?= (int) $apePercent ?>%;"></div>
             </div>
             <div class="student-progress-list">
                 <div class="student-progress-step">
@@ -474,7 +475,7 @@ render_student_header('Dashboard', 'dashboard');
                 <h2 class="student-card-title">Appointment</h2>
                 <p class="student-card-copy">Latest clinic request status</p>
             </div>
-            <span class="student-badge <?= student_e($appointmentBadgeClass) ?>"><?= student_e($appointmentStatus) ?></span>
+            <span class="student-badge <?= student_e($appointmentBadgeClass) ?>"><?= student_e($appointmentDisplayStatus) ?></span>
         </div>
         <div class="student-card-pad">
             <?php if ($latestAppointment): ?>

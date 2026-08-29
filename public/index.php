@@ -13,6 +13,8 @@ $visitorRegisterUrl = app_url('visitor-registration.php');
 $studentLoginUrl = $appBase . '/patient-portal/patient-login.php';
 $staffLoginUrl = app_url('login.php');
 $clinicProfile = clinic_profile_settings();
+$clinicLogoUrl = app_url(clinic_profile_logo_path($clinicProfile));
+$theme = active_cliniq_theme();
 
 ?>
 <!doctype html>
@@ -29,14 +31,14 @@ $clinicProfile = clinic_profile_settings();
             darkMode: 'class',
             theme: {
                 extend: {
-                    colors: {
-                        primary: '#3F7D52',
-                        'primary-fixed': '#e8f6ec',
-                        'primary-container': '#23422C',
-                        surface: '#f4fbf6',
+                        colors: {
+                        primary: <?= json_encode($theme['primary']) ?>,
+                        'primary-fixed': <?= json_encode($theme['primary_fixed']) ?>,
+                        'primary-container': <?= json_encode($theme['primary_container']) ?>,
+                        surface: <?= json_encode($theme['surface']) ?>,
                         'on-surface': '#17261d',
-                        'surface-container-low': '#edf8f0',
-                        'outline-variant': '#c7dccd'
+                        'surface-container-low': <?= json_encode($theme['surface_container_low']) ?>,
+                        'outline-variant': <?= json_encode($theme['outline_variant']) ?>
                     },
                     fontFamily: {
                         headline: ['Manrope', 'sans-serif'],
@@ -48,10 +50,23 @@ $clinicProfile = clinic_profile_settings();
     </script>
     <link href="<?= app_url('assets/css/app.css?v=system-ui-2') ?>" rel="stylesheet">
     <style>
+        :root {
+            --cliniq-primary: <?= e($theme['primary']) ?>;
+            --cliniq-primary-hover: <?= e($theme['primary_container']) ?>;
+            --cliniq-primary-fixed: <?= e($theme['primary_fixed']) ?>;
+            --cliniq-accent: <?= e($theme['accent']) ?>;
+            --cliniq-accent-foreground: <?= e($theme['primary_container']) ?>;
+            --cliniq-surface: <?= e($theme['surface']) ?>;
+            --cliniq-surface-low: <?= e($theme['surface_container_low']) ?>;
+            --cliniq-outline: <?= e($theme['outline_variant']) ?>;
+            --cliniq-focus-rgb: <?= e($theme['focus_rgb']) ?>;
+            --cliniq-shadow-rgb: <?= e($theme['shadow_rgb']) ?>;
+        }
+
         body {
             background:
-                linear-gradient(180deg, rgba(244, 251, 246, 0.95), rgba(248, 252, 249, 1)),
-                radial-gradient(circle at top, rgba(79, 159, 94, 0.08), transparent 34rem);
+                linear-gradient(180deg, color-mix(in srgb, var(--cliniq-surface) 95%, #ffffff), color-mix(in srgb, var(--cliniq-surface) 82%, #ffffff)),
+                radial-gradient(circle at top, color-mix(in srgb, var(--cliniq-primary) 10%, transparent), transparent 34rem);
         }
 
         .portal-shell {
@@ -75,10 +90,10 @@ $clinicProfile = clinic_profile_settings();
         .portal-card {
             width: min(100%, 58rem);
             padding: clamp(1.5rem, 4vw, 3.5rem);
-            border: 1px solid rgba(199, 220, 205, 0.72);
+            border: 1px solid color-mix(in srgb, var(--cliniq-outline) 72%, transparent);
             border-radius: 1rem;
             background: rgba(255, 255, 255, 0.92);
-            box-shadow: 0 1px 2px rgba(23, 38, 29, 0.04), 0 24px 60px rgba(23, 38, 29, 0.08);
+            box-shadow: 0 1px 2px rgba(var(--cliniq-shadow-rgb), 0.04), 0 24px 60px rgba(var(--cliniq-shadow-rgb), 0.08);
         }
 
         .portal-option {
@@ -88,7 +103,7 @@ $clinicProfile = clinic_profile_settings();
             width: 100%;
             min-height: 7rem;
             padding: 1.25rem;
-            border: 1px solid rgba(199, 220, 205, 0.72);
+            border: 1px solid color-mix(in srgb, var(--cliniq-outline) 72%, transparent);
             border-radius: 0.75rem;
             text-decoration: none;
             transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease;
@@ -96,12 +111,12 @@ $clinicProfile = clinic_profile_settings();
 
         .portal-option:hover {
             transform: translateY(-1px);
-            border-color: rgba(79, 159, 94, 0.42);
-            box-shadow: 0 14px 34px rgba(23, 38, 29, 0.08);
+            border-color: color-mix(in srgb, var(--cliniq-primary) 42%, transparent);
+            box-shadow: 0 14px 34px rgba(var(--cliniq-shadow-rgb), 0.08);
         }
 
         .portal-option-primary {
-            background: #edf8f0;
+            background: var(--cliniq-surface-low);
         }
 
         .portal-option-secondary {
@@ -130,7 +145,7 @@ $clinicProfile = clinic_profile_settings();
         }
 
         .portal-option:hover .portal-arrow {
-            background: #3F7D52;
+            background: var(--cliniq-primary);
             color: #ffffff;
         }
 
@@ -157,7 +172,7 @@ $clinicProfile = clinic_profile_settings();
     <header class="portal-header w-full px-5 sm:px-8 py-5 flex items-center justify-between">
         <a href="<?= app_url('index.php') ?>" class="flex items-center gap-3 text-decoration-none">
             <span class="app-brand-mark">
-                <img src="<?= app_url('assets/img/clinic-logo.png') ?>" alt="<?= e($clinicProfile['department']) ?> logo">
+                <img src="<?= e($clinicLogoUrl) ?>" alt="<?= e($clinicProfile['department']) ?> logo">
             </span>
             <span>
                 <span class="block font-headline font-extrabold text-base leading-none text-[#17261d]"><?= e($clinicProfile['system_name']) ?></span>

@@ -148,6 +148,20 @@ function cliniq_visit_has_vitals(array $vitals): bool
     return false;
 }
 
+function cliniq_visit_extract_patient_concerns(?string $value): string
+{
+    $text = str_replace('Visitor notes:', 'Patient Concerns:', trim((string) $value));
+    if ($text === '') {
+        return '';
+    }
+
+    if (preg_match('/^Patient Concerns:\s*(.+)$/mi', $text, $matches)) {
+        return trim($matches[1]);
+    }
+
+    return $text;
+}
+
 function cliniq_visit_insert_entry(PDO $db, int $visitId, array $entry, ?int $staffPersonId): ?int
 {
     if (!cliniq_visit_entry_has_content($entry)) {
@@ -171,6 +185,72 @@ function cliniq_visit_insert_entry(PDO $db, int $visitId, array $entry, ?int $st
         $staffPersonId ?: null,
     ]);
     return (int) $db->lastInsertId();
+}
+
+function cliniq_visit_save_primary_entry(PDO $db, int $visitId, array $entry, ?int $staffPersonId): ?int
+{
+    if (!cliniq_visit_entry_has_content($entry)) {
+        return null;
+    }
+
+    $lookup = $db->prepare("
+        SELECT ve.entry_id
+        FROM visit_entries ve
+        JOIN visits v ON v.visit_id = ve.visit_id
+        WHERE ve.visit_id = ?
+          AND v.visit_source = 'Self Logbook'
+          AND ve.addressed_by_person_id IS NULL
+          AND ve.diagnosis IS NULL
+          AND ve.treatment IS NULL
+          AND ve.referral IS NULL
+          AND ve.remarks IS NULL
+          AND ve.amendment_reason IS NULL
+        ORDER BY ve.created_at ASC, ve.entry_id ASC
+        LIMIT 1
+    ");
+    $lookup->execute([$visitId]);
+    $existingEntryId = (int) ($lookup->fetchColumn() ?: 0);
+
+    if ($existingEntryId < 1) {
+        $lookup = $db->prepare("
+            SELECT entry_id
+            FROM visit_entries
+            WHERE visit_id = ?
+              AND (amendment_reason IS NULL OR amendment_reason = '')
+            ORDER BY created_at DESC, entry_id DESC
+            LIMIT 1
+        ");
+        $lookup->execute([$visitId]);
+        $existingEntryId = (int) ($lookup->fetchColumn() ?: 0);
+    }
+
+    if ($existingEntryId < 1) {
+        return cliniq_visit_insert_entry($db, $visitId, $entry, $staffPersonId);
+    }
+
+    $stmt = $db->prepare('
+        UPDATE visit_entries
+        SET diagnosis = COALESCE(NULLIF(?, \'\'), diagnosis),
+            symptoms = COALESCE(NULLIF(?, \'\'), symptoms),
+            treatment = COALESCE(NULLIF(?, \'\'), treatment),
+            referral = COALESCE(NULLIF(?, \'\'), referral),
+            remarks = COALESCE(NULLIF(?, \'\'), remarks),
+            amendment_reason = COALESCE(NULLIF(?, \'\'), amendment_reason),
+            addressed_by_person_id = COALESCE(addressed_by_person_id, ?)
+        WHERE entry_id = ?
+    ');
+    $stmt->execute([
+        trim((string) ($entry['diagnosis'] ?? '')) ?: null,
+        trim((string) ($entry['symptoms'] ?? '')),
+        trim((string) ($entry['treatment'] ?? '')) ?: null,
+        trim((string) ($entry['referral'] ?? '')) ?: null,
+        trim((string) ($entry['remarks'] ?? '')) ?: null,
+        trim((string) ($entry['amendment_reason'] ?? '')) ?: null,
+        $staffPersonId ?: null,
+        $existingEntryId,
+    ]);
+
+    return $existingEntryId;
 }
 
 function cliniq_visit_insert_vitals(
@@ -210,7 +290,11 @@ function cliniq_visit_create(array $visit, array $entry = [], array $vitals = []
         throw new InvalidArgumentException('Select a patient that exists in Cliniq_db.');
     }
 
+    $visitPurpose = trim((string) ($visit['visit_purpose'] ?? ''));
     $chiefComplaint = trim((string) ($visit['chief_complaint'] ?? ''));
+    if ($visitPurpose !== '' && str_starts_with(strtolower($chiefComplaint), strtolower($visitPurpose . ' - '))) {
+        $chiefComplaint = trim(mb_substr($chiefComplaint, mb_strlen($visitPurpose . ' - ')));
+    }
     if ($chiefComplaint === '') {
         throw new InvalidArgumentException('Chief complaint is required.');
     }
@@ -236,7 +320,7 @@ function cliniq_visit_create(array $visit, array $entry = [], array $vitals = []
             $markCompleted ? 1 : 0,
             $chiefComplaint,
             $status,
-            trim((string) ($visit['visit_purpose'] ?? '')) ?: null,
+            $visitPurpose ?: null,
             trim((string) ($visit['visit_source'] ?? '')) ?: 'Staff Recorded',
             trim((string) ($visit['action_taken'] ?? '')) ?: null,
             !empty($visit['recorded_by_person_id']) ? (int) $visit['recorded_by_person_id'] : null,

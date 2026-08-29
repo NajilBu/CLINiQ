@@ -1,6 +1,12 @@
 <?php
 require_once __DIR__ . '/../app/config/database.php';
 require_once __DIR__ . '/../app/services/AlertWorkflow.php';
+require_once __DIR__ . '/../app/services/ApeWorkflow.php';
+require_once __DIR__ . '/../app/services/SystemSettings.php';
+
+ensure_ape_workflow_schema();
+$clinicProfile = clinic_profile_settings();
+$clinicLogoSrc = '../public/' . ltrim(clinic_profile_logo_path($clinicProfile), '/');
 
 function pp_e(?string $value): string
 {
@@ -58,6 +64,7 @@ function pp_upload_incident_photo(array $file): ?string
 
 $token = trim($_GET['token'] ?? '');
 $patient = null;
+$theme = active_cliniq_theme();
 
 if ($token !== '') {
     $stmt = auth_db()->prepare("
@@ -81,12 +88,9 @@ if ($token !== '') {
             pt.emergency_token,
             pt.token_enabled,
             pt.updated_at AS patient_updated_at,
-            pt.height_cm,
-            pt.weight_kg,
-            pt.bmi,
-            vs.temperature,
-            vs.blood_pressure,
-            vs.pulse_rate,
+            ape_bmi.patient_height_cm AS height_cm,
+            ape_bmi.patient_weight_kg AS weight_kg,
+            ape_bmi.patient_bmi AS bmi,
             COALESCE(
                 NULLIF(TRIM(CONCAT(pr.program_code, '-', s.year_level, UPPER(s.section))), ''),
                 ed.department_code,
@@ -101,16 +105,15 @@ if ($token !== '') {
         LEFT JOIN departments ed ON ed.id = se.department_id
         LEFT JOIN clinic_staff cs ON cs.person_id = pe.id
         LEFT JOIN departments cd ON cd.id = cs.department_id
-        LEFT JOIN (
-            SELECT vs1.*
-            FROM vital_signs vs1
-            INNER JOIN (
-                SELECT patient_id, MAX(measured_at) AS max_measured_at
-                FROM vital_signs
-                WHERE patient_id IS NOT NULL
-                GROUP BY patient_id
-            ) vs2 ON vs1.patient_id = vs2.patient_id AND vs1.measured_at = vs2.max_measured_at
-        ) vs ON vs.patient_id = pt.person_id
+        LEFT JOIN ape_records ape_bmi ON ape_bmi.ape_id = (
+            SELECT ar_latest.ape_id
+            FROM ape_records ar_latest
+            WHERE ar_latest.patient_id = pt.person_id
+              AND ar_latest.patient_vitals_status = 'Confirmed'
+              AND (ar_latest.patient_height_cm IS NOT NULL OR ar_latest.patient_weight_kg IS NOT NULL OR ar_latest.patient_bmi IS NOT NULL)
+            ORDER BY COALESCE(ar_latest.patient_vitals_confirmed_at, ar_latest.exam_date, ar_latest.created_at) DESC, ar_latest.ape_id DESC
+            LIMIT 1
+        )
         WHERE pt.emergency_token = ? AND pt.token_enabled = 1
         LIMIT 1
     ");
@@ -129,8 +132,8 @@ if (!$patient) {
       <title>Emergency Passport Not Found | CLINiQ</title>
       <link href="../public/assets/vendor/fonts/inter-passport.css?v=offline-1" rel="stylesheet">
       <style>
-        body { margin:0; min-height:100vh; display:grid; place-items:center; font-family:Inter,system-ui,sans-serif; background:#f4fbf6; color:#17261d; }
-        section { width:min(92vw,34rem); padding:2rem; background:#fff; border:1px solid #d8e9dd; border-radius:1rem; box-shadow:0 14px 34px rgba(23,38,29,.08); }
+        body { margin:0; min-height:100vh; display:grid; place-items:center; font-family:Inter,system-ui,sans-serif; background:<?= pp_e($theme['surface']) ?>; color:#17261d; }
+        section { width:min(92vw,34rem); padding:2rem; background:#fff; border:1px solid <?= pp_e($theme['outline_variant']) ?>; border-radius:1rem; box-shadow:0 14px 34px rgba(<?= pp_e($theme['shadow_rgb']) ?>,.08); }
         h1 { margin:0 0 .5rem; font-size:1.6rem; }
         p { margin:0; color:#64756a; line-height:1.55; }
       </style>
@@ -162,6 +165,7 @@ $student = [
 
 $allergies = pp_split_lines($patient['allergies'] ?? null, ['No allergies recorded']);
 $conditions = pp_split_lines($patient['existing_conditions'] ?? null, ['No existing conditions recorded']);
+$medications = pp_split_lines($patient['medications'] ?? null, ['No current medications recorded']);
 $instructions = pp_split_lines($patient['emergency_instructions'] ?? null, [
     'Provide immediate first aid as needed.',
     'Notify the school clinic immediately.',
@@ -292,7 +296,7 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#23422C">
+  <meta name="theme-color" content="<?= pp_e($theme['primary_container']) ?>">
   <title><?= pp_e($student['name']) ?> - Emergency Passport | CLINiQ</title>
   <link href="../public/assets/vendor/fonts/inter-manrope.css?v=offline-1" rel="stylesheet">
   <link href="../public/assets/vendor/fonts/material-symbols.css?v=offline-1" rel="stylesheet">
@@ -305,16 +309,18 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
     }
 
     :root {
-      --bg: #f4fbf6;
+      --bg: <?= pp_e($theme['surface']) ?>;
       --ink: #17261d;
       --muted: #64756a;
       --card: #ffffff;
-      --primary: #3F7D52;
-      --primary-dark: #23422C;
-      --primary-soft: #e8f6ec;
-      --border: #d8e9dd;
+      --primary: <?= pp_e($theme['primary']) ?>;
+      --primary-dark: <?= pp_e($theme['primary_container']) ?>;
+      --primary-soft: <?= pp_e($theme['primary_fixed']) ?>;
+      --border: <?= pp_e($theme['outline_variant']) ?>;
       --border-soft: #e5f0e8;
-      --surface: #edf8f0;
+      --surface: <?= pp_e($theme['surface_container_low']) ?>;
+      --focus-rgb: <?= pp_e($theme['focus_rgb']) ?>;
+      --shadow-rgb: <?= pp_e($theme['shadow_rgb']) ?>;
       --danger: #dc2626;
       --danger-dark: #991b1b;
       --danger-soft: #fef2f2;
@@ -433,7 +439,7 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
     }
 
     .pp-shell {
-      width: min(100% - 2rem, 88rem);
+      width: min(100% - 2rem, 36rem);
       margin: 0 auto;
       padding: 1.25rem 0 2rem;
     }
@@ -499,7 +505,7 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
 
     .pp-grid {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(26rem, 0.92fr);
+      grid-template-columns: minmax(0, 1fr);
       gap: 1rem;
       align-items: start;
     }
@@ -628,7 +634,7 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
 
     .pp-info-grid {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: 1fr;
       gap: 0.75rem;
       padding: 1rem;
     }
@@ -650,6 +656,7 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
       padding: 1rem;
       border-color: #cfe6d6;
       background: linear-gradient(180deg, #ffffff 0%, #fbfffc 100%);
+      overflow: hidden;
     }
 
     .pp-priority-card::before {
@@ -658,7 +665,7 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
       inset: 0 auto 0 0;
       width: 4px;
       background: var(--primary);
-      border-radius: 0.75rem 0 0 0.75rem;
+      border-radius: 0;
     }
 
     .pp-priority-card.allergy-focus {
@@ -686,6 +693,61 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
 
     .pp-priority-card.medication-focus::before {
       background: var(--primary);
+    }
+
+    .pp-bmi-card {
+      min-height: auto;
+      padding: 1rem 1rem 1.05rem 1.1rem;
+      border-color: #d8c8ff;
+      background:
+        radial-gradient(circle at top right, rgba(124, 58, 237, 0.11), transparent 42%),
+        linear-gradient(180deg, #ffffff 0%, #faf7ff 100%);
+    }
+
+    .pp-bmi-card::before {
+      background: linear-gradient(180deg, var(--primary), #7c3aed);
+    }
+
+    .pp-bmi-card .pp-label {
+      margin-bottom: 0.85rem;
+    }
+
+    .pp-bmi-card .pp-label .material-symbols-outlined {
+      background: linear-gradient(135deg, var(--primary), #7c3aed);
+    }
+
+    .pp-bmi-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.65rem;
+    }
+
+    .pp-bmi-metric {
+      min-width: 0;
+      padding: 0.75rem 0.7rem;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid rgba(216, 200, 255, 0.85);
+      border-radius: 0.75rem;
+      box-shadow: 0 8px 18px rgba(124, 58, 237, 0.06);
+    }
+
+    .pp-bmi-metric span {
+      display: block;
+      margin-bottom: 0.25rem;
+      color: #8b95a7;
+      font-size: 0.62rem;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .pp-bmi-metric strong {
+      display: block;
+      color: #273449;
+      font-size: clamp(0.92rem, 2.5vw, 1.08rem);
+      font-weight: 900;
+      line-height: 1.12;
+      white-space: nowrap;
     }
 
     .pp-label {
@@ -781,20 +843,38 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
 
     .pp-instructions {
       grid-column: 1 / -1;
+      position: relative;
       display: grid;
       grid-template-columns: auto 1fr;
       gap: 0.75rem;
-      padding: 0.95rem;
+      padding: 1rem 1rem 1rem 1.1rem;
       color: var(--warning);
       background: var(--warning-soft);
       border: 1px solid var(--warning-border);
-      border-left: 4px solid #f59e0b;
       border-radius: 0.75rem;
+      overflow: hidden;
+    }
+
+    .pp-instructions::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 4px;
+      background: #f59e0b;
+      border-radius: 0;
     }
 
     .pp-instructions .material-symbols-outlined {
+      position: relative;
+      z-index: 1;
       color: #f59e0b;
       font-size: 1.35rem;
+    }
+
+    .pp-instructions > div {
+      position: relative;
+      z-index: 1;
+      min-width: 0;
     }
 
     .pp-instructions ul {
@@ -808,6 +888,14 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
     .pp-contact-card {
       display: grid;
       gap: 0.9rem;
+    }
+
+    .pp-contact-priority-slot {
+      padding: 1rem 1rem 0;
+    }
+
+    .pp-contact-priority-slot:empty {
+      display: none;
     }
 
     .pp-section-head {
@@ -892,7 +980,7 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
     .pp-button-primary {
       color: #fff;
       background: var(--primary);
-      box-shadow: 0 8px 18px rgba(63, 125, 82, 0.16);
+      box-shadow: 0 8px 18px rgba(var(--shadow-rgb), 0.16);
     }
 
     .pp-button-primary:hover {
@@ -1098,8 +1186,8 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
     }
 
     .pp-textarea:focus {
-      border-color: rgba(63, 125, 82, 0.55);
-      box-shadow: 0 0 0 3px rgba(63, 125, 82, 0.13);
+      border-color: rgba(var(--focus-rgb), 0.55);
+      box-shadow: 0 0 0 3px rgba(var(--focus-rgb), 0.13);
     }
 
     .pp-status-card {
@@ -1170,16 +1258,8 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
     }
 
     @media (max-width: 960px) {
-      .pp-grid {
-        grid-template-columns: 1fr;
-      }
-
       .pp-form {
         grid-template-columns: 1fr;
-      }
-
-      .pp-info-grid {
-        grid-template-columns: 1fr 1fr;
       }
     }
 
@@ -1199,7 +1279,7 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
       }
 
       .pp-shell {
-        width: min(100% - 1rem, 74rem);
+        width: min(100% - 1rem, 36rem);
         padding-top: 0.7rem;
       }
 
@@ -1276,6 +1356,14 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
         font-size: 0.92rem;
       }
 
+      .pp-bmi-metrics {
+        gap: 0.5rem;
+      }
+
+      .pp-bmi-metric {
+        padding: 0.65rem 0.55rem;
+      }
+
       .pp-contact-card .pp-actions #notifyClinicBtn {
         display: none;
       }
@@ -1295,11 +1383,11 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
   <header class="pp-brand">
     <div class="pp-brand-lockup">
       <span class="pp-logo">
-        <img src="../public/assets/img/clinic-logo.png" alt="PLP Health Services Department logo">
+        <img src="<?= pp_e($clinicLogoSrc) ?>" alt="<?= pp_e($clinicProfile['department']) ?> logo">
       </span>
       <span>
-        <span class="pp-brand-title">CLINiQ</span>
-        <span class="pp-brand-subtitle">PLP School Clinic Management System</span>
+        <span class="pp-brand-title"><?= pp_e($clinicProfile['system_name']) ?></span>
+        <span class="pp-brand-subtitle"><?= pp_e($clinicProfile['department']) ?></span>
       </span>
     </div>
     <span class="pp-use-badge">
@@ -1352,6 +1440,8 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
             </div>
           </div>
 
+          <div id="ppContactPrioritySlot" class="pp-contact-priority-slot"></div>
+
           <div class="pp-info-grid">
             <div class="pp-info-panel pp-priority-card allergy-focus">
               <div class="pp-label">
@@ -1383,8 +1473,9 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
                 Medication
               </div>
               <ul class="pp-list">
-                <li>Salbutamol inhaler as needed</li>
-                <li>Check bag first</li>
+                <?php foreach ($medications as $medication): ?>
+                  <li><?= pp_e($medication) ?></li>
+                <?php endforeach; ?>
               </ul>
             </div>
 
@@ -1399,54 +1490,36 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
                 </ul>
               </div>
             </div>
-          </div>
           
-          <?php if (!empty($patient['height_cm']) || !empty($patient['weight_kg']) || !empty($patient['temperature']) || !empty($patient['blood_pressure']) || !empty($patient['pulse_rate'])): ?>
-          <div class="pp-info-panel pp-priority-card" style="grid-column: span 2; border-color: #e2e8f0; background: #faf5ff; margin-top: 1rem;">
-            <div class="pp-label">
-              <span class="material-symbols-outlined" aria-hidden="true" style="color:#7c3aed;">monitor_heart</span>
-              Vital Signs & Measurements
+            <?php if (!empty($patient['height_cm']) || !empty($patient['weight_kg']) || !empty($patient['bmi'])): ?>
+            <div class="pp-info-panel pp-priority-card pp-bmi-card">
+              <div class="pp-label">
+                <span class="material-symbols-outlined" aria-hidden="true" style="color:#7c3aed;">monitor_heart</span>
+                BMI
+              </div>
+              <div class="pp-bmi-metrics">
+                <?php if (!empty($patient['height_cm'])): ?>
+                  <div class="pp-bmi-metric">
+                    <span>Height</span>
+                    <strong><?= pp_e(number_format((float) $patient['height_cm'], 2)) ?> cm</strong>
+                  </div>
+                <?php endif; ?>
+                <?php if (!empty($patient['weight_kg'])): ?>
+                  <div class="pp-bmi-metric">
+                    <span>Weight</span>
+                    <strong><?= pp_e(number_format((float) $patient['weight_kg'], 2)) ?> kg</strong>
+                  </div>
+                <?php endif; ?>
+                <?php if (!empty($patient['bmi'])): ?>
+                  <div class="pp-bmi-metric">
+                    <span>BMI</span>
+                    <strong><?= pp_e(number_format((float) $patient['bmi'], 2)) ?></strong>
+                  </div>
+                <?php endif; ?>
+              </div>
             </div>
-            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-top: 0.5rem; font-size: 0.825rem; font-weight: bold; color: #4b5563;">
-              <?php if (!empty($patient['height_cm'])): ?>
-                <div>
-                  <div style="font-size: 0.7rem; color: #9ca3af;">Height</div>
-                  <div><?= pp_e($patient['height_cm']) ?> cm</div>
-                </div>
-              <?php endif; ?>
-              <?php if (!empty($patient['weight_kg'])): ?>
-                <div>
-                  <div style="font-size: 0.7rem; color: #9ca3af;">Weight</div>
-                  <div><?= pp_e($patient['weight_kg']) ?> kg</div>
-                </div>
-              <?php endif; ?>
-              <?php if (!empty($patient['bmi'])): ?>
-                <div>
-                  <div style="font-size: 0.7rem; color: #9ca3af;">BMI</div>
-                  <div><?= pp_e($patient['bmi']) ?></div>
-                </div>
-              <?php endif; ?>
-              <?php if (!empty($patient['temperature'])): ?>
-                <div>
-                  <div style="font-size: 0.7rem; color: #9ca3af;">Temperature</div>
-                  <div><?= pp_e(number_format((float) $patient['temperature'], 2)) ?> °C</div>
-                </div>
-              <?php endif; ?>
-              <?php if (!empty($patient['blood_pressure'])): ?>
-                <div>
-                  <div style="font-size: 0.7rem; color: #9ca3af;">Blood Pressure</div>
-                  <div><?= pp_e($patient['blood_pressure']) ?></div>
-                </div>
-              <?php endif; ?>
-              <?php if (!empty($patient['pulse_rate'])): ?>
-                <div>
-                  <div style="font-size: 0.7rem; color: #9ca3af;">Pulse Rate</div>
-                  <div><?= pp_e($patient['pulse_rate']) ?> bpm</div>
-                </div>
-              <?php endif; ?>
-            </div>
+            <?php endif; ?>
           </div>
-          <?php endif; ?>
         </div>
       </section>
 
@@ -1677,6 +1750,12 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
   </div>
 
   <script>
+    const contactPrioritySlot = document.getElementById('ppContactPrioritySlot');
+    const contactCard = document.querySelector('.pp-contact-card');
+    if (contactPrioritySlot && contactCard) {
+      contactPrioritySlot.appendChild(contactCard);
+    }
+
     const notifyBtn = document.getElementById('notifyClinicBtn');
     const stickyNotifyBtn = document.getElementById('stickyNotifyBtn');
     const drawer = document.getElementById('incidentDrawer');

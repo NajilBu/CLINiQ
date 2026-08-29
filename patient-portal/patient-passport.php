@@ -1,10 +1,27 @@
 <?php
 require_once __DIR__ . '/includes/patient-layout.php';
 require_once __DIR__ . '/../app/services/AlertWorkflow.php';
+require_once __DIR__ . '/../app/services/ApeWorkflow.php';
 
 ensure_alert_workflow_schema();
+ensure_ape_workflow_schema();
 $profile = student_require_login();
 $patientId = (int) $profile['patient_id'];
+
+$latestBmiRecord = null;
+if ($patientId > 0) {
+    $latestBmiStmt = auth_db()->prepare("
+        SELECT patient_height_cm, patient_weight_kg, patient_bmi, patient_vitals_confirmed_at
+        FROM ape_records
+        WHERE patient_id = ?
+          AND patient_vitals_status = 'Confirmed'
+          AND (patient_height_cm IS NOT NULL OR patient_weight_kg IS NOT NULL OR patient_bmi IS NOT NULL)
+        ORDER BY COALESCE(patient_vitals_confirmed_at, exam_date, created_at) DESC, ape_id DESC
+        LIMIT 1
+    ");
+    $latestBmiStmt->execute([$patientId]);
+    $latestBmiRecord = $latestBmiStmt->fetch() ?: null;
+}
 
 $passport = [
     'name'            => $profile['name'],
@@ -22,12 +39,10 @@ $passport = [
     'secondary_contact' => '',
     'last_updated'    => $profile['updated_at'] ? date('F j, Y', strtotime($profile['updated_at'])) : date('F j, Y'),
     'token'           => $profile['emergency_token'] ?: 'not-generated',
-    'height_cm'       => $profile['height_cm'] ?? null,
-    'weight_kg'       => $profile['weight_kg'] ?? null,
-    'bmi'             => $profile['bmi'] ?? null,
-    'temperature'     => $profile['temperature'] ?? null,
-    'blood_pressure'  => $profile['blood_pressure'] ?? null,
-    'pulse_rate'      => $profile['pulse_rate'] ?? null,
+    'height_cm'       => $latestBmiRecord['patient_height_cm'] ?? null,
+    'weight_kg'       => $latestBmiRecord['patient_weight_kg'] ?? null,
+    'bmi'             => $latestBmiRecord['patient_bmi'] ?? null,
+    'bmi_recorded_at' => $latestBmiRecord['patient_vitals_confirmed_at'] ?? null,
 ];
 $passportUrl = 'passport-demo.php?token=' . urlencode($passport['token']);
 
@@ -48,32 +63,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $passport['secondary_contact']= trim($_POST['secondary_contact'] ?? $passport['secondary_contact']);
 
     try {
-        $height = filter_var($_POST['height_cm'] ?? '', FILTER_VALIDATE_FLOAT) ?: null;
-        $weight = filter_var($_POST['weight_kg'] ?? '', FILTER_VALIDATE_FLOAT) ?: null;
-        $bmi = null;
-        if ($height && $weight) {
-            $heightM = $height / 100;
-            $bmi = round($weight / ($heightM * $heightM), 1);
-        }
-        $temp = filter_var($_POST['temperature'] ?? '', FILTER_VALIDATE_FLOAT) ?: null;
-        $bloodPressure = trim((string) ($_POST['blood_pressure'] ?? '')) ?: null;
-        if ($bloodPressure !== '' && $bloodPressure !== null && !preg_match('/^\d{2,3}\s*\/\s*\d{2,3}$/', $bloodPressure)) {
-            throw new InvalidArgumentException('Enter a valid blood pressure (format: systolic/diastolic, e.g., 120/80).');
-        }
-        $pulse = filter_var($_POST['pulse_rate'] ?? '', FILTER_VALIDATE_INT) ?: null;
-
-        $passport['height_cm'] = $height;
-        $passport['weight_kg'] = $weight;
-        $passport['bmi'] = $bmi;
-        $passport['temperature'] = $temp;
-        $passport['blood_pressure'] = $bloodPressure;
-        $passport['pulse_rate'] = $pulse;
-
         $stmt = auth_db()->prepare("
             UPDATE patients
             SET blood_type = ?, allergies = ?, existing_conditions = ?, medications = ?, emergency_instructions = ?,
-                guardian_or_contact_name = ?, guardian_or_contact_number = ?,
-                height_cm = ?, weight_kg = ?, bmi = ?
+                guardian_or_contact_name = ?, guardian_or_contact_number = ?
             WHERE person_id = ?
         ");
         $stmt->execute([
@@ -84,19 +77,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $passport['instructions'],
             $passport['guardian_name'],
             $passport['primary_contact'],
-            $passport['height_cm'],
-            $passport['weight_kg'],
-            $passport['bmi'],
             $patientId,
         ]);
-
-        if ($temp !== null || ($bloodPressure !== null && $bloodPressure !== '') || $pulse !== null) {
-            $stmtVitals = auth_db()->prepare("
-                INSERT INTO vital_signs (patient_id, temperature, blood_pressure, pulse_rate, measured_at)
-                VALUES (?, ?, ?, ?, NOW())
-            ");
-            $stmtVitals->execute([$patientId, $temp, $bloodPressure, $pulse]);
-        }
         $passport['last_updated'] = date('F j, Y');
     } catch (Throwable $e) {
         $saved = false;
@@ -194,96 +176,31 @@ render_student_header('Emergency Health Passport', 'passport');
             </div>
         </section>
 
-        <!-- Vital Signs & Measurements -->
+        <!-- BMI -->
         <section class="student-card">
             <div class="student-card-header">
                 <div>
-                    <h2 class="student-card-title">Vital Signs & Measurements</h2>
-                    <p class="student-card-copy">Your standing measurements and vital signs baseline</p>
+                    <h2 class="student-card-title">BMI</h2>
+                    <p class="student-card-copy">Latest height, weight, and BMI confirmed from your APE record</p>
                 </div>
                 <span class="student-badge student-badge-info">
                     <span class="material-symbols-outlined" style="font-size:12px;">monitor_heart</span>
-                    Vitals
+                    BMI
                 </span>
             </div>
             <div class="student-card-pad">
                 <div class="student-grid" style="gap:0.75rem;">
                     <div class="student-span-4 student-field" style="margin-bottom:0;">
-                        <label class="student-label" for="height_cm">Height (cm)</label>
-                        <input
-                            id="height_cm"
-                            name="height_cm"
-                            type="number"
-                            step="0.1"
-                            min="30"
-                            max="250"
-                            class="student-input"
-                            value="<?= student_e($passport['height_cm']) ?>"
-                            placeholder="e.g. 170"
-                        >
+                        <label class="student-label">Height</label>
+                        <div class="passport-readonly-field"><?= $passport['height_cm'] !== null ? student_e(number_format((float) $passport['height_cm'], 2)) . ' cm' : 'Not recorded from APE yet' ?></div>
                     </div>
                     <div class="student-span-4 student-field" style="margin-bottom:0;">
-                        <label class="student-label" for="weight_kg">Weight (kg)</label>
-                        <input
-                            id="weight_kg"
-                            name="weight_kg"
-                            type="number"
-                            step="0.1"
-                            min="1"
-                            max="500"
-                            class="student-input"
-                            value="<?= student_e($passport['weight_kg']) ?>"
-                            placeholder="e.g. 60"
-                        >
+                        <label class="student-label">Weight</label>
+                        <div class="passport-readonly-field"><?= $passport['weight_kg'] !== null ? student_e(number_format((float) $passport['weight_kg'], 2)) . ' kg' : 'Not recorded from APE yet' ?></div>
                     </div>
                     <div class="student-span-4 student-field" style="margin-bottom:0;">
-                        <label class="student-label" for="passport_bmi">BMI (calculated)</label>
-                        <input
-                            id="passport_bmi"
-                            type="text"
-                            class="student-input"
-                            value="<?= student_e($passport['bmi'] ?: 'Enter height/weight') ?>"
-                            readonly
-                        >
-                    </div>
-                    <div class="student-span-4 student-field" style="margin-bottom:0;">
-                        <label class="student-label" for="temperature">Temperature (°C)</label>
-                        <input
-                            id="temperature"
-                            name="temperature"
-                            type="number"
-                            step="0.01"
-                            min="30"
-                            max="45"
-                            class="student-input"
-                            value="<?= student_e($passport['temperature'] ? number_format((float) $passport['temperature'], 2) : '') ?>"
-                            placeholder="e.g. 36.6"
-                        >
-                    </div>
-                    <div class="student-span-4 student-field" style="margin-bottom:0;">
-                        <label class="student-label" for="blood_pressure">Blood Pressure</label>
-                        <input
-                            id="blood_pressure"
-                            name="blood_pressure"
-                            type="text"
-                            pattern="\d{2,3}\s*/\s*\d{2,3}"
-                            class="student-input"
-                            value="<?= student_e($passport['blood_pressure']) ?>"
-                            placeholder="e.g. 120/80"
-                        >
-                    </div>
-                    <div class="student-span-4 student-field" style="margin-bottom:0;">
-                        <label class="student-label" for="pulse_rate">Pulse Rate (bpm)</label>
-                        <input
-                            id="pulse_rate"
-                            name="pulse_rate"
-                            type="number"
-                            min="20"
-                            max="250"
-                            class="student-input"
-                            value="<?= student_e($passport['pulse_rate']) ?>"
-                            placeholder="e.g. 72"
-                        >
+                        <label class="student-label">BMI</label>
+                        <div class="passport-readonly-field"><?= $passport['bmi'] !== null ? student_e(number_format((float) $passport['bmi'], 2)) : 'Not recorded from APE yet' ?></div>
                     </div>
                 </div>
             </div>
@@ -427,12 +344,12 @@ render_student_header('Emergency Health Passport', 'passport');
         </section>
 
         <!-- Save button -->
-        <div class="flex gap-3">
-            <button type="submit" class="student-button" style="flex:1;">
+        <div class="passport-action-row">
+            <button type="submit" class="student-button passport-save-button">
                 <span class="material-symbols-outlined">save</span>
                 Save Passport Settings
             </button>
-            <a href="<?= student_e($passportUrl) ?>" target="_blank" class="student-button-secondary text-decoration-none" style="white-space:nowrap;">
+            <a href="<?= student_e($passportUrl) ?>" target="_blank" class="student-button-secondary passport-preview-button text-decoration-none">
                 <span class="material-symbols-outlined">open_in_new</span>
                 View Live Passport
             </a>
@@ -768,23 +685,5 @@ render_student_header('Emergency Health Passport', 'passport');
         });
     }
 
-    const heightInp = $('height_cm');
-    const weightInp = $('weight_kg');
-    const bmiInp = $('passport_bmi');
-    if (heightInp && weightInp && bmiInp) {
-        const recalcBmi = () => {
-            const h = parseFloat(heightInp.value);
-            const w = parseFloat(weightInp.value);
-            if (h > 0 && w > 0) {
-                const hM = h / 100;
-                const bmi = (w / (hM * hM)).toFixed(1);
-                bmiInp.value = bmi;
-            } else {
-                bmiInp.value = 'Enter height/weight';
-            }
-        };
-        heightInp.addEventListener('input', recalcBmi);
-        weightInp.addEventListener('input', recalcBmi);
-    }
 })();
 </script>

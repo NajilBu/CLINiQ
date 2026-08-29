@@ -162,7 +162,7 @@ $visitColumns = [
     ['headerName' => 'Complaint', 'field' => 'complaint', 'minWidth' => 210],
     ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'sortField' => 'statusSort', 'sortType' => 'number', 'width' => 145],
     ['headerName' => 'Attended By', 'field' => 'attendedBy', 'minWidth' => 165],
-    ['headerName' => 'Open', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 210],
+    ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 100, 'minWidth' => 90],
 ];
 
 $visitRows = [];
@@ -184,10 +184,10 @@ foreach ($visits as $visit) {
             . '<input type="hidden" name="mode" value="no_show">'
             . '<input type="hidden" name="from" value="logbook">'
             . '<input type="hidden" name="return_to" value="index">'
-            . '<button class="btn btn-sm btn-ghost btn-cancel-icon" title="Mark no show" aria-label="Mark no show" data-confirm-submit data-confirm-type="danger" data-confirm-title="Mark as no show?" data-confirm-message="This will cancel the unaddressed logbook entry because the patient did not proceed to the nurse station." data-confirm-toast="Marking no show..."><span class="material-symbols-outlined text-[14px]">cancel</span></button>'
+            . '<button class="btn btn-sm btn-ghost" title="Mark no show" aria-label="Mark no show" data-confirm-submit data-confirm-type="danger" data-confirm-title="Mark as no show?" data-confirm-message="This will cancel the unaddressed logbook entry because the patient did not proceed to the nurse station." data-confirm-toast="Marking no show..."><span class="material-symbols-outlined text-[14px]">cancel</span> No Show</button>'
             . '</form>';
     }
-    $actionsHtml = $actionParts ? '<div class="flex items-center gap-2">' . implode('', $actionParts) . '</div>' : '';
+    $actionsHtml = $actionParts ? '<div class="row-actions-list">' . implode('', $actionParts) . '</div>' : '';
 
     $visitRows[] = [
         'rowUrl' => $actionUrl,
@@ -199,7 +199,7 @@ foreach ($visits as $visit) {
         'statusHtml' => '<span class="badge ' . e(visit_status_badge_class($visitStatus)) . '">' . e($visitStatus) . '</span>',
         'statusSort' => array_search($visitStatus, ['Unaddressed', 'Active', 'Completed', 'Cancelled'], true),
         'attendedBy' => $visit['attended_by_name'] ?: 'Not yet attended',
-        'actionsHtml' => $actionsHtml,
+        'actionsHtml' => row_actions_button('Visit actions', $actionsHtml),
     ];
 }
 

@@ -4,6 +4,7 @@ require_once __DIR__ . '/../app/services/AppointmentWorkflow.php';
 require_once __DIR__ . '/includes/patient-layout.php';
 
 ensure_appointment_schema();
+appointment_sync_overdue_confirmations();
 
 $profile = student_require_login();
 $patientId = (int) $profile['person_id'];
@@ -410,8 +411,13 @@ render_student_header('Appointments', 'appointment');
                 $badge = match ($status) {
                     'Scheduled', 'Completed' => 'student-badge-success',
                     'Cancelled', 'No Show' => 'student-badge-danger',
-                    'Pending' => 'student-badge-warning',
+                    'Pending', 'For Confirmation' => 'student-badge-warning',
                     default => 'student-badge-info',
+                };
+                $displayStatus = match ($status) {
+                    'Pending' => 'Awaiting Clinic',
+                    'For Confirmation' => 'Awaiting Clinic Confirmation',
+                    default => $status,
                 };
                 ?>
                 <div class="student-document-card">
@@ -421,15 +427,18 @@ render_student_header('Appointments', 'appointment');
                     <div class="student-document-meta">
                         <div class="flex flex-wrap items-center gap-2">
                             <h3><?= student_e($appointment['purpose']) ?></h3>
-                            <span class="student-badge <?= student_e($badge) ?>"><?= student_e($status) ?></span>
+                            <span class="student-badge <?= student_e($badge) ?>"><?= student_e($displayStatus) ?></span>
                         </div>
                         <p><?= student_e(date('F j, Y \a\t g:i A', strtotime($appointment['appointment_datetime']))) ?></p>
+                        <?php if ($status === 'For Confirmation'): ?>
+                            <p><strong>Status:</strong> Your appointment time has passed. Please wait for clinic staff to confirm if it was completed.</p>
+                        <?php endif; ?>
                         <?php if ($status === 'Cancelled' && trim((string) ($appointment['cancellation_reason'] ?? '')) !== ''): ?>
                             <p><strong>Reason:</strong> <?= student_e($appointment['cancellation_reason']) ?></p>
                         <?php endif; ?>
                     </div>
                     <div class="student-appointment-actions">
-                        <span class="student-badge <?= student_e($badge) ?>"><?= student_e($status === 'Pending' ? 'Awaiting Clinic' : $status) ?></span>
+                        <span class="student-badge <?= student_e($badge) ?>"><?= student_e($displayStatus) ?></span>
                         <?php if ($canCancel): ?>
                             <form method="post" class="student-cancel-form">
                                 <input type="hidden" name="action" value="cancel_appointment">

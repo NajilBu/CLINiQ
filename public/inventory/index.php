@@ -77,6 +77,10 @@ $activeTab = $_GET['tab'] ?? 'medicine';
 if (!in_array($activeTab, ['medicine', 'equipment', 'expiring', 'archived', 'activity'], true)) {
     $activeTab = 'medicine';
 }
+$stockFilter = $_GET['stock_status'] ?? 'all';
+if (!in_array($stockFilter, ['all', 'low', 'out', 'healthy'], true)) {
+    $stockFilter = 'all';
+}
 $highlightTarget = $_GET['highlight'] ?? '';
 if (!in_array($highlightTarget, ['low-stock', 'expiring', 'active-loans'], true)) {
     $highlightTarget = '';
@@ -89,7 +93,7 @@ $activeColumns = [
     ['headerName' => 'Reorder At', 'field' => 'reorderLevel', 'minWidth' => 120, 'flex' => 0.6],
     ['headerName' => 'Expiration', 'field' => 'expirationHtml', 'cellRenderer' => 'html', 'sortField' => 'expirationSort', 'sortType' => 'date', 'minWidth' => 140, 'flex' => 0.7],
     ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'sortField' => 'statusSort', 'sortType' => 'number', 'minWidth' => 160, 'flex' => 0.8],
-    ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'minWidth' => 150, 'flex' => 0.65],
+    ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'minWidth' => 90, 'maxWidth' => 110, 'flex' => 0.4],
 ];
 
 $archivedColumns = [
@@ -98,7 +102,7 @@ $archivedColumns = [
     ['headerName' => 'Final Stock', 'field' => 'quantityHtml', 'cellRenderer' => 'html', 'sortField' => 'quantitySort', 'sortType' => 'number', 'minWidth' => 140, 'flex' => 0.7],
     ['headerName' => 'Expiration', 'field' => 'expirationHtml', 'cellRenderer' => 'html', 'sortField' => 'expirationSort', 'sortType' => 'date', 'minWidth' => 140, 'flex' => 0.7],
     ['headerName' => 'Archived', 'field' => 'archivedHtml', 'cellRenderer' => 'html', 'sortField' => 'archivedSort', 'sortType' => 'date', 'minWidth' => 180, 'flex' => 0.9],
-    ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'minWidth' => 120, 'flex' => 0.55],
+    ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'minWidth' => 90, 'maxWidth' => 110, 'flex' => 0.4],
 ];
 
 $equipmentColumns = [
@@ -107,7 +111,7 @@ $equipmentColumns = [
     ['headerName' => 'Available', 'field' => 'stockHtml', 'cellRenderer' => 'html', 'sortField' => 'stockSort', 'sortType' => 'number', 'minWidth' => 220, 'flex' => 1],
     ['headerName' => 'Minimum Available', 'field' => 'reorderLevel', 'minWidth' => 170, 'flex' => 0.75],
     ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'sortField' => 'statusSort', 'sortType' => 'number', 'minWidth' => 160, 'flex' => 0.8],
-    ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'minWidth' => 120, 'flex' => 0.55],
+    ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'minWidth' => 90, 'maxWidth' => 110, 'flex' => 0.4],
 ];
 
 $loanColumns = [
@@ -117,7 +121,7 @@ $loanColumns = [
     ['headerName' => 'Qty', 'field' => 'quantityHtml', 'cellRenderer' => 'html', 'sortField' => 'quantitySort', 'sortType' => 'number', 'minWidth' => 90, 'flex' => 0.4],
     ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'sortField' => 'statusSort', 'sortType' => 'number', 'minWidth' => 130, 'flex' => 0.6],
     ['headerName' => 'Condition', 'field' => 'conditionHtml', 'cellRenderer' => 'html', 'sortField' => 'conditionSort', 'minWidth' => 140, 'flex' => 0.65],
-    ['headerName' => 'Actions / Notes', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'minWidth' => 210, 'flex' => 1],
+    ['headerName' => 'Actions / Notes', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'minWidth' => 160, 'flex' => 0.8],
 ];
 
 $activityColumns = [
@@ -136,6 +140,22 @@ $visibleItems = match ($activeTab) {
     'archived' => $archivedItems,
     default => $medicineItems,
 };
+if ($activeTab !== 'activity' && $stockFilter !== 'all') {
+    $visibleItems = array_values(array_filter($visibleItems, static function (array $item) use ($stockFilter, $medicineStockKey, $lowStockKeys): bool {
+        $category = trim((string) ($item['category'] ?? ''));
+        $isEquipment = str_contains(strtolower($category), 'equipment');
+        $stockKey = !$isEquipment ? $medicineStockKey($item) : '';
+        $isLow = $isEquipment
+            ? (int) $item['quantity'] <= (int) $item['reorder_level']
+            : isset($lowStockKeys[$stockKey]);
+        return match ($stockFilter) {
+            'low' => $isLow,
+            'out' => (int) $item['quantity'] === 0,
+            'healthy' => !$isLow && (int) $item['quantity'] > 0,
+            default => true,
+        };
+    }));
+}
 
 $inventoryRows = [];
 $highlightedLowStockKeys = [];
@@ -199,19 +219,19 @@ foreach ($visibleItems as $item) {
             'archivedSort' => $item['archived_at'],
             'archivedHtml' => '<div><strong class="text-sm text-slate-700">' . e(date('M d, Y', strtotime($item['archived_at']))) . '</strong><p class="text-xs font-bold text-slate-400 mb-0">' . e($item['archived_by_name'] ?: 'System') . '</p></div>',
             'reasonHtml' => '<span class="text-sm font-bold text-slate-500">' . e($item['archived_reason'] ?: 'No reason recorded') . '</span>',
-            'actionsHtml' => '<form method="post" action="restore.php" class="flex justify-end" data-inventory-form><input type="hidden" name="id" value="' . (int) $item['id'] . '"><button type="submit" class="btn btn-sm btn-outline" data-confirm-submit data-confirm-type="primary" data-confirm-title="Restore inventory item?" data-confirm-message="' . $restoreMessage . '" data-confirm-toast="Restoring inventory item..."><span class="material-symbols-outlined text-[14px]">restore</span>Restore</button></form>',
+            'actionsHtml' => row_actions_button('Inventory actions', '<form method="post" action="restore.php" data-inventory-form><input type="hidden" name="id" value="' . (int) $item['id'] . '"><button type="submit" class="btn btn-sm btn-outline" data-confirm-submit data-confirm-type="primary" data-confirm-title="Restore inventory item?" data-confirm-message="' . $restoreMessage . '" data-confirm-toast="Restoring inventory item..."><span class="material-symbols-outlined text-[14px]">restore</span>Restore</button></form>'),
         ];
         continue;
     }
 
-    $actionsHtml = '<div class="flex justify-end gap-1">';
+    $actionsHtml = '<div class="row-actions-list">';
     if (!$isEquipment) {
-        $actionsHtml .= '<button onclick="openRestockMedicine(' . $restockArgs . ')" class="btn-icon btn-icon-primary" title="Restock medicine"><span class="material-symbols-outlined">add_box</span></button>';
+        $actionsHtml .= '<button onclick="closeModal(\'rowActionsModal\'); openRestockMedicine(' . $restockArgs . ')" class="btn btn-sm btn-primary" title="Restock medicine"><span class="material-symbols-outlined text-[14px]">add_box</span>Restock</button>';
     }
     if ($activeTab === 'equipment' && $isEquipment && (int) $item['quantity'] > 0) {
-        $actionsHtml .= '<button onclick="openBorrowItem(' . $borrowArgs . ')" class="btn-icon btn-icon-primary" title="Borrow equipment"><span class="material-symbols-outlined">assignment_ind</span></button>';
+        $actionsHtml .= '<button onclick="closeModal(\'rowActionsModal\'); openBorrowItem(' . $borrowArgs . ')" class="btn btn-sm btn-primary" title="Borrow equipment"><span class="material-symbols-outlined text-[14px]">assignment_ind</span>Borrow</button>';
     }
-    $actionsHtml .= '<button onclick="editItem(' . $editArgs . ')" class="btn-icon btn-icon-primary" title="Edit item"><span class="material-symbols-outlined">edit</span></button><button onclick="openArchiveItem(' . $archiveArgs . ')" class="btn-icon btn-icon-slate" title="Deactivate item"><span class="material-symbols-outlined">archive</span></button></div>';
+    $actionsHtml .= '<button onclick="closeModal(\'rowActionsModal\'); editItem(' . $editArgs . ')" class="btn btn-sm btn-outline" title="Edit item"><span class="material-symbols-outlined text-[14px]">edit</span>Edit</button><button onclick="closeModal(\'rowActionsModal\'); openArchiveItem(' . $archiveArgs . ')" class="btn btn-sm btn-ghost" title="Deactivate item"><span class="material-symbols-outlined text-[14px]">archive</span>Deactivate</button></div>';
     $highlightKeys = [];
     if ($isLow && !$isEquipment && !isset($highlightedLowStockKeys[$stockKey])) {
         $highlightKeys[] = 'low-stock';
@@ -234,7 +254,7 @@ foreach ($visibleItems as $item) {
         'expirationHtml' => '<span class="text-sm font-bold ' . $expirationClass . '">' . e($expirationLabel) . '</span>',
         'statusSort' => $isLow ? 0 : ($isExpiring ? 1 : 2),
         'statusHtml' => inventory_status_badge($displayQuantityForStatus),
-        'actionsHtml' => $actionsHtml,
+        'actionsHtml' => row_actions_button('Inventory actions', $actionsHtml),
     ];
 }
 
@@ -289,7 +309,7 @@ foreach ($loanRowsRaw as $loan) {
         'conditionSort' => $loan['return_condition'] ?? '',
         'conditionHtml' => inventory_return_condition_badge($loan['return_condition'] ?? null),
         'actionsHtml' => $isBorrowed
-            ? '<button onclick="openReturnLoan(' . $returnArgs . ')" class="btn btn-sm btn-outline"><span class="material-symbols-outlined text-[14px]">assignment_return</span>Return</button>'
+            ? row_actions_button('Loan actions', '<button onclick="closeModal(\'rowActionsModal\'); openReturnLoan(' . $returnArgs . ')" class="btn btn-sm btn-outline"><span class="material-symbols-outlined text-[14px]">assignment_return</span>Return</button>')
             : $returnSummary,
     ];
 }
@@ -410,6 +430,10 @@ render_clinic_command_header(
                     <span class="search-icon material-symbols-outlined">search</span>
                     <input id="inventoryGridSearch" type="text" placeholder="Search inventory..." class="search-input">
                 </div>
+                <button type="button" onclick="showModal('inventoryAdvancedFilterModal')" class="btn btn-outline w-full sm:w-auto">
+                    <span class="material-symbols-outlined text-[18px]">filter_list</span>
+                    Filters
+                </button>
             </div>
         </div>
 
@@ -441,6 +465,58 @@ render_clinic_command_header(
             </a>
         </div>
     </div>
+    <?php if ($stockFilter !== 'all'): ?>
+        <div class="flex flex-wrap items-center gap-2 px-6 py-4 bg-white border-b border-outline-variant/10">
+            <span class="material-symbols-outlined text-slate-400 text-sm">filter_alt</span>
+            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-2">Active Filters</span>
+            <span class="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold border border-slate-200"><?= e(ucwords(str_replace('_', ' ', $stockFilter))) ?></span>
+            <a href="?tab=<?= e(urlencode($activeTab)) ?>" data-inventory-nav class="ml-auto text-[10px] font-black text-primary uppercase tracking-widest hover:underline text-decoration-none">Clear All</a>
+        </div>
+    <?php endif; ?>
+
+    <form method="get" id="inventoryAdvancedFilterModal" class="modal-backdrop">
+        <div class="modal-content bg-white rounded-[2rem] w-full max-w-2xl p-8 shadow-2xl border border-outline-variant/10">
+            <div class="flex items-center justify-between mb-8">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-primary-fixed text-primary rounded-xl flex items-center justify-center">
+                        <span class="material-symbols-outlined">filter_alt</span>
+                    </div>
+                    <h3 class="font-headline text-2xl font-extrabold text-[#1c2a59] m-0">Advanced Filters</h3>
+                </div>
+                <button type="button" onclick="closeModal('inventoryAdvancedFilterModal')" class="btn-icon btn-icon-slate">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                    <label class="clinic-label">Section</label>
+                    <select class="clinic-select" name="tab">
+                        <option value="medicine" <?= $activeTab === 'medicine' ? 'selected' : '' ?>>Medicine Inventory</option>
+                        <option value="equipment" <?= $activeTab === 'equipment' ? 'selected' : '' ?>>Equipment Tracking</option>
+                        <option value="expiring" <?= $activeTab === 'expiring' ? 'selected' : '' ?>>Expiring Soon</option>
+                        <option value="archived" <?= $activeTab === 'archived' ? 'selected' : '' ?>>Archived</option>
+                        <option value="activity" <?= $activeTab === 'activity' ? 'selected' : '' ?>>Activity</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="clinic-label">Stock Status</label>
+                    <select class="clinic-select" name="stock_status">
+                        <option value="all" <?= $stockFilter === 'all' ? 'selected' : '' ?>>All</option>
+                        <option value="low" <?= $stockFilter === 'low' ? 'selected' : '' ?>>Low Stock</option>
+                        <option value="out" <?= $stockFilter === 'out' ? 'selected' : '' ?>>Out of Stock</option>
+                        <option value="healthy" <?= $stockFilter === 'healthy' ? 'selected' : '' ?>>Healthy Stock</option>
+                    </select>
+                </div>
+            </div>
+            <div class="flex flex-col sm:flex-row gap-3 pt-6 mt-6 border-t border-slate-100">
+                <a href="index.php" data-inventory-nav class="btn btn-ghost flex-1 text-decoration-none">Reset All</a>
+                <button class="btn btn-primary flex-1">
+                    <span class="material-symbols-outlined text-[18px]">check</span>
+                    Apply Filters
+                </button>
+            </div>
+        </div>
+    </form>
 
     <?php render_ag_grid('inventoryGrid', $gridColumns, $inventoryRows, [
         'searchInput' => 'inventoryGridSearch',

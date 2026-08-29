@@ -23,7 +23,7 @@ render_clinic_command_header(
 
 <div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-5 py-4 text-sm font-bold text-emerald-800 flex items-start gap-3">
     <span class="material-symbols-outlined text-[20px]">visibility</span>
-    <p class="m-0">The checklist controls which report sections are exported. The checklist itself is never included in the PDF.</p>
+    <p class="m-0">The checklist controls which report sections are included in the printable PDF view. The checklist itself is never included in the report.</p>
 </div>
 
 <form method="post" action="pdf.php" data-no-ajax="true" id="reportExportForm" class="space-y-6">
@@ -34,7 +34,7 @@ render_clinic_command_header(
         <div class="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
             <div>
                 <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Sections Included in PDF</h2>
-                <p class="text-xs font-bold text-slate-500 mb-0">Uncheck a section to hide it from this preview and exclude it from the exported report.</p>
+                <p class="text-xs font-bold text-slate-500 mb-0">Uncheck a section to hide it from this preview and exclude it from the printable report.</p>
             </div>
             <span class="badge badge-in-progress shrink-0" id="selectedModuleCount"><?= count($modules) ?> selected</span>
         </div>
@@ -53,7 +53,7 @@ render_clinic_command_header(
             </div>
             <p class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-bold text-red-700" id="reportModuleError" role="alert">Select at least one section before exporting.</p>
             <div class="flex justify-end">
-                <button class="btn btn-primary justify-center" type="submit" id="exportReportPdf"><span class="material-symbols-outlined text-[18px]">picture_as_pdf</span>Export Selected Sections as PDF</button>
+                <button class="btn btn-primary justify-center" type="submit" id="exportReportPdf"><span class="material-symbols-outlined text-[18px]">print</span>Open Printable PDF View</button>
             </div>
         </div>
     </section>

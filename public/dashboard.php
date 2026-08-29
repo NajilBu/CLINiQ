@@ -76,6 +76,7 @@ if (first_registration_pending('staff')) {
 ensure_ape_workflow_schema();
 ensure_alert_workflow_schema();
 ensure_appointment_schema();
+appointment_sync_overdue_confirmations();
 
 // --- 1. Metrics & Analytics ---
 $metrics = [
@@ -119,7 +120,7 @@ $appointmentsStmt = appointment_db()->query("
     JOIN patients pt ON pt.person_id = a.patient_id
     JOIN people p ON p.id = pt.person_id
     WHERE DATE(a.appointment_datetime) = CURDATE()
-      AND a.status = 'Scheduled'
+      AND a.status IN ('Scheduled', 'For Confirmation')
     ORDER BY a.appointment_datetime ASC
 ");
 $appointments = $appointmentsStmt ? $appointmentsStmt->fetchAll() : [];
@@ -248,7 +249,7 @@ foreach ($allApeRecords as $record) {
     }
 }
 $apeQueue = [];
-foreach (['examination', 'document_review', 'digital_submission', 'final_decision', 'follow_up'] as $queueKey) {
+foreach (['examination', 'digital_submission', 'final_decision', 'follow_up'] as $queueKey) {
     foreach ($recordsByQueue[$queueKey] as $record) {
         $record['_queue_key'] = $queueKey;
         $apeQueue[] = $record;
@@ -267,8 +268,10 @@ $visitorColumns = [
 $visitorRows = [];
 foreach ($visitorLogs as $visit) {
     $fullName = trim($visit['first_name'] . ' ' . $visit['last_name']);
+    $visitStatus = $visit['status'] ?: 'Unaddressed';
+    $dashboardVisitUrl = app_url('visits/view.php?id=' . (int) $visit['id'] . '&from=dashboard' . ($visitStatus === 'Unaddressed' ? '&begin=1' : ''));
     $visitorRows[] = [
-        'rowUrl' => app_url('visits/view.php?id=' . (int) $visit['id'] . '&from=dashboard'),
+        'rowUrl' => $dashboardVisitUrl,
         'arrivedSort' => $visit['visit_datetime'],
         'arrivedTime' => date('h:i A', strtotime($visit['visit_datetime'])),
         'addressedSort' => $visit['addressed_at'],
@@ -278,8 +281,8 @@ foreach ($visitorLogs as $visit) {
         'patientSort' => trim($visit['last_name'] . ' ' . $visit['first_name']),
         'patientHtml' => '<div class="font-bold text-slate-800 text-sm">' . e($fullName) . '</div><div class="text-[10px] text-slate-400">' . e($visit['id_number']) . '</div>',
         'complaint' => $visit['chief_complaint'],
-        'statusHtml' => '<span class="badge ' . e(status_badge_class($visit['status'])) . ' text-[9px]">' . e($visit['status']) . '</span>',
-        'statusSort' => array_search($visit['status'], ['Unaddressed', 'Active', 'Completed', 'Cancelled'], true),
+        'statusHtml' => '<span class="badge ' . e(status_badge_class($visitStatus)) . ' text-[9px]">' . e($visitStatus) . '</span>',
+        'statusSort' => array_search($visitStatus, ['Unaddressed', 'Active', 'Completed', 'Cancelled'], true),
     ];
 }
 
@@ -287,7 +290,7 @@ $dashboardApeColumns = [
     ['headerName' => 'Patient', 'field' => 'studentHtml', 'cellRenderer' => 'html', 'sortField' => 'studentSort', 'minWidth' => 230],
     ['headerName' => 'Work Queue', 'field' => 'queueHtml', 'cellRenderer' => 'html', 'sortField' => 'queueSort', 'minWidth' => 170],
     ['headerName' => 'Missing / Waiting For', 'field' => 'missing', 'minWidth' => 240],
-    ['headerName' => 'Action', 'field' => 'actionHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 210],
+    ['headerName' => 'Actions', 'field' => 'actionHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 100, 'minWidth' => 90],
 ];
 $dashboardApeRows = [];
 foreach ($apeQueue as $rec) {
@@ -302,7 +305,7 @@ foreach ($apeQueue as $rec) {
         'queueHtml' => '<span class="badge ' . ($queueKey === 'follow_up' ? 'badge-high' : 'badge-in-progress') . '">' . e($queue['short_title'] ?? $queue['title']) . '</span>',
         'queueSort' => $queue['short_title'] ?? $queue['title'],
         'missing' => ape_missing_item($rec),
-        'actionHtml' => '<a href="' . e(app_url('ape/view.php?id=' . (int) $rec['id'])) . '" class="btn btn-sm btn-ghost border border-slate-200 hover:border-primary hover:text-primary text-decoration-none"><span class="material-symbols-outlined text-[14px]">' . e($next['icon']) . '</span>' . e($next['label']) . '</a>',
+        'actionHtml' => row_actions_button('APE actions', '<a href="' . e(app_url('ape/view.php?id=' . (int) $rec['id'])) . '" class="btn btn-sm btn-ghost border border-slate-200 hover:border-primary hover:text-primary text-decoration-none"><span class="material-symbols-outlined text-[14px]">' . e($next['icon']) . '</span>' . e($next['label']) . '</a>'),
     ];
 }
 
@@ -386,13 +389,13 @@ render_header('Main Dashboard');
                 </p>
             </div>
         </a>
-        <a href="<?= app_url('ape/index.php?queue=document_review') ?>"
+        <a href="<?= app_url('ape/index.php?queue=examination') ?>"
             class="dashboard-metric-card flex items-center gap-4 text-decoration-none hover:shadow-md hover:border-blue-200 transition-all cursor-pointer col-span-2 sm:col-span-1">
             <div class="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
                 <span class="material-symbols-outlined text-[24px]">pending_actions</span>
             </div>
             <div class="min-w-0">
-                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">APE To Review</p>
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">APE Action</p>
                 <p class="font-headline text-3xl font-extrabold text-slate-800 leading-none m-0">
                     <?= $metrics['ape_pending_review'] ?>
                 </p>
@@ -608,7 +611,7 @@ render_header('Main Dashboard');
                     </div>
                 </div>
                 <div class="flex items-center gap-2 shrink-0">
-                    <span class="badge badge-in-progress text-[9px]"><?= count($appointments) ?> scheduled</span>
+                    <span class="badge badge-in-progress text-[9px]"><?= count($appointments) ?> scheduled / confirmation</span>
                     <a href="<?= app_url('appointments/index.php') ?>"
                         class="btn btn-sm btn-ghost text-slate-400 hover:text-primary text-decoration-none">
                         <span class="material-symbols-outlined text-[18px]">calendar_month</span>
@@ -644,13 +647,20 @@ render_header('Main Dashboard');
                                     <article class="dashboard-calendar-event <?= $isPlaceholder ? 'is-placeholder' : '' ?>"
                                         style="top: calc(<?= number_format($top, 4, '.', '') ?>% + 2px); height: calc(<?= number_format($height, 4, '.', '') ?>% - 4px); left: calc(<?= number_format($left, 4, '.', '') ?>% + 3px); width: calc(<?= number_format($width, 4, '.', '') ?>% - 6px);"
                                         title="<?= e($fullName . ' — ' . $apt['purpose'] . ' — ' . $time . ' to ' . $endTime) ?>">
-                                        <div class="dashboard-calendar-event-time">
-                                            <span class="material-symbols-outlined" aria-hidden="true">schedule</span>
-                                            <?= e($time) ?>–<?= e($endTime) ?>
-                                            <?php if ($isPlaceholder): ?><span class="dashboard-calendar-sample-badge">Sample</span><?php endif; ?>
+                                        <div class="dashboard-calendar-event-main">
+                                            <div class="dashboard-calendar-event-details">
+                                                <div class="dashboard-calendar-event-time">
+                                                    <span class="material-symbols-outlined" aria-hidden="true">schedule</span>
+                                                    <?= e($time) ?>–<?= e($endTime) ?>
+                                                    <?php if ($isPlaceholder): ?><span class="dashboard-calendar-sample-badge">Sample</span><?php endif; ?>
+                                                </div>
+                                                <strong><?= e($fullName) ?></strong>
+                                                <span><?= e($apt['id_number']) ?> &bull; <?= e($apt['purpose']) ?></span>
+                                            </div>
+                                            <?php if (($apt['status'] ?? '') === 'For Confirmation'): ?>
+                                                <span class="dashboard-calendar-event-status badge badge-pending">For Confirmation</span>
+                                            <?php endif; ?>
                                         </div>
-                                        <strong><?= e($fullName) ?></strong>
-                                        <span><?= e($apt['id_number']) ?> &bull; <?= e($apt['purpose']) ?></span>
                                     </article>
                                 <?php endforeach; ?>
                             </div>
@@ -694,8 +704,7 @@ render_header('Main Dashboard');
         <div class="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
                 <h2 class="font-headline text-xl font-extrabold text-[#17261d] m-0">APE Action Queue</h2>
-                <p class="text-xs font-bold text-slate-500 m-0">Priority patients needing hard-copy review, clinical
-                    examination, document keeping, final decision, or follow-up clearance.</p>
+                <p class="text-xs font-bold text-slate-500 m-0">Priority patients needing examination, document keeping, final decision, or follow-up clearance.</p>
             </div>
             <a href="<?= app_url('ape/index.php') ?>" class="btn btn-sm btn-primary shrink-0">
                 <span class="material-symbols-outlined text-[16px]">open_in_new</span>

@@ -11,7 +11,8 @@ function render_cliniq_entry_header(array $options = []): void
 {
     $clinicProfile = clinic_profile_settings();
     $homeUrl = $options['homeUrl'] ?? '#';
-    $logoUrl = $options['logoUrl'] ?? 'assets/img/clinic-logo.png';
+    $logoPath = clinic_profile_logo_path($clinicProfile);
+    $logoUrl = $options['logoUrl'] ?? (function_exists('app_url') ? app_url($logoPath) : $logoPath);
     $class = trim('cliniq-entry-header ' . ($options['class'] ?? ''));
     $systemName = $options['systemName'] ?? $clinicProfile['system_name'];
     $department = $options['department'] ?? $clinicProfile['department'];

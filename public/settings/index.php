@@ -10,8 +10,8 @@ ensure_system_settings_schema();
 ensure_dropdown_options_schema();
 
 $user = current_user() ?? [];
-$canManageSettings = in_array($user['role'] ?? '', ['admin', 'nurse', 'it_expert'], true);
-$canManageStaffProfiles = in_array($user['role'] ?? '', ['admin', 'it_expert'], true);
+$canManageSettings = in_array($user['role'] ?? '', ['admin', 'doctor', 'it_expert'], true);
+$canManageStaffProfiles = in_array($user['role'] ?? '', ['admin', 'doctor', 'it_expert'], true);
 $canManagePatientAccounts = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
 $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
 $dropdownCategoryLabels = [
@@ -57,8 +57,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             header('Location: index.php?tab=general');
             exit;
         }
-        save_clinic_profile_settings($_POST, $updatedBy);
-        flash_message('success', 'Clinic profile settings saved.');
+        try {
+            $profileInput = $_POST;
+            $currentProfile = clinic_profile_settings();
+            $profileInput['logo_path'] = clinic_profile_logo_path($currentProfile);
+            $uploadedLogoPath = save_uploaded_clinic_logo($_FILES['logo_file'] ?? []);
+            if ($uploadedLogoPath !== '') {
+                $profileInput['logo_path'] = $uploadedLogoPath;
+            }
+            save_clinic_profile_settings($profileInput, $updatedBy);
+            flash_message('success', $uploadedLogoPath !== '' ? 'Clinic profile and system logo saved.' : 'Clinic profile settings saved.');
+        } catch (Throwable $e) {
+            flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $e->getMessage());
+        }
         header('Location: index.php?tab=general');
         exit;
     }
@@ -77,7 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (in_array($action, ['create_staff_profile', 'update_staff_profile', 'reset_staff_password'], true)) {
         if (!$canManageStaffProfiles) {
-            flash_message('error', 'Only administrators and IT experts can manage staff profiles.');
+            flash_message('error', 'Only administrators, doctors, or IT experts can manage staff profiles.');
             header('Location: index.php?tab=account');
             exit;
         }
@@ -257,7 +268,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'save_mail_settings') {
         if (!$canManageSettings) {
-            flash_message('error', 'Only administrators, nurses, or IT experts can update mail settings.');
+            flash_message('error', 'Only administrators, doctors, or IT experts can update mail settings.');
             header('Location: index.php?tab=email');
             exit;
         }
@@ -273,7 +284,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'send_test_email') {
         if (!$canManageSettings) {
-            flash_message('error', 'Only administrators, nurses, or IT experts can send test emails.');
+            flash_message('error', 'Only administrators, doctors, or IT experts can send test emails.');
             header('Location: index.php?tab=email');
             exit;
         }
@@ -398,7 +409,7 @@ render_clinic_command_header(
 
 <?php if (!$canManageSettings): ?>
     <div class="rounded-2xl bg-red-50 border border-red-100 text-red-700 px-5 py-4 font-bold">
-        Clinic configuration can be changed only by administrators, nurses, or IT experts. You can still update your own password.
+        Clinic configuration can be changed only by administrators, doctors, or IT experts. You can still update your own password.
     </div>
 <?php endif; ?>
 
@@ -448,12 +459,17 @@ render_clinic_command_header(
                 <section>
                     <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Clinic Identity</h2>
                     <p class="text-xs font-bold text-slate-500 mb-5">These details appear in the CLINiQ shell and shared access headers.</p>
-                    <form method="post" class="settings-section space-y-5">
+                    <form method="post" class="settings-section space-y-5" enctype="multipart/form-data" id="clinicProfileForm" data-no-ajax="true">
                         <input type="hidden" name="action" value="save_profile">
+                        <input type="hidden" name="logo_path" value="<?= profile_setting_value($clinicProfile, 'logo_path') ?>">
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
                             <div class="settings-field">
                                 <label class="clinic-label" for="system_name">System Name</label>
                                 <input class="settings-input" id="system_name" name="system_name" value="<?= profile_setting_value($clinicProfile, 'system_name') ?>" <?= !$canManageSettings ? 'readonly' : '' ?> required>
+                            </div>
+                            <div class="settings-field">
+                                <label class="clinic-label" for="institution_name">Institution / School Name</label>
+                                <input class="settings-input" id="institution_name" name="institution_name" value="<?= profile_setting_value($clinicProfile, 'institution_name') ?>" <?= !$canManageSettings ? 'readonly' : '' ?> required>
                             </div>
                             <div class="settings-field">
                                 <label class="clinic-label" for="department">Department</label>
@@ -483,19 +499,19 @@ render_clinic_command_header(
 
                 <section data-logo-placeholder>
                     <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">System Logo</h2>
-                    <p class="text-xs font-bold text-slate-500 mb-5">Preview how a replacement logo would appear in CLINiQ. Saving will be enabled in a future update.</p>
+                    <p class="text-xs font-bold text-slate-500 mb-5">Choose the logo shown in the staff shell, patient portal, visit gateway, and shared access pages.</p>
                     <div class="settings-section settings-logo-layout">
                         <div class="settings-logo-preview-card">
                             <span class="clinic-label">Logo preview</span>
                             <div class="settings-logo-preview">
-                                <img src="<?= app_url('assets/img/clinic-logo.png') ?>" alt="Current <?= e($clinicProfile['department']) ?> logo" data-logo-preview>
+                                <img src="<?= app_url(clinic_profile_logo_path($clinicProfile)) ?>" alt="Current <?= e($clinicProfile['department']) ?> logo" data-logo-preview>
                             </div>
-                            <p class="settings-help m-0 text-center">Current CLINiQ sidebar logo</p>
+                            <p class="settings-help m-0 text-center">Current saved system logo</p>
                         </div>
 
                         <div class="settings-logo-controls">
                             <label class="settings-logo-dropzone" for="settingsLogoInput" data-logo-dropzone>
-                                <input id="settingsLogoInput" type="file" accept="image/png,image/jpeg,image/webp" data-logo-input>
+                                <input id="settingsLogoInput" name="logo_file" form="clinicProfileForm" type="file" accept="image/png,image/jpeg,image/webp" data-logo-input <?= !$canManageSettings ? 'disabled' : '' ?>>
                                 <span class="material-symbols-outlined">add_photo_alternate</span>
                                 <strong>Drop a logo here or choose an image</strong>
                                 <span>PNG, JPG, or WebP &bull; square image recommended &bull; up to 5 MB</span>
@@ -503,13 +519,9 @@ render_clinic_command_header(
                             <p class="settings-logo-file-name" data-logo-file-name>No new image selected.</p>
                             <div class="flex flex-wrap justify-end gap-3">
                                 <button type="button" class="btn btn-ghost hidden" data-logo-reset>Reset Preview</button>
-                                <label for="settingsLogoInput" class="btn btn-outline cursor-pointer">
-                                    <span class="material-symbols-outlined text-[18px]">folder_open</span>
-                                    Choose Image
-                                </label>
-                                <button type="button" class="btn btn-primary" disabled title="Logo saving is not implemented yet.">
-                                    <span class="material-symbols-outlined text-[18px]">schedule</span>
-                                    Save Logo &mdash; Coming Soon
+                                <button type="submit" form="clinicProfileForm" class="btn btn-primary" <?= !$canManageSettings ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Save system logo?" data-confirm-message="This will update the logo used across the staff and patient screens." data-confirm-toast="Saving logo...">
+                                    <span class="material-symbols-outlined text-[18px]">save</span>
+                                    Save Logo
                                 </button>
                             </div>
                         </div>
@@ -678,7 +690,7 @@ render_clinic_command_header(
                     <p class="text-xs font-bold text-slate-500 mb-5">Edit the options shown in clinic forms. Deleted options disappear from future forms but old records keep their saved text.</p>
                     <?php if (!$canManageSettings): ?>
                         <div class="rounded-xl bg-amber-50 border border-amber-100 text-amber-800 px-4 py-3 text-sm font-bold mb-5">
-                            Dropdown options can be managed only by administrators, nurses, or IT experts.
+                            Dropdown options can be managed only by administrators, doctors, or IT experts.
                         </div>
                     <?php endif; ?>
 
