@@ -418,8 +418,8 @@ render_student_header('APE Status', 'ape');
                 <span class="text-xs font-black text-slate-500 uppercase tracking-wider">Completion</span>
                 <strong class="font-headline text-3xl font-black text-[#17261d]"><?= (int) $apePercent ?>%</strong>
             </div>
-            <div class="w-full h-3 rounded-full bg-[#edf8f0] overflow-hidden mb-5">
-                <div class="h-full bg-[#3F7D52] rounded-full" style="width: <?= (int) $apePercent ?>%;"></div>
+            <div class="w-full h-3 rounded-full bg-primary-fixed overflow-hidden mb-5">
+                <div class="h-full bg-primary rounded-full" style="width: <?= (int) $apePercent ?>%;"></div>
             </div>
             <div class="student-ape-stepper" aria-label="APE progress steps">
                 <?php foreach ($flowSteps as $step): ?>

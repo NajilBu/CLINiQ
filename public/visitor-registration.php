@@ -226,6 +226,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+$theme = active_cliniq_theme();
+
 ?>
 <!doctype html>
 <html class="light" lang="en">
@@ -242,12 +244,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             theme: {
                 extend: {
                     colors: {
-                        primary: '#3F7D52',
-                        'primary-fixed': '#e8f6ec',
-                        'primary-container': '#23422C',
-                        surface: '#f4fbf6',
+                        primary: <?= json_encode($theme['primary']) ?>,
+                        'primary-fixed': <?= json_encode($theme['primary_fixed']) ?>,
+                        'primary-container': <?= json_encode($theme['primary_container']) ?>,
+                        surface: <?= json_encode($theme['surface']) ?>,
                         'on-surface': '#17261d',
-                        'outline-variant': '#c7dccd'
+                        'outline-variant': <?= json_encode($theme['outline_variant']) ?>
                     },
                     fontFamily: {
                         headline: ['Manrope', 'sans-serif'],
@@ -259,11 +261,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </script>
     <link href="<?= app_url('assets/css/app.css?v=cancel-icon-1') ?>" rel="stylesheet">
     <style>
+        :root {
+            --cliniq-primary: <?= e($theme['primary']) ?>;
+            --cliniq-primary-hover: <?= e($theme['primary_container']) ?>;
+            --cliniq-primary-fixed: <?= e($theme['primary_fixed']) ?>;
+            --cliniq-accent: <?= e($theme['accent']) ?>;
+            --cliniq-accent-foreground: <?= e($theme['primary_container']) ?>;
+            --cliniq-surface: <?= e($theme['surface']) ?>;
+            --cliniq-surface-low: <?= e($theme['surface_container_low']) ?>;
+            --cliniq-outline: <?= e($theme['outline_variant']) ?>;
+            --cliniq-focus-rgb: <?= e($theme['focus_rgb']) ?>;
+            --cliniq-shadow-rgb: <?= e($theme['shadow_rgb']) ?>;
+        }
+
         body {
             min-height: 100vh;
             background:
-                linear-gradient(180deg, rgba(244, 251, 246, 0.96), rgba(248, 252, 249, 1)),
-                radial-gradient(circle at 80% 0%, rgba(79, 159, 94, 0.09), transparent 32rem);
+                linear-gradient(180deg, color-mix(in srgb, var(--cliniq-surface) 96%, #ffffff), color-mix(in srgb, var(--cliniq-surface) 84%, #ffffff)),
+                radial-gradient(circle at 80% 0%, color-mix(in srgb, var(--cliniq-primary) 10%, transparent), transparent 32rem);
         }
 
         .visit-shell {
@@ -287,10 +302,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .visit-card {
             width: min(100%, 64rem);
             overflow: hidden;
-            border: 1px solid rgba(199, 220, 205, 0.72);
+            border: 1px solid color-mix(in srgb, var(--cliniq-outline) 72%, transparent);
             border-radius: 1rem;
             background: rgba(255, 255, 255, 0.95);
-            box-shadow: 0 1px 2px rgba(23, 38, 29, 0.04), 0 24px 60px rgba(23, 38, 29, 0.08);
+            box-shadow: 0 1px 2px rgba(var(--cliniq-shadow-rgb), 0.04), 0 24px 60px rgba(var(--cliniq-shadow-rgb), 0.08);
         }
 
         .visit-field {
@@ -330,8 +345,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         .visit-input:focus {
-            border-color: #3F7D52;
-            box-shadow: 0 8px 18px rgba(79, 159, 94, 0.08);
+            border-color: var(--cliniq-primary);
+            box-shadow: 0 8px 18px rgba(var(--cliniq-shadow-rgb), 0.08);
         }
 
         .visit-input.input-error {
@@ -501,7 +516,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <div class="visit-shell">
     <?php render_cliniq_entry_header([
         'homeUrl' => app_url('index.php'),
-        'logoUrl' => app_url('assets/img/clinic-logo.png'),
     ]); ?>
 
     <main class="visit-main <?= $form['reason'] === VISITOR_REASON_BORROW_EQUIPMENT ? 'is-borrowing' : '' ?>">

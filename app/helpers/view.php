@@ -132,6 +132,7 @@ function render_header(string $title): void
 {
     $user = current_user();
     $clinicProfile = clinic_profile_settings();
+    $clinicLogoUrl = app_url(clinic_profile_logo_path($clinicProfile));
     $theme = active_cliniq_theme();
     $pageBackLink = $GLOBALS['cliniq_page_back_link'] ?? null;
     $currentPath = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
@@ -247,7 +248,7 @@ function render_header(string $title): void
             <aside class="app-sidebar">
                 <a href="<?= app_url('dashboard.php') ?>" class="app-brand text-decoration-none" data-no-ajax="true">
                     <span class="app-brand-mark">
-                        <img src="<?= app_url('assets/img/clinic-logo.png') ?>" alt="<?= e($clinicProfile['department']) ?> logo">
+                        <img src="<?= e($clinicLogoUrl) ?>" alt="<?= e($clinicProfile['department']) ?> logo">
                     </span>
                     <span class="app-brand-copy">
                         <span class="app-brand-title"><?= e($clinicProfile['system_name']) ?></span>

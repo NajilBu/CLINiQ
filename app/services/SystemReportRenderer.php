@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/SystemSettings.php';
+
 function system_report_escape(string $value): string
 {
     return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
@@ -290,6 +292,10 @@ CSS;
 
 function render_system_report_document(array $report, bool $standalone = false, array $options = []): string
 {
+    $clinicProfile = clinic_profile_settings();
+    $systemName = trim((string) ($clinicProfile['system_name'] ?? 'CLINiQ')) ?: 'CLINiQ';
+    $institutionName = trim((string) ($clinicProfile['institution_name'] ?? 'Pamantasan ng Lungsod ng Pasig')) ?: 'Pamantasan ng Lungsod ng Pasig';
+    $departmentName = trim((string) ($clinicProfile['department'] ?? 'University Health Services')) ?: 'University Health Services';
     $includeCover = (bool) ($options['include_cover'] ?? true);
     $remarksMode = (string) ($options['remarks_mode'] ?? 'none');
     $remarks = is_array($options['remarks'] ?? null) ? $options['remarks'] : [];
@@ -309,7 +315,7 @@ function render_system_report_document(array $report, bool $standalone = false, 
         <?php if ($includeCover): ?>
             <header class="report-cover">
                 <div class="report-cover-card">
-                    <div class="report-brand"><div class="report-logo">+</div><div><strong>CLINiQ</strong><span>University Health Services</span></div></div>
+                    <div class="report-brand"><div class="report-logo">+</div><div><strong><?= system_report_escape($systemName) ?></strong><span><?= system_report_escape($departmentName) ?></span></div></div>
                     <h1><?= system_report_escape($report['title']) ?></h1>
                     <p>Consolidated operational analytics from the CLINiQ patient, clinical, appointment, inventory, APE, referral, and incident modules.</p>
                     <div class="report-meta">
@@ -322,7 +328,7 @@ function render_system_report_document(array $report, bool $standalone = false, 
                     <div class="report-cover-details">
                         <div class="report-cover-detail">
                             <span>Prepared for</span>
-                            <strong>Pamantasan ng Lungsod ng Pasig · University Health Services</strong>
+                            <strong><?= system_report_escape($institutionName) ?> · <?= system_report_escape($departmentName) ?></strong>
                         </div>
                         <div class="report-cover-detail">
                             <span>Prepared by</span>
@@ -334,7 +340,7 @@ function render_system_report_document(array $report, bool $standalone = false, 
                         </div>
                         <div class="report-cover-detail">
                             <span>School office</span>
-                            <strong>University Health Services</strong>
+                            <strong><?= system_report_escape($departmentName) ?></strong>
                         </div>
                         <div class="report-cover-detail report-cover-detail-wide">
                             <span>Coverage</span>
@@ -342,7 +348,7 @@ function render_system_report_document(array $report, bool $standalone = false, 
                         </div>
                     </div>
                     <div class="report-confidential-note">
-                        This report contains clinic operational data and should be handled only by authorized University Health Services personnel.
+                        This report contains clinic operational data and should be handled only by authorized <?= system_report_escape($departmentName) ?> personnel.
                     </div>
                     <div class="report-cover-footer-brand">CLINiQ · University Health Services</div>
                 </div>

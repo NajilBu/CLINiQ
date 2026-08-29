@@ -128,10 +128,10 @@ render_header('Reports');
 
     .report-period-option.is-active,
     .report-period-option:has(input:checked) {
-        border-color: rgba(63, 125, 82, 0.45);
-        background: #e9f7ee;
-        color: #1f6b43;
-        box-shadow: 0 10px 22px rgba(63, 125, 82, 0.1);
+        border-color: rgba(var(--cliniq-focus-rgb), 0.45);
+        background: var(--cliniq-primary-fixed);
+        color: var(--cliniq-primary-hover);
+        box-shadow: 0 10px 22px rgba(var(--cliniq-shadow-rgb), 0.1);
     }
 </style>
 <style><?= system_report_styles() ?></style>

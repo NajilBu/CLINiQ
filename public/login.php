@@ -4,6 +4,7 @@ require_once __DIR__ . '/../app/helpers/view.php';
 
 $error = null;
 $clinicProfile = clinic_profile_settings();
+$clinicLogoUrl = app_url(clinic_profile_logo_path($clinicProfile));
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $idNumber = trim($_POST['id_number'] ?? '');
@@ -37,7 +38,7 @@ render_header('Login');
         justify-content: space-between;
         min-height: 31rem;
         padding: 2.35rem 2.25rem;
-        background: #23422C;
+        background: var(--cliniq-primary-hover);
         color: #ffffff;
     }
 
@@ -150,9 +151,9 @@ render_header('Login');
     }
 
     .staff-login-input:focus {
-        border-color: rgba(63, 125, 82, 0.48);
+        border-color: rgba(var(--cliniq-focus-rgb), 0.48);
         background: #ffffff;
-        box-shadow: 0 0 0 3px rgba(63, 125, 82, 0.14);
+        box-shadow: 0 0 0 3px rgba(var(--cliniq-focus-rgb), 0.14);
     }
 
     .staff-toggle-pw {
@@ -169,7 +170,7 @@ render_header('Login');
     }
 
     .staff-toggle-pw:hover {
-        color: #23422C;
+        color: var(--cliniq-primary-hover);
     }
 
     .staff-note {
@@ -205,7 +206,7 @@ render_header('Login');
 
 <?php render_cliniq_entry_header([
     'homeUrl' => app_url('index.php'),
-    'logoUrl' => app_url('assets/img/clinic-logo.png'),
+    'logoUrl' => $clinicLogoUrl,
 ]); ?>
 
 <div class="min-h-[72vh] flex items-center justify-center py-8">
@@ -213,7 +214,7 @@ render_header('Login');
         <section class="staff-login-panel">
             <div>
                 <a href="<?= app_url('index.php') ?>" class="staff-login-logo text-decoration-none" aria-label="Go to <?= e($clinicProfile['system_name']) ?> access portal">
-                    <img src="<?= app_url('assets/img/clinic-logo.png') ?>" alt="<?= e($clinicProfile['department']) ?> logo">
+                    <img src="<?= e($clinicLogoUrl) ?>" alt="<?= e($clinicProfile['department']) ?> logo">
                 </a>
                 <p class="staff-login-eyebrow">
                     <a href="<?= app_url('index.php') ?>" class="text-white/70 hover:text-white text-decoration-none"><?= e($clinicProfile['department']) ?></a>

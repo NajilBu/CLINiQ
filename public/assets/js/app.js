@@ -483,7 +483,7 @@ function initLogoPlaceholders(root = document) {
             clearPreviewUrl();
             previewUrl = URL.createObjectURL(file);
             preview.src = previewUrl;
-            if (fileName) fileName.textContent = `${file.name} — preview only, not saved`;
+            if (fileName) fileName.textContent = `${file.name} — ready to save`;
             if (reset) reset.classList.remove('hidden');
         }
 
@@ -503,7 +503,13 @@ function initLogoPlaceholders(root = document) {
                 });
             });
             dropzone.addEventListener('drop', (event) => {
-                previewFile(event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0]);
+                const file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
+                if (file && window.DataTransfer) {
+                    const transfer = new DataTransfer();
+                    transfer.items.add(file);
+                    input.files = transfer.files;
+                }
+                previewFile(file);
             });
         }
 

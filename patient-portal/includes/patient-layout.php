@@ -20,6 +20,12 @@ function student_e(?string $value): string
     return htmlspecialchars($value ?? '', ENT_QUOTES, 'UTF-8');
 }
 
+function student_public_logo_src(?array $clinicProfile = null): string
+{
+    $profile = $clinicProfile ?? clinic_profile_settings();
+    return '../public/' . ltrim(clinic_profile_logo_path($profile), '/');
+}
+
 function student_nav_items(): array
 {
     return [
@@ -319,6 +325,8 @@ function render_student_header(string $title, string $active = ''): void
 {
     $profile = student_require_login();
     $clinicProfile = clinic_profile_settings();
+    $clinicLogoSrc = student_public_logo_src($clinicProfile);
+    $theme = active_cliniq_theme();
     $navItems = student_nav_items();
     if (!empty($profile['first_registration'])) {
         $navItems = array_intersect_key($navItems, ['dashboard' => true]);
@@ -359,15 +367,15 @@ function render_student_header(string $title, string $active = ''): void
                 theme: {
                     extend: {
                         colors: {
-                            primary: '#3F7D52',
-                            'primary-fixed': '#e8f6ec',
-                            'primary-container': '#23422C',
+                            primary: <?= json_encode($theme['primary']) ?>,
+                            'primary-fixed': <?= json_encode($theme['primary_fixed']) ?>,
+                            'primary-container': <?= json_encode($theme['primary_container']) ?>,
                             'on-primary': '#ffffff',
-                            surface: '#f4fbf6',
+                            surface: <?= json_encode($theme['surface']) ?>,
                             'on-surface': '#17261d',
-                            'surface-container-low': '#edf8f0',
-                            'outline-variant': '#c7dccd',
-                            brand: '#3F7D52',
+                            'surface-container-low': <?= json_encode($theme['surface_container_low']) ?>,
+                            'outline-variant': <?= json_encode($theme['outline_variant']) ?>,
+                            brand: <?= json_encode($theme['primary']) ?>,
                             'brand-dark': '#17261d'
                         },
                         fontFamily: {
@@ -379,14 +387,34 @@ function render_student_header(string $title, string $active = ''): void
             };
         </script>
         <link href="../public/assets/css/app.css?v=file-preview-2" rel="stylesheet">
-        <link href="assets/css/patient.css?v=ape-batch-upload-1" rel="stylesheet">
+        <link href="assets/css/patient.css?v=theme-sync-1" rel="stylesheet">
+        <style>
+            :root {
+                --cliniq-primary: <?= student_e($theme['primary']) ?>;
+                --cliniq-primary-hover: <?= student_e($theme['primary_container']) ?>;
+                --cliniq-primary-fixed: <?= student_e($theme['primary_fixed']) ?>;
+                --cliniq-accent: <?= student_e($theme['accent']) ?>;
+                --cliniq-accent-foreground: <?= student_e($theme['primary_container']) ?>;
+                --cliniq-surface: <?= student_e($theme['surface']) ?>;
+                --cliniq-surface-low: <?= student_e($theme['surface_container_low']) ?>;
+                --cliniq-outline: <?= student_e($theme['outline_variant']) ?>;
+                --cliniq-focus-rgb: <?= student_e($theme['focus_rgb']) ?>;
+                --cliniq-shadow-rgb: <?= student_e($theme['shadow_rgb']) ?>;
+                --student-bg: <?= student_e($theme['surface']) ?>;
+                --student-primary: <?= student_e($theme['primary']) ?>;
+                --student-primary-dark: <?= student_e($theme['primary_container']) ?>;
+                --student-primary-soft: <?= student_e($theme['primary_fixed']) ?>;
+                --student-border-soft: <?= student_e($theme['outline_variant']) ?>;
+                --student-muted-soft: <?= student_e($theme['surface_container_low']) ?>;
+            }
+        </style>
     </head>
     <body class="student-body">
         <div class="student-shell">
             <header class="student-topbar">
                 <a href="patient-dashboard.php" class="student-brand text-decoration-none">
                     <span class="student-brand-mark">
-                        <img src="../public/assets/img/clinic-logo.png" alt="<?= student_e($clinicProfile['department']) ?> logo">
+                        <img src="<?= student_e($clinicLogoSrc) ?>" alt="<?= student_e($clinicProfile['department']) ?> logo">
                     </span>
                     <span class="student-brand-copy">
                         <span class="student-brand-title"><?= student_e($clinicProfile['system_name']) ?></span>
@@ -463,8 +491,8 @@ function render_student_footer(): void
             <div class="student-card w-full max-w-md p-6 shadow-xl relative animate-in fade-in zoom-in duration-150">
                 <div class="flex items-center justify-between pb-4 mb-4 border-b border-slate-100">
                     <div class="flex items-center gap-2">
-                        <span class="material-symbols-outlined text-[#3F7D52]">key</span>
-                        <h3 class="font-headline text-lg font-extrabold text-[#17261d]">Change Password</h3>
+                        <span class="material-symbols-outlined text-primary">key</span>
+                        <h3 class="font-headline text-lg font-extrabold text-on-surface">Change Password</h3>
                     </div>
                     <button type="button" onclick="document.getElementById('change-password-modal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600">
                         <span class="material-symbols-outlined">close</span>
@@ -529,6 +557,7 @@ function render_student_footer(): void
 function render_student_auth_header(string $title): void
 {
     $clinicProfile = clinic_profile_settings();
+    $theme = active_cliniq_theme();
     ?>
     <!DOCTYPE html>
     <html lang="en">
@@ -544,14 +573,14 @@ function render_student_auth_header(string $title): void
                 theme: {
                     extend: {
                         colors: {
-                            primary: '#3F7D52',
-                            'primary-fixed': '#e8f6ec',
-                            'primary-container': '#23422C',
+                            primary: <?= json_encode($theme['primary']) ?>,
+                            'primary-fixed': <?= json_encode($theme['primary_fixed']) ?>,
+                            'primary-container': <?= json_encode($theme['primary_container']) ?>,
                             'on-primary': '#ffffff',
-                            surface: '#f4fbf6',
+                            surface: <?= json_encode($theme['surface']) ?>,
                             'on-surface': '#17261d',
-                            'surface-container-low': '#edf8f0',
-                            'outline-variant': '#c7dccd'
+                            'surface-container-low': <?= json_encode($theme['surface_container_low']) ?>,
+                            'outline-variant': <?= json_encode($theme['outline_variant']) ?>
                         },
                         fontFamily: {
                             headline: ['Manrope', 'sans-serif'],
@@ -562,7 +591,27 @@ function render_student_auth_header(string $title): void
             };
         </script>
         <link href="../public/assets/css/app.css?v=file-preview-2" rel="stylesheet">
-        <link href="assets/css/patient.css?v=ape-batch-upload-1" rel="stylesheet">
+        <link href="assets/css/patient.css?v=theme-sync-1" rel="stylesheet">
+        <style>
+            :root {
+                --cliniq-primary: <?= student_e($theme['primary']) ?>;
+                --cliniq-primary-hover: <?= student_e($theme['primary_container']) ?>;
+                --cliniq-primary-fixed: <?= student_e($theme['primary_fixed']) ?>;
+                --cliniq-accent: <?= student_e($theme['accent']) ?>;
+                --cliniq-accent-foreground: <?= student_e($theme['primary_container']) ?>;
+                --cliniq-surface: <?= student_e($theme['surface']) ?>;
+                --cliniq-surface-low: <?= student_e($theme['surface_container_low']) ?>;
+                --cliniq-outline: <?= student_e($theme['outline_variant']) ?>;
+                --cliniq-focus-rgb: <?= student_e($theme['focus_rgb']) ?>;
+                --cliniq-shadow-rgb: <?= student_e($theme['shadow_rgb']) ?>;
+                --student-bg: <?= student_e($theme['surface']) ?>;
+                --student-primary: <?= student_e($theme['primary']) ?>;
+                --student-primary-dark: <?= student_e($theme['primary_container']) ?>;
+                --student-primary-soft: <?= student_e($theme['primary_fixed']) ?>;
+                --student-border-soft: <?= student_e($theme['outline_variant']) ?>;
+                --student-muted-soft: <?= student_e($theme['surface_container_low']) ?>;
+            }
+        </style>
     </head>
     <body class="student-body student-auth-page">
     <?php

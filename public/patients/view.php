@@ -225,8 +225,8 @@ render_header($fullName . ' - Patient Profile');
         min-height: 2rem;
         border: 0;
         border-radius: 0.65rem;
-        background: #e8f6ec;
-        color: #2f6942;
+        background: var(--cliniq-primary-fixed);
+        color: var(--cliniq-primary-hover);
         padding: 0.35rem 0.55rem;
         font-size: 0.72rem;
         font-weight: 900;
@@ -235,8 +235,8 @@ render_header($fullName . ' - Patient Profile');
     }
 
     .care-timeline-toggle:hover {
-        background: #d8efdf;
-        color: #245535;
+        background: color-mix(in srgb, var(--cliniq-primary) 14%, #ffffff);
+        color: var(--cliniq-primary-hover);
     }
 
     .care-timeline-toggle .material-symbols-outlined {
@@ -260,8 +260,8 @@ render_header($fullName . ' - Patient Profile');
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        background: #e8f6ec;
-        color: #3f7d52;
+        background: var(--cliniq-primary-fixed);
+        color: var(--cliniq-primary);
         flex-shrink: 0;
     }
 

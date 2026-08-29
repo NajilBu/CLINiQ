@@ -427,7 +427,7 @@ render_student_header('Dashboard', 'dashboard');
             </div>
             <div>
                 <span class="student-label">Email</span>
-                <a href="mailto:<?= student_e($profile['email']) ?>" class="text-sm font-black text-[#3F7D52] text-decoration-none"><?= student_e($profile['email']) ?></a>
+                <a href="mailto:<?= student_e($profile['email']) ?>" class="text-sm font-black text-primary text-decoration-none"><?= student_e($profile['email']) ?></a>
             </div>
         </div>
     </section>
@@ -445,8 +445,8 @@ render_student_header('Dashboard', 'dashboard');
                 <span class="text-xs font-black text-slate-500 uppercase tracking-wider">Completion</span>
                 <strong class="font-headline text-3xl font-black text-[#17261d]"><?= (int) $apePercent ?>%</strong>
             </div>
-            <div class="w-full h-3 rounded-full bg-[#edf8f0] overflow-hidden mb-4">
-                <div class="h-full bg-[#3F7D52] rounded-full" style="width: <?= (int) $apePercent ?>%;"></div>
+            <div class="w-full h-3 rounded-full bg-primary-fixed overflow-hidden mb-4">
+                <div class="h-full bg-primary rounded-full" style="width: <?= (int) $apePercent ?>%;"></div>
             </div>
             <div class="student-progress-list">
                 <div class="student-progress-step">

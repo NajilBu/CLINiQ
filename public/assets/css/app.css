@@ -1947,8 +1947,8 @@ body.file-preview-open {
 
 .file-preview-download:hover,
 .file-preview-close:hover {
-    border-color: #9fc6aa;
-    background: #edf8f0;
+    border-color: color-mix(in srgb, var(--cliniq-primary) 34%, #ffffff);
+    background: var(--cliniq-surface-low);
 }
 
 .file-preview-download .material-symbols-outlined,

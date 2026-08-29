@@ -643,10 +643,12 @@ function default_clinic_profile_settings(): array
 {
     return [
         'system_name' => 'CLINiQ',
+        'institution_name' => 'Pamantasan ng Lungsod ng Pasig',
         'department' => 'University Health Services',
         'contact_email' => 'clinic@plpasig.edu.ph',
         'physical_address' => 'Alcalde Jose Street, Brgy. Kapasigan, Pasig City, Metro Manila, Philippines, 1600',
         'system_purpose' => 'School clinic information management system for patient records, visits, APE workflow, emergency alerts, appointments, inventory, referrals, and reports.',
+        'logo_path' => 'assets/img/clinic-logo.png',
     ];
 }
 
@@ -668,6 +670,7 @@ function normalize_clinic_profile_settings(array $input): array
     if (!filter_var($settings['contact_email'], FILTER_VALIDATE_EMAIL)) {
         $settings['contact_email'] = $defaults['contact_email'];
     }
+    $settings['logo_path'] = clinic_profile_logo_path($settings);
 
     return $settings;
 }
@@ -675,6 +678,67 @@ function normalize_clinic_profile_settings(array $input): array
 function save_clinic_profile_settings(array $input, ?int $updatedBy = null): void
 {
     cliniq_setting_write('clinic.profile', normalize_clinic_profile_settings($input), $updatedBy);
+}
+
+function clinic_profile_logo_path(?array $profile = null): string
+{
+    $defaults = default_clinic_profile_settings();
+    $logoPath = str_replace('\\', '/', trim((string) (($profile ?? [])['logo_path'] ?? $defaults['logo_path'])));
+
+    if (
+        $logoPath === ''
+        || str_contains($logoPath, '..')
+        || str_starts_with($logoPath, '/')
+        || !preg_match('#^(assets|uploads)/[A-Za-z0-9._/-]+\.(png|jpe?g|webp)$#i', $logoPath)
+    ) {
+        return $defaults['logo_path'];
+    }
+
+    return $logoPath;
+}
+
+function save_uploaded_clinic_logo(array $file): string
+{
+    $error = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($error === UPLOAD_ERR_NO_FILE) {
+        return '';
+    }
+
+    if ($error !== UPLOAD_ERR_OK) {
+        throw new InvalidArgumentException('Choose a valid logo image before saving.');
+    }
+
+    if ((int) ($file['size'] ?? 0) > 5 * 1024 * 1024) {
+        throw new InvalidArgumentException('Logo image must be 5 MB or smaller.');
+    }
+
+    $temporaryPath = (string) ($file['tmp_name'] ?? '');
+    if ($temporaryPath === '' || !is_uploaded_file($temporaryPath)) {
+        throw new InvalidArgumentException('Logo upload could not be verified.');
+    }
+
+    $mimeType = function_exists('mime_content_type') ? (string) mime_content_type($temporaryPath) : '';
+    $allowedTypes = [
+        'image/png' => 'png',
+        'image/jpeg' => 'jpg',
+        'image/webp' => 'webp',
+    ];
+    if (!isset($allowedTypes[$mimeType])) {
+        throw new InvalidArgumentException('Logo must be a PNG, JPG, or WebP image.');
+    }
+
+    $uploadDirectory = dirname(__DIR__, 2) . '/public/uploads/settings';
+    if (!is_dir($uploadDirectory) && !mkdir($uploadDirectory, 0775, true) && !is_dir($uploadDirectory)) {
+        throw new RuntimeException('Unable to create the logo upload folder.');
+    }
+
+    $fileName = 'clinic-logo-' . date('YmdHis') . '-' . bin2hex(random_bytes(4)) . '.' . $allowedTypes[$mimeType];
+    $destination = $uploadDirectory . '/' . $fileName;
+    if (!move_uploaded_file($temporaryPath, $destination)) {
+        throw new RuntimeException('Unable to save the uploaded logo.');
+    }
+
+    return 'uploads/settings/' . $fileName;
 }
 
 function cliniq_theme_presets(): array

@@ -2,8 +2,11 @@
 require_once __DIR__ . '/../app/config/database.php';
 require_once __DIR__ . '/../app/services/AlertWorkflow.php';
 require_once __DIR__ . '/../app/services/ApeWorkflow.php';
+require_once __DIR__ . '/../app/services/SystemSettings.php';
 
 ensure_ape_workflow_schema();
+$clinicProfile = clinic_profile_settings();
+$clinicLogoSrc = '../public/' . ltrim(clinic_profile_logo_path($clinicProfile), '/');
 
 function pp_e(?string $value): string
 {
@@ -61,6 +64,7 @@ function pp_upload_incident_photo(array $file): ?string
 
 $token = trim($_GET['token'] ?? '');
 $patient = null;
+$theme = active_cliniq_theme();
 
 if ($token !== '') {
     $stmt = auth_db()->prepare("
@@ -128,8 +132,8 @@ if (!$patient) {
       <title>Emergency Passport Not Found | CLINiQ</title>
       <link href="../public/assets/vendor/fonts/inter-passport.css?v=offline-1" rel="stylesheet">
       <style>
-        body { margin:0; min-height:100vh; display:grid; place-items:center; font-family:Inter,system-ui,sans-serif; background:#f4fbf6; color:#17261d; }
-        section { width:min(92vw,34rem); padding:2rem; background:#fff; border:1px solid #d8e9dd; border-radius:1rem; box-shadow:0 14px 34px rgba(23,38,29,.08); }
+        body { margin:0; min-height:100vh; display:grid; place-items:center; font-family:Inter,system-ui,sans-serif; background:<?= pp_e($theme['surface']) ?>; color:#17261d; }
+        section { width:min(92vw,34rem); padding:2rem; background:#fff; border:1px solid <?= pp_e($theme['outline_variant']) ?>; border-radius:1rem; box-shadow:0 14px 34px rgba(<?= pp_e($theme['shadow_rgb']) ?>,.08); }
         h1 { margin:0 0 .5rem; font-size:1.6rem; }
         p { margin:0; color:#64756a; line-height:1.55; }
       </style>
@@ -292,7 +296,7 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#23422C">
+  <meta name="theme-color" content="<?= pp_e($theme['primary_container']) ?>">
   <title><?= pp_e($student['name']) ?> - Emergency Passport | CLINiQ</title>
   <link href="../public/assets/vendor/fonts/inter-manrope.css?v=offline-1" rel="stylesheet">
   <link href="../public/assets/vendor/fonts/material-symbols.css?v=offline-1" rel="stylesheet">
@@ -305,16 +309,18 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
     }
 
     :root {
-      --bg: #f4fbf6;
+      --bg: <?= pp_e($theme['surface']) ?>;
       --ink: #17261d;
       --muted: #64756a;
       --card: #ffffff;
-      --primary: #3F7D52;
-      --primary-dark: #23422C;
-      --primary-soft: #e8f6ec;
-      --border: #d8e9dd;
+      --primary: <?= pp_e($theme['primary']) ?>;
+      --primary-dark: <?= pp_e($theme['primary_container']) ?>;
+      --primary-soft: <?= pp_e($theme['primary_fixed']) ?>;
+      --border: <?= pp_e($theme['outline_variant']) ?>;
       --border-soft: #e5f0e8;
-      --surface: #edf8f0;
+      --surface: <?= pp_e($theme['surface_container_low']) ?>;
+      --focus-rgb: <?= pp_e($theme['focus_rgb']) ?>;
+      --shadow-rgb: <?= pp_e($theme['shadow_rgb']) ?>;
       --danger: #dc2626;
       --danger-dark: #991b1b;
       --danger-soft: #fef2f2;
@@ -974,7 +980,7 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
     .pp-button-primary {
       color: #fff;
       background: var(--primary);
-      box-shadow: 0 8px 18px rgba(63, 125, 82, 0.16);
+      box-shadow: 0 8px 18px rgba(var(--shadow-rgb), 0.16);
     }
 
     .pp-button-primary:hover {
@@ -1180,8 +1186,8 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
     }
 
     .pp-textarea:focus {
-      border-color: rgba(63, 125, 82, 0.55);
-      box-shadow: 0 0 0 3px rgba(63, 125, 82, 0.13);
+      border-color: rgba(var(--focus-rgb), 0.55);
+      box-shadow: 0 0 0 3px rgba(var(--focus-rgb), 0.13);
     }
 
     .pp-status-card {
@@ -1377,11 +1383,11 @@ $telHref = preg_replace('/[^0-9+]/', '', $guardian['phone']);
   <header class="pp-brand">
     <div class="pp-brand-lockup">
       <span class="pp-logo">
-        <img src="../public/assets/img/clinic-logo.png" alt="PLP Health Services Department logo">
+        <img src="<?= pp_e($clinicLogoSrc) ?>" alt="<?= pp_e($clinicProfile['department']) ?> logo">
       </span>
       <span>
-        <span class="pp-brand-title">CLINiQ</span>
-        <span class="pp-brand-subtitle">PLP School Clinic Management System</span>
+        <span class="pp-brand-title"><?= pp_e($clinicProfile['system_name']) ?></span>
+        <span class="pp-brand-subtitle"><?= pp_e($clinicProfile['department']) ?></span>
       </span>
     </div>
     <span class="pp-use-badge">

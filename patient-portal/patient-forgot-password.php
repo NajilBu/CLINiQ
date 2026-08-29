@@ -1,11 +1,13 @@
 <?php
 require_once __DIR__ . '/includes/patient-layout.php';
+$clinicProfile = clinic_profile_settings();
+$clinicLogoSrc = student_public_logo_src($clinicProfile);
 render_student_auth_header('Recover Password');
 ?>
 
 <?php render_cliniq_entry_header([
     'homeUrl' => '../public/index.php',
-    'logoUrl' => '../public/assets/img/clinic-logo.png',
+    'logoUrl' => $clinicLogoSrc,
 ]); ?>
 
 <main class="student-auth-wrap">
@@ -13,9 +15,9 @@ render_student_auth_header('Recover Password');
         <aside class="student-auth-side">
             <div>
                 <a href="../public/index.php" class="student-brand-mark text-decoration-none" aria-label="Go to CLINiQ access portal">
-                    <img src="../public/assets/img/clinic-logo.png" alt="PLP Health Services Department logo">
+                    <img src="<?= student_e($clinicLogoSrc) ?>" alt="<?= student_e($clinicProfile['department']) ?> logo">
                 </a>
-                <p class="student-auth-brand-line">CLINiQ</p>
+                <p class="student-auth-brand-line"><?= student_e($clinicProfile['system_name']) ?></p>
                 <h1 class="student-auth-side-title">Recover<br>Access</h1>
                 <p class="student-auth-side-copy">Request recovery instructions for your patient portal account.</p>
                 <svg class="student-auth-pulse" viewBox="0 0 320 40" preserveAspectRatio="none" aria-hidden="true">

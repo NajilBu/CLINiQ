@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/SystemReport.php';
 require_once __DIR__ . '/SystemReportRenderer.php';
+require_once __DIR__ . '/SystemSettings.php';
 
 final class SimpleReportPdf
 {
@@ -155,6 +156,10 @@ final class SimpleReportPdf
 function render_system_report_pdf(array $report, array $options = []): string
 {
     $pdf = new SimpleReportPdf();
+    $clinicProfile = clinic_profile_settings();
+    $systemName = trim((string) ($clinicProfile['system_name'] ?? 'CLINiQ')) ?: 'CLINiQ';
+    $institutionName = trim((string) ($clinicProfile['institution_name'] ?? 'Pamantasan ng Lungsod ng Pasig')) ?: 'Pamantasan ng Lungsod ng Pasig';
+    $departmentName = trim((string) ($clinicProfile['department'] ?? 'University Health Services')) ?: 'University Health Services';
     $preparedBy = is_array($options['prepared_by'] ?? null) ? $options['prepared_by'] : [];
     $preparedByName = trim((string) ($preparedBy['name'] ?? '')) ?: 'CLINiQ Staff';
     $preparedByRole = trim((string) ($preparedBy['role'] ?? '')) ?: 'Authorized Staff';
@@ -166,8 +171,8 @@ function render_system_report_pdf(array $report, array $options = []): string
     $pdf->rect(92, 385, 412, 276, [31, 107, 67]);
     $pdf->rect(122, 612, 32, 32, [255, 255, 255]);
     $pdf->text(134, 622, '+', 18, [31, 107, 67], 'F2');
-    $pdf->text(168, 628, 'CLINiQ', 17, [255, 255, 255], 'F2');
-    $pdf->text(168, 615, 'UNIVERSITY HEALTH SERVICES', 8, [217, 241, 226], 'F2');
+    $pdf->text(168, 628, $systemName, 17, [255, 255, 255], 'F2');
+    $pdf->text(168, 615, mb_strtoupper($departmentName), 8, [217, 241, 226], 'F2');
     $pdf->text(122, 570, (string) $report['title'], 24, [255, 255, 255], 'F2');
     $pdf->textBlock(122, 545, 350, 'Consolidated operational analytics from the CLINiQ patient, clinical, appointment, inventory, APE, referral, and incident modules.', 10, [224, 242, 231], 13, 'F2');
     $pdf->rect(122, 484, 105, 36, [62, 132, 86]);
@@ -183,7 +188,7 @@ function render_system_report_pdf(array $report, array $options = []): string
     $pdf->rect(92, 315, 198, 36, [255, 255, 255]);
     $pdf->rect(305, 315, 198, 36, [255, 255, 255]);
     $pdf->text(102, 337, 'PREPARED FOR', 7, [100, 116, 139], 'F2');
-    $pdf->textBlock(102, 326, 174, 'Pamantasan ng Lungsod ng Pasig - University Health Services', 8, [23, 38, 29], 10, 'F2');
+    $pdf->textBlock(102, 326, 174, $institutionName . ' - ' . $departmentName, 8, [23, 38, 29], 10, 'F2');
     $pdf->text(315, 337, 'PREPARED BY', 7, [100, 116, 139], 'F2');
     $pdf->textBlock(315, 326, 174, "{$preparedByName} - {$preparedByRole}", 8, [23, 38, 29], 10, 'F2');
     $pdf->rect(92, 270, 198, 36, [255, 255, 255]);
@@ -191,11 +196,11 @@ function render_system_report_pdf(array $report, array $options = []): string
     $pdf->text(102, 292, 'REPORT TYPE', 7, [100, 116, 139], 'F2');
     $pdf->text(102, 280, 'System Analytics Report', 8, [23, 38, 29], 'F2');
     $pdf->text(315, 292, 'SCHOOL OFFICE', 7, [100, 116, 139], 'F2');
-    $pdf->text(315, 280, 'University Health Services', 8, [23, 38, 29], 'F2');
+    $pdf->text(315, 280, $departmentName, 8, [23, 38, 29], 'F2');
     $pdf->rect(92, 205, 412, 50, [255, 255, 255]);
     $pdf->text(102, 238, 'COVERAGE', 7, [100, 116, 139], 'F2');
     $pdf->textBlock(102, 225, 386, $coverage, 8, [23, 38, 29], 10, 'F2');
-    $pdf->textBlock(110, 145, 376, 'This report contains clinic operational data and should be handled only by authorized University Health Services personnel.', 8, [71, 85, 105], 10);
+    $pdf->textBlock(110, 145, 376, 'This report contains clinic operational data and should be handled only by authorized ' . $departmentName . ' personnel.', 8, [71, 85, 105], 10);
 
     $sectionNumber = 0;
     foreach ($report['sections'] as $sectionKey => $section) {
