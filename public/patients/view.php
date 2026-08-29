@@ -565,17 +565,10 @@ render_header($fullName . ' - Patient Profile');
                                 <p class="text-xs font-bold text-slate-500 mb-2"><?= e(implode(' / ', $vitalBits)) ?></p>
                             <?php endif; ?>
                             <div class="flex flex-wrap gap-2 text-xs font-bold text-slate-400">
-                                <span>Recorded by <?= e($visit['recorded_by_name'] ?: 'System') ?></span>
+                                <span><?= $isSelfLogbookVisit ? 'Submitted by patient' : 'Recorded by ' . e($visit['recorded_by_name'] ?: 'System') ?></span>
                                 <span>&bull;</span>
                                 <span>Attended by <?= e($visit['attended_by_name'] ?: 'Not assigned') ?></span>
                             </div>
-                            <?php if ($visit['action_taken']): ?>
-                                <div class="mt-3 rounded-xl border border-primary/10 bg-primary-fixed/40 px-4 py-3">
-                                    <p class="clinic-label mb-1">Visit Action Taken</p>
-                                    <p class="text-sm font-bold text-slate-700 m-0 whitespace-pre-wrap"><?= e($visit['action_taken']) ?></p>
-                                </div>
-                            <?php endif; ?>
-
                             <?php if ($visit['entries']): ?>
                                 <div class="grid gap-3 mt-4">
                                     <?php foreach ($visit['entries'] as $entry): ?>
@@ -586,11 +579,9 @@ render_header($fullName . ' - Patient Profile');
                                             && $entrySymptomsValue !== '';
                                         ?>
                                         <section class="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
-                                            <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-                                                <p class="text-[11px] font-black uppercase tracking-widest text-primary m-0">Clinical Entry #<?= (int) $entry['entry_id'] ?></p>
+                                            <div class="flex flex-wrap items-center justify-end gap-2 mb-3">
                                                 <p class="text-[11px] font-bold text-slate-400 m-0">
                                                     <?= e(date('M d, Y g:i A', strtotime($entry['created_at']))) ?>
-                                                    &bull; <?= e($entry['addressed_by_name'] ?: ($isSelfLogbookVisit ? 'Submitted by patient' : 'Clinic staff')) ?>
                                                 </p>
                                             </div>
                                             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">

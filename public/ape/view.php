@@ -342,6 +342,9 @@ $pendingRequirements = array_values(array_filter(
     static fn(array $requirement): bool => ($requirement['status'] ?? '') !== 'Verified'
 ));
 $documents = ape_documents_for_record($id);
+$documentsArchived = in_array(($record['workflow_status'] ?? ''), ['Reviewed', 'Follow-up Required', 'Cleared'], true)
+    || in_array(($record['clearance_status'] ?? ''), ['For Follow-up', 'Submitted', 'Cleared'], true);
+$visibleArchivedDocuments = $documentsArchived ? $documents : [];
 $reviewDocuments = array_values(array_filter(
     $documents,
     static fn(array $document): bool => ($document['document_type'] ?? '') !== 'Clearance'
@@ -959,12 +962,12 @@ render_header('APE Record - ' . $fullName);
                 <div class="flex items-center justify-between gap-3 mb-4">
                     <div>
                         <h2 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Uploaded Documents</h2>
-                        <p class="text-xs font-bold text-slate-500 mb-0">Patient and clinic uploads with verification details.</p>
+                        <p class="text-xs font-bold text-slate-500 mb-0">Archived patient and clinic uploads with verification details.</p>
                     </div>
-                    <span class="badge badge-in-progress"><?= count($documents) ?> file(s)</span>
+                    <span class="badge badge-in-progress"><?= count($visibleArchivedDocuments) ?> file(s)</span>
                 </div>
                 <div class="space-y-2">
-                    <?php foreach ($documents as $document): ?>
+                    <?php foreach ($visibleArchivedDocuments as $document): ?>
                         <div class="ape-flow-field">
                             <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                                 <div>
@@ -988,8 +991,8 @@ render_header('APE Record - ' . $fullName);
                             </div>
                         </div>
                     <?php endforeach; ?>
-                    <?php if (!$documents): ?>
-                        <div class="ape-flow-field text-center text-sm font-bold text-slate-500">No document has been uploaded.</div>
+                    <?php if (!$visibleArchivedDocuments): ?>
+                        <div class="ape-flow-field text-center text-sm font-bold text-slate-500">No archived document has been stored yet.</div>
                     <?php endif; ?>
                 </div>
             </section>

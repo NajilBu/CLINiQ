@@ -290,7 +290,11 @@ function cliniq_visit_create(array $visit, array $entry = [], array $vitals = []
         throw new InvalidArgumentException('Select a patient that exists in Cliniq_db.');
     }
 
+    $visitPurpose = trim((string) ($visit['visit_purpose'] ?? ''));
     $chiefComplaint = trim((string) ($visit['chief_complaint'] ?? ''));
+    if ($visitPurpose !== '' && str_starts_with(strtolower($chiefComplaint), strtolower($visitPurpose . ' - '))) {
+        $chiefComplaint = trim(mb_substr($chiefComplaint, mb_strlen($visitPurpose . ' - ')));
+    }
     if ($chiefComplaint === '') {
         throw new InvalidArgumentException('Chief complaint is required.');
     }
@@ -316,7 +320,7 @@ function cliniq_visit_create(array $visit, array $entry = [], array $vitals = []
             $markCompleted ? 1 : 0,
             $chiefComplaint,
             $status,
-            trim((string) ($visit['visit_purpose'] ?? '')) ?: null,
+            $visitPurpose ?: null,
             trim((string) ($visit['visit_source'] ?? '')) ?: 'Staff Recorded',
             trim((string) ($visit['action_taken'] ?? '')) ?: null,
             !empty($visit['recorded_by_person_id']) ? (int) $visit['recorded_by_person_id'] : null,

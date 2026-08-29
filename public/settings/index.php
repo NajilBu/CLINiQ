@@ -459,7 +459,7 @@ render_clinic_command_header(
                 <section>
                     <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Clinic Identity</h2>
                     <p class="text-xs font-bold text-slate-500 mb-5">These details appear in the CLINiQ shell and shared access headers.</p>
-                    <form method="post" class="settings-section space-y-5" enctype="multipart/form-data" id="clinicProfileForm">
+                    <form method="post" class="settings-section space-y-5" enctype="multipart/form-data" id="clinicProfileForm" data-no-ajax="true">
                         <input type="hidden" name="action" value="save_profile">
                         <input type="hidden" name="logo_path" value="<?= profile_setting_value($clinicProfile, 'logo_path') ?>">
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
