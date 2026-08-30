@@ -247,18 +247,21 @@ function cliniq_inventory_entry_dispensings(array $entryIds): array
 }
 
 /** @return array<int,array<string,mixed>> */
-function cliniq_inventory_transactions(int $limit = 100): array
+function cliniq_inventory_transactions(?int $limit = null): array
 {
-    $limit = max(1, min(500, $limit));
-    return cliniq_inventory_db()->query("
+    $sql = "
         SELECT t.*, i.item_code, i.item_name, i.item_type, i.unit,
                TRIM(CONCAT_WS(' ', pe.first_name, pe.middle_name, pe.last_name)) AS performed_by_name
         FROM inventory_transactions t
         JOIN inventory_items i ON i.item_id = t.item_id
         LEFT JOIN people pe ON pe.id = t.performed_by_person_id
         ORDER BY t.created_at DESC, t.transaction_id DESC
-        LIMIT {$limit}
-    ")->fetchAll();
+    ";
+    if ($limit !== null) {
+        $limit = max(1, $limit);
+        $sql .= " LIMIT {$limit}";
+    }
+    return cliniq_inventory_db()->query($sql)->fetchAll();
 }
 
 function cliniq_inventory_status_badge(array $item): string

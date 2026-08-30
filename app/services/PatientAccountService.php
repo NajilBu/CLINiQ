@@ -448,10 +448,9 @@ function create_bulk_inactive_patient_accounts(array $rows): array
     return $results;
 }
 
-function recent_patient_accounts(int $limit = 100): array
+function recent_patient_accounts(?int $limit = null): array
 {
-    $limit = max(1, min(250, $limit));
-    return auth_db()->query("
+    $sql = "
         SELECT
             p.id_number,
             CONCAT_WS(' ', p.first_name, p.middle_name, p.last_name) AS full_name,
@@ -472,6 +471,10 @@ function recent_patient_accounts(int $limit = 100): array
         LEFT JOIN clinic_staff cs ON cs.person_id = p.id
         WHERE cs.person_id IS NULL
         ORDER BY a.created_at DESC, p.id DESC
-        LIMIT {$limit}
-    ")->fetchAll();
+    ";
+    if ($limit !== null) {
+        $limit = max(1, $limit);
+        $sql .= " LIMIT {$limit}";
+    }
+    return auth_db()->query($sql)->fetchAll();
 }

@@ -26,10 +26,6 @@ if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $filters['date_to'])) {
     $filters['date_to'] = '';
 }
 
-$page = max(1, (int) ($_GET['page'] ?? 1));
-$perPage = 25;
-$offset = ($page - 1) * $perPage;
-
 $buildWhere = function (bool $includeStatus = true) use ($filters): array {
     $where = ['1=1'];
     $params = [];
@@ -73,7 +69,6 @@ $buildWhere = function (bool $includeStatus = true) use ($filters): array {
 $countStmt = cliniq_visit_db()->prepare("SELECT COUNT(*) AS total FROM visits v JOIN people p ON p.id = v.patient_person_id WHERE {$whereSQL}");
 $countStmt->execute($params);
 $totalRows = (int) $countStmt->fetch()['total'];
-$totalPages = max(1, (int) ceil($totalRows / $perPage));
 
 $stmt = cliniq_visit_db()->prepare("
     SELECT v.*, v.visit_id AS id, p.first_name, p.last_name, p.id_number,
@@ -95,7 +90,6 @@ $stmt = cliniq_visit_db()->prepare("
         WHEN 'Completed' THEN 3
         ELSE 4
     END, v.visit_datetime DESC
-    LIMIT {$perPage} OFFSET {$offset}
 ");
 $stmt->execute($params);
 $visits = $stmt->fetchAll();
@@ -127,8 +121,6 @@ $purposeRows = cliniq_visit_db()->query("
 $purposeOptions = array_values(array_unique(array_merge(visit_purposes(), array_column($purposeRows, 'visit_purpose'))));
 
 $baseParams = array_filter($filters, fn ($value) => $value !== '' && $value !== 'all');
-$paginationParams = $baseParams;
-
 $activeChips = [];
 $chipParams = $baseParams;
 foreach ([
@@ -334,37 +326,13 @@ render_clinic_command_header(
 
     <?php render_ag_grid('visitsGrid', $visitColumns, $visitRows, [
         'searchInput' => 'visitsGridSearch',
+        'pageSize' => 10,
+        'pagination' => true,
+        'paginationControls' => 'visitsPagination',
         'emptyTitle' => $activeChips ? 'No matching visits' : 'No clinic visits yet',
         'emptyText' => $activeChips ? 'Try a different search or filter.' : 'Record a clinic visit to get started.',
     ]); ?>
-
-    <?php if ($totalPages > 1): ?>
-        <div class="pagination">
-            <?php if ($page > 1): ?>
-                <a href="?<?= http_build_query(array_merge($paginationParams, ['page' => $page - 1])) ?>">
-                    <span class="material-symbols-outlined text-[18px]">chevron_left</span>
-                </a>
-            <?php else: ?>
-                <span class="page-disabled"><span class="material-symbols-outlined text-[18px]">chevron_left</span></span>
-            <?php endif; ?>
-
-            <?php for ($i = max(1, $page - 2); $i <= min($totalPages, $page + 2); $i++): ?>
-                <?php if ($i === $page): ?>
-                    <span class="page-active"><?= $i ?></span>
-                <?php else: ?>
-                    <a href="?<?= http_build_query(array_merge($paginationParams, ['page' => $i])) ?>"><?= $i ?></a>
-                <?php endif; ?>
-            <?php endfor; ?>
-
-            <?php if ($page < $totalPages): ?>
-                <a href="?<?= http_build_query(array_merge($paginationParams, ['page' => $page + 1])) ?>">
-                    <span class="material-symbols-outlined text-[18px]">chevron_right</span>
-                </a>
-            <?php else: ?>
-                <span class="page-disabled"><span class="material-symbols-outlined text-[18px]">chevron_right</span></span>
-            <?php endif; ?>
-        </div>
-    <?php endif; ?>
+    <nav id="visitsPagination" class="pagination" aria-label="Visit log pages"></nav>
 </section>
 
 <?php render_footer(); ?>

@@ -38,7 +38,6 @@ $stmt = auth_db()->prepare("
     JOIN people pe ON pe.id = pt.person_id
     WHERE {$where}
     ORDER BY r.referral_date DESC, r.referral_id DESC
-    LIMIT 100
 ");
 $stmt->execute($params);
 $referrals = $stmt->fetchAll();
@@ -184,8 +183,12 @@ render_clinic_command_header(
     </form>
     <?php render_ag_grid('referralsGrid', $referralColumns, $referralRows, [
         'searchInput' => 'referralsGridSearch',
+        'pageSize' => 10,
+        'pagination' => true,
+        'paginationControls' => 'referralsPagination',
         'emptyTitle' => 'No referrals',
         'emptyText' => 'Create a referral record to track external patient transfers.',
     ]); ?>
+    <nav id="referralsPagination" class="pagination" aria-label="Referral pages"></nav>
 </section>
 <?php render_footer(); ?>

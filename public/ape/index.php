@@ -135,65 +135,10 @@ render_clinic_command_header(
                 <span class="search-icon material-symbols-outlined">search</span>
                 <input type="text" name="q" value="<?= e($search) ?>" placeholder="Search APE records..." class="search-input">
             </div>
-            <button type="button" onclick="showModal('apeAdvancedFilterModal')" class="btn btn-outline w-full sm:w-auto">
-                <span class="material-symbols-outlined text-[18px]">filter_list</span>
-                Filters
-            </button>
-        </div>
-    </div>
-    <?php if ($activeQueue !== 'all' || $search !== ''): ?>
-        <div class="flex flex-wrap items-center gap-2 mb-5">
-            <span class="material-symbols-outlined text-slate-400 text-sm">filter_alt</span>
-            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-2">Active Filters</span>
-            <?php if ($search !== ''): ?>
-                <span class="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold border border-slate-200">Search: <?= e($search) ?></span>
-            <?php endif; ?>
-            <?php if ($activeQueue !== 'all'): ?>
-                <span class="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold border border-slate-200"><?= e($queues[$activeQueue]['short_title'] ?? $activeQueue) ?></span>
-            <?php endif; ?>
-            <a href="index.php" class="ml-auto text-[10px] font-black text-primary uppercase tracking-widest hover:underline text-decoration-none">Clear All</a>
-        </div>
-    <?php endif; ?>
-    <div id="apeAdvancedFilterModal" class="modal-backdrop">
-        <div class="modal-content bg-white rounded-[2rem] w-full max-w-2xl p-8 shadow-2xl border border-outline-variant/10">
-            <div class="flex items-center justify-between mb-8">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 bg-primary-fixed text-primary rounded-xl flex items-center justify-center">
-                        <span class="material-symbols-outlined">filter_alt</span>
-                    </div>
-                    <h3 class="font-headline text-2xl font-extrabold text-[#1c2a59] m-0">Advanced Filters</h3>
-                </div>
-                <button type="button" onclick="closeModal('apeAdvancedFilterModal')" class="btn-icon btn-icon-slate">
-                    <span class="material-symbols-outlined">close</span>
-                </button>
-            </div>
-            <div>
-                <label class="clinic-label">Queue</label>
-                <select class="clinic-select" name="queue">
-                    <option value="all" <?= $activeQueue === 'all' ? 'selected' : '' ?>>All Queues</option>
-                    <?php foreach ($queues as $key => $queue): ?>
-                        <option value="<?= e($key) ?>" <?= $activeQueue === $key ? 'selected' : '' ?>><?= e($queue['short_title'] ?? $queue['title']) ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="flex flex-col sm:flex-row gap-3 pt-6 mt-6 border-t border-slate-100">
-                <a href="index.php" class="btn btn-ghost flex-1 text-decoration-none">Reset All</a>
-                <button class="btn btn-primary flex-1">
-                    <span class="material-symbols-outlined text-[18px]">check</span>
-                    Apply Filters
-                </button>
-            </div>
         </div>
     </div>
     </form>
     <div class="ape-queue-map-grid">
-        <a href="?<?= $search !== '' ? 'q=' . urlencode($search) : '' ?>" class="ape-queue-map-card rounded-2xl border <?= $activeQueue === 'all' ? 'border-primary bg-primary-fixed' : 'border-outline-variant bg-white' ?> p-3 text-decoration-none transition-colors">
-            <div class="flex items-center justify-between gap-2">
-                <span class="w-8 h-8 rounded-xl bg-white text-primary border border-outline-variant flex items-center justify-center material-symbols-outlined text-[16px]">view_list</span>
-                <strong class="font-headline text-xl text-[#17261d]"><?= count($allRecords) ?></strong>
-            </div>
-            <p class="ape-queue-map-label">All Queues</p>
-        </a>
         <?php foreach ($queues as $key => $queue): ?>
             <a href="?queue=<?= urlencode($key) ?><?= $search !== '' ? '&q=' . urlencode($search) : '' ?>" class="ape-queue-map-card rounded-2xl border <?= $activeQueue === $key ? 'border-primary bg-primary-fixed' : 'border-outline-variant bg-white' ?> p-3 text-decoration-none hover:bg-primary-fixed transition-colors">
                 <div class="flex items-center justify-between gap-2">
@@ -210,8 +155,9 @@ render_clinic_command_header(
     <?php foreach ($visibleQueues as $queueKey):
         $queue = $queues[$queueKey];
         $records = $recordsByQueue[$queueKey];
-        $limit = $activeQueue === 'all' ? 6 : 200;
-        $shownRecords = array_slice($records, 0, $limit);
+        $shownRecords = $records;
+        $gridSuffix = preg_replace('/[^A-Za-z0-9_-]/', '', $queueKey);
+        $paginationId = 'apePagination' . $gridSuffix;
     ?>
         <section class="clinic-card overflow-hidden">
             <div class="p-6 border-b border-outline-variant">
@@ -250,18 +196,16 @@ render_clinic_command_header(
                     'actionHtml' => row_actions_button('APE actions', $queueKey === 'completed' ? '' : '<a href="view.php?id=' . (int)$rec['id'] . '" class="btn btn-primary btn-sm text-decoration-none"><span class="material-symbols-outlined text-[14px]">' . e($next['icon']) . '</span>' . e($next['label']) . '</a>'),
                 ];
             }
-            render_ag_grid('apeGrid' . preg_replace('/[^A-Za-z0-9_-]/', '', $queueKey), $apeQueueColumns, $apeRows, [
-                'pageSize' => $activeQueue === 'all' ? 10 : 25,
+            render_ag_grid('apeGrid' . $gridSuffix, $apeQueueColumns, $apeRows, [
+                'pageSize' => 10,
+                'pagination' => true,
+                'paginationControls' => $paginationId,
                 'height' => 'compact',
                 'emptyTitle' => 'No patients here',
                 'emptyText' => 'This queue is clear for now.',
             ]);
             ?>
-            <?php if ($activeQueue === 'all' && count($records) > $limit): ?>
-                <div class="px-6 py-4 border-t border-outline-variant bg-slate-50/40 text-right">
-                    <a class="btn btn-sm btn-ghost text-decoration-none" href="?queue=<?= urlencode($queueKey) ?><?= $search !== '' ? '&q=' . urlencode($search) : '' ?>">View all <?= count($records) ?></a>
-                </div>
-            <?php endif; ?>
+            <nav id="<?= e($paginationId) ?>" class="pagination" aria-label="<?= e($queue['title']) ?> pages"></nav>
         </section>
     <?php endforeach; ?>
 </div>

@@ -80,7 +80,8 @@ appointment_sync_overdue_confirmations();
 
 // --- 1. Metrics & Analytics ---
 $metrics = [
-    'visits_today' => (int) (cliniq_visit_db()->query('SELECT COUNT(*) AS total FROM visits WHERE DATE(visit_datetime) = CURDATE()')->fetch()['total'] ?? 0),
+    'visits_today' => (int) (cliniq_visit_db()->query("SELECT COUNT(*) AS total FROM visits WHERE DATE(visit_datetime) = CURDATE() AND TIME(visit_datetime) BETWEEN '08:00:00' AND '17:00:00'")->fetch()['total'] ?? 0),
+    'patients_in_clinic' => (int) (cliniq_visit_db()->query("SELECT COUNT(DISTINCT patient_person_id) AS total FROM visits WHERE DATE(visit_datetime) = CURDATE() AND TIME(visit_datetime) BETWEEN '08:00:00' AND '17:00:00' AND status IN ('Unaddressed', 'Active')")->fetch()['total'] ?? 0),
     'pending_alerts' => (int) (auth_db()->query("SELECT COUNT(*) AS total FROM nurse_alerts WHERE status = 'Pending'")->fetch()['total'] ?? 0),
     'low_stock' => (int) (cliniq_inventory_db()->query('SELECT COUNT(*) AS total FROM inventory_items WHERE is_active = 1 AND quantity <= reorder_level')->fetch()['total'] ?? 0),
     'appointment_requests' => (int) (appointment_db()->query("SELECT COUNT(*) AS total FROM appointments WHERE status = 'Pending'")->fetch()['total'] ?? 0),
@@ -90,7 +91,6 @@ $metrics = [
 $apeTotal = (int) (auth_db()->query('SELECT COUNT(*) AS total FROM ape_records')->fetch()['total'] ?? 0);
 $apeCleared = (int) (auth_db()->query("SELECT COUNT(*) AS total FROM ape_records WHERE workflow_status = 'Cleared' OR clearance_status = 'Cleared'")->fetch()['total'] ?? 0);
 $metrics['ape_clearance_rate'] = $apeTotal > 0 ? round(($apeCleared / $apeTotal) * 100) : 0;
-$metrics['ape_pending_review'] = (int) (auth_db()->query("SELECT COUNT(*) AS total FROM ape_records WHERE COALESCE(requirement_status, '') <> 'Checked'")->fetch()['total'] ?? 0);
 
 
 // --- 2. Live Alerts (Most Urgent First) ---
@@ -236,7 +236,7 @@ $visitorLogs = cliniq_visit_db()->query("
 
 // --- 5. APE Action Queue (Condensed) ---
 $allApeRecords = array_values(array_filter(
-    ape_fetch_records('', 500),
+    ape_fetch_records(),
     static fn(array $record): bool => ($record['workflow_status'] ?? '') !== 'Cleared'
 ));
 
@@ -255,8 +255,6 @@ foreach (['examination', 'digital_submission', 'final_decision', 'follow_up'] as
         $apeQueue[] = $record;
     }
 }
-$apeQueue = array_slice($apeQueue, 0, 5); // Limit to 5 for condensed view
-
 $visitorColumns = [
     ['headerName' => 'Arrived', 'field' => 'arrivedTime', 'sortField' => 'arrivedSort', 'sortType' => 'date', 'width' => 105, 'minWidth' => 100, 'maxWidth' => 115, 'flex' => 0],
     ['headerName' => 'Addressed', 'field' => 'addressedTime', 'sortField' => 'addressedSort', 'sortType' => 'date', 'width' => 110, 'minWidth' => 105, 'maxWidth' => 120, 'flex' => 0],
@@ -347,10 +345,11 @@ render_header('Main Dashboard');
                 <span class="material-symbols-outlined text-[24px]">group</span>
             </div>
             <div class="min-w-0">
-                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Visits Today</p>
-                <p class="font-headline text-3xl font-extrabold text-slate-800 leading-none m-0">
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Clinic Visits Today</p>
+                <p class="dashboard-metric-value font-headline text-3xl font-extrabold text-slate-800 leading-none m-0">
                     <?= $metrics['visits_today'] ?>
                 </p>
+                <p class="text-[9px] font-bold text-slate-400 leading-tight mt-1 mb-0">Visit records logged today</p>
             </div>
         </a>
         <a href="<?= app_url('inventory/index.php') ?>"
@@ -359,10 +358,11 @@ render_header('Main Dashboard');
                 <span class="material-symbols-outlined text-[24px]">inventory_2</span>
             </div>
             <div class="min-w-0">
-                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Low Stock</p>
-                <p class="font-headline text-3xl font-extrabold text-slate-800 leading-none m-0">
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Low-Stock Items</p>
+                <p class="dashboard-metric-value font-headline text-3xl font-extrabold text-slate-800 leading-none m-0">
                     <?= $metrics['low_stock'] ?>
                 </p>
+                <p class="text-[9px] font-bold text-slate-400 leading-tight mt-1 mb-0">At or below reorder level</p>
             </div>
         </a>
         <a href="<?= app_url('appointments/index.php') ?>"
@@ -371,10 +371,11 @@ render_header('Main Dashboard');
                 <span class="material-symbols-outlined text-[24px]">event_available</span>
             </div>
             <div class="min-w-0">
-                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Appt Requests</p>
-                <p class="font-headline text-3xl font-extrabold text-slate-800 leading-none m-0">
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Pending Appointments</p>
+                <p class="dashboard-metric-value font-headline text-3xl font-extrabold text-slate-800 leading-none m-0">
                     <?= $metrics['appointment_requests'] ?>
                 </p>
+                <p class="text-[9px] font-bold text-slate-400 leading-tight mt-1 mb-0">Requests awaiting clinic action</p>
             </div>
         </a>
         <a href="<?= app_url('ape/index.php') ?>"
@@ -383,22 +384,24 @@ render_header('Main Dashboard');
                 <span class="material-symbols-outlined text-[24px]">fact_check</span>
             </div>
             <div class="min-w-0">
-                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">APE Clearance</p>
-                <p class="font-headline text-3xl font-extrabold text-slate-800 leading-none m-0">
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">APE Progress</p>
+                <p class="dashboard-metric-value font-headline text-2xl font-extrabold text-slate-800 leading-none m-0 whitespace-nowrap">
                     <?= $metrics['ape_clearance_rate'] ?>%
                 </p>
+                <p class="text-[9px] font-bold text-slate-400 leading-tight mt-1 mb-0"><?= $apeCleared ?> of <?= $apeTotal ?> patients cleared</p>
             </div>
         </a>
-        <a href="<?= app_url('ape/index.php?queue=examination') ?>"
+        <a href="<?= app_url('visits/index.php?status=all') ?>"
             class="dashboard-metric-card flex items-center gap-4 text-decoration-none hover:shadow-md hover:border-blue-200 transition-all cursor-pointer col-span-2 sm:col-span-1">
             <div class="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                <span class="material-symbols-outlined text-[24px]">pending_actions</span>
+                <span class="material-symbols-outlined text-[24px]">personal_injury</span>
             </div>
             <div class="min-w-0">
-                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">APE Action</p>
-                <p class="font-headline text-3xl font-extrabold text-slate-800 leading-none m-0">
-                    <?= $metrics['ape_pending_review'] ?>
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Patients in Clinic</p>
+                <p class="dashboard-metric-value font-headline text-3xl font-extrabold text-slate-800 leading-none m-0">
+                    <?= $metrics['patients_in_clinic'] ?>
                 </p>
+                <p class="text-[9px] font-bold text-slate-400 leading-tight mt-1 mb-0">Unaddressed or in treatment</p>
             </div>
         </a>
     </div>
@@ -690,12 +693,15 @@ render_header('Main Dashboard');
             <div class="dashboard-visitor-grid-wrap p-0" style="height: 380px;">
                 <?php render_ag_grid('dashboardVisitorGrid', $visitorColumns, $visitorRows, [
                     'pageSize' => 10,
+                    'pagination' => true,
+                    'paginationControls' => 'dashboardVisitorPagination',
                     'height' => 'compact',
                     'fitColumns' => true,
                     'emptyTitle' => 'No visitors logged yet today.',
                     'emptyText' => 'Recorded clinic visits will appear here.',
                 ]); ?>
             </div>
+            <nav id="dashboardVisitorPagination" class="pagination border-t border-slate-100" aria-label="Live visitor log pages"></nav>
         </section>
     </div>
 
@@ -714,10 +720,13 @@ render_header('Main Dashboard');
 
         <?php render_ag_grid('dashboardApeGrid', $dashboardApeColumns, $dashboardApeRows, [
             'pageSize' => 10,
+            'pagination' => true,
+            'paginationControls' => 'dashboardApePagination',
             'height' => 'compact',
             'emptyTitle' => 'No pending APE tasks in the queue.',
             'emptyText' => 'Patients with clinic actions will appear here.',
         ]); ?>
+        <nav id="dashboardApePagination" class="pagination border-t border-slate-100" aria-label="APE action queue pages"></nav>
     </section>
 
 </div>

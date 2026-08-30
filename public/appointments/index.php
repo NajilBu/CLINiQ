@@ -56,7 +56,6 @@ $stmt = appointment_db()->prepare("
         CASE a.status WHEN 'Pending' THEN 0 WHEN 'Scheduled' THEN 1 WHEN 'For Confirmation' THEN 2 ELSE 3 END,
         a.appointment_datetime ASC,
         a.created_at DESC
-    LIMIT 200
 ");
 $stmt->execute($params);
 $appointments = $stmt->fetchAll();
@@ -240,9 +239,13 @@ render_clinic_command_header(
     </form>
     <?php render_ag_grid('appointmentsGrid', $columns, $rows, [
         'searchInput' => 'appointmentsGridSearch',
+        'pageSize' => 10,
+        'pagination' => true,
+        'paginationControls' => 'appointmentsPagination',
         'emptyTitle' => $filterStatus === 'today' ? 'No appointments today' : ($filterStatus === 'Pending' ? 'No appointment requests' : 'No appointments found'),
         'emptyText' => $filterStatus === 'today' ? 'Today’s appointment schedule is clear.' : ($filterStatus === 'Pending' ? 'Student appointment requests will appear here for clinic approval.' : 'Try another status filter.'),
     ]); ?>
+    <nav id="appointmentsPagination" class="pagination" aria-label="Appointment pages"></nav>
 </section>
 
 <?php require __DIR__ . '/_availability_section.php'; ?>

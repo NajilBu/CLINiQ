@@ -804,12 +804,12 @@ render_header($fullName . ' - Patient Profile');
     function renderPagination(totalPages) {
         if (!pagination) return;
 
-        let markup = `<button type="button" data-care-page-action="previous" aria-label="Previous page" ${currentPage === 1 ? 'class="page-disabled" disabled' : ''}>&lsaquo;</button>`;
+        let markup = `<button type="button" class="pagination-arrow${currentPage === 1 ? ' page-disabled' : ''}" data-care-page-action="previous" aria-label="Previous page" ${currentPage === 1 ? 'disabled' : ''}>&lsaquo;</button>`;
         for (let page = 1; page <= totalPages; page += 1) {
             const active = page === currentPage;
             markup += `<button type="button" data-care-page="${page}"${active ? ' class="page-active" aria-current="page"' : ''}>${page}</button>`;
         }
-        markup += `<button type="button" data-care-page-action="next" aria-label="Next page" ${currentPage === totalPages ? 'class="page-disabled" disabled' : ''}>&rsaquo;</button>`;
+        markup += `<button type="button" class="pagination-arrow${currentPage === totalPages ? ' page-disabled' : ''}" data-care-page-action="next" aria-label="Next page" ${currentPage === totalPages ? 'disabled' : ''}>&rsaquo;</button>`;
         pagination.innerHTML = markup;
     }
 

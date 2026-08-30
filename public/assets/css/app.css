@@ -2653,7 +2653,7 @@ textarea.record-sheet-field {
     letter-spacing: 0.06em;
 }
 
-.dashboard-metric-card p:last-of-type {
+.dashboard-metric-card .dashboard-metric-value {
     font-size: 2rem;
 }
 
@@ -2921,7 +2921,7 @@ textarea.record-sheet-field {
 
 @media (min-width: 1280px) {
     .ape-queue-map-grid {
-        grid-template-columns: repeat(6, minmax(0, 1fr));
+        grid-template-columns: repeat(5, minmax(0, 1fr));
     }
 }
 
@@ -3059,70 +3059,68 @@ textarea.record-sheet-field {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 0.25rem;
-    padding: 1.5rem;
-}
-
-.pagination a,
-.pagination button,
-.pagination span {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 2.25rem;
-    height: 2.25rem;
-    padding: 0 0.5rem;
-    border-radius: 0.75rem;
-    font-size: 0.8125rem;
-    font-weight: 700;
-    text-decoration: none;
-    transition: all 0.15s ease;
-    border: 0;
-    background: transparent;
+    gap: 0.5rem;
+    min-height: 4.75rem;
+    padding: 1rem 1.5rem;
 }
 
 .pagination a,
 .pagination button {
-    color: #64748b;
-    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    min-width: 2.5rem;
+    height: 2.5rem;
+    padding: 0 0.75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    background: #ffffff;
+    color: #475569;
+    font-size: 0.875rem;
+    font-weight: 800;
+    line-height: 1;
+    text-decoration: none;
+    transition: all 0.15s ease;
+}
+
+.pagination-pages {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
 }
 
 .pagination a:hover,
 .pagination button:hover:not(:disabled) {
-    background: #f1f5f9;
-    color: #1e293b;
+    border-color: var(--cliniq-primary);
+    background: var(--cliniq-accent);
+    color: var(--cliniq-accent-foreground);
+    transform: translateY(-1px);
 }
 
-.pagination .page-active {
-    background: var(--cliniq-primary);
-    color: white;
-}
-
-.pagination .page-disabled {
-    color: #cbd5e1;
-    pointer-events: none;
-}
-
-#recentPatientAccounts .pagination,
-#patientsPagination {
-    gap: 0.55rem;
-    padding: 1.35rem 1.5rem;
-}
-
-#recentPatientAccounts .pagination button,
-#patientsPagination button {
-    min-width: 2.5rem;
-    height: 2.5rem;
-    padding: 0 0.85rem;
-    border-radius: 9999px;
-    line-height: 1;
-}
-
-#recentPatientAccounts .pagination .page-active,
-#patientsPagination .page-active {
+.pagination a.page-active,
+.pagination button.page-active {
+    border-color: var(--cliniq-primary);
     background: var(--cliniq-primary);
     color: #ffffff;
     box-shadow: 0 5px 14px rgba(var(--cliniq-focus-rgb), 0.2);
+}
+
+.pagination a.page-disabled,
+.pagination button.page-disabled,
+.pagination button:disabled {
+    border-color: #eef2f7;
+    background: #f8fafc;
+    color: #cbd5e1;
+    cursor: not-allowed;
+    opacity: 0.8;
+    pointer-events: none;
+}
+
+.pagination .pagination-arrow {
+    padding: 0;
+    font-size: 1.35rem;
 }
 
 /* ============================================================

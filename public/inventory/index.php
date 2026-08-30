@@ -67,11 +67,10 @@ $loanRowsRaw = cliniq_inventory_db()->query('
     ORDER BY
         CASE WHEN l.status IN ("Borrowed", "Overdue") THEN 0 ELSE 1 END,
         COALESCE(l.returned_at, l.borrowed_at) DESC
-    LIMIT 50
 ')->fetchAll();
 $activeLoans = array_values(array_filter($loanRowsRaw, fn(array $loan): bool => in_array(($loan['status'] ?? ''), ['Borrowed', 'Overdue'], true)));
 $returnedToday = array_values(array_filter($loanRowsRaw, fn(array $loan): bool => !empty($loan['returned_at']) && date('Y-m-d', strtotime($loan['returned_at'])) === date('Y-m-d')));
-$inventoryTransactions = cliniq_inventory_transactions(200);
+$inventoryTransactions = cliniq_inventory_transactions();
 
 $activeTab = $_GET['tab'] ?? 'medicine';
 if (!in_array($activeTab, ['medicine', 'equipment', 'expiring', 'archived', 'activity'], true)) {
@@ -520,6 +519,9 @@ render_clinic_command_header(
 
     <?php render_ag_grid('inventoryGrid', $gridColumns, $inventoryRows, [
         'searchInput' => 'inventoryGridSearch',
+        'pageSize' => 10,
+        'pagination' => true,
+        'paginationControls' => 'inventoryPagination',
         'emptyTitle' => match ($activeTab) {
             'equipment' => 'No equipment items',
             'expiring' => 'No expiring items',
@@ -535,6 +537,7 @@ render_clinic_command_header(
             default => 'Add medicines to start tracking stock.',
         },
     ]); ?>
+    <nav id="inventoryPagination" class="pagination" aria-label="Inventory pages"></nav>
 </section>
 
 <?php if ($activeTab === 'equipment'): ?>
@@ -563,10 +566,14 @@ render_clinic_command_header(
 
         <?php render_ag_grid('inventoryLoansGrid', $loanColumns, $loanRows, [
             'searchInput' => 'inventoryLoansSearch',
+            'pageSize' => 10,
+            'pagination' => true,
+            'paginationControls' => 'inventoryLoansPagination',
             'height' => 'compact',
             'emptyTitle' => 'No equipment loans yet',
             'emptyText' => 'Borrowed equipment and completed returns will appear here.',
         ]); ?>
+        <nav id="inventoryLoansPagination" class="pagination" aria-label="Equipment loan pages"></nav>
     </section>
 <?php endif; ?>
 </div>

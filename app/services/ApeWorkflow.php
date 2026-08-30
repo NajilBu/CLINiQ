@@ -527,9 +527,8 @@ function ape_record_select_sql(): string
     ";
 }
 
-function ape_fetch_records(string $search = '', int $limit = 200): array
+function ape_fetch_records(string $search = '', ?int $limit = null): array
 {
-    $limit = max(1, min(500, $limit));
     $sql = ape_record_select_sql();
     $params = [];
     if ($search !== '') {
@@ -548,7 +547,11 @@ function ape_fetch_records(string $search = '', int $limit = 200): array
         $term = '%' . $search . '%';
         $params = array_fill(0, 6, $term);
     }
-    $sql .= " ORDER BY ar.updated_at DESC, ar.created_at DESC LIMIT {$limit}";
+    $sql .= " ORDER BY ar.updated_at DESC, ar.created_at DESC";
+    if ($limit !== null) {
+        $limit = max(1, $limit);
+        $sql .= " LIMIT {$limit}";
+    }
     $stmt = auth_db()->prepare($sql);
     $stmt->execute($params);
     return $stmt->fetchAll();

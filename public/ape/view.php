@@ -262,12 +262,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (ape_record_queue($record) !== 'final_decision' || empty($record['exam_date'])) {
                 throw new RuntimeException('The examination and document archive must be complete before clearing the patient.');
             }
-            $requiredTypes = ape_default_requirements();
-            $requiredPlaceholders = implode(',', array_fill(0, count($requiredTypes), '?'));
-            $documents = $apeDb->prepare("UPDATE ape_documents SET verification_status = 'Verified', verified_by_person_id = ?, verified_at = NOW() WHERE ape_id = ? AND document_type IN ({$requiredPlaceholders}) AND verification_status = 'Pending'");
-            $documents->execute(array_merge([$staffPersonId, $id], $requiredTypes));
-            $requirements = $apeDb->prepare("UPDATE ape_requirements SET status = 'Verified', remarks = NULL, checked_by_person_id = ?, checked_at = NOW() WHERE ape_id = ? AND requirement_name IN ({$requiredPlaceholders})");
-            $requirements->execute(array_merge([$staffPersonId, $id], $requiredTypes));
+            $documents = $apeDb->prepare("UPDATE ape_documents SET verification_status = 'Verified', verified_by_person_id = ?, verified_at = NOW() WHERE ape_id = ? AND document_type <> 'Clearance' AND verification_status = 'Pending'");
+            $documents->execute([$staffPersonId, $id]);
+            $requirements = $apeDb->prepare("UPDATE ape_requirements SET status = 'Verified', remarks = NULL, checked_by_person_id = ?, checked_at = NOW() WHERE ape_id = ? AND status = 'Submitted'");
+            $requirements->execute([$staffPersonId, $id]);
             $patientNote = trim((string) ($_POST['patient_visible_note'] ?? '')) ?: ($record['patient_visible_note'] ?? null);
             $stmt = $apeDb->prepare("UPDATE ape_records SET workflow_status = 'Cleared', clearance_status = 'Cleared', follow_up_required = 0, patient_visible_note = ?, reviewed_by_person_id = ? WHERE ape_id = ? AND workflow_status IN ('Exam Done', 'Reviewed')");
             $stmt->execute([$patientNote, $staffPersonId, $id]);
@@ -280,12 +278,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (ape_record_queue($record) !== 'final_decision') {
                 throw new RuntimeException('The examination and document archive must be complete before requiring follow-up.');
             }
-            $requiredTypes = ape_default_requirements();
-            $requiredPlaceholders = implode(',', array_fill(0, count($requiredTypes), '?'));
-            $documents = $apeDb->prepare("UPDATE ape_documents SET verification_status = 'Verified', verified_by_person_id = ?, verified_at = NOW() WHERE ape_id = ? AND document_type IN ({$requiredPlaceholders}) AND verification_status = 'Pending'");
-            $documents->execute(array_merge([$staffPersonId, $id], $requiredTypes));
-            $requirements = $apeDb->prepare("UPDATE ape_requirements SET status = 'Verified', remarks = NULL, checked_by_person_id = ?, checked_at = NOW() WHERE ape_id = ? AND requirement_name IN ({$requiredPlaceholders})");
-            $requirements->execute(array_merge([$staffPersonId, $id], $requiredTypes));
+            $documents = $apeDb->prepare("UPDATE ape_documents SET verification_status = 'Verified', verified_by_person_id = ?, verified_at = NOW() WHERE ape_id = ? AND document_type <> 'Clearance' AND verification_status = 'Pending'");
+            $documents->execute([$staffPersonId, $id]);
+            $requirements = $apeDb->prepare("UPDATE ape_requirements SET status = 'Verified', remarks = NULL, checked_by_person_id = ?, checked_at = NOW() WHERE ape_id = ? AND status = 'Submitted'");
+            $requirements->execute([$staffPersonId, $id]);
             $followUpNotes = trim((string) ($_POST['follow_up_notes'] ?? ''));
             if ($followUpNotes === '') {
                 throw new InvalidArgumentException('Enter the follow-up required from the patient.');

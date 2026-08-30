@@ -464,11 +464,15 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
         </table>
     </div>
     <nav class="pagination border-t border-slate-100" aria-label="Recent patient accounts pages">
-        <button type="button" class="page-disabled" aria-label="Previous page" data-recent-account-previous disabled>‹</button>
+        <button type="button" class="pagination-arrow page-disabled" aria-label="Previous page" data-recent-account-previous disabled>&lsaquo;</button>
 
-        <span class="inline-flex items-center gap-1" data-recent-account-pages></span>
+        <div class="pagination-pages" data-recent-account-pages>
+            <?php for ($pageNumber = 1; $pageNumber <= $recentAccountPageCount; $pageNumber++): ?>
+                <button type="button" class="<?= $pageNumber === 1 ? 'page-active' : '' ?>" data-recent-account-page="<?= $pageNumber ?>"<?= $pageNumber === 1 ? ' aria-current="page"' : '' ?>><?= $pageNumber ?></button>
+            <?php endfor; ?>
+        </div>
 
-        <button type="button" class="<?= $recentAccountPageCount === 1 ? 'page-disabled' : '' ?>" aria-label="Next page" data-recent-account-next<?= $recentAccountPageCount === 1 ? ' disabled' : '' ?>>›</button>
+        <button type="button" class="pagination-arrow <?= $recentAccountPageCount === 1 ? 'page-disabled' : '' ?>" aria-label="Next page" data-recent-account-next<?= $recentAccountPageCount === 1 ? ' disabled' : '' ?>>&rsaquo;</button>
     </nav>
 </section>
 

@@ -6,7 +6,6 @@ require_once __DIR__ . '/AlertWorkflow.php';
 function system_report_module_labels(): array
 {
     return [
-        'patients' => 'Patients',
         'visits' => 'Visits',
         'appointments' => 'Appointments',
         'inventory' => 'Medicine and Inventory',
@@ -80,54 +79,6 @@ function build_system_report(string $dateFrom, string $dateTo, array $modules): 
     $modules = normalize_system_report_modules($modules);
     $range = [$dateFrom, $dateTo];
     $sections = [];
-
-    if (in_array('patients', $modules, true)) {
-        $sections['patients'] = [
-            'title' => 'Patients',
-            'description' => 'Current patient registry and demographic distribution. Snapshot values are not limited by the reporting dates.',
-            'metrics' => [
-                system_report_metric('Registered Patients', system_report_scalar($newDb, 'SELECT COUNT(*) FROM patients')),
-                system_report_metric('Active Patients', system_report_scalar($newDb, "SELECT COUNT(*) FROM patients pt JOIN accounts a ON a.person_id = pt.person_id WHERE a.account_status = 'active'")),
-                system_report_metric('Inactive Patients', system_report_scalar($newDb, "SELECT COUNT(*) FROM patients pt JOIN accounts a ON a.person_id = pt.person_id WHERE a.account_status = 'inactive'")),
-                system_report_metric('Students', system_report_scalar($newDb, 'SELECT COUNT(*) FROM patients pt JOIN students s ON s.person_id = pt.person_id')),
-                system_report_metric('Faculty / Personnel / Staff', system_report_scalar($newDb, 'SELECT COUNT(*) FROM patients pt LEFT JOIN school_employees se ON se.person_id = pt.person_id LEFT JOIN clinic_staff cs ON cs.person_id = pt.person_id WHERE se.person_id IS NOT NULL OR cs.person_id IS NOT NULL')),
-            ],
-            'charts' => [
-                system_report_chart('Patient Account Status', system_report_rows($newDb, "
-                    SELECT COALESCE(NULLIF(a.account_status, ''), 'No account') label, COUNT(*) value
-                    FROM patients pt
-                    LEFT JOIN accounts a ON a.person_id = pt.person_id
-                    GROUP BY label ORDER BY value DESC, label
-                ")),
-                system_report_chart('Patient Type', system_report_rows($newDb, "
-                    SELECT CASE
-                        WHEN s.person_id IS NOT NULL THEN 'Student'
-                        WHEN se.role_classification = 'Faculty' THEN 'Faculty'
-                        WHEN se.role_classification = 'School Personnel' THEN 'School Personnel'
-                        WHEN cs.person_id IS NOT NULL THEN 'Clinic Staff'
-                        ELSE 'Other'
-                    END AS label, COUNT(*) AS value
-                    FROM patients pt
-                    LEFT JOIN students s ON s.person_id = pt.person_id
-                    LEFT JOIN school_employees se ON se.person_id = pt.person_id
-                    LEFT JOIN clinic_staff cs ON cs.person_id = pt.person_id
-                    GROUP BY label ORDER BY value DESC, label
-                ")),
-                system_report_chart('Sex', system_report_rows($newDb, "SELECT COALESCE(NULLIF(p.sex, ''), 'Not specified') label, COUNT(*) value FROM patients pt JOIN people p ON p.id = pt.person_id GROUP BY label ORDER BY value DESC, label")),
-                system_report_chart('Student Program', system_report_rows($newDb, "SELECT COALESCE(pr.program_code, 'Not assigned') label, COUNT(*) value FROM patients pt JOIN students s ON s.person_id = pt.person_id LEFT JOIN programs pr ON pr.id = s.program_id GROUP BY label ORDER BY value DESC, label")),
-                system_report_chart('Employee / Staff Department', system_report_rows($newDb, "
-                    SELECT COALESCE(ed.department_code, cd.department_code, 'Not assigned') label, COUNT(*) value
-                    FROM patients pt
-                    LEFT JOIN school_employees se ON se.person_id = pt.person_id
-                    LEFT JOIN departments ed ON ed.id = se.department_id
-                    LEFT JOIN clinic_staff cs ON cs.person_id = pt.person_id
-                    LEFT JOIN departments cd ON cd.id = cs.department_id
-                    WHERE se.person_id IS NOT NULL OR cs.person_id IS NOT NULL
-                    GROUP BY label ORDER BY value DESC, label
-                ")),
-            ],
-        ];
-    }
 
     if (in_array('visits', $modules, true)) {
         $visitCount = system_report_scalar($newDb, 'SELECT COUNT(*) FROM visits WHERE DATE(visit_datetime) BETWEEN ? AND ?', $range);
