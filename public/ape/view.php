@@ -197,13 +197,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!in_array($resultStatus, ['Normal', 'With Finding', 'Referred'], true)) {
                 throw new InvalidArgumentException('Select a valid examination result.');
             }
-            $findingType = trim((string) ($_POST['finding_type'] ?? '')) ?: 'General Examination';
-            $findingDescription = trim((string) ($_POST['finding_description'] ?? ''));
-            if ($findingDescription === '') {
-                throw new InvalidArgumentException('Enter the clinical examination finding or result description.');
-            }
-            $clinicalRemarks = trim((string) ($_POST['clinical_remarks'] ?? '')) ?: null;
-            $patientNote = trim((string) ($_POST['patient_visible_note'] ?? '')) ?: null;
+            $findingType = 'APE Examination';
+            $submittedFindingDescription = trim((string) ($_POST['finding_description'] ?? ''));
+            $clinicalRemarks = $resultStatus === 'With Finding'
+                ? (trim((string) ($_POST['clinical_remarks'] ?? '')) ?: null)
+                : null;
+            $patientNote = $resultStatus === 'With Finding'
+                ? (trim((string) ($_POST['patient_visible_note'] ?? '')) ?: null)
+                : null;
             $hardCopyStatus = (string) ($_POST['hard_copy_status'] ?? 'complete');
             if (!in_array($hardCopyStatus, ['complete', 'incomplete'], true)) {
                 throw new InvalidArgumentException('Select whether the hard-copy documents are complete or incomplete.');
@@ -218,6 +219,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new InvalidArgumentException('Enter the referral destination and reason when the examination result is Referred.');
             }
             $isReferral = $resultStatus === 'Referred';
+            $findingDescription = match ($resultStatus) {
+                'Normal' => 'No abnormal findings noted during the APE examination.',
+                'Referred' => $referralReason,
+                default => $submittedFindingDescription,
+            };
+            if ($resultStatus === 'With Finding' && $findingDescription === '') {
+                throw new InvalidArgumentException('Enter the clinical examination finding or result description.');
+            }
             $nextRequirementStatus = $hardCopyStatus === 'complete' ? 'Checked' : 'Needs Correction';
             $nextWorkflowStatus = $hardCopyStatus === 'complete'
                 ? ($isReferral ? 'Follow-up Required' : 'Requirements Checked')
@@ -496,6 +505,113 @@ render_header('APE Record - ' . $fullName);
         line-height: 1.25;
         overflow-wrap: anywhere;
     }
+    .ape-checklist-list {
+        display: grid;
+        gap: 0.55rem;
+        margin-bottom: 1rem;
+    }
+    .ape-checklist-row {
+        display: grid;
+        grid-template-columns: minmax(10rem, 0.9fr) minmax(0, 2fr) auto;
+        gap: 0.65rem;
+        align-items: center;
+        padding: 0.7rem 0.8rem;
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 0.65rem;
+        background: #f8fafc;
+    }
+    .ape-checklist-meta {
+        min-width: 0;
+    }
+    .ape-checklist-meta strong {
+        display: block;
+        color: #1e293b;
+        font-size: 0.84rem;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
+    }
+    .ape-checklist-meta span {
+        display: block;
+        margin-top: 0.2rem;
+        color: #94a3b8;
+        font-size: 0.58rem;
+        font-weight: 800;
+        line-height: 1.25;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+    }
+    .ape-checklist-update {
+        display: grid;
+        grid-template-columns: 10.5rem minmax(11rem, 1fr) auto;
+        gap: 0.5rem;
+        align-items: center;
+        min-width: 0;
+    }
+    .ape-checklist-row .clinic-select,
+    .ape-checklist-row .clinic-input {
+        height: 2.45rem;
+        min-height: 2.45rem;
+        padding-top: 0.45rem;
+        padding-bottom: 0.45rem;
+        font-size: 0.78rem;
+    }
+    .ape-checklist-save,
+    .ape-checklist-delete {
+        height: 2.45rem;
+        min-height: 2.45rem;
+    }
+    .ape-checklist-save {
+        padding-inline: 0.75rem;
+    }
+    .ape-checklist-delete {
+        width: 2.45rem;
+        padding: 0;
+        color: #b91c1c;
+        border-color: rgba(185, 28, 28, 0.25);
+    }
+    .ape-requirement-status {
+        font-weight: 800;
+        transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+    }
+    .ape-requirement-status[data-status="Missing"] {
+        color: #92400e;
+        border-color: #fcd34d;
+        background: #fffbeb;
+    }
+    .ape-requirement-status[data-status="Submitted"] {
+        color: #1d4ed8;
+        border-color: #93c5fd;
+        background: #eff6ff;
+    }
+    .ape-requirement-status[data-status="Verified"] {
+        color: #166534;
+        border-color: #86efac;
+        background: #f0fdf4;
+    }
+    .ape-requirement-status[data-status="Needs Correction"] {
+        color: #b91c1c;
+        border-color: #fca5a5;
+        background: #fef2f2;
+    }
+    @media (max-width: 1100px) {
+        .ape-checklist-row {
+            grid-template-columns: minmax(0, 1fr) auto;
+        }
+        .ape-checklist-update {
+            grid-column: 1 / -1;
+        }
+    }
+    @media (max-width: 639px) {
+        .ape-checklist-row {
+            grid-template-columns: minmax(0, 1fr) auto;
+        }
+        .ape-checklist-update {
+            grid-template-columns: 1fr;
+        }
+        .ape-checklist-save {
+            width: 100%;
+        }
+    }
     .ape-document-review-list {
         display: grid;
         gap: 0.75rem;
@@ -764,40 +880,38 @@ render_header('APE Record - ' . $fullName);
                                     <option value="Referred">Referred</option>
                                 </select>
                             </div>
-                            <div>
-                                <label class="clinic-label" for="apeFindingType">Finding Type</label>
-                                <input class="clinic-input" id="apeFindingType" name="finding_type" value="General Examination" placeholder="General, vision, dental, laboratory..." required>
-                            </div>
-                            <div class="md:col-span-2">
-                                <label class="clinic-label" for="apeFindingDescription">Examination Finding / Result</label>
-                                <textarea class="clinic-textarea" id="apeFindingDescription" name="finding_description" rows="3" placeholder="Describe the examination result and any finding..." required></textarea>
-                            </div>
-                            <div>
-                                <label class="clinic-label" for="apeClinicalRemarks">Internal Clinical Notes</label>
-                                <textarea class="clinic-textarea" id="apeClinicalRemarks" name="clinical_remarks" rows="3" placeholder="Visible only to authorized clinic staff..."><?= e($record['clinical_remarks']) ?></textarea>
-                            </div>
-                            <div>
-                                <label class="clinic-label" for="apePatientNote">Patient-Visible Instructions</label>
-                                <textarea class="clinic-textarea" id="apePatientNote" name="patient_visible_note" rows="3" placeholder="Instructions that the patient can see..."><?= e($record['patient_visible_note']) ?></textarea>
+                            <div class="md:col-span-2 hidden grid grid-cols-1 md:grid-cols-2 gap-4" id="apeFindingDetails">
+                                <div class="md:col-span-2">
+                                    <label class="clinic-label" for="apeFindingDescription">Examination Finding / Result</label>
+                                    <textarea class="clinic-textarea" id="apeFindingDescription" name="finding_description" rows="3" placeholder="Describe the examination result and any finding..."></textarea>
+                                </div>
+                                <div>
+                                    <label class="clinic-label" for="apeClinicalRemarks">Internal Clinical Notes</label>
+                                    <textarea class="clinic-textarea" id="apeClinicalRemarks" name="clinical_remarks" rows="3" placeholder="Visible only to authorized clinic staff..."><?= e($record['clinical_remarks']) ?></textarea>
+                                </div>
+                                <div>
+                                    <label class="clinic-label" for="apePatientNote">Patient-Visible Instructions</label>
+                                    <textarea class="clinic-textarea" id="apePatientNote" name="patient_visible_note" rows="3" placeholder="Instructions that the patient can see..."><?= e($record['patient_visible_note']) ?></textarea>
+                                </div>
                             </div>
                             <div class="md:col-span-2 rounded-xl border border-primary/20 bg-primary-fixed p-4">
                                 <p class="clinic-label text-primary mb-1">Hard-copy Documents</p>
                                 <p class="text-xs font-bold text-slate-600 mb-3">Review the patient’s physical documents during this examination.</p>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    <div>
+                                <div class="grid grid-cols-1 gap-3" id="apeHardCopyFields">
+                                    <div id="apeHardCopyStatusField">
                                         <label class="clinic-label" for="apeHardCopyStatus">Hard-copy Status</label>
                                         <select class="clinic-select" id="apeHardCopyStatus" name="hard_copy_status" required>
-                                            <option value="complete">Complete - allow digital upload</option>
-                                            <option value="incomplete">Incomplete - needs correction</option>
+                                            <option value="complete" <?= ($record['requirement_status'] ?? '') !== 'Needs Correction' ? 'selected' : '' ?>>Complete - allow digital upload</option>
+                                            <option value="incomplete" <?= ($record['requirement_status'] ?? '') === 'Needs Correction' ? 'selected' : '' ?>>Incomplete - needs correction</option>
                                         </select>
                                     </div>
-                                    <div>
+                                    <div id="apeHardCopyIssuesField" class="<?= ($record['requirement_status'] ?? '') === 'Needs Correction' ? '' : 'hidden' ?>">
                                         <label class="clinic-label" for="apeHardCopyIssues">Document Issues</label>
                                         <textarea class="clinic-textarea" id="apeHardCopyIssues" name="missing_items" rows="2" placeholder="Required only if hard-copy documents are incomplete..."><?= e(($record['requirement_status'] ?? '') === 'Needs Correction' ? $record['patient_visible_note'] : '') ?></textarea>
                                     </div>
                                 </div>
                             </div>
-                            <div class="md:col-span-2 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                            <div class="md:col-span-2 hidden rounded-xl border border-amber-200 bg-amber-50 p-4" id="apeReferralDetails">
                                 <p class="clinic-label text-amber-800 mb-1">Immediate Referral (only when result is Referred)</p>
                                 <p class="text-xs font-bold text-amber-700 mb-3">A referral is created immediately with this examination; it will not wait for a separate decision step.</p>
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -940,55 +1054,42 @@ render_header('APE Record - ' . $fullName);
                     </div>
                     <span class="badge badge-pending"><?= count($requirements) ?> item(s)</span>
                 </div>
-                <div class="space-y-2 mb-4">
+                <div class="ape-checklist-list">
                     <?php foreach ($requirements as $requirement): ?>
-                        <div class="ape-flow-field">
-                            <div class="grid grid-cols-1 xl:grid-cols-[minmax(12rem,1fr)_12rem_minmax(12rem,1.2fr)_auto] gap-3 xl:items-end">
-                                <div class="min-w-0">
-                                    <p class="clinic-label mb-1">Requirement</p>
-                                    <strong class="text-sm text-slate-800 block"><?= e($requirement['requirement_name']) ?></strong>
-                                    <?php if ($requirement['checked_at']): ?>
-                                        <p class="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-2 mb-0">
-                                            Checked by <?= e($requirement['checked_by_name'] ?: 'Clinic staff') ?> · <?= e(date('M d, Y g:i A', strtotime($requirement['checked_at']))) ?>
-                                        </p>
-                                    <?php endif; ?>
-                                </div>
-                                <form method="post" class="contents">
-                                    <input type="hidden" name="action" value="update_requirement">
-                                    <input type="hidden" name="requirement_id" value="<?= (int) $requirement['requirement_id'] ?>">
-                                    <label class="grid gap-1">
-                                        <span class="clinic-label mb-0">Status</span>
-                                        <select class="clinic-select" name="requirement_item_status">
-                                            <?php foreach (['Missing', 'Submitted', 'Verified', 'Needs Correction'] as $status): ?>
-                                                <option value="<?= e($status) ?>" <?= ($requirement['status'] ?? '') === $status ? 'selected' : '' ?>><?= e($status) ?></option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    </label>
-                                    <label class="grid gap-1">
-                                        <span class="clinic-label mb-0">Remarks</span>
-                                        <input class="clinic-input" name="requirement_remarks" value="<?= e($requirement['remarks'] ?? '') ?>" placeholder="Optional remarks">
-                                    </label>
-                                    <div class="flex flex-wrap gap-2">
-                                        <button class="btn btn-sm btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Update requirement?" data-confirm-message="This will save the selected checklist status and remarks." data-confirm-toast="Saving requirement...">
-                                            <span class="material-symbols-outlined text-[15px]">save</span> Save
-                                        </button>
-                                    </div>
-                                </form>
-                                <form method="post" class="xl:col-start-4">
-                                    <input type="hidden" name="action" value="delete_requirement">
-                                    <input type="hidden" name="requirement_id" value="<?= (int) $requirement['requirement_id'] ?>">
-                                    <button class="btn btn-sm btn-outline w-full" style="color:#b91c1c;border-color:rgba(185,28,28,0.25);" data-confirm-submit data-confirm-type="danger" data-confirm-title="Delete requirement?" data-confirm-message="This will remove <?= e($requirement['requirement_name']) ?> from this APE checklist." data-confirm-toast="Deleting requirement...">
-                                        <span class="material-symbols-outlined text-[15px]">delete</span> Delete
-                                    </button>
-                                </form>
+                        <div class="ape-checklist-row">
+                            <div class="ape-checklist-meta">
+                                <strong><?= e($requirement['requirement_name']) ?></strong>
+                                <?php if ($requirement['checked_at']): ?>
+                                    <span>Checked by <?= e($requirement['checked_by_name'] ?: 'Clinic staff') ?> · <?= e(date('M d, Y g:i A', strtotime($requirement['checked_at']))) ?></span>
+                                <?php endif; ?>
                             </div>
+                            <form method="post" class="ape-checklist-update">
+                                <input type="hidden" name="action" value="update_requirement">
+                                <input type="hidden" name="requirement_id" value="<?= (int) $requirement['requirement_id'] ?>">
+                                <select class="clinic-select ape-requirement-status" name="requirement_item_status" data-requirement-status aria-label="Status for <?= e($requirement['requirement_name']) ?>">
+                                    <?php foreach (['Missing', 'Submitted', 'Verified', 'Needs Correction'] as $status): ?>
+                                        <option value="<?= e($status) ?>" <?= ($requirement['status'] ?? '') === $status ? 'selected' : '' ?>><?= e($status) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <input class="clinic-input" name="requirement_remarks" value="<?= e($requirement['remarks'] ?? '') ?>" placeholder="Optional remarks" aria-label="Remarks for <?= e($requirement['requirement_name']) ?>">
+                                <button class="btn btn-sm btn-primary ape-checklist-save" data-confirm-submit data-confirm-type="primary" data-confirm-title="Update requirement?" data-confirm-message="This will save the selected checklist status and remarks." data-confirm-toast="Saving requirement...">
+                                    <span class="material-symbols-outlined text-[15px]">save</span> Save
+                                </button>
+                            </form>
+                            <form method="post">
+                                <input type="hidden" name="action" value="delete_requirement">
+                                <input type="hidden" name="requirement_id" value="<?= (int) $requirement['requirement_id'] ?>">
+                                <button class="btn btn-sm btn-outline ape-checklist-delete" aria-label="Delete <?= e($requirement['requirement_name']) ?>" title="Delete requirement" data-confirm-submit data-confirm-type="danger" data-confirm-title="Delete requirement?" data-confirm-message="This will remove <?= e($requirement['requirement_name']) ?> from this APE checklist." data-confirm-toast="Deleting requirement...">
+                                    <span class="material-symbols-outlined text-[15px]">delete</span>
+                                </button>
+                            </form>
                         </div>
                     <?php endforeach; ?>
                 </div>
                 <form method="post" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <input type="hidden" name="action" value="add_requirement">
                     <input class="clinic-input sm:col-span-2" name="requirement_name" placeholder="Requirement name" required>
-                    <select class="clinic-select" name="requirement_item_status">
+                    <select class="clinic-select ape-requirement-status" name="requirement_item_status" data-requirement-status>
                         <?php foreach (['Missing', 'Submitted', 'Verified', 'Needs Correction'] as $status): ?>
                             <option value="<?= e($status) ?>"><?= e($status) ?></option>
                         <?php endforeach; ?>
@@ -1117,18 +1218,73 @@ render_header('APE Record - ' . $fullName);
 
 <script>
 (() => {
-    const status = document.getElementById('apeHardCopyStatus');
-    const issues = document.getElementById('apeHardCopyIssues');
-    if (!status || !issues) return;
+    const statusSelects = document.querySelectorAll('[data-requirement-status]');
+    statusSelects.forEach((select) => {
+        const syncStatusColor = () => {
+            select.dataset.status = select.value;
+        };
+        select.addEventListener('change', syncStatusColor);
+        syncStatusColor();
+    });
+})();
 
-    const syncHardCopyIssues = () => {
+(() => {
+    const status = document.getElementById('apeHardCopyStatus');
+    const fields = document.getElementById('apeHardCopyFields');
+    const statusField = document.getElementById('apeHardCopyStatusField');
+    const issues = document.getElementById('apeHardCopyIssues');
+    const issuesField = document.getElementById('apeHardCopyIssuesField');
+    if (!status || !fields || !statusField || !issues || !issuesField) return;
+
+    const syncHardCopyIssues = (clearHiddenValue = false) => {
         const isIncomplete = status.value === 'incomplete';
         issues.required = isIncomplete;
-        issues.closest('div')?.classList.toggle('opacity-60', !isIncomplete);
+        issues.disabled = !isIncomplete;
+        fields.classList.toggle('md:grid-cols-2', isIncomplete);
+        statusField.classList.toggle('md:col-span-2', !isIncomplete);
+        issuesField.classList.toggle('hidden', !isIncomplete);
+        if (clearHiddenValue && !isIncomplete) issues.value = '';
     };
 
-    status.addEventListener('change', syncHardCopyIssues);
-    syncHardCopyIssues();
+    status.addEventListener('change', () => syncHardCopyIssues(true));
+    syncHardCopyIssues(false);
+})();
+
+(() => {
+    const result = document.getElementById('apeExamResult');
+    const findingDetails = document.getElementById('apeFindingDetails');
+    const findingDescription = document.getElementById('apeFindingDescription');
+    const clinicalRemarks = document.getElementById('apeClinicalRemarks');
+    const patientNote = document.getElementById('apePatientNote');
+    const referralDetails = document.getElementById('apeReferralDetails');
+    const referralDestination = document.getElementById('apeReferralDestination');
+    const referralReason = document.getElementById('apeReferralReason');
+    if (!result) return;
+
+    const syncExamResultFields = (clearHiddenValues = false) => {
+        const hasFinding = result.value === 'With Finding';
+        const isReferred = result.value === 'Referred';
+
+        findingDetails?.classList.toggle('hidden', !hasFinding);
+        referralDetails?.classList.toggle('hidden', !isReferred);
+
+        [findingDescription, clinicalRemarks, patientNote].forEach((field) => {
+            if (!field) return;
+            field.disabled = !hasFinding;
+            if (clearHiddenValues && !hasFinding) field.value = '';
+        });
+        if (findingDescription) findingDescription.required = hasFinding;
+
+        [referralDestination, referralReason].forEach((field) => {
+            if (!field) return;
+            field.disabled = !isReferred;
+            field.required = isReferred;
+            if (clearHiddenValues && !isReferred) field.value = '';
+        });
+    };
+
+    result.addEventListener('change', () => syncExamResultFields(true));
+    syncExamResultFields(false);
 })();
 </script>
 
