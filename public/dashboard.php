@@ -90,7 +90,7 @@ $metrics = [
 $apeTotal = (int) (auth_db()->query('SELECT COUNT(*) AS total FROM ape_records')->fetch()['total'] ?? 0);
 $apeCleared = (int) (auth_db()->query("SELECT COUNT(*) AS total FROM ape_records WHERE workflow_status = 'Cleared' OR clearance_status = 'Cleared'")->fetch()['total'] ?? 0);
 $metrics['ape_clearance_rate'] = $apeTotal > 0 ? round(($apeCleared / $apeTotal) * 100) : 0;
-$metrics['ape_pending_review'] = (int) (auth_db()->query("SELECT COUNT(*) AS total FROM ape_records WHERE COALESCE(requirement_status, '') <> 'Pre-Verified'")->fetch()['total'] ?? 0);
+$metrics['ape_pending_review'] = (int) (auth_db()->query("SELECT COUNT(*) AS total FROM ape_records WHERE COALESCE(requirement_status, '') <> 'Checked'")->fetch()['total'] ?? 0);
 
 
 // --- 2. Live Alerts (Most Urgent First) ---

@@ -27,6 +27,29 @@ function ape_follow_up_due_date_from_post(): ?string
     return null;
 }
 
+function ape_sync_requirement_status(PDO $db, int $apeId): void
+{
+    $stmt = $db->prepare("
+        SELECT
+            COUNT(*) AS total,
+            SUM(status = 'Verified') AS verified_total,
+            SUM(status = 'Needs Correction') AS correction_total
+        FROM ape_requirements
+        WHERE ape_id = ?
+    ");
+    $stmt->execute([$apeId]);
+    $summary = $stmt->fetch() ?: ['total' => 0, 'verified_total' => 0, 'correction_total' => 0];
+    $total = (int) ($summary['total'] ?? 0);
+    $verifiedTotal = (int) ($summary['verified_total'] ?? 0);
+    $correctionTotal = (int) ($summary['correction_total'] ?? 0);
+    $nextStatus = $total > 0 && $verifiedTotal === $total
+        ? 'Checked'
+        : ($correctionTotal > 0 ? 'Needs Correction' : 'Not Checked');
+
+    $update = $db->prepare('UPDATE ape_records SET requirement_status = ? WHERE ape_id = ?');
+    $update->execute([$nextStatus, $apeId]);
+}
+
 $record = fetch_ape_record($id);
 $apeUser = current_user() ?? [];
 $canRecordApeExam = in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor', 'nurse'], true);
@@ -59,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('The patient must confirm their vitals and BMI before examination can be completed.');
             }
             $notes = trim((string) ($_POST['clinical_remarks'] ?? ''));
-            $stmt = $apeDb->prepare("UPDATE ape_records SET requirement_status = 'Pre-Verified', workflow_status = 'Requirements Checked', follow_up_required = 0, clearance_status = 'Pending', clinical_remarks = ?, patient_visible_note = NULL, reviewed_by_person_id = ? WHERE ape_id = ?");
+            $stmt = $apeDb->prepare("UPDATE ape_records SET requirement_status = 'Checked', workflow_status = 'Requirements Checked', follow_up_required = 0, clearance_status = 'Pending', clinical_remarks = ?, patient_visible_note = NULL, reviewed_by_person_id = ? WHERE ape_id = ?");
             $stmt->execute([$notes ?: null, $staffPersonId, $id]);
             $checked = $apeDb->prepare("UPDATE ape_requirements SET status = 'Verified', checked_by_person_id = ?, checked_at = NOW() WHERE ape_id = ?");
             $checked->execute([$staffPersonId, $id]);
@@ -154,7 +177,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $selectedTypes[] = $selectedDocument['document_type'];
                 $requirement->execute([$missingItems, $staffPersonId, $id, $selectedDocument['document_type']]);
             }
-            $apeDb->prepare("UPDATE ape_records SET requirement_status = 'Pre-Verified', workflow_status = 'Submitted', reviewed_by_person_id = ? WHERE ape_id = ?")
+            $apeDb->prepare("UPDATE ape_records SET requirement_status = 'Checked', workflow_status = 'Submitted', reviewed_by_person_id = ? WHERE ape_id = ?")
                 ->execute([$staffPersonId, $id]);
             $activityLabel = 'Requested document correction';
             $activityNotes = implode(', ', $selectedTypes) . ': ' . $missingItems;
@@ -162,7 +185,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed') {
                 throw new RuntimeException('The patient must confirm their vitals and BMI before the clinical examination can be recorded.');
             }
-            if (!in_array(($record['workflow_status'] ?? ''), ['Registered', 'Batch Assigned', 'Requirements Checked', 'Scheduled', 'Exam Done', 'Submitted', 'Reviewed'], true) || (!empty($record['exam_date']) && ($record['requirement_status'] ?? '') === 'Pre-Verified')) {
+            if (!in_array(($record['workflow_status'] ?? ''), ['Registered', 'Batch Assigned', 'Requirements Checked', 'Scheduled', 'Exam Done', 'Submitted', 'Reviewed'], true) || (!empty($record['exam_date']) && ($record['requirement_status'] ?? '') === 'Checked')) {
                 throw new RuntimeException('This APE record is not ready for examination.');
             }
             $examDate = trim((string) ($_POST['exam_date'] ?? ''));
@@ -195,7 +218,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new InvalidArgumentException('Enter the referral destination and reason when the examination result is Referred.');
             }
             $isReferral = $resultStatus === 'Referred';
-            $nextRequirementStatus = $hardCopyStatus === 'complete' ? 'Pre-Verified' : 'Needs Correction';
+            $nextRequirementStatus = $hardCopyStatus === 'complete' ? 'Checked' : 'Needs Correction';
             $nextWorkflowStatus = $hardCopyStatus === 'complete'
                 ? ($isReferral ? 'Follow-up Required' : 'Requirements Checked')
                 : 'Exam Done';
@@ -308,8 +331,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $requirement = $apeDb->prepare("INSERT INTO ape_requirements (ape_id, requirement_name, status, remarks, checked_by_person_id, checked_at) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), remarks = VALUES(remarks), checked_by_person_id = VALUES(checked_by_person_id), checked_at = VALUES(checked_at)");
             $isChecked = $requirementStatus === 'Verified';
             $requirement->execute([$id, $requirementName, $requirementStatus, trim((string) ($_POST['requirement_remarks'] ?? '')) ?: null, $isChecked ? $staffPersonId : null, $isChecked ? date('Y-m-d H:i:s') : null]);
+            ape_sync_requirement_status($apeDb, $id);
             $activityLabel = 'Updated APE requirement';
             $activityNotes = $requirementName . ': ' . $requirementStatus;
+        } elseif ($action === 'update_requirement') {
+            $requirementId = (int) ($_POST['requirement_id'] ?? 0);
+            $requirementStatus = (string) ($_POST['requirement_item_status'] ?? 'Missing');
+            $requirementRemarks = trim((string) ($_POST['requirement_remarks'] ?? '')) ?: null;
+            if ($requirementId <= 0 || !in_array($requirementStatus, ['Missing', 'Submitted', 'Verified', 'Needs Correction'], true)) {
+                throw new InvalidArgumentException('Choose a valid requirement and status.');
+            }
+            $existing = $apeDb->prepare('SELECT requirement_name FROM ape_requirements WHERE requirement_id = ? AND ape_id = ? FOR UPDATE');
+            $existing->execute([$requirementId, $id]);
+            $requirementName = (string) $existing->fetchColumn();
+            if ($requirementName === '') {
+                throw new RuntimeException('Requirement not found.');
+            }
+            $isChecked = $requirementStatus === 'Verified';
+            $requirement = $apeDb->prepare('UPDATE ape_requirements SET status = ?, remarks = ?, checked_by_person_id = ?, checked_at = ? WHERE requirement_id = ? AND ape_id = ?');
+            $requirement->execute([
+                $requirementStatus,
+                $requirementRemarks,
+                $isChecked ? $staffPersonId : null,
+                $isChecked ? date('Y-m-d H:i:s') : null,
+                $requirementId,
+                $id,
+            ]);
+            ape_sync_requirement_status($apeDb, $id);
+            $activityLabel = 'Updated APE requirement';
+            $activityNotes = $requirementName . ': ' . $requirementStatus;
+        } elseif ($action === 'delete_requirement') {
+            $requirementId = (int) ($_POST['requirement_id'] ?? 0);
+            if ($requirementId <= 0) {
+                throw new InvalidArgumentException('Choose a requirement to delete.');
+            }
+            $existing = $apeDb->prepare('SELECT requirement_name FROM ape_requirements WHERE requirement_id = ? AND ape_id = ? FOR UPDATE');
+            $existing->execute([$requirementId, $id]);
+            $requirementName = (string) $existing->fetchColumn();
+            if ($requirementName === '') {
+                throw new RuntimeException('Requirement not found.');
+            }
+            $delete = $apeDb->prepare('DELETE FROM ape_requirements WHERE requirement_id = ? AND ape_id = ?');
+            $delete->execute([$requirementId, $id]);
+            ape_sync_requirement_status($apeDb, $id);
+            $activityLabel = 'Deleted APE requirement';
+            $activityNotes = $requirementName;
         }
 
         if ($activityLabel) {
@@ -342,9 +408,9 @@ $pendingRequirements = array_values(array_filter(
     static fn(array $requirement): bool => ($requirement['status'] ?? '') !== 'Verified'
 ));
 $documents = ape_documents_for_record($id);
-$documentsArchived = in_array(($record['workflow_status'] ?? ''), ['Reviewed', 'Follow-up Required', 'Cleared'], true)
-    || in_array(($record['clearance_status'] ?? ''), ['For Follow-up', 'Submitted', 'Cleared'], true);
-$visibleArchivedDocuments = $documentsArchived ? $documents : [];
+$apeIsCompleted = ($record['workflow_status'] ?? '') === 'Cleared'
+    || ($record['clearance_status'] ?? '') === 'Cleared';
+$visibleArchivedDocuments = $apeIsCompleted ? $documents : [];
 $reviewDocuments = array_values(array_filter(
     $documents,
     static fn(array $document): bool => ($document['document_type'] ?? '') !== 'Clearance'
@@ -476,7 +542,7 @@ render_header('APE Record - ' . $fullName);
                 </div>
             </div>
             <div class="flex flex-wrap gap-2">
-                <span class="badge <?= ape_status_badge_class($record['workflow_status']) ?>"><?= e($record['workflow_status']) ?></span>
+                <span class="badge <?= ape_priority_badge($record)['class'] ?>"><?= e($next['label']) ?></span>
                 <span class="badge <?= ape_priority_badge($record)['class'] ?>"><?= e(ape_waiting_label($record)) ?></span>
                 <a class="btn btn-ghost text-decoration-none" href="<?= app_url('patients/view.php?id=' . (int)$record['patient_id']) ?>">
                     <span class="material-symbols-outlined text-[18px]">folder_shared</span> Patient
@@ -501,58 +567,6 @@ render_header('APE Record - ' . $fullName);
                     </div>
                 </div>
             <?php endforeach; ?>
-        </div>
-
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <section class="ape-flow-panel space-y-4">
-                <h2 class="font-headline text-lg font-extrabold text-[#17261d] flex items-center gap-2 mb-1">
-                    <span class="material-symbols-outlined text-primary text-[20px]">person</span>
-                    Patient Information
-                </h2>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div class="ape-flow-field">
-                        <p class="clinic-label mb-1">ID Number</p>
-                        <strong class="text-sm text-slate-800"><?= e($record['id_number']) ?></strong>
-                    </div>
-                    <div class="ape-flow-field">
-                        <p class="clinic-label mb-1">Program / Section</p>
-                        <strong class="text-sm text-slate-800"><?= e($record['course_section'] ?: 'Not set') ?></strong>
-                    </div>
-                    <div class="ape-flow-field">
-                        <p class="clinic-label mb-1">Sex</p>
-                        <strong class="text-sm text-slate-800"><?= e($sexLabel) ?></strong>
-                    </div>
-                    <div class="ape-flow-field">
-                        <p class="clinic-label mb-1">Birthdate</p>
-                        <strong class="text-sm text-slate-800"><?= e($birthdateLabel) ?></strong>
-                    </div>
-                </div>
-            </section>
-
-            <section class="ape-flow-panel space-y-4">
-                <h2 class="font-headline text-lg font-extrabold text-[#17261d] flex items-center gap-2 mb-1">
-                    <span class="material-symbols-outlined text-primary text-[20px]">assignment</span>
-                    APE Information
-                </h2>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div class="ape-flow-field">
-                        <p class="clinic-label mb-1">Uploaded Documents</p>
-                        <strong class="text-sm text-slate-800"><?= count($reviewDocuments) ?> submitted file<?= count($reviewDocuments) === 1 ? '' : 's' ?></strong>
-                    </div>
-                    <div class="ape-flow-field">
-                        <p class="clinic-label mb-1">Hard Copy Status</p>
-                        <span class="badge <?= ape_status_badge_class($record['requirement_status']) ?>"><?= e($record['requirement_status']) ?></span>
-                    </div>
-                    <div class="ape-flow-field">
-                        <p class="clinic-label mb-1">Online Archive</p>
-                        <span class="badge <?= ape_status_badge_class($record['verification_status']) ?>"><?= e($record['verification_status']) ?></span>
-                    </div>
-                    <div class="ape-flow-field">
-                        <p class="clinic-label mb-1">Clearance</p>
-                        <span class="badge <?= ape_status_badge_class($record['clearance_status']) ?>"><?= e($record['clearance_status']) ?></span>
-                    </div>
-                </div>
-            </section>
         </div>
 
         <section class="ape-flow-panel">
@@ -916,7 +930,8 @@ render_header('APE Record - ' . $fullName);
             <?php endif; ?>
         </section>
 
-        <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 gap-4">
+            <?php if (!$apeIsCompleted): ?>
             <section class="ape-flow-panel">
                 <div class="flex items-center justify-between gap-3 mb-4">
                     <div>
@@ -927,19 +942,46 @@ render_header('APE Record - ' . $fullName);
                 </div>
                 <div class="space-y-2 mb-4">
                     <?php foreach ($requirements as $requirement): ?>
-                        <div class="ape-flow-field flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                            <div>
-                                <strong class="text-sm text-slate-800 block"><?= e($requirement['requirement_name']) ?></strong>
-                                <?php if ($requirement['remarks']): ?>
-                                    <p class="text-xs font-bold text-slate-500 mt-1 mb-0"><?= e($requirement['remarks']) ?></p>
-                                <?php endif; ?>
-                                <?php if ($requirement['checked_at']): ?>
-                                    <p class="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-2 mb-0">
-                                        Checked by <?= e($requirement['checked_by_name'] ?: 'Clinic staff') ?> · <?= e(date('M d, Y g:i A', strtotime($requirement['checked_at']))) ?>
-                                    </p>
-                                <?php endif; ?>
+                        <div class="ape-flow-field">
+                            <div class="grid grid-cols-1 xl:grid-cols-[minmax(12rem,1fr)_12rem_minmax(12rem,1.2fr)_auto] gap-3 xl:items-end">
+                                <div class="min-w-0">
+                                    <p class="clinic-label mb-1">Requirement</p>
+                                    <strong class="text-sm text-slate-800 block"><?= e($requirement['requirement_name']) ?></strong>
+                                    <?php if ($requirement['checked_at']): ?>
+                                        <p class="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-2 mb-0">
+                                            Checked by <?= e($requirement['checked_by_name'] ?: 'Clinic staff') ?> · <?= e(date('M d, Y g:i A', strtotime($requirement['checked_at']))) ?>
+                                        </p>
+                                    <?php endif; ?>
+                                </div>
+                                <form method="post" class="contents">
+                                    <input type="hidden" name="action" value="update_requirement">
+                                    <input type="hidden" name="requirement_id" value="<?= (int) $requirement['requirement_id'] ?>">
+                                    <label class="grid gap-1">
+                                        <span class="clinic-label mb-0">Status</span>
+                                        <select class="clinic-select" name="requirement_item_status">
+                                            <?php foreach (['Missing', 'Submitted', 'Verified', 'Needs Correction'] as $status): ?>
+                                                <option value="<?= e($status) ?>" <?= ($requirement['status'] ?? '') === $status ? 'selected' : '' ?>><?= e($status) ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </label>
+                                    <label class="grid gap-1">
+                                        <span class="clinic-label mb-0">Remarks</span>
+                                        <input class="clinic-input" name="requirement_remarks" value="<?= e($requirement['remarks'] ?? '') ?>" placeholder="Optional remarks">
+                                    </label>
+                                    <div class="flex flex-wrap gap-2">
+                                        <button class="btn btn-sm btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Update requirement?" data-confirm-message="This will save the selected checklist status and remarks." data-confirm-toast="Saving requirement...">
+                                            <span class="material-symbols-outlined text-[15px]">save</span> Save
+                                        </button>
+                                    </div>
+                                </form>
+                                <form method="post" class="xl:col-start-4">
+                                    <input type="hidden" name="action" value="delete_requirement">
+                                    <input type="hidden" name="requirement_id" value="<?= (int) $requirement['requirement_id'] ?>">
+                                    <button class="btn btn-sm btn-outline w-full" style="color:#b91c1c;border-color:rgba(185,28,28,0.25);" data-confirm-submit data-confirm-type="danger" data-confirm-title="Delete requirement?" data-confirm-message="This will remove <?= e($requirement['requirement_name']) ?> from this APE checklist." data-confirm-toast="Deleting requirement...">
+                                        <span class="material-symbols-outlined text-[15px]">delete</span> Delete
+                                    </button>
+                                </form>
                             </div>
-                            <span class="badge <?= ape_status_badge_class($requirement['status']) ?>"><?= e($requirement['status']) ?></span>
                         </div>
                     <?php endforeach; ?>
                 </div>
@@ -957,6 +999,7 @@ render_header('APE Record - ' . $fullName);
                     </button>
                 </form>
             </section>
+            <?php else: ?>
 
             <section class="ape-flow-panel">
                 <div class="flex items-center justify-between gap-3 mb-4">
@@ -996,6 +1039,7 @@ render_header('APE Record - ' . $fullName);
                     <?php endif; ?>
                 </div>
             </section>
+            <?php endif; ?>
         </div>
 
         <?php if (!empty($record['exam_date'])): ?>

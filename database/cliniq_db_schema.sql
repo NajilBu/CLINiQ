@@ -505,7 +505,7 @@ CREATE TABLE ape_records (
   academic_year VARCHAR(20) NOT NULL,
   exam_date DATE NULL,
   appointment_id BIGINT UNSIGNED NULL,
-  requirement_status ENUM('Not Checked', 'Pre-Verified', 'Needs Correction')
+  requirement_status ENUM('Not Checked', 'Checked', 'Needs Correction')
     NOT NULL DEFAULT 'Not Checked',
   workflow_status ENUM(
     'Registered',

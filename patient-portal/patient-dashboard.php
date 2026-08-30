@@ -181,17 +181,17 @@ $apeBadgeClass = match ($latestApe['clearance_status'] ?? '') {
 };
 $apeNote = trim((string) ($latestApe['patient_visible_note'] ?? ''));
 $apeRequirementStatus = $latestApe['requirement_status'] ?? 'Not Checked';
-$apeRequirementsVerified = $apeRequirementStatus === 'Pre-Verified' || in_array($apeStatus, [
+$apePatientVitalsConfirmed = ($latestApe['patient_vitals_status'] ?? 'Not Started') === 'Confirmed';
+$apeRequirementsVerified = $apePatientVitalsConfirmed && ($apeRequirementStatus === 'Checked' || in_array($apeStatus, [
     'Requirements Checked',
     'Submitted',
     'Reviewed',
     'Scheduled',
     'Follow-up Required',
     'Cleared',
-], true);
+], true));
 $apeRequirementsNeedCorrection = $apeRequirementStatus === 'Needs Correction';
 $apeExamCompleted = !empty($latestApe['exam_date']);
-$apePatientVitalsConfirmed = ($latestApe['patient_vitals_status'] ?? 'Not Started') === 'Confirmed';
 $apeAllDocumentsUploaded = (int) ($latestApe['required_document_count'] ?? 0) >= count(ape_default_requirements());
 $apeDocumentsAwaitingReview = $apeAllDocumentsUploaded && (int) ($latestApe['required_unverified_count'] ?? 0) > 0;
 $clinicNotes = [];

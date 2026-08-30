@@ -364,7 +364,6 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
                         <option value="student">Student</option>
                         <option value="faculty">Faculty</option>
                         <option value="school personnel">Personnel</option>
-                        <option value="patient">Patient</option>
                     </select>
                 </div>
                 <div>

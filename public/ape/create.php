@@ -57,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!in_array($workflowStatus, ape_workflow_status_options(), true)) {
             throw new InvalidArgumentException('Choose a valid APE workflow status.');
         }
-        if (!in_array($requirementStatus, ['Not Checked', 'Pre-Verified', 'Needs Correction'], true)) {
+        if (!in_array($requirementStatus, ['Not Checked', 'Checked', 'Needs Correction'], true)) {
             throw new InvalidArgumentException('Choose a valid requirement status.');
         }
         if (!in_array($clearanceStatus, ['Pending', 'For Follow-up', 'Cleared'], true)) {
@@ -106,8 +106,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
         $apeId = (int) $apeDb->lastInsertId();
 
-        ape_seed_default_requirements($apeId, $requirementStatus === 'Pre-Verified' ? 'Verified' : ($requirementStatus === 'Needs Correction' ? 'Needs Correction' : 'Missing'));
-        if ($requirementStatus === 'Pre-Verified') {
+        ape_seed_default_requirements($apeId, $requirementStatus === 'Checked' ? 'Verified' : ($requirementStatus === 'Needs Correction' ? 'Needs Correction' : 'Missing'));
+        if ($requirementStatus === 'Checked') {
             $checked = $apeDb->prepare('UPDATE ape_requirements SET checked_by_person_id = ?, checked_at = NOW() WHERE ape_id = ?');
             $checked->execute([$staffPersonId, $apeId]);
         }

@@ -479,7 +479,7 @@ function default_dropdown_option_groups(): array
         'ape_requirement_status' => [
             'label' => 'APE Requirement Status',
             'description' => 'Used when creating and reviewing APE records.',
-            'options' => ['Not Checked', 'Pre-Verified', 'Needs Correction'],
+            'options' => ['Not Checked', 'Checked', 'Needs Correction'],
         ],
         'ape_verification_status' => [
             'label' => 'APE Verification Status',
