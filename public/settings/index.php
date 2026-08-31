@@ -121,16 +121,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'update_password') {
-        $stmt = auth_db()->prepare('SELECT password_hash FROM accounts WHERE person_id = ? LIMIT 1');
-        $stmt->execute([(int) $user['id']]);
-        $passwordHash = (string) ($stmt->fetchColumn() ?: '');
-        $currentPassword = (string) ($_POST['current_password'] ?? '');
-        $newPassword = (string) ($_POST['new_password'] ?? '');
-        $confirmPassword = (string) ($_POST['confirm_password'] ?? '');
+        $newPassword = (string) ($_POST['password'] ?? '');
+        $confirmPassword = (string) ($_POST['password_confirmation'] ?? '');
 
-        if (!password_verify($currentPassword, $passwordHash)) {
-            flash_message('error', 'Current password is incorrect.');
-        } elseif (strlen($newPassword) < 8) {
+        if (strlen($newPassword) < 8) {
             flash_message('error', 'New password must be at least 8 characters.');
         } elseif ($newPassword !== $confirmPassword) {
             flash_message('error', 'New password confirmation does not match.');
@@ -309,6 +303,84 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    if ($action === 'send_custom_email') {
+        if (!$canManageSettings) {
+            flash_message('error', 'Only administrators, doctors, or IT experts can send custom emails.');
+            header('Location: index.php?tab=email');
+            exit;
+        }
+
+        try {
+            if (!mail_settings_configured()) {
+                throw new InvalidArgumentException('Configure the clinic email before composing a message.');
+            }
+
+            $recipientIds = array_values(array_unique(array_filter(array_map(
+                'intval',
+                is_array($_POST['recipient_ids'] ?? null) ? $_POST['recipient_ids'] : []
+            ), static fn(int $id): bool => $id > 0)));
+            $subject = trim((string) ($_POST['subject'] ?? ''));
+            $message = trim((string) ($_POST['message'] ?? ''));
+
+            if ($recipientIds === []) {
+                throw new InvalidArgumentException('Select at least one email recipient.');
+            }
+            if (count($recipientIds) > 200) {
+                throw new InvalidArgumentException('Select no more than 200 recipients per message.');
+            }
+            if ($subject === '' || mb_strlen($subject) > 180) {
+                throw new InvalidArgumentException('Enter a subject containing no more than 180 characters.');
+            }
+            if ($message === '' || mb_strlen($message) > 10000) {
+                throw new InvalidArgumentException('Enter a message containing no more than 10,000 characters.');
+            }
+
+            $selectedIdMap = array_fill_keys($recipientIds, true);
+            $recipients = array_values(array_filter(
+                cliniq_mail_recipients(),
+                static fn(array $recipient): bool => isset($selectedIdMap[(int) $recipient['account_id']])
+            ));
+            if ($recipients === []) {
+                throw new InvalidArgumentException('The selected accounts do not have valid email addresses.');
+            }
+
+            require_once __DIR__ . '/../../app/helpers/mail.php';
+            $profile = clinic_profile_settings();
+            $body = cliniq_custom_email_body($message, (string) ($profile['system_name'] ?? 'CLINiQ'));
+            $sentCount = 0;
+            $failedCount = 0;
+            foreach ($recipients as $recipient) {
+                try {
+                    $sent = send_cliniq_email(
+                        (string) $recipient['email'],
+                        (string) ($recipient['name'] ?: 'CLINiQ Recipient'),
+                        $subject,
+                        $body
+                    );
+                } catch (Throwable $e) {
+                    error_log('[CLINiQ Mail] Custom email failed: ' . $e->getMessage());
+                    $sent = false;
+                }
+                $sent ? $sentCount++ : $failedCount++;
+            }
+
+            if ($sentCount > 0) {
+                $summary = "Custom email sent to {$sentCount} recipient(s).";
+                if ($failedCount > 0) {
+                    $summary .= " {$failedCount} delivery attempt(s) failed.";
+                }
+                flash_message($failedCount > 0 ? 'warning' : 'success', $summary);
+            } else {
+                flash_message('error', "Email could not be delivered to the selected {$failedCount} recipient(s). Check the SMTP configuration.");
+            }
+        } catch (Throwable $e) {
+            flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $e->getMessage());
+        }
+
+        header('Location: index.php?tab=email');
+        exit;
+    }
+
     flash_message('warning', 'Unknown settings action.');
     header('Location: index.php?tab=general');
     exit;
@@ -322,6 +394,7 @@ $staffRoles = staff_profile_roles();
 $settings = risk_settings();
 $mailSettings = mail_settings();
 $mailConfigured = mail_settings_configured();
+$mailRecipients = $canManageSettings ? cliniq_mail_recipients() : [];
 $activeApePatientCount = 0;
 $excludedApePatientCount = 0;
 $apeCurrentCycle = null;
@@ -556,60 +629,119 @@ render_clinic_command_header(
 
             <div id="settings-account" class="settings-tab-panel <?= $currentTab === 'account' ? 'active' : '' ?> space-y-6">
                 <section>
-                    <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Staff Profiles</h2>
-                    <p class="text-xs font-bold text-slate-500 mb-5">Create separate logins for doctors and clinic staff. Visit records are automatically attributed to the profile currently signed in.</p>
+                    <div class="flex flex-wrap items-start justify-between gap-4 mb-5">
+                        <div>
+                            <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Staff Profiles</h2>
+                            <p class="text-xs font-bold text-slate-500 mb-0">Create separate logins for doctors and clinic staff. Visit records are automatically attributed to the profile currently signed in.</p>
+                        </div>
+                        <button type="button" class="btn btn-primary" onclick="showModal('createStaffProfileModal')" <?= !$canManageStaffProfiles ? 'disabled' : '' ?>>
+                            <span class="material-symbols-outlined text-[18px]">person_add</span>
+                            Create Profile
+                        </button>
+                    </div>
                     <?php if (!$canManageStaffProfiles): ?>
                         <div class="rounded-xl bg-amber-50 border border-amber-100 text-amber-800 px-4 py-3 text-sm font-bold mb-5">
                             Staff profiles can be managed only by administrators or IT experts.
                         </div>
                     <?php endif; ?>
 
-                    <form method="post" class="settings-section space-y-5 mb-6" autocomplete="off">
-                        <input type="hidden" name="action" value="create_staff_profile">
-                        <div class="grid grid-cols-1 lg:grid-cols-[1fr_1.2fr_0.8fr_0.75fr_0.85fr] gap-4">
-                            <div class="settings-field">
-                                <label class="clinic-label" for="new_staff_name">Full Name</label>
-                                <input class="settings-input" id="new_staff_name" name="name" placeholder="Dr. Maria Santos" <?= !$canManageStaffProfiles ? 'readonly' : '' ?> required>
+                    <div class="modal-backdrop" id="createStaffProfileModal" aria-hidden="true">
+                        <div class="modal-content bg-white rounded-[2rem] p-6 w-full max-w-3xl shadow-2xl">
+                            <div class="flex items-start justify-between gap-4 mb-5">
+                                <div class="flex items-center gap-3">
+                                    <span class="w-11 h-11 rounded-xl bg-primary-fixed text-primary flex items-center justify-center">
+                                        <span class="material-symbols-outlined">person_add</span>
+                                    </span>
+                                    <div>
+                                        <h3 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Create Staff Profile</h3>
+                                        <p class="text-xs font-bold text-slate-500 mb-0">Create a separate clinic staff login.</p>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn btn-ghost" onclick="closeModal('createStaffProfileModal')" aria-label="Close create staff profile popup">
+                                    <span class="material-symbols-outlined">close</span>
+                                </button>
                             </div>
-                            <div class="settings-field">
-                                <label class="clinic-label" for="new_staff_email">Email Address</label>
-                                <input class="settings-input" id="new_staff_email" name="email" placeholder="santos_maria@plpasig.edu.ph" readonly>
-                            </div>
-                            <div class="settings-field">
-                                <label class="clinic-label" for="new_staff_id_number">Login ID Number</label>
-                                <input class="settings-input" id="new_staff_id_number" name="id_number" placeholder="STAFF-0006" pattern="STAFF-[0-9]{4}" style="text-transform:uppercase;" <?= !$canManageStaffProfiles ? 'readonly' : '' ?>>
-                            </div>
-                            <div class="settings-field">
-                                <label class="clinic-label" for="new_staff_role">Role</label>
-                                <select class="settings-input" id="new_staff_role" name="role" <?= !$canManageStaffProfiles ? 'disabled' : '' ?>>
-                                    <?php foreach ($staffRoles as $roleValue => $roleLabel): ?>
-                                        <option value="<?= e($roleValue) ?>" <?= $roleValue === 'doctor' ? 'selected' : '' ?>><?= e($roleLabel) ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            <div class="settings-field">
-                                <label class="clinic-label" for="new_staff_password">Password</label>
-                                <input class="settings-input" id="new_staff_password" name="password" type="password" minlength="8" autocomplete="new-password" <?= !$canManageStaffProfiles ? 'readonly' : '' ?> required>
-                            </div>
+
+                            <form method="post" class="space-y-5" autocomplete="off" data-password-confirm-form>
+                                <input type="hidden" name="action" value="create_staff_profile">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div class="settings-field">
+                                        <label class="clinic-label" for="new_staff_name">Full Name</label>
+                                        <input class="settings-input" id="new_staff_name" name="name" placeholder="Dr. Maria Santos" required>
+                                    </div>
+                                    <div class="settings-field">
+                                        <label class="clinic-label" for="new_staff_email">Email Address</label>
+                                        <input class="settings-input" id="new_staff_email" name="email" placeholder="santos_maria@plpasig.edu.ph" readonly>
+                                    </div>
+                                    <div class="settings-field">
+                                        <label class="clinic-label" for="new_staff_id_number">Login ID Number</label>
+                                        <input class="settings-input" id="new_staff_id_number" name="id_number" placeholder="STAFF-0006" pattern="STAFF-[0-9]{4}" style="text-transform:uppercase;">
+                                    </div>
+                                    <div class="settings-field">
+                                        <label class="clinic-label" for="new_staff_role">Role</label>
+                                        <select class="settings-input" id="new_staff_role" name="role">
+                                            <?php foreach ($staffRoles as $roleValue => $roleLabel): ?>
+                                                <option value="<?= e($roleValue) ?>" <?= $roleValue === 'doctor' ? 'selected' : '' ?>><?= e($roleLabel) ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                    <div class="settings-field">
+                                        <label class="clinic-label" for="new_staff_password">Password</label>
+                                        <div class="password-field-control">
+                                            <input class="settings-input" id="new_staff_password" name="password" type="password" minlength="8" autocomplete="new-password" required>
+                                            <button type="button" class="password-visibility-button" data-password-toggle="new_staff_password" aria-label="Show password" aria-pressed="false"><span class="material-symbols-outlined">visibility</span></button>
+                                        </div>
+                                    </div>
+                                    <div class="settings-field">
+                                        <label class="clinic-label" for="new_staff_password_confirmation">Confirm Password</label>
+                                        <div class="password-field-control">
+                                            <input class="settings-input" id="new_staff_password_confirmation" name="password_confirmation" type="password" minlength="8" autocomplete="new-password" required>
+                                            <button type="button" class="password-visibility-button" data-password-toggle="new_staff_password_confirmation" aria-label="Show confirmation password" aria-pressed="false"><span class="material-symbols-outlined">visibility</span></button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex justify-end">
+                                    <button class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Create staff profile?" data-confirm-message="This staff member will be able to sign in and create records under their own name." data-confirm-toast="Creating staff profile...">
+                                        <span class="material-symbols-outlined text-[18px]">person_add</span>
+                                        Create Profile
+                                    </button>
+                                </div>
+                            </form>
                         </div>
-                        <div class="flex justify-end">
-                            <button class="btn btn-primary" <?= !$canManageStaffProfiles ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Create staff profile?" data-confirm-message="This staff member will be able to sign in and create records under their own name." data-confirm-toast="Creating staff profile...">
-                                <span class="material-symbols-outlined text-[18px]">person_add</span>
-                                Create Profile
-                            </button>
-                        </div>
-                    </form>
+                    </div>
 
                     <div class="settings-profile-list">
                         <?php foreach ($staffProfiles as $staffProfile): ?>
                             <?php $staffId = (int) $staffProfile['id']; ?>
-                            <article class="settings-profile-card">
+                            <button type="button" class="settings-profile-row" onclick="showModal('staffProfileModal_<?= $staffId ?>')" aria-label="Open <?= e($staffProfile['name']) ?> staff profile">
                                 <div class="settings-profile-avatar <?= avatar_color($staffProfile['name']) ?>"><?= initials($staffProfile['name']) ?></div>
-                                <div class="settings-profile-main">
+                                <div class="settings-profile-row-copy">
+                                    <strong><?= e($staffProfile['name']) ?></strong>
+                                    <span>Click to view and manage this profile</span>
+                                </div>
+                                <span class="badge badge-in-progress"><?= e(staff_profile_role_label((string) $staffProfile['role'])) ?></span>
+                                <span class="material-symbols-outlined settings-profile-row-arrow" aria-hidden="true">chevron_right</span>
+                            </button>
+
+                            <div class="modal-backdrop" id="staffProfileModal_<?= $staffId ?>" aria-hidden="true">
+                                <div class="modal-content bg-white rounded-[2rem] p-6 w-full max-w-3xl shadow-2xl">
+                                    <div class="flex items-start justify-between gap-4 mb-5">
+                                        <div class="flex items-center gap-3 min-w-0">
+                                            <div class="settings-profile-avatar <?= avatar_color($staffProfile['name']) ?>"><?= initials($staffProfile['name']) ?></div>
+                                            <div class="min-w-0">
+                                                <h3 class="font-headline text-xl font-extrabold text-[#17261d] truncate mb-1"><?= e($staffProfile['name']) ?></h3>
+                                                <span class="badge badge-in-progress"><?= e(staff_profile_role_label((string) $staffProfile['role'])) ?></span>
+                                            </div>
+                                        </div>
+                                        <button type="button" class="btn btn-ghost" onclick="closeModal('staffProfileModal_<?= $staffId ?>')" aria-label="Close staff profile popup">
+                                            <span class="material-symbols-outlined">close</span>
+                                        </button>
+                                    </div>
+
                                     <form method="post" class="settings-profile-form">
                                         <input type="hidden" name="action" value="update_staff_profile">
                                         <input type="hidden" name="user_id" value="<?= $staffId ?>">
-                                        <div class="grid grid-cols-1 lg:grid-cols-[1fr_1.2fr_0.8fr_0.7fr_auto] gap-3 items-end">
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <div class="settings-field">
                                                 <label class="clinic-label" for="staff_name_<?= $staffId ?>">Name</label>
                                                 <input class="settings-input staff-name-input" id="staff_name_<?= $staffId ?>" name="name" value="<?= e($staffProfile['name']) ?>" <?= !$canManageStaffProfiles ? 'readonly' : '' ?> required>
@@ -630,27 +762,45 @@ render_clinic_command_header(
                                                     <?php endforeach; ?>
                                                 </select>
                                             </div>
-                                            <button class="btn btn-outline" <?= !$canManageStaffProfiles ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Update staff profile?" data-confirm-message="This updates the staff member name, email, or role used by CLINiQ." data-confirm-toast="Updating profile...">
+                                        </div>
+                                        <div class="flex justify-end mt-5">
+                                            <button class="btn btn-primary" <?= !$canManageStaffProfiles ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Update staff profile?" data-confirm-message="This updates the staff member name, email, login ID, or role used by CLINiQ." data-confirm-toast="Updating profile...">
                                                 <span class="material-symbols-outlined text-[18px]">save</span>
-                                                Save
+                                                Save Changes
                                             </button>
                                         </div>
                                     </form>
-                                    <form method="post" class="settings-password-reset-form mt-3">
-                                        <input type="hidden" name="action" value="reset_staff_password">
-                                        <input type="hidden" name="user_id" value="<?= $staffId ?>">
-                                        <label class="clinic-label" for="staff_password_<?= $staffId ?>">Reset Password</label>
-                                        <div class="settings-password-reset-row">
-                                            <input class="settings-input" id="staff_password_<?= $staffId ?>" name="password" type="password" minlength="8" autocomplete="new-password" placeholder="New password" <?= !$canManageStaffProfiles ? 'readonly' : '' ?> required>
-                                            <button class="btn btn-ghost" <?= !$canManageStaffProfiles ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Reset staff password?" data-confirm-message="This replaces the selected staff member password." data-confirm-toast="Resetting password...">
-                                                <span class="material-symbols-outlined text-[18px]">lock_reset</span>
-                                                Reset
-                                            </button>
-                                        </div>
-                                    </form>
+
+                                    <div class="border-t border-slate-100 mt-6 pt-5">
+                                        <form method="post" class="settings-password-reset-form" data-password-confirm-form>
+                                            <input type="hidden" name="action" value="reset_staff_password">
+                                            <input type="hidden" name="user_id" value="<?= $staffId ?>">
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div class="settings-field">
+                                                    <label class="clinic-label" for="staff_password_<?= $staffId ?>">New Password</label>
+                                                    <div class="password-field-control">
+                                                        <input class="settings-input" id="staff_password_<?= $staffId ?>" name="password" type="password" minlength="8" autocomplete="new-password" placeholder="Enter a new password" <?= !$canManageStaffProfiles ? 'readonly' : '' ?> required>
+                                                        <button type="button" class="password-visibility-button" data-password-toggle="staff_password_<?= $staffId ?>" aria-label="Show password" aria-pressed="false"><span class="material-symbols-outlined">visibility</span></button>
+                                                    </div>
+                                                </div>
+                                                <div class="settings-field">
+                                                    <label class="clinic-label" for="staff_password_confirmation_<?= $staffId ?>">Confirm New Password</label>
+                                                    <div class="password-field-control">
+                                                        <input class="settings-input" id="staff_password_confirmation_<?= $staffId ?>" name="password_confirmation" type="password" minlength="8" autocomplete="new-password" placeholder="Repeat the new password" <?= !$canManageStaffProfiles ? 'readonly' : '' ?> required>
+                                                        <button type="button" class="password-visibility-button" data-password-toggle="staff_password_confirmation_<?= $staffId ?>" aria-label="Show confirmation password" aria-pressed="false"><span class="material-symbols-outlined">visibility</span></button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="flex justify-end mt-4">
+                                                <button class="btn btn-ghost" <?= !$canManageStaffProfiles ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Reset staff password?" data-confirm-message="This replaces the selected staff member password." data-confirm-toast="Resetting password...">
+                                                    <span class="material-symbols-outlined text-[18px]">lock_reset</span>
+                                                    Reset Password
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
                                 </div>
-                                <span class="badge badge-in-progress"><?= e(staff_profile_role_label((string) $staffProfile['role'])) ?></span>
-                            </article>
+                            </div>
                         <?php endforeach; ?>
                     </div>
                 </section>
@@ -658,24 +808,26 @@ render_clinic_command_header(
                 <section>
                     <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">My Password</h2>
                     <p class="text-xs font-bold text-slate-500 mb-5">Update the password for your own signed-in CLINiQ profile.</p>
-                    <form method="post" class="settings-section space-y-5" autocomplete="off">
+                    <form method="post" class="settings-section space-y-5" autocomplete="off" data-password-confirm-form>
                         <input type="hidden" name="action" value="update_password">
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                            <div class="settings-field md:col-span-2">
-                                <label class="clinic-label" for="current_password">Current Password</label>
-                                <input class="settings-input" id="current_password" name="current_password" type="password" autocomplete="current-password" required>
-                            </div>
                             <div class="settings-field">
                                 <label class="clinic-label" for="new_password">New Password</label>
-                                <input class="settings-input" id="new_password" name="new_password" type="password" minlength="8" autocomplete="new-password" required>
+                                <div class="password-field-control">
+                                    <input class="settings-input" id="new_password" name="password" type="password" minlength="8" autocomplete="new-password" required>
+                                    <button type="button" class="password-visibility-button" data-password-toggle="new_password" aria-label="Show password" aria-pressed="false"><span class="material-symbols-outlined">visibility</span></button>
+                                </div>
                             </div>
                             <div class="settings-field">
                                 <label class="clinic-label" for="confirm_password">Confirm New Password</label>
-                                <input class="settings-input" id="confirm_password" name="confirm_password" type="password" minlength="8" autocomplete="new-password" required>
+                                <div class="password-field-control">
+                                    <input class="settings-input" id="confirm_password" name="password_confirmation" type="password" minlength="8" autocomplete="new-password" required>
+                                    <button type="button" class="password-visibility-button" data-password-toggle="confirm_password" aria-label="Show confirmation password" aria-pressed="false"><span class="material-symbols-outlined">visibility</span></button>
+                                </div>
                             </div>
                         </div>
                         <div class="flex justify-end">
-                            <button class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Update password?" data-confirm-message="Your current staff login password will be replaced." data-confirm-toast="Updating password...">
+                            <button class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Update password?" data-confirm-message="Your staff login password will be replaced." data-confirm-toast="Updating password...">
                                 <span class="material-symbols-outlined text-[18px]">lock_reset</span>
                                 Update Password
                             </button>
@@ -1177,6 +1329,10 @@ render_clinic_command_header(
                         </div>
                         <div class="flex flex-col sm:flex-row gap-3">
                             <?php if ($canManageSettings): ?>
+                                <button type="button" class="btn btn-secondary justify-center" id="openEmailComposerButton" <?= $mailRecipients === [] ? 'disabled' : '' ?> title="<?= $mailRecipients === [] ? 'No valid recipient emails found' : 'Compose a custom email' ?>">
+                                    <span class="material-symbols-outlined text-[18px]">edit_square</span>
+                                    Compose Email
+                                </button>
                                 <button type="button" class="btn btn-primary justify-center" id="openEmailConfigButton">
                                     <span class="material-symbols-outlined text-[18px]">settings</span>
                                     Configure Email
@@ -1340,11 +1496,164 @@ render_clinic_command_header(
         </div>
     </div>
 
+    <div id="emailComposerModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="emailComposerModalTitle">
+        <div class="modal-content bg-white rounded-[1.5rem] w-full max-w-4xl p-7 shadow-2xl border border-outline-variant/10">
+            <div class="flex items-start justify-between gap-4 mb-6">
+                <div>
+                    <div class="w-12 h-12 rounded-xl bg-[var(--cliniq-surface-low)] text-[var(--cliniq-primary)] flex items-center justify-center mb-5">
+                        <span class="material-symbols-outlined text-[26px]">edit_square</span>
+                    </div>
+                    <h3 class="font-headline text-2xl font-extrabold text-[#17261d] mb-2" id="emailComposerModalTitle">Compose Email</h3>
+                    <p class="text-sm font-bold text-slate-500 leading-6 mb-0">Select registered accounts and send each recipient a private copy.</p>
+                </div>
+                <button type="button" class="btn btn-ghost justify-center px-3" id="closeEmailComposerButton" aria-label="Close email composer">
+                    <span class="material-symbols-outlined text-[20px]">close</span>
+                </button>
+            </div>
+
+            <form method="post" data-no-ajax="true" class="space-y-5" id="customEmailForm">
+                <input type="hidden" name="action" value="send_custom_email">
+
+                <?php if (!$mailConfigured): ?>
+                    <div class="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
+                        <span class="material-symbols-outlined text-[18px] mt-0.5">warning</span>
+                        <span>You can prepare this message now, but Configure Email must be completed before it can be sent.</span>
+                    </div>
+                <?php endif; ?>
+
+                <div class="settings-field">
+                    <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                        <div>
+                            <span class="clinic-label">Recipients</span>
+                            <p class="settings-help mb-0"><span id="selectedEmailRecipientCount">0</span> selected</p>
+                        </div>
+                        <button type="button" class="btn btn-secondary justify-center" id="openEmailRecipientPickerButton">
+                            <span class="material-symbols-outlined text-[18px]">group_add</span>
+                            Select Recipients
+                        </button>
+                    </div>
+                    <div class="min-h-12 rounded-xl border border-slate-200 bg-slate-50 p-3 flex flex-wrap items-center gap-2" id="selectedEmailRecipientPills">
+                        <span class="text-sm font-bold text-slate-400" data-empty-recipient-message>No recipients selected.</span>
+                    </div>
+                    <div id="customEmailRecipientInputs"></div>
+                </div>
+
+                <div class="settings-field">
+                    <label class="clinic-label" for="customEmailSubject">Subject</label>
+                    <input class="settings-input" id="customEmailSubject" name="subject" type="text" maxlength="180" required>
+                </div>
+                <div class="settings-field">
+                    <label class="clinic-label" for="customEmailMessage">Message</label>
+                    <textarea class="settings-input min-h-48 resize-y" id="customEmailMessage" name="message" maxlength="10000" placeholder="Write the email message..." required></textarea>
+                </div>
+
+                <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
+                    <button type="button" class="btn btn-secondary justify-center" id="cancelEmailComposerButton">Cancel</button>
+                    <button type="submit" class="btn btn-primary justify-center" <?= !$mailConfigured ? 'disabled' : '' ?> title="<?= !$mailConfigured ? 'Configure email before sending' : 'Send this email' ?>" data-confirm-submit data-confirm-type="primary" data-confirm-title="Send custom email?" data-confirm-message="Each selected account will receive a separate private copy of this message." data-confirm-toast="Sending email...">
+                        <span class="material-symbols-outlined text-[18px]">send</span>
+                        Send Email
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="emailRecipientPickerModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="emailRecipientPickerTitle">
+        <div class="modal-content bg-white rounded-[1.5rem] w-full max-w-3xl max-h-[calc(100vh-2rem)] overflow-hidden p-6 shadow-2xl border border-outline-variant/10">
+            <div class="flex items-start justify-between gap-4 mb-4">
+                <div>
+                    <div class="w-10 h-10 rounded-xl bg-[var(--cliniq-surface-low)] text-[var(--cliniq-primary)] flex items-center justify-center mb-3">
+                        <span class="material-symbols-outlined text-[26px]">group_add</span>
+                    </div>
+                    <h3 class="font-headline text-2xl font-extrabold text-[#17261d] mb-1" id="emailRecipientPickerTitle">Select Recipients</h3>
+                    <p class="text-sm font-bold text-slate-500 mb-0">Selections are kept while you search or change pages.</p>
+                </div>
+                <button type="button" class="btn btn-ghost justify-center px-3" id="closeEmailRecipientPickerButton" aria-label="Close recipient selection">
+                    <span class="material-symbols-outlined text-[20px]">close</span>
+                </button>
+            </div>
+
+            <div class="settings-field mb-3">
+                <label class="clinic-label" for="emailRecipientPickerSearch">Search accounts</label>
+                <input class="settings-input" id="emailRecipientPickerSearch" type="search" placeholder="Search name, email, or account type">
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2" id="emailRecipientPickerList">
+                <?php foreach ($mailRecipients as $recipient): ?>
+                    <?php
+                    $recipientName = $recipient['name'] ?: 'Unnamed Account';
+                    $recipientSearch = strtolower(trim(implode(' ', [$recipientName, $recipient['email'], $recipient['type'], $recipient['status']])));
+                    ?>
+                    <label class="flex items-center gap-3 rounded-xl border border-slate-200 px-3 py-2 hover:bg-slate-50 cursor-pointer" data-email-recipient-option
+                        data-id="<?= (int) $recipient['account_id'] ?>"
+                        data-name="<?= e($recipientName) ?>"
+                        data-email="<?= e($recipient['email']) ?>"
+                        data-type="<?= e($recipient['type']) ?>"
+                        data-search="<?= e($recipientSearch) ?>">
+                        <input type="checkbox" class="w-4 h-4 accent-[var(--cliniq-primary)]" value="<?= (int) $recipient['account_id'] ?>">
+                        <span class="min-w-0 flex-1">
+                            <strong class="block text-sm font-extrabold text-slate-800 truncate"><?= e($recipientName) ?></strong>
+                            <span class="block text-xs font-bold text-slate-500 truncate"><?= e($recipient['email']) ?></span>
+                        </span>
+                        <span class="badge badge-in-progress shrink-0"><?= e($recipient['type']) ?></span>
+                    </label>
+                <?php endforeach; ?>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-between gap-3 mt-3">
+                <p class="settings-help mb-0" id="emailRecipientPickerSummary"></p>
+                <div class="flex items-center gap-2">
+                    <button type="button" class="btn btn-secondary justify-center px-3" id="emailRecipientPickerPrevious" aria-label="Previous recipient page">
+                        <span class="material-symbols-outlined text-[18px]">chevron_left</span>
+                    </button>
+                    <span class="min-w-20 text-center text-sm font-extrabold text-slate-700" id="emailRecipientPickerPageLabel">1 / 1</span>
+                    <button type="button" class="btn btn-secondary justify-center px-3" id="emailRecipientPickerNext" aria-label="Next recipient page">
+                        <span class="material-symbols-outlined text-[18px]">chevron_right</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 mt-4">
+                <button type="button" class="btn btn-ghost justify-center text-slate-600" id="clearEmailRecipients">Clear Selection</button>
+                <button type="button" class="btn btn-primary justify-center" id="applyEmailRecipientSelection">
+                    Done
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
         (() => {
             const openButton = document.getElementById('openEmailConfigButton');
             const closeButton = document.getElementById('closeEmailConfigButton');
             const cancelButton = document.getElementById('cancelEmailConfigButton');
+            const openComposerButton = document.getElementById('openEmailComposerButton');
+            const closeComposerButton = document.getElementById('closeEmailComposerButton');
+            const cancelComposerButton = document.getElementById('cancelEmailComposerButton');
+            const composerForm = document.getElementById('customEmailForm');
+            const openRecipientPickerButton = document.getElementById('openEmailRecipientPickerButton');
+            const closeRecipientPickerButton = document.getElementById('closeEmailRecipientPickerButton');
+            const applyRecipientSelectionButton = document.getElementById('applyEmailRecipientSelection');
+            const recipientSearch = document.getElementById('emailRecipientPickerSearch');
+            const recipientRows = Array.from(document.querySelectorAll('[data-email-recipient-option]'));
+            const recipientCount = document.getElementById('selectedEmailRecipientCount');
+            const recipientPills = document.getElementById('selectedEmailRecipientPills');
+            const recipientInputs = document.getElementById('customEmailRecipientInputs');
+            const recipientSummary = document.getElementById('emailRecipientPickerSummary');
+            const recipientPageLabel = document.getElementById('emailRecipientPickerPageLabel');
+            const recipientPrevious = document.getElementById('emailRecipientPickerPrevious');
+            const recipientNext = document.getElementById('emailRecipientPickerNext');
+            const selectedRecipientIds = new Set();
+            const recipientPageSize = 10;
+            let recipientPage = 1;
+
+            const recipientDirectory = new Map(recipientRows.map((row) => [String(row.dataset.id || ''), {
+                id: String(row.dataset.id || ''),
+                name: String(row.dataset.name || 'Unnamed Account'),
+                email: String(row.dataset.email || ''),
+                type: String(row.dataset.type || ''),
+            }]));
+
             if (openButton) {
                 openButton.addEventListener('click', () => showModal('emailConfigModal'));
             }
@@ -1353,6 +1662,163 @@ render_clinic_command_header(
                     button.addEventListener('click', () => closeModal('emailConfigModal'));
                 }
             });
+            if (openComposerButton) {
+                openComposerButton.addEventListener('click', () => showModal('emailComposerModal'));
+            }
+            [closeComposerButton, cancelComposerButton].forEach((button) => {
+                if (button) button.addEventListener('click', () => closeModal('emailComposerModal'));
+            });
+
+            const getFilteredRecipientRows = () => {
+                const query = recipientSearch?.value.trim().toLowerCase() || '';
+                return recipientRows.filter((row) => query === '' || String(row.dataset.search || '').includes(query));
+            };
+
+            const renderRecipientPicker = () => {
+                const filteredRows = getFilteredRecipientRows();
+                const pageCount = Math.max(1, Math.ceil(filteredRows.length / recipientPageSize));
+                recipientPage = Math.min(Math.max(recipientPage, 1), pageCount);
+                const pageStart = (recipientPage - 1) * recipientPageSize;
+                const visibleRows = new Set(filteredRows.slice(pageStart, pageStart + recipientPageSize));
+
+                recipientRows.forEach((row) => {
+                    const isVisible = visibleRows.has(row);
+                    row.hidden = !isVisible;
+                    row.classList.toggle('hidden', !isVisible);
+                    const checkbox = row.querySelector('input[type="checkbox"]');
+                    if (checkbox) checkbox.checked = selectedRecipientIds.has(String(row.dataset.id || ''));
+                });
+
+                if (recipientPageLabel) recipientPageLabel.textContent = `${recipientPage} / ${pageCount}`;
+                if (recipientPrevious) recipientPrevious.disabled = recipientPage <= 1;
+                if (recipientNext) recipientNext.disabled = recipientPage >= pageCount;
+                if (recipientSummary) {
+                    const first = filteredRows.length === 0 ? 0 : pageStart + 1;
+                    const last = Math.min(pageStart + recipientPageSize, filteredRows.length);
+                    recipientSummary.textContent = filteredRows.length === 0
+                        ? 'No accounts found'
+                        : `Showing ${first}-${last} of ${filteredRows.length}`;
+                }
+            };
+
+            const renderRecipientSelection = () => {
+                if (recipientCount) recipientCount.textContent = String(selectedRecipientIds.size);
+
+                if (recipientInputs) {
+                    recipientInputs.replaceChildren(...Array.from(selectedRecipientIds, (id) => {
+                        const input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = 'recipient_ids[]';
+                        input.value = id;
+                        return input;
+                    }));
+                }
+
+                if (!recipientPills) return;
+                recipientPills.replaceChildren();
+                const selectedRecipients = Array.from(selectedRecipientIds)
+                    .map((id) => recipientDirectory.get(id))
+                    .filter(Boolean);
+
+                if (selectedRecipients.length === 0) {
+                    const emptyMessage = document.createElement('span');
+                    emptyMessage.className = 'text-sm font-bold text-slate-400';
+                    emptyMessage.textContent = 'No recipients selected.';
+                    recipientPills.append(emptyMessage);
+                    return;
+                }
+
+                selectedRecipients.slice(0, 10).forEach((recipient) => {
+                    const pill = document.createElement('span');
+                    pill.className = 'inline-flex max-w-full items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-extrabold text-emerald-800';
+                    pill.title = recipient.email;
+
+                    const label = document.createElement('span');
+                    label.className = 'max-w-52 truncate';
+                    label.textContent = recipient.name;
+
+                    const removeButton = document.createElement('button');
+                    removeButton.type = 'button';
+                    removeButton.className = 'inline-flex rounded-full text-emerald-700 hover:text-red-600';
+                    removeButton.setAttribute('aria-label', `Remove ${recipient.name}`);
+                    removeButton.dataset.removeEmailRecipient = recipient.id;
+                    removeButton.innerHTML = '<span class="material-symbols-outlined text-[16px]">close</span>';
+
+                    pill.append(label, removeButton);
+                    recipientPills.append(pill);
+                });
+
+                if (selectedRecipients.length > 10) {
+                    const remainingPill = document.createElement('span');
+                    remainingPill.className = 'inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-extrabold text-slate-600';
+                    remainingPill.textContent = `+${selectedRecipients.length - 10} more`;
+                    recipientPills.append(remainingPill);
+                }
+            };
+
+            recipientRows.forEach((row) => {
+                row.querySelector('input[type="checkbox"]')?.addEventListener('change', (event) => {
+                    const id = String(row.dataset.id || '');
+                    if (event.currentTarget.checked) selectedRecipientIds.add(id);
+                    else selectedRecipientIds.delete(id);
+                    renderRecipientSelection();
+                });
+            });
+
+            openRecipientPickerButton?.addEventListener('click', () => {
+                renderRecipientPicker();
+                showModal('emailRecipientPickerModal');
+            });
+            [closeRecipientPickerButton, applyRecipientSelectionButton].forEach((button) => {
+                button?.addEventListener('click', () => closeModal('emailRecipientPickerModal'));
+            });
+            recipientSearch?.addEventListener('input', () => {
+                recipientPage = 1;
+                renderRecipientPicker();
+            });
+            recipientPrevious?.addEventListener('click', (event) => {
+                event.preventDefault();
+                recipientPage -= 1;
+                renderRecipientPicker();
+            });
+            recipientNext?.addEventListener('click', (event) => {
+                event.preventDefault();
+                recipientPage += 1;
+                renderRecipientPicker();
+            });
+            document.getElementById('clearEmailRecipients')?.addEventListener('click', () => {
+                selectedRecipientIds.clear();
+                renderRecipientSelection();
+                renderRecipientPicker();
+            });
+            recipientPills?.addEventListener('click', (event) => {
+                const removeButton = event.target.closest('[data-remove-email-recipient]');
+                if (!removeButton) return;
+                selectedRecipientIds.delete(String(removeButton.dataset.removeEmailRecipient || ''));
+                renderRecipientSelection();
+                renderRecipientPicker();
+            });
+            composerForm?.addEventListener('click', (event) => {
+                if (!event.target.closest('[type="submit"]') || selectedRecipientIds.size > 0) return;
+                event.preventDefault();
+                event.stopPropagation();
+                if (typeof showToast === 'function') showToast('Select at least one email recipient.', 'warning');
+                renderRecipientPicker();
+                showModal('emailRecipientPickerModal');
+            }, true);
+            composerForm?.addEventListener('submit', (event) => {
+                if (selectedRecipientIds.size > 0) {
+                    closeModal('emailRecipientPickerModal');
+                    closeModal('emailComposerModal');
+                    return;
+                }
+                event.preventDefault();
+                if (typeof showToast === 'function') showToast('Select at least one email recipient.', 'warning');
+                renderRecipientPicker();
+                showModal('emailRecipientPickerModal');
+            }, true);
+            renderRecipientSelection();
+            renderRecipientPicker();
         })();
     </script>
 <?php endif; ?>

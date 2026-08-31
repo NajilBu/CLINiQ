@@ -469,7 +469,7 @@ render_student_header('APE Status', 'ape');
                     <div class="student-ape-step <?= student_e($stepClass) ?>">
                         <span class="student-ape-step-rail" aria-hidden="true"></span>
                         <span class="student-ape-step-index">
-                            <span class="material-symbols-outlined"><?= student_e($isDone ? 'check' : $step['icon']) ?></span>
+                            <span class="material-symbols-outlined"><?= student_e($isDone ? 'check' : ($isCurrent ? 'pending_actions' : $step['icon'])) ?></span>
                         </span>
                         <div class="student-ape-step-body">
                             <div class="student-ape-step-top">

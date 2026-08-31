@@ -219,7 +219,19 @@ function patient_account_initial_password(string $idNumber): string
 function patient_account_valid_birthdate(string $value): bool
 {
     $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
-    return $date instanceof DateTimeImmutable && $date->format('Y-m-d') === $value;
+    $today = new DateTimeImmutable('today');
+
+    return $date instanceof DateTimeImmutable
+        && $date->format('Y-m-d') === $value
+        && $date <= $today;
+}
+
+function patient_account_valid_name(string $value): bool
+{
+    $length = function_exists('mb_strlen') ? mb_strlen($value) : strlen($value);
+    return $length >= 1
+        && $length <= 100
+        && preg_match("/^[\\p{L} .'-]+$/u", $value) === 1;
 }
 
 function normalize_person_sex(string $value): string
@@ -240,18 +252,44 @@ function normalize_person_sex(string $value): string
 function create_inactive_patient_account(array $input): array
 {
     $idNumber = strtoupper(trim((string) ($input['id_number'] ?? '')));
-    $type = patient_account_type((string) ($input['patient_type'] ?? $input['category'] ?? 'school_personnel'));
+    $rawType = trim((string) ($input['patient_type'] ?? $input['category'] ?? ''));
+    $normalizedType = preg_replace('/[^a-z0-9]+/', '_', strtolower($rawType)) ?? '';
+    if (!in_array($normalizedType, ['student', 'faculty', 'school_personnel'], true)) {
+        throw new InvalidArgumentException('Select a patient type.');
+    }
+    $type = $normalizedType;
     $firstName = trim((string) ($input['first_name'] ?? ''));
     $middleName = trim((string) ($input['middle_name'] ?? ''));
     $lastName = trim((string) ($input['last_name'] ?? ''));
     $birthdate = trim((string) ($input['birthdate'] ?? ''));
-    $sex = normalize_person_sex((string) ($input['sex'] ?? ''));
+    $rawSex = trim((string) ($input['sex'] ?? ''));
     $programDepartment = trim((string) ($input['program_or_department'] ?? ''));
     $yearEmployment = trim((string) ($input['year_level_or_employment_type'] ?? ''));
     $sectionPosition = trim((string) ($input['section_or_position'] ?? ''));
     $academicYear = trim((string) ($input['academic_year'] ?? ''));
     $programId = null;
     $departmentId = null;
+
+    $missingFields = [];
+    foreach ([
+        'ID number' => $idNumber,
+        'first name' => $firstName,
+        'last name' => $lastName,
+        'birthdate' => $birthdate,
+        'sex' => $rawSex,
+        $type === 'student' ? 'program' : 'department' => $programDepartment,
+        $type === 'student' ? 'year level' : 'employment type' => $yearEmployment,
+        $type === 'student' ? 'section code' : ($type === 'faculty' ? 'title' : 'position') => $sectionPosition,
+    ] as $label => $value) {
+        if ($value === '') {
+            $missingFields[] = $label;
+        }
+    }
+    if ($missingFields !== []) {
+        throw new InvalidArgumentException('Complete the required field' . (count($missingFields) > 1 ? 's' : '') . ': ' . implode(', ', $missingFields) . '.');
+    }
+
+    $sex = normalize_person_sex($rawSex);
 
     if ($type === 'student') {
         $programDepartment = patient_account_active_program_code($programDepartment);
@@ -272,11 +310,17 @@ function create_inactive_patient_account(array $input): array
     if (!is_valid_id_number($idNumber)) {
         throw new InvalidArgumentException(id_number_validation_message());
     }
-    if ($firstName === '' || $lastName === '') {
-        throw new InvalidArgumentException('First name and last name are required.');
+    if (!patient_account_valid_name($firstName) || !patient_account_valid_name($lastName)) {
+        throw new InvalidArgumentException("First name and last name may contain only letters, spaces, apostrophes, periods, and hyphens.");
+    }
+    if ($middleName !== '' && !patient_account_valid_name($middleName)) {
+        throw new InvalidArgumentException("Middle name may contain only letters, spaces, apostrophes, periods, and hyphens.");
     }
     if (!patient_account_valid_birthdate($birthdate)) {
-        throw new InvalidArgumentException('Birthdate must use the YYYY-MM-DD format.');
+        throw new InvalidArgumentException('Enter a valid birthdate that is not in the future.');
+    }
+    if (strlen($yearEmployment) > 100 || strlen($sectionPosition) > 100) {
+        throw new InvalidArgumentException('Employment type, title, or position cannot exceed 100 characters.');
     }
 
     $initialPassword = patient_account_initial_password($idNumber);

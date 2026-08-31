@@ -712,9 +712,8 @@ render_header('Main Dashboard');
                 <h2 class="font-headline text-xl font-extrabold text-[#17261d] m-0">APE Action Queue</h2>
                 <p class="text-xs font-bold text-slate-500 m-0">Priority patients needing examination, document keeping, final decision, or follow-up clearance.</p>
             </div>
-            <a href="<?= app_url('ape/index.php') ?>" class="btn btn-sm btn-primary shrink-0">
+            <a href="<?= app_url('ape/index.php') ?>" class="btn btn-sm btn-ghost text-slate-500 hover:text-primary shrink-0" aria-label="Open APE Center" title="Open APE Center">
                 <span class="material-symbols-outlined text-[16px]">open_in_new</span>
-                Open APE Center
             </a>
         </div>
 

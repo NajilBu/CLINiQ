@@ -2188,6 +2188,59 @@ body.file-preview-open {
     font-weight: 900;
 }
 
+.settings-profile-row {
+    width: 100%;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    gap: 1rem;
+    align-items: center;
+    padding: 0.9rem 1rem;
+    color: inherit;
+    text-align: left;
+    border: 1px solid rgba(199, 220, 205, 0.72);
+    border-radius: 0.9rem;
+    background: #ffffff;
+    cursor: pointer;
+    transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.settings-profile-row:hover {
+    border-color: rgba(var(--cliniq-focus-rgb), 0.4);
+    box-shadow: 0 10px 24px rgba(var(--cliniq-shadow-rgb), 0.08);
+    transform: translateY(-1px);
+}
+
+.settings-profile-row:focus-visible {
+    outline: 3px solid rgba(var(--cliniq-focus-rgb), 0.2);
+    outline-offset: 2px;
+}
+
+.settings-profile-row-copy {
+    display: grid;
+    gap: 0.2rem;
+    min-width: 0;
+}
+
+.settings-profile-row-copy strong {
+    color: #17261d;
+    font-size: 0.95rem;
+    font-weight: 900;
+}
+
+.settings-profile-row-copy span {
+    overflow: hidden;
+    color: #64748b;
+    font-size: 0.76rem;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.settings-profile-row-arrow {
+    color: #789087;
+    font-size: 1.25rem;
+}
+
 .settings-profile-main {
     min-width: 0;
 }
@@ -2197,6 +2250,43 @@ body.file-preview-open {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 0.75rem;
     align-items: center;
+}
+
+.password-field-control {
+    position: relative;
+}
+
+.password-field-control .settings-input,
+.password-field-control .clinic-input {
+    padding-right: 3rem;
+}
+
+.password-visibility-button {
+    position: absolute;
+    top: 50%;
+    right: 0.65rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    color: #64748b;
+    border: 0;
+    border-radius: 0.55rem;
+    background: transparent;
+    transform: translateY(-50%);
+    cursor: pointer;
+}
+
+.password-visibility-button:hover,
+.password-visibility-button:focus-visible {
+    color: var(--cliniq-primary);
+    background: rgba(var(--cliniq-focus-rgb), 0.08);
+}
+
+.password-visibility-button .material-symbols-outlined {
+    font-size: 1.2rem;
 }
 
 .settings-dropdown-group-list {
@@ -2516,6 +2606,14 @@ textarea.record-sheet-field {
 
     .settings-profile-card > .badge {
         grid-column: auto;
+    }
+
+    .settings-profile-row {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+    }
+
+    .settings-profile-row > .badge {
+        display: none;
     }
 
     .settings-password-reset-row {

@@ -32,6 +32,10 @@ $visits = cliniq_patient_profile_history((int) $patient['person_id']);
 
 ensure_ape_workflow_schema();
 $apeRecords = ape_fetch_patient_records((int) $patient['person_id']);
+$completedApeRecords = array_values(array_filter(
+    $apeRecords,
+    static fn(array $apeRecord): bool => ape_record_queue($apeRecord) === 'completed'
+));
 
 $refStmt = auth_db()->prepare('
     SELECT r.*, TRIM(CONCAT_WS(" ", pe.first_name, pe.middle_name, pe.last_name)) AS referred_by_name
@@ -697,34 +701,35 @@ render_header($fullName . ' - Patient Profile');
             <div class="p-5 md:p-6 border-b border-slate-100 flex items-center justify-between gap-3">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                        <span class="material-symbols-outlined">description</span>
+                        <span class="material-symbols-outlined">assignment_turned_in</span>
                     </div>
                     <div>
-                        <h2 class="font-headline text-lg font-extrabold text-[#17261d] m-0">APE Documents</h2>
-                        <p class="text-xs font-bold text-slate-500 m-0">Annual physical exam records and clearance status.</p>
+                        <h2 class="font-headline text-lg font-extrabold text-[#17261d] m-0">APE Records</h2>
+                        <p class="text-xs font-bold text-slate-500 m-0">Completed annual physical examination history.</p>
                     </div>
                 </div>
-                <span class="badge badge-pending"><?= count($apeRecords) ?> record(s)</span>
+                <span class="badge badge-pending"><?= count($completedApeRecords) ?> record(s)</span>
             </div>
-            <?php if ($apeRecords): ?>
+            <?php if ($completedApeRecords): ?>
                 <div class="divide-y divide-outline-variant/10">
-                    <?php foreach ($apeRecords as $ape): ?>
+                    <?php foreach ($completedApeRecords as $ape): ?>
+                        <?php
+                        $completedAt = trim((string) ($ape['updated_at'] ?? ''));
+                        if ($completedAt === '') {
+                            $completedAt = trim((string) ($ape['exam_date'] ?? ''));
+                        }
+                        ?>
                         <a href="<?= e(app_url('ape/view.php?id=' . (int) $ape['id'])) ?>" class="p-5 flex items-center justify-between gap-4 text-decoration-none hover:bg-slate-50/70 transition-colors">
                             <div class="min-w-0">
-                                <p class="text-sm font-extrabold text-slate-800 mb-1"><?= e($ape['document_type'] ?: 'APE Form') ?></p>
+                                <p class="text-sm font-extrabold text-slate-800 mb-1">Completed APE</p>
                                 <p class="text-xs font-bold text-slate-400 m-0">
-                                    <?= $ape['exam_date'] ? e(date('M d, Y', strtotime($ape['exam_date']))) : 'No exam date' ?>
-                                    <?php if ($ape['verified_by_name']): ?>
-                                        &bull; Verified by <?= e($ape['verified_by_name']) ?>
-                                    <?php endif; ?>
+                                    <?= $completedAt !== '' ? 'Completed ' . e(date('M d, Y', strtotime($completedAt))) : 'Completion date not recorded' ?>
                                 </p>
                             </div>
                             <div class="flex items-center gap-3 shrink-0">
-                                <span class="badge <?= status_badge_class($ape['workflow_status'] ?: $ape['verification_status']) ?>">
-                                    <?= e($ape['workflow_status'] ?: $ape['verification_status']) ?>
-                                </span>
+                                <span class="badge badge-completed">Completed</span>
                                 <span class="text-xs font-black text-primary inline-flex items-center gap-1">
-                                    Open progress
+                                    Open record
                                     <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
                                 </span>
                             </div>
@@ -733,9 +738,9 @@ render_header($fullName . ' - Patient Profile');
                 </div>
             <?php else: ?>
                 <div class="empty-state">
-                    <span class="material-symbols-outlined">description</span>
-                    <p class="empty-state-title">No APE documents</p>
-                    <p class="empty-state-text">APE records will appear here once submitted.</p>
+                    <span class="material-symbols-outlined">assignment_turned_in</span>
+                    <p class="empty-state-title">No completed APE records</p>
+                    <p class="empty-state-text">An APE record will appear here after phase five is completed.</p>
                 </div>
             <?php endif; ?>
         </section>

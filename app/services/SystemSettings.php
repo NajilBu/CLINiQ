@@ -133,6 +133,7 @@ function create_staff_profile(array $input): void
     $idNumber = strtoupper(trim((string) ($input['id_number'] ?? $input['email'] ?? '')));
     $role = normalize_staff_profile_role((string) ($input['role'] ?? 'staff'));
     $password = (string) ($input['password'] ?? '');
+    $passwordConfirmation = (string) ($input['password_confirmation'] ?? '');
 
     if ($name === '') {
         throw new InvalidArgumentException('Enter the staff member name.');
@@ -145,6 +146,9 @@ function create_staff_profile(array $input): void
     }
     if (strlen($password) < 8) {
         throw new InvalidArgumentException('Password must be at least 8 characters.');
+    }
+    if ($password !== $passwordConfirmation) {
+        throw new InvalidArgumentException('Password and confirmation password must match.');
     }
 
     [$firstName, $middleName, $lastName] = split_staff_profile_name($name);
@@ -258,12 +262,16 @@ function reset_staff_profile_password(array $input): void
 
     $id = (int) ($input['user_id'] ?? 0);
     $password = (string) ($input['password'] ?? '');
+    $passwordConfirmation = (string) ($input['password_confirmation'] ?? '');
 
     if ($id <= 0) {
         throw new InvalidArgumentException('Select a staff profile before resetting the password.');
     }
     if (strlen($password) < 8) {
         throw new InvalidArgumentException('New password must be at least 8 characters.');
+    }
+    if ($password !== $passwordConfirmation) {
+        throw new InvalidArgumentException('New password and confirmation password must match.');
     }
 
     $stmt = auth_db()->prepare('UPDATE accounts SET password_hash = ? WHERE person_id = ?');
@@ -932,4 +940,46 @@ function mail_settings_configured(): bool
 {
     $s = cliniq_setting_read('mail.smtp', []);
     return !empty($s['host']) && !empty($s['username']) && !empty($s['password']);
+}
+
+/**
+ * @return array<int,array{account_id:int,name:string,email:string,type:string,status:string}>
+ */
+function cliniq_mail_recipients(): array
+{
+    $rows = auth_db()->query("
+        SELECT
+            a.id AS account_id,
+            TRIM(CONCAT_WS(' ', p.first_name, p.middle_name, p.last_name)) AS name,
+            a.email,
+            CASE
+                WHEN cs.person_id IS NOT NULL THEN 'Clinic Staff'
+                WHEN s.person_id IS NOT NULL THEN 'Student'
+                WHEN se.role_classification = 'Faculty' THEN 'Faculty'
+                WHEN se.person_id IS NOT NULL THEN 'School Personnel'
+                ELSE 'Patient'
+            END AS type,
+            a.account_status AS status
+        FROM accounts a
+        JOIN people p ON p.id = a.person_id
+        LEFT JOIN clinic_staff cs ON cs.person_id = p.id
+        LEFT JOIN students s ON s.person_id = p.id
+        LEFT JOIN school_employees se ON se.person_id = p.id
+        WHERE a.email IS NOT NULL
+          AND TRIM(a.email) <> ''
+        ORDER BY name, a.email
+    ")->fetchAll();
+
+    return array_values(array_filter(array_map(
+        static function (array $row): array {
+            return [
+                'account_id' => (int) $row['account_id'],
+                'name' => trim((string) $row['name']),
+                'email' => strtolower(trim((string) $row['email'])),
+                'type' => (string) $row['type'],
+                'status' => (string) $row['status'],
+            ];
+        },
+        $rows
+    ), static fn(array $row): bool => filter_var($row['email'], FILTER_VALIDATE_EMAIL) !== false));
 }

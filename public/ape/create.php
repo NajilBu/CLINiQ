@@ -138,6 +138,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ape_id, finding_type, description, result_status,
                     follow_up_required, recorded_by_person_id
                 ) VALUES (?, 'General', ?, 'With Finding', 1, ?)
+                ON DUPLICATE KEY UPDATE
+                    finding_type = VALUES(finding_type),
+                    description = VALUES(description),
+                    result_status = VALUES(result_status),
+                    follow_up_required = VALUES(follow_up_required),
+                    recorded_by_person_id = VALUES(recorded_by_person_id),
+                    recorded_at = CURRENT_TIMESTAMP
             ");
             $finding->execute([$apeId, $clinicalRemarks, $staffPersonId]);
         }
