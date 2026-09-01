@@ -502,12 +502,16 @@ function initLogoPlaceholders(root = document) {
 
         const input = section.querySelector('[data-logo-input]');
         const preview = section.querySelector('[data-logo-preview]');
+        const previewLink = section.querySelector('[data-logo-preview-link]');
         const dropzone = section.querySelector('[data-logo-dropzone]');
         const fileName = section.querySelector('[data-logo-file-name]');
         const reset = section.querySelector('[data-logo-reset]');
+        const saveLogo = section.querySelector('[data-logo-save]');
         if (!(input instanceof HTMLInputElement) || !(preview instanceof HTMLImageElement)) return;
 
         const originalSource = preview.src;
+        const originalPreviewHref = previewLink instanceof HTMLAnchorElement ? previewLink.href : '';
+        const originalPreviewTitle = previewLink instanceof HTMLAnchorElement ? previewLink.dataset.previewTitle || '' : '';
         let previewUrl = '';
 
         function clearPreviewUrl() {
@@ -517,22 +521,85 @@ function initLogoPlaceholders(root = document) {
             }
         }
 
+        function setSaveEnabled(enabled) {
+            if (saveLogo instanceof HTMLButtonElement) {
+                const ready = !input.disabled && enabled;
+                saveLogo.disabled = input.disabled;
+                saveLogo.dataset.logoReady = ready ? '1' : '0';
+                saveLogo.setAttribute('aria-disabled', ready ? 'false' : 'true');
+                saveLogo.classList.toggle('is-locked', !ready);
+            }
+        }
+
+        function showLogoSelectionWarning() {
+            let modal = document.getElementById('logoSelectionWarningModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'logoSelectionWarningModal';
+                modal.className = 'modal-backdrop';
+                modal.innerHTML = `
+                    <div class="modal-content bg-white rounded-[2rem] p-8 w-full max-w-md shadow-2xl" role="alertdialog" aria-modal="true" aria-labelledby="logoSelectionWarningTitle">
+                        <div class="flex items-start gap-4 mb-6">
+                            <div class="w-12 h-12 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center shrink-0">
+                                <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+                            </div>
+                            <div>
+                                <h3 class="font-headline text-lg font-extrabold text-[#1c2a59] mb-1" id="logoSelectionWarningTitle">Select a logo first</h3>
+                                <p class="text-sm font-bold text-slate-500">Choose or drop a valid PNG, JPG, or WebP image before saving.</p>
+                            </div>
+                        </div>
+                        <div class="flex justify-end">
+                            <button type="button" class="btn btn-primary" data-logo-warning-close>Close</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+                modal.querySelector('[data-logo-warning-close]')?.addEventListener('click', () => closeModal(modal.id));
+                modal.addEventListener('click', (event) => {
+                    if (event.target === modal) closeModal(modal.id);
+                });
+            }
+
+            showModal(modal.id);
+            modal.querySelector('[data-logo-warning-close]')?.focus();
+        }
+
+        function restoreSavedPreview(message = 'No new image selected.') {
+            clearPreviewUrl();
+            input.value = '';
+            preview.src = originalSource;
+            if (previewLink instanceof HTMLAnchorElement) {
+                previewLink.href = originalPreviewHref;
+                previewLink.dataset.previewTitle = originalPreviewTitle;
+            }
+            if (fileName) fileName.textContent = message;
+            if (reset) reset.classList.add('hidden');
+            setSaveEnabled(false);
+        }
+
         function previewFile(file) {
             if (!file) return;
             if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
                 if (typeof showToast === 'function') showToast('Choose a PNG, JPG, or WebP image.', 'error');
+                restoreSavedPreview('Invalid file. Choose a PNG, JPG, or WebP image.');
                 return;
             }
             if (file.size > 5 * 1024 * 1024) {
                 if (typeof showToast === 'function') showToast('Logo preview files must be 5 MB or smaller.', 'error');
+                restoreSavedPreview('The selected image is larger than 5 MB.');
                 return;
             }
 
             clearPreviewUrl();
             previewUrl = URL.createObjectURL(file);
             preview.src = previewUrl;
+            if (previewLink instanceof HTMLAnchorElement) {
+                previewLink.href = previewUrl;
+                previewLink.dataset.previewTitle = file.name;
+            }
             if (fileName) fileName.textContent = `${file.name} — ready to save`;
             if (reset) reset.classList.remove('hidden');
+            setSaveEnabled(true);
         }
 
         input.addEventListener('change', () => previewFile(input.files && input.files[0]));
@@ -563,13 +630,20 @@ function initLogoPlaceholders(root = document) {
 
         if (reset) {
             reset.addEventListener('click', () => {
-                clearPreviewUrl();
-                input.value = '';
-                preview.src = originalSource;
-                if (fileName) fileName.textContent = 'No new image selected.';
-                reset.classList.add('hidden');
+                restoreSavedPreview();
             });
         }
+
+        if (saveLogo instanceof HTMLButtonElement) {
+            saveLogo.addEventListener('click', (event) => {
+                if (saveLogo.dataset.logoReady === '1' || saveLogo.disabled) return;
+                event.preventDefault();
+                event.stopPropagation();
+                showLogoSelectionWarning();
+            });
+        }
+
+        setSaveEnabled(Boolean(input.files && input.files[0]));
     });
 }
 

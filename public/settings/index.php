@@ -65,6 +65,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($uploadedLogoPath !== '') {
                 $profileInput['logo_path'] = $uploadedLogoPath;
             }
+            if ((string) ($_POST['save_intent'] ?? '') === 'logo' && $uploadedLogoPath === '') {
+                throw new InvalidArgumentException('Choose a PNG, JPG, or WebP logo before saving.');
+            }
             save_clinic_profile_settings($profileInput, $updatedBy);
             flash_message('success', $uploadedLogoPath !== '' ? 'Clinic profile and system logo saved.' : 'Clinic profile settings saved.');
         } catch (Throwable $e) {
@@ -395,6 +398,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $clinicProfile = clinic_profile_settings();
+$systemLogoPath = clinic_profile_logo_path($clinicProfile);
+$systemLogoUrl = app_url($systemLogoPath);
+$systemLogoExtension = strtolower((string) pathinfo($systemLogoPath, PATHINFO_EXTENSION));
+$systemLogoDownloadName = 'cliniq-system-logo.' . (in_array($systemLogoExtension, ['png', 'jpg', 'jpeg', 'webp'], true) ? $systemLogoExtension : 'png');
 $themePresets = cliniq_theme_presets();
 $themeSettings = cliniq_theme_settings();
 $activeTheme = $themeSettings['theme'];
@@ -586,10 +593,18 @@ render_clinic_command_header(
                     <div class="settings-section settings-logo-layout">
                         <div class="settings-logo-preview-card">
                             <span class="clinic-label">Logo preview</span>
-                            <div class="settings-logo-preview">
-                                <img src="<?= app_url(clinic_profile_logo_path($clinicProfile)) ?>" alt="Current <?= e($clinicProfile['department']) ?> logo" data-logo-preview>
-                            </div>
-                            <p class="settings-help m-0 text-center">Current saved system logo</p>
+                            <a
+                                href="<?= e($systemLogoUrl) ?>"
+                                class="settings-logo-preview"
+                                data-file-preview
+                                data-preview-type="image"
+                                data-preview-title="<?= e($systemLogoDownloadName) ?>"
+                                data-logo-preview-link
+                                aria-label="View or download the current system logo"
+                            >
+                                <img src="<?= e($systemLogoUrl) ?>" alt="Current <?= e($clinicProfile['department']) ?> logo" data-logo-preview>
+                            </a>
+                            <p class="settings-help m-0 text-center">Click the logo to view or download it</p>
                         </div>
 
                         <div class="settings-logo-controls">
@@ -602,7 +617,7 @@ render_clinic_command_header(
                             <p class="settings-logo-file-name" data-logo-file-name>No new image selected.</p>
                             <div class="flex flex-wrap justify-end gap-3">
                                 <button type="button" class="btn btn-ghost hidden" data-logo-reset>Reset Preview</button>
-                                <button type="submit" form="clinicProfileForm" class="btn btn-primary" <?= !$canManageSettings ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Save system logo?" data-confirm-message="This will update the logo used across the staff and patient screens." data-confirm-toast="Saving logo...">
+                                <button type="submit" form="clinicProfileForm" name="save_intent" value="logo" class="btn btn-primary is-locked" <?= !$canManageSettings ? 'disabled' : '' ?> aria-disabled="true" data-logo-ready="0" data-logo-save data-confirm-submit data-confirm-type="primary" data-confirm-title="Save system logo?" data-confirm-message="This will update the logo used across the staff and patient screens." data-confirm-toast="Saving logo...">
                                     <span class="material-symbols-outlined text-[18px]">save</span>
                                     Save Logo
                                 </button>

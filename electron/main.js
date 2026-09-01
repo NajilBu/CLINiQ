@@ -29,8 +29,8 @@ const healthUrl = new URL('api/health.php', clinicBaseUrl);
 
 function desktopIconPath() {
     return app.isPackaged
-        ? path.join(process.resourcesPath, 'clinic-logo.png')
-        : path.join(__dirname, '..', 'public', 'assets', 'img', 'clinic-logo.png');
+        ? path.join(process.resourcesPath, 'cliniq-desktop-icon.ico')
+        : path.join(__dirname, 'assets', 'cliniq-desktop-icon.ico');
 }
 
 function isAllowedClinicUrl(value) {

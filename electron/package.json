@@ -27,11 +27,12 @@
     ],
     "extraResources": [
       {
-        "from": "../public/assets/img/clinic-logo.png",
-        "to": "clinic-logo.png"
+        "from": "assets/cliniq-desktop-icon.ico",
+        "to": "cliniq-desktop-icon.ico"
       }
     ],
     "win": {
+      "icon": "assets/cliniq-desktop-icon.ico",
       "target": [
         "nsis"
       ]

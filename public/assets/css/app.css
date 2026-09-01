@@ -2162,6 +2162,20 @@ body.file-preview-open {
     border-radius: 1.35rem;
     background: #ffffff;
     box-shadow: 0 12px 28px rgba(var(--cliniq-shadow-rgb), 0.12);
+    cursor: pointer;
+    text-decoration: none;
+    transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.settings-logo-preview:hover {
+    border-color: var(--cliniq-primary);
+    box-shadow: 0 14px 32px rgba(var(--cliniq-shadow-rgb), 0.18);
+    transform: translateY(-2px);
+}
+
+.settings-logo-preview:focus-visible {
+    outline: 3px solid rgba(var(--cliniq-focus-rgb), 0.22);
+    outline-offset: 3px;
 }
 
 .settings-logo-preview img {
@@ -2224,6 +2238,18 @@ body.file-preview-open {
 .settings-logo-file-name {
     margin: 0;
     min-height: 1rem;
+}
+
+.btn.is-locked {
+    opacity: 0.52;
+    cursor: not-allowed;
+    box-shadow: none;
+    filter: saturate(0.65);
+}
+
+.btn.is-locked:hover {
+    transform: none;
+    box-shadow: none;
 }
 
 @media (max-width: 760px) {
