@@ -49,7 +49,6 @@ $alerts = auth_db()->prepare("
     LEFT JOIN people pe ON pe.id = pt.person_id
     WHERE {$where}
     ORDER BY a.created_at DESC
-    LIMIT 100
 ");
 $alerts->execute($params);
 $alerts = $alerts->fetchAll();
@@ -234,8 +233,12 @@ render_clinic_command_header(
 
     <?php render_ag_grid('alertsGrid', $alertColumns, $alertRows, [
         'searchInput' => 'alertsGridSearch',
+        'pageSize' => 10,
+        'pagination' => true,
+        'paginationControls' => 'alertsPagination',
         'emptyTitle' => 'No alerts found',
         'emptyText' => 'No alerts with this status.',
     ]); ?>
+    <nav id="alertsPagination" class="pagination" aria-label="Alert pages"></nav>
 </section>
 <?php render_footer(); ?>

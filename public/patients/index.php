@@ -16,7 +16,7 @@ if (!in_array($filterType, $allowedPatientTypes, true)) {
 if (!in_array($filterStatus, $allowedAccountStatuses, true)) {
     $filterStatus = 'all';
 }
-$perPage = 15;
+$perPage = 10;
 
 $totalRows = cliniq_patient_profile_count();
 $patients = cliniq_patient_profile_list('', max(1, $totalRows), 0);

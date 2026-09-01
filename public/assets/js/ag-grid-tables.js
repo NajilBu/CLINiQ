@@ -227,12 +227,12 @@
 
             const totalPages = Math.max(1, Number(api.paginationGetTotalPages ? api.paginationGetTotalPages() : 1));
             const currentPage = Math.min(totalPages, Number(api.paginationGetCurrentPage ? api.paginationGetCurrentPage() : 0) + 1);
-            let html = `<button type="button" data-page-action="previous" aria-label="Previous page" ${currentPage === 1 ? 'class="page-disabled" disabled' : ''}>‹</button>`;
+            let html = `<button type="button" class="pagination-arrow${currentPage === 1 ? ' page-disabled' : ''}" data-page-action="previous" aria-label="Previous page" ${currentPage === 1 ? 'disabled' : ''}>&lsaquo;</button>`;
             for (let page = 1; page <= totalPages; page += 1) {
                 const active = page === currentPage;
                 html += `<button type="button" data-page-number="${page}"${active ? ' class="page-active" aria-current="page"' : ''}>${page}</button>`;
             }
-            html += `<button type="button" data-page-action="next" aria-label="Next page" ${currentPage === totalPages ? 'class="page-disabled" disabled' : ''}>›</button>`;
+            html += `<button type="button" class="pagination-arrow${currentPage === totalPages ? ' page-disabled' : ''}" data-page-action="next" aria-label="Next page" ${currentPage === totalPages ? 'disabled' : ''}>&rsaquo;</button>`;
             controls.innerHTML = html;
 
             if (controls.dataset.paginationReady !== 'true') {

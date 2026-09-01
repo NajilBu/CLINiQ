@@ -672,6 +672,265 @@ function cliniqRemoveStaleConfirmModal() {
     }
 }
 
+function initPatientAccountTypeFields(root = document) {
+    const forms = [];
+    if (root instanceof Element && root.matches('[data-patient-account-form]')) {
+        forms.push(root);
+    }
+    forms.push(...root.querySelectorAll('[data-patient-account-form]'));
+
+    forms.forEach((form) => {
+        if (form.dataset.patientTypeFieldsReady === 'true') return;
+        form.dataset.patientTypeFieldsReady = 'true';
+
+        let activePrograms = [];
+        let activeDepartments = [];
+        try {
+            activePrograms = JSON.parse(form.dataset.programOptions || '[]');
+            activeDepartments = JSON.parse(form.dataset.departmentOptions || '[]');
+        } catch (error) {
+            console.error('Unable to load patient account options.', error);
+        }
+
+        const field = (id) => form.querySelector(`#${id}`);
+        const patientType = field('patient_type');
+        const idNumberInput = field('id_number');
+        const programInput = field('program_or_department');
+        const employmentInput = field('year_level_or_employment_type');
+        const studentYearSelect = field('student_year_level');
+        const facultyEmploymentSelect = field('faculty_employment_type');
+        const sectionPositionInput = field('section_or_position');
+        const studentSectionSelect = field('student_section_code');
+        let pendingProgramValue = String(programInput?.dataset.selectedValue || '').toUpperCase();
+        const hintsByType = {
+            student: {
+                idPlaceholder: '23-00262',
+                idHint: 'Student example: 23-00262',
+                programLabel: 'Program Code',
+                programPlaceholder: 'Select program',
+                programHint: 'Select an active program from the database.',
+                yearLabel: 'Year Level',
+                yearPlaceholder: '3',
+                yearHint: 'Choose 1 to 4.',
+                sectionLabel: 'Section Code',
+                sectionPlaceholder: 'D',
+                sectionHint: 'Choose A to E. Program, year level, and section are stored separately.'
+            },
+            faculty: {
+                idPlaceholder: 'FAC-0001',
+                idHint: 'Faculty example: FAC-0001',
+                programLabel: 'Department',
+                programPlaceholder: 'Select department',
+                programHint: 'Select an active department from the database.',
+                yearLabel: 'Employment Type',
+                yearPlaceholder: 'Full-time',
+                yearHint: 'Choose Full-time or Part-time.',
+                sectionLabel: 'Title',
+                sectionPlaceholder: 'DIT or MIT',
+                sectionHint: 'Example: DIT or MIT'
+            },
+            school_personnel: {
+                idPlaceholder: 'SP-0001',
+                idHint: 'School personnel example: SP-0001',
+                programLabel: 'Department',
+                programPlaceholder: 'Select department',
+                programHint: 'Select an active department from the database.',
+                yearLabel: 'Employment Type',
+                yearPlaceholder: 'Full-time',
+                yearHint: 'Example: Full-time',
+                sectionLabel: 'Position',
+                sectionPlaceholder: 'Administrative Assistant',
+                sectionHint: 'Example: Administrative Assistant'
+            }
+        };
+
+        function setText(id, value) {
+            const element = field(id);
+            if (element) element.textContent = value;
+        }
+
+        function replaceProgramOptions(options, placeholder) {
+            if (!programInput) return;
+            const currentValue = pendingProgramValue || String(programInput.value || '').toUpperCase();
+            pendingProgramValue = '';
+            programInput.replaceChildren(new Option(placeholder, ''));
+            options.forEach((option) => {
+                programInput.add(new Option(`${option.code} — ${option.name}`, option.code));
+            });
+            programInput.value = options.some((option) => option.code === currentValue) ? currentValue : '';
+        }
+
+        function updateStudentSectionPreview() {
+            if (patientType?.value !== 'student') return;
+            const program = String(programInput?.value || '').trim().toUpperCase();
+            const year = String(studentYearSelect?.value || '').trim();
+            const section = String(studentSectionSelect?.value || '').trim().toUpperCase();
+            setText('section_or_position_hint', program && year && section
+                ? `Program: ${program} · Year: ${year} · Section: ${section}`
+                : hintsByType.student.sectionHint);
+        }
+
+        function applyPatientType() {
+            const type = patientType?.value || 'student';
+            const hints = hintsByType[type] || hintsByType.student;
+            const isStudent = type === 'student';
+            const isFaculty = type === 'faculty';
+
+            if (idNumberInput) idNumberInput.placeholder = hints.idPlaceholder;
+            setText('id_number_hint', hints.idHint);
+            setText('program_or_department_label', hints.programLabel);
+            setText('program_or_department_hint', hints.programHint);
+            if (programInput) programInput.dataset.requiredMessage = `Select the patient's ${isStudent ? 'program' : 'department'}.`;
+            replaceProgramOptions(isStudent ? activePrograms : activeDepartments, hints.programPlaceholder);
+
+            setText('year_level_or_employment_type_label', hints.yearLabel);
+            setText('year_level_or_employment_type_hint', hints.yearHint);
+            if (employmentInput) {
+                employmentInput.classList.toggle('hidden', isStudent || isFaculty);
+                employmentInput.disabled = isStudent || isFaculty;
+                employmentInput.required = !isStudent && !isFaculty;
+                employmentInput.dataset.requiredMessage = "Enter the patient's employment type.";
+                employmentInput.placeholder = hints.yearPlaceholder;
+            }
+            if (studentYearSelect) {
+                studentYearSelect.classList.toggle('hidden', !isStudent);
+                studentYearSelect.disabled = !isStudent;
+                studentYearSelect.required = isStudent;
+                studentYearSelect.dataset.requiredMessage = "Select the patient's year level.";
+            }
+            if (facultyEmploymentSelect) {
+                facultyEmploymentSelect.classList.toggle('hidden', !isFaculty);
+                facultyEmploymentSelect.disabled = !isFaculty;
+                facultyEmploymentSelect.required = isFaculty;
+                facultyEmploymentSelect.dataset.requiredMessage = "Select the patient's employment type.";
+            }
+            const employmentLabel = field('year_level_or_employment_type_label');
+            if (employmentLabel) {
+                employmentLabel.htmlFor = isStudent
+                    ? 'student_year_level'
+                    : (isFaculty ? 'faculty_employment_type' : 'year_level_or_employment_type');
+            }
+
+            setText('section_or_position_label', hints.sectionLabel);
+            setText('section_or_position_hint', hints.sectionHint);
+            if (sectionPositionInput) {
+                sectionPositionInput.classList.toggle('hidden', isStudent);
+                sectionPositionInput.disabled = isStudent;
+                sectionPositionInput.required = !isStudent;
+                sectionPositionInput.dataset.requiredMessage = `Enter the patient's ${isFaculty ? 'title' : 'position'}.`;
+                sectionPositionInput.placeholder = hints.sectionPlaceholder;
+                if (isFaculty) sectionPositionInput.value = sectionPositionInput.value.toUpperCase();
+            }
+            if (studentSectionSelect) {
+                studentSectionSelect.classList.toggle('hidden', !isStudent);
+                studentSectionSelect.disabled = !isStudent;
+                studentSectionSelect.required = isStudent;
+                studentSectionSelect.dataset.requiredMessage = "Select the patient's section code.";
+            }
+            const sectionLabel = field('section_or_position_label');
+            if (sectionLabel) sectionLabel.htmlFor = isStudent ? 'student_section_code' : 'section_or_position';
+            updateStudentSectionPreview();
+        }
+
+        patientType?.addEventListener('change', applyPatientType);
+        idNumberInput?.addEventListener('input', () => {
+            idNumberInput.value = idNumberInput.value.toUpperCase();
+        });
+        programInput?.addEventListener('change', updateStudentSectionPreview);
+        studentYearSelect?.addEventListener('change', updateStudentSectionPreview);
+        studentSectionSelect?.addEventListener('change', updateStudentSectionPreview);
+        sectionPositionInput?.addEventListener('input', () => {
+            if (patientType?.value === 'faculty') {
+                sectionPositionInput.value = sectionPositionInput.value.toUpperCase();
+            }
+        });
+
+        const namePattern = /^[\p{L} .'-]+$/u;
+        const validateField = (input) => {
+            input.setCustomValidity('');
+            if (input.disabled) return;
+            const value = String(input.value || '');
+            if (input.required && value.trim() === '') {
+                input.setCustomValidity(input.dataset.requiredMessage || 'Complete this required field.');
+                return;
+            }
+            if (['first_name', 'middle_name', 'last_name'].includes(input.name) && value !== '' && !namePattern.test(value)) {
+                input.setCustomValidity('Use only letters, spaces, apostrophes, periods, and hyphens.');
+            }
+        };
+        form.querySelectorAll('input, select').forEach((input) => {
+            input.addEventListener('input', () => validateField(input));
+            input.addEventListener('change', () => validateField(input));
+            input.addEventListener('invalid', () => {
+                if (input.validity.valueMissing) {
+                    input.setCustomValidity(input.dataset.requiredMessage || 'Complete this required field.');
+                } else if (input.id === 'id_number' && input.validity.patternMismatch) {
+                    input.setCustomValidity('Use up to 50 letters, numbers, spaces, or - / _.');
+                }
+            });
+        });
+        applyPatientType();
+        if (form.dataset.validationError === 'true' && typeof showModal === 'function') {
+            setTimeout(() => showModal('individualAccountModal'), 0);
+        }
+    });
+}
+
+function initConfirmedPasswordForms(root = document) {
+    const toggleButtons = [];
+    if (root instanceof Element && root.matches('[data-password-toggle]')) toggleButtons.push(root);
+    toggleButtons.push(...root.querySelectorAll('[data-password-toggle]'));
+
+    toggleButtons.forEach((button) => {
+        if (button.dataset.passwordToggleReady === 'true') return;
+        button.dataset.passwordToggleReady = 'true';
+        button.addEventListener('click', () => {
+            const input = document.getElementById(button.dataset.passwordToggle || '');
+            if (!input) return;
+            const showPassword = input.type === 'password';
+            input.type = showPassword ? 'text' : 'password';
+            button.setAttribute('aria-pressed', showPassword ? 'true' : 'false');
+            button.setAttribute('aria-label', showPassword ? 'Hide password' : 'Show password');
+            const icon = button.querySelector('.material-symbols-outlined');
+            if (icon) icon.textContent = showPassword ? 'visibility_off' : 'visibility';
+        });
+    });
+
+    const forms = [];
+    if (root instanceof Element && root.matches('[data-password-confirm-form]')) forms.push(root);
+    forms.push(...root.querySelectorAll('[data-password-confirm-form]'));
+
+    forms.forEach((form) => {
+        if (form.dataset.passwordConfirmationReady === 'true') return;
+        form.dataset.passwordConfirmationReady = 'true';
+        const password = form.querySelector('[name="password"]');
+        const confirmation = form.querySelector('[name="password_confirmation"]');
+        if (!password || !confirmation) return;
+
+        const validateMatch = () => {
+            confirmation.setCustomValidity('');
+            if (confirmation.value !== '' && password.value !== confirmation.value) {
+                confirmation.setCustomValidity('Passwords do not match.');
+                return false;
+            }
+            return password.value === confirmation.value;
+        };
+
+        password.addEventListener('input', validateMatch);
+        confirmation.addEventListener('input', validateMatch);
+        form.addEventListener('click', (event) => {
+            const submitButton = event.target.closest('button:not([type]), button[type="submit"], input[type="submit"]');
+            if (submitButton) validateMatch();
+        }, true);
+        form.addEventListener('submit', (event) => {
+            if (!validateMatch()) {
+                event.preventDefault();
+                confirmation.reportValidity();
+            }
+        });
+    });
+}
+
 function cliniqAfterContentSwap(root) {
     if (typeof window.cliniqInitAgGrids === 'function') {
         window.cliniqInitAgGrids(root || document);
@@ -679,6 +938,8 @@ function cliniqAfterContentSwap(root) {
     initStudentIdFormatting(root || document);
     initLogoPlaceholders(root || document);
     initDragScrolling(root || document);
+    initPatientAccountTypeFields(root || document);
+    initConfirmedPasswordForms(root || document);
     if (typeof window.initRecentPatientAccountPagination === 'function') {
         window.initRecentPatientAccountPagination();
     }
@@ -1024,6 +1285,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Mouse users can hold and drag any scrollable panel or table.
     initDragScrolling();
+
+    // Keep account-creation fields synchronized with the selected patient type.
+    initPatientAccountTypeFields();
+
+    // Staff profile passwords can be revealed and must match their confirmation.
+    initConfirmedPasswordForms();
 
     // Start alert polling
     refreshAlerts();

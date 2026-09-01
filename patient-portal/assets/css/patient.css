@@ -725,15 +725,15 @@ html:has(.student-body) body {
 }
 
 .student-ape-step.is-current .student-ape-step-index {
-    color: #ffffff;
-    background: var(--student-primary);
-    border-color: var(--student-primary);
-    box-shadow: 0 0 0 5px rgba(var(--cliniq-focus-rgb), 0.12);
+    color: #9a5a00;
+    background: #fff3cd;
+    border-color: #f2c94c;
+    box-shadow: 0 0 0 5px rgba(242, 201, 76, 0.18);
 }
 
 .student-ape-step.is-current .student-ape-step-body {
-    border-color: color-mix(in srgb, var(--student-primary) 34%, #ffffff);
-    background: linear-gradient(180deg, #ffffff 0%, color-mix(in srgb, var(--student-primary) 5%, #ffffff) 100%);
+    border-color: #efd27a;
+    background: linear-gradient(180deg, #ffffff 0%, #fffcf2 100%);
     box-shadow: 0 14px 30px rgba(var(--cliniq-shadow-rgb), 0.08);
 }
 
@@ -2457,4 +2457,79 @@ body.student-time-modal-open {
         margin-left: 0;
         margin-right: 0;
     }
+}
+
+.student-field-hint {
+    margin: 0.45rem 0 0;
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-weight: 800;
+}
+
+.ape-flow-field span {
+    display: block;
+    margin-top: 0.2rem;
+    color: var(--primary);
+    font-size: 0.82rem;
+    font-weight: 900;
+}
+
+.student-pagination {
+    display: flex !important;
+    justify-content: center;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 1.25rem 0 0.25rem;
+    margin-top: 0.35rem;
+    width: 100%;
+}
+
+.student-pagination .student-pagination-link {
+    width: 2.65rem;
+    height: 2.65rem;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--student-border);
+    border-radius: 0.8rem;
+    color: var(--student-primary) !important;
+    background: #fff !important;
+    font-weight: 900;
+    font-size: 1rem;
+    line-height: 1;
+    text-decoration: none !important;
+    box-shadow: 0 6px 16px rgba(20, 78, 43, 0.1);
+    transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.student-pagination .student-pagination-link.is-active,
+.student-pagination .student-pagination-link:hover {
+    background: var(--student-primary) !important;
+    color: #fff !important;
+    border-color: var(--student-primary) !important;
+}
+
+.student-pagination .student-pagination-link:hover {
+    transform: translateY(-1px);
+}
+
+.student-pagination .student-pagination-arrow .material-symbols-outlined {
+    font-size: 1.35rem;
+}
+
+.student-pagination .student-pagination-link.is-disabled {
+    background: var(--student-muted-soft) !important;
+    border-color: var(--student-border-soft) !important;
+    color: #a3b1a8 !important;
+    box-shadow: none;
+    cursor: not-allowed;
+}
+
+#ape-activity-timeline {
+    transition: opacity 160ms ease;
+}
+
+#ape-activity-timeline.is-loading {
+    opacity: 0.55;
+    pointer-events: none;
 }

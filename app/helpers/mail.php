@@ -2,9 +2,9 @@
 
 require_once __DIR__ . '/../config/env.php';
 require_once __DIR__ . '/../services/SystemSettings.php';
-require_once __DIR__ . '/../vendor/phpmailer/src/Exception.php';
-require_once __DIR__ . '/../vendor/phpmailer/src/PHPMailer.php';
-require_once __DIR__ . '/../vendor/phpmailer/src/SMTP.php';
+require_once __DIR__ . '/../lib/phpmailer/src/Exception.php';
+require_once __DIR__ . '/../lib/phpmailer/src/PHPMailer.php';
+require_once __DIR__ . '/../lib/phpmailer/src/SMTP.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception as MailException;
@@ -51,6 +51,28 @@ function send_cliniq_email(string $toEmail, string $toName, string $subject, str
         error_log('[CLINiQ Mail] Failed to send to ' . $toEmail . ': ' . $mail->ErrorInfo);
         return false;
     }
+}
+
+function cliniq_custom_email_body(string $message, string $clinicName): string
+{
+    $clinicSafe = htmlspecialchars($clinicName, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $messageSafe = nl2br(htmlspecialchars($message, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'), false);
+
+    return <<<HTML
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#f4f6f3;font-family:Arial,sans-serif;color:#17261d;">
+<table width="100%" cellpadding="0" cellspacing="0" style="padding:28px 14px;"><tr><td align="center">
+  <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:14px;overflow:hidden;">
+    <tr><td style="background:#1e6e4f;padding:22px 30px;color:#ffffff;font-size:21px;font-weight:800;">{$clinicSafe}</td></tr>
+    <tr><td style="padding:30px;font-size:15px;line-height:1.7;color:#374a3d;">{$messageSafe}</td></tr>
+    <tr><td style="padding:18px 30px;background:#f4f6f3;color:#7a8c80;font-size:12px;text-align:center;">Sent by {$clinicSafe}</td></tr>
+  </table>
+</td></tr></table>
+</body>
+</html>
+HTML;
 }
 
 /**

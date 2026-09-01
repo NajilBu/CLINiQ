@@ -317,7 +317,7 @@ function render_system_report_document(array $report, bool $standalone = false, 
                 <div class="report-cover-card">
                     <div class="report-brand"><div class="report-logo">+</div><div><strong><?= system_report_escape($systemName) ?></strong><span><?= system_report_escape($departmentName) ?></span></div></div>
                     <h1><?= system_report_escape($report['title']) ?></h1>
-                    <p>Consolidated operational analytics from the CLINiQ patient, clinical, appointment, inventory, APE, referral, and incident modules.</p>
+                    <p>Consolidated operational analytics from the CLINiQ clinical, appointment, inventory, APE, referral, and incident modules.</p>
                     <div class="report-meta">
                         <div><span>Reporting Period</span><strong><?= system_report_escape(date('M j, Y', strtotime($report['date_from']))) ?> - <?= system_report_escape(date('M j, Y', strtotime($report['date_to']))) ?></strong></div>
                         <div><span>Included Modules</span><strong data-report-module-total><?= count($report['sections']) ?> module(s)</strong></div>

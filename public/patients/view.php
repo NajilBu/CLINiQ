@@ -23,15 +23,71 @@ if (!$patient) {
     exit;
 }
 
+$user = current_user() ?? [];
+$canEmailPatient = in_array($user['role'] ?? '', ['admin', 'doctor', 'it_expert'], true)
+    && filter_var(trim((string) ($patient['email'] ?? '')), FILTER_VALIDATE_EMAIL);
+$patientMailConfigured = mail_settings_configured();
+
 $fullName = trim(implode(' ', array_filter([
     $patient['first_name'] ?? '',
     $patient['middle_name'] ?? '',
     $patient['last_name'] ?? '',
 ])));
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'send_patient_email') {
+    try {
+        if (!$canEmailPatient) {
+            throw new InvalidArgumentException('You do not have permission to email this patient, or the patient email is invalid.');
+        }
+        if (!$patientMailConfigured) {
+            throw new InvalidArgumentException('Configure the clinic email before sending a message.');
+        }
+
+        $subject = trim((string) ($_POST['subject'] ?? ''));
+        $message = trim((string) ($_POST['message'] ?? ''));
+        if ($subject === '' || mb_strlen($subject) > 180) {
+            throw new InvalidArgumentException('Enter a subject containing no more than 180 characters.');
+        }
+        if ($message === '' || mb_strlen($message) > 10000) {
+            throw new InvalidArgumentException('Enter a message containing no more than 10,000 characters.');
+        }
+
+        require_once __DIR__ . '/../../app/helpers/mail.php';
+        $profile = clinic_profile_settings();
+        try {
+            $sent = send_cliniq_email(
+                trim((string) $patient['email']),
+                $fullName !== '' ? $fullName : 'CLINiQ Patient',
+                $subject,
+                cliniq_custom_email_body($message, (string) ($profile['system_name'] ?? 'CLINiQ'))
+            );
+        } catch (Throwable $e) {
+            error_log('[CLINiQ Mail] Patient profile email failed: ' . $e->getMessage());
+            $sent = false;
+        }
+        flash_message(
+            $sent ? 'success' : 'error',
+            $sent ? 'Email sent to ' . $fullName . '.' : 'The email could not be delivered. Check the SMTP configuration.'
+        );
+    } catch (Throwable $e) {
+        flash_message(
+            $e instanceof InvalidArgumentException ? 'warning' : 'error',
+            $e instanceof InvalidArgumentException ? $e->getMessage() : 'The email could not be sent.'
+        );
+    }
+
+    header('Location: view.php?id=' . (int) $patient['person_id']);
+    exit;
+}
+
 $visits = cliniq_patient_profile_history((int) $patient['person_id']);
 
 ensure_ape_workflow_schema();
 $apeRecords = ape_fetch_patient_records((int) $patient['person_id']);
+$completedApeRecords = array_values(array_filter(
+    $apeRecords,
+    static fn(array $apeRecord): bool => ape_record_queue($apeRecord) === 'completed'
+));
 
 $refStmt = auth_db()->prepare('
     SELECT r.*, TRIM(CONCAT_WS(" ", pe.first_name, pe.middle_name, pe.last_name)) AS referred_by_name
@@ -394,7 +450,14 @@ render_header($fullName . ' - Patient Profile');
                     </div>
                     <div class="patient-profile-field md:col-span-2">
                         <span class="clinic-label">Email</span>
-                        <strong><?= e($emailLabel) ?></strong>
+                        <?php if ($canEmailPatient): ?>
+                            <button type="button" class="inline-flex items-center gap-2 text-left font-extrabold text-primary hover:underline" id="openPatientEmailComposerButton" title="Email this patient">
+                                <span><?= e($emailLabel) ?></span>
+                                <span class="material-symbols-outlined text-[17px]">edit_square</span>
+                            </button>
+                        <?php else: ?>
+                            <strong><?= e($emailLabel) ?></strong>
+                        <?php endif; ?>
                     </div>
                     <div class="patient-profile-field md:col-span-2">
                         <span class="clinic-label">Guardian</span>
@@ -697,34 +760,35 @@ render_header($fullName . ' - Patient Profile');
             <div class="p-5 md:p-6 border-b border-slate-100 flex items-center justify-between gap-3">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                        <span class="material-symbols-outlined">description</span>
+                        <span class="material-symbols-outlined">assignment_turned_in</span>
                     </div>
                     <div>
-                        <h2 class="font-headline text-lg font-extrabold text-[#17261d] m-0">APE Documents</h2>
-                        <p class="text-xs font-bold text-slate-500 m-0">Annual physical exam records and clearance status.</p>
+                        <h2 class="font-headline text-lg font-extrabold text-[#17261d] m-0">APE Records</h2>
+                        <p class="text-xs font-bold text-slate-500 m-0">Completed annual physical examination history.</p>
                     </div>
                 </div>
-                <span class="badge badge-pending"><?= count($apeRecords) ?> record(s)</span>
+                <span class="badge badge-pending"><?= count($completedApeRecords) ?> record(s)</span>
             </div>
-            <?php if ($apeRecords): ?>
+            <?php if ($completedApeRecords): ?>
                 <div class="divide-y divide-outline-variant/10">
-                    <?php foreach ($apeRecords as $ape): ?>
+                    <?php foreach ($completedApeRecords as $ape): ?>
+                        <?php
+                        $completedAt = trim((string) ($ape['updated_at'] ?? ''));
+                        if ($completedAt === '') {
+                            $completedAt = trim((string) ($ape['exam_date'] ?? ''));
+                        }
+                        ?>
                         <a href="<?= e(app_url('ape/view.php?id=' . (int) $ape['id'])) ?>" class="p-5 flex items-center justify-between gap-4 text-decoration-none hover:bg-slate-50/70 transition-colors">
                             <div class="min-w-0">
-                                <p class="text-sm font-extrabold text-slate-800 mb-1"><?= e($ape['document_type'] ?: 'APE Form') ?></p>
+                                <p class="text-sm font-extrabold text-slate-800 mb-1">Completed APE</p>
                                 <p class="text-xs font-bold text-slate-400 m-0">
-                                    <?= $ape['exam_date'] ? e(date('M d, Y', strtotime($ape['exam_date']))) : 'No exam date' ?>
-                                    <?php if ($ape['verified_by_name']): ?>
-                                        &bull; Verified by <?= e($ape['verified_by_name']) ?>
-                                    <?php endif; ?>
+                                    <?= $completedAt !== '' ? 'Completed ' . e(date('M d, Y', strtotime($completedAt))) : 'Completion date not recorded' ?>
                                 </p>
                             </div>
                             <div class="flex items-center gap-3 shrink-0">
-                                <span class="badge <?= status_badge_class($ape['workflow_status'] ?: $ape['verification_status']) ?>">
-                                    <?= e($ape['workflow_status'] ?: $ape['verification_status']) ?>
-                                </span>
+                                <span class="badge badge-completed">Completed</span>
                                 <span class="text-xs font-black text-primary inline-flex items-center gap-1">
-                                    Open progress
+                                    Open record
                                     <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
                                 </span>
                             </div>
@@ -733,9 +797,9 @@ render_header($fullName . ' - Patient Profile');
                 </div>
             <?php else: ?>
                 <div class="empty-state">
-                    <span class="material-symbols-outlined">description</span>
-                    <p class="empty-state-title">No APE documents</p>
-                    <p class="empty-state-text">APE records will appear here once submitted.</p>
+                    <span class="material-symbols-outlined">assignment_turned_in</span>
+                    <p class="empty-state-title">No completed APE records</p>
+                    <p class="empty-state-text">An APE record will appear here after phase five is completed.</p>
                 </div>
             <?php endif; ?>
         </section>
@@ -777,8 +841,83 @@ render_header($fullName . ' - Patient Profile');
     </div>
 </div>
 
+<?php if ($canEmailPatient): ?>
+    <div id="patientEmailComposerModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="patientEmailComposerTitle">
+        <div class="modal-content bg-white rounded-[1.5rem] w-full max-w-2xl p-7 shadow-2xl border border-outline-variant/10">
+            <div class="flex items-start justify-between gap-4 mb-6">
+                <div>
+                    <div class="w-12 h-12 rounded-xl bg-[var(--cliniq-surface-low)] text-[var(--cliniq-primary)] flex items-center justify-center mb-4">
+                        <span class="material-symbols-outlined text-[26px]">edit_square</span>
+                    </div>
+                    <h3 class="font-headline text-2xl font-extrabold text-[#17261d] mb-1" id="patientEmailComposerTitle">Email Patient</h3>
+                    <p class="text-sm font-bold text-slate-500 mb-0">Send a private message to this patient.</p>
+                </div>
+                <button type="button" class="btn btn-ghost justify-center px-3" id="closePatientEmailComposerButton" aria-label="Close email composer">
+                    <span class="material-symbols-outlined text-[20px]">close</span>
+                </button>
+            </div>
+
+            <form method="post" data-no-ajax="true" class="space-y-5" id="patientEmailComposerForm">
+                <input type="hidden" name="action" value="send_patient_email">
+
+                <?php if (!$patientMailConfigured): ?>
+                    <div class="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
+                        <span class="material-symbols-outlined text-[18px] mt-0.5">warning</span>
+                        <span>Configure Email in System Settings before sending this message.</span>
+                    </div>
+                <?php endif; ?>
+
+                <div class="settings-field">
+                    <span class="clinic-label">Recipient</span>
+                    <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center gap-3">
+                        <span class="material-symbols-outlined text-primary">person</span>
+                        <span class="min-w-0">
+                            <strong class="block text-sm font-extrabold text-slate-800 truncate"><?= e($fullName) ?></strong>
+                            <span class="block text-xs font-bold text-slate-500 truncate"><?= e($emailLabel) ?></span>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="settings-field">
+                    <label class="clinic-label" for="patientEmailSubject">Subject</label>
+                    <input class="settings-input" id="patientEmailSubject" name="subject" type="text" maxlength="180" required>
+                </div>
+                <div class="settings-field">
+                    <label class="clinic-label" for="patientEmailMessage">Message</label>
+                    <textarea class="settings-input min-h-48 resize-y" id="patientEmailMessage" name="message" maxlength="10000" placeholder="Write the email message..." required></textarea>
+                </div>
+
+                <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
+                    <button type="button" class="btn btn-secondary justify-center" id="cancelPatientEmailComposerButton">Cancel</button>
+                    <button type="submit" class="btn btn-primary justify-center" <?= !$patientMailConfigured ? 'disabled' : '' ?>
+                        title="<?= !$patientMailConfigured ? 'Configure email before sending' : 'Send this email' ?>"
+                        data-confirm-submit data-confirm-type="primary" data-confirm-title="Send email to this patient?"
+                        data-confirm-message="This message will be sent only to <?= e($fullName) ?>."
+                        data-confirm-toast="Sending email...">
+                        <span class="material-symbols-outlined text-[18px]">send</span>
+                        Send Email
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+<?php endif; ?>
+
 <script>
 (function () {
+    const openEmailComposer = document.getElementById('openPatientEmailComposerButton');
+    const closeEmailComposer = document.getElementById('closePatientEmailComposerButton');
+    const cancelEmailComposer = document.getElementById('cancelPatientEmailComposerButton');
+    const patientEmailForm = document.getElementById('patientEmailComposerForm');
+
+    openEmailComposer?.addEventListener('click', () => showModal('patientEmailComposerModal'));
+    [closeEmailComposer, cancelEmailComposer].forEach((button) => {
+        button?.addEventListener('click', () => closeModal('patientEmailComposerModal'));
+    });
+    patientEmailForm?.addEventListener('submit', () => {
+        closeModal('patientEmailComposerModal');
+    }, true);
+
     const timeline = document.querySelector('[data-care-timeline]');
     if (!timeline) return;
 
@@ -804,12 +943,12 @@ render_header($fullName . ' - Patient Profile');
     function renderPagination(totalPages) {
         if (!pagination) return;
 
-        let markup = `<button type="button" data-care-page-action="previous" aria-label="Previous page" ${currentPage === 1 ? 'class="page-disabled" disabled' : ''}>&lsaquo;</button>`;
+        let markup = `<button type="button" class="pagination-arrow${currentPage === 1 ? ' page-disabled' : ''}" data-care-page-action="previous" aria-label="Previous page" ${currentPage === 1 ? 'disabled' : ''}>&lsaquo;</button>`;
         for (let page = 1; page <= totalPages; page += 1) {
             const active = page === currentPage;
             markup += `<button type="button" data-care-page="${page}"${active ? ' class="page-active" aria-current="page"' : ''}>${page}</button>`;
         }
-        markup += `<button type="button" data-care-page-action="next" aria-label="Next page" ${currentPage === totalPages ? 'class="page-disabled" disabled' : ''}>&rsaquo;</button>`;
+        markup += `<button type="button" class="pagination-arrow${currentPage === totalPages ? ' page-disabled' : ''}" data-care-page-action="next" aria-label="Next page" ${currentPage === totalPages ? 'disabled' : ''}>&rsaquo;</button>`;
         pagination.innerHTML = markup;
     }
 

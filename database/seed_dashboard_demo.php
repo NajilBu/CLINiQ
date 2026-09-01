@@ -257,11 +257,11 @@ echo "Alert risk classifier demo data ready: " . count($alertRiskDemos) . "\n";
 
 $apeRecords = [
     ['26-01073', 'Not Checked', 'Registered', null, 'Pending', 0, 'Pending', 'UHS Medical Record and Dental Record pending hard-copy review.', null, 'Document review needed before student upload.', 2],
-    ['26-01102', 'Pre-Verified', 'Submitted', '/uploads/ape/26-01102-ape-bundle.pdf', 'Pending', 0, 'Pending', 'Online files uploaded; verify against checked hard copies.', null, 'Consent, lab request, medical, dental, and referral forms uploaded.', 1],
+    ['26-01102', 'Checked', 'Submitted', '/uploads/ape/26-01102-ape-bundle.pdf', 'Pending', 0, 'Pending', 'Online files uploaded; verify against checked hard copies.', null, 'Consent, lab request, medical, dental, and referral forms uploaded.', 1],
     ['26-01024', 'Needs Correction', 'Submitted', null, 'Needs Correction', 0, 'Pending', 'Lab request form lacks physician signature.', 'Please return with signed lab request form before online submission.', 'Hard-copy requirements need correction.', 4],
-    ['26-01058', 'Pre-Verified', 'Follow-up Required', '/uploads/ape/26-01058-ape-bundle.pdf', 'Verified', 1, 'For Follow-up', 'History of asthma noted during APE review. Needs pulmonary clearance after school clinic observation.', 'Submit pulmonary clearance or treatment note after follow-up consultation.', 'Pulmonary clearance required.', 5],
-    ['26-01089', 'Pre-Verified', 'Follow-up Required', '/uploads/ape/26-01089-ape-bundle.pdf', 'Verified', 1, 'Submitted', 'Food allergy history documented. Student submitted allergist clearance for review.', 'Clearance submitted; wait for clinic approval.', 'Allergy clearance waiting for approval.', 1],
-    ['26-01136', 'Pre-Verified', 'Cleared', '/uploads/ape/26-01136-ape-bundle.pdf', 'Verified', 0, 'Cleared', 'No significant findings. Fit to study.', 'APE completed and archived.', null, 0],
+    ['26-01058', 'Checked', 'Follow-up Required', '/uploads/ape/26-01058-ape-bundle.pdf', 'Verified', 1, 'For Follow-up', 'History of asthma noted during APE review. Needs pulmonary clearance after school clinic observation.', 'Submit pulmonary clearance or treatment note after follow-up consultation.', 'Pulmonary clearance required.', 5],
+    ['26-01089', 'Checked', 'Follow-up Required', '/uploads/ape/26-01089-ape-bundle.pdf', 'Verified', 1, 'Submitted', 'Food allergy history documented. Student submitted allergist clearance for review.', 'Clearance submitted; wait for clinic approval.', 'Allergy clearance waiting for approval.', 1],
+    ['26-01136', 'Checked', 'Cleared', '/uploads/ape/26-01136-ape-bundle.pdf', 'Verified', 0, 'Cleared', 'No significant findings. Fit to study.', 'APE completed and archived.', null, 0],
 ];
 
 $apeExists = $db->prepare('SELECT id FROM ape_records WHERE patient_id = ? ORDER BY id DESC LIMIT 1');

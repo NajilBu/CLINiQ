@@ -15,6 +15,7 @@ if (!can_manage_patient_accounts($user)) {
 $createdAccount = null;
 $bulkResults = [];
 $pageError = '';
+$individualSubmissionFailed = false;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
@@ -30,8 +31,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } catch (Throwable $e) {
         $pageError = $e->getMessage();
+        $individualSubmissionFailed = (string) ($_POST['action'] ?? '') === 'create_individual';
     }
 }
+
+$individualValues = $individualSubmissionFailed ? $_POST : [];
+$selectedPatientType = (string) ($individualValues['patient_type'] ?? 'student');
+$selectedProgramDepartment = strtoupper(trim((string) ($individualValues['program_or_department'] ?? '')));
+$selectedYearEmployment = trim((string) ($individualValues['year_level_or_employment_type'] ?? ''));
+$selectedSectionPosition = trim((string) ($individualValues['section_or_position'] ?? ''));
 
 $programOptions = patient_account_active_programs();
 $departmentOptions = patient_account_active_departments();
@@ -76,6 +84,10 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
         <a href="<?= app_url('settings/index.php?tab=clinical') ?>" class="settings-tab-link text-decoration-none" data-no-ajax="true">
             <span class="material-symbols-outlined">emergency</span>
             <span>Incident Risk</span>
+        </a>
+        <a href="<?= app_url('settings/index.php?tab=email') ?>" class="settings-tab-link text-decoration-none" data-no-ajax="true">
+            <span class="material-symbols-outlined">mail</span>
+            <span>Email</span>
         </a>
         <a href="<?= app_url('settings/index.php?tab=maintenance') ?>" class="settings-tab-link text-decoration-none" data-no-ajax="true">
             <span class="material-symbols-outlined">restart_alt</span>
@@ -147,53 +159,63 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
                 <span class="material-symbols-outlined">close</span>
             </button>
         </div>
-        <form method="post" class="space-y-4" autocomplete="off">
+        <?php if ($individualSubmissionFailed): ?>
+            <div class="rounded-xl bg-red-50 border border-red-100 text-red-700 px-4 py-3 text-sm font-bold mb-4" role="alert">
+                <?= e($pageError) ?>
+            </div>
+        <?php endif; ?>
+        <p class="text-xs font-bold text-slate-500 mb-4">All fields are required except middle name.</p>
+        <form method="post" class="space-y-4" autocomplete="off"
+            data-patient-account-form
+            <?= $individualSubmissionFailed ? 'data-validation-error="true"' : '' ?>
+            data-program-options="<?= e(json_encode($programOptions, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) ?>"
+            data-department-options="<?= e(json_encode($departmentOptions, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) ?>">
             <input type="hidden" name="action" value="create_individual">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                     <label class="clinic-label" for="patient_type">Patient Type</label>
                     <select class="clinic-input" id="patient_type" name="patient_type" required>
-                        <option value="student">Student</option>
-                        <option value="faculty">Faculty</option>
-                        <option value="school_personnel">School Personnel</option>
+                        <option value="student" <?= $selectedPatientType === 'student' ? 'selected' : '' ?>>Student</option>
+                        <option value="faculty" <?= $selectedPatientType === 'faculty' ? 'selected' : '' ?>>Faculty</option>
+                        <option value="school_personnel" <?= $selectedPatientType === 'school_personnel' ? 'selected' : '' ?>>School Personnel</option>
                     </select>
                 </div>
                 <div>
                     <label class="clinic-label" for="id_number">ID Number</label>
-                    <input class="clinic-input uppercase" id="id_number" name="id_number" placeholder="23-00262" aria-describedby="id_number_hint" autocapitalize="characters" required>
+                    <input class="clinic-input uppercase" id="id_number" name="id_number" value="<?= e((string) ($individualValues['id_number'] ?? '')) ?>" placeholder="23-00262" aria-describedby="id_number_hint" autocapitalize="characters" pattern="<?= e(ID_NUMBER_HTML_PATTERN) ?>" maxlength="50" data-required-message="Enter the patient's ID number." required>
                     <p class="text-[11px] font-bold text-slate-500 mt-1" id="id_number_hint">Student example: 23-00262</p>
                 </div>
                 <div>
                     <label class="clinic-label" for="first_name">First Name</label>
-                    <input class="clinic-input" id="first_name" name="first_name" required>
+                    <input class="clinic-input" id="first_name" name="first_name" value="<?= e((string) ($individualValues['first_name'] ?? '')) ?>" maxlength="100" data-required-message="Enter the patient's first name." required>
                 </div>
                 <div>
-                    <label class="clinic-label" for="middle_name">Middle Name</label>
-                    <input class="clinic-input" id="middle_name" name="middle_name">
+                    <label class="clinic-label" for="middle_name">Middle Name <span class="normal-case text-slate-400">(optional)</span></label>
+                    <input class="clinic-input" id="middle_name" name="middle_name" value="<?= e((string) ($individualValues['middle_name'] ?? '')) ?>" maxlength="100">
                 </div>
                 <div>
                     <label class="clinic-label" for="last_name">Last Name</label>
-                    <input class="clinic-input" id="last_name" name="last_name" required>
+                    <input class="clinic-input" id="last_name" name="last_name" value="<?= e((string) ($individualValues['last_name'] ?? '')) ?>" maxlength="100" data-required-message="Enter the patient's last name." required>
                 </div>
                 <div>
                     <label class="clinic-label" for="birthdate">Birthdate</label>
-                    <input class="clinic-input" id="birthdate" name="birthdate" type="date" required>
+                    <input class="clinic-input" id="birthdate" name="birthdate" type="date" value="<?= e((string) ($individualValues['birthdate'] ?? '')) ?>" max="<?= e(date('Y-m-d')) ?>" data-required-message="Select the patient's birthdate." required>
                 </div>
                 <div>
                     <label class="clinic-label" for="sex">Sex</label>
-                    <select class="clinic-input" id="sex" name="sex" required>
+                    <select class="clinic-input" id="sex" name="sex" data-required-message="Select the patient's sex." required>
                         <option value="">Select sex</option>
-                        <option value="Male">Male</option>
-                        <option value="Female">Female</option>
-                        <option value="Other">Other</option>
+                        <option value="Male" <?= ($individualValues['sex'] ?? '') === 'Male' ? 'selected' : '' ?>>Male</option>
+                        <option value="Female" <?= ($individualValues['sex'] ?? '') === 'Female' ? 'selected' : '' ?>>Female</option>
+                        <option value="Other" <?= ($individualValues['sex'] ?? '') === 'Other' ? 'selected' : '' ?>>Other</option>
                     </select>
                 </div>
                 <div>
                     <label class="clinic-label" id="program_or_department_label" for="program_or_department">Program Code</label>
-                    <select class="clinic-input" id="program_or_department" name="program_or_department" aria-describedby="program_or_department_hint" required>
+                    <select class="clinic-input" id="program_or_department" name="program_or_department" data-selected-value="<?= e($selectedProgramDepartment) ?>" aria-describedby="program_or_department_hint" required>
                         <option value="">Select program</option>
                         <?php foreach ($programOptions as $program): ?>
-                            <option value="<?= e($program['code']) ?>">
+                            <option value="<?= e($program['code']) ?>" <?= $selectedProgramDepartment === strtoupper((string) $program['code']) ? 'selected' : '' ?>>
                                 <?= e($program['code'] . ' — ' . $program['name']) ?>
                             </option>
                         <?php endforeach; ?>
@@ -202,31 +224,31 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
                 </div>
                 <div>
                     <label class="clinic-label" id="year_level_or_employment_type_label" for="year_level_or_employment_type">Year Level</label>
-                    <input class="clinic-input hidden" id="year_level_or_employment_type" name="year_level_or_employment_type" placeholder="Full-time" aria-describedby="year_level_or_employment_type_hint" disabled>
+                    <input class="clinic-input hidden" id="year_level_or_employment_type" name="year_level_or_employment_type" value="<?= e($selectedYearEmployment) ?>" placeholder="Full-time" aria-describedby="year_level_or_employment_type_hint" maxlength="100" disabled>
                     <select class="clinic-input" id="student_year_level" name="year_level_or_employment_type" aria-describedby="year_level_or_employment_type_hint" required>
                         <option value="">Select year level</option>
-                        <option value="1">1</option>
-                        <option value="2">2</option>
-                        <option value="3">3</option>
-                        <option value="4">4</option>
+                        <option value="1" <?= $selectedYearEmployment === '1' ? 'selected' : '' ?>>1</option>
+                        <option value="2" <?= $selectedYearEmployment === '2' ? 'selected' : '' ?>>2</option>
+                        <option value="3" <?= $selectedYearEmployment === '3' ? 'selected' : '' ?>>3</option>
+                        <option value="4" <?= $selectedYearEmployment === '4' ? 'selected' : '' ?>>4</option>
                     </select>
                     <select class="clinic-input hidden" id="faculty_employment_type" name="year_level_or_employment_type" aria-describedby="year_level_or_employment_type_hint" disabled>
                         <option value="">Select employment type</option>
-                        <option value="Full-time">Full-time</option>
-                        <option value="Part-time">Part-time</option>
+                        <option value="Full-time" <?= $selectedYearEmployment === 'Full-time' ? 'selected' : '' ?>>Full-time</option>
+                        <option value="Part-time" <?= $selectedYearEmployment === 'Part-time' ? 'selected' : '' ?>>Part-time</option>
                     </select>
                     <p class="text-[11px] font-bold text-slate-500 mt-1" id="year_level_or_employment_type_hint">Choose 1 to 4.</p>
                 </div>
                 <div>
                     <label class="clinic-label" id="section_or_position_label" for="student_section_code">Section Code</label>
-                    <input class="clinic-input hidden" id="section_or_position" name="section_or_position" placeholder="Position" aria-describedby="section_or_position_hint" disabled>
+                    <input class="clinic-input hidden" id="section_or_position" name="section_or_position" value="<?= e($selectedSectionPosition) ?>" placeholder="Position" aria-describedby="section_or_position_hint" maxlength="100" disabled>
                     <select class="clinic-input" id="student_section_code" name="section_or_position" aria-describedby="section_or_position_hint" required>
                         <option value="">Select section code</option>
-                        <option value="A">A</option>
-                        <option value="B">B</option>
-                        <option value="C">C</option>
-                        <option value="D">D</option>
-                        <option value="E">E</option>
+                        <option value="A" <?= strtoupper($selectedSectionPosition) === 'A' ? 'selected' : '' ?>>A</option>
+                        <option value="B" <?= strtoupper($selectedSectionPosition) === 'B' ? 'selected' : '' ?>>B</option>
+                        <option value="C" <?= strtoupper($selectedSectionPosition) === 'C' ? 'selected' : '' ?>>C</option>
+                        <option value="D" <?= strtoupper($selectedSectionPosition) === 'D' ? 'selected' : '' ?>>D</option>
+                        <option value="E" <?= strtoupper($selectedSectionPosition) === 'E' ? 'selected' : '' ?>>E</option>
                     </select>
                     <p class="text-[11px] font-bold text-slate-500 mt-1" id="section_or_position_hint">Choose A to E. Program, year level, and section are stored separately.</p>
                 </div>
@@ -364,7 +386,6 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
                         <option value="student">Student</option>
                         <option value="faculty">Faculty</option>
                         <option value="school personnel">Personnel</option>
-                        <option value="patient">Patient</option>
                     </select>
                 </div>
                 <div>
@@ -465,11 +486,15 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
         </table>
     </div>
     <nav class="pagination border-t border-slate-100" aria-label="Recent patient accounts pages">
-        <button type="button" class="page-disabled" aria-label="Previous page" data-recent-account-previous disabled>‹</button>
+        <button type="button" class="pagination-arrow page-disabled" aria-label="Previous page" data-recent-account-previous disabled>&lsaquo;</button>
 
-        <span class="inline-flex items-center gap-1" data-recent-account-pages></span>
+        <div class="pagination-pages" data-recent-account-pages>
+            <?php for ($pageNumber = 1; $pageNumber <= $recentAccountPageCount; $pageNumber++): ?>
+                <button type="button" class="<?= $pageNumber === 1 ? 'page-active' : '' ?>" data-recent-account-page="<?= $pageNumber ?>"<?= $pageNumber === 1 ? ' aria-current="page"' : '' ?>><?= $pageNumber ?></button>
+            <?php endfor; ?>
+        </div>
 
-        <button type="button" class="<?= $recentAccountPageCount === 1 ? 'page-disabled' : '' ?>" aria-label="Next page" data-recent-account-next<?= $recentAccountPageCount === 1 ? ' disabled' : '' ?>>›</button>
+        <button type="button" class="pagination-arrow <?= $recentAccountPageCount === 1 ? 'page-disabled' : '' ?>" aria-label="Next page" data-recent-account-next<?= $recentAccountPageCount === 1 ? ' disabled' : '' ?>>&rsaquo;</button>
     </nav>
 </section>
 

@@ -181,17 +181,17 @@ $apeBadgeClass = match ($latestApe['clearance_status'] ?? '') {
 };
 $apeNote = trim((string) ($latestApe['patient_visible_note'] ?? ''));
 $apeRequirementStatus = $latestApe['requirement_status'] ?? 'Not Checked';
-$apeRequirementsVerified = $apeRequirementStatus === 'Pre-Verified' || in_array($apeStatus, [
+$apePatientVitalsConfirmed = ($latestApe['patient_vitals_status'] ?? 'Not Started') === 'Confirmed';
+$apeRequirementsVerified = $apePatientVitalsConfirmed && ($apeRequirementStatus === 'Checked' || in_array($apeStatus, [
     'Requirements Checked',
     'Submitted',
     'Reviewed',
     'Scheduled',
     'Follow-up Required',
     'Cleared',
-], true);
+], true));
 $apeRequirementsNeedCorrection = $apeRequirementStatus === 'Needs Correction';
 $apeExamCompleted = !empty($latestApe['exam_date']);
-$apePatientVitalsConfirmed = ($latestApe['patient_vitals_status'] ?? 'Not Started') === 'Confirmed';
 $apeAllDocumentsUploaded = (int) ($latestApe['required_document_count'] ?? 0) >= count(ape_default_requirements());
 $apeDocumentsAwaitingReview = $apeAllDocumentsUploaded && (int) ($latestApe['required_unverified_count'] ?? 0) > 0;
 $clinicNotes = [];
@@ -452,8 +452,7 @@ render_student_header('Dashboard', 'dashboard');
                 <div class="student-progress-step">
                     <span class="student-progress-step-icon material-symbols-outlined">task_alt</span>
                     <div>
-                        <strong><?= student_e($latestApe['document_type'] ?? 'APE Form') ?></strong>
-                        <span><?= student_e($latestApe['clinical_remarks'] ?? 'No clinic remarks yet.') ?></span>
+                        <strong><?= ($latestApe['clearance_status'] ?? '') === 'Cleared' ? 'Completed APE' : 'Current APE Phase' ?></strong>
                     </div>
                     <span class="student-badge <?= student_e($apeBadgeClass) ?>"><?= student_e($latestApe['clearance_status'] ?? 'Pending') ?></span>
                 </div>
@@ -461,7 +460,6 @@ render_student_header('Dashboard', 'dashboard');
                     <span class="student-progress-step-icon material-symbols-outlined">cloud_upload</span>
                     <div>
                         <strong>Required action</strong>
-                        <span><?= student_e($latestApe['missing_items'] ?? 'No missing items recorded.') ?></span>
                     </div>
                     <span class="student-badge <?= student_e($apeBadgeClass) ?>"><?= student_e($latestApe['verification_status'] ?? 'Pending') ?></span>
                 </div>

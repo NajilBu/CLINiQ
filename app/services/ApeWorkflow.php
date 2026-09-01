@@ -66,6 +66,10 @@ function ape_work_queues(): array
 
 function ape_record_queue(array $record): string
 {
+    if (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed') {
+        return 'examination';
+    }
+
     if (($record['workflow_status'] ?? '') === 'Cleared' || ($record['clearance_status'] ?? '') === 'Cleared') {
         return 'completed';
     }
@@ -78,7 +82,7 @@ function ape_record_queue(array $record): string
         return 'final_decision';
     }
 
-    if (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed' || empty($record['exam_date']) || ($record['requirement_status'] ?? '') !== 'Pre-Verified') {
+    if (empty($record['exam_date']) || ($record['requirement_status'] ?? '') !== 'Checked') {
         return 'examination';
     }
 
@@ -343,7 +347,7 @@ function ape_workflow_step_index(?string $status): int
 function ape_status_badge_class(?string $status): string
 {
     return match (strtolower((string)$status)) {
-        'cleared', 'verified', 'pre-verified', 'exam done', 'completed', 'fit to proceed' => 'badge-completed',
+        'cleared', 'verified', 'Checked', 'exam done', 'completed', 'fit to proceed' => 'badge-completed',
         'scheduled', 'reviewed', 'submitted', 'batch assigned', 'requirements checked', 'with finding' => 'badge-in-progress',
         'follow-up required', 'needs correction', 'for follow-up' => 'badge-high',
         'critical' => 'badge-critical',
@@ -523,9 +527,8 @@ function ape_record_select_sql(): string
     ";
 }
 
-function ape_fetch_records(string $search = '', int $limit = 200): array
+function ape_fetch_records(string $search = '', ?int $limit = null): array
 {
-    $limit = max(1, min(500, $limit));
     $sql = ape_record_select_sql();
     $params = [];
     if ($search !== '') {
@@ -544,7 +547,11 @@ function ape_fetch_records(string $search = '', int $limit = 200): array
         $term = '%' . $search . '%';
         $params = array_fill(0, 6, $term);
     }
-    $sql .= " ORDER BY ar.updated_at DESC, ar.created_at DESC LIMIT {$limit}";
+    $sql .= " ORDER BY ar.updated_at DESC, ar.created_at DESC";
+    if ($limit !== null) {
+        $limit = max(1, $limit);
+        $sql .= " LIMIT {$limit}";
+    }
     $stmt = auth_db()->prepare($sql);
     $stmt->execute($params);
     return $stmt->fetchAll();

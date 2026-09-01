@@ -8,13 +8,22 @@ ensure_ape_workflow_schema();
 $apeRecord = ape_fetch_patient_record($patientId);
 $uploadError = '';
 
-$batchDocumentTypes = [
-    'lab_request_form' => 'Lab Request Form',
-    'uhs_consent_form' => 'UHS Consent Form',
-    'uhs_medical_record' => 'UHS Medical Record',
-    'uhs_dental_record' => 'UHS Dental Record',
-    'referral_form' => 'Referral Form',
-];
+function patient_ape_bmi_classification(float $bmi): string
+{
+    if ($bmi <= 0) {
+        return 'Not calculated';
+    }
+    if ($bmi < 18.5) {
+        return 'Underweight';
+    }
+    if ($bmi < 25) {
+        return 'Normal';
+    }
+    if ($bmi < 30) {
+        return 'Overweight';
+    }
+    return 'Obese';
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confirm_ape_vitals') {
     try {
@@ -37,6 +46,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confi
         }
         if (!preg_match('/^\d{2,3}\s*\/\s*\d{2,3}$/', $bloodPressure)) {
             throw new InvalidArgumentException('Enter blood pressure in the format 120/80.');
+        }
+        [$systolic, $diastolic] = array_map('intval', preg_split('/\s*\/\s*/', $bloodPressure));
+        if ($systolic < 70 || $systolic > 250 || $diastolic < 40 || $diastolic > 150 || $diastolic >= $systolic) {
+            throw new InvalidArgumentException('Enter a realistic blood pressure value such as 120/80.');
         }
         if ($pulseRate < 20 || $pulseRate > 250) {
             throw new InvalidArgumentException('Enter a valid pulse rate between 20 and 250 bpm.');
@@ -61,10 +74,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
         if (!$apeRecord) {
             throw new RuntimeException('The clinic must create your APE record before you can upload documents.');
         }
-        $requirementsVerifiedForUpload = ($apeRecord['requirement_status'] ?? '') === 'Pre-Verified'
+        $requirementsVerifiedForUpload = ($apeRecord['requirement_status'] ?? '') === 'Checked'
             || in_array(($apeRecord['workflow_status'] ?? ''), ['Requirements Checked', 'Submitted', 'Reviewed', 'Scheduled', 'Exam Done', 'Follow-up Required'], true);
-        if (!$requirementsVerifiedForUpload || empty($apeRecord['exam_date']) || ($apeRecord['clearance_status'] ?? '') === 'Cleared') {
+        if (($apeRecord['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed' || !$requirementsVerifiedForUpload || empty($apeRecord['exam_date']) || ($apeRecord['clearance_status'] ?? '') === 'Cleared') {
             throw new RuntimeException('Document upload opens only after the clinical examination is complete.');
+        }
+
+        $uploadRequirements = ape_requirements_for_record((int) $apeRecord['ape_id']);
+        $documentTypesByKey = [];
+        foreach ($uploadRequirements as $uploadRequirement) {
+            $documentTypesByKey['r' . (int) $uploadRequirement['requirement_id']] = $uploadRequirement['requirement_name'];
+        }
+        if (!$documentTypesByKey) {
+            throw new RuntimeException('The clinic has not listed any APE requirements for upload yet.');
         }
 
         $latestExistingByType = [];
@@ -72,7 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
             $latestExistingByType[$existingDocument['document_type']] ??= $existingDocument;
         }
         $batchFiles = $_FILES['documents'] ?? [];
-        foreach ($batchDocumentTypes as $documentKey => $documentType) {
+        foreach ($documentTypesByKey as $documentKey => $documentType) {
             $errors = $batchFiles['error'][$documentKey] ?? UPLOAD_ERR_NO_FILE;
             if (!is_array($errors)) {
                 $errors = [$errors];
@@ -114,9 +136,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
             ) VALUES (?, ?, ?, ?, 'Pending', ?)
         ");
         $requirement = $apeDb->prepare("
-            UPDATE ape_requirements
-            SET status = 'Submitted', remarks = NULL, checked_by_person_id = NULL, checked_at = NULL
-            WHERE ape_id = ? AND requirement_name = ?
+            INSERT INTO ape_requirements (ape_id, requirement_name, status, remarks, checked_by_person_id, checked_at)
+            VALUES (?, ?, 'Submitted', NULL, NULL, NULL)
+            ON DUPLICATE KEY UPDATE
+                status = 'Submitted',
+                remarks = NULL,
+                checked_by_person_id = NULL,
+                checked_at = NULL
         ");
         $updatedRequirements = [];
         foreach ($storedFiles as $storedUpload) {
@@ -166,25 +192,37 @@ $apeRecord = ape_fetch_patient_record($patientId);
 $requirements = $apeRecord ? ape_requirements_for_record((int) $apeRecord['ape_id']) : [];
 $uploadedDocuments = $apeRecord ? ape_documents_for_record((int) $apeRecord['ape_id']) : [];
 $findings = $apeRecord ? ape_findings_for_record((int) $apeRecord['ape_id']) : [];
-$activities = $apeRecord ? ape_activities_for_record((int) $apeRecord['ape_id'], 10) : [];
+$allActivities = $apeRecord ? ape_activities_for_patient_record((int) $apeRecord['ape_id'], $patientId, 200) : [];
+$historyLimit = 5;
+$historyTotalPages = max(1, (int) ceil(count($allActivities) / $historyLimit));
+$historyPage = max(1, min($historyTotalPages, (int) ($_GET['ape_history_page'] ?? 1)));
+$activities = array_slice($allActivities, ($historyPage - 1) * $historyLimit, $historyLimit);
 $apeStatus = $apeRecord['workflow_status'] ?? 'Not Started';
 $clearanceStatus = $apeRecord['clearance_status'] ?? 'Pending';
 $studentNote = trim((string) ($apeRecord['patient_visible_note'] ?? ''));
 $missingItems = trim((string) ($apeRecord['missing_items'] ?? ''));
 $actionNeeded = $clearanceStatus !== 'Cleared' && $apeStatus !== 'Not Started';
 $requirementStatus = $apeRecord['requirement_status'] ?? 'Not Checked';
-$requirementsVerified = $requirementStatus === 'Pre-Verified' || in_array($apeStatus, [
+$patientVitalsConfirmed = ($apeRecord['patient_vitals_status'] ?? 'Not Started') === 'Confirmed';
+$currentBmi = (float) ($apeRecord['patient_bmi'] ?? 0);
+$currentBmiClassification = patient_ape_bmi_classification($currentBmi);
+$requirementsVerified = $patientVitalsConfirmed && ($requirementStatus === 'Checked' || in_array($apeStatus, [
     'Requirements Checked',
     'Submitted',
     'Reviewed',
     'Scheduled',
     'Follow-up Required',
     'Cleared',
-], true);
+], true));
 $requirementsNeedCorrection = $requirementStatus === 'Needs Correction';
 $examCompleted = !empty($apeRecord['exam_date']);
-$patientVitalsConfirmed = ($apeRecord['patient_vitals_status'] ?? 'Not Started') === 'Confirmed';
-$allRequiredDocumentsUploaded = (int) ($apeRecord['required_document_count'] ?? 0) >= count(ape_default_requirements());
+$requiredRequirementNames = array_values(array_unique(array_map(static fn(array $requirement): string => $requirement['requirement_name'], $requirements)));
+$uploadedRequirementNames = [];
+foreach ($uploadedDocuments as $uploadedDocument) {
+    $uploadedRequirementNames[$uploadedDocument['document_type']] = true;
+}
+$allRequiredDocumentsUploaded = $requiredRequirementNames !== []
+    && count(array_filter($requiredRequirementNames, static fn(string $requirementName): bool => isset($uploadedRequirementNames[$requirementName]))) >= count($requiredRequirementNames);
 $documentsAwaitingReview = $allRequiredDocumentsUploaded && (int) ($apeRecord['required_unverified_count'] ?? 0) > 0;
 $canUploadDocuments = $requirementsVerified
     && !$requirementsNeedCorrection
@@ -279,10 +317,6 @@ $flowSteps = [
     ],
 ];
 
-$requirementsByName = [];
-foreach ($requirements as $requirement) {
-    $requirementsByName[$requirement['requirement_name']] = $requirement;
-}
 $latestDocumentByType = [];
 foreach ($uploadedDocuments as $uploadedDocument) {
     $latestDocumentByType[$uploadedDocument['document_type']] ??= $uploadedDocument;
@@ -295,9 +329,10 @@ $documentIcons = [
     'Referral Form' => 'send',
 ];
 $documents = [];
-foreach ($documentIcons as $name => $icon) {
-    $documentKey = array_search($name, $batchDocumentTypes, true);
-    $requirement = $requirementsByName[$name] ?? null;
+foreach ($requirements as $requirement) {
+    $name = $requirement['requirement_name'];
+    $icon = $documentIcons[$name] ?? 'upload_file';
+    $documentKey = 'r' . (int) $requirement['requirement_id'];
     $uploadedDocument = $latestDocumentByType[$name] ?? null;
     if ($uploadedDocument) {
         $verification = $uploadedDocument['verification_status'];
@@ -434,7 +469,7 @@ render_student_header('APE Status', 'ape');
                     <div class="student-ape-step <?= student_e($stepClass) ?>">
                         <span class="student-ape-step-rail" aria-hidden="true"></span>
                         <span class="student-ape-step-index">
-                            <span class="material-symbols-outlined"><?= student_e($isDone ? 'check' : $step['icon']) ?></span>
+                            <span class="material-symbols-outlined"><?= student_e($isDone ? 'check' : ($isCurrent ? 'pending_actions' : $step['icon'])) ?></span>
                         </span>
                         <div class="student-ape-step-body">
                             <div class="student-ape-step-top">
@@ -450,7 +485,100 @@ render_student_header('APE Status', 'ape');
         </div>
     </section>
 
-    <section class="student-card student-span-7">
+    <div class="student-span-7 grid gap-4">
+    <section class="student-card">
+        <div class="student-card-header">
+            <div>
+                <h2 class="student-card-title">Clinic Findings and Follow-Up</h2>
+                <p class="student-card-copy">Examination findings and follow-up instructions recorded for you.</p>
+            </div>
+            <span class="student-badge <?= student_e($headerBadge) ?>"><?= student_e($apeRecord['result_status'] ?? 'No Active Treatment') ?></span>
+        </div>
+        <div class="student-card-pad grid gap-3">
+            <?php foreach ($findings as $finding): ?>
+                <div class="student-note <?= $finding['follow_up_required'] ? 'student-note-warning' : 'student-note-success' ?>">
+                    <span class="material-symbols-outlined"><?= $finding['follow_up_required'] ? 'medical_information' : 'check_circle' ?></span>
+                    <div>
+                        <strong><?= student_e($finding['finding_type'] . ' · ' . $finding['result_status']) ?></strong>
+                        <?= student_e($finding['description']) ?>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+            <?php if (!$findings): ?>
+                <div class="student-note student-note-success"><span class="material-symbols-outlined">check_circle</span><div><strong>No active finding recorded.</strong> <?= student_e($studentNote ?: 'No additional patient instruction has been recorded.') ?></div></div>
+            <?php endif; ?>
+        </div>
+    </section>
+
+    <?php if ($apeRecord): ?>
+    <section class="student-card">
+        <div class="student-card-header">
+            <div>
+                <h2 class="student-card-title">Vitals and BMI</h2>
+                <p class="student-card-copy">Enter these values before presenting your hard-copy APE requirements to the clinic.</p>
+            </div>
+            <span class="student-badge <?= $patientVitalsConfirmed ? 'student-badge-success' : 'student-badge-warning' ?>">
+                <?= $patientVitalsConfirmed ? 'Confirmed' : 'Not Started' ?>
+            </span>
+        </div>
+        <div class="student-card-pad">
+            <?php if ($patientVitalsConfirmed): ?>
+                <div class="student-note student-note-success mb-4"><span class="material-symbols-outlined">verified</span><div><strong>Patient-entered profile confirmed.</strong> Present your hard-copy requirements to the clinic. The clinic will record official examination findings separately.</div></div>
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    <div class="ape-flow-field"><p class="clinic-label mb-1">Height</p><strong><?= student_e(number_format((float) $apeRecord['patient_height_cm'], 2)) ?> cm</strong></div>
+                    <div class="ape-flow-field"><p class="clinic-label mb-1">Weight</p><strong><?= student_e(number_format((float) $apeRecord['patient_weight_kg'], 2)) ?> kg</strong></div>
+                    <div class="ape-flow-field"><p class="clinic-label mb-1">BMI</p><strong><?= student_e(number_format($currentBmi, 2)) ?></strong><span><?= student_e($currentBmiClassification) ?></span></div>
+                    <div class="ape-flow-field"><p class="clinic-label mb-1">Temperature</p><strong><?= student_e(number_format((float) $apeRecord['patient_temperature'], 1)) ?> °C</strong></div>
+                    <div class="ape-flow-field"><p class="clinic-label mb-1">Blood Pressure</p><strong><?= student_e($apeRecord['patient_blood_pressure']) ?></strong></div>
+                    <div class="ape-flow-field"><p class="clinic-label mb-1">Pulse Rate</p><strong><?= (int) $apeRecord['patient_pulse_rate'] ?> bpm</strong></div>
+                </div>
+            <?php elseif ($canEnterPatientVitals): ?>
+                <form method="post" class="grid grid-cols-1 md:grid-cols-3 gap-4" id="ape-vitals-form">
+                    <input type="hidden" name="action" value="confirm_ape_vitals">
+                    <div>
+                        <label class="student-label" for="patient_height_cm">Height (cm)</label>
+                        <input class="student-input" id="patient_height_cm" name="patient_height_cm" type="number" min="30" max="250" step="0.01" placeholder="e.g. 170" required>
+                    </div>
+                    <div>
+                        <label class="student-label" for="patient_weight_kg">Weight (kg)</label>
+                        <input class="student-input" id="patient_weight_kg" name="patient_weight_kg" type="number" min="1" max="500" step="0.01" placeholder="e.g. 60" required>
+                    </div>
+                    <div>
+                        <label class="student-label" for="patient_bmi">BMI (calculated)</label>
+                        <input class="student-input" id="patient_bmi" name="patient_bmi_display" type="text" placeholder="Enter height/weight" readonly>
+                    </div>
+                    <div>
+                        <label class="student-label" for="patient_temperature">Temperature (°C)</label>
+                        <input class="student-input" id="patient_temperature" name="patient_temperature" type="number" min="30" max="45" step="0.01" placeholder="e.g. 36.6" required>
+                    </div>
+                    <div>
+                        <label class="student-label" for="patient_blood_pressure">Blood Pressure</label>
+                        <input class="student-input" id="patient_blood_pressure" name="patient_blood_pressure" type="text" pattern="\d{2,3}\s*/\s*\d{2,3}" placeholder="e.g. 120/80" required>
+                    </div>
+                    <div>
+                        <label class="student-label" for="patient_pulse_rate">Pulse Rate (bpm)</label>
+                        <input class="student-input" id="patient_pulse_rate" name="patient_pulse_rate" type="number" min="20" max="250" placeholder="e.g. 72" required>
+                    </div>
+                    
+                    <div class="md:col-span-3 student-note student-note-warning">
+                        <span class="material-symbols-outlined">info</span>
+                        <div>Review your entries carefully. After confirmation, these values will be locked and shown to clinic staff.</div>
+                    </div>
+                    
+                    <button class="student-button md:col-span-3" type="submit" data-confirm-submit data-confirm-type="primary" data-confirm-title="Confirm vitals and BMI?" data-confirm-message="These values will be locked and shared with the clinic for review." data-confirm-toast="Confirming vitals and BMI...">
+                        <span class="material-symbols-outlined">verified</span>
+                        Confirm Vitals and BMI
+                    </button>
+                </form>
+            <?php else: ?>
+                <div class="student-note student-note-info"><span class="material-symbols-outlined">info</span><div>This completed APE record predates the patient vitals profile step. No new patient-entered values are required.</div></div>
+            <?php endif; ?>
+        </div>
+    </section>
+    <?php endif; ?>
+    </div>
+
+    <section class="student-card student-span-12">
         <div class="student-card-header">
             <div>
                 <h2 class="student-card-title">Required Documents</h2>
@@ -503,6 +631,12 @@ render_student_header('APE Status', 'ape');
                         <?php endif; ?>
                     </div>
                 <?php endforeach; ?>
+                <?php if (!$documents): ?>
+                    <div class="student-note student-note-warning">
+                        <span class="material-symbols-outlined">info</span>
+                        <div>No APE requirements have been listed by the clinic yet.</div>
+                    </div>
+                <?php endif; ?>
             </div>
             <?php if ($uploadableDocumentCount > 0): ?>
                 <div class="ape-batch-submit-bar">
@@ -542,176 +676,15 @@ render_student_header('APE Status', 'ape');
     </div>
 </div>
 
-<div class="student-grid mt-4">
-    <section class="student-card student-span-6">
-        <div class="student-card-header">
-            <div>
-                <h2 class="student-card-title">Requirements Checklist</h2>
-                <p class="student-card-copy">Current clinic status for every APE requirement.</p>
-            </div>
-            <span class="student-badge student-badge-info"><?= count($requirements) ?> Item(s)</span>
-        </div>
-        <div class="student-card-pad grid gap-3">
-            <?php foreach ($requirements as $requirement): ?>
-                <?php
-                $requirementBadge = match ($requirement['status']) {
-                    'Verified' => 'student-badge-success',
-                    'Needs Correction' => 'student-badge-danger',
-                    'Submitted' => 'student-badge-warning',
-                    default => 'student-badge-info',
-                };
-                ?>
-                <div class="student-document-card">
-                    <span class="student-icon-box"><span class="material-symbols-outlined">checklist</span></span>
-                    <div class="student-document-meta">
-                        <h3><?= student_e($requirement['requirement_name']) ?></h3>
-                        <p><?= student_e($requirement['remarks'] ?: ($requirement['checked_at'] ? 'Checked by the clinic.' : 'Waiting for completion.')) ?></p>
-                    </div>
-                    <span class="student-badge <?= student_e($requirementBadge) ?>"><?= student_e($requirement['status']) ?></span>
-                </div>
-            <?php endforeach; ?>
-            <?php if (!$requirements): ?>
-                <div class="student-note student-note-warning"><span class="material-symbols-outlined">info</span><div>No requirements have been listed yet.</div></div>
-            <?php endif; ?>
-        </div>
-    </section>
-
-    <section class="student-card student-span-6">
-        <div class="student-card-header">
-            <div>
-                <h2 class="student-card-title">Uploaded File History</h2>
-                <p class="student-card-copy">All digital documents submitted for this APE.</p>
-            </div>
-            <span class="student-badge student-badge-info"><?= count($uploadedDocuments) ?> File(s)</span>
-        </div>
-        <div class="student-card-pad grid gap-3">
-            <?php foreach ($uploadedDocuments as $uploadedDocument): ?>
-                <?php
-                $documentBadge = match ($uploadedDocument['verification_status']) {
-                    'Verified' => 'student-badge-success',
-                    'Needs Correction' => 'student-badge-danger',
-                    default => 'student-badge-warning',
-                };
-                ?>
-                <div class="student-document-card">
-                    <span class="student-icon-box"><span class="material-symbols-outlined">description</span></span>
-                    <div class="student-document-meta">
-                        <h3><?= student_e($uploadedDocument['document_type']) ?></h3>
-                        <p><?= student_e($uploadedDocument['original_filename'] ?: basename($uploadedDocument['file_path'])) ?> · <?= student_e(date('M d, Y g:i A', strtotime($uploadedDocument['uploaded_at']))) ?></p>
-                    </div>
-                    <div class="student-appointment-actions">
-                        <span class="student-badge <?= student_e($documentBadge) ?>"><?= student_e($uploadedDocument['verification_status']) ?></span>
-                        <a class="student-button-secondary text-decoration-none" href="../public/<?= student_e($uploadedDocument['file_path']) ?>" data-file-preview data-preview-title="<?= student_e($uploadedDocument['original_filename'] ?: $uploadedDocument['document_type']) ?>">Open</a>
-                    </div>
-                </div>
-            <?php endforeach; ?>
-            <?php if (!$uploadedDocuments): ?>
-                <div class="student-note student-note-warning"><span class="material-symbols-outlined">upload_file</span><div>No digital document has been uploaded.</div></div>
-            <?php endif; ?>
-        </div>
-    </section>
-</div>
-
-<section class="student-card mt-4">
-    <div class="student-card-header">
-        <div>
-            <h2 class="student-card-title">Clinic Findings and Follow-Up</h2>
-            <p class="student-card-copy">Examination findings and follow-up instructions recorded for you.</p>
-        </div>
-        <span class="student-badge <?= student_e($headerBadge) ?>"><?= student_e($apeRecord['result_status'] ?? 'No Active Treatment') ?></span>
-    </div>
-    <div class="student-card-pad grid gap-3">
-        <?php foreach ($findings as $finding): ?>
-            <div class="student-note <?= $finding['follow_up_required'] ? 'student-note-warning' : 'student-note-success' ?>">
-                <span class="material-symbols-outlined"><?= $finding['follow_up_required'] ? 'medical_information' : 'check_circle' ?></span>
-                <div>
-                    <strong><?= student_e($finding['finding_type'] . ' · ' . $finding['result_status']) ?></strong>
-                    <?= student_e($finding['description']) ?>
-                </div>
-            </div>
-        <?php endforeach; ?>
-        <?php if (!$findings): ?>
-            <div class="student-note student-note-success"><span class="material-symbols-outlined">check_circle</span><div><strong>No active finding recorded.</strong> <?= student_e($studentNote ?: 'No additional patient instruction has been recorded.') ?></div></div>
-        <?php endif; ?>
-    </div>
-</section>
-
-<?php if ($apeRecord): ?>
-<section class="student-card mb-4">
-    <div class="student-card-header">
-        <div>
-            <h2 class="student-card-title">Vitals and BMI</h2>
-            <p class="student-card-copy">Enter these values before presenting your hard-copy APE requirements to the clinic.</p>
-        </div>
-        <span class="student-badge <?= $patientVitalsConfirmed ? 'student-badge-success' : 'student-badge-warning' ?>">
-            <?= $patientVitalsConfirmed ? 'Confirmed' : 'Not Started' ?>
-        </span>
-    </div>
-    <div class="student-card-pad">
-        <?php if ($patientVitalsConfirmed): ?>
-            <div class="student-note student-note-success mb-4"><span class="material-symbols-outlined">verified</span><div><strong>Patient-entered profile confirmed.</strong> Present your hard-copy requirements to the clinic. The clinic will record official examination findings separately.</div></div>
-            <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
-                <div class="ape-flow-field"><p class="clinic-label mb-1">Height</p><strong><?= student_e(number_format((float) $apeRecord['patient_height_cm'], 2)) ?> cm</strong></div>
-                <div class="ape-flow-field"><p class="clinic-label mb-1">Weight</p><strong><?= student_e(number_format((float) $apeRecord['patient_weight_kg'], 2)) ?> kg</strong></div>
-                <div class="ape-flow-field"><p class="clinic-label mb-1">BMI</p><strong><?= student_e(number_format((float) $apeRecord['patient_bmi'], 2)) ?></strong></div>
-                <div class="ape-flow-field"><p class="clinic-label mb-1">Temperature</p><strong><?= student_e(number_format((float) $apeRecord['patient_temperature'], 1)) ?> °C</strong></div>
-                <div class="ape-flow-field"><p class="clinic-label mb-1">Blood Pressure</p><strong><?= student_e($apeRecord['patient_blood_pressure']) ?></strong></div>
-                <div class="ape-flow-field"><p class="clinic-label mb-1">Pulse Rate</p><strong><?= (int) $apeRecord['patient_pulse_rate'] ?> bpm</strong></div>
-            </div>
-        <?php elseif ($canEnterPatientVitals): ?>
-            <form method="post" class="grid grid-cols-1 md:grid-cols-3 gap-4" id="ape-vitals-form">
-                <input type="hidden" name="action" value="confirm_ape_vitals">
-                <div>
-                    <label class="student-label" for="patient_height_cm">Height (cm)</label>
-                    <input class="student-input" id="patient_height_cm" name="patient_height_cm" type="number" min="30" max="250" step="0.01" placeholder="e.g. 170" required>
-                </div>
-                <div>
-                    <label class="student-label" for="patient_weight_kg">Weight (kg)</label>
-                    <input class="student-input" id="patient_weight_kg" name="patient_weight_kg" type="number" min="1" max="500" step="0.01" placeholder="e.g. 60" required>
-                </div>
-                <div>
-                    <label class="student-label" for="patient_bmi">BMI (calculated)</label>
-                    <input class="student-input" id="patient_bmi" name="patient_bmi_display" type="text" placeholder="Enter height/weight" readonly>
-                </div>
-                <div>
-                    <label class="student-label" for="patient_temperature">Temperature (°C)</label>
-                    <input class="student-input" id="patient_temperature" name="patient_temperature" type="number" min="30" max="45" step="0.01" placeholder="e.g. 36.6" required>
-                </div>
-                <div>
-                    <label class="student-label" for="patient_blood_pressure">Blood Pressure</label>
-                    <input class="student-input" id="patient_blood_pressure" name="patient_blood_pressure" type="text" pattern="\d{2,3}\s*/\s*\d{2,3}" placeholder="e.g. 120/80" required>
-                </div>
-                <div>
-                    <label class="student-label" for="patient_pulse_rate">Pulse Rate (bpm)</label>
-                    <input class="student-input" id="patient_pulse_rate" name="patient_pulse_rate" type="number" min="20" max="250" placeholder="e.g. 72" required>
-                </div>
-                
-                <div class="md:col-span-3 student-note student-note-warning">
-                    <span class="material-symbols-outlined">info</span>
-                    <div>Review your entries carefully. After confirmation, these values will be locked and shown to clinic staff.</div>
-                </div>
-                
-                <button class="student-button md:col-span-3" type="submit" data-confirm-submit data-confirm-type="primary" data-confirm-title="Confirm vitals and BMI?" data-confirm-message="These values will be locked and shared with the clinic for review." data-confirm-toast="Confirming vitals and BMI...">
-                    <span class="material-symbols-outlined">verified</span>
-                    Confirm Vitals and BMI
-                </button>
-            </form>
-        <?php else: ?>
-            <div class="student-note student-note-info"><span class="material-symbols-outlined">info</span><div>This completed APE record predates the patient vitals profile step. No new patient-entered values are required.</div></div>
-        <?php endif; ?>
-    </div>
-</section>
-<?php endif; ?>
-
-<section class="student-card mt-4">
+<section class="student-card mt-4" id="ape-activity-timeline">
     <div class="student-card-header">
         <div>
             <h2 class="student-card-title">APE Activity Timeline</h2>
             <p class="student-card-copy">Actions recorded for this APE case.</p>
         </div>
-        <span class="student-badge student-badge-info"><?= count($activities) ?> Event(s)</span>
+        <span class="student-badge student-badge-info"><?= count($allActivities) ?> Event(s)</span>
     </div>
-    <div class="student-card-pad grid gap-3">
+    <div class="student-card-pad grid gap-3" aria-live="polite">
         <?php foreach ($activities as $activity): ?>
             <div class="student-document-card">
                 <span class="student-icon-box"><span class="material-symbols-outlined">history</span></span>
@@ -724,6 +697,42 @@ render_student_header('APE Status', 'ape');
         <?php if (!$activities): ?>
             <div class="student-note student-note-warning"><span class="material-symbols-outlined">history</span><div>No APE activity has been recorded.</div></div>
         <?php endif; ?>
+        <?php if ($historyTotalPages > 1): ?>
+            <nav class="student-pagination" aria-label="APE activity pages">
+                <?php if ($historyPage > 1): ?>
+                    <a
+                        class="student-pagination-link student-pagination-arrow"
+                        href="?ape_history_page=<?= (int) ($historyPage - 1) ?>#ape-activity-timeline"
+                        data-ape-history-page="<?= (int) ($historyPage - 1) ?>"
+                        aria-label="Previous activity page"
+                    ><span class="material-symbols-outlined" aria-hidden="true">chevron_left</span></a>
+                <?php else: ?>
+                    <span class="student-pagination-link student-pagination-arrow is-disabled" aria-disabled="true">
+                        <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
+                    </span>
+                <?php endif; ?>
+                <?php for ($page = 1; $page <= $historyTotalPages; $page++): ?>
+                    <a
+                        class="student-pagination-link <?= $page === $historyPage ? 'is-active' : '' ?>"
+                        href="?ape_history_page=<?= (int) $page ?>#ape-activity-timeline"
+                        data-ape-history-page="<?= (int) $page ?>"
+                        <?= $page === $historyPage ? 'aria-current="page"' : '' ?>
+                    ><?= (int) $page ?></a>
+                <?php endfor; ?>
+                <?php if ($historyPage < $historyTotalPages): ?>
+                    <a
+                        class="student-pagination-link student-pagination-arrow"
+                        href="?ape_history_page=<?= (int) ($historyPage + 1) ?>#ape-activity-timeline"
+                        data-ape-history-page="<?= (int) ($historyPage + 1) ?>"
+                        aria-label="Next activity page"
+                    ><span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></a>
+                <?php else: ?>
+                    <span class="student-pagination-link student-pagination-arrow is-disabled" aria-disabled="true">
+                        <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                    </span>
+                <?php endif; ?>
+            </nav>
+        <?php endif; ?>
     </div>
 </section>
 
@@ -731,14 +740,49 @@ render_student_header('APE Status', 'ape');
     const apeHeightInput = document.getElementById('patient_height_cm');
     const apeWeightInput = document.getElementById('patient_weight_kg');
     const apeBmiOutput = document.getElementById('patient_bmi');
+    const apeBmiClassification = document.getElementById('patient_bmi_classification');
+    const apeVitalsForm = document.getElementById('ape-vitals-form');
+    const apeBloodPressureInput = document.getElementById('patient_blood_pressure');
+
+    function classifyApeBmi(bmi) {
+        if (!Number.isFinite(bmi) || bmi <= 0) return '';
+        if (bmi < 18.5) return 'Underweight';
+        if (bmi < 25) return 'Normal';
+        if (bmi < 30) return 'Overweight';
+        return 'Obese';
+    }
+
     function updateApeBmi() {
         if (!apeHeightInput || !apeWeightInput || !apeBmiOutput) return;
         const height = Number(apeHeightInput.value);
         const weight = Number(apeWeightInput.value);
-        apeBmiOutput.value = height > 0 && weight > 0 ? (weight / ((height / 100) ** 2)).toFixed(2) : '';
+        const bmi = height > 0 && weight > 0 ? weight / ((height / 100) ** 2) : 0;
+        apeBmiOutput.value = bmi > 0 ? bmi.toFixed(2) : '';
+        if (apeBmiClassification) {
+            apeBmiClassification.textContent = classifyApeBmi(bmi);
+        }
     }
     apeHeightInput?.addEventListener('input', updateApeBmi);
     apeWeightInput?.addEventListener('input', updateApeBmi);
+
+    apeVitalsForm?.addEventListener('submit', (event) => {
+        if (!apeBloodPressureInput) return;
+        const parts = apeBloodPressureInput.value.split('/').map((part) => Number(part.trim()));
+        const [systolic, diastolic] = parts;
+        const isValidBloodPressure = parts.length === 2
+            && Number.isFinite(systolic)
+            && Number.isFinite(diastolic)
+            && systolic >= 70
+            && systolic <= 250
+            && diastolic >= 40
+            && diastolic <= 150
+            && diastolic < systolic;
+        apeBloodPressureInput.setCustomValidity(isValidBloodPressure ? '' : 'Enter a realistic blood pressure value such as 120/80.');
+        if (!isValidBloodPressure) {
+            event.preventDefault();
+            apeBloodPressureInput.reportValidity();
+        }
+    });
 
     function selectApeFile(documentKey) {
         document.getElementById(`ape-file-${documentKey}`).click();
@@ -864,6 +908,63 @@ render_student_header('APE Status', 'ape');
         }
         submitButton.disabled = true;
         submitButton.innerHTML = '<span class="material-symbols-outlined">progress_activity</span> Uploading Documents...';
+    });
+
+    let apeHistoryRequest = null;
+
+    async function loadApeHistoryPage(url, updateBrowserHistory = true) {
+        const timeline = document.getElementById('ape-activity-timeline');
+        if (!timeline || timeline.classList.contains('is-loading')) return;
+
+        if (apeHistoryRequest) {
+            apeHistoryRequest.abort();
+        }
+        apeHistoryRequest = new AbortController();
+        timeline.classList.add('is-loading');
+        timeline.setAttribute('aria-busy', 'true');
+
+        try {
+            const response = await fetch(url, {
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                signal: apeHistoryRequest.signal,
+            });
+            if (!response.ok) throw new Error('Unable to load the requested activity page.');
+
+            const html = await response.text();
+            const page = new DOMParser().parseFromString(html, 'text/html');
+            const replacement = page.getElementById('ape-activity-timeline');
+            if (!replacement) throw new Error('Activity timeline was missing from the response.');
+
+            timeline.replaceWith(replacement);
+            if (updateBrowserHistory) {
+                const nextUrl = new URL(url, window.location.href);
+                nextUrl.hash = 'ape-activity-timeline';
+                window.history.pushState({ apeHistoryPage: true }, '', nextUrl);
+            }
+
+            replacement.querySelector('[aria-current="page"]')?.focus({ preventScroll: true });
+        } catch (error) {
+            if (error.name !== 'AbortError') {
+                window.location.href = url;
+            }
+        } finally {
+            const currentTimeline = document.getElementById('ape-activity-timeline');
+            currentTimeline?.classList.remove('is-loading');
+            currentTimeline?.removeAttribute('aria-busy');
+            apeHistoryRequest = null;
+        }
+    }
+
+    document.addEventListener('click', (event) => {
+        const pageLink = event.target.closest('[data-ape-history-page]');
+        if (!pageLink || !pageLink.closest('#ape-activity-timeline')) return;
+        event.preventDefault();
+        loadApeHistoryPage(pageLink.href);
+    });
+
+    window.addEventListener('popstate', () => {
+        loadApeHistoryPage(window.location.href, false);
     });
 </script>
 

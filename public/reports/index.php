@@ -59,7 +59,7 @@ render_header('Reports');
 <?php render_clinic_command_header(
     'Reports',
     'Reports & Analytics',
-    'Build, preview, and export consolidated analytics across every CLINiQ module.',
+    'Build, preview, and export consolidated clinic operational analytics.',
     '<a class="btn btn-primary text-decoration-none" id="reportHeaderPreviewLink" href="preview.php?from=' . e($dateFrom) . '&to=' . e($dateTo) . '&period=' . e($period) . '&semester=' . e((string) $semester) . '"><span class="material-symbols-outlined text-[20px]">preview</span>Preview Report</a>'
 ); ?>
 
@@ -67,7 +67,7 @@ render_header('Reports');
 <form method="get" class="clinic-card overflow-hidden" data-no-ajax="true" id="reportDateForm">
     <div class="p-6 border-b border-slate-100">
         <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">System Analytics Period</h2>
-        <p class="text-xs font-bold text-slate-500 mb-0">All available module graphs update automatically when the date range changes.</p>
+        <p class="text-xs font-bold text-slate-500 mb-0">All available operational graphs update automatically when the date range changes.</p>
     </div>
     <div class="p-6 grid grid-cols-1 xl:grid-cols-[1fr_auto] gap-5 items-end">
         <div class="space-y-3">
@@ -99,7 +99,7 @@ render_header('Reports');
     <div>
         <p class="text-[10px] font-black uppercase tracking-[0.16em] text-primary mb-1">Complete Analytics</p>
         <h2 class="font-headline text-2xl font-extrabold text-[#17261d] mb-1">All System Graphs</h2>
-        <p class="text-xs font-bold text-slate-500 mb-0">Live summaries from every reporting module for <?= e(date('M j, Y', strtotime($dateFrom))) ?> - <?= e(date('M j, Y', strtotime($dateTo))) ?>.</p>
+        <p class="text-xs font-bold text-slate-500 mb-0">Live operational summaries for <?= e(date('M j, Y', strtotime($dateFrom))) ?> - <?= e(date('M j, Y', strtotime($dateTo))) ?>.</p>
     </div>
 </section>
 <style>

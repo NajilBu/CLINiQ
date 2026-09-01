@@ -60,7 +60,14 @@ function student_profile_from_identity(array $identity): array
         $identity['last_name'] ?? '',
     ])));
     $idNumber = (string) ($identity['id_number'] ?? '');
-    $emailId = strtolower(str_replace(['-', ' '], '', $idNumber));
+    $emailPart = static function (mixed $value): string {
+        return strtolower((string) preg_replace('/[^a-z0-9]+/i', '', trim((string) $value)));
+    };
+    $generatedEmailName = implode('_', array_filter([
+        $emailPart($identity['last_name'] ?? ''),
+        $emailPart($identity['first_name'] ?? ''),
+    ]));
+    $storedEmail = trim((string) ($identity['email'] ?? ''));
 
     return [
         'patient_id' => (int) ($identity['person_id'] ?? 0),
@@ -79,7 +86,9 @@ function student_profile_from_identity(array $identity): array
             ?? $identity['personnel_department']
             ?? 'Not recorded'
         ),
-        'email' => ($emailId !== '' ? $emailId : 'patient') . '@plpasig.edu.ph',
+        'email' => $storedEmail !== ''
+            ? $storedEmail
+            : ($generatedEmailName !== '' ? $generatedEmailName : 'patient') . '@plpasig.edu.ph',
         'birthdate' => $identity['birthdate'] ?? null,
         'sex' => $identity['sex'] ?? null,
         'blood_type' => $identity['blood_type'] ?? null,
@@ -129,6 +138,7 @@ function student_current_profile(): ?array
             a.id AS account_id,
             a.account_status,
             a.password_hash,
+            a.email,
             pr.program_code AS program,
             CASE WHEN se.role_classification = "Faculty" THEN ed.department_code END AS faculty_department,
             CASE WHEN se.role_classification = "School Personnel" THEN ed.department_code END AS personnel_department,
@@ -387,7 +397,7 @@ function render_student_header(string $title, string $active = ''): void
             };
         </script>
         <link href="../public/assets/css/app.css?v=file-preview-2" rel="stylesheet">
-        <link href="assets/css/patient.css?v=theme-sync-1" rel="stylesheet">
+        <link href="assets/css/patient.css?v=ape-current-step-1" rel="stylesheet">
         <style>
             :root {
                 --cliniq-primary: <?= student_e($theme['primary']) ?>;
@@ -591,7 +601,7 @@ function render_student_auth_header(string $title): void
             };
         </script>
         <link href="../public/assets/css/app.css?v=file-preview-2" rel="stylesheet">
-        <link href="assets/css/patient.css?v=theme-sync-1" rel="stylesheet">
+        <link href="assets/css/patient.css?v=ape-current-step-1" rel="stylesheet">
         <style>
             :root {
                 --cliniq-primary: <?= student_e($theme['primary']) ?>;

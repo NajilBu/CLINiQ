@@ -57,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!in_array($workflowStatus, ape_workflow_status_options(), true)) {
             throw new InvalidArgumentException('Choose a valid APE workflow status.');
         }
-        if (!in_array($requirementStatus, ['Not Checked', 'Pre-Verified', 'Needs Correction'], true)) {
+        if (!in_array($requirementStatus, ['Not Checked', 'Checked', 'Needs Correction'], true)) {
             throw new InvalidArgumentException('Choose a valid requirement status.');
         }
         if (!in_array($clearanceStatus, ['Pending', 'For Follow-up', 'Cleared'], true)) {
@@ -106,8 +106,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
         $apeId = (int) $apeDb->lastInsertId();
 
-        ape_seed_default_requirements($apeId, $requirementStatus === 'Pre-Verified' ? 'Verified' : ($requirementStatus === 'Needs Correction' ? 'Needs Correction' : 'Missing'));
-        if ($requirementStatus === 'Pre-Verified') {
+        ape_seed_default_requirements($apeId, $requirementStatus === 'Checked' ? 'Verified' : ($requirementStatus === 'Needs Correction' ? 'Needs Correction' : 'Missing'));
+        if ($requirementStatus === 'Checked') {
             $checked = $apeDb->prepare('UPDATE ape_requirements SET checked_by_person_id = ?, checked_at = NOW() WHERE ape_id = ?');
             $checked->execute([$staffPersonId, $apeId]);
         }
@@ -138,6 +138,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ape_id, finding_type, description, result_status,
                     follow_up_required, recorded_by_person_id
                 ) VALUES (?, 'General', ?, 'With Finding', 1, ?)
+                ON DUPLICATE KEY UPDATE
+                    finding_type = VALUES(finding_type),
+                    description = VALUES(description),
+                    result_status = VALUES(result_status),
+                    follow_up_required = VALUES(follow_up_required),
+                    recorded_by_person_id = VALUES(recorded_by_person_id),
+                    recorded_at = CURRENT_TIMESTAMP
             ");
             $finding->execute([$apeId, $clinicalRemarks, $staffPersonId]);
         }

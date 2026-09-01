@@ -505,7 +505,7 @@ CREATE TABLE ape_records (
   academic_year VARCHAR(20) NOT NULL,
   exam_date DATE NULL,
   appointment_id BIGINT UNSIGNED NULL,
-  requirement_status ENUM('Not Checked', 'Pre-Verified', 'Needs Correction')
+  requirement_status ENUM('Not Checked', 'Checked', 'Needs Correction')
     NOT NULL DEFAULT 'Not Checked',
   workflow_status ENUM(
     'Registered',
@@ -616,8 +616,9 @@ CREATE TABLE ape_findings (
     FOREIGN KEY (ape_id) REFERENCES ape_records(ape_id)
     ON DELETE CASCADE,
   CONSTRAINT fk_ape_findings_recorded_by
-    FOREIGN KEY (recorded_by_person_id) REFERENCES clinic_staff(person_id)
+  FOREIGN KEY (recorded_by_person_id) REFERENCES clinic_staff(person_id)
     ON DELETE SET NULL,
+  UNIQUE KEY uq_ape_findings_ape (ape_id),
   INDEX idx_ape_findings_type (ape_id, finding_type),
   INDEX idx_ape_findings_result (result_status),
   INDEX idx_ape_findings_recorded_by (recorded_by_person_id)
