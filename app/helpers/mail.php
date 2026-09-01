@@ -61,6 +61,16 @@ function send_cliniq_email(string $toEmail, string $toName, string $subject, str
     $fromEmail   = $dbSettings['from_email'] ?? env_value('MAIL_FROM', $user);
     $fromName    = $dbSettings['from_name']  ?? env_value('MAIL_FROM_NAME', 'CLINiQ Clinic');
 
+    if (
+        trim((string) $host) === ''
+        || trim((string) $user) === ''
+        || trim((string) $pass) === ''
+        || !filter_var($fromEmail, FILTER_VALIDATE_EMAIL)
+    ) {
+        error_log('[CLINiQ Mail] Delivery skipped because the SMTP configuration is incomplete.');
+        return false;
+    }
+
     $mail = new PHPMailer(true);
     try {
         $mail->isSMTP();
@@ -70,6 +80,8 @@ function send_cliniq_email(string $toEmail, string $toName, string $subject, str
         $mail->Password   = $pass;
         $mail->SMTPSecure = $encryption === 'ssl' ? PHPMailer::ENCRYPTION_SMTPS : PHPMailer::ENCRYPTION_STARTTLS;
         $mail->Port       = $port;
+        $mail->Timeout    = 10;
+        $mail->Timelimit  = 10;
 
         $mail->setFrom($fromEmail, $fromName);
         $mail->addAddress($toEmail, $toName);
@@ -131,6 +143,62 @@ function cliniq_custom_email_body(string $message, string $clinicName): string
 HTML;
 }
 
+function cliniq_mail_template_interpolate(string $value, array $context): string
+{
+    $replacements = [];
+    foreach ($context as $key => $replacement) {
+        $replacements['{{' . $key . '}}'] = (string) $replacement;
+    }
+    return strtr($value, $replacements);
+}
+
+/** @return array{subject:string,html:string} */
+function cliniq_notification_email(string $templateKey, array $context, string $actionUrl): array
+{
+    $template = cliniq_mail_template($templateKey);
+    $rendered = [];
+    foreach ($template as $field => $value) {
+        $rendered[$field] = cliniq_mail_template_interpolate((string) $value, $context);
+    }
+
+    $clinic = htmlspecialchars((string) ($context['clinic_name'] ?? 'CLINiQ Clinic'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $heading = htmlspecialchars($rendered['heading'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $message = nl2br(htmlspecialchars($rendered['message'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'), false);
+    $button = htmlspecialchars($rendered['button_label'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $footer = nl2br(htmlspecialchars($rendered['footer'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'), false);
+    $url = htmlspecialchars($actionUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+    $html = <<<HTML
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#f4f6f3;font-family:Arial,sans-serif;color:#17261d;">
+<table width="100%" cellpadding="0" cellspacing="0" style="padding:28px 14px;"><tr><td align="center">
+  <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 4px 22px rgba(0,0,0,.07);">
+    <tr><td style="background:#1e6e4f;padding:22px 30px;color:#ffffff;">
+      <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+        <td style="padding-right:14px;vertical-align:middle;">{{CLINIQ_EMAIL_LOGO}}</td>
+        <td style="vertical-align:middle;font-size:21px;font-weight:800;">{$clinic}</td>
+      </tr></table>
+    </td></tr>
+    <tr><td style="padding:32px 30px;">
+      <h1 style="margin:0 0 16px;font-size:23px;line-height:1.3;color:#17261d;">{$heading}</h1>
+      <div style="font-size:15px;line-height:1.7;color:#374a3d;">{$message}</div>
+      <table role="presentation" cellpadding="0" cellspacing="0" style="margin:26px 0;"><tr><td style="background:#1e6e4f;border-radius:9px;">
+        <a href="{$url}" target="_blank" style="display:inline-block;padding:13px 24px;color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;">{$button}</a>
+      </td></tr></table>
+      <div style="font-size:12px;line-height:1.6;color:#7a8c80;">{$footer}</div>
+    </td></tr>
+    <tr><td style="padding:17px 30px;background:#f4f6f3;color:#7a8c80;font-size:12px;text-align:center;">Automated message from {$clinic}</td></tr>
+  </table>
+</td></tr></table>
+</body>
+</html>
+HTML;
+
+    return ['subject' => $rendered['subject'], 'html' => $html];
+}
+
 /**
  * Build the re-enrollment / re-employment HTML email body.
  *
@@ -145,65 +213,9 @@ function cliniq_re_enrollment_email_body(
     string $clinicName,
     string $loginUrl
 ): string {
-    $isStudent    = $accountType === 'student';
-    $actionVerb   = $isStudent ? 'enrolled' : 'employed';
-    $confirmLabel = $isStudent ? 'Confirm Enrollment' : 'Confirm Employment';
-    $clinicSafe   = htmlspecialchars($clinicName, ENT_QUOTES);
-    $firstSafe    = htmlspecialchars($firstName, ENT_QUOTES);
-    $loginSafe    = htmlspecialchars($loginUrl, ENT_QUOTES);
-    $message      = $isStudent
-        ? "A new school year has started at {$clinicSafe}. To continue accessing your health records and clinic services, please log in and confirm that you are still enrolled."
-        : "A new school year has started at {$clinicSafe}. To continue accessing your health records and clinic services, please log in and confirm that you are still employed.";
-
-    $primaryColor = '#1e6e4f';
-
-    return <<<HTML
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>{$confirmLabel} — {$clinicSafe}</title>
-</head>
-<body style="margin:0;padding:0;background:#f4f6f3;font-family:'Helvetica Neue',Arial,sans-serif;color:#1a2e22;">
-<table width="100%" cellpadding="0" cellspacing="0" style="padding:32px 16px;">
-  <tr><td align="center">
-    <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
-      <tr><td style="background:{$primaryColor};padding:28px 36px;">
-        <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-          <td style="padding-right:16px;vertical-align:middle;">{{CLINIQ_EMAIL_LOGO}}</td>
-          <td style="vertical-align:middle;">
-            <p style="margin:0;font-size:13px;font-weight:700;letter-spacing:.08em;color:rgba(255,255,255,.7);text-transform:uppercase;">Patient Health Portal</p>
-            <h1 style="margin:6px 0 0;font-size:24px;font-weight:800;color:#fff;">{$clinicSafe}</h1>
-          </td>
-        </tr></table>
-      </td></tr>
-      <tr><td style="padding:36px;">
-        <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#6b7c73;text-transform:uppercase;letter-spacing:.06em;">New School Year</p>
-        <h2 style="margin:0 0 20px;font-size:22px;font-weight:800;color:#17261d;">{$confirmLabel}, {$firstSafe}</h2>
-        <p style="margin:0 0 28px;font-size:15px;line-height:1.7;color:#374a3d;">{$message}</p>
-        <table cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
-          <tr><td style="background:{$primaryColor};border-radius:10px;">
-            <a href="{$loginSafe}" target="_blank"
-               style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:700;color:#fff;text-decoration:none;">
-              {$confirmLabel} &rarr;
-            </a>
-          </td></tr>
-        </table>
-        <p style="margin:0;font-size:13px;color:#8a9e90;line-height:1.6;">
-          If you are no longer {$actionVerb}, simply ignore this email — your account will remain inactive.<br>
-          If you have questions, contact the clinic directly.
-        </p>
-      </td></tr>
-      <tr><td style="background:#f4f6f3;padding:20px 36px;border-top:1px solid #e2ebe5;">
-        <p style="margin:0;font-size:12px;color:#8a9e90;text-align:center;">
-          This is an automated message from {$clinicSafe}. Please do not reply to this email.
-        </p>
-      </td></tr>
-    </table>
-  </td></tr>
-</table>
-</body>
-</html>
-HTML;
+    $key = $accountType === 'student' ? 'student_re_enrollment' : 'employee_re_employment';
+    return cliniq_notification_email($key, [
+        'patient_name' => $firstName,
+        'clinic_name' => $clinicName,
+    ], $loginUrl)['html'];
 }

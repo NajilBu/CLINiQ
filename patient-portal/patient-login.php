@@ -74,6 +74,13 @@ render_student_auth_header('Patient Login');
             <h2 class="student-card-title text-xl">Sign in to your clinic record</h2>
             <p class="student-card-copy mb-5">Enter the password provided by the clinic or the password you created after activation.</p>
 
+            <?php if (($_GET['password_reset'] ?? '') === '1'): ?>
+                <div class="student-note student-note-success mb-4">
+                    <span class="material-symbols-outlined">check_circle</span>
+                    <div>Password updated. You can now sign in with your new password.</div>
+                </div>
+            <?php endif; ?>
+
             <div id="error-alert" class="student-note student-note-danger mb-4 <?= $error === '' ? 'hidden' : '' ?>">
                 <span class="material-symbols-outlined">error</span>
                 <div id="error-msg"><?= student_e($error !== '' ? $error : 'Invalid ID Number or password. Please try again.') ?></div>

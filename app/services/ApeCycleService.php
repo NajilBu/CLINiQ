@@ -311,24 +311,18 @@ function reset_school_year_accounts(): array
     foreach ($patients as $patient) {
         $firstName   = (string) ($patient['first_name'] ?? '');
         $accountType = (string) ($patient['account_type'] ?? 'student');
-        $isStudent   = $accountType === 'student';
-        $subject     = $isStudent
-            ? "[{$clinicName}] Confirm you are still enrolled — new school year"
-            : "[{$clinicName}] Confirm you are still employed — new school year";
-
-        $body = cliniq_re_enrollment_email_body(
-            $firstName,
-            $accountType,
-            $clinicName,
-            $loginUrl
-        );
+        $templateKey = $accountType === 'student' ? 'student_re_enrollment' : 'employee_re_employment';
+        $notification = cliniq_notification_email($templateKey, [
+            'patient_name' => $firstName,
+            'clinic_name' => $clinicName,
+        ], $loginUrl);
 
         $fullName = trim($firstName . ' ' . ($patient['last_name'] ?? ''));
         $sent = send_cliniq_email(
             (string) $patient['email'],
             $fullName ?: 'Patient',
-            $subject,
-            $body
+            $notification['subject'],
+            $notification['html']
         );
 
         $sent ? $emailed++ : $failed++;

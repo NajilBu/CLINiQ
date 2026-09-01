@@ -287,6 +287,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    if ($action === 'save_mail_template' || $action === 'reset_mail_template') {
+        if (!$canManageSettings) {
+            flash_message('error', 'Only administrators, doctors, or IT experts can update email notification formats.');
+            header('Location: index.php?tab=email');
+            exit;
+        }
+        try {
+            $templateKey = trim((string) ($_POST['template_key'] ?? ''));
+            if ($action === 'reset_mail_template') {
+                reset_cliniq_mail_template($templateKey, (int) ($user['person_id'] ?? 0) ?: null);
+                flash_message('success', 'Email notification format restored to its default.');
+            } else {
+                save_cliniq_mail_template($templateKey, $_POST, (int) ($user['person_id'] ?? 0) ?: null);
+                flash_message('success', 'Email notification format saved.');
+            }
+        } catch (Throwable $e) {
+            flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $e->getMessage());
+        }
+        header('Location: index.php?tab=email');
+        exit;
+    }
+
     if ($action === 'send_test_email') {
         if (!$canManageSettings) {
             flash_message('error', 'Only administrators, doctors, or IT experts can send test emails.');
@@ -415,6 +437,7 @@ $staffRoles = staff_profile_roles();
 $settings = risk_settings();
 $mailSettings = mail_settings();
 $mailConfigured = mail_settings_configured();
+$mailNotificationTemplates = cliniq_mail_templates();
 $mailRecipients = $canManageSettings ? cliniq_mail_recipients() : [];
 $activeApePatientCount = 0;
 $excludedApePatientCount = 0;
@@ -1427,6 +1450,34 @@ render_clinic_command_header(
                     <?php endif; ?>
                 </section>
 
+                <section class="settings-section space-y-4">
+                    <div>
+                        <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Email Notification Formats</h3>
+                        <p class="settings-help mb-0">Review every automated patient email. Formats stay locked until you explicitly unlock the editor.</p>
+                    </div>
+                    <div class="divide-y divide-slate-200 rounded-2xl border border-slate-200 overflow-hidden">
+                        <?php foreach ($mailNotificationTemplates as $templateKey => $definition): ?>
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-white">
+                                <div class="flex items-start gap-3 min-w-0">
+                                    <span class="w-10 h-10 rounded-xl bg-[var(--cliniq-surface-low)] text-[var(--cliniq-primary)] flex items-center justify-center shrink-0">
+                                        <span class="material-symbols-outlined text-[21px]"><?= e($definition['icon']) ?></span>
+                                    </span>
+                                    <div class="min-w-0">
+                                        <h4 class="font-headline text-sm font-extrabold text-slate-800 mb-1"><?= e($definition['label']) ?></h4>
+                                        <p class="text-xs font-bold text-slate-500 leading-5 mb-0"><?= e($definition['description']) ?></p>
+                                    </div>
+                                </div>
+                                <?php if ($canManageSettings): ?>
+                                    <button type="button" class="btn btn-secondary justify-center shrink-0" data-edit-email-template="<?= e($templateKey) ?>">
+                                        <span class="material-symbols-outlined text-[18px]">edit_note</span>
+                                        Edit Format
+                                    </button>
+                                <?php endif; ?>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </section>
+
                 <?php if ($mailConfigured && $canManageSettings): ?>
                 <section class="settings-section space-y-4">
                     <div>
@@ -1474,6 +1525,106 @@ render_clinic_command_header(
 </div>
 
 <?php if ($canManageSettings): ?>
+    <script type="application/json" id="emailNotificationTemplateData"><?= json_encode($mailNotificationTemplates, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES) ?></script>
+
+    <div id="emailTemplateModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="emailTemplateModalTitle">
+        <div class="modal-content bg-white rounded-[1.5rem] w-full max-w-5xl max-h-[calc(100vh-2rem)] overflow-y-auto p-7 shadow-2xl border border-outline-variant/10">
+            <div class="flex items-start justify-between gap-4 mb-6">
+                <div class="flex items-start gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-[var(--cliniq-surface-low)] text-[var(--cliniq-primary)] flex items-center justify-center shrink-0">
+                        <span class="material-symbols-outlined text-[26px]" id="emailTemplateModalIcon">mail</span>
+                    </div>
+                    <div>
+                        <p class="clinic-label mb-1">Automated Notification</p>
+                        <h3 class="font-headline text-2xl font-extrabold text-[#17261d] mb-1" id="emailTemplateModalTitle">Email Format</h3>
+                        <p class="text-sm font-bold text-slate-500 leading-6 mb-0" id="emailTemplateModalDescription"></p>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-ghost justify-center px-3" id="closeEmailTemplateButton" aria-label="Close email format editor">
+                    <span class="material-symbols-outlined text-[20px]">close</span>
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(300px,.8fr)] gap-6">
+                <form method="post" data-no-ajax="true" id="emailTemplateForm" class="space-y-4">
+                    <input type="hidden" name="action" value="save_mail_template">
+                    <input type="hidden" name="template_key" id="emailTemplateKey">
+
+                    <div class="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                        <span class="text-xs font-extrabold text-amber-800" id="emailTemplateLockStatus">Format is read-only.</span>
+                        <button type="button" class="btn btn-secondary justify-center shrink-0" id="unlockEmailTemplateButton">
+                            <span class="material-symbols-outlined text-[18px]">lock_open</span>
+                            Unlock Editing
+                        </button>
+                    </div>
+
+                    <div class="settings-field">
+                        <label class="clinic-label" for="emailTemplateSubject">Subject</label>
+                        <input class="settings-input" id="emailTemplateSubject" name="subject" type="text" maxlength="180" required readonly>
+                    </div>
+                    <div class="settings-field">
+                        <label class="clinic-label" for="emailTemplateHeading">Heading</label>
+                        <input class="settings-input" id="emailTemplateHeading" name="heading" type="text" maxlength="180" required readonly>
+                    </div>
+                    <div class="settings-field">
+                        <label class="clinic-label" for="emailTemplateMessage">Message</label>
+                        <textarea class="settings-input min-h-32 resize-y" id="emailTemplateMessage" name="message" maxlength="4000" required readonly></textarea>
+                    </div>
+                    <div class="settings-field">
+                        <label class="clinic-label" for="emailTemplateButtonLabel">Button Label</label>
+                        <input class="settings-input" id="emailTemplateButtonLabel" name="button_label" type="text" maxlength="60" required readonly>
+                        <p class="settings-help mb-0" id="emailTemplateActionHint"></p>
+                    </div>
+                    <div class="settings-field">
+                        <label class="clinic-label" for="emailTemplateFooter">Footer</label>
+                        <textarea class="settings-input min-h-24 resize-y" id="emailTemplateFooter" name="footer" maxlength="1000" readonly></textarea>
+                    </div>
+
+                    <div>
+                        <p class="clinic-label mb-2">Available Placeholders</p>
+                        <div class="flex flex-wrap gap-2" id="emailTemplatePlaceholders"></div>
+                        <p class="settings-help mt-2 mb-0">Required placeholders must remain somewhere in the format. Click a pill to insert it into the last selected field after unlocking.</p>
+                    </div>
+
+                    <div class="flex flex-col-reverse sm:flex-row sm:justify-between gap-3 pt-2">
+                        <button type="button" class="btn btn-secondary justify-center" id="cancelEmailTemplateButton">Cancel</button>
+                        <button type="submit" class="btn btn-primary justify-center" id="saveEmailTemplateButton" disabled>
+                            <span class="material-symbols-outlined text-[18px]">save</span>
+                            Save Format
+                        </button>
+                    </div>
+                </form>
+
+                <div class="space-y-4">
+                    <div>
+                        <p class="clinic-label mb-2">Live Preview</p>
+                        <div class="rounded-2xl overflow-hidden border border-slate-200 bg-white shadow-sm">
+                            <div class="flex items-center gap-3 bg-[var(--cliniq-primary)] px-5 py-4 text-white">
+                                <img src="<?= e($systemLogoUrl) ?>" alt="Clinic logo" class="w-11 h-11 rounded-xl bg-white object-contain p-1">
+                                <strong><?= e($clinicProfile['system_name'] ?? 'CLINiQ Clinic') ?></strong>
+                            </div>
+                            <div class="p-5">
+                                <p class="text-xs font-extrabold uppercase tracking-wider text-slate-400 mb-2" id="emailTemplatePreviewSubject"></p>
+                                <h4 class="font-headline text-xl font-extrabold text-slate-800 mb-3" id="emailTemplatePreviewHeading"></h4>
+                                <p class="text-sm font-semibold leading-6 text-slate-600 whitespace-pre-line mb-5" id="emailTemplatePreviewMessage"></p>
+                                <span class="btn btn-primary pointer-events-none inline-flex" id="emailTemplatePreviewButton"></span>
+                                <p class="text-xs font-bold leading-5 text-slate-400 whitespace-pre-line mt-5 mb-0" id="emailTemplatePreviewFooter"></p>
+                            </div>
+                        </div>
+                    </div>
+                    <form method="post" data-no-ajax="true" id="resetEmailTemplateForm">
+                        <input type="hidden" name="action" value="reset_mail_template">
+                        <input type="hidden" name="template_key" id="resetEmailTemplateKey">
+                        <button type="submit" class="btn btn-ghost justify-center w-full text-slate-600" data-confirm-submit data-confirm-type="warning" data-confirm-title="Restore default email format?" data-confirm-message="Your saved wording for this notification will be replaced by the system default." data-confirm-toast="Restoring email format...">
+                            <span class="material-symbols-outlined text-[18px]">restart_alt</span>
+                            Restore Default
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="emailConfigModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="emailConfigModalTitle">
         <div class="modal-content bg-white rounded-[1.5rem] w-full max-w-3xl p-7 shadow-2xl border border-outline-variant/10">
             <div class="flex items-start justify-between gap-4 mb-6">
@@ -1696,6 +1847,121 @@ render_clinic_command_header(
     </div>
 
     <script>
+        (() => {
+            const dataNode = document.getElementById('emailNotificationTemplateData');
+            if (!dataNode) return;
+            const templates = JSON.parse(dataNode.textContent || '{}');
+            const form = document.getElementById('emailTemplateForm');
+            const fields = {
+                subject: document.getElementById('emailTemplateSubject'),
+                heading: document.getElementById('emailTemplateHeading'),
+                message: document.getElementById('emailTemplateMessage'),
+                button_label: document.getElementById('emailTemplateButtonLabel'),
+                footer: document.getElementById('emailTemplateFooter'),
+            };
+            const preview = {
+                subject: document.getElementById('emailTemplatePreviewSubject'),
+                heading: document.getElementById('emailTemplatePreviewHeading'),
+                message: document.getElementById('emailTemplatePreviewMessage'),
+                button_label: document.getElementById('emailTemplatePreviewButton'),
+                footer: document.getElementById('emailTemplatePreviewFooter'),
+            };
+            const unlockButton = document.getElementById('unlockEmailTemplateButton');
+            const saveButton = document.getElementById('saveEmailTemplateButton');
+            const lockStatus = document.getElementById('emailTemplateLockStatus');
+            const placeholders = document.getElementById('emailTemplatePlaceholders');
+            let activeTemplate = null;
+            let lastFocusedField = fields.message;
+            let unlocked = false;
+
+            const sampleValues = {
+                patient_name: 'Alex',
+                clinic_name: <?= json_encode((string) ($clinicProfile['system_name'] ?? 'CLINiQ Clinic')) ?>,
+                expiry_minutes: '60',
+            };
+            const interpolatePreview = (value) => String(value || '').replace(/\{\{([a-z_]+)\}\}/g, (token, key) => sampleValues[key] ?? token);
+            const renderPreview = () => {
+                Object.entries(fields).forEach(([key, field]) => {
+                    if (preview[key]) preview[key].textContent = interpolatePreview(field.value);
+                });
+            };
+            const setLocked = (locked) => {
+                unlocked = !locked;
+                Object.values(fields).forEach((field) => field.readOnly = locked);
+                saveButton.disabled = locked;
+                unlockButton.hidden = !locked;
+                lockStatus.textContent = locked ? 'Format is read-only.' : 'Editing is unlocked. Save to apply changes.';
+                lockStatus.closest('div').classList.toggle('border-amber-200', locked);
+                lockStatus.closest('div').classList.toggle('bg-amber-50', locked);
+                lockStatus.closest('div').classList.toggle('border-emerald-200', !locked);
+                lockStatus.closest('div').classList.toggle('bg-emerald-50', !locked);
+            };
+            const openTemplate = (key) => {
+                const definition = templates[key];
+                if (!definition) return;
+                activeTemplate = definition;
+                document.getElementById('emailTemplateKey').value = key;
+                document.getElementById('resetEmailTemplateKey').value = key;
+                document.getElementById('emailTemplateModalTitle').textContent = definition.label;
+                document.getElementById('emailTemplateModalDescription').textContent = definition.description;
+                document.getElementById('emailTemplateModalIcon').textContent = definition.icon;
+                document.getElementById('emailTemplateActionHint').textContent = definition.action_hint;
+                Object.entries(fields).forEach(([field, input]) => input.value = definition.template[field] || '');
+                placeholders.replaceChildren(...definition.allowed_placeholders.map((placeholder) => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'badge badge-in-progress';
+                    button.textContent = placeholder;
+                    button.dataset.insertEmailPlaceholder = placeholder;
+                    if (definition.required_placeholders.includes(placeholder)) button.title = 'Required placeholder';
+                    return button;
+                }));
+                lastFocusedField = fields.message;
+                setLocked(true);
+                renderPreview();
+                showModal('emailTemplateModal');
+            };
+
+            document.querySelectorAll('[data-edit-email-template]').forEach((button) => {
+                button.addEventListener('click', () => openTemplate(button.dataset.editEmailTemplate));
+            });
+            [document.getElementById('closeEmailTemplateButton'), document.getElementById('cancelEmailTemplateButton')].forEach((button) => {
+                button?.addEventListener('click', () => {
+                    setLocked(true);
+                    closeModal('emailTemplateModal');
+                });
+            });
+            unlockButton?.addEventListener('click', () => {
+                setLocked(false);
+                fields.subject.focus();
+            });
+            Object.values(fields).forEach((field) => {
+                field.addEventListener('focus', () => lastFocusedField = field);
+                field.addEventListener('input', renderPreview);
+            });
+            placeholders?.addEventListener('click', (event) => {
+                const button = event.target.closest('[data-insert-email-placeholder]');
+                if (!button || !unlocked || !lastFocusedField) return;
+                const start = lastFocusedField.selectionStart ?? lastFocusedField.value.length;
+                const end = lastFocusedField.selectionEnd ?? start;
+                lastFocusedField.setRangeText(button.dataset.insertEmailPlaceholder, start, end, 'end');
+                lastFocusedField.focus();
+                renderPreview();
+            });
+            form?.addEventListener('submit', (event) => {
+                if (!unlocked || !activeTemplate) {
+                    event.preventDefault();
+                    return;
+                }
+                const combined = Object.values(fields).map((field) => field.value).join('\n');
+                const missing = activeTemplate.required_placeholders.filter((placeholder) => !combined.includes(placeholder));
+                if (missing.length > 0) {
+                    event.preventDefault();
+                    if (typeof showToast === 'function') showToast(`Keep required placeholder: ${missing.join(', ')}`, 'warning');
+                }
+            });
+        })();
+
         (() => {
             const openButton = document.getElementById('openEmailConfigButton');
             const closeButton = document.getElementById('closeEmailConfigButton');
