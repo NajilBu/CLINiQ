@@ -9,6 +9,42 @@ require_once __DIR__ . '/../lib/phpmailer/src/SMTP.php';
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception as MailException;
 
+const CLINIQ_EMAIL_LOGO_CID = 'cliniq-clinic-logo';
+const CLINIQ_EMAIL_LOGO_PLACEHOLDER = '{{CLINIQ_EMAIL_LOGO}}';
+
+function cliniq_email_logo_path(): ?string
+{
+    $profile = clinic_profile_settings();
+    $relativePath = ltrim(str_replace('\\', '/', clinic_profile_logo_path($profile)), '/');
+    $publicRoot = realpath(dirname(__DIR__, 2) . '/public');
+    if ($publicRoot === false) {
+        return null;
+    }
+
+    $logoPath = realpath($publicRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relativePath));
+    if ($logoPath === false || !is_file($logoPath)) {
+        return null;
+    }
+
+    $normalizedRoot = rtrim(str_replace('\\', '/', $publicRoot), '/') . '/';
+    $normalizedLogo = str_replace('\\', '/', $logoPath);
+    if (!str_starts_with($normalizedLogo, $normalizedRoot)) {
+        return null;
+    }
+
+    return $logoPath;
+}
+
+function cliniq_email_logo_mime_type(string $logoPath): ?string
+{
+    return match (strtolower((string) pathinfo($logoPath, PATHINFO_EXTENSION))) {
+        'png' => 'image/png',
+        'jpg', 'jpeg' => 'image/jpeg',
+        'webp' => 'image/webp',
+        default => null,
+    };
+}
+
 /**
  * Send an HTML email via SMTP.
  * Config is read from the DB (mail_settings()) first; falls back to .env values.
@@ -38,6 +74,21 @@ function send_cliniq_email(string $toEmail, string $toName, string $subject, str
         $mail->setFrom($fromEmail, $fromName);
         $mail->addAddress($toEmail, $toName);
 
+        $logoMarkup = '';
+        $logoPath = cliniq_email_logo_path();
+        $logoMimeType = $logoPath !== null ? cliniq_email_logo_mime_type($logoPath) : null;
+        if ($logoPath !== null && $logoMimeType !== null) {
+            $mail->addEmbeddedImage(
+                $logoPath,
+                CLINIQ_EMAIL_LOGO_CID,
+                basename($logoPath),
+                PHPMailer::ENCODING_BASE64,
+                $logoMimeType
+            );
+            $logoMarkup = '<img src="cid:' . CLINIQ_EMAIL_LOGO_CID . '" alt="Clinic logo" width="56" height="56" style="display:block;width:56px;height:56px;object-fit:contain;border-radius:12px;background:#ffffff;">';
+        }
+        $htmlBody = str_replace(CLINIQ_EMAIL_LOGO_PLACEHOLDER, $logoMarkup, $htmlBody);
+
         $mail->isHTML(true);
         $mail->Subject = $subject;
         $mail->Body    = $htmlBody;
@@ -65,7 +116,12 @@ function cliniq_custom_email_body(string $message, string $clinicName): string
 <body style="margin:0;padding:0;background:#f4f6f3;font-family:Arial,sans-serif;color:#17261d;">
 <table width="100%" cellpadding="0" cellspacing="0" style="padding:28px 14px;"><tr><td align="center">
   <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:14px;overflow:hidden;">
-    <tr><td style="background:#1e6e4f;padding:22px 30px;color:#ffffff;font-size:21px;font-weight:800;">{$clinicSafe}</td></tr>
+    <tr><td style="background:#1e6e4f;padding:20px 30px;color:#ffffff;">
+      <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+        <td style="padding-right:14px;vertical-align:middle;">{{CLINIQ_EMAIL_LOGO}}</td>
+        <td style="vertical-align:middle;font-size:21px;font-weight:800;">{$clinicSafe}</td>
+      </tr></table>
+    </td></tr>
     <tr><td style="padding:30px;font-size:15px;line-height:1.7;color:#374a3d;">{$messageSafe}</td></tr>
     <tr><td style="padding:18px 30px;background:#f4f6f3;color:#7a8c80;font-size:12px;text-align:center;">Sent by {$clinicSafe}</td></tr>
   </table>
@@ -114,8 +170,13 @@ function cliniq_re_enrollment_email_body(
   <tr><td align="center">
     <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
       <tr><td style="background:{$primaryColor};padding:28px 36px;">
-        <p style="margin:0;font-size:13px;font-weight:700;letter-spacing:.08em;color:rgba(255,255,255,.7);text-transform:uppercase;">Patient Health Portal</p>
-        <h1 style="margin:6px 0 0;font-size:24px;font-weight:800;color:#fff;">{$clinicSafe}</h1>
+        <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+          <td style="padding-right:16px;vertical-align:middle;">{{CLINIQ_EMAIL_LOGO}}</td>
+          <td style="vertical-align:middle;">
+            <p style="margin:0;font-size:13px;font-weight:700;letter-spacing:.08em;color:rgba(255,255,255,.7);text-transform:uppercase;">Patient Health Portal</p>
+            <h1 style="margin:6px 0 0;font-size:24px;font-weight:800;color:#fff;">{$clinicSafe}</h1>
+          </td>
+        </tr></table>
       </td></tr>
       <tr><td style="padding:36px;">
         <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#6b7c73;text-transform:uppercase;letter-spacing:.06em;">New School Year</p>

@@ -2252,6 +2252,20 @@ body.file-preview-open {
     box-shadow: none;
 }
 
+.passport-contact-error {
+    margin: 0.4rem 0 0;
+    color: #b91c1c;
+    font-size: 0.75rem;
+    font-weight: 700;
+    line-height: 1.35;
+}
+
+.student-input[aria-invalid="true"],
+.student-select[aria-invalid="true"] {
+    border-color: #dc2626;
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+}
+
 @media (max-width: 760px) {
     .settings-logo-layout {
         grid-template-columns: 1fr;

@@ -193,7 +193,7 @@ function render_student_header(string $title, string $active = ''): void
                 }
             };
         </script>
-        <link href="../public/assets/css/app.css?v=cancel-icon-1" rel="stylesheet">
+        <link href="../public/assets/css/app.css?v=emergency-contact-1" rel="stylesheet">
         <link href="assets/css/student.css?v=passport-flow-1" rel="stylesheet">
     </head>
     <body class="student-body">

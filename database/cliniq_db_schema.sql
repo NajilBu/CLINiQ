@@ -132,6 +132,8 @@ CREATE TABLE patients (
   emergency_instructions TEXT NULL,
   guardian_or_contact_name VARCHAR(160) NULL,
   guardian_or_contact_number VARCHAR(50) NULL,
+  guardian_relationship VARCHAR(80) NULL,
+  secondary_contact_number VARCHAR(32) NULL,
   height_cm DECIMAL(5,2) NULL,
   weight_kg DECIMAL(5,2) NULL,
   bmi DECIMAL(4,1) NULL,

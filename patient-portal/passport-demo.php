@@ -5,6 +5,7 @@ require_once __DIR__ . '/../app/services/ApeWorkflow.php';
 require_once __DIR__ . '/../app/services/SystemSettings.php';
 
 ensure_ape_workflow_schema();
+ensure_alert_workflow_schema();
 $clinicProfile = clinic_profile_settings();
 $clinicLogoSrc = '../public/' . ltrim(clinic_profile_logo_path($clinicProfile), '/');
 
@@ -85,6 +86,8 @@ if ($token !== '') {
             pt.emergency_instructions,
             pt.guardian_or_contact_name AS guardian_name,
             pt.guardian_or_contact_number AS guardian_contact,
+            pt.guardian_relationship,
+            pt.secondary_contact_number,
             pt.emergency_token,
             pt.token_enabled,
             pt.updated_at AS patient_updated_at,
@@ -175,7 +178,7 @@ $instructions = pp_split_lines($patient['emergency_instructions'] ?? null, [
 $guardian = [
     'name' => (string) ($patient['guardian_name'] ?: 'Guardian not recorded'),
     'phone' => (string) ($patient['guardian_contact'] ?: 'No phone recorded'),
-    'relationship' => 'Guardian',
+    'relationship' => (string) ($patient['guardian_relationship'] ?: 'Guardian'),
 ];
 
 $reportSubmitted = false;

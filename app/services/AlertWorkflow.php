@@ -119,6 +119,8 @@ function ensure_passport_patient_columns(PDO $db): void
     $addColumn('allergies', 'TEXT NULL AFTER blood_type');
     $addColumn('existing_conditions', 'TEXT NULL AFTER allergies');
     $addColumn('medications', 'TEXT NULL AFTER existing_conditions');
+    $addColumn('guardian_relationship', 'VARCHAR(80) NULL AFTER guardian_or_contact_number');
+    $addColumn('secondary_contact_number', 'VARCHAR(32) NULL AFTER guardian_relationship');
     $addColumn('created_at', 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
     $addColumn('updated_at', 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP');
 }

@@ -298,11 +298,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!filter_var($toEmail, FILTER_VALIDATE_EMAIL)) {
             flash_message('error', 'Enter a valid email address to send the test to.');
         } else {
+            $profile = clinic_profile_settings();
             $sent = send_cliniq_email(
                 $toEmail,
                 'CLINiQ Admin',
                 '[CLINiQ] SMTP Test Email',
-                '<p style="font-family:sans-serif;">Your CLINiQ SMTP configuration is working correctly! This is a test message.</p>'
+                cliniq_custom_email_body(
+                    'Your CLINiQ SMTP configuration is working correctly. This is a test message.',
+                    (string) ($profile['system_name'] ?? 'CLINiQ')
+                )
             );
             if ($sent) {
                 flash_message('success', "Test email sent to {$toEmail}. Check the inbox.");
