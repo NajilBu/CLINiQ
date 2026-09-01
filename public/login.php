@@ -28,8 +28,8 @@ render_header('Login');
         grid-template-columns: 0.9fr 1fr;
         background: #ffffff;
         border: 1px solid oklch(92% .01 230 / .72);
-        border-radius: 1rem;
-        box-shadow: 0 1px 2px oklch(22% .03 250 / .04), 0 18px 42px oklch(22% .03 250 / .08);
+        border-radius: 1.65rem;
+        box-shadow: 0 2px 8px oklch(22% .03 250 / .04), 0 24px 64px oklch(22% .03 250 / .1);
     }
 
     .staff-login-panel {
@@ -135,7 +135,7 @@ render_header('Login');
         height: 2.65rem;
         padding: 0 0.9rem;
         border: 1px solid oklch(92% .01 230 / .88);
-        border-radius: 0.625rem;
+        border-radius: 0.85rem;
         background: #fbfcfa;
         color: #17261d;
         font-size: 0.8125rem;
@@ -181,6 +181,53 @@ render_header('Login');
         color: #64756a;
         font-size: 0.76rem;
         font-weight: 400;
+    }
+
+    .staff-login-form .btn-primary {
+        border-radius: 0.9rem;
+        box-shadow: 0 12px 26px rgba(var(--cliniq-shadow-rgb), 0.16);
+    }
+
+    body.is-electron-runtime .auth-wrap {
+        position: relative;
+        z-index: 1;
+    }
+
+    body.is-electron-runtime .staff-login-card {
+        border-color: color-mix(in srgb, var(--cliniq-outline) 72%, transparent);
+        border-radius: 2rem;
+        box-shadow:
+            0 2px 10px rgba(var(--cliniq-shadow-rgb), 0.04),
+            0 30px 80px rgba(var(--cliniq-shadow-rgb), 0.14);
+    }
+
+    body.is-electron-runtime .staff-login-panel {
+        background: linear-gradient(
+            155deg,
+            var(--cliniq-primary-hover),
+            color-mix(in srgb, var(--cliniq-primary-hover) 82%, var(--cliniq-accent))
+        );
+    }
+
+    body.is-electron-runtime .staff-login-form {
+        position: relative;
+        background: color-mix(in srgb, #ffffff 94%, var(--cliniq-primary-fixed));
+    }
+
+    body.is-electron-runtime .staff-login-input {
+        border-color: color-mix(in srgb, var(--cliniq-outline) 65%, transparent);
+        background: color-mix(in srgb, #ffffff 84%, var(--cliniq-surface-low));
+    }
+
+    body.is-electron-runtime .cliniq-entry-back {
+        border-radius: 1rem;
+        background: color-mix(in srgb, #ffffff 72%, var(--cliniq-primary-fixed));
+        box-shadow: 0 10px 28px rgba(var(--cliniq-shadow-rgb), 0.08);
+    }
+
+    body.is-electron-runtime .cliniq-entry-logo,
+    body.is-electron-runtime .staff-login-logo {
+        border-radius: 1rem;
     }
 
     @media (max-width: 760px) {

@@ -4,6 +4,54 @@
    ============================================================ */
 
 // ============================================================
+// DESKTOP RUNTIME BRIDGE
+// ============================================================
+
+function cliniqDesktopBridge() {
+    return window.cliniqDesktop && typeof window.cliniqDesktop.openExternal === 'function'
+        ? window.cliniqDesktop
+        : null;
+}
+
+document.addEventListener('click', (event) => {
+    const bridge = cliniqDesktopBridge();
+    if (!bridge || event.defaultPrevented || event.button !== 0) return;
+
+    const link = event.target.closest('a[href]');
+    if (!link || link.hasAttribute('download')) return;
+
+    let targetUrl;
+    try {
+        targetUrl = new URL(link.href, window.location.href);
+    } catch (error) {
+        return;
+    }
+
+    if (!['http:', 'https:', 'mailto:'].includes(targetUrl.protocol)) return;
+
+    let patientPortalBase = '';
+    try {
+        patientPortalBase = new URL(
+            String(document.body.dataset.cliniqPatientPortalUrl || ''),
+            window.location.href
+        ).href.replace(/\/$/, '');
+    } catch (error) {
+        patientPortalBase = '';
+    }
+    const isPatientPortalLink = patientPortalBase !== ''
+        && (targetUrl.href === patientPortalBase || targetUrl.href.startsWith(`${patientPortalBase}/`));
+    const shouldOpenExternally = link.matches('[data-open-external], [target="_blank"]')
+        || targetUrl.origin !== window.location.origin
+        || isPatientPortalLink;
+
+    if (!shouldOpenExternally) return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    bridge.openExternal(targetUrl.href);
+}, true);
+
+// ============================================================
 // MODAL SYSTEM
 // ============================================================
 

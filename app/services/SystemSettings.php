@@ -834,25 +834,106 @@ function default_cliniq_theme_key(): string
 
 function cliniq_theme_settings(): array
 {
-    $saved = cliniq_setting_read('clinic.theme', ['theme' => default_cliniq_theme_key()]);
-    return ['theme' => cliniq_normalize_theme_key((string) ($saved['theme'] ?? default_cliniq_theme_key()))];
+    $saved = cliniq_setting_read('clinic.theme', [
+        'theme' => default_cliniq_theme_key(),
+        'custom_color' => '#3F7D52',
+    ]);
+
+    return [
+        'theme' => cliniq_normalize_theme_key((string) ($saved['theme'] ?? default_cliniq_theme_key())),
+        'custom_color' => cliniq_normalize_hex_color((string) ($saved['custom_color'] ?? '#3F7D52')) ?? '#3F7D52',
+    ];
 }
 
 function cliniq_normalize_theme_key(string $theme): string
 {
-    return array_key_exists($theme, cliniq_theme_presets()) ? $theme : default_cliniq_theme_key();
+    return $theme === 'custom' || array_key_exists($theme, cliniq_theme_presets())
+        ? $theme
+        : default_cliniq_theme_key();
 }
 
-function save_cliniq_theme_settings(string $theme, ?int $updatedBy = null): void
+function cliniq_normalize_hex_color(string $color): ?string
 {
-    cliniq_setting_write('clinic.theme', ['theme' => cliniq_normalize_theme_key($theme)], $updatedBy);
+    $color = trim($color);
+    if (!preg_match('/^#[0-9a-fA-F]{6}$/', $color)) {
+        return null;
+    }
+
+    return strtoupper($color);
+}
+
+function cliniq_hex_rgb(string $color): array
+{
+    $hex = ltrim($color, '#');
+    return [
+        hexdec(substr($hex, 0, 2)),
+        hexdec(substr($hex, 2, 2)),
+        hexdec(substr($hex, 4, 2)),
+    ];
+}
+
+function cliniq_mix_hex_colors(string $foreground, string $background, float $foregroundWeight): string
+{
+    $foregroundRgb = cliniq_hex_rgb($foreground);
+    $backgroundRgb = cliniq_hex_rgb($background);
+    $foregroundWeight = max(0, min(1, $foregroundWeight));
+    $mixed = [];
+
+    for ($index = 0; $index < 3; $index++) {
+        $mixed[] = (int) round(
+            ($foregroundRgb[$index] * $foregroundWeight)
+            + ($backgroundRgb[$index] * (1 - $foregroundWeight))
+        );
+    }
+
+    return sprintf('#%02X%02X%02X', $mixed[0], $mixed[1], $mixed[2]);
+}
+
+function cliniq_custom_theme(string $color): array
+{
+    $primary = cliniq_normalize_hex_color($color) ?? '#3F7D52';
+    $primaryContainer = cliniq_mix_hex_colors($primary, '#000000', 0.78);
+    $primaryRgb = cliniq_hex_rgb($primary);
+    $shadowRgb = cliniq_hex_rgb($primaryContainer);
+
+    return [
+        'label' => 'Custom',
+        'primary' => $primary,
+        'primary_fixed' => cliniq_mix_hex_colors($primary, '#FFFFFF', 0.14),
+        'primary_container' => $primaryContainer,
+        'surface' => cliniq_mix_hex_colors($primary, '#FFFFFF', 0.03),
+        'surface_container_low' => cliniq_mix_hex_colors($primary, '#FFFFFF', 0.07),
+        'outline_variant' => cliniq_mix_hex_colors($primary, '#FFFFFF', 0.24),
+        'accent' => cliniq_mix_hex_colors($primary, '#FFFFFF', 0.11),
+        'focus_rgb' => implode(', ', $primaryRgb),
+        'shadow_rgb' => implode(', ', $shadowRgb),
+    ];
+}
+
+function save_cliniq_theme_settings(string $theme, ?int $updatedBy = null, string $customColor = '#3F7D52'): void
+{
+    $theme = cliniq_normalize_theme_key($theme);
+    $customColor = cliniq_normalize_hex_color($customColor);
+    if ($theme === 'custom' && $customColor === null) {
+        throw new InvalidArgumentException('Choose a valid custom color before applying the theme.');
+    }
+
+    cliniq_setting_write('clinic.theme', [
+        'theme' => $theme,
+        'custom_color' => $customColor ?? '#3F7D52',
+    ], $updatedBy);
 }
 
 function active_cliniq_theme(): array
 {
     $themes = cliniq_theme_presets();
-    $key = cliniq_theme_settings()['theme'];
-    return ['key' => $key] + $themes[$key];
+    $settings = cliniq_theme_settings();
+    $key = $settings['theme'];
+    $theme = $key === 'custom'
+        ? cliniq_custom_theme($settings['custom_color'])
+        : $themes[$key];
+
+    return ['key' => $key] + $theme;
 }
 
 // ── Mail / SMTP Settings ─────────────────────────────────────────────────────

@@ -80,8 +80,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             header('Location: index.php?tab=general');
             exit;
         }
-        save_cliniq_theme_settings((string) ($_POST['theme'] ?? default_cliniq_theme_key()), $updatedBy);
-        flash_message('success', 'System color theme updated.');
+        try {
+            save_cliniq_theme_settings(
+                (string) ($_POST['theme'] ?? default_cliniq_theme_key()),
+                $updatedBy,
+                (string) ($_POST['custom_color'] ?? '#3F7D52')
+            );
+            flash_message('success', 'System color theme updated.');
+        } catch (InvalidArgumentException $e) {
+            flash_message('warning', $e->getMessage());
+        }
         header('Location: index.php?tab=general');
         exit;
     }
@@ -388,7 +396,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $clinicProfile = clinic_profile_settings();
 $themePresets = cliniq_theme_presets();
-$activeTheme = cliniq_theme_settings()['theme'];
+$themeSettings = cliniq_theme_settings();
+$activeTheme = $themeSettings['theme'];
+$customThemeColor = $themeSettings['custom_color'];
 $staffProfiles = staff_profiles();
 $staffRoles = staff_profile_roles();
 $settings = risk_settings();
@@ -616,6 +626,24 @@ render_clinic_command_header(
                                     <span><?= e($theme['label']) ?></span>
                                 </label>
                             <?php endforeach; ?>
+                            <label class="settings-theme-option settings-theme-custom-option <?= $activeTheme === 'custom' ? 'active' : '' ?>" id="customThemeOption">
+                                <input type="radio" name="theme" value="custom" id="customThemeRadio" <?= $activeTheme === 'custom' ? 'checked' : '' ?> <?= !$canManageSettings ? 'disabled' : '' ?>>
+                                <span class="settings-theme-swatch settings-theme-custom-swatch" id="customThemeSwatch" style="--theme-swatch: <?= e($customThemeColor) ?>">
+                                    <span class="material-symbols-outlined">check</span>
+                                    <input
+                                        type="color"
+                                        name="custom_color"
+                                        id="customThemeColor"
+                                        class="settings-theme-color-input"
+                                        value="<?= e($customThemeColor) ?>"
+                                        aria-label="Choose a custom theme color"
+                                        title="Choose a custom color"
+                                        <?= !$canManageSettings ? 'disabled' : '' ?>
+                                    >
+                                </span>
+                                <span>Custom</span>
+                                <span class="material-symbols-outlined settings-theme-picker-icon" aria-hidden="true">colorize</span>
+                            </label>
                         </div>
                         <div class="flex justify-end mt-5">
                             <button class="btn btn-primary" <?= !$canManageSettings ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Apply color theme?" data-confirm-message="This will update the CLINiQ interface theme for all pages using the shared shell." data-confirm-toast="Applying theme...">
@@ -624,6 +652,32 @@ render_clinic_command_header(
                             </button>
                         </div>
                     </form>
+                    <script>
+                        (() => {
+                            const picker = document.getElementById('customThemeColor');
+                            const radio = document.getElementById('customThemeRadio');
+                            const swatch = document.getElementById('customThemeSwatch');
+                            const option = document.getElementById('customThemeOption');
+                            if (!picker || !radio || !swatch || !option) return;
+
+                            const selectCustomTheme = () => {
+                                radio.checked = true;
+                                radio.dispatchEvent(new Event('change', { bubbles: true }));
+                            };
+
+                            picker.addEventListener('pointerdown', selectCustomTheme);
+                            picker.addEventListener('input', () => {
+                                selectCustomTheme();
+                                swatch.style.setProperty('--theme-swatch', picker.value);
+                            });
+                            option.addEventListener('click', (event) => {
+                                if (event.target === picker || picker.disabled) return;
+                                event.preventDefault();
+                                selectCustomTheme();
+                                picker.click();
+                            });
+                        })();
+                    </script>
                 </section>
             </div>
 

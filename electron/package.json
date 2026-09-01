@@ -1,0 +1,50 @@
+{
+  "name": "cliniq-clinic-desktop",
+  "version": "0.1.0",
+  "description": "Secure Electron desktop shell for the CLINiQ clinic interface.",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --enable-logging",
+    "pack": "electron-builder --dir",
+    "build:win": "electron-builder --win nsis"
+  },
+  "build": {
+    "appId": "ph.edu.plpasig.cliniq.clinic",
+    "productName": "CLINiQ Clinic",
+    "asar": true,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "offline.html",
+      "offline.css",
+      "offline.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../public/assets/img/clinic-logo.png",
+        "to": "clinic-logo.png"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  },
+  "devDependencies": {
+    "electron": "^44.1.0",
+    "electron-builder": "^26.15.3"
+  }
+}

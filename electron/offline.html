@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:">
+    <title>CLINiQ Clinic — Server unavailable</title>
+    <link rel="stylesheet" href="offline.css">
+</head>
+<body>
+    <main class="offline-shell">
+        <section class="offline-card" aria-labelledby="offlineTitle">
+            <div class="offline-mark" aria-hidden="true">Q</div>
+            <p class="offline-eyebrow">CLINiQ Clinic</p>
+            <h1 id="offlineTitle">Clinic server is unavailable</h1>
+            <p class="offline-copy">Start Apache and MySQL in XAMPP, then try connecting again.</p>
+
+            <div class="offline-status" role="status" aria-live="polite">
+                <span class="status-dot" id="statusDot"></span>
+                <span id="connectionStatus">Waiting for the local clinic server</span>
+            </div>
+
+            <button type="button" id="retryButton">Retry Connection</button>
+            <p class="offline-address" id="clinicAddress"></p>
+        </section>
+    </main>
+    <script src="offline.js"></script>
+</body>
+</html>
