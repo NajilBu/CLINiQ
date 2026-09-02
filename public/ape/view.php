@@ -663,6 +663,44 @@ render_header('APE Record - ' . $fullName);
         </div>
     </div>
 
+    <?php
+    $hasApeBatch = !empty($record['schedule_batch_id']) && ($record['batch_status'] ?? '') !== 'Cancelled';
+    $batchHasPassed = $hasApeBatch && strtotime((string) $record['batch_end_at']) < time();
+    $batchWasMissed = $batchHasPassed && ($record['patient_vitals_status'] ?? 'Not Started') === 'Not Started';
+    $batchDisplayStatus = !$hasApeBatch ? 'Unscheduled' : ($batchWasMissed ? 'Missed' : ($batchHasPassed ? 'Completed' : 'Scheduled'));
+    $batchStatusClass = !$hasApeBatch ? 'badge-pending' : ($batchWasMissed ? 'badge-critical' : ($batchHasPassed ? 'badge-completed' : 'badge-in-progress'));
+    ?>
+    <section class="clinic-card p-5 md:p-6">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
+            <div class="flex items-start gap-4">
+                <span class="w-11 h-11 rounded-2xl bg-primary-fixed text-primary flex items-center justify-center material-symbols-outlined shrink-0"><?= $hasApeBatch ? 'event_available' : 'event_busy' ?></span>
+                <div>
+                    <p class="text-[10px] font-black text-primary uppercase tracking-widest mb-1">Assigned APE Schedule</p>
+                    <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1"><?= $hasApeBatch ? e($record['batch_name']) : 'No batch assigned' ?></h2>
+                    <p class="text-xs font-bold text-slate-500 mb-0"><?= $hasApeBatch ? e($record['batch_patient_category']) : 'Assign this patient from Settings > APE Cycle.' ?></p>
+                </div>
+            </div>
+            <?php if ($hasApeBatch): ?>
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 min-w-0 lg:min-w-[32rem]">
+                    <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                        <p class="clinic-label mb-1">Exam Date</p>
+                        <strong class="text-sm text-slate-800"><?= e(date('F j, Y', strtotime($record['batch_schedule_date']))) ?></strong>
+                    </div>
+                    <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                        <p class="clinic-label mb-1">Time</p>
+                        <strong class="text-sm text-slate-800"><?= e(date('g:i A', strtotime($record['batch_start_time']))) ?>–<?= e(date('g:i A', strtotime($record['batch_end_time']))) ?></strong>
+                    </div>
+                    <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 col-span-2 sm:col-span-1">
+                        <p class="clinic-label mb-1">Status</p>
+                        <span class="badge <?= $batchStatusClass ?>"><?= e($batchDisplayStatus) ?></span>
+                    </div>
+                </div>
+            <?php else: ?>
+                <span class="badge <?= $batchStatusClass ?>"><?= e($batchDisplayStatus) ?></span>
+            <?php endif; ?>
+        </div>
+    </section>
+
     <section class="clinic-card p-5 md:p-6 space-y-6">
         <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
             <?php foreach (ape_workflow_steps() as $i => $step):

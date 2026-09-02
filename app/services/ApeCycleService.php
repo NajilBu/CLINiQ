@@ -15,10 +15,10 @@ function ensure_ape_cycle_schema(): void
     if ((int) $table !== 1 || (int) $column !== 1) {
         throw new RuntimeException('APE cycle schema is missing. Run database/migrations/20260811_create_ape_cycles.sql.');
     }
-    // Auto-add exam_schedule_date column if missing.
-    $scheduleCol = $db->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ape_cycles' AND COLUMN_NAME = 'exam_schedule_date'")->fetchColumn();
-    if ((int) $scheduleCol === 0) {
-        $db->exec("ALTER TABLE ape_cycles ADD COLUMN exam_schedule_date DATE NULL AFTER compliance_end");
+    $batchTable = $db->query("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ape_schedule_batches'")->fetchColumn();
+    $batchColumn = $db->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ape_records' AND COLUMN_NAME = 'schedule_batch_id'")->fetchColumn();
+    if ((int) $batchTable !== 1 || (int) $batchColumn !== 1) {
+        throw new RuntimeException('APE batch scheduling is missing. Run database/migrations/20260902_create_ape_schedule_batches.sql.');
     }
     $ready = true;
 }
@@ -252,6 +252,305 @@ function update_ape_cycle_schedule(int $cycleId, string $examScheduleDate): void
     $stmt->execute([$examDate, $cycleId]);
     if ($stmt->rowCount() !== 1) {
         throw new RuntimeException('The exam schedule could not be updated. Make sure the cycle is still active.');
+    }
+}
+
+function ape_schedule_batch_categories(): array
+{
+    return ['Student', 'Faculty', 'School Personnel'];
+}
+
+function normalize_ape_batch_time(string $value, string $label): string
+{
+    $value = trim($value);
+    $time = DateTimeImmutable::createFromFormat('!H:i', $value);
+    if (!$time || $time->format('H:i') !== $value) {
+        throw new InvalidArgumentException("Select a valid {$label}.");
+    }
+    return $time->format('H:i:s');
+}
+
+function ape_schedule_batches(int $cycleId): array
+{
+    ensure_ape_cycle_schema();
+    $stmt = auth_db()->prepare("
+        SELECT b.*,
+               COUNT(ar.ape_id) AS assigned_count,
+               TRIM(CONCAT_WS(' ', creator.first_name, creator.middle_name, creator.last_name)) AS created_by_name
+        FROM ape_schedule_batches b
+        LEFT JOIN ape_records ar ON ar.schedule_batch_id = b.batch_id
+        LEFT JOIN people creator ON creator.id = b.created_by_person_id
+        WHERE b.ape_cycle_id = ?
+        GROUP BY b.batch_id
+        ORDER BY b.schedule_date, b.start_time, b.batch_id
+    ");
+    $stmt->execute([$cycleId]);
+    return $stmt->fetchAll();
+}
+
+function ape_schedule_candidates(int $cycleId): array
+{
+    ensure_ape_cycle_schema();
+    $stmt = auth_db()->prepare("
+        SELECT ar.ape_id,
+               p.id_number,
+               TRIM(CONCAT_WS(' ', p.first_name, p.middle_name, p.last_name)) AS patient_name,
+               CASE
+                   WHEN s.person_id IS NOT NULL THEN 'Student'
+                   WHEN se.role_classification = 'Faculty' THEN 'Faculty'
+                   ELSE 'School Personnel'
+               END AS patient_category,
+               COALESCE(pr.program_code, '') AS program_code,
+               COALESCE(s.year_level, '') AS year_level,
+               COALESCE(s.section, '') AS section,
+               COALESCE(d.department_code, staff_department.department_code, '') AS department_code,
+               COALESCE(d.department_name, staff_department.department_name, '') AS department_name
+        FROM ape_records ar
+        JOIN patients pt ON pt.person_id = ar.patient_id
+        JOIN people p ON p.id = pt.person_id
+        JOIN accounts a ON a.person_id = pt.person_id AND a.account_status = 'active'
+        LEFT JOIN students s ON s.person_id = pt.person_id
+        LEFT JOIN programs pr ON pr.id = s.program_id
+        LEFT JOIN school_employees se ON se.person_id = pt.person_id
+        LEFT JOIN departments d ON d.id = se.department_id
+        LEFT JOIN clinic_staff cs ON cs.person_id = pt.person_id
+        LEFT JOIN departments staff_department ON staff_department.id = cs.department_id
+        WHERE ar.ape_cycle_id = ?
+          AND ar.schedule_batch_id IS NULL
+        ORDER BY patient_category, p.last_name, p.first_name, ar.ape_id
+    ");
+    $stmt->execute([$cycleId]);
+    return $stmt->fetchAll();
+}
+
+function ape_schedule_candidate_groups(int $cycleId): array
+{
+    $groups = [];
+    foreach (ape_schedule_candidates($cycleId) as $candidate) {
+        $category = (string) $candidate['patient_category'];
+        if ($category === 'Student') {
+            $program = trim((string) $candidate['program_code']) ?: 'No Program';
+            $year = trim((string) $candidate['year_level']) ?: 'No Year';
+            $section = trim((string) $candidate['section']) ?: 'No Section';
+            $identity = [$category, $program, $year, $section];
+            $label = $program . ' • Year ' . $year . ' • Section ' . $section;
+            $detail = 'Complete student section';
+        } else {
+            $departmentCode = trim((string) $candidate['department_code']);
+            $departmentName = trim((string) $candidate['department_name']);
+            $office = $departmentCode ?: ($departmentName ?: 'Unassigned Office');
+            $identity = [$category, $office];
+            $label = $office;
+            $detail = $departmentName !== '' && $departmentName !== $departmentCode
+                ? $departmentName
+                : $category . ' department or office';
+        }
+
+        $key = strtolower(str_replace(' ', '_', $category)) . ':' . hash('sha256', implode("\0", $identity));
+        if (!isset($groups[$key])) {
+            $groups[$key] = [
+                'group_key' => $key,
+                'patient_category' => $category,
+                'group_label' => $label,
+                'group_detail' => $detail,
+                'patient_count' => 0,
+                'ape_ids' => [],
+            ];
+        }
+        $groups[$key]['patient_count']++;
+        $groups[$key]['ape_ids'][] = (int) $candidate['ape_id'];
+    }
+
+    $groups = array_values($groups);
+    usort($groups, static fn(array $a, array $b): int => [
+        $a['patient_category'],
+        $a['group_label'],
+    ] <=> [
+        $b['patient_category'],
+        $b['group_label'],
+    ]);
+    return $groups;
+}
+
+function create_ape_schedule_batch(array $input, ?int $actorPersonId): array
+{
+    ensure_ape_cycle_schema();
+    $cycleId = (int) ($input['ape_cycle_id'] ?? 0);
+    $batchName = trim((string) ($input['batch_name'] ?? ''));
+    $category = trim((string) ($input['patient_category'] ?? ''));
+    $scheduleDate = normalize_ape_cycle_date((string) ($input['schedule_date'] ?? ''), 'batch schedule');
+    $startTime = normalize_ape_batch_time((string) ($input['start_time'] ?? ''), 'start time');
+    $endTime = normalize_ape_batch_time((string) ($input['end_time'] ?? ''), 'end time');
+    $capacity = (int) ($input['capacity'] ?? 0);
+    $selectedGroupKeys = array_values(array_unique(array_filter(array_map('strval', (array) ($input['group_keys'] ?? [])))));
+
+    if ($cycleId < 1) {
+        throw new InvalidArgumentException('Select an active APE cycle.');
+    }
+    if ($batchName === '' || mb_strlen($batchName) > 120) {
+        throw new InvalidArgumentException('Enter a batch name up to 120 characters.');
+    }
+    if (!in_array($category, ape_schedule_batch_categories(), true)) {
+        throw new InvalidArgumentException('Select Student, Faculty, or School Personnel for this batch.');
+    }
+    if ($startTime >= $endTime) {
+        throw new InvalidArgumentException('The batch end time must be later than its start time.');
+    }
+    if ($capacity < 1 || $capacity > 5000) {
+        throw new InvalidArgumentException('Enter a patient limit from 1 to 5000.');
+    }
+    if (!$selectedGroupKeys) {
+        throw new InvalidArgumentException('Select at least one section, department, or office for this batch.');
+    }
+
+    $availableGroups = [];
+    foreach (ape_schedule_candidate_groups($cycleId) as $group) {
+        $availableGroups[$group['group_key']] = $group;
+    }
+    $selectedIds = [];
+    foreach ($selectedGroupKeys as $groupKey) {
+        $group = $availableGroups[$groupKey] ?? null;
+        if (!$group) {
+            throw new RuntimeException('A selected section, department, or office is no longer available.');
+        }
+        if (($group['patient_category'] ?? '') !== $category) {
+            throw new InvalidArgumentException('A batch cannot mix Students, Faculty, and School Personnel.');
+        }
+        $selectedIds = array_merge($selectedIds, $group['ape_ids']);
+    }
+    $selectedIds = array_values(array_unique(array_map('intval', $selectedIds)));
+    if (count($selectedIds) > $capacity) {
+        throw new InvalidArgumentException('The selected groups exceed the patient limit.');
+    }
+
+    $db = auth_db();
+    $db->beginTransaction();
+    try {
+        $cycle = $db->prepare("SELECT * FROM ape_cycles WHERE ape_cycle_id = ? AND status = 'Active' FOR UPDATE");
+        $cycle->execute([$cycleId]);
+        $cycleRow = $cycle->fetch();
+        if (!$cycleRow) {
+            throw new RuntimeException('Only an active APE cycle can receive schedule batches.');
+        }
+        if ($scheduleDate < $cycleRow['compliance_start'] || $scheduleDate > $cycleRow['compliance_end']) {
+            throw new InvalidArgumentException('The batch date must be within the APE compliance period.');
+        }
+
+        $overlap = $db->prepare("
+            SELECT batch_name, patient_category
+            FROM ape_schedule_batches
+            WHERE ape_cycle_id = ? AND schedule_date = ? AND status = 'Scheduled'
+              AND patient_category <> ? AND start_time < ? AND end_time > ?
+            LIMIT 1
+        ");
+        $overlap->execute([$cycleId, $scheduleDate, $category, $endTime, $startTime]);
+        $overlappingBatch = $overlap->fetch();
+        if ($overlappingBatch) {
+            throw new InvalidArgumentException(sprintf(
+                '%s cannot overlap with %s because Student, Faculty, and School Personnel schedules must use separate times.',
+                $batchName,
+                $overlappingBatch['batch_name']
+            ));
+        }
+
+        $placeholders = implode(',', array_fill(0, count($selectedIds), '?'));
+        $candidate = $db->prepare("
+            SELECT ar.ape_id,
+                   CASE
+                       WHEN s.person_id IS NOT NULL THEN 'Student'
+                       WHEN se.role_classification = 'Faculty' THEN 'Faculty'
+                       ELSE 'School Personnel'
+                   END AS patient_category
+            FROM ape_records ar
+            JOIN patients pt ON pt.person_id = ar.patient_id
+            JOIN accounts a ON a.person_id = pt.person_id AND a.account_status = 'active'
+            LEFT JOIN students s ON s.person_id = pt.person_id
+            LEFT JOIN school_employees se ON se.person_id = pt.person_id
+            WHERE ar.ape_cycle_id = ? AND ar.schedule_batch_id IS NULL
+              AND ar.ape_id IN ({$placeholders})
+            FOR UPDATE
+        ");
+        $candidate->execute(array_merge([$cycleId], $selectedIds));
+        $candidateRows = $candidate->fetchAll();
+        if (count($candidateRows) !== count($selectedIds)) {
+            throw new RuntimeException('One or more selected patients are inactive, already assigned, or no longer available.');
+        }
+        foreach ($candidateRows as $candidateRow) {
+            if (($candidateRow['patient_category'] ?? '') !== $category) {
+                throw new InvalidArgumentException('A batch cannot mix Students, Faculty, and School Personnel.');
+            }
+        }
+
+        $insert = $db->prepare("
+            INSERT INTO ape_schedule_batches
+                (ape_cycle_id, batch_name, patient_category, schedule_date, start_time, end_time, capacity, created_by_person_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ");
+        $insert->execute([$cycleId, $batchName, $category, $scheduleDate, $startTime, $endTime, $capacity, $actorPersonId]);
+        $batchId = (int) $db->lastInsertId();
+
+        $assign = $db->prepare("
+            UPDATE ape_records
+            SET schedule_batch_id = ?,
+                workflow_status = CASE WHEN workflow_status = 'Registered' THEN 'Batch Assigned' ELSE workflow_status END
+            WHERE ape_cycle_id = ? AND schedule_batch_id IS NULL AND ape_id IN ({$placeholders})
+        ");
+        $assign->execute(array_merge([$batchId, $cycleId], $selectedIds));
+        if ($assign->rowCount() !== count($selectedIds)) {
+            throw new RuntimeException('Not all selected patients could be assigned. No batch was saved.');
+        }
+
+        $log = $db->prepare("
+            INSERT INTO ape_activity_logs (ape_id, performed_by_person_id, action, notes)
+            SELECT ape_id, ?, 'Assigned APE schedule batch', ?
+            FROM ape_records WHERE schedule_batch_id = ?
+        ");
+        $log->execute([$actorPersonId, "{$batchName}: {$scheduleDate} {$startTime}-{$endTime}", $batchId]);
+        $db->commit();
+        return ['batch_id' => $batchId, 'batch_name' => $batchName, 'assigned_count' => count($selectedIds)];
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        throw $e;
+    }
+}
+
+function cancel_ape_schedule_batch(int $batchId, int $cycleId, ?int $actorPersonId): void
+{
+    ensure_ape_cycle_schema();
+    $db = auth_db();
+    $db->beginTransaction();
+    try {
+        $batch = $db->prepare("
+            SELECT batch_name FROM ape_schedule_batches
+            WHERE batch_id = ? AND ape_cycle_id = ? AND status = 'Scheduled'
+            FOR UPDATE
+        ");
+        $batch->execute([$batchId, $cycleId]);
+        $batchName = $batch->fetchColumn();
+        if ($batchName === false) {
+            throw new RuntimeException('Only a scheduled batch can be cancelled.');
+        }
+        $log = $db->prepare("
+            INSERT INTO ape_activity_logs (ape_id, performed_by_person_id, action, notes)
+            SELECT ape_id, ?, 'APE schedule batch cancelled', ?
+            FROM ape_records WHERE schedule_batch_id = ?
+        ");
+        $log->execute([$actorPersonId, "Batch {$batchName} was cancelled; the patient can be assigned again.", $batchId]);
+        $db->prepare("
+            UPDATE ape_records
+            SET schedule_batch_id = NULL,
+                workflow_status = CASE WHEN workflow_status = 'Batch Assigned' THEN 'Registered' ELSE workflow_status END
+            WHERE schedule_batch_id = ?
+        ")->execute([$batchId]);
+        $db->prepare("UPDATE ape_schedule_batches SET status = 'Cancelled' WHERE batch_id = ?")->execute([$batchId]);
+        $db->commit();
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        throw $e;
     }
 }
 

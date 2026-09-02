@@ -101,6 +101,10 @@ function ape_record_queue(array $record): string
 
 function ape_next_action(array $record): array
 {
+    if (empty($record['schedule_batch_id']) || ($record['batch_status'] ?? '') !== 'Scheduled') {
+        return ['label' => 'Assign APE Schedule', 'icon' => 'calendar_add_on'];
+    }
+
     return match (ape_record_queue($record)) {
         'examination' => (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed'
             ? ['label' => 'Wait for Patient Vitals', 'icon' => 'monitor_heart']
@@ -230,12 +234,13 @@ function ape_priority_badge(array $record): array
         return ['label' => 'Clinical', 'class' => 'badge-high'];
     }
 
-    // If an exam schedule date is set and has passed and the patient hasn't confirmed vitals, mark as Missed.
-    $examDate = $record['exam_schedule_date'] ?? null;
+    // A patient is missed only after their own assigned batch has ended.
+    $batchEnd = $record['batch_end_at'] ?? null;
     if (
-        $examDate
+        $batchEnd
+        && ($record['batch_status'] ?? '') === 'Scheduled'
         && ($record['patient_vitals_status'] ?? 'Not Started') === 'Not Started'
-        && date('Y-m-d') > $examDate
+        && time() > strtotime($batchEnd)
     ) {
         return ['label' => 'Missed', 'class' => 'badge-critical'];
     }
@@ -260,6 +265,13 @@ function ape_waiting_label(array $record): string
 
 function ape_next_action_card(array $record): array
 {
+    if (empty($record['schedule_batch_id']) || ($record['batch_status'] ?? '') !== 'Scheduled') {
+        return [
+            'title' => 'Assign this patient to an APE batch',
+            'body' => 'The patient is waiting for a schedule. Vitals and BMI entry remains locked until a scheduled batch is assigned.',
+        ];
+    }
+
     return match (ape_record_queue($record)) {
         'examination' => [
             'title' => (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed' ? 'Wait for patient vitals and BMI confirmation' : 'Record the examination'),
@@ -295,6 +307,9 @@ function ape_next_action_card(array $record): array
 
 function ape_missing_item(array $record): string
 {
+    if (empty($record['schedule_batch_id']) || ($record['batch_status'] ?? '') !== 'Scheduled') {
+        return 'No APE schedule assigned';
+    }
     if (!empty($record['missing_items'])) {
         return $record['missing_items'];
     }
@@ -377,7 +392,7 @@ function ensure_ape_workflow_schema(): void
     }
 
     $db = auth_db();
-    foreach (['ape_cycles', 'ape_records', 'ape_requirements', 'ape_documents', 'ape_findings', 'ape_activity_logs'] as $table) {
+    foreach (['ape_cycles', 'ape_schedule_batches', 'ape_records', 'ape_requirements', 'ape_documents', 'ape_findings', 'ape_activity_logs'] as $table) {
         $stmt = $db->prepare('
             SELECT COUNT(*)
             FROM information_schema.TABLES
@@ -419,6 +434,16 @@ function ape_record_select_sql(): string
         SELECT
             ar.*,
             ar.ape_id AS id,
+            batch.batch_name,
+            batch.patient_category AS batch_patient_category,
+            batch.schedule_date AS batch_schedule_date,
+            batch.start_time AS batch_start_time,
+            batch.end_time AS batch_end_time,
+            batch.status AS batch_status,
+            CASE
+                WHEN batch.batch_id IS NULL THEN NULL
+                ELSE CONCAT(batch.schedule_date, ' ', batch.end_time)
+            END AS batch_end_at,
             p.first_name,
             p.middle_name,
             p.last_name,
@@ -524,16 +549,25 @@ function ape_record_select_sql(): string
         LEFT JOIN people reviewer ON reviewer.id = reviewer_staff.person_id
         LEFT JOIN appointments ap ON ap.appointment_id = ar.appointment_id
         LEFT JOIN ape_cycles ac ON ac.ape_cycle_id = ar.ape_cycle_id
+        LEFT JOIN ape_schedule_batches batch ON batch.batch_id = ar.schedule_batch_id
     ";
 }
 
-function ape_fetch_records(string $search = '', ?int $limit = null): array
+function ape_fetch_records(string $search = '', ?int $limit = null, ?string $scheduleDate = null, ?int $scheduleBatchId = null): array
 {
     $sql = ape_record_select_sql();
     $params = [];
+    $conditions = [];
+    if ($scheduleBatchId !== null) {
+        $conditions[] = "batch.batch_id = ? AND batch.status = 'Scheduled'";
+        $params[] = $scheduleBatchId;
+    } elseif ($scheduleDate !== null) {
+        $conditions[] = "batch.schedule_date = ? AND batch.status = 'Scheduled'";
+        $params[] = $scheduleDate;
+    }
     if ($search !== '') {
-        $sql .= "
-            WHERE p.first_name LIKE ?
+        $conditions[] = "(
+               p.first_name LIKE ?
                OR p.last_name LIKE ?
                OR p.id_number LIKE ?
                OR pr.program_code LIKE ?
@@ -543,9 +577,12 @@ function ape_fetch_records(string $search = '', ?int $limit = null): array
                     WHERE search_document.ape_id = ar.ape_id
                       AND search_document.document_type LIKE ?
                )
-        ";
+            )";
         $term = '%' . $search . '%';
-        $params = array_fill(0, 6, $term);
+        $params = array_merge($params, array_fill(0, 6, $term));
+    }
+    if ($conditions) {
+        $sql .= ' WHERE ' . implode(' AND ', $conditions);
     }
     $sql .= " ORDER BY ar.updated_at DESC, ar.created_at DESC";
     if ($limit !== null) {

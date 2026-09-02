@@ -488,6 +488,7 @@ CREATE TABLE ape_cycles (
   academic_year VARCHAR(20) NOT NULL,
   compliance_start DATE NOT NULL,
   compliance_end DATE NOT NULL,
+  exam_schedule_date DATE NULL,
   status ENUM('Active', 'Closed', 'Archived') NOT NULL DEFAULT 'Active',
   started_by_person_id BIGINT UNSIGNED NULL,
   started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -515,9 +516,36 @@ CREATE TABLE ape_cycles (
   INDEX idx_ape_cycles_archived_by (archived_by_person_id)
 );
 
+CREATE TABLE ape_schedule_batches (
+  batch_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  ape_cycle_id BIGINT UNSIGNED NOT NULL,
+  batch_name VARCHAR(120) NOT NULL,
+  patient_category ENUM('Student', 'Faculty', 'School Personnel') NOT NULL,
+  schedule_date DATE NOT NULL,
+  start_time TIME NOT NULL,
+  end_time TIME NOT NULL,
+  capacity SMALLINT UNSIGNED NOT NULL,
+  status ENUM('Scheduled', 'Completed', 'Cancelled') NOT NULL DEFAULT 'Scheduled',
+  created_by_person_id BIGINT UNSIGNED NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT chk_ape_batch_time CHECK (start_time < end_time),
+  CONSTRAINT chk_ape_batch_capacity CHECK (capacity > 0),
+  CONSTRAINT fk_ape_batches_cycle
+    FOREIGN KEY (ape_cycle_id) REFERENCES ape_cycles(ape_cycle_id)
+    ON DELETE RESTRICT,
+  CONSTRAINT fk_ape_batches_created_by
+    FOREIGN KEY (created_by_person_id) REFERENCES clinic_staff(person_id)
+    ON DELETE SET NULL,
+  UNIQUE INDEX uq_ape_batch_name (ape_cycle_id, batch_name),
+  INDEX idx_ape_batches_schedule (ape_cycle_id, schedule_date, start_time),
+  INDEX idx_ape_batches_category (ape_cycle_id, patient_category, status)
+);
+
 CREATE TABLE ape_records (
   ape_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   ape_cycle_id BIGINT UNSIGNED NULL,
+  schedule_batch_id BIGINT UNSIGNED NULL,
   patient_id BIGINT UNSIGNED NOT NULL,
   academic_year VARCHAR(20) NOT NULL,
   exam_date DATE NULL,
@@ -556,6 +584,9 @@ CREATE TABLE ape_records (
   CONSTRAINT fk_ape_records_cycle
     FOREIGN KEY (ape_cycle_id) REFERENCES ape_cycles(ape_cycle_id)
     ON DELETE RESTRICT,
+  CONSTRAINT fk_ape_records_schedule_batch
+    FOREIGN KEY (schedule_batch_id) REFERENCES ape_schedule_batches(batch_id)
+    ON DELETE SET NULL,
   CONSTRAINT fk_ape_records_appointment
     FOREIGN KEY (appointment_id) REFERENCES appointments(appointment_id)
     ON DELETE SET NULL,
@@ -567,6 +598,7 @@ CREATE TABLE ape_records (
   INDEX idx_ape_records_workflow (workflow_status),
   INDEX idx_ape_records_clearance (clearance_status),
   INDEX idx_ape_records_cycle (ape_cycle_id),
+  INDEX idx_ape_records_schedule_batch (schedule_batch_id),
   INDEX idx_ape_records_reviewed_by (reviewed_by_person_id)
 );
 
