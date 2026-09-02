@@ -24,7 +24,7 @@ function normalizedClinicUrl() {
 }
 
 const clinicBaseUrl = normalizedClinicUrl();
-const clinicStartUrl = new URL('login.php', clinicBaseUrl);
+const clinicStartUrl = new URL('index.php', clinicBaseUrl);
 const healthUrl = new URL('api/health.php', clinicBaseUrl);
 
 function desktopIconPath() {
@@ -41,7 +41,7 @@ function isAllowedClinicUrl(value) {
         }
 
         const relativePath = candidate.pathname.slice(clinicBaseUrl.pathname.length).replace(/^\/+/, '').toLowerCase();
-        const browserOnlyRoutes = new Set(['', 'index.php', 'visitor-registration.php', 'emergency.php']);
+        const browserOnlyRoutes = new Set(['visitor-registration.php', 'emergency.php']);
         return !browserOnlyRoutes.has(relativePath);
     } catch (error) {
         return false;

@@ -88,6 +88,10 @@ $completedApeRecords = array_values(array_filter(
     $apeRecords,
     static fn(array $apeRecord): bool => ape_record_queue($apeRecord) === 'completed'
 ));
+$documentCount = array_sum(array_map(
+    static fn(array $apeRecord): int => (int) ($apeRecord['document_count'] ?? 0),
+    $apeRecords
+));
 
 $refStmt = auth_db()->prepare('
     SELECT r.*, TRIM(CONCAT_WS(" ", pe.first_name, pe.middle_name, pe.last_name)) AS referred_by_name
@@ -403,7 +407,7 @@ render_header($fullName . ' - Patient Profile');
             </div>
             <div>
                 <p class="clinic-label mb-1">Documents</p>
-                <p class="font-headline text-3xl font-extrabold text-slate-800 leading-none m-0"><?= count($apeRecords) + count($referrals) ?></p>
+                <p class="font-headline text-3xl font-extrabold text-slate-800 leading-none m-0"><?= $documentCount ?></p>
             </div>
         </div>
     </section>
