@@ -203,6 +203,12 @@ render_clinic_command_header(
             <p class="text-xs font-bold text-slate-500 mb-0"><?= e($scopeDescription) ?></p>
         </div>
         <div class="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
+            <?php if (in_array($apeUser['role'] ?? '', ['admin', 'doctor'], true)): ?>
+                <a href="scheduling.php" class="btn btn-outline w-full sm:w-auto justify-center text-decoration-none">
+                    <span class="material-symbols-outlined text-[18px]">calendar_month</span>
+                    Manage Scheduling
+                </a>
+            <?php endif; ?>
             <button type="button" onclick="showModal('apeBatchPickerModal')" class="w-full sm:w-auto min-h-12 px-4 py-2 rounded-xl border border-outline-variant bg-primary-fixed flex items-center gap-3 text-left hover:border-primary transition-colors" title="Choose a scheduled APE batch">
                 <span class="material-symbols-outlined text-primary text-[20px]">event_available</span>
                 <div class="min-w-0">

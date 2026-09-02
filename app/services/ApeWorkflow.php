@@ -310,9 +310,6 @@ function ape_missing_item(array $record): string
     if (empty($record['schedule_batch_id']) || ($record['batch_status'] ?? '') !== 'Scheduled') {
         return 'No APE schedule assigned';
     }
-    if (!empty($record['missing_items'])) {
-        return $record['missing_items'];
-    }
     if (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed') {
         return 'Waiting for patient vitals and BMI confirmation';
     }
@@ -321,6 +318,9 @@ function ape_missing_item(array $record): string
     }
     if (($record['requirement_status'] ?? '') === 'Needs Correction') {
         return 'Hard-copy requirements need attention';
+    }
+    if (!empty($record['missing_items'])) {
+        return $record['missing_items'];
     }
     if ((int)($record['follow_up_required'] ?? 0) === 1 || ($record['clearance_status'] ?? '') === 'For Follow-up') {
         return 'Follow-up action required';

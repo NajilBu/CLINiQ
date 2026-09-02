@@ -84,7 +84,7 @@ $metrics = [
     'patients_in_clinic' => (int) (cliniq_visit_db()->query("SELECT COUNT(DISTINCT patient_person_id) AS total FROM visits WHERE DATE(visit_datetime) = CURDATE() AND TIME(visit_datetime) BETWEEN '08:00:00' AND '17:00:00' AND status IN ('Unaddressed', 'Active')")->fetch()['total'] ?? 0),
     'pending_alerts' => (int) (auth_db()->query("SELECT COUNT(*) AS total FROM nurse_alerts WHERE status = 'Pending'")->fetch()['total'] ?? 0),
     'low_stock' => (int) (cliniq_inventory_db()->query('SELECT COUNT(*) AS total FROM inventory_items WHERE is_active = 1 AND quantity <= reorder_level')->fetch()['total'] ?? 0),
-    'appointment_requests' => (int) (appointment_db()->query("SELECT COUNT(*) AS total FROM appointments WHERE status = 'Pending'")->fetch()['total'] ?? 0),
+    'appointment_requests' => (int) (appointment_db()->query("SELECT COUNT(*) AS total FROM appointments WHERE status IN ('Pending', 'For Confirmation')")->fetch()['total'] ?? 0),
 ];
 
 // APE Metrics (condensed)
@@ -125,7 +125,7 @@ $appointmentsStmt = appointment_db()->query("
 ");
 $appointments = $appointmentsStmt ? $appointmentsStmt->fetchAll() : [];
 
-// --- 3b. Pending Appointment Requests (awaiting approval) ---
+// --- 3b. Appointments requiring clinic action ---
 $pendingAppointmentsStmt = appointment_db()->query("
     SELECT a.*, p.first_name, p.last_name, p.id_number,
            COALESCE(
@@ -140,8 +140,8 @@ $pendingAppointmentsStmt = appointment_db()->query("
     LEFT JOIN programs pr ON pr.id = s.program_id
     LEFT JOIN school_employees se ON se.person_id = p.id
     LEFT JOIN departments ed ON ed.id = se.department_id
-    WHERE a.status = 'Pending'
-    ORDER BY a.appointment_datetime ASC
+    WHERE a.status IN ('Pending', 'For Confirmation')
+    ORDER BY CASE WHEN a.status = 'For Confirmation' THEN 0 ELSE 1 END, a.appointment_datetime ASC
     LIMIT 10
 ");
 $pendingAppointments = $pendingAppointmentsStmt ? $pendingAppointmentsStmt->fetchAll() : [];
@@ -152,9 +152,27 @@ $scheduleStartMinutes = 8 * 60;
 $scheduleEndMinutes = 17 * 60;
 $appointmentDurationMinutes = 60;
 $scheduleItems = [];
-$usingAppointmentPlaceholders = count($appointments) === 0;
+$dashboardToday = date('Y-m-d');
+$todayApeBatchesByDate = appointment_ape_batches_for_range($dashboardToday, $dashboardToday);
+$todayApeBatches = $todayApeBatchesByDate[$dashboardToday] ?? [];
+$usingAppointmentPlaceholders = count($appointments) === 0 && count($todayApeBatches) === 0;
 
 $appointmentRows = $appointments;
+$appointmentRows = array_merge($appointmentRows, array_map(static function (array $batch): array {
+    $assignedCount = (int) ($batch['assigned_count'] ?? 0);
+    return [
+        'id' => 0,
+        'patient_id' => 0,
+        'appointment_datetime' => $batch['schedule_date'] . ' ' . $batch['start_time'],
+        '_end_datetime' => $batch['schedule_date'] . ' ' . $batch['end_time'],
+        'first_name' => (string) $batch['batch_name'],
+        'last_name' => '',
+        'id_number' => (string) $batch['patient_category'],
+        'purpose' => $assignedCount . ' assigned patient' . ($assignedCount === 1 ? '' : 's'),
+        'status' => 'APE Scheduled',
+        '_is_ape' => true,
+    ];
+}, $todayApeBatches));
 if ($usingAppointmentPlaceholders) {
     // UI-only examples make the empty timeline understandable. They are never saved.
     $today = date('Y-m-d');
@@ -168,7 +186,10 @@ if ($usingAppointmentPlaceholders) {
 foreach ($appointmentRows as $row) {
     $timestamp = strtotime((string) $row['appointment_datetime']);
     $startMinute = ((int) date('G', $timestamp) * 60) + (int) date('i', $timestamp);
-    $endMinute = $startMinute + $appointmentDurationMinutes;
+    $endTimestamp = !empty($row['_end_datetime']) ? strtotime((string) $row['_end_datetime']) : false;
+    $endMinute = $endTimestamp !== false
+        ? ((int) date('G', $endTimestamp) * 60) + (int) date('i', $endTimestamp)
+        : $startMinute + $appointmentDurationMinutes;
 
     // The day view covers clinic hours only. Keep partially overlapping appointments
     // visible by clipping their cards to the calendar boundary.
@@ -235,9 +256,13 @@ $visitorLogs = cliniq_visit_db()->query("
 ")->fetchAll();
 
 // --- 5. APE Action Queue (Condensed) ---
+$dashboardToday = date('Y-m-d');
 $allApeRecords = array_values(array_filter(
     ape_fetch_records(),
     static fn(array $record): bool => ($record['workflow_status'] ?? '') !== 'Cleared'
+        && ($record['batch_status'] ?? '') === 'Scheduled'
+        && !empty($record['schedule_batch_id'])
+        && ($record['batch_schedule_date'] ?? '') >= $dashboardToday
 ));
 
 $dashboardQueues = ape_work_queues();
@@ -255,6 +280,11 @@ foreach (['examination', 'digital_submission', 'final_decision', 'follow_up'] as
         $apeQueue[] = $record;
     }
 }
+usort($apeQueue, static function (array $left, array $right): int {
+    $leftSchedule = (string) ($left['batch_schedule_date'] ?? '') . ' ' . (string) ($left['batch_start_time'] ?? '');
+    $rightSchedule = (string) ($right['batch_schedule_date'] ?? '') . ' ' . (string) ($right['batch_start_time'] ?? '');
+    return $leftSchedule <=> $rightSchedule;
+});
 $visitorColumns = [
     ['headerName' => 'Arrived', 'field' => 'arrivedTime', 'sortField' => 'arrivedSort', 'sortType' => 'date', 'width' => 105, 'minWidth' => 100, 'maxWidth' => 115, 'flex' => 0],
     ['headerName' => 'Addressed', 'field' => 'addressedTime', 'sortField' => 'addressedSort', 'sortType' => 'date', 'width' => 110, 'minWidth' => 105, 'maxWidth' => 120, 'flex' => 0],
@@ -286,6 +316,7 @@ foreach ($visitorLogs as $visit) {
 
 $dashboardApeColumns = [
     ['headerName' => 'Patient', 'field' => 'studentHtml', 'cellRenderer' => 'html', 'sortField' => 'studentSort', 'minWidth' => 230],
+    ['headerName' => 'APE Schedule', 'field' => 'scheduleHtml', 'cellRenderer' => 'html', 'sortField' => 'scheduleSort', 'minWidth' => 210],
     ['headerName' => 'Work Queue', 'field' => 'queueHtml', 'cellRenderer' => 'html', 'sortField' => 'queueSort', 'minWidth' => 170],
     ['headerName' => 'Missing / Waiting For', 'field' => 'missing', 'minWidth' => 240],
     ['headerName' => 'Actions', 'field' => 'actionHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 100, 'minWidth' => 90],
@@ -296,14 +327,25 @@ foreach ($apeQueue as $rec) {
     $queueKey = $rec['_queue_key'];
     $queue = $dashboardQueues[$queueKey];
     $next = ape_next_action($rec);
+    $isScheduledToday = ($rec['batch_schedule_date'] ?? '') === $dashboardToday;
+    $queueLabel = !$isScheduledToday
+        ? 'Scheduled'
+        : (($rec['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed'
+            ? 'Vitals'
+            : ($queue['short_title'] ?? $queue['title']));
+    $recordUrl = app_url('ape/view.php?id=' . (int) $rec['id']);
     $dashboardApeRows[] = [
-        'rowUrl' => app_url('ape/view.php?id=' . (int) $rec['id']),
+        'rowUrl' => $isScheduledToday ? $recordUrl : '',
         'studentSort' => trim($rec['last_name'] . ' ' . $rec['first_name']),
         'studentHtml' => '<div class="flex items-center gap-3"><div class="avatar ' . e(avatar_color($fullName)) . '">' . e(initials($fullName)) . '</div><div><strong class="text-sm text-slate-800">' . e($fullName) . '</strong><div class="text-[10px] font-bold text-slate-400">' . e($rec['id_number']) . '</div></div></div>',
-        'queueHtml' => '<span class="badge ' . ($queueKey === 'follow_up' ? 'badge-high' : 'badge-in-progress') . '">' . e($queue['short_title'] ?? $queue['title']) . '</span>',
-        'queueSort' => $queue['short_title'] ?? $queue['title'],
-        'missing' => ape_missing_item($rec),
-        'actionHtml' => row_actions_button('APE actions', '<a href="' . e(app_url('ape/view.php?id=' . (int) $rec['id'])) . '" class="btn btn-sm btn-ghost border border-slate-200 hover:border-primary hover:text-primary text-decoration-none"><span class="material-symbols-outlined text-[14px]">' . e($next['icon']) . '</span>' . e($next['label']) . '</a>'),
+        'scheduleSort' => (string) $rec['batch_schedule_date'] . ' ' . (string) $rec['batch_start_time'],
+        'scheduleHtml' => '<strong class="text-sm text-slate-800 block">' . e(date('M j, Y', strtotime((string) $rec['batch_schedule_date']))) . '</strong><span class="text-xs font-bold text-slate-500">' . e(date('g:i A', strtotime((string) $rec['batch_start_time']))) . '–' . e(date('g:i A', strtotime((string) $rec['batch_end_time']))) . '</span>',
+        'queueHtml' => '<span class="badge ' . ($queueKey === 'follow_up' ? 'badge-high' : 'badge-in-progress') . '">' . e($queueLabel) . '</span>',
+        'queueSort' => $queueLabel,
+        'missing' => $isScheduledToday ? ape_missing_item($rec) : 'Waiting for scheduled date',
+        'actionHtml' => row_actions_button('APE actions', $isScheduledToday
+            ? '<a href="' . e($recordUrl) . '" class="btn btn-sm btn-ghost border border-slate-200 hover:border-primary hover:text-primary text-decoration-none"><span class="material-symbols-outlined text-[14px]">' . e($next['icon']) . '</span>' . e($next['label']) . '</a>'
+            : ''),
     ];
 }
 
@@ -371,11 +413,11 @@ render_header('Main Dashboard');
                 <span class="material-symbols-outlined text-[24px]">event_available</span>
             </div>
             <div class="min-w-0">
-                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Pending Appointments</p>
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Appointments</p>
                 <p class="dashboard-metric-value font-headline text-3xl font-extrabold text-slate-800 leading-none m-0">
                     <?= $metrics['appointment_requests'] ?>
                 </p>
-                <p class="text-[9px] font-bold text-slate-400 leading-tight mt-1 mb-0">Requests awaiting clinic action</p>
+                <p class="text-[9px] font-bold text-slate-400 leading-tight mt-1 mb-0">Awaiting clinic action</p>
             </div>
         </a>
         <a href="<?= app_url('ape/index.php') ?>"
@@ -501,7 +543,7 @@ render_header('Main Dashboard');
 
     <div class="dashboard-activity-grid grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8 items-stretch">
 
-        <!-- NEW: Pending Appointment Requests (left panel) -->
+        <!-- Appointments requiring clinic action (left panel) -->
         <section class="clinic-card overflow-hidden flex flex-col h-[520px]" style="height: 520px;">
             <div class="p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
                 <div class="flex items-center gap-3">
@@ -509,13 +551,13 @@ render_header('Main Dashboard');
                         <span class="material-symbols-outlined">pending_actions</span>
                     </div>
                     <div>
-                        <h2 class="font-headline text-lg font-extrabold text-[#17261d] m-0">Appointment Requests</h2>
-                        <p class="text-xs font-bold text-slate-500 m-0">Approve or cancel pending patient booking requests.</p>
+                        <h2 class="font-headline text-lg font-extrabold text-[#17261d] m-0">Appointments</h2>
+                        <p class="text-xs font-bold text-slate-500 m-0">Review booking requests and confirm completed visits.</p>
                     </div>
                 </div>
                 <div class="flex items-center gap-2 shrink-0">
                     <?php if (count($pendingAppointments) > 0): ?>
-                        <span class="badge badge-pending text-[10px]"><?= count($pendingAppointments) ?> pending</span>
+                        <span class="badge badge-pending text-[10px]"><?= count($pendingAppointments) ?> action needed</span>
                     <?php endif; ?>
                     <a href="<?= app_url('appointments/index.php') ?>"
                         class="btn btn-sm btn-ghost text-slate-400 hover:text-primary text-decoration-none">
@@ -529,8 +571,8 @@ render_header('Main Dashboard');
                         <div class="w-12 h-12 rounded-2xl bg-slate-50 text-slate-300 flex items-center justify-center mb-3">
                             <span class="material-symbols-outlined text-[26px]">event_available</span>
                         </div>
-                        <p class="text-sm font-bold text-slate-500 mb-0">No pending requests</p>
-                        <p class="text-xs text-slate-400 mt-1">New appointment requests will appear here.</p>
+                        <p class="text-sm font-bold text-slate-500 mb-0">No appointments need action</p>
+                        <p class="text-xs text-slate-400 mt-1">New requests and completion confirmations will appear here.</p>
                     </div>
                 <?php else: ?>
                     <?php foreach ($pendingAppointments as $pa):
@@ -538,6 +580,7 @@ render_header('Main Dashboard');
                         $paDate = date('M d, Y', strtotime($pa['appointment_datetime']));
                         $paTime = date('g:i A', strtotime($pa['appointment_datetime']));
                         $paId = (int) $pa['appointment_id'];
+                        $isConfirmation = ($pa['status'] ?? '') === 'For Confirmation';
                     ?>
                         <div class="p-4 hover:bg-slate-50 transition-colors">
                             <div class="flex items-start gap-3">
@@ -550,7 +593,7 @@ render_header('Main Dashboard');
                                             <p class="text-sm font-bold text-slate-800 mb-0 truncate"><?= e($paName) ?></p>
                                             <p class="text-[11px] font-bold text-slate-400 mb-1"><?= e($pa['id_number']) ?> · <?= e($pa['course_section'] ?? 'Patient') ?></p>
                                         </div>
-                                        <span class="text-[10px] font-bold text-amber-600 bg-amber-50 rounded-full px-2 py-0.5 whitespace-nowrap shrink-0">For Approval</span>
+                                        <span class="text-[10px] font-bold text-amber-600 bg-amber-50 rounded-full px-2 py-0.5 whitespace-nowrap shrink-0"><?= $isConfirmation ? 'Confirm Completion' : 'For Approval' ?></span>
                                     </div>
                                     <div class="flex items-center gap-1 text-xs font-bold text-slate-500 mb-2">
                                         <span class="material-symbols-outlined text-[13px] text-indigo-400">event</span>
@@ -564,32 +607,32 @@ render_header('Main Dashboard');
                                     <div class="flex items-center gap-2">
                                         <form method="post" action="<?= app_url('appointments/update.php') ?>" class="flex-1">
                                             <input type="hidden" name="id" value="<?= $paId ?>">
-                                            <input type="hidden" name="status" value="Scheduled">
+                                            <input type="hidden" name="status" value="<?= $isConfirmation ? 'Completed' : 'Scheduled' ?>">
                                             <input type="hidden" name="redirect" value="../dashboard.php">
                                             <button type="submit" class="btn btn-sm btn-primary w-full justify-center"
                                                 data-confirm-submit
                                                 data-confirm-type="primary"
-                                                data-confirm-title="Approve this appointment?"
-                                                data-confirm-message="This will schedule the appointment for <?= e($paName) ?> on <?= e($paDate . ' at ' . $paTime) ?>."
-                                                data-confirm-toast="Approving appointment...">
-                                                <span class="material-symbols-outlined text-[14px]">event_available</span>
-                                                Approve
+                                                data-confirm-title="<?= $isConfirmation ? 'Confirm this appointment was completed?' : 'Approve this appointment?' ?>"
+                                                data-confirm-message="<?= $isConfirmation ? 'This will mark the appointment for ' . e($paName) . ' as completed.' : 'This will schedule the appointment for ' . e($paName) . ' on ' . e($paDate . ' at ' . $paTime) . '.' ?>"
+                                                data-confirm-toast="<?= $isConfirmation ? 'Confirming completion...' : 'Approving appointment...' ?>">
+                                                <span class="material-symbols-outlined text-[14px]"><?= $isConfirmation ? 'task_alt' : 'event_available' ?></span>
+                                                <?= $isConfirmation ? 'Completed' : 'Approve' ?>
                                             </button>
                                         </form>
                                         <form method="post" action="<?= app_url('appointments/update.php') ?>">
                                             <input type="hidden" name="id" value="<?= $paId ?>">
-                                            <input type="hidden" name="status" value="Cancelled">
-                                            <input type="hidden" name="cancellation_reason" value="Declined by clinic staff.">
+                                            <input type="hidden" name="status" value="<?= $isConfirmation ? 'No Show' : 'Cancelled' ?>">
+                                            <?php if (!$isConfirmation): ?><input type="hidden" name="cancellation_reason" value="Declined by clinic staff."><?php endif; ?>
                                             <input type="hidden" name="redirect" value="../dashboard.php">
                                             <button type="submit" class="btn btn-sm btn-ghost btn-cancel-icon"
-                                                title="Decline request"
-                                                aria-label="Decline appointment request"
+                                                title="<?= $isConfirmation ? 'Mark as no-show' : 'Decline request' ?>"
+                                                aria-label="<?= $isConfirmation ? 'Mark appointment as no-show' : 'Decline appointment request' ?>"
                                                 data-confirm-submit
                                                 data-confirm-type="danger"
-                                                data-confirm-title="Decline this request?"
-                                                data-confirm-message="This will cancel the appointment request for <?= e($paName) ?>."
-                                                data-confirm-toast="Declining request...">
-                                                <span class="material-symbols-outlined text-[16px]">cancel</span>
+                                                data-confirm-title="<?= $isConfirmation ? 'Mark as no-show?' : 'Decline this request?' ?>"
+                                                data-confirm-message="<?= $isConfirmation ? 'This will mark the appointment for ' . e($paName) . ' as a no-show.' : 'This will cancel the appointment request for ' . e($paName) . '.' ?>"
+                                                data-confirm-toast="<?= $isConfirmation ? 'Marking no-show...' : 'Declining request...' ?>">
+                                                <span class="material-symbols-outlined text-[16px]"><?= $isConfirmation ? 'person_off' : 'cancel' ?></span>
                                             </button>
                                         </form>
                                     </div>
@@ -614,7 +657,7 @@ render_header('Main Dashboard');
                     </div>
                 </div>
                 <div class="flex items-center gap-2 shrink-0">
-                    <span class="badge badge-in-progress text-[9px]"><?= count($appointments) ?> scheduled / confirmation</span>
+                    <span class="badge badge-in-progress text-[9px]"><?= count($appointments) ?> appointment(s) &bull; <?= count($todayApeBatches) ?> APE batch(es)</span>
                     <a href="<?= app_url('appointments/index.php') ?>"
                         class="btn btn-sm btn-ghost text-slate-400 hover:text-primary text-decoration-none">
                         <span class="material-symbols-outlined text-[18px]">calendar_month</span>
@@ -643,11 +686,14 @@ render_header('Main Dashboard');
                                     $width = 100 / $laneCount;
                                     $left = $lane * $width;
                                     $time = date('g:i A', strtotime((string) $apt['appointment_datetime']));
-                                    $endTime = date('g:i A', strtotime((string) $apt['appointment_datetime']) + ($appointmentDurationMinutes * 60));
+                                    $endTime = date('g:i A', !empty($apt['_end_datetime'])
+                                        ? strtotime((string) $apt['_end_datetime'])
+                                        : strtotime((string) $apt['appointment_datetime']) + ($appointmentDurationMinutes * 60));
                                     $fullName = trim($apt['first_name'] . ' ' . $apt['last_name']);
                                     $isPlaceholder = !empty($apt['_placeholder']);
+                                    $isApe = !empty($apt['_is_ape']);
                                     ?>
-                                    <article class="dashboard-calendar-event <?= $isPlaceholder ? 'is-placeholder' : '' ?>"
+                                    <article class="dashboard-calendar-event <?= $isPlaceholder ? 'is-placeholder' : '' ?> <?= $isApe ? 'is-ape' : '' ?>"
                                         style="top: calc(<?= number_format($top, 4, '.', '') ?>% + 2px); height: calc(<?= number_format($height, 4, '.', '') ?>% - 4px); left: calc(<?= number_format($left, 4, '.', '') ?>% + 3px); width: calc(<?= number_format($width, 4, '.', '') ?>% - 6px);"
                                         title="<?= e($fullName . ' — ' . $apt['purpose'] . ' — ' . $time . ' to ' . $endTime) ?>">
                                         <div class="dashboard-calendar-event-main">
@@ -656,6 +702,7 @@ render_header('Main Dashboard');
                                                     <span class="material-symbols-outlined" aria-hidden="true">schedule</span>
                                                     <?= e($time) ?>–<?= e($endTime) ?>
                                                     <?php if ($isPlaceholder): ?><span class="dashboard-calendar-sample-badge">Sample</span><?php endif; ?>
+                                                    <?php if ($isApe): ?><span class="dashboard-calendar-sample-badge">APE</span><?php endif; ?>
                                                 </div>
                                                 <strong><?= e($fullName) ?></strong>
                                                 <span><?= e($apt['id_number']) ?> &bull; <?= e($apt['purpose']) ?></span>
@@ -710,7 +757,7 @@ render_header('Main Dashboard');
         <div class="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
                 <h2 class="font-headline text-xl font-extrabold text-[#17261d] m-0">APE Action Queue</h2>
-                <p class="text-xs font-bold text-slate-500 m-0">Priority patients needing examination, document keeping, final decision, or follow-up clearance.</p>
+                <p class="text-xs font-bold text-slate-500 m-0">Today&rsquo;s and upcoming scheduled patients. Only today&rsquo;s records can be opened.</p>
             </div>
             <a href="<?= app_url('ape/index.php') ?>" class="btn btn-sm btn-ghost text-slate-500 hover:text-primary shrink-0" aria-label="Open APE Center" title="Open APE Center">
                 <span class="material-symbols-outlined text-[16px]">open_in_new</span>
@@ -722,8 +769,8 @@ render_header('Main Dashboard');
             'pagination' => true,
             'paginationControls' => 'dashboardApePagination',
             'height' => 'compact',
-            'emptyTitle' => 'No pending APE tasks in the queue.',
-            'emptyText' => 'Patients with clinic actions will appear here.',
+            'emptyTitle' => 'No scheduled APE patients.',
+            'emptyText' => "Patients assigned to today's or upcoming APE batches will appear here.",
         ]); ?>
         <nav id="dashboardApePagination" class="pagination border-t border-slate-100" aria-label="APE action queue pages"></nav>
     </section>

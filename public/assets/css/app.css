@@ -3064,6 +3064,13 @@ textarea.record-sheet-field {
     box-shadow: none;
 }
 
+.dashboard-calendar-event.is-ape {
+    border-color: #a7f3d0;
+    border-left-color: #059669;
+    background: #ecfdf5;
+    color: #064e3b;
+}
+
 .dashboard-calendar-event-main {
     display: flex;
     align-items: center;
@@ -4300,6 +4307,19 @@ body.cliniq-drag-scroll-active * {
     opacity: 0.58;
     box-shadow: none;
     cursor: default;
+}
+
+.appointment-week-block.is-ape {
+    border-color: #6ee7b7;
+    border-left-color: #059669;
+    background: #ecfdf5;
+    box-shadow: 0 2px 7px rgba(6, 95, 70, 0.1);
+    color: #065f46;
+    cursor: default;
+}
+
+.appointment-week-block.is-ape:hover {
+    box-shadow: 0 4px 10px rgba(6, 95, 70, 0.14);
 }
 
 .appointment-week-sample-badge {
