@@ -267,6 +267,9 @@ function normalize_ape_batch_time(string $value, string $label): string
     if (!$time || $time->format('H:i') !== $value) {
         throw new InvalidArgumentException("Select a valid {$label}.");
     }
+    if ($value < '08:00' || $value > '17:00') {
+        throw new InvalidArgumentException('APE batch times must be between 8:00 AM and 5:00 PM.');
+    }
     return $time->format('H:i:s');
 }
 

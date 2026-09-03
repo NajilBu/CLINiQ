@@ -552,6 +552,7 @@ CREATE TABLE ape_records (
   appointment_id BIGINT UNSIGNED NULL,
   requirement_status ENUM('Not Checked', 'Checked', 'Needs Correction')
     NOT NULL DEFAULT 'Not Checked',
+  requirements_saved_at DATETIME NULL,
   workflow_status ENUM(
     'Registered',
     'Batch Assigned',
@@ -566,6 +567,8 @@ CREATE TABLE ape_records (
   clearance_status ENUM('Pending', 'Cleared', 'For Follow-up')
     NOT NULL DEFAULT 'Pending',
   follow_up_required TINYINT(1) NOT NULL DEFAULT 0,
+  follow_up_due_date DATE NULL,
+  follow_up_due_time TIME NULL,
   clinical_remarks TEXT NULL,
   patient_visible_note TEXT NULL,
   patient_height_cm DECIMAL(5,2) NULL,
@@ -606,6 +609,8 @@ CREATE TABLE ape_requirements (
   requirement_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   ape_id BIGINT UNSIGNED NOT NULL,
   requirement_name VARCHAR(160) NOT NULL,
+  upload_group ENUM('initial', 'follow_up') NULL,
+  upload_due_date DATE NULL,
   status ENUM('Missing', 'Submitted', 'Verified', 'Needs Correction')
     NOT NULL DEFAULT 'Missing',
   remarks TEXT NULL,

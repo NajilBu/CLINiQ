@@ -54,6 +54,15 @@ if ($hasActiveApeCycle) {
     $apeScheduleGroups = ape_schedule_candidate_groups($cycleId);
 }
 
+// Explicit AM/PM labels avoid browser/OS-dependent military-time controls.
+$apeBatchTimeOptions = [];
+for ($minutes = 8 * 60; $minutes <= 17 * 60; $minutes++) {
+    $hour = intdiv($minutes, 60);
+    $minute = $minutes % 60;
+    $value = sprintf('%02d:%02d', $hour, $minute);
+    $apeBatchTimeOptions[$value] = sprintf('%d:%02d %s', $hour % 12 ?: 12, $minute, $hour < 12 ? 'AM' : 'PM');
+}
+
 set_page_back_link('index.php', 'APE');
 render_header('APE Scheduling');
 
@@ -193,12 +202,23 @@ render_clinic_command_header(
                     </div>
                     <div>
                         <label class="clinic-label" for="apeBatchStart">Start Time</label>
-                        <input class="clinic-input" id="apeBatchStart" name="start_time" type="time" required>
+                        <select class="clinic-select" id="apeBatchStart" name="start_time" aria-describedby="apeBatchHours" required>
+                            <option value="" disabled selected>Select start time</option>
+                            <?php foreach ($apeBatchTimeOptions as $value => $label): ?>
+                                <option value="<?= e($value) ?>"><?= e($label) ?></option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
                     <div>
                         <label class="clinic-label" for="apeBatchEnd">End Time</label>
-                        <input class="clinic-input" id="apeBatchEnd" name="end_time" type="time" required>
+                        <select class="clinic-select" id="apeBatchEnd" name="end_time" aria-describedby="apeBatchHours" required>
+                            <option value="" disabled selected>Select end time</option>
+                            <?php foreach ($apeBatchTimeOptions as $value => $label): ?>
+                                <option value="<?= e($value) ?>"><?= e($label) ?></option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
+                    <p class="md:col-span-2 text-xs font-bold text-slate-500 mb-0" id="apeBatchHours">Clinic hours: 8:00 AM–5:00 PM. End time must be later than start time.</p>
                 </div>
 
                 <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-4">
@@ -343,16 +363,36 @@ render_clinic_command_header(
             }));
             previous.addEventListener('click', () => { if (currentPage > 1) { currentPage -= 1; render(); } });
             next.addEventListener('click', () => { currentPage += 1; render(); });
+            const startField = document.getElementById('apeBatchStart');
+            const endField = document.getElementById('apeBatchEnd');
+            const validateBatchTimes = () => {
+                let message = '';
+                [startField, endField].forEach((field) => {
+                    const outsideHours = field.value && (field.value < '08:00' || field.value > '17:00');
+                    const fieldMessage = outsideHours ? 'APE batch times must be between 8:00 AM and 5:00 PM.' : '';
+                    field.setCustomValidity(fieldMessage);
+                    if (fieldMessage) message = fieldMessage;
+                });
+                if (!message && startField.value && endField.value && startField.value >= endField.value) {
+                    message = 'The batch end time must be later than its start time.';
+                    endField.setCustomValidity(message);
+                }
+                return message;
+            };
+            [startField, endField].forEach((field) => {
+                field.addEventListener('input', validateBatchTimes);
+                field.addEventListener('change', validateBatchTimes);
+            });
+            validateBatchTimes();
             form.addEventListener('submit', (event) => {
                 const selected = checkboxes.filter((box) => box.checked);
                 const patientLimit = Number(capacity.value || 0);
                 const patientTotal = selectedPatientTotal();
-                const startTime = document.getElementById('apeBatchStart').value;
-                const endTime = document.getElementById('apeBatchEnd').value;
+                const timeMessage = validateBatchTimes();
                 let message = '';
                 if (selected.length < 1) message = 'Select at least one section, department, or office for this batch.';
                 else if (patientTotal > patientLimit) message = 'The selected groups exceed the patient limit.';
-                else if (startTime && endTime && startTime >= endTime) message = 'The batch end time must be later than its start time.';
+                else if (timeMessage) message = timeMessage;
                 if (message) {
                     event.preventDefault();
                     error.textContent = message;

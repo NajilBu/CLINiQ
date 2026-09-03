@@ -48,6 +48,96 @@ function ape_sync_requirement_status(PDO $db, int $apeId): void
 
     $update = $db->prepare('UPDATE ape_records SET requirement_status = ? WHERE ape_id = ?');
     $update->execute([$nextStatus, $apeId]);
+    $savedRecord = fetch_ape_record($apeId);
+    if ($nextStatus === 'Checked' && !empty($savedRecord['exam_date']) && ($savedRecord['workflow_status'] ?? '') === 'Exam Done') {
+        $isReferral = ($savedRecord['result_status'] ?? '') === 'Referred';
+        $advance = $db->prepare('UPDATE ape_records SET workflow_status = ?, follow_up_required = ?, clearance_status = ? WHERE ape_id = ?');
+        $advance->execute([$isReferral ? 'Follow-up Required' : 'Requirements Checked', $isReferral ? 1 : 0, $isReferral ? 'For Follow-up' : 'Pending', $apeId]);
+    }
+}
+
+function render_ape_hard_copy_review_fields(array $requirements, string $mode = '', array $record = [], string $formId = 'apeRequirementsForm'): void
+{
+    $targetStatus = $mode === 'correction' ? 'Needs Correction' : 'Missing';
+    $selectedIds = [];
+    $notes = [];
+    foreach ($requirements as $requirement) {
+        if ($mode !== '' && $mode !== 'complete' && $requirement['status'] === $targetStatus
+            && (!empty($record['exam_date']) || ape_requirements_locked($record) || trim((string) ($requirement['remarks'] ?? '')) !== '')) {
+            $selectedIds[] = (int) $requirement['requirement_id'];
+            $notes[] = (string) $requirement['remarks'];
+        }
+    }
+    $notes = array_values(array_unique($notes));
+    $requiresSelection = in_array($mode, ['correction', 'follow_up'], true);
+    if (!empty($record['exam_date'])) {
+        $savedRequirements = array_filter($requirements, static fn(array $requirement): bool => in_array((int) $requirement['requirement_id'], $selectedIds, true));
+        ?>
+        <div class="rounded-xl border border-primary/20 bg-primary-fixed p-4" data-saved-hard-copy-review>
+            <p class="clinic-label text-primary">Hard-copy Status</p>
+            <p class="text-sm font-bold mb-0"><?= e(match ($mode) { 'complete' => 'Complete', 'correction' => 'Needs Correction', 'follow_up' => 'Follow-up Documents', default => 'Not recorded' }) ?></p>
+            <?php if (!empty($record['initial_upload_due_date'])): ?>
+                <p class="text-sm mt-2 mb-0">Initial clinic-verified uploads due <?= e(date('M j, Y', strtotime($record['initial_upload_due_date']))) ?> (one week after examination).</p>
+            <?php endif; ?>
+            <?php if ($requiresSelection): ?>
+                <p class="clinic-label mt-4"><?= $mode === 'follow_up' ? 'Documents to provide later' : 'Documents needing correction' ?></p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <?php foreach ($savedRequirements as $requirement): ?>
+                        <div class="rounded-xl bg-white border border-slate-200 p-3">
+                            <strong class="text-sm block"><?= e($requirement['requirement_name']) ?></strong>
+                            <span class="badge <?= ape_status_badge_class($requirement['status']) ?> mt-2"><?= e($requirement['status']) ?></span>
+                            <?php if (trim((string) ($requirement['remarks'] ?? '')) !== ''): ?>
+                                <p class="clinic-label mt-3"><?= $mode === 'follow_up' ? 'Follow-up instructions' : 'Correction instructions' ?></p>
+                                <p class="text-sm whitespace-pre-wrap mb-0"><?= e($requirement['remarks']) ?></p>
+                            <?php endif; ?>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+                <?php if (!$savedRequirements): ?><p class="text-sm mb-0">No outstanding selected documents.</p><?php endif; ?>
+                <p class="clinic-label mt-4">Return Date</p>
+                <p class="text-sm font-bold mb-0"><?= !empty($record['follow_up_due_date']) ? e(date('M j, Y', strtotime($record['follow_up_due_date']))) : 'Not recorded' ?></p>
+                <p class="text-xs text-slate-500 mt-2 mb-0">Deadline for alerts only. Uploads and clinic review are allowed before or after this date; no appointment time is reserved.</p>
+            <?php else: ?>
+                <p class="text-sm mt-2 mb-0">All hard-copy requirements were verified at this review.</p>
+            <?php endif; ?>
+        </div>
+        <?php
+        return;
+    }
+    ?>
+    <div class="md:col-span-2 rounded-xl border border-primary/20 bg-primary-fixed p-4" data-hard-copy-review>
+        <label class="clinic-label text-primary" for="apeHardCopyStatus">Hard-copy Status</label>
+        <select class="clinic-select" id="apeHardCopyStatus" name="hard_copy_status" form="<?= e($formId) ?>" required>
+            <option value="" disabled <?= $mode === '' ? 'selected' : '' ?>>Select document review outcome</option>
+            <option value="complete" <?= $mode === 'complete' ? 'selected' : '' ?>>Complete</option>
+            <option value="correction" <?= $mode === 'correction' ? 'selected' : '' ?>>Needs Correction</option>
+            <option value="follow_up" <?= $mode === 'follow_up' ? 'selected' : '' ?>>Follow-up Documents</option>
+        </select>
+        <p class="text-xs font-bold text-slate-500 mt-2 mb-0">Complete verifies all requirements. For correction or follow-up, only checked documents need attention; all unchecked documents will be verified.</p>
+        <div class="mt-4 <?= $requiresSelection ? '' : 'hidden' ?>" data-hard-copy-targets>
+            <p class="clinic-label" data-hard-copy-target-label><?= $mode === 'follow_up' ? 'Documents to provide later' : 'Documents needing correction' ?></p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <?php foreach ($requirements as $requirement): ?>
+                    <label class="flex items-center gap-3 rounded-xl bg-white border border-slate-200 p-3">
+                        <input type="checkbox" name="requirement_ids[]" form="<?= e($formId) ?>" value="<?= (int) $requirement['requirement_id'] ?>" <?= in_array((int) $requirement['requirement_id'], $selectedIds, true) ? 'checked' : '' ?> <?= $requiresSelection ? '' : 'disabled' ?>>
+                        <span><strong class="text-sm block"><?= e($requirement['requirement_name']) ?></strong><small class="text-slate-500"><?= e($requirement['status']) ?></small></span>
+                    </label>
+                <?php endforeach; ?>
+            </div>
+            <?php if (!$requirements): ?><p class="text-sm mt-2">Add documents in the Requirements Checklist first.</p><?php endif; ?>
+            <label class="clinic-label mt-4" for="apeHardCopyIssues" data-hard-copy-instruction-label><?= $mode === 'follow_up' ? 'Follow-up instructions' : 'Correction instructions' ?></label>
+            <textarea class="clinic-textarea" id="apeHardCopyIssues" name="missing_items" form="<?= e($formId) ?>" rows="3" placeholder="Explain what is needed for the selected documents..." <?= $requiresSelection ? 'required' : 'disabled' ?>><?= e(count($notes) === 1 ? $notes[0] : '') ?></textarea>
+            <p class="text-xs font-bold text-slate-500 mt-2 mb-0">These instructions apply only to checked documents. Unchecked documents are verified and keep their individual comments.</p>
+            <div class="mt-4">
+                <div>
+                    <label class="clinic-label" for="apeReturnDate">Return Date</label>
+                    <input class="clinic-input" id="apeReturnDate" type="date" name="follow_up_due_date" form="<?= e($formId) ?>" data-return-schedule min="<?= e(date('Y-m-d')) ?>" value="<?= e($record['follow_up_due_date'] ?? '') ?>" <?= $requiresSelection ? 'required' : 'disabled' ?>>
+                </div>
+                <p class="text-xs font-bold text-slate-500 mt-2 mb-0">Deadline for alerts only. Uploads and clinic review are allowed before or after this date. It does not create an appointment or reserve time.</p>
+            </div>
+        </div>
+    </div>
+    <?php
 }
 
 $record = fetch_ape_record($id);
@@ -66,7 +156,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $activityLabel = null;
     $activityNotes = null;
     $apeDb = auth_db();
-    $clinicalActions = ['record_examination', 'finalize_exam_clear', 'finalize_exam_follow_up'];
+    $clinicalActions = ['record_examination', 'save_document_review', 'save_requirements', 'save_hard_copy_review', 'mark_requirements_complete', 'mark_missing_requirements', 'finalize_exam_clear', 'finalize_exam_follow_up'];
 
     try {
         if ($staffPersonId <= 0) {
@@ -76,38 +166,75 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new RuntimeException('Only administrators, doctors, and nurses can record or finalize an APE examination.');
         }
         $apeDb->beginTransaction();
+        // Serialize updates for this APE, including concurrent examination saves.
+        $lockRecord = $apeDb->prepare('SELECT ape_id FROM ape_records WHERE ape_id = ? FOR UPDATE');
+        $lockRecord->execute([$id]);
+        $record = fetch_ape_record($id);
+        if (!$record) {
+            throw new RuntimeException('APE record no longer exists.');
+        }
 
-        if ($action === 'mark_requirements_complete') {
-            if (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed') {
-                throw new RuntimeException('The patient must confirm their vitals and BMI before examination can be completed.');
+        $checklistActions = ['save_document_review', 'save_requirements', 'save_hard_copy_review', 'mark_requirements_complete', 'mark_missing_requirements', 'add_requirement', 'update_requirement', 'delete_requirement'];
+        if (in_array($action, $checklistActions, true) && !empty($record['exam_date'])) {
+            throw new RuntimeException('The saved examination checklist is locked. Review and archive the uploaded follow-up documents instead.');
+        }
+        if ($action === 'update_requirement' && empty($record['exam_date'])) {
+            throw new RuntimeException('Document statuses are saved together with Save Examination.');
+        }
+        if (in_array($action, ['keep_follow_up_open', 'approve_clearance', 'return_clearance'], true) && ape_record_queue($record) !== 'follow_up') {
+            throw new RuntimeException('Complete digital submission and clinic archive review before acting on follow-up.');
+        }
+        if (ape_document_follow_up($record) && in_array($action, ['keep_follow_up_open', 'approve_clearance', 'return_clearance'], true)) {
+            throw new RuntimeException('Review and archive the uploaded follow-up documents before clinical clearance.');
+        }
+
+        if ($action === 'review_returned_documents') {
+            // Old open tabs must never unlock the saved checklist.
+            throw new RuntimeException('Review Returned Documents has moved to the uploaded-file panel. Refresh this page to view and archive the files.');
+        } elseif (in_array($action, ['save_document_review', 'save_requirements', 'save_hard_copy_review', 'mark_requirements_complete', 'mark_missing_requirements'], true)) {
+            if (empty($record['exam_date'])) {
+                throw new RuntimeException('Use Save Examination to save the clinical result and document review together.');
             }
-            $notes = trim((string) ($_POST['clinical_remarks'] ?? ''));
-            $stmt = $apeDb->prepare("UPDATE ape_records SET requirement_status = 'Checked', workflow_status = 'Requirements Checked', follow_up_required = 0, clearance_status = 'Pending', clinical_remarks = ?, patient_visible_note = NULL, reviewed_by_person_id = ? WHERE ape_id = ?");
-            $stmt->execute([$notes ?: null, $staffPersonId, $id]);
-            $checked = $apeDb->prepare("UPDATE ape_requirements SET status = 'Verified', checked_by_person_id = ?, checked_at = NOW() WHERE ape_id = ?");
-            $checked->execute([$staffPersonId, $id]);
-            $activityLabel = 'Completed hard-copy document review';
-            $activityNotes = $notes ?: 'Hard-copy documents complete; ready for digital submission';
-        } elseif ($action === 'mark_missing_requirements') {
-            if (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed') {
-                throw new RuntimeException('The patient must confirm their vitals and BMI before examination can be recorded.');
+            if (($record['clearance_status'] ?? '') === 'Cleared' || ($record['workflow_status'] ?? '') === 'Cleared') {
+                throw new RuntimeException('This completed APE checklist is locked.');
             }
-            $documentIssues = trim((string) ($_POST['missing_items'] ?? ''));
-            if ($documentIssues === '') {
-                throw new InvalidArgumentException('Describe the missing, incorrect, or incomplete hard-copy documents.');
-            }
-            $notes = trim((string) ($_POST['clinical_remarks'] ?? ''));
-            $combinedNotes = $notes !== '' ? $documentIssues . "\n\n" . $notes : $documentIssues;
-            $stmt = $apeDb->prepare("UPDATE ape_records SET requirement_status = 'Needs Correction', workflow_status = 'Registered', follow_up_required = 0, clearance_status = 'Pending', clinical_remarks = ?, patient_visible_note = ?, reviewed_by_person_id = ? WHERE ape_id = ?");
-            $stmt->execute([$combinedNotes, $documentIssues, $staffPersonId, $id]);
-            $activityLabel = 'Recorded hard-copy document correction';
-            $activityNotes = $documentIssues;
+            $mode = (string) ($_POST['hard_copy_status'] ?? ($action === 'mark_requirements_complete' ? 'complete' : 'correction'));
+            $reviewPlan = ape_hard_copy_review_plan(ape_requirements_for_record($id), $mode, (array) ($_POST['requirement_ids'] ?? []), (string) ($_POST['missing_items'] ?? ''), (array) ($_POST['requirement_remarks'] ?? []));
+            $returnSchedule = $mode === 'complete' ? null : ape_return_schedule((string) ($_POST['follow_up_due_date'] ?? ''));
+            ape_apply_hard_copy_review($apeDb, $id, $staffPersonId, $reviewPlan, $record['exam_date'], $returnSchedule['date'] ?? null);
+            $complete = $reviewPlan['record_status'] === 'Checked';
+            $findingsForReview = ape_findings_for_record($id);
+            $requiresClinicalFollowUp = ($record['result_status'] ?? '') === 'Referred' || !empty($findingsForReview[0]['follow_up_required']);
+            $hasExam = !empty($record['exam_date']);
+            $needsFollowUp = !$complete || ($hasExam && $requiresClinicalFollowUp);
+            $nextWorkflow = $needsFollowUp ? 'Follow-up Required'
+                : (ape_digital_submission_complete($record) ? 'Reviewed' : 'Requirements Checked');
+            $stmt = $apeDb->prepare('UPDATE ape_records SET requirement_status = ?, workflow_status = ?, follow_up_required = ?, clearance_status = ?, reviewed_by_person_id = ?, follow_up_due_date = ?, requirements_saved_at = NOW() WHERE ape_id = ?');
+            $stmt->execute([
+                $reviewPlan['record_status'],
+                $nextWorkflow,
+                $needsFollowUp ? 1 : 0,
+                $needsFollowUp ? 'For Follow-up' : 'Pending', $staffPersonId,
+                $returnSchedule['date'] ?? ($needsFollowUp ? ($record['follow_up_due_date'] ?? null) : null), $id,
+            ]);
+            $activityLabel = 'Saved document review';
+            $activityNotes = $reviewPlan['notes'] . ($returnSchedule ? ' Return date: ' . $returnSchedule['date'] : '');
         } elseif ($action === 'approve_documents') {
+            $archiveQueue = ape_record_queue($record);
+            $archiveGroup = $archiveQueue === 'digital_submission' ? 'initial' : 'follow_up';
+            if (!in_array($archiveQueue, ['digital_submission', 'follow_up'], true) || ($archiveGroup === 'follow_up' && !ape_can_review_returned_documents($record))) {
+                throw new RuntimeException('This record is not awaiting digital submission or archive review.');
+            }
+            if ($archiveGroup === 'follow_up' && !$canRecordApeExam) {
+                throw new RuntimeException('Only authorized clinical staff can approve follow-up documents.');
+            }
             if (empty($record['exam_date'])) {
                 throw new RuntimeException('Record the clinical examination before archiving digital documents.');
             }
-            $requiredTypes = ape_default_requirements();
-            $requiredPlaceholders = implode(',', array_fill(0, count($requiredTypes), '?'));
+            $requiredTypes = ape_upload_requirement_names(ape_requirements_for_record($id), $archiveGroup);
+            if (!$requiredTypes || (int) ($record['unassigned_upload_count'] ?? 1) > 0) {
+                throw new RuntimeException('Save the document review and upload groups before archiving.');
+            }
             $currentDocuments = $apeDb->prepare("
                 SELECT d.document_id, d.document_type, d.verification_status
                 FROM ape_documents d
@@ -128,22 +255,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             foreach ($requiredTypes as $requiredType) {
                 if (!isset($currentByType[$requiredType])) {
-                    throw new RuntimeException('All five required APE documents must be uploaded before archiving the submission.');
+                    throw new RuntimeException('All documents in this upload group must be uploaded before archiving the submission.');
                 }
                 if ($currentByType[$requiredType]['verification_status'] === 'Needs Correction') {
                     throw new RuntimeException("{$requiredType} still needs a corrected upload before the submission can be archived.");
                 }
             }
             if (!$currentRows) {
-                throw new RuntimeException('All five required APE documents must be uploaded before archiving the submission.');
+                throw new RuntimeException('Upload the documents in this group before archiving.');
             }
             $nextWorkflow = (int) ($record['follow_up_required'] ?? 0) === 1 ? 'Follow-up Required' : 'Reviewed';
             $nextClearance = (int) ($record['follow_up_required'] ?? 0) === 1 ? 'For Follow-up' : 'Pending';
-            $requirements = $apeDb->prepare("UPDATE ape_requirements SET status = 'Submitted', remarks = NULL, checked_by_person_id = NULL, checked_at = NULL WHERE ape_id = ? AND requirement_name IN ({$requiredPlaceholders})");
-            $requirements->execute(array_merge([$id], $requiredTypes));
-            $stmt = $apeDb->prepare('UPDATE ape_records SET workflow_status = ?, clearance_status = ?, reviewed_by_person_id = ? WHERE ape_id = ?');
-            $stmt->execute([$nextWorkflow, $nextClearance, $staffPersonId, $id]);
-            $activityLabel = 'Moved APE documents to final decision';
+            // Archive review verifies the latest required uploads, not the outstanding hard-copy follow-up.
+            $requiredDocumentIds = array_map(static fn(string $type): int => (int) $currentByType[$type]['document_id'], $requiredTypes);
+            $documentPlaceholders = implode(',', array_fill(0, count($requiredDocumentIds), '?'));
+            $verified = $apeDb->prepare("UPDATE ape_documents SET verification_status = 'Verified', verified_by_person_id = ?, verified_at = NOW() WHERE ape_id = ? AND document_id IN ({$documentPlaceholders})");
+            $verified->execute(array_merge([$staffPersonId, $id], $requiredDocumentIds));
+            if ($archiveGroup === 'follow_up') {
+                $clinicalFindings = ape_findings_for_record($id);
+                $clinicalFollowUp = ($record['result_status'] ?? '') === 'Referred'
+                    || (bool) array_filter($clinicalFindings, static fn(array $finding): bool => !empty($finding['follow_up_required']))
+                    || (!ape_document_follow_up($record) && (int) ($record['follow_up_required'] ?? 0) === 1);
+                $nextWorkflow = $clinicalFollowUp ? 'Follow-up Required' : 'Reviewed';
+                $nextClearance = $clinicalFollowUp ? (($record['clearance_status'] ?? '') === 'Submitted' ? 'Submitted' : 'For Follow-up') : 'Pending';
+                $requirementPlaceholders = implode(',', array_fill(0, count($requiredTypes), '?'));
+                $accepted = $apeDb->prepare("UPDATE ape_requirements SET status = 'Verified', checked_by_person_id = ?, checked_at = NOW() WHERE ape_id = ? AND upload_group = 'follow_up' AND requirement_name IN ({$requirementPlaceholders})");
+                $accepted->execute(array_merge([$staffPersonId, $id], $requiredTypes));
+                $stmt = $apeDb->prepare("UPDATE ape_records SET requirement_status = 'Checked', follow_up_required = ?, workflow_status = ?, clearance_status = ?, reviewed_by_person_id = ?, requirements_saved_at = COALESCE(requirements_saved_at, NOW()) WHERE ape_id = ?");
+                $stmt->execute([$clinicalFollowUp ? 1 : 0, $nextWorkflow, $nextClearance, $staffPersonId, $id]);
+                $activityLabel = 'Archived follow-up documents';
+            } else {
+                // Initial archive preserves the outstanding document follow-up.
+                $stmt = $apeDb->prepare('UPDATE ape_records SET workflow_status = ?, clearance_status = ?, reviewed_by_person_id = ? WHERE ape_id = ?');
+                $stmt->execute([$nextWorkflow, $nextClearance, $staffPersonId, $id]);
+                $activityLabel = 'Archived APE documents';
+            }
+            $activityNotes = implode(', ', $requiredTypes);
         } elseif ($action === 'request_document_correction') {
             if (empty($record['exam_date'])) {
                 throw new RuntimeException('Record the clinical examination before reviewing digital documents.');
@@ -161,6 +308,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                   AND d.document_id IN ({$documentPlaceholders})
                   AND d.document_type <> 'Clearance'
                   AND d.verification_status = 'Pending'
+                  AND d.document_id = (SELECT MAX(v.document_id) FROM ape_documents v WHERE v.ape_id = d.ape_id AND v.document_type = d.document_type)
                 FOR UPDATE
             ");
             $selectedDocuments->execute(array_merge([$id], $documentIds));
@@ -171,21 +319,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $documents = $apeDb->prepare("UPDATE ape_documents SET verification_status = 'Needs Correction', verified_by_person_id = ?, verified_at = NOW() WHERE ape_id = ? AND document_id IN ({$documentPlaceholders})");
             $documents->execute(array_merge([$staffPersonId, $id], $documentIds));
-            $requirement = $apeDb->prepare("UPDATE ape_requirements SET status = 'Needs Correction', remarks = ?, checked_by_person_id = ?, checked_at = NOW() WHERE ape_id = ? AND requirement_name = ?");
+            $requirement = $apeDb->prepare("UPDATE ape_requirements SET status = CASE WHEN upload_group IS NULL THEN 'Needs Correction' ELSE status END, remarks = ?, checked_by_person_id = ?, checked_at = NOW() WHERE ape_id = ? AND requirement_name = ?");
             $selectedTypes = [];
             foreach ($selectedRows as $selectedDocument) {
                 $selectedTypes[] = $selectedDocument['document_type'];
                 $requirement->execute([$missingItems, $staffPersonId, $id, $selectedDocument['document_type']]);
             }
-            $apeDb->prepare("UPDATE ape_records SET requirement_status = 'Checked', workflow_status = 'Submitted', reviewed_by_person_id = ? WHERE ape_id = ?")
+            $apeDb->prepare("UPDATE ape_records SET workflow_status = CASE WHEN follow_up_required = 1 THEN 'Follow-up Required' ELSE 'Submitted' END, reviewed_by_person_id = ? WHERE ape_id = ?")
                 ->execute([$staffPersonId, $id]);
             $activityLabel = 'Requested document correction';
             $activityNotes = implode(', ', $selectedTypes) . ': ' . $missingItems;
         } elseif ($action === 'record_examination') {
+            if (!empty($record['exam_date'])) {
+                throw new RuntimeException('This examination has already been saved and is locked. Use the separate document review to resolve outstanding requirements.');
+            }
             if (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed') {
                 throw new RuntimeException('The patient must confirm their vitals and BMI before the clinical examination can be recorded.');
             }
-            if (!in_array(($record['workflow_status'] ?? ''), ['Registered', 'Batch Assigned', 'Requirements Checked', 'Scheduled', 'Exam Done', 'Submitted', 'Reviewed'], true) || (!empty($record['exam_date']) && ($record['requirement_status'] ?? '') === 'Checked')) {
+            if (!in_array(($record['workflow_status'] ?? ''), ['Registered', 'Batch Assigned', 'Requirements Checked', 'Scheduled', 'Exam Done', 'Submitted', 'Reviewed', 'Follow-up Required'], true) || (!empty($record['exam_date']) && ($record['requirement_status'] ?? '') === 'Checked')) {
                 throw new RuntimeException('This APE record is not ready for examination.');
             }
             $examDate = trim((string) ($_POST['exam_date'] ?? ''));
@@ -205,14 +356,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $patientNote = $resultStatus === 'With Finding'
                 ? (trim((string) ($_POST['patient_visible_note'] ?? '')) ?: null)
                 : null;
-            $hardCopyStatus = (string) ($_POST['hard_copy_status'] ?? 'complete');
-            if (!in_array($hardCopyStatus, ['complete', 'incomplete'], true)) {
-                throw new InvalidArgumentException('Select whether the hard-copy documents are complete or incomplete.');
-            }
-            $hardCopyIssues = trim((string) ($_POST['missing_items'] ?? ''));
-            if ($hardCopyStatus === 'incomplete' && $hardCopyIssues === '') {
-                throw new InvalidArgumentException('Describe the missing, incorrect, or incomplete hard-copy documents.');
-            }
             $referredTo = trim((string) ($_POST['referred_to'] ?? ''));
             $referralReason = trim((string) ($_POST['referral_reason'] ?? ''));
             if ($resultStatus === 'Referred' && ($referredTo === '' || $referralReason === '')) {
@@ -227,26 +370,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($resultStatus === 'With Finding' && $findingDescription === '') {
                 throw new InvalidArgumentException('Enter the clinical examination finding or result description.');
             }
-            $nextRequirementStatus = $hardCopyStatus === 'complete' ? 'Checked' : 'Needs Correction';
-            $nextWorkflowStatus = $hardCopyStatus === 'complete'
-                ? ($isReferral ? 'Follow-up Required' : 'Requirements Checked')
-                : 'Exam Done';
-            $nextClearanceStatus = $isReferral && $hardCopyStatus === 'complete' ? 'For Follow-up' : 'Pending';
-            $nextPatientNote = $hardCopyStatus === 'incomplete'
-                ? $hardCopyIssues
-                : ($patientNote ?: ($isReferral ? $referralReason : null));
-            $combinedRemarks = $hardCopyStatus === 'incomplete'
-                ? trim(($clinicalRemarks ? $clinicalRemarks . "\n\n" : '') . 'Hard-copy issue: ' . $hardCopyIssues)
-                : $clinicalRemarks;
-            $updateExam = $apeDb->prepare("UPDATE ape_records SET exam_date = ?, requirement_status = ?, workflow_status = ?, clearance_status = ?, follow_up_required = ?, clinical_remarks = ?, patient_visible_note = ?, reviewed_by_person_id = ? WHERE ape_id = ?");
-            $updateExam->execute([$examDate, $nextRequirementStatus, $nextWorkflowStatus, $nextClearanceStatus, $isReferral && $hardCopyStatus === 'complete' ? 1 : 0, $combinedRemarks ?: null, $nextPatientNote, $staffPersonId, $id]);
-            if ($hardCopyStatus === 'complete') {
-                $checked = $apeDb->prepare("UPDATE ape_requirements SET status = 'Verified', remarks = NULL, checked_by_person_id = ?, checked_at = NOW() WHERE ape_id = ?");
-                $checked->execute([$staffPersonId, $id]);
-            } else {
-                $checked = $apeDb->prepare("UPDATE ape_requirements SET status = 'Needs Correction', remarks = ?, checked_by_person_id = ?, checked_at = NOW() WHERE ape_id = ?");
-                $checked->execute([$hardCopyIssues, $staffPersonId, $id]);
-            }
+            // Validate both parts before writing; the enclosing transaction commits them together.
+            $mode = (string) ($_POST['hard_copy_status'] ?? '');
+            $reviewPlan = ape_hard_copy_review_plan(ape_requirements_for_record($id), $mode, (array) ($_POST['requirement_ids'] ?? []), (string) ($_POST['missing_items'] ?? ''), (array) ($_POST['requirement_remarks'] ?? []));
+            $returnSchedule = $mode === 'complete' ? null : ape_return_schedule((string) ($_POST['follow_up_due_date'] ?? ''));
+            $nextRequirementStatus = $reviewPlan['record_status'];
+            $needsFollowUp = $isReferral || $mode !== 'complete';
+            $nextWorkflowStatus = $needsFollowUp ? 'Follow-up Required' : 'Requirements Checked';
+            $nextClearanceStatus = $needsFollowUp ? 'For Follow-up' : 'Pending';
+            $nextPatientNote = $patientNote ?: ($isReferral ? $referralReason : null);
+            ape_apply_hard_copy_review($apeDb, $id, $staffPersonId, $reviewPlan, $examDate, $returnSchedule['date'] ?? null);
+            $updateExam = $apeDb->prepare("UPDATE ape_records SET exam_date = ?, requirement_status = ?, workflow_status = ?, clearance_status = ?, follow_up_required = ?, clinical_remarks = ?, patient_visible_note = ?, reviewed_by_person_id = ?, follow_up_due_date = ?, requirements_saved_at = NOW() WHERE ape_id = ?");
+            $updateExam->execute([$examDate, $nextRequirementStatus, $nextWorkflowStatus, $nextClearanceStatus, $needsFollowUp ? 1 : 0, $clinicalRemarks, $nextPatientNote, $staffPersonId, $returnSchedule['date'] ?? null, $id]);
             $finding = $apeDb->prepare('INSERT INTO ape_findings (ape_id, finding_type, description, result_status, follow_up_required, recorded_by_person_id) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE finding_type = VALUES(finding_type), description = VALUES(description), result_status = VALUES(result_status), follow_up_required = VALUES(follow_up_required), recorded_by_person_id = VALUES(recorded_by_person_id), recorded_at = CURRENT_TIMESTAMP');
             $finding->execute([$id, $isReferral ? 'Referral' : $findingType, $isReferral ? $referralReason : $findingDescription, $resultStatus, $isReferral ? 1 : 0, $staffPersonId]);
             if ($isReferral) {
@@ -255,9 +390,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $activityLabel = 'Recorded APE examination and created referral';
                 $activityNotes = $referredTo . ': ' . $referralReason;
             } else {
-                $activityLabel = $hardCopyStatus === 'complete' ? 'Recorded APE examination' : 'Recorded APE examination with document correction';
-                $activityNotes = $hardCopyStatus === 'complete' ? $findingType . ': ' . $resultStatus : $hardCopyIssues;
+                $activityLabel = 'Recorded APE examination and document review';
+                $activityNotes = $findingType . ': ' . $resultStatus . '.';
             }
+            $activityNotes .= ' ' . $reviewPlan['notes'] . ($returnSchedule ? ' Return date: ' . $returnSchedule['date'] : '');
         } elseif ($action === 'finalize_exam_clear') {
             if (ape_record_queue($record) !== 'final_decision' || empty($record['exam_date'])) {
                 throw new RuntimeException('The examination and document archive must be complete before clearing the patient.');
@@ -302,6 +438,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $activityLabel = 'Kept follow-up open';
             $activityNotes = $followUpDueDate ? $followUpNotes . ' Due: ' . $followUpDueDate : $followUpNotes;
         } elseif ($action === 'approve_clearance') {
+            if (!ape_deferred_submission_complete($record)) {
+                throw new RuntimeException('Upload and archive the deferred checklist documents before final clearance.');
+            }
             $stmt = $apeDb->prepare("UPDATE ape_records SET clearance_status = 'Cleared', follow_up_required = 0, workflow_status = 'Cleared', reviewed_by_person_id = ? WHERE ape_id = ?");
             $stmt->execute([$staffPersonId, $id]);
             $document = $apeDb->prepare("UPDATE ape_documents SET verification_status = 'Verified', verified_by_person_id = ?, verified_at = NOW() WHERE ape_id = ? AND document_type = 'Clearance'");
@@ -328,16 +467,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
             $activityLabel = 'Updated APE notes';
         } elseif ($action === 'add_requirement') {
+            if (($record['clearance_status'] ?? '') === 'Cleared' || ($record['workflow_status'] ?? '') === 'Cleared') {
+                throw new RuntimeException('This completed APE checklist is locked.');
+            }
             $requirementName = trim((string) ($_POST['requirement_name'] ?? ''));
-            $requirementStatus = (string) ($_POST['requirement_item_status'] ?? 'Missing');
+            $requirementStatus = 'Missing';
             if ($requirementName === '' || !in_array($requirementStatus, ['Missing', 'Submitted', 'Verified', 'Needs Correction'], true)) {
                 throw new InvalidArgumentException('Enter a requirement name and valid status.');
             }
-            $requirement = $apeDb->prepare("INSERT INTO ape_requirements (ape_id, requirement_name, status, remarks, checked_by_person_id, checked_at) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), remarks = VALUES(remarks), checked_by_person_id = VALUES(checked_by_person_id), checked_at = VALUES(checked_at)");
+            if (mb_strlen($requirementName) > 160) {
+                throw new InvalidArgumentException('Requirement names must be 160 characters or fewer.');
+            }
+            $duplicate = $apeDb->prepare('SELECT requirement_id FROM ape_requirements WHERE ape_id = ? AND requirement_name = ? LIMIT 1');
+            $duplicate->execute([$id, $requirementName]);
+            if ($duplicate->fetchColumn()) {
+                throw new InvalidArgumentException('That requirement already exists. Edit its remarks in the checklist instead.');
+            }
+            $requirement = $apeDb->prepare('INSERT INTO ape_requirements (ape_id, requirement_name, status, remarks, checked_by_person_id, checked_at) VALUES (?, ?, ?, ?, ?, ?)');
             $isChecked = $requirementStatus === 'Verified';
             $requirement->execute([$id, $requirementName, $requirementStatus, trim((string) ($_POST['requirement_remarks'] ?? '')) ?: null, $isChecked ? $staffPersonId : null, $isChecked ? date('Y-m-d H:i:s') : null]);
-            ape_sync_requirement_status($apeDb, $id);
-            $activityLabel = 'Updated APE requirement';
+            if (!empty($record['exam_date'])) ape_sync_requirement_status($apeDb, $id);
+            $activityLabel = 'Added APE requirement';
             $activityNotes = $requirementName . ': ' . $requirementStatus;
         } elseif ($action === 'update_requirement') {
             $requirementId = (int) ($_POST['requirement_id'] ?? 0);
@@ -362,7 +512,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $requirementId,
                 $id,
             ]);
-            ape_sync_requirement_status($apeDb, $id);
+            if (!empty($record['exam_date'])) ape_sync_requirement_status($apeDb, $id);
             $activityLabel = 'Updated APE requirement';
             $activityNotes = $requirementName . ': ' . $requirementStatus;
         } elseif ($action === 'delete_requirement') {
@@ -378,7 +528,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $delete = $apeDb->prepare('DELETE FROM ape_requirements WHERE requirement_id = ? AND ape_id = ?');
             $delete->execute([$requirementId, $id]);
-            ape_sync_requirement_status($apeDb, $id);
+            if (!empty($record['exam_date'])) ape_sync_requirement_status($apeDb, $id);
             $activityLabel = 'Deleted APE requirement';
             $activityNotes = $requirementName;
         }
@@ -425,6 +575,37 @@ $pendingReviewDocuments = array_values(array_filter(
     static fn(array $document): bool => ($document['verification_status'] ?? '') === 'Pending'
 ));
 $findings = ape_findings_for_record($id);
+$examSaved = !empty($record['exam_date']);
+$requirementsLocked = $examSaved;
+$requirementsFormId = $examSaved ? 'apeRequirementsForm' : 'apeExaminationForm';
+$documentFollowUp = ape_document_follow_up($record);
+$reviewUploadGroup = $queueKey === 'follow_up' ? 'follow_up' : 'initial';
+$reviewUploadNames = ape_upload_requirement_names($requirements, $reviewUploadGroup);
+$reviewGroupUploaded = $reviewUploadGroup === 'initial' ? ape_initial_uploads_present($record)
+    : (int) ($record['deferred_document_count'] ?? 0) >= count($reviewUploadNames);
+$reviewDocuments = array_values(array_filter($reviewDocuments, static fn(array $document): bool => in_array($document['document_type'], $reviewUploadNames, true)));
+$latestReviewDocuments = [];
+foreach ($reviewDocuments as $document) {
+    $type = $document['document_type'];
+    if (!isset($latestReviewDocuments[$type]) || (int) $document['document_id'] > (int) $latestReviewDocuments[$type]['document_id']) {
+        $latestReviewDocuments[$type] = $document;
+    }
+}
+$reviewDocuments = array_values($latestReviewDocuments);
+$reviewGroupNeedsCorrection = (bool) array_filter($reviewDocuments, static fn(array $document): bool => $document['verification_status'] === 'Needs Correction');
+$pendingReviewDocuments = array_values(array_filter($reviewDocuments, static fn(array $document): bool => $document['verification_status'] === 'Pending'));
+$showExamForm = !$examSaved && !$apeIsCompleted && $canRecordApeExam && ($record['patient_vitals_status'] ?? '') === 'Confirmed';
+$savedExam = $findings[0] ?? [];
+$savedExamResult = (string) ($savedExam['result_status'] ?? '');
+$hardCopyReviewMode = ($record['requirement_status'] ?? '') === 'Checked'
+    ? 'complete'
+    : (($record['requirement_status'] ?? '') === 'Needs Correction' ? 'correction' : 'follow_up');
+$savedReferral = null;
+if ($examSaved && $savedExamResult === 'Referred') {
+    $referralStmt = auth_db()->prepare('SELECT referred_to, reason FROM referrals WHERE patient_person_id = ? AND remarks = ? ORDER BY referral_id DESC LIMIT 1');
+    $referralStmt->execute([(int) $record['patient_id'], 'Created during APE examination #' . $id]);
+    $savedReferral = $referralStmt->fetch() ?: null;
+}
 $activities = ape_activities_for_patient_record($id, (int) $record['patient_id'], 20);
 $birthdateLabel = $record['birthdate'] ? date('M d, Y', strtotime($record['birthdate'])) : 'Not recorded';
 $sexLabel = $record['sex'] ?: 'Not specified';
@@ -538,7 +719,7 @@ render_header('APE Record - ' . $fullName);
     }
     .ape-checklist-update {
         display: grid;
-        grid-template-columns: 10.5rem minmax(11rem, 1fr) auto;
+        grid-template-columns: 10.5rem minmax(11rem, 1fr);
         gap: 0.5rem;
         align-items: center;
         min-width: 0;
@@ -744,6 +925,41 @@ render_header('APE Record - ' . $fullName);
             <?php endif; ?>
         </section>
 
+        <?php if ($examSaved): ?>
+        <section class="ape-flow-panel" aria-labelledby="savedApeExamTitle">
+            <div class="flex items-center justify-between gap-3 mb-4">
+                <div>
+                    <h2 class="font-headline text-lg font-extrabold mb-1" id="savedApeExamTitle">Examination</h2>
+                    <p class="text-xs font-bold text-slate-500 mb-0">Saved examination. Document review is handled separately below.</p>
+                </div>
+                <span class="badge badge-completed"><span class="material-symbols-outlined text-[14px]">lock</span> Saved and locked</span>
+            </div>
+            <fieldset disabled class="grid grid-cols-1 md:grid-cols-2 gap-4" style="border:0; padding:0; margin:0; min-width:0;">
+                <div>
+                    <label class="clinic-label" for="savedApeExamDate">Examination Date</label>
+                    <input class="clinic-input" id="savedApeExamDate" type="date" value="<?= e($record['exam_date']) ?>">
+                </div>
+                <div>
+                    <label class="clinic-label" for="savedApeExamResult">Clinical Result</label>
+                    <select class="clinic-select" id="savedApeExamResult">
+                        <?php if ($savedExamResult === ''): ?><option selected>Not recorded</option><?php endif; ?>
+                        <?php foreach (['Normal', 'With Finding', 'Referred'] as $result): ?>
+                            <option <?= $savedExamResult === $result ? 'selected' : '' ?>><?= e($result) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <?php if ($savedExamResult === 'With Finding'): ?>
+                    <div class="md:col-span-2"><label class="clinic-label" for="savedApeFinding">Examination Finding / Result</label><textarea id="savedApeFinding" class="clinic-textarea" rows="3"><?= e($savedExam['description'] ?? '') ?></textarea></div>
+                    <div><label class="clinic-label" for="savedApeClinicalNotes">Internal Clinical Notes</label><textarea id="savedApeClinicalNotes" class="clinic-textarea" rows="3"><?= e($record['clinical_remarks'] ?? '') ?></textarea></div>
+                    <div><label class="clinic-label" for="savedApePatientNotes">Patient-Visible Instructions</label><textarea id="savedApePatientNotes" class="clinic-textarea" rows="3"><?= e($record['patient_visible_note'] ?? '') ?></textarea></div>
+                <?php elseif ($savedExamResult === 'Referred'): ?>
+                    <div><label class="clinic-label" for="savedApeReferralTo">Facility / Specialist</label><input id="savedApeReferralTo" class="clinic-input" value="<?= e($savedReferral['referred_to'] ?? 'Not recorded') ?>"></div>
+                    <div><label class="clinic-label" for="savedApeReferralReason">Referral Reason</label><textarea id="savedApeReferralReason" class="clinic-textarea" rows="3"><?= e($savedReferral['reason'] ?? $savedExam['description'] ?? '') ?></textarea></div>
+                <?php endif; ?>
+            </fieldset>
+        </section>
+        <?php endif; ?>
+
         <section class="ape-flow-panel">
             <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-3">
                 <div class="min-w-0 flex-1">
@@ -803,8 +1019,13 @@ render_header('APE Record - ' . $fullName);
                         </button>
                     </form>
                 </div>
-            <?php elseif ($queueKey === 'digital_submission'): ?>
-                <?php if ((int) ($record['required_document_count'] ?? 0) < count(ape_default_requirements())): ?>
+            <?php elseif ($queueKey === 'digital_submission' || ape_can_review_returned_documents($record)): ?>
+                <?php if ((int) ($record['follow_up_required'] ?? 0) === 1): ?>
+                    <div class="ape-flow-action muted mb-4">
+                        <p class="text-sm font-bold mb-0">The initial clinic-verified group is due one week after examination. Deferred correction or follow-up documents use the assigned return date and do not block the initial archive review.</p>
+                    </div>
+                <?php endif; ?>
+                <?php if (!$reviewGroupUploaded): ?>
                     <div class="ape-flow-action muted">
                         <div class="flex items-start gap-3">
                             <span class="material-symbols-outlined text-amber-700 mt-0.5">hourglass_empty</span>
@@ -812,19 +1033,20 @@ render_header('APE Record - ' . $fullName);
                                 <h3 class="font-headline text-base font-extrabold text-amber-900 mb-1">Waiting for Complete Patient Upload</h3>
                                 <p class="text-sm font-bold text-amber-800 mb-4">The examination is complete. The patient must now upload the checked APE documents from the patient portal before clinic archive review can continue.</p>
                                 <div class="flex flex-wrap gap-2">
-                                    <?php foreach (['Lab Request Form', 'UHS Consent Form', 'UHS Medical Record', 'UHS Dental Record', 'Referral Form'] as $type): ?>
+                                    <?php foreach ($reviewUploadNames as $type): ?>
                                         <span class="badge badge-pending"><?= e($type) ?></span>
                                     <?php endforeach; ?>
                                 </div>
                             </div>
                         </div>
                     </div>
-                <?php else: ?>
+                <?php endif; ?>
+                <?php if ($reviewDocuments): ?>
                     <div class="grid grid-cols-1 xl:grid-cols-[1fr_0.9fr] gap-4">
                         <div class="ape-flow-action">
                             <div class="flex items-center justify-between gap-3 mb-3">
                                 <div>
-                                    <p class="clinic-label mb-1">Submitted Documents</p>
+                                    <p class="clinic-label mb-1"><?= $reviewUploadGroup === 'follow_up' ? 'Uploaded Follow-up Documents' : 'Submitted Documents' ?></p>
                                     <p class="text-xs font-bold text-slate-500 mb-0">Select only the files that must be corrected.</p>
                                 </div>
                                 <span class="badge badge-in-progress"><?= count($reviewDocuments) ?> File<?= count($reviewDocuments) === 1 ? '' : 's' ?></span>
@@ -857,8 +1079,9 @@ render_header('APE Record - ' . $fullName);
                             <form method="post" class="ape-flow-action space-y-3">
                                 <input type="hidden" name="action" value="approve_documents">
                                 <h3 class="font-headline text-base font-extrabold text-[#17261d] mb-1">Archive Submission</h3>
-                                <p class="text-xs font-bold text-slate-500 mb-0">Approve when the upload matches the checked hard-copy documents.</p>
-                                <button class="btn btn-primary w-full" data-confirm-submit data-confirm-type="primary" data-confirm-title="Archive these documents?" data-confirm-message="This will approve the uploaded documents for clinic archive." data-confirm-toast="Archiving documents..."><span class="material-symbols-outlined text-[18px]">inventory_2</span> Archive Documents</button>
+                                <p class="text-xs font-bold text-slate-500 mb-0"><?= $reviewUploadGroup === 'initial' ? 'Approve the initial group when the uploads match the checked hard copies.' : 'Preview the submitted files, then archive them to confirm the document follow-up is complete. Separate clinical follow-up remains open.' ?></p>
+                                <?php if (!$reviewGroupUploaded || $reviewGroupNeedsCorrection): ?><p class="text-xs text-amber-800">All files in this group must be submitted, including any requested replacements, before archiving.</p><?php endif; ?>
+                                <button class="btn btn-primary w-full" <?= !$reviewGroupUploaded || $reviewGroupNeedsCorrection || ($reviewUploadGroup === 'follow_up' && !$canRecordApeExam) ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Archive these documents?" data-confirm-message="This approves the uploaded files and completes their document review. Separate clinical follow-up will remain open." data-confirm-toast="Archiving documents..."><span class="material-symbols-outlined text-[18px]">inventory_2</span> Archive Documents</button>
                             </form>
                             <form method="post" class="ape-flow-action muted space-y-3" id="apeCorrectionForm">
                                 <input type="hidden" name="action" value="request_document_correction">
@@ -870,7 +1093,7 @@ render_header('APE Record - ' . $fullName);
                         </div>
                     </div>
                 <?php endif; ?>
-            <?php elseif ($queueKey === 'examination'): ?>
+            <?php elseif ($queueKey === 'examination' || (!$examSaved && !$apeIsCompleted)): ?>
                 <?php if (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed'): ?>
                     <div class="ape-flow-action muted">
                         <div class="flex items-start gap-3">
@@ -891,13 +1114,17 @@ render_header('APE Record - ' . $fullName);
                             </div>
                         </div>
                     </div>
+                <?php elseif ($examSaved): ?>
+                    <div class="ape-flow-action">
+                        <p class="text-sm font-bold text-slate-500 mb-0">The examination is locked. Any remaining document review is handled separately in the Requirements Checklist below.</p>
+                    </div>
                 <?php else: ?>
-                    <form method="post" class="ape-flow-action space-y-5">
+                    <form method="post" class="ape-flow-action space-y-5" id="apeExaminationForm" data-ape-id="<?= (int) $id ?>">
                         <input type="hidden" name="action" value="record_examination">
                         <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
                             <div>
                                 <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Examination</h3>
-                                <p class="text-xs font-bold text-slate-500 mb-0">Record the examination while checking the patient’s hard-copy APE documents. Digital upload opens only when the hard copies are complete.</p>
+                                <p class="text-xs font-bold text-slate-500 mb-0">Record the examination and hard-copy review together. Digital submission comes next; any correction or follow-up remains flagged until that submission is reviewed.</p>
                             </div>
                             <span class="badge badge-in-progress">Clearance Pending</span>
                         </div>
@@ -928,23 +1155,7 @@ render_header('APE Record - ' . $fullName);
                                     <textarea class="clinic-textarea" id="apePatientNote" name="patient_visible_note" rows="3" placeholder="Instructions that the patient can see..."><?= e($record['patient_visible_note']) ?></textarea>
                                 </div>
                             </div>
-                            <div class="md:col-span-2 rounded-xl border border-primary/20 bg-primary-fixed p-4">
-                                <p class="clinic-label text-primary mb-1">Hard-copy Documents</p>
-                                <p class="text-xs font-bold text-slate-600 mb-3">Review the patient’s physical documents during this examination.</p>
-                                <div class="grid grid-cols-1 gap-3" id="apeHardCopyFields">
-                                    <div id="apeHardCopyStatusField">
-                                        <label class="clinic-label" for="apeHardCopyStatus">Hard-copy Status</label>
-                                        <select class="clinic-select" id="apeHardCopyStatus" name="hard_copy_status" required>
-                                            <option value="complete" <?= ($record['requirement_status'] ?? '') !== 'Needs Correction' ? 'selected' : '' ?>>Complete - allow digital upload</option>
-                                            <option value="incomplete" <?= ($record['requirement_status'] ?? '') === 'Needs Correction' ? 'selected' : '' ?>>Incomplete - needs correction</option>
-                                        </select>
-                                    </div>
-                                    <div id="apeHardCopyIssuesField" class="<?= ($record['requirement_status'] ?? '') === 'Needs Correction' ? '' : 'hidden' ?>">
-                                        <label class="clinic-label" for="apeHardCopyIssues">Document Issues</label>
-                                        <textarea class="clinic-textarea" id="apeHardCopyIssues" name="missing_items" rows="2" placeholder="Required only if hard-copy documents are incomplete..."><?= e(($record['requirement_status'] ?? '') === 'Needs Correction' ? $record['patient_visible_note'] : '') ?></textarea>
-                                    </div>
-                                </div>
-                            </div>
+                            <p class="md:col-span-2 text-xs font-bold text-slate-500">Choose the document outcome in the checklist below. Save Examination saves and locks both the clinical result and document review together.</p>
                             <div class="md:col-span-2 hidden rounded-xl border border-amber-200 bg-amber-50 p-4" id="apeReferralDetails">
                                 <p class="clinic-label text-amber-800 mb-1">Immediate Referral (only when result is Referred)</p>
                                 <p class="text-xs font-bold text-amber-700 mb-3">A referral is created immediately with this examination; it will not wait for a separate decision step.</p>
@@ -960,9 +1171,7 @@ render_header('APE Record - ' . $fullName);
                                 </div>
                             </div>
                         </div>
-                        <button class="btn btn-primary w-full" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save examination?" data-confirm-message="If the hard-copy documents are complete, digital document upload will open for the patient." data-confirm-toast="Saving APE examination...">
-                            <span class="material-symbols-outlined text-[18px]">clinical_notes</span> Save Examination
-                        </button>
+                        <p class="text-xs font-bold text-slate-500 mb-0">Save Examination is at the bottom of this page, after the requirements and notes.</p>
                     </form>
                 <?php endif; ?>
             <?php elseif ($queueKey === 'final_decision'): ?>
@@ -1018,6 +1227,13 @@ render_header('APE Record - ' . $fullName);
                     </div>
                 <?php endif; ?>
             <?php elseif ($queueKey === 'follow_up'): ?>
+                <?php if ($documentFollowUp): ?>
+                    <div class="ape-flow-action muted">
+                        <h3 class="font-headline text-lg font-extrabold mb-2">Document <?= $hardCopyReviewMode === 'correction' ? 'Correction' : 'Follow-up' ?></h3>
+                        <p class="text-sm font-bold mb-2">Review the returned documents using Review Returned Documents below. Uploads and review are allowed before or after the deadline.</p>
+                        <p class="text-sm mb-0">Document Deadline: <?= e(date('M j, Y', strtotime($record['follow_up_due_date']))) ?></p>
+                    </div>
+                <?php else: ?>
                 <div class="grid grid-cols-1 xl:grid-cols-[1fr_0.9fr] gap-4">
                     <div class="ape-flow-action muted space-y-4">
                         <div>
@@ -1065,6 +1281,7 @@ render_header('APE Record - ' . $fullName);
                         <?php endif; ?>
                     </div>
                 </div>
+                <?php endif; ?>
             <?php else: ?>
                 <div class="ape-flow-action">
                     <div class="flex items-start gap-3">
@@ -1080,14 +1297,27 @@ render_header('APE Record - ' . $fullName);
 
         <div class="grid grid-cols-1 gap-4">
             <?php if (!$apeIsCompleted): ?>
-            <section class="ape-flow-panel">
+            <section class="ape-flow-panel" id="apeRequirementsChecklist" data-ape-requirements data-locked="<?= $requirementsLocked ? 'true' : 'false' ?>">
                 <div class="flex items-center justify-between gap-3 mb-4">
                     <div>
-                        <h2 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Requirements Checklist</h2>
-                        <p class="text-xs font-bold text-slate-500 mb-0">Each requirement is stored separately in Cliniq_db.</p>
+                        <h2 class="font-headline text-lg font-extrabold text-[#17261d] mb-1"><?= $requirementsLocked ? 'Saved Document Review' : 'Requirements Checklist' ?></h2>
+                        <p class="text-xs font-bold text-slate-500 mb-0"><?= $requirementsLocked ? 'Saved and locked. The outcome, selected documents, instructions, and return date are preserved.' : ($examSaved ? 'Choose the document outcome, then use Save Document Review. The original examination stays locked.' : 'Document choices are unsaved previews. Statuses, return date, and queue movement take effect only after Save Examination succeeds.') ?></p>
                     </div>
-                    <span class="badge badge-pending"><?= count($requirements) ?> item(s)</span>
+                    <?php if (!$requirementsLocked): ?><span class="badge badge-pending"><?= count($requirements) ?> item(s)</span><?php endif; ?>
                 </div>
+                <?php if ($requirementsLocked): ?>
+                    <p class="text-sm font-bold text-primary mb-4"><span class="material-symbols-outlined align-middle">lock</span> Saved <?= e(date('M j, Y g:i A', strtotime($record['requirements_saved_at'] ?: $record['exam_date']))) ?></p>
+                <?php endif; ?>
+                <fieldset <?= $requirementsLocked ? 'disabled' : '' ?> class="m-0 p-0 border-0 min-w-0">
+                <?php if ($examSaved): ?>
+                <form method="post" id="apeRequirementsForm" class="mb-4" data-ape-id="<?= (int) $id ?>">
+                    <input type="hidden" name="action" value="save_document_review">
+                <?php endif; ?>
+                    <?php render_ape_hard_copy_review_fields($requirements, $hardCopyReviewMode, $record, $requirementsFormId); ?>
+                <?php if ($examSaved): ?>
+                </form>
+                <?php endif; ?>
+                <?php if (!$requirementsLocked): ?>
                 <div class="ape-checklist-list">
                     <?php foreach ($requirements as $requirement): ?>
                         <div class="ape-checklist-row">
@@ -1097,19 +1327,14 @@ render_header('APE Record - ' . $fullName);
                                     <span>Checked by <?= e($requirement['checked_by_name'] ?: 'Clinic staff') ?> · <?= e(date('M d, Y g:i A', strtotime($requirement['checked_at']))) ?></span>
                                 <?php endif; ?>
                             </div>
-                            <form method="post" class="ape-checklist-update">
-                                <input type="hidden" name="action" value="update_requirement">
-                                <input type="hidden" name="requirement_id" value="<?= (int) $requirement['requirement_id'] ?>">
-                                <select class="clinic-select ape-requirement-status" name="requirement_item_status" data-requirement-status aria-label="Status for <?= e($requirement['requirement_name']) ?>">
+                            <div class="ape-checklist-update">
+                                <select class="clinic-select ape-requirement-status" disabled data-requirement-preview="<?= (int) $requirement['requirement_id'] ?>" data-requirement-status data-status="<?= e($requirement['status'] ?? 'Missing') ?>" aria-label="Status preview for <?= e($requirement['requirement_name']) ?>">
                                     <?php foreach (['Missing', 'Submitted', 'Verified', 'Needs Correction'] as $status): ?>
                                         <option value="<?= e($status) ?>" <?= ($requirement['status'] ?? '') === $status ? 'selected' : '' ?>><?= e($status) ?></option>
                                     <?php endforeach; ?>
                                 </select>
-                                <input class="clinic-input" name="requirement_remarks" value="<?= e($requirement['remarks'] ?? '') ?>" placeholder="Optional remarks" aria-label="Remarks for <?= e($requirement['requirement_name']) ?>">
-                                <button class="btn btn-sm btn-primary ape-checklist-save" data-confirm-submit data-confirm-type="primary" data-confirm-title="Update requirement?" data-confirm-message="This will save the selected checklist status and remarks." data-confirm-toast="Saving requirement...">
-                                    <span class="material-symbols-outlined text-[15px]">save</span> Save
-                                </button>
-                            </form>
+                                <input class="clinic-input" form="<?= e($requirementsFormId) ?>" name="requirement_remarks[<?= (int) $requirement['requirement_id'] ?>]" data-requirement-remark="<?= (int) $requirement['requirement_id'] ?>" value="<?= e($requirement['remarks'] ?? '') ?>" placeholder="Optional remarks" aria-label="Remarks for <?= e($requirement['requirement_name']) ?>">
+                            </div>
                             <form method="post">
                                 <input type="hidden" name="action" value="delete_requirement">
                                 <input type="hidden" name="requirement_id" value="<?= (int) $requirement['requirement_id'] ?>">
@@ -1120,19 +1345,36 @@ render_header('APE Record - ' . $fullName);
                         </div>
                     <?php endforeach; ?>
                 </div>
-                <form method="post" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <input type="hidden" name="action" value="add_requirement">
-                    <input class="clinic-input sm:col-span-2" name="requirement_name" placeholder="Requirement name" required>
-                    <select class="clinic-select ape-requirement-status" name="requirement_item_status" data-requirement-status>
-                        <?php foreach (['Missing', 'Submitted', 'Verified', 'Needs Correction'] as $status): ?>
-                            <option value="<?= e($status) ?>"><?= e($status) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                    <input class="clinic-input" name="requirement_remarks" placeholder="Optional remarks">
-                    <button class="btn btn-primary sm:col-span-2" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save requirement?" data-confirm-message="This will add or update the named APE requirement." data-confirm-toast="Saving requirement...">
-                        <span class="material-symbols-outlined text-[18px]">playlist_add</span> Save Requirement
+                <div class="flex flex-wrap gap-3">
+                    <?php if ($examSaved): ?>
+                    <button type="submit" form="apeRequirementsForm" class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save document review?" data-confirm-message="This updates and locks the document review for this visit. The original examination stays locked." data-confirm-toast="Saving document review...">
+                        <span class="material-symbols-outlined text-[18px]">save</span> Save Document Review
                     </button>
-                </form>
+                    <?php endif; ?>
+                    <button type="button" class="btn btn-outline" onclick="showModal('apeAddRequirementModal')">
+                        <span class="material-symbols-outlined text-[18px]">playlist_add</span> Add Requirement
+                    </button>
+                </div>
+                <div class="modal-backdrop" id="apeAddRequirementModal" style="display:none;">
+                    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="apeAddRequirementTitle">
+                        <div class="flex items-center justify-between gap-3 mb-4">
+                            <h3 class="font-headline text-lg font-extrabold mb-0" id="apeAddRequirementTitle">Add Requirement</h3>
+                            <button type="button" class="btn btn-sm btn-ghost" onclick="closeModal('apeAddRequirementModal')" aria-label="Close add requirement"><span class="material-symbols-outlined">close</span></button>
+                        </div>
+                        <p class="text-xs text-slate-500">New requirements start as Missing. Choose their outcome in the checklist; it is applied with Save Examination or, for later visits, Save Document Review.</p>
+                        <form method="post" class="grid gap-3">
+                            <input type="hidden" name="action" value="add_requirement">
+                            <input type="hidden" name="requirement_item_status" value="Missing">
+                            <label class="clinic-label" for="apeNewRequirementName">Requirement name</label>
+                            <input class="clinic-input" id="apeNewRequirementName" name="requirement_name" maxlength="160" placeholder="Requirement name" required>
+                            <label class="clinic-label" for="apeNewRequirementRemarks">Optional remarks</label>
+                            <input class="clinic-input" id="apeNewRequirementRemarks" name="requirement_remarks" placeholder="Optional remarks">
+                            <button type="submit" class="btn btn-primary" data-confirm-submit data-confirm-title="Add requirement?" data-confirm-message="This adds a Missing requirement. Your other document choices remain unsaved until the examination or document review is saved." data-confirm-toast="Adding requirement...">Add Requirement</button>
+                        </form>
+                    </div>
+                </div>
+                <?php endif; ?>
+                </fieldset>
             </section>
             <?php else: ?>
 
@@ -1195,7 +1437,7 @@ render_header('APE Record - ' . $fullName);
                             </div>
                             <p class="text-sm font-bold text-slate-600 whitespace-pre-wrap mb-0"><?= e($finding['description']) ?></p>
                             <p class="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-2 mb-0">
-                                <?= $finding['follow_up_required'] ? 'Follow-up required' : 'No follow-up' ?> · <?= e($finding['recorded_by_name'] ?: 'Clinic staff') ?> · <?= e(date('M d, Y g:i A', strtotime($finding['recorded_at']))) ?>
+                                <?= $finding['follow_up_required'] ? 'Clinical follow-up required' : 'No clinical follow-up recorded' ?><?php if ($documentFollowUp): ?> · Document follow-up required<?php endif; ?> · <?= e($finding['recorded_by_name'] ?: 'Clinic staff') ?> · <?= e(date('M d, Y g:i A', strtotime($finding['recorded_at']))) ?>
                             </p>
                         </div>
                     <?php endforeach; ?>
@@ -1247,79 +1489,15 @@ render_header('APE Record - ' . $fullName);
                 </div>
             </section>
         </div>
+        <?php if ($showExamForm): ?>
+            <section class="ape-flow-panel">
+                <p class="text-sm font-bold text-slate-500 mb-3">Save the examination and document review together. Document statuses, the return date, and queue movement are applied only when this save succeeds.</p>
+                <button type="submit" form="apeExaminationForm" class="btn btn-primary w-full" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save and lock examination and document review?" data-confirm-message="This saves and locks the clinical result and document review together. Digital submission and archive review must be completed before final decision or follow-up." data-confirm-toast="Saving examination and document review...">
+                    <span class="material-symbols-outlined text-[18px]">clinical_notes</span> Save Examination
+                </button>
+            </section>
+        <?php endif; ?>
     </section>
 </div>
-
-<script>
-(() => {
-    const statusSelects = document.querySelectorAll('[data-requirement-status]');
-    statusSelects.forEach((select) => {
-        const syncStatusColor = () => {
-            select.dataset.status = select.value;
-        };
-        select.addEventListener('change', syncStatusColor);
-        syncStatusColor();
-    });
-})();
-
-(() => {
-    const status = document.getElementById('apeHardCopyStatus');
-    const fields = document.getElementById('apeHardCopyFields');
-    const statusField = document.getElementById('apeHardCopyStatusField');
-    const issues = document.getElementById('apeHardCopyIssues');
-    const issuesField = document.getElementById('apeHardCopyIssuesField');
-    if (!status || !fields || !statusField || !issues || !issuesField) return;
-
-    const syncHardCopyIssues = (clearHiddenValue = false) => {
-        const isIncomplete = status.value === 'incomplete';
-        issues.required = isIncomplete;
-        issues.disabled = !isIncomplete;
-        fields.classList.toggle('md:grid-cols-2', isIncomplete);
-        statusField.classList.toggle('md:col-span-2', !isIncomplete);
-        issuesField.classList.toggle('hidden', !isIncomplete);
-        if (clearHiddenValue && !isIncomplete) issues.value = '';
-    };
-
-    status.addEventListener('change', () => syncHardCopyIssues(true));
-    syncHardCopyIssues(false);
-})();
-
-(() => {
-    const result = document.getElementById('apeExamResult');
-    const findingDetails = document.getElementById('apeFindingDetails');
-    const findingDescription = document.getElementById('apeFindingDescription');
-    const clinicalRemarks = document.getElementById('apeClinicalRemarks');
-    const patientNote = document.getElementById('apePatientNote');
-    const referralDetails = document.getElementById('apeReferralDetails');
-    const referralDestination = document.getElementById('apeReferralDestination');
-    const referralReason = document.getElementById('apeReferralReason');
-    if (!result) return;
-
-    const syncExamResultFields = (clearHiddenValues = false) => {
-        const hasFinding = result.value === 'With Finding';
-        const isReferred = result.value === 'Referred';
-
-        findingDetails?.classList.toggle('hidden', !hasFinding);
-        referralDetails?.classList.toggle('hidden', !isReferred);
-
-        [findingDescription, clinicalRemarks, patientNote].forEach((field) => {
-            if (!field) return;
-            field.disabled = !hasFinding;
-            if (clearHiddenValues && !hasFinding) field.value = '';
-        });
-        if (findingDescription) findingDescription.required = hasFinding;
-
-        [referralDestination, referralReason].forEach((field) => {
-            if (!field) return;
-            field.disabled = !isReferred;
-            field.required = isReferred;
-            if (clearHiddenValues && !isReferred) field.value = '';
-        });
-    };
-
-    result.addEventListener('change', () => syncExamResultFields(true));
-    syncExamResultFields(false);
-})();
-</script>
 
 <?php render_footer(); ?>

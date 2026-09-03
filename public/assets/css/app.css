@@ -3071,6 +3071,15 @@ textarea.record-sheet-field {
     color: #064e3b;
 }
 
+.dashboard-calendar-event.is-ape .dashboard-calendar-event-details {
+    align-items: center;
+    text-align: center;
+}
+
+.dashboard-calendar-event.is-ape .dashboard-calendar-event-time {
+    justify-content: center;
+}
+
 .dashboard-calendar-event-main {
     display: flex;
     align-items: center;

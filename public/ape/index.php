@@ -31,18 +31,25 @@ $selectedBatchId = $requestedBatchId && isset($scheduledBatchesById[(int) $reque
     : null;
 $selectedBatch = $selectedBatchId !== null ? $scheduledBatchesById[$selectedBatchId] : null;
 
-$todayScheduleRecords = ape_fetch_records('', null, $todayScheduleDate);
-$scopeRecords = $selectedBatchId !== null
-    ? ape_fetch_records('', null, null, $selectedBatchId)
-    : $todayScheduleRecords;
-$allRecords = $search === ''
-    ? $scopeRecords
-    : ($selectedBatchId !== null
-        ? ape_fetch_records($search, null, null, $selectedBatchId)
-        : ape_fetch_records($search, null, $todayScheduleDate));
+$todayScheduleRecords = array_values(array_filter(
+    ape_fetch_records('', null, $todayScheduleDate),
+    static fn(array $record): bool => !empty($record['schedule_batch_id'])
+        && ($record['batch_status'] ?? '') === 'Scheduled'
+        && ($record['batch_schedule_date'] ?? '') === $todayScheduleDate
+));
+// A selected batch scopes every queue. By default, only Examination is date-scoped.
+$scopeRecords = ape_fetch_records($search, null, null, $selectedBatchId);
+$allRecords = array_values(array_filter(
+    $scopeRecords,
+    static fn(array $record): bool => $selectedBatchId !== null
+        || ape_record_queue($record) !== 'examination'
+        || (!empty($record['schedule_batch_id'])
+            && ($record['batch_status'] ?? '') === 'Scheduled'
+            && ($record['batch_schedule_date'] ?? '') === $todayScheduleDate)
+));
 $todayScheduledBatches = [];
 foreach ($todayScheduleRecords as $scheduledRecord) {
-    if (!empty($scheduledRecord['schedule_batch_id'])) {
+    if (!empty($scheduledRecord['schedule_batch_id']) && ($scheduledRecord['batch_schedule_date'] ?? '') === $todayScheduleDate) {
         $todayScheduledBatches[(int) $scheduledRecord['schedule_batch_id']] = [
             'name' => (string) ($scheduledRecord['batch_name'] ?? 'APE Batch'),
             'start_time' => (string) ($scheduledRecord['batch_start_time'] ?? ''),
@@ -70,14 +77,11 @@ $batchIndicator = $selectedBatch !== null
         date('g:i A', strtotime((string) $selectedBatch['start_time'])),
         date('g:i A', strtotime((string) $selectedBatch['end_time']))
     )
-    : $todayBatchIndicator;
+    : 'Overall / Default';
 $scopeDescription = $selectedBatch !== null
-    ? 'Showing patients assigned to ' . (string) $selectedBatch['batch_name'] . '. Click a queue to focus the page.'
-    : 'Today’s scheduled patients only. Click a queue to focus the page.';
-$scopeEmptyText = $selectedBatch !== null
-    ? 'No patients from this scheduled batch are in this queue.'
-    : 'No patients are scheduled for today in this queue.';
-$scopeCountLabel = $selectedBatch !== null ? 'Selected batch' : 'Scheduled today';
+    ? 'All queues show patients assigned to ' . (string) $selectedBatch['batch_name'] . '. Choose Overall / Default to remove the batch filter.'
+    : 'Examination shows today’s scheduled patients. The other four queues show overall data. Select a batch to filter all queues.';
+$scopeCountLabel = $selectedBatch !== null ? 'Selected batch' : 'Queue records';
 $batchQuerySuffix = $selectedBatchId !== null ? '&batch=' . $selectedBatchId : '';
 
 $recordsByQueue = array_fill_keys(array_keys($queues), []);
@@ -111,7 +115,7 @@ $appointmentsToday = (int)($appointmentsStmt->fetch()['total'] ?? 0);
 $overdueRecords = [];
 foreach ($allRecords as $rec) {
     $priority = ape_priority_badge($rec);
-    if (in_array($priority['label'], ['Missed', 'Overdue', 'Urgent'], true)) {
+    if (in_array($priority['label'], ['Missed', 'Overdue'], true)) {
         $overdueRecords[] = $rec;
     }
 }
@@ -170,7 +174,7 @@ render_clinic_command_header(
             $deadlineText = match ($priority['label']) {
                 'Missed' => 'Assigned batch was missed',
                 'Overdue' => $priority['label'] . ' - ' . $days . 'd',
-                default => 'Due in ' . $days . 'd',
+                default => 'Review required',
             };
         ?>
             <div class="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-red-100/30 transition-colors">
@@ -209,7 +213,7 @@ render_clinic_command_header(
                     Manage Scheduling
                 </a>
             <?php endif; ?>
-            <button type="button" onclick="showModal('apeBatchPickerModal')" class="w-full sm:w-auto min-h-12 px-4 py-2 rounded-xl border border-outline-variant bg-primary-fixed flex items-center gap-3 text-left hover:border-primary transition-colors" title="Choose a scheduled APE batch">
+            <button type="button" onclick="showModal('apeBatchPickerModal')" class="w-full sm:w-auto min-h-12 px-4 py-2 rounded-xl border border-outline-variant bg-primary-fixed flex items-center gap-3 text-left hover:border-primary transition-colors" title="<?= e($selectedBatch !== null ? 'Filter all queues by a scheduled batch, or choose Overall / Default.' : 'Examination: ' . $todayBatchIndicator . '. Other queues: overall data.') ?>">
                 <span class="material-symbols-outlined text-primary text-[20px]">event_available</span>
                 <div class="min-w-0">
                     <p class="text-[9px] font-black uppercase tracking-widest text-primary mb-0">Scheduled Batch</p>
@@ -248,6 +252,13 @@ render_clinic_command_header(
         $queue = $queues[$queueKey];
         $records = $recordsByQueue[$queueKey];
         $shownRecords = $records;
+        $scopeEmptyText = $search !== ''
+            ? 'No records match your search in this queue.'
+            : ($selectedBatchId !== null
+                ? 'No patients from this scheduled batch are in this queue.'
+                : ($queueKey === 'examination'
+                    ? 'No patients are scheduled for examination today.'
+                    : 'No patients are currently in this queue.'));
         $gridSuffix = preg_replace('/[^A-Za-z0-9_-]/', '', $queueKey);
         $paginationId = 'apePagination' . $gridSuffix;
     ?>
@@ -278,6 +289,11 @@ render_clinic_command_header(
                 $scheduleHtml = $hasBatch
                     ? '<strong class="text-sm text-slate-800 block">' . e($rec['batch_name']) . '</strong><span class="text-xs font-bold text-slate-500">' . e(date('M j, Y', strtotime($rec['batch_schedule_date']))) . ' &bull; ' . e(date('g:i A', strtotime($rec['batch_start_time']))) . '–' . e(date('g:i A', strtotime($rec['batch_end_time']))) . '</span>'
                     : '<span class="badge badge-pending">Unscheduled</span>';
+                if (ape_record_queue($rec) === 'follow_up' && !empty($rec['follow_up_due_date'])) {
+                    $scheduleSort = $rec['follow_up_due_date'];
+                    $scheduleHtml = '<strong class="text-sm text-slate-800 block">Return Date</strong><span class="text-xs font-bold text-slate-500">'
+                        . e(date('M j, Y', strtotime($rec['follow_up_due_date']))) . '</span>';
+                }
                 $apeRows[] = [
                     'rowUrl' => 'view.php?id=' . (int)$rec['id'],
                     'prioritySort' => array_search($priority['label'], ['Missed', 'Overdue', 'Urgent', 'Clinical', 'Waiting', 'Ready', 'Done'], true),
@@ -329,17 +345,18 @@ render_clinic_command_header(
         </div>
 
         <?php
-        $todayQuery = ['queue' => $activeQueue];
+        $defaultQuery = ['queue' => $activeQueue];
         if ($search !== '') {
-            $todayQuery['q'] = $search;
+            $defaultQuery['q'] = $search;
         }
         ?>
-        <a href="?<?= e(http_build_query($todayQuery)) ?>" class="flex items-center justify-between gap-4 rounded-2xl border <?= $selectedBatchId === null ? 'border-primary bg-primary-fixed' : 'border-outline-variant bg-white' ?> p-4 mb-3 text-decoration-none hover:border-primary transition-colors">
+        <a href="?<?= e(http_build_query($defaultQuery)) ?>" class="flex items-center justify-between gap-4 rounded-2xl border <?= $selectedBatchId === null ? 'border-primary bg-primary-fixed' : 'border-outline-variant bg-white' ?> p-4 mb-3 text-decoration-none hover:border-primary transition-colors">
             <div class="flex items-center gap-3 min-w-0">
                 <span class="w-10 h-10 rounded-xl bg-white border border-outline-variant text-primary flex items-center justify-center material-symbols-outlined shrink-0">today</span>
                 <div class="min-w-0">
-                    <strong class="block text-sm text-slate-800">Today&rsquo;s Scheduled Batches</strong>
-                    <span class="block text-xs font-bold text-slate-500"><?= e(date('F j, Y', strtotime($todayScheduleDate))) ?> &bull; <?= $todayScheduledPatientCount ?> patient(s)</span>
+                    <strong class="block text-sm text-slate-800">Overall / Default</strong>
+                    <span class="block text-xs font-bold text-slate-500">Examination: today’s scheduled patients. Other queues: overall data.</span>
+                    <span class="block text-xs font-bold text-slate-500"><?= e(date('F j, Y', strtotime($todayScheduleDate))) ?> &bull; <?= $todayScheduledPatientCount ?> patient(s) assigned to today’s batches</span>
                 </div>
             </div>
             <?php if ($selectedBatchId === null): ?>

@@ -371,7 +371,7 @@ function render_footer(): void
         </div>
         <?php endif; ?>
     <?php render_flash_toasts(); ?>
-    <script src="<?= app_url('assets/js/app.js?v=logo-warning-1') ?>"></script>
+    <script src="<?= app_url('assets/js/app.js?v=' . filemtime(__DIR__ . '/../../public/assets/js/app.js')) ?>"></script>
     <script src="<?= app_url('assets/js/ag-grid-tables.js?v=name-tooltip-1') ?>"></script>
     <script src="<?= app_url('assets/js/file-preview.js?v=ape-popup-2') ?>"></script>
     </body>
