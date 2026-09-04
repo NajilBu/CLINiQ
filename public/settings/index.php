@@ -493,7 +493,7 @@ if (!isset($dropdownGroupsByCategory[$currentDropdownCategory][$currentDropdownG
     $currentDropdownGroup = (string) array_key_first($dropdownGroupsByCategory[$currentDropdownCategory]);
 }
 $currentTab = $_GET['tab'] ?? 'general';
-if (!in_array($currentTab, ['general', 'account', 'ape-cycle', 'dropdowns', 'clinical', 'email', 'maintenance'], true)) {
+if (!in_array($currentTab, ['general', 'account', 'ape-cycle', 'dropdowns', 'clinical', 'email', 'backup', 'maintenance'], true)) {
     $currentTab = 'general';
 }
 if ($currentTab === 'ape-cycle' && !$canManageApeCycles) {
@@ -559,6 +559,10 @@ render_clinic_command_header(
         <a href="index.php?tab=email" class="settings-tab-link <?= $currentTab === 'email' ? 'active' : '' ?> text-decoration-none" data-settings-tab="email" data-no-ajax="true">
             <span class="material-symbols-outlined">mail</span>
             <span>Email</span>
+        </a>
+        <a href="index.php?tab=backup" class="settings-tab-link <?= $currentTab === 'backup' ? 'active' : '' ?> text-decoration-none" data-settings-tab="backup" data-no-ajax="true">
+            <span class="material-symbols-outlined">backup</span>
+            <span>Backup</span>
         </a>
         <a href="index.php?tab=maintenance" class="settings-tab-link <?= $currentTab === 'maintenance' ? 'active' : '' ?> text-decoration-none" data-settings-tab="maintenance" data-no-ajax="true">
             <span class="material-symbols-outlined">restart_alt</span>
@@ -1464,6 +1468,82 @@ render_clinic_command_header(
                     </form>
                 </section>
                 <?php endif; ?>
+            </div>
+
+            <div id="settings-backup" class="settings-tab-panel <?= $currentTab === 'backup' ? 'active' : '' ?> space-y-6" data-backup-placeholder>
+                <section>
+                    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                        <div>
+                            <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">System Backup</h2>
+                            <p class="text-xs font-bold text-slate-500 mb-0">Placeholder for the planned daily backup of CLINiQ records and uploaded files.</p>
+                        </div>
+                        <span class="badge badge-pending"><span class="material-symbols-outlined text-[14px]">construction</span> Not configured</span>
+                    </div>
+                </section>
+
+                <section class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4" aria-label="Planned backup configuration">
+                    <div class="settings-section">
+                        <span class="material-symbols-outlined text-primary mb-3">calendar_today</span>
+                        <p class="clinic-label mb-1">Frequency</p>
+                        <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Once daily</h3>
+                        <p class="settings-help mb-0">Planned after clinic hours.</p>
+                    </div>
+                    <div class="settings-section">
+                        <span class="material-symbols-outlined text-primary mb-3">schedule</span>
+                        <p class="clinic-label mb-1">Proposed Time</p>
+                        <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">6:00 PM</h3>
+                        <p class="settings-help mb-0">The server must be running.</p>
+                    </div>
+                    <div class="settings-section">
+                        <span class="material-symbols-outlined text-primary mb-3">hard_drive</span>
+                        <p class="clinic-label mb-1">Destination</p>
+                        <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Internal drive</h3>
+                        <p class="settings-help mb-0">A folder or drive has not been selected.</p>
+                    </div>
+                    <div class="settings-section">
+                        <span class="material-symbols-outlined text-primary mb-3">history</span>
+                        <p class="clinic-label mb-1">Last Backup</p>
+                        <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">No backup yet</h3>
+                        <p class="settings-help mb-0">History will appear after implementation.</p>
+                    </div>
+                </section>
+
+                <section class="settings-section space-y-4">
+                    <div>
+                        <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Planned Backup Coverage</h3>
+                        <p class="settings-help mb-0">The database and uploaded files must be backed up together so restored records keep their documents.</p>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div class="rounded-xl border border-outline-variant bg-[var(--cliniq-surface-low)] p-4 flex items-start gap-3">
+                            <span class="material-symbols-outlined text-primary">database</span>
+                            <div><strong class="text-sm block">CLINiQ database</strong><span class="settings-help">Accounts, patient records, visits, appointments, APE, inventory, and settings.</span></div>
+                        </div>
+                        <div class="rounded-xl border border-outline-variant bg-[var(--cliniq-surface-low)] p-4 flex items-start gap-3">
+                            <span class="material-symbols-outlined text-primary">folder_copy</span>
+                            <div><strong class="text-sm block">Uploaded files</strong><span class="settings-help">Patient documents, clinic logos, and other stored attachments.</span></div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="settings-section flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                    <div>
+                        <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Backup Controls</h3>
+                        <p class="settings-help mb-0">These controls are placeholders and cannot start or configure a backup yet.</p>
+                    </div>
+                    <div class="flex flex-col sm:flex-row gap-3">
+                        <button type="button" class="btn btn-secondary justify-center" disabled title="Backup implementation is not configured yet">
+                            <span class="material-symbols-outlined text-[18px]">settings</span> Configure Backup · Coming soon
+                        </button>
+                        <button type="button" class="btn btn-primary justify-center" disabled title="Backup implementation is not configured yet">
+                            <span class="material-symbols-outlined text-[18px]">backup</span> Run Backup · Coming soon
+                        </button>
+                    </div>
+                </section>
+
+                <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 flex items-start gap-3 text-amber-900">
+                    <span class="material-symbols-outlined">info</span>
+                    <p class="text-sm font-bold mb-0">No automatic backup is running. This page describes the agreed plan only.</p>
+                </div>
             </div>
 
             <div id="settings-maintenance" class="settings-tab-panel <?= $currentTab === 'maintenance' ? 'active' : '' ?> space-y-6">
