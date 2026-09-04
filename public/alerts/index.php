@@ -160,26 +160,6 @@ render_clinic_command_header(
             <?php endforeach; ?>
         </div>
     </div>
-    <?php if ($filterKey !== 'pending' || $filterRisk !== 'all' || $dateFrom !== '' || $dateTo !== ''): ?>
-        <div class="flex flex-wrap items-center gap-2 px-6 py-4 bg-white border-b border-outline-variant/10">
-            <span class="material-symbols-outlined text-slate-400 text-sm">filter_alt</span>
-            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-2">Active Filters</span>
-            <?php if ($filterKey !== 'pending'): ?>
-                <span class="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold border border-slate-200"><?= e($filterStatus) ?></span>
-            <?php endif; ?>
-            <?php if ($filterRisk !== 'all'): ?>
-                <span class="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold border border-slate-200"><?= e($filterRisk) ?> Risk</span>
-            <?php endif; ?>
-            <?php if ($dateFrom !== ''): ?>
-                <span class="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold border border-slate-200">From <?= e($dateFrom) ?></span>
-            <?php endif; ?>
-            <?php if ($dateTo !== ''): ?>
-                <span class="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold border border-slate-200">To <?= e($dateTo) ?></span>
-            <?php endif; ?>
-            <a href="index.php" class="ml-auto text-[10px] font-black text-primary uppercase tracking-widest hover:underline text-decoration-none">Clear All</a>
-        </div>
-    <?php endif; ?>
-
     <div id="alertAdvancedFilterModal" class="modal-backdrop">
         <div class="modal-content bg-white rounded-[2rem] w-full max-w-2xl p-8 shadow-2xl border border-outline-variant/10">
             <div class="flex items-center justify-between mb-8">

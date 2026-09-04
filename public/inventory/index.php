@@ -28,14 +28,14 @@ $lowStockKeys = array_fill_keys(array_keys(array_filter($medicineStockGroups, fn
 $expiring = array_values(array_filter($medicineItems, fn(array $item): bool => $item['expiration_date'] && strtotime($item['expiration_date']) <= strtotime('+30 days')));
 $outOfStock = array_values(array_filter($medicineItems, fn(array $item): bool => (int) $item['quantity'] === 0));
 $medicineRestockOptions = [];
-foreach ($allItems as $item) {
+foreach ($activeItems as $item) {
     $category = (string) ($item['category'] ?? '');
     if (str_contains(strtolower($category), 'equipment')) {
         continue;
     }
 
     $key = strtolower(trim((string) $item['item_name'])) . '|' . strtolower(trim($category)) . '|' . strtolower(trim((string) $item['unit'])) . '|' . (int) $item['reorder_level'];
-    if (!isset($medicineRestockOptions[$key]) || empty($item['archived_at'])) {
+    if (!isset($medicineRestockOptions[$key])) {
         $medicineRestockOptions[$key] = $item;
     }
 }
@@ -174,7 +174,7 @@ foreach ($visibleItems as $item) {
     $maxQty = max((int) $item['reorder_level'] * 4, (int) $item['quantity'], 1);
     $pct = min(100, round(((int) $item['quantity'] / $maxQty) * 100));
     $barClass = $isLow ? ($pct <= 20 ? 'stock-critical' : 'stock-warning') : ($pct <= 20 ? 'stock-warning' : 'stock-healthy');
-    $expirationLabel = $item['expiration_date'] ? date('M Y', strtotime($item['expiration_date'])) : '-';
+    $expirationLabel = $item['expiration_date'] ? date('M d, Y', strtotime($item['expiration_date'])) : '-';
     $expirationClass = $isExpiring && !$isArchived ? 'text-red-600' : 'text-slate-600';
     $editArgs = implode(', ', [
         (int) $item['id'],
@@ -464,15 +464,6 @@ render_clinic_command_header(
             </a>
         </div>
     </div>
-    <?php if ($stockFilter !== 'all'): ?>
-        <div class="flex flex-wrap items-center gap-2 px-6 py-4 bg-white border-b border-outline-variant/10">
-            <span class="material-symbols-outlined text-slate-400 text-sm">filter_alt</span>
-            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-2">Active Filters</span>
-            <span class="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold border border-slate-200"><?= e(ucwords(str_replace('_', ' ', $stockFilter))) ?></span>
-            <a href="?tab=<?= e(urlencode($activeTab)) ?>" data-inventory-nav class="ml-auto text-[10px] font-black text-primary uppercase tracking-widest hover:underline text-decoration-none">Clear All</a>
-        </div>
-    <?php endif; ?>
-
     <form method="get" id="inventoryAdvancedFilterModal" class="modal-backdrop">
         <div class="modal-content bg-white rounded-[2rem] w-full max-w-2xl p-8 shadow-2xl border border-outline-variant/10">
             <div class="flex items-center justify-between mb-8">
@@ -822,14 +813,15 @@ render_clinic_command_header(
                         <input class="clinic-input" name="quantity" type="number" min="1" required value="1">
                     </div>
                     <div>
-                        <label class="clinic-label">Expiration Date</label>
-                        <input class="clinic-input" name="expiration_date" type="date">
+                        <label class="clinic-label">Batch Expiration Date</label>
+                        <input class="clinic-input" name="expiration_date" type="date" required>
+                        <p class="settings-help mt-2 mb-0">Each restock is saved as a separate batch so existing expiry dates and quantities remain unchanged.</p>
                     </div>
                 </div>
             </div>
             <div class="mt-6 flex justify-end gap-3">
                 <button type="button" onclick="closeModal('addMedicineModal')" class="btn btn-ghost">Cancel</button>
-                <button type="submit" class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Restock this medicine?" data-confirm-message="This will add the received quantity and record a Stock In transaction." data-confirm-toast="Restocking medicine...">
+                <button type="submit" class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Create this medicine batch?" data-confirm-message="This will save the received stock as a separate batch with its own expiration date." data-confirm-toast="Creating medicine batch...">
                     <span class="material-symbols-outlined text-[18px]">add_box</span>
                     Restock Medicine
                 </button>

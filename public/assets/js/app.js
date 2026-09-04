@@ -65,6 +65,11 @@ function showModal(modalId) {
     if (!modal) return;
 
     modal.style.display = 'flex';
+    modal.scrollTop = 0;
+    const modalContent = modal.querySelector('.modal-content');
+    if (modalContent) {
+        modalContent.scrollTop = 0;
+    }
     document.body.style.overflow = 'hidden';
 
     // Trigger reflow then add .show for CSS transition

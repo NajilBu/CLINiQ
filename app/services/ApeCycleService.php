@@ -262,12 +262,22 @@ function ape_schedule_batch_categories(): array
 
 function normalize_ape_batch_time(string $value, string $label): string
 {
-    $value = trim($value);
-    $time = DateTimeImmutable::createFromFormat('!H:i', $value);
-    if (!$time || $time->format('H:i') !== $value) {
-        throw new InvalidArgumentException("Select a valid {$label}.");
+    $value = preg_replace('/\s+/', ' ', strtoupper(trim($value))) ?? '';
+    $time = null;
+
+    if (preg_match('/^(?:0?[1-9]|1[0-2]):[0-5][0-9] (?:AM|PM)$/', $value)) {
+        $time = DateTimeImmutable::createFromFormat('!g:i A', $value) ?: null;
+    } elseif (preg_match('/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/', $value)) {
+        // Retain support for normalized internal values used by existing integrations.
+        $time = DateTimeImmutable::createFromFormat('!H:i', $value) ?: null;
     }
-    if ($value < '08:00' || $value > '17:00') {
+
+    if (!$time) {
+        throw new InvalidArgumentException("Enter a valid {$label} using AM or PM.");
+    }
+
+    $normalized = $time->format('H:i');
+    if ($normalized < '08:00' || $normalized > '17:00') {
         throw new InvalidArgumentException('APE batch times must be between 8:00 AM and 5:00 PM.');
     }
     return $time->format('H:i:s');

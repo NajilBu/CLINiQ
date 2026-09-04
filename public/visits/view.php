@@ -588,7 +588,7 @@ render_header($pageTitle);
                         <option value="" data-type="Medicine">No medicine selected</option>
                         <?php foreach ($medicineInventory as $medicine): ?>
                             <option value="<?= (int) $medicine['id'] ?>" data-type="Medicine" <?= (int) $medicine['quantity'] <= 0 ? 'disabled' : '' ?>>
-                                <?= e($medicine['item_name']) ?> (<?= (int) $medicine['quantity'] ?> <?= e($medicine['unit']) ?>)
+                                <?= e(cliniq_inventory_medicine_option_label($medicine)) ?>
                             </option>
                         <?php endforeach; ?>
                         <?php foreach ($equipmentInventory as $equipment): ?>
@@ -923,7 +923,7 @@ render_header($pageTitle);
                             <option value="" data-type="Medicine">No medicine selected</option>
                             <?php foreach ($medicineInventory as $medicine): ?>
                                 <option value="<?= (int) $medicine['id'] ?>" data-type="Medicine" <?= (int) $medicine['quantity'] <= 0 ? 'disabled' : '' ?>>
-                                    <?= e($medicine['item_name']) ?> (<?= (int) $medicine['quantity'] ?> <?= e($medicine['unit']) ?>)
+                                    <?= e(cliniq_inventory_medicine_option_label($medicine)) ?>
                                 </option>
                             <?php endforeach; ?>
                             <?php foreach ($equipmentInventory as $equipment): ?>

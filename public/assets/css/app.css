@@ -1082,6 +1082,11 @@ h6,
     transform: scale(1);
 }
 
+#apeBatchModal .modal-content {
+    max-height: calc(100vh - 2rem);
+    max-height: calc(100dvh - 2rem);
+}
+
 .row-actions-trigger {
     width: 2.25rem;
     height: 2.25rem;

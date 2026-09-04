@@ -92,20 +92,6 @@ render_header('Patients');
         </div>
     </div>
 
-    <?php if ($filterType !== 'all' || $filterStatus !== 'all'): ?>
-        <div class="flex flex-wrap items-center gap-2 px-6 py-4 bg-white border-b border-outline-variant/10">
-            <span class="material-symbols-outlined text-slate-400 text-sm">filter_alt</span>
-            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-2">Active Filters</span>
-            <?php if ($filterType !== 'all'): ?>
-                <span class="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold border border-slate-200"><?= e($filterType) ?></span>
-            <?php endif; ?>
-            <?php if ($filterStatus !== 'all'): ?>
-                <span class="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold border border-slate-200"><?= e($filterStatus) ?></span>
-            <?php endif; ?>
-            <a href="index.php" class="ml-auto text-[10px] font-black text-primary uppercase tracking-widest hover:underline text-decoration-none">Clear All</a>
-        </div>
-    <?php endif; ?>
-
     <div id="patientAdvancedFilterModal" class="modal-backdrop">
         <div class="modal-content bg-white rounded-[2rem] w-full max-w-2xl p-8 shadow-2xl border border-outline-variant/10">
             <div class="flex items-center justify-between mb-8">

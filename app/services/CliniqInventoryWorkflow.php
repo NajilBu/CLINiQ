@@ -38,6 +38,44 @@ function cliniq_inventory_item_code(string $value): string
     return $value;
 }
 
+function cliniq_inventory_batch_code(PDO $db, string $sourceCode, string $expirationDate): string
+{
+    $baseCode = strtoupper(trim($sourceCode));
+    $baseCode = preg_replace('/-B\d{6}-[A-F0-9]{4}$/', '', $baseCode) ?: 'MED';
+    $date = DateTimeImmutable::createFromFormat('!Y-m-d', $expirationDate);
+    if (!$date || $date->format('Y-m-d') !== $expirationDate) {
+        throw new InvalidArgumentException('Enter a valid expiration date for the received batch.');
+    }
+
+    $suffixPrefix = '-B' . $date->format('ymd') . '-';
+    $baseCode = rtrim(substr($baseCode, 0, 40 - strlen($suffixPrefix) - 4), '-');
+    $baseCode = $baseCode !== '' ? $baseCode : 'MED';
+    $exists = $db->prepare('SELECT 1 FROM inventory_items WHERE item_code = ? LIMIT 1');
+
+    for ($attempt = 0; $attempt < 20; $attempt++) {
+        $candidate = $baseCode . $suffixPrefix . strtoupper(bin2hex(random_bytes(2)));
+        $exists->execute([$candidate]);
+        if (!$exists->fetchColumn()) {
+            return $candidate;
+        }
+    }
+
+    throw new RuntimeException('A unique batch code could not be generated. Please try again.');
+}
+
+function cliniq_inventory_medicine_option_label(array $medicine): string
+{
+    $expiration = trim((string) ($medicine['expiration_date'] ?? ''));
+    $expirationLabel = $expiration !== ''
+        ? date('M d, Y', strtotime($expiration))
+        : 'No expiry recorded';
+
+    return trim((string) ($medicine['item_name'] ?? 'Medicine'))
+        . ' — ' . trim((string) ($medicine['item_code'] ?? 'No batch code'))
+        . ' — Expires ' . $expirationLabel
+        . ' (' . (int) ($medicine['quantity'] ?? 0) . ' ' . trim((string) ($medicine['unit'] ?? 'unit')) . ')';
+}
+
 /** @return array<int,array<string,mixed>> */
 function cliniq_inventory_items(?string $type = null, ?bool $active = null): array
 {
@@ -75,7 +113,7 @@ function cliniq_inventory_available_medicines(): array
                quantity, unit, reorder_level, expiration_date
         FROM inventory_items
         WHERE item_type = 'Medicine' AND is_active = 1
-        ORDER BY item_name, expiration_date, item_id
+        ORDER BY item_name, expiration_date IS NULL, expiration_date, item_id
     ");
     return $stmt->fetchAll();
 }

@@ -121,32 +121,7 @@ $purposeRows = cliniq_visit_db()->query("
 $purposeOptions = array_values(array_unique(array_merge(visit_purposes(), array_column($purposeRows, 'visit_purpose'))));
 
 $baseParams = array_filter($filters, fn ($value) => $value !== '' && $value !== 'all');
-$activeChips = [];
-$chipParams = $baseParams;
-foreach ([
-    'status' => 'Status',
-    'purpose' => 'Purpose',
-    'staff' => 'Attended By',
-    'date_from' => 'From',
-    'date_to' => 'To',
-    'q' => 'Search',
-] as $key => $label) {
-    if (!isset($baseParams[$key])) {
-        continue;
-    }
-    $value = $baseParams[$key];
-    if ($key === 'staff') {
-        foreach ($staffMembers as $staff) {
-            if ((string) $staff['id'] === (string) $value) {
-                $value = $staff['name'];
-                break;
-            }
-        }
-    }
-    $remove = $chipParams;
-    unset($remove[$key]);
-    $activeChips[] = ['label' => $label . ': ' . $value, 'href' => '?' . http_build_query($remove)];
-}
+$hasActiveFilters = $baseParams !== [];
 
 $visitColumns = [
     ['headerName' => 'Date/Time', 'field' => 'dateTimeHtml', 'cellRenderer' => 'html', 'sortField' => 'dateTimeSort', 'sortType' => 'date', 'width' => 150],
@@ -247,20 +222,6 @@ render_clinic_command_header(
             </div>
         </div>
 
-        <?php if ($activeChips): ?>
-            <div class="flex flex-wrap items-center gap-2 px-6 py-4 bg-white border-b border-outline-variant/10">
-                <span class="material-symbols-outlined text-slate-400 text-sm">filter_alt</span>
-                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-2">Active Filters</span>
-                <?php foreach ($activeChips as $chip): ?>
-                    <a href="<?= e($chip['href']) ?>" class="flex items-center gap-1.5 px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold border border-slate-200 text-decoration-none">
-                        <?= e($chip['label']) ?>
-                        <span class="material-symbols-outlined text-[14px]">close</span>
-                    </a>
-                <?php endforeach; ?>
-                <a href="index.php" class="ml-auto text-[10px] font-black text-primary uppercase tracking-widest hover:underline text-decoration-none">Clear All</a>
-            </div>
-        <?php endif; ?>
-
         <div id="advancedFilterModal" class="modal-backdrop">
             <div class="modal-content bg-white rounded-[2rem] w-full max-w-2xl p-8 shadow-2xl border border-outline-variant/10">
                 <div class="flex items-center justify-between mb-8">
@@ -329,8 +290,8 @@ render_clinic_command_header(
         'pageSize' => 10,
         'pagination' => true,
         'paginationControls' => 'visitsPagination',
-        'emptyTitle' => $activeChips ? 'No matching visits' : 'No clinic visits yet',
-        'emptyText' => $activeChips ? 'Try a different search or filter.' : 'Record a clinic visit to get started.',
+        'emptyTitle' => $hasActiveFilters ? 'No matching visits' : 'No clinic visits yet',
+        'emptyText' => $hasActiveFilters ? 'Try a different search or filter.' : 'Record a clinic visit to get started.',
     ]); ?>
     <nav id="visitsPagination" class="pagination" aria-label="Visit log pages"></nav>
 </section>
