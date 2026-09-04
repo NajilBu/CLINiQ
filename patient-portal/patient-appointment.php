@@ -65,6 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!$hasAppointmentPatientProfile || 
     $note = trim($_POST['appt_note'] ?? '');
     $selectedDate = DateTimeImmutable::createFromFormat('!Y-m-d', $dateStr) ?: null;
     $datetimeStr = $dateStr . ' ' . $timeStr;
+    $apeConflict = appointment_ape_batch_conflict($datetimeStr);
 
     if ($selectedDate) {
         $month = appointment_month_from_request($selectedDate->format('Y-m'));
@@ -78,10 +79,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!$hasAppointmentPatientProfile || 
         $error = 'Please choose a valid appointment date.';
     } elseif ($dateStr < date('Y-m-d')) {
         $error = 'Please choose a future clinic date.';
+    } elseif (!appointment_date_is_clinic_day($dateStr)) {
+        $error = 'Clinic appointments are available Monday through Friday only.';
     } elseif (!in_array($timeStr, $allowedTimes, true)) {
         $error = 'Please choose one of the available appointment times.';
     } elseif (appointment_time_is_blocked($dateStr, $timeStr, $blocksForPostMonth)) {
         $error = 'That date or time is unavailable. Please choose another schedule.';
+    } elseif ($apeConflict !== null) {
+        $error = 'That time is reserved for an APE examination batch. Please choose another hour.';
     } elseif (appointment_slot_is_reserved($datetimeStr)) {
         $error = 'That appointment time was already requested by another patient. Please choose another hour.';
     } else {
@@ -108,15 +113,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!$hasAppointmentPatientProfile || 
 $blocksByDate = appointment_blocks_for_month($month);
 $studentAppointmentDates = appointment_patient_dates_for_month($patientId, $month);
 $reservedTimesByDate = appointment_reserved_times_for_month($month);
+$monthStart = $month->modify('first day of this month')->format('Y-m-d');
+$monthEnd = $month->modify('last day of this month')->format('Y-m-d');
+$apeBatchesByDate = appointment_ape_batches_for_range($monthStart, $monthEnd);
 
 $availabilityPayload = [];
-$availabilityDates = array_values(array_unique(array_merge(array_keys($blocksByDate), array_keys($reservedTimesByDate))));
+$availabilityDates = array_values(array_unique(array_merge(array_keys($blocksByDate), array_keys($reservedTimesByDate), array_keys($apeBatchesByDate))));
 foreach ($availabilityDates as $date) {
     $blocks = $blocksByDate[$date] ?? [];
     $blockedTimes = [];
+    $apeTimes = [];
     foreach ($timeSlots as $slot) {
         if (appointment_time_is_blocked($date, $slot['value'], $blocksByDate)) {
             $blockedTimes[] = $slot['value'];
+        }
+        if (appointment_time_overlaps_ape_batches($date, $slot['value'], $apeBatchesByDate)) {
+            $apeTimes[] = $slot['value'];
         }
     }
 
@@ -124,6 +136,7 @@ foreach ($availabilityDates as $date) {
         'fullDay' => appointment_is_full_day_blocked($blocks),
         'blockedTimes' => $blockedTimes,
         'reservedTimes' => array_values(array_unique($reservedTimesByDate[$date] ?? [])),
+        'apeTimes' => $apeTimes,
     ];
 }
 
@@ -218,6 +231,7 @@ render_student_header('Appointments', 'appointment');
                         <span><i class="legend-open"></i>Available</span>
                         <span><i class="legend-blocked"></i>Unavailable</span>
                         <span><i class="legend-partial"></i>Limited hours</span>
+                        <span><i class="legend-blocked"></i>APE examination</span>
                         <span><i class="legend-appointment"></i>Your appointment</span>
                     </div>
                     <div class="student-calendar-grid mb-2 text-center">
@@ -237,12 +251,14 @@ render_student_header('Appointments', 'appointment');
                             $fullDay = appointment_is_full_day_blocked($blocks);
                             $unavailableTimes = array_values(array_unique(array_merge(
                                 $availabilityPayload[$date]['blockedTimes'] ?? [],
-                                $availabilityPayload[$date]['reservedTimes'] ?? []
+                                $availabilityPayload[$date]['reservedTimes'] ?? [],
+                                $availabilityPayload[$date]['apeTimes'] ?? []
                             )));
                             $allTimesUnavailable = count(array_intersect($allowedTimes, $unavailableTimes)) >= count($allowedTimes);
                             $hasAppointment = !empty($studentAppointmentDates[$date]);
                             $isPast = $date < $today;
-                            $disabled = $fullDay || $allTimesUnavailable || $isPast;
+                            $isWeekend = !appointment_date_is_clinic_day($date);
+                            $disabled = $fullDay || $allTimesUnavailable || $isPast || $isWeekend;
                             $classes = ['student-date-btn'];
                             $classes[] = $disabled ? 'disabled' : 'available';
                             if (!$disabled && !empty($unavailableTimes)) {
@@ -261,7 +277,7 @@ render_student_header('Appointments', 'appointment');
                                 <span><?= (int) $day ?></span>
                                 <?php if ($hasAppointment): ?>
                                     <small>Booked</small>
-                                <?php elseif ($fullDay || $allTimesUnavailable): ?>
+                                <?php elseif ($fullDay || $allTimesUnavailable || $isWeekend): ?>
                                     <small>Closed</small>
                                 <?php elseif (!$isPast && !empty($unavailableTimes)): ?>
                                     <small>Limited</small>
@@ -480,21 +496,27 @@ render_student_header('Appointments', 'appointment');
     function updateTimeSlots(date) {
         const blockedTimes = availability[date]?.blockedTimes || [];
         const reservedTimes = availability[date]?.reservedTimes || [];
+        const apeTimes = availability[date]?.apeTimes || [];
 
         timeSlots.forEach((slot) => {
             const isClinicBlocked = blockedTimes.includes(slot.dataset.time);
             const isReserved = reservedTimes.includes(slot.dataset.time);
-            const isUnavailable = isClinicBlocked || isReserved;
+            const isApeBlocked = apeTimes.includes(slot.dataset.time);
+            const isUnavailable = isClinicBlocked || isReserved || isApeBlocked;
             slot.classList.toggle('disabled', isUnavailable);
-            slot.classList.toggle('is-blocked', isClinicBlocked);
+            slot.classList.toggle('is-blocked', isClinicBlocked || isApeBlocked);
             slot.classList.toggle('is-reserved', isReserved);
             slot.disabled = isUnavailable;
-            slot.title = isReserved
-                ? 'Another patient has already requested this time'
-                : (isClinicBlocked ? 'This time is unavailable' : '');
-            slot.querySelector('.student-calendar-time-status').textContent = isReserved
-                ? 'Reserved'
-                : (isClinicBlocked ? 'Unavailable' : 'Available');
+            slot.title = isApeBlocked
+                ? 'Reserved for APE examinations'
+                : (isReserved
+                    ? 'Another patient has already requested this time'
+                    : (isClinicBlocked ? 'This time is unavailable' : ''));
+            slot.querySelector('.student-calendar-time-status').textContent = isApeBlocked
+                ? 'APE Examination'
+                : (isReserved
+                    ? 'Reserved'
+                    : (isClinicBlocked ? 'Unavailable' : 'Available'));
 
             if (isUnavailable && slot.classList.contains('selected')) {
                 slot.classList.remove('selected');

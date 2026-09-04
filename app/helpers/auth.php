@@ -4,6 +4,24 @@ require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/env.php';
 
 if (session_status() === PHP_SESSION_NONE) {
+    $configuredAppUrl = (string) env_value('APP_URL', '');
+    $forwardedProtocol = strtolower(trim(explode(',', (string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''))[0] ?? ''));
+    $requestUsesHttps = (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off')
+        || $forwardedProtocol === 'https'
+        || str_starts_with(strtolower($configuredAppUrl), 'https://');
+    $secureCookieSetting = strtolower((string) env_value('SESSION_SECURE_COOKIE', 'auto'));
+    $secureCookie = $secureCookieSetting === 'true'
+        || ($secureCookieSetting !== 'false' && $requestUsesHttps);
+
+    ini_set('session.use_strict_mode', '1');
+    ini_set('session.use_only_cookies', '1');
+    session_set_cookie_params([
+        'lifetime' => 0,
+        'path' => '/',
+        'secure' => $secureCookie,
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
     session_start();
 }
 

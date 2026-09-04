@@ -43,8 +43,8 @@ if ($action === 'delete') {
     $validDates = [];
     $validSlots = [];
     $today = new DateTimeImmutable('today');
-    $minimumDate = $today->format('N') === '7'
-        ? $today->modify('+1 day')
+    $minimumDate = (int) $today->format('N') >= 6
+        ? $today->modify('next monday')
         : $today;
 
     $validateDate = static function (string $date) use ($minimumDate): ?string {
@@ -55,8 +55,8 @@ if ($action === 'delete') {
         if ($selectedDate < $minimumDate) {
             return 'Past dates can no longer be marked unavailable.';
         }
-        if ($selectedDate->format('N') === '7') {
-            return 'Clinic availability can only be managed from Monday through Saturday.';
+        if (!appointment_date_is_clinic_day($date)) {
+            return 'Clinic availability can only be managed from Monday through Friday.';
         }
         return null;
     };

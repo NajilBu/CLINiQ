@@ -2,14 +2,87 @@
 
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/ApeWorkflow.php';
+require_once __DIR__ . '/../../app/services/ApeCycleService.php';
 require_login();
 ensure_ape_workflow_schema();
 
-$activeQueue = $_GET['queue'] ?? 'all';
+$activeQueue = $_GET['queue'] ?? 'examination';
 $search = trim($_GET['q'] ?? '');
 $queues = ape_work_queues();
 
-$allRecords = ape_fetch_records($search);
+$todayScheduleDate = date('Y-m-d');
+$activeApeCycle = ape_cycle_current();
+$schoolYearBatches = [];
+$scheduledBatchesById = [];
+if (($activeApeCycle['status'] ?? '') === 'Active') {
+    foreach (ape_schedule_batches((int) $activeApeCycle['ape_cycle_id']) as $batch) {
+        if (($batch['status'] ?? '') !== 'Scheduled') {
+            continue;
+        }
+        $schoolYearBatches[] = $batch;
+        $scheduledBatchesById[(int) $batch['batch_id']] = $batch;
+    }
+}
+$requestedBatchId = filter_input(INPUT_GET, 'batch', FILTER_VALIDATE_INT, [
+    'options' => ['min_range' => 1],
+]);
+$selectedBatchId = $requestedBatchId && isset($scheduledBatchesById[(int) $requestedBatchId])
+    ? (int) $requestedBatchId
+    : null;
+$selectedBatch = $selectedBatchId !== null ? $scheduledBatchesById[$selectedBatchId] : null;
+
+$todayScheduleRecords = array_values(array_filter(
+    ape_fetch_records('', null, $todayScheduleDate),
+    static fn(array $record): bool => !empty($record['schedule_batch_id'])
+        && ($record['batch_status'] ?? '') === 'Scheduled'
+        && ($record['batch_schedule_date'] ?? '') === $todayScheduleDate
+));
+// A selected batch scopes every queue. By default, only Examination is date-scoped.
+$scopeRecords = ape_fetch_records($search, null, null, $selectedBatchId);
+$allRecords = array_values(array_filter(
+    $scopeRecords,
+    static fn(array $record): bool => $selectedBatchId !== null
+        || ape_record_queue($record) !== 'examination'
+        || (!empty($record['schedule_batch_id'])
+            && ($record['batch_status'] ?? '') === 'Scheduled'
+            && ($record['batch_schedule_date'] ?? '') === $todayScheduleDate)
+));
+$todayScheduledBatches = [];
+foreach ($todayScheduleRecords as $scheduledRecord) {
+    if (!empty($scheduledRecord['schedule_batch_id']) && ($scheduledRecord['batch_schedule_date'] ?? '') === $todayScheduleDate) {
+        $todayScheduledBatches[(int) $scheduledRecord['schedule_batch_id']] = [
+            'name' => (string) ($scheduledRecord['batch_name'] ?? 'APE Batch'),
+            'start_time' => (string) ($scheduledRecord['batch_start_time'] ?? ''),
+            'end_time' => (string) ($scheduledRecord['batch_end_time'] ?? ''),
+        ];
+    }
+}
+$todayBatchCount = count($todayScheduledBatches);
+$todayScheduledPatientCount = count($todayScheduleRecords);
+$todayBatchIndicator = match (true) {
+    $todayBatchCount === 0 => 'No APE batch scheduled today',
+    $todayBatchCount === 1 => sprintf(
+        '%s • %s–%s',
+        reset($todayScheduledBatches)['name'],
+        date('g:i A', strtotime(reset($todayScheduledBatches)['start_time'])),
+        date('g:i A', strtotime(reset($todayScheduledBatches)['end_time']))
+    ),
+    default => sprintf('%d batches • %d patients', $todayBatchCount, $todayScheduledPatientCount),
+};
+$batchIndicator = $selectedBatch !== null
+    ? sprintf(
+        '%s • %s, %s–%s',
+        (string) $selectedBatch['batch_name'],
+        date('M j', strtotime((string) $selectedBatch['schedule_date'])),
+        date('g:i A', strtotime((string) $selectedBatch['start_time'])),
+        date('g:i A', strtotime((string) $selectedBatch['end_time']))
+    )
+    : 'Overall / Default';
+$scopeDescription = $selectedBatch !== null
+    ? 'All queues show patients assigned to ' . (string) $selectedBatch['batch_name'] . '. Choose Overall / Default to remove the batch filter.'
+    : 'Examination shows today’s scheduled patients. The other four queues show overall data. Select a batch to filter all queues.';
+$scopeCountLabel = $selectedBatch !== null ? 'Selected batch' : 'Queue records';
+$batchQuerySuffix = $selectedBatchId !== null ? '&batch=' . $selectedBatchId : '';
 
 $recordsByQueue = array_fill_keys(array_keys($queues), []);
 foreach ($allRecords as $record) {
@@ -42,7 +115,7 @@ $appointmentsToday = (int)($appointmentsStmt->fetch()['total'] ?? 0);
 $overdueRecords = [];
 foreach ($allRecords as $rec) {
     $priority = ape_priority_badge($rec);
-    if ($priority['label'] === 'Overdue' || $priority['label'] === 'Urgent') {
+    if (in_array($priority['label'], ['Missed', 'Overdue'], true)) {
         $overdueRecords[] = $rec;
     }
 }
@@ -51,6 +124,7 @@ $apeQueueColumns = [
     ['headerName' => 'Priority', 'field' => 'priorityHtml', 'cellRenderer' => 'html', 'sortField' => 'prioritySort', 'sortType' => 'number', 'width' => 140],
     ['headerName' => 'Patient', 'field' => 'studentHtml', 'cellRenderer' => 'html', 'sortField' => 'studentSort', 'minWidth' => 250],
     ['headerName' => 'Program', 'field' => 'programHtml', 'cellRenderer' => 'html', 'sortField' => 'programSort', 'minWidth' => 220],
+    ['headerName' => 'APE Schedule', 'field' => 'scheduleHtml', 'cellRenderer' => 'html', 'sortField' => 'scheduleSort', 'minWidth' => 250],
     ['headerName' => 'Waiting', 'field' => 'waiting', 'sortField' => 'waitingSort', 'sortType' => 'number', 'width' => 140],
     ['headerName' => 'Next Action', 'field' => 'nextActionHtml', 'cellRenderer' => 'html', 'sortField' => 'nextActionSort', 'minWidth' => 260],
     ['headerName' => 'Actions', 'field' => 'actionHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 100, 'minWidth' => 90],
@@ -64,7 +138,7 @@ $apeHeaderActions = ''
     . '<div class="bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-4 min-w-[140px]">'
     . '<span class="material-symbols-outlined text-slate-400 text-[28px]">group</span>'
     . '<div><p class="font-headline text-2xl font-extrabold text-[#17261d] leading-none mb-1">' . (int) $activePatients . '</p>'
-    . '<p class="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Active patients</p></div></div>'
+    . '<p class="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">' . e($scopeCountLabel) . '</p></div></div>'
     . '<div class="bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-4 min-w-[140px]">'
     . '<span class="material-symbols-outlined text-slate-400 text-[28px]">notification_important</span>'
     . '<div><p class="font-headline text-2xl font-extrabold text-[#17261d] leading-none mb-1">' . count($overdueRecords) . '</p>'
@@ -77,7 +151,7 @@ $apeHeaderActions = ''
 render_clinic_command_header(
     'APE Work Queues',
     'Good day, ' . $apeDisplayName,
-    "Here's what needs your attention today. Start at the top.",
+    $selectedBatch !== null ? 'Reviewing the selected scheduled APE batch.' : "Here's what needs your attention today. Start at the top.",
     $apeHeaderActions
 );
 ?>
@@ -95,11 +169,13 @@ render_clinic_command_header(
             $priority = ape_priority_badge($rec);
             $deadline = ape_deadline_status($rec);
             $days = (int) ($deadline['days'] ?? 0);
-            $warningClass = $priority['label'] === 'Overdue' ? 'text-red-600' : 'text-amber-600';
-            $badgeIcon = 'error';
-            $deadlineText = $priority['label'] === 'Overdue'
-                ? $priority['label'] . ' - ' . $days . 'd'
-                : 'Due in ' . $days . 'd';
+            $warningClass = in_array($priority['label'], ['Missed', 'Overdue'], true) ? 'text-red-600' : 'text-amber-600';
+            $badgeIcon = $priority['label'] === 'Missed' ? 'event_busy' : 'error';
+            $deadlineText = match ($priority['label']) {
+                'Missed' => 'Assigned batch was missed',
+                'Overdue' => $priority['label'] . ' - ' . $days . 'd',
+                default => 'Review required',
+            };
         ?>
             <div class="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-red-100/30 transition-colors">
                 <div>
@@ -128,19 +204,39 @@ render_clinic_command_header(
     <div class="flex flex-col lg:flex-row justify-between gap-4 lg:items-center mb-5">
         <div>
             <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Work Queue Map</h2>
-            <p class="text-xs font-bold text-slate-500 mb-0">Click a queue to focus the page. Each patient shows one next clinic action.</p>
+            <p class="text-xs font-bold text-slate-500 mb-0"><?= e($scopeDescription) ?></p>
         </div>
         <div class="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
+            <?php if (in_array($apeUser['role'] ?? '', ['admin', 'doctor'], true)): ?>
+                <a href="scheduling.php" class="btn btn-outline w-full sm:w-auto justify-center text-decoration-none">
+                    <span class="material-symbols-outlined text-[18px]">calendar_month</span>
+                    Manage Scheduling
+                </a>
+            <?php endif; ?>
+            <button type="button" onclick="showModal('apeBatchPickerModal')" class="w-full sm:w-auto min-h-12 px-4 py-2 rounded-xl border border-outline-variant bg-primary-fixed flex items-center gap-3 text-left hover:border-primary transition-colors" title="<?= e($selectedBatch !== null ? 'Filter all queues by a scheduled batch, or choose Overall / Default.' : 'Examination: ' . $todayBatchIndicator . '. Other queues: overall data.') ?>">
+                <span class="material-symbols-outlined text-primary text-[20px]">event_available</span>
+                <div class="min-w-0">
+                    <p class="text-[9px] font-black uppercase tracking-widest text-primary mb-0">Scheduled Batch</p>
+                    <p class="text-xs font-extrabold text-slate-700 mb-0 whitespace-nowrap"><?= e($batchIndicator) ?></p>
+                </div>
+                <span class="material-symbols-outlined text-primary text-[18px]">expand_more</span>
+            </button>
             <div class="search-input-wrap w-full sm:w-80">
                 <span class="search-icon material-symbols-outlined">search</span>
                 <input type="text" name="q" value="<?= e($search) ?>" placeholder="Search APE records..." class="search-input">
             </div>
+            <?php if ($activeQueue !== 'all'): ?>
+                <input type="hidden" name="queue" value="<?= e($activeQueue) ?>">
+            <?php endif; ?>
+            <?php if ($selectedBatchId !== null): ?>
+                <input type="hidden" name="batch" value="<?= (int) $selectedBatchId ?>">
+            <?php endif; ?>
         </div>
     </div>
     </form>
     <div class="ape-queue-map-grid">
         <?php foreach ($queues as $key => $queue): ?>
-            <a href="?queue=<?= urlencode($key) ?><?= $search !== '' ? '&q=' . urlencode($search) : '' ?>" class="ape-queue-map-card rounded-2xl border <?= $activeQueue === $key ? 'border-primary bg-primary-fixed' : 'border-outline-variant bg-white' ?> p-3 text-decoration-none hover:bg-primary-fixed transition-colors">
+            <a href="?queue=<?= urlencode($key) ?><?= $search !== '' ? '&q=' . urlencode($search) : '' ?><?= e($batchQuerySuffix) ?>" class="ape-queue-map-card rounded-2xl border <?= $activeQueue === $key ? 'border-primary bg-primary-fixed' : 'border-outline-variant bg-white' ?> p-3 text-decoration-none hover:bg-primary-fixed transition-colors">
                 <div class="flex items-center justify-between gap-2">
                     <span class="w-8 h-8 rounded-xl bg-white text-primary border border-outline-variant flex items-center justify-center material-symbols-outlined text-[16px]"><?= e($queue['icon']) ?></span>
                     <strong class="font-headline text-xl text-[#17261d]"><?= count($recordsByQueue[$key]) ?></strong>
@@ -156,6 +252,13 @@ render_clinic_command_header(
         $queue = $queues[$queueKey];
         $records = $recordsByQueue[$queueKey];
         $shownRecords = $records;
+        $scopeEmptyText = $search !== ''
+            ? 'No records match your search in this queue.'
+            : ($selectedBatchId !== null
+                ? 'No patients from this scheduled batch are in this queue.'
+                : ($queueKey === 'examination'
+                    ? 'No patients are scheduled for examination today.'
+                    : 'No patients are currently in this queue.'));
         $gridSuffix = preg_replace('/[^A-Za-z0-9_-]/', '', $queueKey);
         $paginationId = 'apePagination' . $gridSuffix;
     ?>
@@ -181,14 +284,26 @@ render_clinic_command_header(
                 $fullName = trim($rec['first_name'] . ' ' . $rec['last_name']);
                 $next = ape_next_action($rec);
                 $priority = ape_priority_badge($rec);
+                $hasBatch = !empty($rec['schedule_batch_id']) && ($rec['batch_status'] ?? '') !== 'Cancelled';
+                $scheduleSort = $hasBatch ? (string) $rec['batch_schedule_date'] . ' ' . (string) $rec['batch_start_time'] : '9999-12-31 23:59:59';
+                $scheduleHtml = $hasBatch
+                    ? '<strong class="text-sm text-slate-800 block">' . e($rec['batch_name']) . '</strong><span class="text-xs font-bold text-slate-500">' . e(date('M j, Y', strtotime($rec['batch_schedule_date']))) . ' &bull; ' . e(date('g:i A', strtotime($rec['batch_start_time']))) . '–' . e(date('g:i A', strtotime($rec['batch_end_time']))) . '</span>'
+                    : '<span class="badge badge-pending">Unscheduled</span>';
+                if (ape_record_queue($rec) === 'follow_up' && !empty($rec['follow_up_due_date'])) {
+                    $scheduleSort = $rec['follow_up_due_date'];
+                    $scheduleHtml = '<strong class="text-sm text-slate-800 block">Return Date</strong><span class="text-xs font-bold text-slate-500">'
+                        . e(date('M j, Y', strtotime($rec['follow_up_due_date']))) . '</span>';
+                }
                 $apeRows[] = [
                     'rowUrl' => 'view.php?id=' . (int)$rec['id'],
-                    'prioritySort' => array_search($priority['label'], ['Overdue', 'Urgent', 'Clinical', 'Waiting', 'Ready', 'Done'], true),
+                    'prioritySort' => array_search($priority['label'], ['Missed', 'Overdue', 'Urgent', 'Clinical', 'Waiting', 'Ready', 'Done'], true),
                     'priorityHtml' => '<span class="badge ' . e($priority['class']) . '">' . e($priority['label']) . '</span>',
                     'studentSort' => trim($rec['last_name'] . ' ' . $rec['first_name']),
                     'studentHtml' => '<div class="flex items-center gap-3"><div class="avatar ' . e(avatar_color($fullName)) . '">' . e(initials($fullName)) . '</div><div><strong class="text-sm text-slate-800">' . e($fullName) . '</strong><div class="text-xs font-bold text-slate-400">' . e($rec['id_number']) . '</div></div></div>',
                     'programSort' => $rec['course_section'] ?: '',
                     'programHtml' => '<p class="text-sm font-bold text-slate-700 mb-1">' . e($rec['course_section'] ?: 'No course set') . '</p><p class="text-xs font-bold text-slate-400 mb-0">' . e($rec['document_type'] ?: 'APE documents') . '</p>',
+                    'scheduleSort' => $scheduleSort,
+                    'scheduleHtml' => $scheduleHtml,
                     'waiting' => ape_waiting_label($rec),
                     'waitingSort' => ape_waiting_days($rec),
                     'nextActionSort' => $next['label'],
@@ -202,12 +317,94 @@ render_clinic_command_header(
                 'paginationControls' => $paginationId,
                 'height' => 'compact',
                 'emptyTitle' => 'No patients here',
-                'emptyText' => 'This queue is clear for now.',
+                'emptyText' => $scopeEmptyText,
             ]);
             ?>
             <nav id="<?= e($paginationId) ?>" class="pagination" aria-label="<?= e($queue['title']) ?> pages"></nav>
         </section>
     <?php endforeach; ?>
+</div>
+
+<div id="apeBatchPickerModal" class="modal-backdrop" data-no-row-click>
+    <div class="modal-content bg-white rounded-[2rem] w-full max-w-3xl p-8 shadow-2xl border border-outline-variant/10">
+        <div class="flex items-start justify-between gap-4 mb-6">
+            <div class="flex items-start gap-3">
+                <div class="w-11 h-11 bg-primary-fixed text-primary rounded-xl flex items-center justify-center shrink-0">
+                    <span class="material-symbols-outlined">calendar_month</span>
+                </div>
+                <div>
+                    <h3 class="font-headline text-2xl font-extrabold text-[#17261d] mb-1">Scheduled APE Batches</h3>
+                    <p class="text-sm font-bold text-slate-500 mb-0">
+                        <?= e((string) ($activeApeCycle['academic_year'] ?? 'Current school year')) ?> &bull; Select a batch to populate the work queues.
+                    </p>
+                </div>
+            </div>
+            <button type="button" onclick="closeModal('apeBatchPickerModal')" class="btn-icon btn-icon-slate" aria-label="Close scheduled batch list">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+
+        <?php
+        $defaultQuery = ['queue' => $activeQueue];
+        if ($search !== '') {
+            $defaultQuery['q'] = $search;
+        }
+        ?>
+        <a href="?<?= e(http_build_query($defaultQuery)) ?>" class="flex items-center justify-between gap-4 rounded-2xl border <?= $selectedBatchId === null ? 'border-primary bg-primary-fixed' : 'border-outline-variant bg-white' ?> p-4 mb-3 text-decoration-none hover:border-primary transition-colors">
+            <div class="flex items-center gap-3 min-w-0">
+                <span class="w-10 h-10 rounded-xl bg-white border border-outline-variant text-primary flex items-center justify-center material-symbols-outlined shrink-0">today</span>
+                <div class="min-w-0">
+                    <strong class="block text-sm text-slate-800">Overall / Default</strong>
+                    <span class="block text-xs font-bold text-slate-500">Examination: today’s scheduled patients. Other queues: overall data.</span>
+                    <span class="block text-xs font-bold text-slate-500"><?= e(date('F j, Y', strtotime($todayScheduleDate))) ?> &bull; <?= $todayScheduledPatientCount ?> patient(s) assigned to today’s batches</span>
+                </div>
+            </div>
+            <?php if ($selectedBatchId === null): ?>
+                <span class="badge badge-completed">Viewing</span>
+            <?php else: ?>
+                <span class="material-symbols-outlined text-primary">arrow_forward</span>
+            <?php endif; ?>
+        </a>
+
+        <div class="space-y-3 max-h-[55vh] overflow-y-auto pr-1">
+            <?php if ($schoolYearBatches === []): ?>
+                <div class="rounded-2xl border border-dashed border-outline-variant p-8 text-center">
+                    <span class="material-symbols-outlined text-4xl text-slate-300 mb-2">event_busy</span>
+                    <p class="font-extrabold text-slate-700 mb-1">No scheduled batches</p>
+                    <p class="text-xs font-bold text-slate-500 mb-0">Create an APE batch from Settings &gt; APE Cycle.</p>
+                </div>
+            <?php else: ?>
+                <?php foreach ($schoolYearBatches as $batch): ?>
+                    <?php
+                    $batchId = (int) $batch['batch_id'];
+                    $batchQuery = ['queue' => $activeQueue, 'batch' => $batchId];
+                    if ($search !== '') {
+                        $batchQuery['q'] = $search;
+                    }
+                    $isSelectedBatch = $selectedBatchId === $batchId;
+                    ?>
+                    <a href="?<?= e(http_build_query($batchQuery)) ?>" class="flex items-center justify-between gap-4 rounded-2xl border <?= $isSelectedBatch ? 'border-primary bg-primary-fixed' : 'border-outline-variant bg-white' ?> p-4 text-decoration-none hover:border-primary hover:bg-primary-fixed transition-colors">
+                        <div class="min-w-0">
+                            <div class="flex flex-wrap items-center gap-2 mb-1">
+                                <strong class="text-sm text-slate-800"><?= e((string) $batch['batch_name']) ?></strong>
+                                <span class="badge badge-in-progress"><?= e((string) $batch['patient_category']) ?></span>
+                            </div>
+                            <p class="text-xs font-bold text-slate-500 mb-0">
+                                <?= e(date('F j, Y', strtotime((string) $batch['schedule_date']))) ?>
+                                &bull; <?= e(date('g:i A', strtotime((string) $batch['start_time']))) ?>&ndash;<?= e(date('g:i A', strtotime((string) $batch['end_time']))) ?>
+                                &bull; <?= (int) $batch['assigned_count'] ?> patient(s)
+                            </p>
+                        </div>
+                        <?php if ($isSelectedBatch): ?>
+                            <span class="badge badge-completed shrink-0">Viewing</span>
+                        <?php else: ?>
+                            <span class="material-symbols-outlined text-primary shrink-0">arrow_forward</span>
+                        <?php endif; ?>
+                    </a>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
+    </div>
 </div>
 
 <?php render_footer(); ?>

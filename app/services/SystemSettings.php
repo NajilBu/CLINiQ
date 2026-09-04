@@ -834,25 +834,106 @@ function default_cliniq_theme_key(): string
 
 function cliniq_theme_settings(): array
 {
-    $saved = cliniq_setting_read('clinic.theme', ['theme' => default_cliniq_theme_key()]);
-    return ['theme' => cliniq_normalize_theme_key((string) ($saved['theme'] ?? default_cliniq_theme_key()))];
+    $saved = cliniq_setting_read('clinic.theme', [
+        'theme' => default_cliniq_theme_key(),
+        'custom_color' => '#3F7D52',
+    ]);
+
+    return [
+        'theme' => cliniq_normalize_theme_key((string) ($saved['theme'] ?? default_cliniq_theme_key())),
+        'custom_color' => cliniq_normalize_hex_color((string) ($saved['custom_color'] ?? '#3F7D52')) ?? '#3F7D52',
+    ];
 }
 
 function cliniq_normalize_theme_key(string $theme): string
 {
-    return array_key_exists($theme, cliniq_theme_presets()) ? $theme : default_cliniq_theme_key();
+    return $theme === 'custom' || array_key_exists($theme, cliniq_theme_presets())
+        ? $theme
+        : default_cliniq_theme_key();
 }
 
-function save_cliniq_theme_settings(string $theme, ?int $updatedBy = null): void
+function cliniq_normalize_hex_color(string $color): ?string
 {
-    cliniq_setting_write('clinic.theme', ['theme' => cliniq_normalize_theme_key($theme)], $updatedBy);
+    $color = trim($color);
+    if (!preg_match('/^#[0-9a-fA-F]{6}$/', $color)) {
+        return null;
+    }
+
+    return strtoupper($color);
+}
+
+function cliniq_hex_rgb(string $color): array
+{
+    $hex = ltrim($color, '#');
+    return [
+        hexdec(substr($hex, 0, 2)),
+        hexdec(substr($hex, 2, 2)),
+        hexdec(substr($hex, 4, 2)),
+    ];
+}
+
+function cliniq_mix_hex_colors(string $foreground, string $background, float $foregroundWeight): string
+{
+    $foregroundRgb = cliniq_hex_rgb($foreground);
+    $backgroundRgb = cliniq_hex_rgb($background);
+    $foregroundWeight = max(0, min(1, $foregroundWeight));
+    $mixed = [];
+
+    for ($index = 0; $index < 3; $index++) {
+        $mixed[] = (int) round(
+            ($foregroundRgb[$index] * $foregroundWeight)
+            + ($backgroundRgb[$index] * (1 - $foregroundWeight))
+        );
+    }
+
+    return sprintf('#%02X%02X%02X', $mixed[0], $mixed[1], $mixed[2]);
+}
+
+function cliniq_custom_theme(string $color): array
+{
+    $primary = cliniq_normalize_hex_color($color) ?? '#3F7D52';
+    $primaryContainer = cliniq_mix_hex_colors($primary, '#000000', 0.78);
+    $primaryRgb = cliniq_hex_rgb($primary);
+    $shadowRgb = cliniq_hex_rgb($primaryContainer);
+
+    return [
+        'label' => 'Custom',
+        'primary' => $primary,
+        'primary_fixed' => cliniq_mix_hex_colors($primary, '#FFFFFF', 0.14),
+        'primary_container' => $primaryContainer,
+        'surface' => cliniq_mix_hex_colors($primary, '#FFFFFF', 0.03),
+        'surface_container_low' => cliniq_mix_hex_colors($primary, '#FFFFFF', 0.07),
+        'outline_variant' => cliniq_mix_hex_colors($primary, '#FFFFFF', 0.24),
+        'accent' => cliniq_mix_hex_colors($primary, '#FFFFFF', 0.11),
+        'focus_rgb' => implode(', ', $primaryRgb),
+        'shadow_rgb' => implode(', ', $shadowRgb),
+    ];
+}
+
+function save_cliniq_theme_settings(string $theme, ?int $updatedBy = null, string $customColor = '#3F7D52'): void
+{
+    $theme = cliniq_normalize_theme_key($theme);
+    $customColor = cliniq_normalize_hex_color($customColor);
+    if ($theme === 'custom' && $customColor === null) {
+        throw new InvalidArgumentException('Choose a valid custom color before applying the theme.');
+    }
+
+    cliniq_setting_write('clinic.theme', [
+        'theme' => $theme,
+        'custom_color' => $customColor ?? '#3F7D52',
+    ], $updatedBy);
 }
 
 function active_cliniq_theme(): array
 {
     $themes = cliniq_theme_presets();
-    $key = cliniq_theme_settings()['theme'];
-    return ['key' => $key] + $themes[$key];
+    $settings = cliniq_theme_settings();
+    $key = $settings['theme'];
+    $theme = $key === 'custom'
+        ? cliniq_custom_theme($settings['custom_color'])
+        : $themes[$key];
+
+    return ['key' => $key] + $theme;
 }
 
 // ── Mail / SMTP Settings ─────────────────────────────────────────────────────
@@ -940,6 +1021,139 @@ function mail_settings_configured(): bool
 {
     $s = cliniq_setting_read('mail.smtp', []);
     return !empty($s['host']) && !empty($s['username']) && !empty($s['password']);
+}
+
+/**
+ * Automated patient-facing email formats. Action destinations are deliberately
+ * not editable: the system supplies the signed reset URL or portal URL.
+ */
+function cliniq_mail_template_definitions(): array
+{
+    return [
+        'patient_password_reset' => [
+            'label' => 'Patient Password Reset',
+            'description' => 'Sent after a patient requests a secure password reset link.',
+            'icon' => 'lock_reset',
+            'action_hint' => 'The button opens the one-time password reset link.',
+            'allowed_placeholders' => ['{{patient_name}}', '{{clinic_name}}', '{{expiry_minutes}}'],
+            'required_placeholders' => ['{{patient_name}}', '{{clinic_name}}', '{{expiry_minutes}}'],
+            'default' => [
+                'subject' => '[{{clinic_name}}] Reset your patient portal password',
+                'heading' => 'Reset your password, {{patient_name}}',
+                'message' => 'We received a request to reset your patient portal password. Use the secure button below within {{expiry_minutes}} minutes. If you did not request this, you can ignore this email.',
+                'button_label' => 'Reset Password',
+                'footer' => 'For your security, this link can only be used once. Contact {{clinic_name}} if you need assistance.',
+            ],
+        ],
+        'student_re_enrollment' => [
+            'label' => 'Student Enrollment Confirmation',
+            'description' => 'Sent when a new APE cycle asks students to confirm continued enrollment.',
+            'icon' => 'school',
+            'action_hint' => 'The button opens the patient portal login page.',
+            'allowed_placeholders' => ['{{patient_name}}', '{{clinic_name}}'],
+            'required_placeholders' => ['{{patient_name}}', '{{clinic_name}}'],
+            'default' => [
+                'subject' => '[{{clinic_name}}] Confirm you are still enrolled — new school year',
+                'heading' => 'Confirm Enrollment, {{patient_name}}',
+                'message' => 'A new school year has started at {{clinic_name}}. Log in to confirm that you are still enrolled and continue accessing your health records and clinic services.',
+                'button_label' => 'Confirm Enrollment',
+                'footer' => 'If you are no longer enrolled, ignore this email and your account will remain inactive.',
+            ],
+        ],
+        'employee_re_employment' => [
+            'label' => 'Employee Employment Confirmation',
+            'description' => 'Sent when a new APE cycle asks faculty or personnel to confirm employment.',
+            'icon' => 'badge',
+            'action_hint' => 'The button opens the patient portal login page.',
+            'allowed_placeholders' => ['{{patient_name}}', '{{clinic_name}}'],
+            'required_placeholders' => ['{{patient_name}}', '{{clinic_name}}'],
+            'default' => [
+                'subject' => '[{{clinic_name}}] Confirm you are still employed — new school year',
+                'heading' => 'Confirm Employment, {{patient_name}}',
+                'message' => 'A new school year has started at {{clinic_name}}. Log in to confirm that you are still employed and continue accessing your health records and clinic services.',
+                'button_label' => 'Confirm Employment',
+                'footer' => 'If you are no longer employed, ignore this email and your account will remain inactive.',
+            ],
+        ],
+    ];
+}
+
+function cliniq_mail_template(string $key): array
+{
+    $definitions = cliniq_mail_template_definitions();
+    if (!isset($definitions[$key])) {
+        throw new InvalidArgumentException('Unknown email notification format.');
+    }
+    $default = $definitions[$key]['default'];
+    $saved = cliniq_setting_read('mail.template.' . $key, $default);
+    return array_intersect_key(array_merge($default, $saved), $default);
+}
+
+function cliniq_mail_templates(): array
+{
+    $templates = [];
+    foreach (cliniq_mail_template_definitions() as $key => $definition) {
+        $templates[$key] = $definition + ['template' => cliniq_mail_template($key)];
+    }
+    return $templates;
+}
+
+function validate_cliniq_mail_template(string $key, array $input): array
+{
+    $definitions = cliniq_mail_template_definitions();
+    if (!isset($definitions[$key])) {
+        throw new InvalidArgumentException('Unknown email notification format.');
+    }
+
+    $limits = ['subject' => 180, 'heading' => 180, 'message' => 4000, 'button_label' => 60, 'footer' => 1000];
+    $template = [];
+    foreach ($limits as $field => $limit) {
+        $value = trim((string) ($input[$field] ?? ''));
+        if ($field !== 'footer' && $value === '') {
+            throw new InvalidArgumentException(ucwords(str_replace('_', ' ', $field)) . ' is required.');
+        }
+        if (mb_strlen($value) > $limit) {
+            throw new InvalidArgumentException(ucwords(str_replace('_', ' ', $field)) . " must not exceed {$limit} characters.");
+        }
+        if ($field === 'subject' && preg_match('/[\r\n]/', $value)) {
+            throw new InvalidArgumentException('Subject must be a single line.');
+        }
+        $template[$field] = $value;
+    }
+
+    $combined = implode("\n", $template);
+    preg_match_all('/\{\{[a-z_]+\}\}/', $combined, $matches);
+    $used = array_values(array_unique($matches[0] ?? []));
+    $unsupported = array_diff($used, $definitions[$key]['allowed_placeholders']);
+    if ($unsupported !== []) {
+        throw new InvalidArgumentException('Unsupported placeholder: ' . implode(', ', $unsupported));
+    }
+    $missing = array_filter(
+        $definitions[$key]['required_placeholders'],
+        static fn(string $placeholder): bool => !str_contains($combined, $placeholder)
+    );
+    if ($missing !== []) {
+        throw new InvalidArgumentException('Required placeholder missing: ' . implode(', ', $missing));
+    }
+    if (preg_match('/\{\{|\}\}/', preg_replace('/\{\{[a-z_]+\}\}/', '', $combined))) {
+        throw new InvalidArgumentException('A placeholder is incomplete. Use the exact placeholder pills shown in the editor.');
+    }
+
+    return $template;
+}
+
+function save_cliniq_mail_template(string $key, array $input, ?int $updatedBy = null): void
+{
+    cliniq_setting_write('mail.template.' . $key, validate_cliniq_mail_template($key, $input), $updatedBy);
+}
+
+function reset_cliniq_mail_template(string $key, ?int $updatedBy = null): void
+{
+    $definitions = cliniq_mail_template_definitions();
+    if (!isset($definitions[$key])) {
+        throw new InvalidArgumentException('Unknown email notification format.');
+    }
+    cliniq_setting_write('mail.template.' . $key, $definitions[$key]['default'], $updatedBy);
 }
 
 /**

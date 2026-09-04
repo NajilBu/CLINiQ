@@ -33,6 +33,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confi
         if (($apeRecord['patient_vitals_status'] ?? 'Not Started') === 'Confirmed') {
             throw new RuntimeException('Your vitals and BMI have already been confirmed.');
         }
+        if (empty($apeRecord['schedule_batch_id']) || ($apeRecord['batch_status'] ?? '') !== 'Scheduled') {
+            throw new RuntimeException('Wait for the clinic to assign your APE schedule before entering vitals.');
+        }
         $height = (float) ($_POST['patient_height_cm'] ?? 0);
         $weight = (float) ($_POST['patient_weight_kg'] ?? 0);
         $temperature = (float) ($_POST['patient_temperature'] ?? 0);
@@ -55,7 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confi
             throw new InvalidArgumentException('Enter a valid pulse rate between 20 and 250 bpm.');
         }
         $bmi = round($weight / (($height / 100) ** 2), 2);
-        $stmt = auth_db()->prepare("UPDATE ape_records SET patient_height_cm = ?, patient_weight_kg = ?, patient_bmi = ?, patient_temperature = ?, patient_blood_pressure = ?, patient_pulse_rate = ?, patient_vitals_status = 'Confirmed', patient_vitals_confirmed_at = NOW() WHERE ape_id = ? AND patient_id = ? AND patient_vitals_status = 'Not Started'");
+        $stmt = auth_db()->prepare("UPDATE ape_records SET patient_height_cm = ?, patient_weight_kg = ?, patient_bmi = ?, patient_temperature = ?, patient_blood_pressure = ?, patient_pulse_rate = ?, patient_vitals_status = 'Confirmed', patient_vitals_confirmed_at = NOW() WHERE ape_id = ? AND patient_id = ? AND patient_vitals_status = 'Not Started' AND schedule_batch_id IN (SELECT batch_id FROM ape_schedule_batches WHERE status = 'Scheduled')");
         $stmt->execute([$height, $weight, $bmi, $temperature, $bloodPressure, $pulseRate, (int) $apeRecord['ape_id'], $patientId]);
         if ($stmt->rowCount() !== 1) {
             throw new RuntimeException('The vitals could not be confirmed. Refresh and try again.');
@@ -74,16 +77,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
         if (!$apeRecord) {
             throw new RuntimeException('The clinic must create your APE record before you can upload documents.');
         }
-        $requirementsVerifiedForUpload = ($apeRecord['requirement_status'] ?? '') === 'Checked'
-            || in_array(($apeRecord['workflow_status'] ?? ''), ['Requirements Checked', 'Submitted', 'Reviewed', 'Scheduled', 'Exam Done', 'Follow-up Required'], true);
-        if (($apeRecord['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed' || !$requirementsVerifiedForUpload || empty($apeRecord['exam_date']) || ($apeRecord['clearance_status'] ?? '') === 'Cleared') {
+        if (($apeRecord['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed' || empty($apeRecord['exam_date']) || ($apeRecord['clearance_status'] ?? '') === 'Cleared' || ($apeRecord['workflow_status'] ?? '') === 'Cleared') {
             throw new RuntimeException('Document upload opens only after the clinical examination is complete.');
         }
 
         $uploadRequirements = ape_requirements_for_record((int) $apeRecord['ape_id']);
         $documentTypesByKey = [];
+        $preserveFollowUpReview = [];
         foreach ($uploadRequirements as $uploadRequirement) {
             $documentTypesByKey['r' . (int) $uploadRequirement['requirement_id']] = $uploadRequirement['requirement_name'];
+            if (!empty($uploadRequirement['upload_group']) || (ape_requirements_locked($apeRecord) && (int) ($apeRecord['follow_up_required'] ?? 0) === 1
+                && in_array($uploadRequirement['status'], ['Missing', 'Needs Correction'], true))) {
+                $preserveFollowUpReview[$uploadRequirement['requirement_name']] = true;
+            }
         }
         if (!$documentTypesByKey) {
             throw new RuntimeException('The clinic has not listed any APE requirements for upload yet.');
@@ -156,7 +162,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
                 $patientId,
             ]);
             if (!isset($updatedRequirements[$documentType])) {
-                $requirement->execute([(int) $apeRecord['ape_id'], $documentType]);
+                if (!isset($preserveFollowUpReview[$documentType])) {
+                    $requirement->execute([(int) $apeRecord['ape_id'], $documentType]);
+                }
                 $updatedRequirements[$documentType] = true;
             }
         }
@@ -201,9 +209,15 @@ $apeStatus = $apeRecord['workflow_status'] ?? 'Not Started';
 $clearanceStatus = $apeRecord['clearance_status'] ?? 'Pending';
 $studentNote = trim((string) ($apeRecord['patient_visible_note'] ?? ''));
 $missingItems = trim((string) ($apeRecord['missing_items'] ?? ''));
-$actionNeeded = $clearanceStatus !== 'Cleared' && $apeStatus !== 'Not Started';
 $requirementStatus = $apeRecord['requirement_status'] ?? 'Not Checked';
 $patientVitalsConfirmed = ($apeRecord['patient_vitals_status'] ?? 'Not Started') === 'Confirmed';
+$hasScheduledBatch = !empty($apeRecord['schedule_batch_id']) && ($apeRecord['batch_status'] ?? '') === 'Scheduled';
+$actionNeeded = $clearanceStatus !== 'Cleared' && $apeStatus !== 'Not Started' && $hasScheduledBatch;
+$batchScheduleLabel = $hasScheduledBatch
+    ? date('F j, Y', strtotime((string) $apeRecord['batch_schedule_date'])) . ' at '
+        . date('g:i A', strtotime((string) $apeRecord['batch_start_time'])) . '–'
+        . date('g:i A', strtotime((string) $apeRecord['batch_end_time']))
+    : '';
 $currentBmi = (float) ($apeRecord['patient_bmi'] ?? 0);
 $currentBmiClassification = patient_ape_bmi_classification($currentBmi);
 $requirementsVerified = $patientVitalsConfirmed && ($requirementStatus === 'Checked' || in_array($apeStatus, [
@@ -216,23 +230,24 @@ $requirementsVerified = $patientVitalsConfirmed && ($requirementStatus === 'Chec
 ], true));
 $requirementsNeedCorrection = $requirementStatus === 'Needs Correction';
 $examCompleted = !empty($apeRecord['exam_date']);
-$requiredRequirementNames = array_values(array_unique(array_map(static fn(array $requirement): string => $requirement['requirement_name'], $requirements)));
+$apeQueue = $apeRecord ? ape_record_queue($apeRecord) : 'examination';
+$requiredRequirementNames = ape_upload_requirement_names($requirements);
 $uploadedRequirementNames = [];
 foreach ($uploadedDocuments as $uploadedDocument) {
     $uploadedRequirementNames[$uploadedDocument['document_type']] = true;
 }
-$allRequiredDocumentsUploaded = $requiredRequirementNames !== []
-    && count(array_filter($requiredRequirementNames, static fn(string $requirementName): bool => isset($uploadedRequirementNames[$requirementName]))) >= count($requiredRequirementNames);
+$allRequiredDocumentsUploaded = ape_initial_uploads_present($apeRecord ?? []);
 $documentsAwaitingReview = $allRequiredDocumentsUploaded && (int) ($apeRecord['required_unverified_count'] ?? 0) > 0;
-$canUploadDocuments = $requirementsVerified
-    && !$requirementsNeedCorrection
-    && $examCompleted
+$canUploadDocuments = $patientVitalsConfirmed && $examCompleted
     && $clearanceStatus !== 'Cleared'
-    && in_array($apeStatus, ['Requirements Checked', 'Exam Done', 'Submitted', 'Follow-up Required'], true);
+    && $apeStatus !== 'Cleared';
 $nextActionTitle = match (true) {
     $clearanceStatus === 'Cleared' => 'APE completed',
+    $apeQueue === 'digital_submission' => $documentsAwaitingReview ? 'Wait for clinic document review' : 'Upload APE documents',
+    $apeQueue === 'follow_up' && !ape_document_follow_up($apeRecord) && !ape_deferred_submission_complete($apeRecord) => 'Submit follow-up documents for archive review',
     $requirementsNeedCorrection => 'Return corrected hard-copy requirements',
     $apeStatus === 'Follow-up Required' => 'Complete the required follow-up',
+    !$hasScheduledBatch => 'Wait for your APE schedule',
     !$patientVitalsConfirmed => 'Complete your vitals and BMI',
     !$examCompleted || !$requirementsVerified => 'Attend examination',
     $documentsAwaitingReview => 'Wait for clinic document review',
@@ -241,51 +256,47 @@ $nextActionTitle = match (true) {
 };
 $nextActionCopy = match (true) {
     $clearanceStatus === 'Cleared' => 'Your APE record is already cleared by the clinic.',
+    $apeQueue === 'digital_submission' => $documentsAwaitingReview
+        ? 'Your required uploads are waiting for clinic archive review. Any recorded follow-up remains pending.'
+        : 'Upload the initially clinic-verified documents within seven days of examination. Follow-up or correction documents use their assigned due date and do not block this initial step.',
+    $apeQueue === 'follow_up' && !ape_document_follow_up($apeRecord) && !ape_deferred_submission_complete($apeRecord) => 'Your initial documents are archived. Upload the returned documents by their assigned due date, then wait for clinic archive review.',
     $requirementsNeedCorrection => $studentNote ?: 'Return the corrected hard-copy requirements requested by the clinic.',
     $apeStatus === 'Follow-up Required' => $studentNote ?: 'Complete the referral or other follow-up requested by the clinic.',
+    !$hasScheduledBatch => 'The clinic has not assigned your examination batch yet. Your vitals form will open after a schedule is assigned.',
     !$patientVitalsConfirmed => 'Enter and confirm your height, weight, BMI, and vital signs before visiting the clinic for examination.',
-    !$examCompleted || !$requirementsVerified => $studentNote ?: 'Your vitals are confirmed. Visit the clinic for examination and hard-copy document review.',
+    !$examCompleted || !$requirementsVerified => $studentNote ?: ($hasScheduledBatch
+        ? "Attend {$apeRecord['batch_name']} on {$batchScheduleLabel} and bring your hard-copy requirements."
+        : 'Your vitals are confirmed. Wait for the clinic to assign your examination batch.'),
     $documentsAwaitingReview => 'Your documents were submitted and are waiting for clinic archive review.',
     $apeStatus === 'Reviewed' => $studentNote ?: 'Your examination and document archive are complete. The clinic will now record the final decision.',
     default => $studentNote ?: ($apeRecord ? 'Complete the current APE step shown below.' : 'No APE record has been opened by the clinic yet.'),
 };
-$apePercent = match ($apeStatus) {
-    'Registered' => 20,
-    'Batch Assigned' => 20,
-    'Exam Done' => 40,
-    'Requirements Checked', 'Scheduled' => 60,
-    'Submitted' => 80,
-    'Reviewed', 'Follow-up Required' => 80,
-    'Cleared' => 100,
-    default => 0,
-};
+$currentStep = $apeRecord ? ape_record_step_index($apeRecord) + 1 : 1;
+$apePercent = $currentStep === 5 ? 100 : ($currentStep - 1) * 20;
 $headerBadge = $clearanceStatus === 'Cleared' ? 'student-badge-success' : ($actionNeeded ? 'student-badge-warning' : 'student-badge-info');
 $actionBadgeLabel = match (true) {
+    $apeQueue === 'digital_submission' => $documentsAwaitingReview ? 'Under Clinic Review' : 'Digital Submission',
+    $apeQueue === 'follow_up' => 'Follow-up Required',
     $requirementsNeedCorrection => 'Correction Needed',
     $apeStatus === 'Follow-up Required' => 'Follow-up Required',
+    !$hasScheduledBatch => 'Waiting for Schedule',
     !$patientVitalsConfirmed => 'Vitals and BMI First',
     !$examCompleted || !$requirementsVerified => 'Examination',
     $documentsAwaitingReview => 'Under Clinic Review',
     $apeStatus === 'Reviewed' => 'Final Decision Pending',
     default => 'Current Step',
 };
-$currentStep = match (true) {
-    $clearanceStatus === 'Cleared' => 5,
-    $apeStatus === 'Follow-up Required' || $clearanceStatus === 'For Follow-up' => 4,
-    $apeStatus === 'Reviewed' => 4,
-    !$patientVitalsConfirmed => 1,
-    !$examCompleted || !$requirementsVerified => 2,
-    default => 3,
-};
 
 $flowSteps = [
     [
         'number' => 1,
-        'icon' => 'monitor_heart',
-        'title' => 'Patient vitals and BMI',
-        'copy' => $patientVitalsConfirmed
+        'icon' => $hasScheduledBatch ? 'monitor_heart' : 'calendar_month',
+        'title' => $hasScheduledBatch ? 'Patient vitals and BMI' : 'APE schedule assignment',
+        'copy' => !$hasScheduledBatch
+            ? 'Wait for the clinic to assign your APE examination batch.'
+            : ($patientVitalsConfirmed
             ? 'You confirmed your height, weight, BMI, and vital signs.'
-            : 'Enter and confirm your vitals and BMI before visiting the clinic.',
+            : 'Enter and confirm your vitals and BMI before visiting the clinic.'),
     ],
     [
         'number' => 2,
@@ -293,7 +304,9 @@ $flowSteps = [
         'title' => 'Examination',
         'copy' => $examCompleted && $requirementsVerified
             ? 'Clinic recorded your examination and checked your hard-copy requirements.'
-            : ($patientVitalsConfirmed ? 'Visit the clinic for examination and bring your hard-copy requirements.' : 'Confirm your vitals and BMI before visiting the clinic.'),
+            : ($patientVitalsConfirmed
+                ? ($hasScheduledBatch ? "Attend {$apeRecord['batch_name']} on {$batchScheduleLabel}." : 'Wait for the clinic to assign your examination batch.')
+                : 'Confirm your vitals and BMI before visiting the clinic.'),
     ],
     [
         'number' => 3,
@@ -306,7 +319,7 @@ $flowSteps = [
     [
         'number' => 4,
         'icon' => 'medical_services',
-        'title' => 'Final decision or follow-up',
+        'title' => 'Final Decision or Follow-up',
         'copy' => 'The clinic clears the record or requests treatment, clearance, or referral follow-up.',
     ],
     [
@@ -362,7 +375,7 @@ foreach ($requirements as $requirement) {
             'icon' => $icon,
             'status' => 'Ready to Upload',
             'badge' => 'student-badge-warning',
-            'detail' => $requirement['remarks'] ?? 'Hard copy checked. Upload one or more digital copies for clinic record keeping.',
+            'detail' => $requirement['remarks'] ?? (($requirement['upload_group'] ?? '') === 'follow_up' ? 'Provide the requested follow-up or correction document by its assigned due date.' : 'Hard copy checked. Upload one or more digital copies for clinic record keeping.'),
             'action' => 'Upload',
             'button' => 'student-button',
             'disabled' => false,
@@ -387,8 +400,15 @@ foreach ($requirements as $requirement) {
         ];
     }
 }
+$requirementByName = array_column($requirements, null, 'requirement_name');
+foreach ($documents as &$documentCard) {
+    $uploadRequirement = $requirementByName[$documentCard['name']];
+    $documentCard['upload_group'] = $uploadRequirement['upload_group'] ?? null;
+    $documentCard['upload_due_date'] = $uploadRequirement['upload_due_date'] ?? null;
+}
+unset($documentCard);
 $uploadableDocumentCount = count(array_filter($documents, static fn(array $document): bool => !$document['disabled']));
-$canEnterPatientVitals = $apeRecord && !$patientVitalsConfirmed && $clearanceStatus !== 'Cleared';
+$canEnterPatientVitals = $apeRecord && $hasScheduledBatch && !$patientVitalsConfirmed && $clearanceStatus !== 'Cleared';
 
 render_student_header('APE Status', 'ape');
 ?>
@@ -422,6 +442,22 @@ render_student_header('APE Status', 'ape');
     </div>
 <?php endif; ?>
 
+<?php if ($hasScheduledBatch): ?>
+    <section class="student-action-card mb-4">
+        <div class="flex items-start gap-4">
+            <span class="student-icon-box">
+                <span class="material-symbols-outlined">event_available</span>
+            </span>
+            <div>
+                <p class="student-eyebrow mb-1">Your APE Schedule</p>
+                <h2><?= student_e($apeRecord['batch_name']) ?></h2>
+                <p><?= student_e($batchScheduleLabel) ?></p>
+            </div>
+        </div>
+        <span class="student-badge student-badge-info"><?= student_e($apeRecord['batch_patient_category']) ?></span>
+    </section>
+<?php endif; ?>
+
 <section class="student-action-card mb-4">
     <div class="flex items-start gap-4">
         <span class="student-icon-box">
@@ -446,7 +482,7 @@ render_student_header('APE Status', 'ape');
                 <h2 class="student-card-title">APE Flow</h2>
                 <p class="student-card-copy">What happens to your record</p>
             </div>
-            <span class="student-badge <?= student_e($headerBadge) ?>"><?= student_e($apeStatus) ?></span>
+            <span class="student-badge <?= student_e($headerBadge) ?>"><?= student_e($apeRecord ? ape_record_stage_label($apeRecord) : $apeStatus) ?></span>
         </div>
         <div class="student-card-pad">
             <div class="flex items-end justify-between mb-4">
@@ -515,10 +551,10 @@ render_student_header('APE Status', 'ape');
         <div class="student-card-header">
             <div>
                 <h2 class="student-card-title">Vitals and BMI</h2>
-                <p class="student-card-copy">Enter these values before presenting your hard-copy APE requirements to the clinic.</p>
+                <p class="student-card-copy"><?= $hasScheduledBatch ? 'Enter these values before presenting your hard-copy APE requirements to the clinic.' : 'Vitals entry opens after the clinic assigns your APE schedule.' ?></p>
             </div>
-            <span class="student-badge <?= $patientVitalsConfirmed ? 'student-badge-success' : 'student-badge-warning' ?>">
-                <?= $patientVitalsConfirmed ? 'Confirmed' : 'Not Started' ?>
+            <span class="student-badge <?= $patientVitalsConfirmed ? 'student-badge-success' : ($hasScheduledBatch ? 'student-badge-warning' : 'student-badge-info') ?>">
+                <?= $patientVitalsConfirmed ? 'Confirmed' : ($hasScheduledBatch ? 'Not Started' : 'Waiting Schedule') ?>
             </span>
         </div>
         <div class="student-card-pad">
@@ -570,6 +606,8 @@ render_student_header('APE Status', 'ape');
                         Confirm Vitals and BMI
                     </button>
                 </form>
+            <?php elseif (!$hasScheduledBatch && !$patientVitalsConfirmed): ?>
+                <div class="student-note student-note-info"><span class="material-symbols-outlined">calendar_month</span><div><strong>Waiting for APE schedule.</strong> The clinic will assign your examination batch before you enter vitals and BMI.</div></div>
             <?php else: ?>
                 <div class="student-note student-note-info"><span class="material-symbols-outlined">info</span><div>This completed APE record predates the patient vitals profile step. No new patient-entered values are required.</div></div>
             <?php endif; ?>
@@ -607,6 +645,9 @@ render_student_header('APE Status', 'ape');
                                 <span class="student-badge <?= student_e($doc['badge']) ?>"><?= student_e($doc['status']) ?></span>
                             </div>
                             <p><?= student_e($doc['detail']) ?></p>
+                            <?php if ($doc['upload_due_date']): ?>
+                                <p class="font-bold"><?= $doc['upload_group'] === 'initial' ? 'Initial upload' : 'Follow-up / correction upload' ?> due <?= student_e(date('M j, Y', strtotime($doc['upload_due_date']))) ?></p>
+                            <?php endif; ?>
                             <?php if (!$doc['disabled']): ?>
                                 <p class="ape-staged-file-name hidden" id="ape-file-name-<?= student_e($doc['key']) ?>"></p>
                             <?php endif; ?>

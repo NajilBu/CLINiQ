@@ -4,6 +4,54 @@
    ============================================================ */
 
 // ============================================================
+// DESKTOP RUNTIME BRIDGE
+// ============================================================
+
+function cliniqDesktopBridge() {
+    return window.cliniqDesktop && typeof window.cliniqDesktop.openExternal === 'function'
+        ? window.cliniqDesktop
+        : null;
+}
+
+document.addEventListener('click', (event) => {
+    const bridge = cliniqDesktopBridge();
+    if (!bridge || event.defaultPrevented || event.button !== 0) return;
+
+    const link = event.target.closest('a[href]');
+    if (!link || link.hasAttribute('download')) return;
+
+    let targetUrl;
+    try {
+        targetUrl = new URL(link.href, window.location.href);
+    } catch (error) {
+        return;
+    }
+
+    if (!['http:', 'https:', 'mailto:'].includes(targetUrl.protocol)) return;
+
+    let patientPortalBase = '';
+    try {
+        patientPortalBase = new URL(
+            String(document.body.dataset.cliniqPatientPortalUrl || ''),
+            window.location.href
+        ).href.replace(/\/$/, '');
+    } catch (error) {
+        patientPortalBase = '';
+    }
+    const isPatientPortalLink = patientPortalBase !== ''
+        && (targetUrl.href === patientPortalBase || targetUrl.href.startsWith(`${patientPortalBase}/`));
+    const shouldOpenExternally = link.matches('[data-open-external], [target="_blank"]')
+        || targetUrl.origin !== window.location.origin
+        || isPatientPortalLink;
+
+    if (!shouldOpenExternally) return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    bridge.openExternal(targetUrl.href);
+}, true);
+
+// ============================================================
 // MODAL SYSTEM
 // ============================================================
 
@@ -454,12 +502,16 @@ function initLogoPlaceholders(root = document) {
 
         const input = section.querySelector('[data-logo-input]');
         const preview = section.querySelector('[data-logo-preview]');
+        const previewLink = section.querySelector('[data-logo-preview-link]');
         const dropzone = section.querySelector('[data-logo-dropzone]');
         const fileName = section.querySelector('[data-logo-file-name]');
         const reset = section.querySelector('[data-logo-reset]');
+        const saveLogo = section.querySelector('[data-logo-save]');
         if (!(input instanceof HTMLInputElement) || !(preview instanceof HTMLImageElement)) return;
 
         const originalSource = preview.src;
+        const originalPreviewHref = previewLink instanceof HTMLAnchorElement ? previewLink.href : '';
+        const originalPreviewTitle = previewLink instanceof HTMLAnchorElement ? previewLink.dataset.previewTitle || '' : '';
         let previewUrl = '';
 
         function clearPreviewUrl() {
@@ -469,22 +521,85 @@ function initLogoPlaceholders(root = document) {
             }
         }
 
+        function setSaveEnabled(enabled) {
+            if (saveLogo instanceof HTMLButtonElement) {
+                const ready = !input.disabled && enabled;
+                saveLogo.disabled = input.disabled;
+                saveLogo.dataset.logoReady = ready ? '1' : '0';
+                saveLogo.setAttribute('aria-disabled', ready ? 'false' : 'true');
+                saveLogo.classList.toggle('is-locked', !ready);
+            }
+        }
+
+        function showLogoSelectionWarning() {
+            let modal = document.getElementById('logoSelectionWarningModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'logoSelectionWarningModal';
+                modal.className = 'modal-backdrop';
+                modal.innerHTML = `
+                    <div class="modal-content bg-white rounded-[2rem] p-8 w-full max-w-md shadow-2xl" role="alertdialog" aria-modal="true" aria-labelledby="logoSelectionWarningTitle">
+                        <div class="flex items-start gap-4 mb-6">
+                            <div class="w-12 h-12 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center shrink-0">
+                                <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+                            </div>
+                            <div>
+                                <h3 class="font-headline text-lg font-extrabold text-[#1c2a59] mb-1" id="logoSelectionWarningTitle">Select a logo first</h3>
+                                <p class="text-sm font-bold text-slate-500">Choose or drop a valid PNG, JPG, or WebP image before saving.</p>
+                            </div>
+                        </div>
+                        <div class="flex justify-end">
+                            <button type="button" class="btn btn-primary" data-logo-warning-close>Close</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+                modal.querySelector('[data-logo-warning-close]')?.addEventListener('click', () => closeModal(modal.id));
+                modal.addEventListener('click', (event) => {
+                    if (event.target === modal) closeModal(modal.id);
+                });
+            }
+
+            showModal(modal.id);
+            modal.querySelector('[data-logo-warning-close]')?.focus();
+        }
+
+        function restoreSavedPreview(message = 'No new image selected.') {
+            clearPreviewUrl();
+            input.value = '';
+            preview.src = originalSource;
+            if (previewLink instanceof HTMLAnchorElement) {
+                previewLink.href = originalPreviewHref;
+                previewLink.dataset.previewTitle = originalPreviewTitle;
+            }
+            if (fileName) fileName.textContent = message;
+            if (reset) reset.classList.add('hidden');
+            setSaveEnabled(false);
+        }
+
         function previewFile(file) {
             if (!file) return;
             if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
                 if (typeof showToast === 'function') showToast('Choose a PNG, JPG, or WebP image.', 'error');
+                restoreSavedPreview('Invalid file. Choose a PNG, JPG, or WebP image.');
                 return;
             }
             if (file.size > 5 * 1024 * 1024) {
                 if (typeof showToast === 'function') showToast('Logo preview files must be 5 MB or smaller.', 'error');
+                restoreSavedPreview('The selected image is larger than 5 MB.');
                 return;
             }
 
             clearPreviewUrl();
             previewUrl = URL.createObjectURL(file);
             preview.src = previewUrl;
+            if (previewLink instanceof HTMLAnchorElement) {
+                previewLink.href = previewUrl;
+                previewLink.dataset.previewTitle = file.name;
+            }
             if (fileName) fileName.textContent = `${file.name} — ready to save`;
             if (reset) reset.classList.remove('hidden');
+            setSaveEnabled(true);
         }
 
         input.addEventListener('change', () => previewFile(input.files && input.files[0]));
@@ -515,13 +630,20 @@ function initLogoPlaceholders(root = document) {
 
         if (reset) {
             reset.addEventListener('click', () => {
-                clearPreviewUrl();
-                input.value = '';
-                preview.src = originalSource;
-                if (fileName) fileName.textContent = 'No new image selected.';
-                reset.classList.add('hidden');
+                restoreSavedPreview();
             });
         }
+
+        if (saveLogo instanceof HTMLButtonElement) {
+            saveLogo.addEventListener('click', (event) => {
+                if (saveLogo.dataset.logoReady === '1' || saveLogo.disabled) return;
+                event.preventDefault();
+                event.stopPropagation();
+                showLogoSelectionWarning();
+            });
+        }
+
+        setSaveEnabled(Boolean(input.files && input.files[0]));
     });
 }
 
@@ -931,6 +1053,113 @@ function initConfirmedPasswordForms(root = document) {
     });
 }
 
+function initRequirementStatusColors(root = document) {
+    root.querySelectorAll('[data-requirement-status]').forEach((select) => {
+        const syncStatusColor = () => {
+            select.dataset.status = select.value;
+        };
+        syncStatusColor();
+        if (select.dataset.statusColorReady === 'true') return;
+        select.dataset.statusColorReady = 'true';
+        select.addEventListener('change', syncStatusColor);
+    });
+}
+
+function initApeExamResultFields(root = document) {
+    const result = root.querySelector('#apeExamResult');
+    if (!result) return;
+    const findingDetails = root.querySelector('#apeFindingDetails');
+    const findingDescription = root.querySelector('#apeFindingDescription');
+    const clinicalRemarks = root.querySelector('#apeClinicalRemarks');
+    const patientNote = root.querySelector('#apePatientNote');
+    const referralDetails = root.querySelector('#apeReferralDetails');
+    const referralDestination = root.querySelector('#apeReferralDestination');
+    const referralReason = root.querySelector('#apeReferralReason');
+
+    const syncExamResultFields = (clearHiddenValues = false) => {
+        const hasFinding = result.value === 'With Finding';
+        const isReferred = result.value === 'Referred';
+
+        findingDetails?.classList.toggle('hidden', !hasFinding);
+        referralDetails?.classList.toggle('hidden', !isReferred);
+
+        [findingDescription, clinicalRemarks, patientNote].forEach((field) => {
+            if (!field) return;
+            field.disabled = !hasFinding;
+            if (clearHiddenValues && !hasFinding) field.value = '';
+        });
+        if (findingDescription) findingDescription.required = hasFinding;
+
+        [referralDestination, referralReason].forEach((field) => {
+            if (!field) return;
+            field.disabled = !isReferred;
+            field.required = isReferred;
+            if (clearHiddenValues && !isReferred) field.value = '';
+        });
+    };
+
+    syncExamResultFields(false);
+    if (result.dataset.examResultReady === 'true') return;
+    result.dataset.examResultReady = 'true';
+    result.addEventListener('change', () => syncExamResultFields(true));
+}
+
+function initApeHardCopyReview(root = document) {
+    root.querySelectorAll('[data-hard-copy-review]').forEach((panel) => {
+        const status = panel.querySelector('[name="hard_copy_status"]');
+        const targets = panel.querySelector('[data-hard-copy-targets]');
+        const targetLabel = panel.querySelector('[data-hard-copy-target-label]');
+        const instructionLabel = panel.querySelector('[data-hard-copy-instruction-label]');
+        const instructions = panel.querySelector('[name="missing_items"]');
+        const checkboxes = Array.from(panel.querySelectorAll('[name="requirement_ids[]"]'));
+        const checklist = panel.closest('[data-ape-requirements]');
+        if (!status || !targets || !instructions) return;
+        // Preserve the server-rendered saved values; never preview or re-enable locked controls.
+        if (checklist?.dataset.locked === 'true') return;
+
+        const sync = () => {
+            const needsDocuments = ['correction', 'follow_up'].includes(status.value);
+            const isFollowUp = status.value === 'follow_up';
+            targets.classList.toggle('hidden', !needsDocuments);
+            if (targetLabel) targetLabel.textContent = isFollowUp ? 'Documents to provide later' : 'Documents needing correction';
+            if (instructionLabel) instructionLabel.textContent = isFollowUp ? 'Follow-up instructions' : 'Correction instructions';
+            instructions.disabled = !needsDocuments;
+            instructions.required = needsDocuments;
+            panel.querySelectorAll('[data-return-schedule]').forEach((field) => {
+                field.disabled = !needsDocuments;
+                field.required = needsDocuments;
+            });
+            instructions.setCustomValidity(needsDocuments && checkboxes.length === 0 ? 'Add documents to the Requirements Checklist first.' : '');
+            checkboxes.forEach((checkbox) => {
+                checkbox.disabled = !needsDocuments;
+                checkbox.setCustomValidity('');
+            });
+            if (checkboxes[0] && needsDocuments && !checkboxes.some((checkbox) => checkbox.checked)) {
+                checkboxes[0].setCustomValidity('Select at least one document.');
+            }
+            const selectedIds = new Set(checkboxes.filter((checkbox) => checkbox.checked && needsDocuments).map((checkbox) => checkbox.value));
+            checklist?.querySelectorAll('[data-requirement-preview]').forEach((preview) => {
+                const selected = selectedIds.has(preview.dataset.requirementPreview);
+                const nextStatus = selected ? (isFollowUp ? 'Missing' : 'Needs Correction') : 'Verified';
+                if (['complete', 'correction', 'follow_up'].includes(status.value)) {
+                    preview.value = nextStatus;
+                    preview.dataset.status = nextStatus;
+                }
+            });
+            checklist?.querySelectorAll('[data-requirement-remark]').forEach((input) => {
+                const selected = selectedIds.has(input.dataset.requirementRemark);
+                input.readOnly = selected;
+                input.title = selected ? 'The instructions above will be used for this selected document.' : '';
+            });
+        };
+        sync();
+        if (panel.dataset.hardCopyReady === 'true') return;
+        panel.dataset.hardCopyReady = 'true';
+        status.addEventListener('change', sync);
+        checkboxes.forEach((checkbox) => checkbox.addEventListener('change', sync));
+    });
+}
+
 function cliniqAfterContentSwap(root) {
     if (typeof window.cliniqInitAgGrids === 'function') {
         window.cliniqInitAgGrids(root || document);
@@ -940,6 +1169,9 @@ function cliniqAfterContentSwap(root) {
     initDragScrolling(root || document);
     initPatientAccountTypeFields(root || document);
     initConfirmedPasswordForms(root || document);
+    initRequirementStatusColors(root || document);
+    initApeExamResultFields(root || document);
+    initApeHardCopyReview(root || document);
     if (typeof window.initRecentPatientAccountPagination === 'function') {
         window.initRecentPatientAccountPagination();
     }
@@ -1002,6 +1234,15 @@ function cliniqFormData(form, submitter) {
 }
 
 async function cliniqSubmitFormAjax(form, submitter) {
+    // Keep unsaved APE fields only in memory across add-item saves or validation errors.
+    const examForm = document.getElementById('apeExaminationForm') || document.getElementById('apeRequirementsForm');
+    const examDraft = examForm ? {
+        apeId: examForm.dataset.apeId,
+        formId: examForm.id,
+        fields: Array.from(examForm.elements)
+            .filter((field) => field.name && field.name !== 'action')
+            .map((field) => ({ name: field.name, type: field.type, value: field.value, checked: field.checked }))
+    } : null;
     const method = (form.method || 'GET').toUpperCase();
     const actionAttribute = form.getAttribute('action');
     let url = new URL(actionAttribute || window.location.href, window.location.href);
@@ -1028,6 +1269,22 @@ async function cliniqSubmitFormAjax(form, submitter) {
     }
 
     cliniqRenderFetchedPage(await response.text(), finalUrl.href, { pushHistory: method === 'GET' });
+    const refreshedExam = examDraft ? document.getElementById(examDraft.formId) : null;
+    if (examDraft && refreshedExam?.dataset.apeId === examDraft.apeId
+        && refreshedExam.closest('[data-ape-requirements]')?.dataset.locked !== 'true') {
+        examDraft.fields.forEach(({ name, type, value, checked }) => {
+            if (type === 'checkbox' || type === 'radio') {
+                Array.from(refreshedExam.elements)
+                    .filter((field) => field.name === name && field.value === value)
+                    .forEach((field) => { field.checked = checked; });
+            } else {
+                const field = refreshedExam.elements.namedItem(name);
+                if (field) field.value = value;
+            }
+        });
+        initApeExamResultFields(document);
+        initApeHardCopyReview(document);
+    }
 }
 
 function initSamePageAjax() {
@@ -1291,6 +1548,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Staff profile passwords can be revealed and must match their confirmation.
     initConfirmedPasswordForms();
+    initRequirementStatusColors();
+    initApeExamResultFields();
+    initApeHardCopyReview();
 
     // Start alert polling
     refreshAlerts();

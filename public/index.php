@@ -65,8 +65,15 @@ $theme = active_cliniq_theme();
 
         body {
             background:
-                linear-gradient(180deg, color-mix(in srgb, var(--cliniq-surface) 95%, #ffffff), color-mix(in srgb, var(--cliniq-surface) 82%, #ffffff)),
-                radial-gradient(circle at top, color-mix(in srgb, var(--cliniq-primary) 10%, transparent), transparent 34rem);
+                radial-gradient(circle at 12% 16%, color-mix(in srgb, var(--cliniq-primary) 18%, transparent), transparent 28rem),
+                radial-gradient(circle at 88% 84%, color-mix(in srgb, var(--cliniq-primary-fixed) 74%, transparent), transparent 32rem),
+                linear-gradient(
+                    135deg,
+                    color-mix(in srgb, var(--cliniq-primary) 14%, #ffffff),
+                    color-mix(in srgb, var(--cliniq-surface-low) 84%, #ffffff) 48%,
+                    color-mix(in srgb, var(--cliniq-primary) 18%, #ffffff)
+                );
+            background-attachment: fixed;
         }
 
         .portal-shell {

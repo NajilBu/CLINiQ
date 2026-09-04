@@ -8,7 +8,7 @@ function ape_workflow_steps(): array
         'Patient Vitals and BMI',
         'Examination',
         'Digital Submission',
-        'Final Decision / Follow-up',
+        'Final Decision or Follow-up',
         'Completed',
     ];
 }
@@ -16,6 +16,81 @@ function ape_workflow_steps(): array
 function ape_requirement_status_options(): array
 {
     return dropdown_options('ape_requirement_status');
+}
+
+/** Build one checklist save, preserving comments outside the selected documents. */
+function ape_hard_copy_review_plan(array $requirements, string $mode, array $selectedIds, string $instructions, array $remarks = []): array
+{
+    if (!in_array($mode, ['complete', 'correction', 'follow_up'], true)) {
+        throw new InvalidArgumentException('Select a valid hard-copy document status.');
+    }
+    if (!$requirements) {
+        throw new InvalidArgumentException('Add the required documents to the checklist before reviewing them.');
+    }
+    $byId = [];
+    foreach ($requirements as $requirement) {
+        $byId[(int) $requirement['requirement_id']] = $requirement;
+    }
+    foreach ($remarks as $requirementId => $value) {
+        if (!ctype_digit((string) $requirementId) || !isset($byId[(int) $requirementId]) || !is_string($value)) {
+            throw new InvalidArgumentException('Submit remarks only for documents in this checklist.');
+        }
+        $byId[(int) $requirementId]['remarks'] = trim($value) ?: null;
+    }
+    $instructions = trim($instructions);
+    if ($mode !== 'complete' && $instructions === '') {
+        throw new InvalidArgumentException($mode === 'correction'
+            ? 'Describe what needs to be corrected in the selected documents.'
+            : 'Enter instructions for the documents to be provided later.');
+    }
+    $ids = [];
+    foreach ($mode === 'complete' ? [] : $selectedIds as $value) {
+        if ((!is_string($value) && !is_int($value)) || !ctype_digit((string) $value) || !isset($byId[(int) $value])) {
+            throw new InvalidArgumentException('Select only documents from this patient’s requirements checklist.');
+        }
+        $ids[(int) $value] = (int) $value;
+    }
+    if ($mode !== 'complete' && !$ids) {
+        throw new InvalidArgumentException('Select at least one document for correction or follow-up.');
+    }
+    $status = $mode === 'correction' ? 'Needs Correction' : 'Missing';
+    $updates = [];
+    $names = [];
+    foreach ($byId as $requirementId => $requirement) {
+        $selected = isset($ids[$requirementId]);
+        $updates[] = [
+            'requirement_id' => $requirementId,
+            'status' => $selected ? $status : 'Verified',
+            'remarks' => $selected ? $instructions : ($requirement['remarks'] ?? null),
+        ];
+        if ($selected) $names[] = $requirement['requirement_name'];
+    }
+    return [
+        'mode' => $mode,
+        'record_status' => $mode === 'complete' ? 'Checked' : ($mode === 'correction' ? 'Needs Correction' : 'Not Checked'),
+        'updates' => $updates,
+        'notes' => $mode === 'complete' ? 'All checklist documents verified.' : ($mode === 'correction' ? 'Correction: ' : 'Follow-up documents: ') . implode(', ', $names) . '. ' . $instructions,
+    ];
+}
+
+function ape_apply_hard_copy_review(PDO $db, int $apeId, int $staffPersonId, array $plan, string $examDate, ?string $returnDate): void
+{
+    $initialDueDate = (new DateTimeImmutable($examDate))->modify('+7 days')->format('Y-m-d');
+    if ($plan['mode'] !== 'complete' && !$returnDate) {
+        throw new InvalidArgumentException('Choose a return date for correction or follow-up documents.');
+    }
+    // Once assigned, the original upload group survives uploads and return reviews.
+    $update = $db->prepare('UPDATE ape_requirements SET status = ?, remarks = ?, checked_by_person_id = ?, checked_at = ?, upload_due_date = CASE WHEN ? = 1 THEN ? ELSE COALESCE(upload_due_date, ?) END, upload_group = COALESCE(upload_group, ?) WHERE requirement_id = ? AND ape_id = ?');
+    foreach ($plan['updates'] as $requirement) {
+        $reviewed = in_array($requirement['status'], ['Verified', 'Needs Correction'], true);
+        $update->execute([
+            $requirement['status'], $requirement['remarks'],
+            $reviewed ? $staffPersonId : null, $reviewed ? date('Y-m-d H:i:s') : null,
+            $requirement['status'] !== 'Verified' ? 1 : 0, $returnDate, $initialDueDate,
+            $requirement['status'] === 'Verified' ? 'initial' : 'follow_up',
+            $requirement['requirement_id'], $apeId,
+        ]);
+    }
 }
 
 function ape_verification_status_options(): array
@@ -64,36 +139,85 @@ function ape_work_queues(): array
     ];
 }
 
+function ape_requirements_locked(array $record): bool
+{
+    return !empty($record['requirements_saved_at']);
+}
+
+function ape_document_follow_up(array $record): bool
+{
+    return ($record['requirement_status'] ?? '') !== 'Checked'
+        && (int) ($record['follow_up_required'] ?? 0) === 1
+        && !empty($record['follow_up_due_date']);
+}
+
+function ape_return_schedule(string $date, ?DateTimeImmutable $now = null): array
+{
+    $now ??= new DateTimeImmutable();
+    $value = trim($date);
+    $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $value, $now->getTimezone());
+    if (!$parsed || $parsed->format('Y-m-d') !== $value) {
+        throw new InvalidArgumentException('Choose a valid return date for the selected documents.');
+    }
+    if ($parsed < $now->setTime(0, 0)) {
+        throw new InvalidArgumentException('The return date must be today or a future date.');
+    }
+    return ['date' => $parsed->format('Y-m-d')];
+}
+
+function ape_can_review_returned_documents(array $record): bool
+{
+    // The return date is an alert deadline, not a restriction on clinic access.
+    return ape_record_queue($record) === 'follow_up'
+        && (int) ($record['deferred_requirement_count'] ?? 0) > 0
+        && !ape_deferred_submission_complete($record)
+        && !empty($record['exam_date'])
+        && !in_array('Cleared', [$record['workflow_status'] ?? '', $record['clearance_status'] ?? ''], true);
+}
+
+function ape_initial_uploads_present(array $record): bool
+{
+    return (int) ($record['requirement_count'] ?? 0) > 0
+        && (int) ($record['unassigned_upload_count'] ?? 1) === 0
+        && (int) ($record['required_document_count'] ?? 0) >= (int) ($record['initial_requirement_count'] ?? 0);
+}
+
+function ape_upload_requirement_names(array $requirements, string $group = 'initial'): array
+{
+    return array_values(array_map(static fn(array $r): string => $r['requirement_name'],
+        array_filter($requirements, static fn(array $r): bool => ($r['upload_group'] ?? null) === $group && $r['requirement_name'] !== 'Follow-up clearance')));
+}
+
+function ape_deferred_submission_complete(array $record): bool
+{
+    return (int) ($record['deferred_document_count'] ?? 0) >= (int) ($record['deferred_requirement_count'] ?? 0)
+        && (int) ($record['deferred_unverified_count'] ?? 0) === 0;
+}
+
+function ape_digital_submission_complete(array $record): bool
+{
+    // File presence alone is not proof of a complete, reviewed submission.
+    return ape_initial_uploads_present($record)
+        && array_key_exists('required_unverified_count', $record)
+        && (int) $record['required_unverified_count'] === 0;
+}
+
 function ape_record_queue(array $record): string
 {
-    if (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed') {
-        return 'examination';
-    }
-
     if (($record['workflow_status'] ?? '') === 'Cleared' || ($record['clearance_status'] ?? '') === 'Cleared') {
         return 'completed';
     }
 
-    if ((int)($record['follow_up_required'] ?? 0) === 1 || in_array(($record['clearance_status'] ?? ''), ['For Follow-up', 'Submitted'], true)) {
-        return 'follow_up';
-    }
-
-    if (($record['workflow_status'] ?? '') === 'Reviewed') {
-        return 'final_decision';
-    }
-
-    if (empty($record['exam_date']) || ($record['requirement_status'] ?? '') !== 'Checked') {
+    if (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed' || empty($record['exam_date'])) {
         return 'examination';
     }
 
-    $requiredDocumentCount = array_key_exists('required_document_count', $record)
-        ? (int) $record['required_document_count']
-        : (empty($record['document_path']) ? 0 : 5);
-    $unverifiedDocumentCount = array_key_exists('required_unverified_count', $record)
-        ? (int) $record['required_unverified_count']
-        : (in_array(($record['verification_status'] ?? 'Pending'), ['Pending', 'Needs Correction'], true) ? 1 : 0);
-    if ($requiredDocumentCount < count(ape_default_requirements()) || $unverifiedDocumentCount > 0) {
+    if (!ape_digital_submission_complete($record)) {
         return 'digital_submission';
+    }
+
+    if (!ape_deferred_submission_complete($record) || (int)($record['follow_up_required'] ?? 0) === 1 || in_array(($record['clearance_status'] ?? ''), ['For Follow-up', 'Submitted'], true)) {
+        return 'follow_up';
     }
 
     return 'final_decision';
@@ -101,11 +225,17 @@ function ape_record_queue(array $record): string
 
 function ape_next_action(array $record): array
 {
+    if (empty($record['schedule_batch_id']) || ($record['batch_status'] ?? '') !== 'Scheduled') {
+        return ['label' => 'Assign APE Schedule', 'icon' => 'calendar_add_on'];
+    }
+
     return match (ape_record_queue($record)) {
         'examination' => (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed'
             ? ['label' => 'Wait for Patient Vitals', 'icon' => 'monitor_heart']
-            : ['label' => 'Record Examination', 'icon' => 'stethoscope']),
-        'digital_submission' => (int) ($record['required_document_count'] ?? 0) < count(ape_default_requirements())
+            : (!empty($record['exam_date'])
+                ? ['label' => 'Review Hard-copy Documents', 'icon' => 'fact_check']
+                : ['label' => 'Record Examination', 'icon' => 'stethoscope'])),
+        'digital_submission' => !ape_initial_uploads_present($record)
             ? ['label' => 'Wait for Patient Upload', 'icon' => 'upload_file']
             : ['label' => 'Archive Submission', 'icon' => 'inventory_2'],
         'final_decision' => ['label' => 'Record Final Decision', 'icon' => 'clinical_notes'],
@@ -126,7 +256,7 @@ function ape_record_stage_label(array $record): string
 function ape_record_step_index(array $record): int
 {
     return match (ape_record_queue($record)) {
-        'examination' => 0,
+        'examination' => ($record['patient_vitals_status'] ?? '') === 'Confirmed' ? 1 : 0,
         'digital_submission' => 2,
         'final_decision' => 3,
         'follow_up' => 3,
@@ -161,7 +291,7 @@ function ape_follow_up_due_date(array $record): ?string
     return null;
 }
 
-function ape_deadline_status(array $record): ?array
+function ape_deadline_status(array $record, ?DateTimeImmutable $today = null): ?array
 {
     $queueKey = ape_record_queue($record);
     $dueDate = null;
@@ -172,23 +302,32 @@ function ape_deadline_status(array $record): ?array
         if (!$examTimestamp) {
             return null;
         }
-        $dueDate = date('Y-m-d', strtotime('+7 days', $examTimestamp));
+        $dueDate = $record['initial_upload_due_date'] ?? date('Y-m-d', strtotime('+7 days', $examTimestamp));
     } elseif ($queueKey === 'follow_up') {
-        $dueDate = ape_follow_up_due_date($record);
+        $dueDate = !ape_deferred_submission_complete($record)
+            ? ($record['deferred_upload_due_date'] ?? ape_follow_up_due_date($record))
+            : ape_follow_up_due_date($record);
     }
 
     if (!$dueDate) {
         return null;
     }
 
-    $today = new DateTimeImmutable('today');
-    $due = DateTimeImmutable::createFromFormat('Y-m-d', $dueDate);
+    $today = ($today ?? new DateTimeImmutable('today'))->setTime(0, 0);
+    $due = DateTimeImmutable::createFromFormat('!Y-m-d', $dueDate, $today->getTimezone());
     if (!$due) {
         return null;
     }
 
+    // Preserve the due date, but allow the full examination week before warning.
+    // A later assigned return date must also pass before the warning appears.
+    $warningDate = $due;
+    $exam = DateTimeImmutable::createFromFormat('!Y-m-d', (string) ($record['exam_date'] ?? ''), $today->getTimezone());
+    if ($exam && $exam->modify('+7 days') > $warningDate) {
+        $warningDate = $exam->modify('+7 days');
+    }
     $diff = (int) $today->diff($due)->format('%r%a');
-    if ($diff < 0) {
+    if ($today > $warningDate) {
         return [
             'label' => 'Overdue',
             'class' => 'badge-critical',
@@ -197,20 +336,11 @@ function ape_deadline_status(array $record): ?array
         ];
     }
 
-    if ($diff <= 2) {
-        return [
-            'label' => 'Urgent',
-            'class' => 'badge-high',
-            'due_date' => $dueDate,
-            'days' => $diff,
-        ];
-    }
-
     return [
         'label' => 'On Track',
         'class' => 'badge-in-progress',
         'due_date' => $dueDate,
-        'days' => $diff,
+        'days' => max(0, $diff),
     ];
 }
 
@@ -222,7 +352,7 @@ function ape_priority_badge(array $record): array
     }
 
     $deadline = ape_deadline_status($record);
-    if ($deadline && in_array($deadline['label'], ['Overdue', 'Urgent'], true)) {
+    if ($deadline && $deadline['label'] === 'Overdue') {
         return ['label' => $deadline['label'], 'class' => $deadline['class']];
     }
 
@@ -230,12 +360,13 @@ function ape_priority_badge(array $record): array
         return ['label' => 'Clinical', 'class' => 'badge-high'];
     }
 
-    // If an exam schedule date is set and has passed and the patient hasn't confirmed vitals, mark as Missed.
-    $examDate = $record['exam_schedule_date'] ?? null;
+    // A patient is missed only after their own assigned batch has ended.
+    $batchEnd = $record['batch_end_at'] ?? null;
     if (
-        $examDate
+        $batchEnd
+        && ($record['batch_status'] ?? '') === 'Scheduled'
         && ($record['patient_vitals_status'] ?? 'Not Started') === 'Not Started'
-        && date('Y-m-d') > $examDate
+        && time() > strtotime($batchEnd)
     ) {
         return ['label' => 'Missed', 'class' => 'badge-critical'];
     }
@@ -260,15 +391,22 @@ function ape_waiting_label(array $record): string
 
 function ape_next_action_card(array $record): array
 {
+    if (empty($record['schedule_batch_id']) || ($record['batch_status'] ?? '') !== 'Scheduled') {
+        return [
+            'title' => 'Assign this patient to an APE batch',
+            'body' => 'The patient is waiting for a schedule. Vitals and BMI entry remains locked until a scheduled batch is assigned.',
+        ];
+    }
+
     return match (ape_record_queue($record)) {
         'examination' => [
-            'title' => (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed' ? 'Wait for patient vitals and BMI confirmation' : 'Record the examination'),
-            'body' => (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed' ? 'The patient must enter and confirm their height, weight, BMI, and vital signs before the clinic can begin the examination.' : 'Enter the examination result while checking the patient’s hard-copy APE documents in the same step.'),
+            'title' => (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed' ? 'Wait for patient vitals and BMI confirmation' : (!empty($record['exam_date']) ? 'Review outstanding hard-copy documents' : 'Record the examination')),
+            'body' => (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed' ? 'The patient must enter and confirm their height, weight, BMI, and vital signs before the clinic can begin the examination.' : (!empty($record['exam_date']) ? 'The clinical examination is saved and locked. Resolve the selected correction or follow-up documents in the checklist.' : 'Enter the examination result while checking the patient’s hard-copy APE documents in the same step.')),
         ],
-        'digital_submission' => (int) ($record['required_document_count'] ?? 0) < count(ape_default_requirements())
+        'digital_submission' => !ape_initial_uploads_present($record)
             ? [
                 'title' => 'Wait for the patient to submit all checked documents online',
-                'body' => 'The patient uploads the checked requirements for clinic record keeping. Expected files include Lab Request Form, UHS Consent Form, UHS Medical Record, UHS Dental Record, and Referral Form.',
+                'body' => 'Upload the clinic-verified group within seven days of examination. Selected correction or follow-up documents keep their assigned return date and do not block this step.',
             ]
             : [
                 'title' => 'Archive the digital submission',
@@ -295,22 +433,36 @@ function ape_next_action_card(array $record): array
 
 function ape_missing_item(array $record): string
 {
-    if (!empty($record['missing_items'])) {
-        return $record['missing_items'];
+    if (empty($record['schedule_batch_id']) || ($record['batch_status'] ?? '') !== 'Scheduled') {
+        return 'No APE schedule assigned';
     }
     if (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed') {
         return 'Waiting for patient vitals and BMI confirmation';
     }
-    if (empty($record['exam_date']) || ($record['requirement_status'] ?? '') === 'Not Checked') {
+    if (empty($record['exam_date'])) {
         return 'Ready for examination';
+    }
+    if (ape_record_queue($record) === 'digital_submission') {
+        if (!ape_initial_uploads_present($record)) {
+            return 'Waiting for patient online submission';
+        }
+        return ($record['verification_status'] ?? '') === 'Needs Correction'
+            ? 'Online submission correction needed'
+            : 'Online documents waiting for archive review';
+    }
+    if (($record['requirement_status'] ?? '') === 'Not Checked') {
+        return 'Waiting for follow-up hard-copy documents';
     }
     if (($record['requirement_status'] ?? '') === 'Needs Correction') {
         return 'Hard-copy requirements need attention';
     }
+    if (!empty($record['missing_items'])) {
+        return $record['missing_items'];
+    }
     if ((int)($record['follow_up_required'] ?? 0) === 1 || ($record['clearance_status'] ?? '') === 'For Follow-up') {
         return 'Follow-up action required';
     }
-    if ((int) ($record['required_document_count'] ?? 0) < count(ape_default_requirements())) {
+    if (!ape_initial_uploads_present($record)) {
         return 'Waiting for patient online submission';
     }
     if ((int) ($record['required_unverified_count'] ?? 0) > 0 && ($record['verification_status'] ?? '') === 'Pending') {
@@ -377,7 +529,7 @@ function ensure_ape_workflow_schema(): void
     }
 
     $db = auth_db();
-    foreach (['ape_cycles', 'ape_records', 'ape_requirements', 'ape_documents', 'ape_findings', 'ape_activity_logs'] as $table) {
+    foreach (['ape_cycles', 'ape_schedule_batches', 'ape_records', 'ape_requirements', 'ape_documents', 'ape_findings', 'ape_activity_logs'] as $table) {
         $stmt = $db->prepare('
             SELECT COUNT(*)
             FROM information_schema.TABLES
@@ -401,6 +553,8 @@ function ensure_ape_workflow_schema(): void
     ];
     $workflowColumns = [
         'follow_up_due_date' => "DATE NULL AFTER follow_up_required",
+        'follow_up_due_time' => "TIME NULL AFTER follow_up_due_date",
+        'requirements_saved_at' => "DATETIME NULL AFTER requirement_status",
     ];
     foreach (array_merge($measurementColumns, $workflowColumns) as $column => $definition) {
         $columnCheck = $db->prepare('SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = \'ape_records\' AND COLUMN_NAME = ?');
@@ -410,6 +564,13 @@ function ensure_ape_workflow_schema(): void
         }
     }
 
+    foreach (['upload_group', 'upload_due_date'] as $column) {
+        $columnCheck = $db->prepare("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ape_requirements' AND COLUMN_NAME = ?");
+        $columnCheck->execute([$column]);
+        if ((int) $columnCheck->fetchColumn() !== 1) {
+            throw new RuntimeException('Run the approved 20260903_ape_document_upload_groups.sql migration before using APE.');
+        }
+    }
     $ready = true;
 }
 
@@ -419,6 +580,16 @@ function ape_record_select_sql(): string
         SELECT
             ar.*,
             ar.ape_id AS id,
+            batch.batch_name,
+            batch.patient_category AS batch_patient_category,
+            batch.schedule_date AS batch_schedule_date,
+            batch.start_time AS batch_start_time,
+            batch.end_time AS batch_end_time,
+            batch.status AS batch_status,
+            CASE
+                WHEN batch.batch_id IS NULL THEN NULL
+                ELSE CONCAT(batch.schedule_date, ' ', batch.end_time)
+            END AS batch_end_at,
             p.first_name,
             p.middle_name,
             p.last_name,
@@ -494,26 +665,36 @@ function ape_record_select_sql(): string
                 LIMIT 1
             ) AS clearance_document_path,
             (SELECT COUNT(*) FROM ape_documents d WHERE d.ape_id = ar.ape_id) AS document_count,
-            (
-                SELECT COUNT(DISTINCT required_document.document_type)
-                FROM ape_documents required_document
-                WHERE required_document.ape_id = ar.ape_id
-                  AND required_document.document_type IN ('Lab Request Form', 'UHS Consent Form', 'UHS Medical Record', 'UHS Dental Record', 'Referral Form')
-            ) AS required_document_count,
-            (
-                SELECT COUNT(*)
-                FROM ape_documents latest_required
-                WHERE latest_required.ape_id = ar.ape_id
-                  AND latest_required.document_type IN ('Lab Request Form', 'UHS Consent Form', 'UHS Medical Record', 'UHS Dental Record', 'Referral Form')
-                  AND latest_required.document_id = (
-                      SELECT MAX(required_version.document_id)
-                      FROM ape_documents required_version
-                      WHERE required_version.ape_id = latest_required.ape_id
-                        AND required_version.document_type = latest_required.document_type
-                  )
-                  AND latest_required.verification_status <> 'Verified'
-            ) AS required_unverified_count
+            COALESCE(uploads.requirement_count, 0) AS requirement_count,
+            COALESCE(uploads.unassigned_upload_count, 0) AS unassigned_upload_count,
+            COALESCE(uploads.initial_requirement_count, 0) AS initial_requirement_count,
+            COALESCE(uploads.required_document_count, 0) AS required_document_count,
+            COALESCE(uploads.required_unverified_count, 0) AS required_unverified_count,
+            COALESCE(uploads.deferred_requirement_count, 0) AS deferred_requirement_count,
+            COALESCE(uploads.deferred_document_count, 0) AS deferred_document_count,
+            COALESCE(uploads.deferred_unverified_count, 0) AS deferred_unverified_count,
+            uploads.initial_upload_due_date,
+            uploads.deferred_upload_due_date
         FROM ape_records ar
+        LEFT JOIN (
+            SELECT r.ape_id, COUNT(*) AS requirement_count,
+                SUM(r.upload_group IS NULL) AS unassigned_upload_count,
+                SUM(r.upload_group = 'initial') AS initial_requirement_count,
+                SUM(r.upload_group = 'initial' AND d.document_id IS NOT NULL) AS required_document_count,
+                SUM(r.upload_group = 'initial' AND d.verification_status <> 'Verified') AS required_unverified_count,
+                SUM(r.upload_group = 'follow_up') AS deferred_requirement_count,
+                SUM(r.upload_group = 'follow_up' AND d.document_id IS NOT NULL) AS deferred_document_count,
+                SUM(r.upload_group = 'follow_up' AND d.verification_status <> 'Verified') AS deferred_unverified_count,
+                MIN(CASE WHEN r.upload_group = 'initial' THEN r.upload_due_date END) AS initial_upload_due_date,
+                MIN(CASE WHEN r.upload_group = 'follow_up' THEN r.upload_due_date END) AS deferred_upload_due_date
+            FROM ape_requirements r
+            LEFT JOIN ape_documents d ON d.document_id = (
+                SELECT MAX(v.document_id) FROM ape_documents v
+                WHERE v.ape_id = r.ape_id AND v.document_type = r.requirement_name
+            )
+            WHERE r.requirement_name <> 'Follow-up clearance'
+            GROUP BY r.ape_id
+        ) uploads ON uploads.ape_id = ar.ape_id
         JOIN patients patient_profile ON patient_profile.person_id = ar.patient_id
         JOIN people p ON p.id = patient_profile.person_id
         LEFT JOIN students s ON s.person_id = p.id
@@ -524,16 +705,27 @@ function ape_record_select_sql(): string
         LEFT JOIN people reviewer ON reviewer.id = reviewer_staff.person_id
         LEFT JOIN appointments ap ON ap.appointment_id = ar.appointment_id
         LEFT JOIN ape_cycles ac ON ac.ape_cycle_id = ar.ape_cycle_id
+        LEFT JOIN ape_schedule_batches batch ON batch.batch_id = ar.schedule_batch_id
     ";
 }
 
-function ape_fetch_records(string $search = '', ?int $limit = null): array
+function ape_fetch_records(string $search = '', ?int $limit = null, ?string $scheduleDate = null, ?int $scheduleBatchId = null): array
 {
     $sql = ape_record_select_sql();
     $params = [];
+    $conditions = [];
+    if ($scheduleBatchId !== null) {
+        $conditions[] = "batch.batch_id = ? AND batch.status = 'Scheduled'";
+        $params[] = $scheduleBatchId;
+    } elseif ($scheduleDate !== null) {
+        $conditions[] = "((batch.schedule_date = ? AND batch.status = 'Scheduled') OR (ar.follow_up_due_date = ? AND ar.follow_up_required = 1 AND ar.workflow_status <> 'Cleared' AND ar.clearance_status <> 'Cleared'))";
+        $params[] = $scheduleDate;
+        $params[] = $scheduleDate;
+    }
+
     if ($search !== '') {
-        $sql .= "
-            WHERE p.first_name LIKE ?
+        $conditions[] = "(
+               p.first_name LIKE ?
                OR p.last_name LIKE ?
                OR p.id_number LIKE ?
                OR pr.program_code LIKE ?
@@ -543,9 +735,12 @@ function ape_fetch_records(string $search = '', ?int $limit = null): array
                     WHERE search_document.ape_id = ar.ape_id
                       AND search_document.document_type LIKE ?
                )
-        ";
+            )";
         $term = '%' . $search . '%';
-        $params = array_fill(0, 6, $term);
+        $params = array_merge($params, array_fill(0, 6, $term));
+    }
+    if ($conditions) {
+        $sql .= ' WHERE ' . implode(' AND ', $conditions);
     }
     $sql .= " ORDER BY ar.updated_at DESC, ar.created_at DESC";
     if ($limit !== null) {
@@ -721,6 +916,9 @@ function ape_store_uploaded_file(array $file, string $prefix): array
 
 function ape_workflow_summary(array $record): string
 {
+    if (ape_record_queue($record) === 'digital_submission') {
+        return 'Digital submission and clinic archive review must be completed before final decision or follow-up.';
+    }
     if (($record['workflow_status'] ?? '') === 'Follow-up Required') {
         return 'Patient needs treatment follow-up and clearance before APE completion.';
     }

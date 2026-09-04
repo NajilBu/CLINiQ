@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/includes/student-layout.php';
+require_once __DIR__ . '/../app/helpers/emergency_contact.php';
 
 $profile = student_require_login();
 $patientId = (int) $profile['patient_id'];
@@ -14,9 +15,9 @@ $passport = [
     'conditions'      => $profile['existing_conditions'] ?: 'None reported.',
     'medications'     => 'No current medications recorded.',
     'instructions'    => $profile['emergency_instructions'] ?: "If unconscious, place in recovery position and notify the clinic immediately.",
-    'guardian_name'   => $profile['guardian_name'] ?: 'Not recorded',
+    'guardian_name'   => $profile['guardian_name'] ?: '',
     'relationship'    => 'Guardian',
-    'primary_contact' => $profile['guardian_contact'] ?: 'Not recorded',
+    'primary_contact' => $profile['guardian_contact'] ?: '',
     'secondary_contact' => '',
     'last_updated'    => $profile['updated_at'] ? date('F j, Y', strtotime($profile['updated_at'])) : date('F j, Y'),
     'token'           => $profile['emergency_token'] ?: 'not-generated',
@@ -31,10 +32,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $passport['conditions']       = trim($_POST['conditions'] ?? $passport['conditions']);
     $passport['medications']      = trim($_POST['medications'] ?? $passport['medications']);
     $passport['instructions']     = trim($_POST['instructions'] ?? $passport['instructions']);
-    $passport['guardian_name']    = trim($_POST['guardian_name'] ?? $passport['guardian_name']);
-    $passport['relationship']     = trim($_POST['relationship'] ?? $passport['relationship']);
-    $passport['primary_contact']  = trim($_POST['primary_contact'] ?? $passport['primary_contact']);
-    $passport['secondary_contact']= trim($_POST['secondary_contact'] ?? $passport['secondary_contact']);
+    try {
+        $passport['guardian_name'] = trim((string) ($_POST['guardian_name'] ?? ''));
+        $passport['relationship'] = trim((string) ($_POST['relationship'] ?? ''));
+        $passport['primary_contact'] = trim((string) ($_POST['primary_contact'] ?? ''));
+        $passport['secondary_contact'] = trim((string) ($_POST['secondary_contact'] ?? ''));
+        $contact = cliniq_validate_emergency_contact($passport, dropdown_options('guardian_relationship'));
+        $passport['guardian_name'] = $contact['guardian_name'];
+        $passport['relationship'] = $contact['relationship'];
+        $passport['primary_contact'] = $contact['primary_contact'];
+        $passport['secondary_contact'] = $contact['secondary_contact'] ?? '';
 
     $stmt = db()->prepare("
         UPDATE patients
@@ -52,6 +59,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $patientId,
     ]);
     $passport['last_updated'] = date('F j, Y');
+    } catch (InvalidArgumentException $e) {
+        $saved = false;
+        $passportError = $e->getMessage();
+    }
 }
 
 render_student_header('Emergency Health Passport', 'passport');
@@ -76,6 +87,13 @@ render_student_header('Emergency Health Passport', 'passport');
 </div>
 <?php endif; ?>
 
+<?php if (!empty($passportError)): ?>
+<div class="student-note student-note-warning mb-4">
+    <span class="material-symbols-outlined">warning</span>
+    <div><?= student_e($passportError) ?></div>
+</div>
+<?php endif; ?>
+
 <!-- ── Emergency Notice ── -->
 <div class="student-note student-note-danger mb-4">
     <span class="material-symbols-outlined">info</span>
@@ -85,7 +103,7 @@ render_student_header('Emergency Health Passport', 'passport');
     </div>
 </div>
 
-<form method="POST" action="" id="passport-form">
+<form method="POST" action="" id="passport-form" data-emergency-contact-form>
 <div class="student-grid">
 
     <!-- ── Left column: Settings ── -->
@@ -234,11 +252,16 @@ render_student_header('Emergency Health Passport', 'passport');
                             class="student-input"
                             value="<?= student_e($passport['guardian_name']) ?>"
                             placeholder="Full name of guardian or next of kin"
+                            minlength="2"
+                            maxlength="100"
+                            autocomplete="name"
+                            required
                         >
+                        <p class="passport-contact-error" data-contact-error="guardian_name" hidden></p>
                     </div>
                     <div class="student-span-6 student-field" style="margin-bottom:0;">
                         <label class="student-label" for="relationship">Relationship</label>
-                        <select id="relationship" name="relationship" class="student-select">
+                        <select id="relationship" name="relationship" class="student-select" required>
                             <?php
                             $rels = dropdown_options('guardian_relationship');
                             foreach ($rels as $r):
@@ -246,6 +269,7 @@ render_student_header('Emergency Health Passport', 'passport');
                                 <option value="<?= student_e($r) ?>" <?= $passport['relationship'] === $r ? 'selected' : '' ?>><?= student_e($r) ?></option>
                             <?php endforeach; ?>
                         </select>
+                        <p class="passport-contact-error" data-contact-error="relationship" hidden></p>
                     </div>
                     <div class="student-span-6 student-field" style="margin-bottom:0;">
                         <label class="student-label" for="primary_contact">Primary Contact Number</label>
@@ -256,7 +280,12 @@ render_student_header('Emergency Health Passport', 'passport');
                             class="student-input"
                             value="<?= student_e($passport['primary_contact']) ?>"
                             placeholder="+63 9XX XXX XXXX"
+                            inputmode="tel"
+                            autocomplete="tel"
+                            maxlength="17"
+                            required
                         >
+                        <p class="passport-contact-error" data-contact-error="primary_contact" hidden></p>
                     </div>
                     <div class="student-span-6 student-field" style="margin-bottom:0;">
                         <label class="student-label" for="secondary_contact">Secondary Contact Number</label>
@@ -267,7 +296,11 @@ render_student_header('Emergency Health Passport', 'passport');
                             class="student-input"
                             value="<?= student_e($passport['secondary_contact']) ?>"
                             placeholder="+63 9XX XXX XXXX (optional)"
+                            inputmode="tel"
+                            autocomplete="tel"
+                            maxlength="17"
                         >
+                        <p class="passport-contact-error" data-contact-error="secondary_contact" hidden></p>
                     </div>
                 </div>
             </div>
@@ -570,6 +603,7 @@ render_student_header('Emergency Health Passport', 'passport');
 
 <?php render_student_footer(); ?>
 
+<script src="../public/assets/js/emergency-contact.js?v=1"></script>
 <script>
 // ── Live preview update ───────────────────────────────────────────
 (function () {

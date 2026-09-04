@@ -86,6 +86,21 @@ CREATE TABLE accounts (
   INDEX idx_accounts_status (account_status)
 );
 
+-- One-time patient password recovery links. Only a SHA-256 token hash is stored.
+CREATE TABLE patient_password_resets (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  account_id BIGINT UNSIGNED NOT NULL,
+  token_hash CHAR(64) NOT NULL UNIQUE,
+  requested_ip VARCHAR(45) NULL,
+  expires_at DATETIME NOT NULL,
+  used_at DATETIME NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_patient_password_resets_account
+    FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+  INDEX idx_patient_password_resets_account_created (account_id, created_at),
+  INDEX idx_patient_password_resets_expiry (expires_at, used_at)
+);
+
 CREATE TABLE students (
   person_id BIGINT UNSIGNED PRIMARY KEY,
   program_id BIGINT UNSIGNED NULL,
@@ -132,6 +147,8 @@ CREATE TABLE patients (
   emergency_instructions TEXT NULL,
   guardian_or_contact_name VARCHAR(160) NULL,
   guardian_or_contact_number VARCHAR(50) NULL,
+  guardian_relationship VARCHAR(80) NULL,
+  secondary_contact_number VARCHAR(32) NULL,
   height_cm DECIMAL(5,2) NULL,
   weight_kg DECIMAL(5,2) NULL,
   bmi DECIMAL(4,1) NULL,
@@ -471,6 +488,7 @@ CREATE TABLE ape_cycles (
   academic_year VARCHAR(20) NOT NULL,
   compliance_start DATE NOT NULL,
   compliance_end DATE NOT NULL,
+  exam_schedule_date DATE NULL,
   status ENUM('Active', 'Closed', 'Archived') NOT NULL DEFAULT 'Active',
   started_by_person_id BIGINT UNSIGNED NULL,
   started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -498,15 +516,43 @@ CREATE TABLE ape_cycles (
   INDEX idx_ape_cycles_archived_by (archived_by_person_id)
 );
 
+CREATE TABLE ape_schedule_batches (
+  batch_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  ape_cycle_id BIGINT UNSIGNED NOT NULL,
+  batch_name VARCHAR(120) NOT NULL,
+  patient_category ENUM('Student', 'Faculty', 'School Personnel') NOT NULL,
+  schedule_date DATE NOT NULL,
+  start_time TIME NOT NULL,
+  end_time TIME NOT NULL,
+  capacity SMALLINT UNSIGNED NOT NULL,
+  status ENUM('Scheduled', 'Completed', 'Cancelled') NOT NULL DEFAULT 'Scheduled',
+  created_by_person_id BIGINT UNSIGNED NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT chk_ape_batch_time CHECK (start_time < end_time),
+  CONSTRAINT chk_ape_batch_capacity CHECK (capacity > 0),
+  CONSTRAINT fk_ape_batches_cycle
+    FOREIGN KEY (ape_cycle_id) REFERENCES ape_cycles(ape_cycle_id)
+    ON DELETE RESTRICT,
+  CONSTRAINT fk_ape_batches_created_by
+    FOREIGN KEY (created_by_person_id) REFERENCES clinic_staff(person_id)
+    ON DELETE SET NULL,
+  UNIQUE INDEX uq_ape_batch_name (ape_cycle_id, batch_name),
+  INDEX idx_ape_batches_schedule (ape_cycle_id, schedule_date, start_time),
+  INDEX idx_ape_batches_category (ape_cycle_id, patient_category, status)
+);
+
 CREATE TABLE ape_records (
   ape_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   ape_cycle_id BIGINT UNSIGNED NULL,
+  schedule_batch_id BIGINT UNSIGNED NULL,
   patient_id BIGINT UNSIGNED NOT NULL,
   academic_year VARCHAR(20) NOT NULL,
   exam_date DATE NULL,
   appointment_id BIGINT UNSIGNED NULL,
   requirement_status ENUM('Not Checked', 'Checked', 'Needs Correction')
     NOT NULL DEFAULT 'Not Checked',
+  requirements_saved_at DATETIME NULL,
   workflow_status ENUM(
     'Registered',
     'Batch Assigned',
@@ -521,6 +567,8 @@ CREATE TABLE ape_records (
   clearance_status ENUM('Pending', 'Cleared', 'For Follow-up')
     NOT NULL DEFAULT 'Pending',
   follow_up_required TINYINT(1) NOT NULL DEFAULT 0,
+  follow_up_due_date DATE NULL,
+  follow_up_due_time TIME NULL,
   clinical_remarks TEXT NULL,
   patient_visible_note TEXT NULL,
   patient_height_cm DECIMAL(5,2) NULL,
@@ -539,6 +587,9 @@ CREATE TABLE ape_records (
   CONSTRAINT fk_ape_records_cycle
     FOREIGN KEY (ape_cycle_id) REFERENCES ape_cycles(ape_cycle_id)
     ON DELETE RESTRICT,
+  CONSTRAINT fk_ape_records_schedule_batch
+    FOREIGN KEY (schedule_batch_id) REFERENCES ape_schedule_batches(batch_id)
+    ON DELETE SET NULL,
   CONSTRAINT fk_ape_records_appointment
     FOREIGN KEY (appointment_id) REFERENCES appointments(appointment_id)
     ON DELETE SET NULL,
@@ -550,6 +601,7 @@ CREATE TABLE ape_records (
   INDEX idx_ape_records_workflow (workflow_status),
   INDEX idx_ape_records_clearance (clearance_status),
   INDEX idx_ape_records_cycle (ape_cycle_id),
+  INDEX idx_ape_records_schedule_batch (schedule_batch_id),
   INDEX idx_ape_records_reviewed_by (reviewed_by_person_id)
 );
 
@@ -557,6 +609,8 @@ CREATE TABLE ape_requirements (
   requirement_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   ape_id BIGINT UNSIGNED NOT NULL,
   requirement_name VARCHAR(160) NOT NULL,
+  upload_group ENUM('initial', 'follow_up') NULL,
+  upload_due_date DATE NULL,
   status ENUM('Missing', 'Submitted', 'Verified', 'Needs Correction')
     NOT NULL DEFAULT 'Missing',
   remarks TEXT NULL,

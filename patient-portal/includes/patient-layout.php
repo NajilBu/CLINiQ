@@ -98,6 +98,8 @@ function student_profile_from_identity(array $identity): array
         'emergency_instructions' => $identity['emergency_instructions'] ?? null,
         'guardian_name' => $identity['guardian_or_contact_name'] ?? null,
         'guardian_contact' => $identity['guardian_or_contact_number'] ?? null,
+        'guardian_relationship' => $identity['guardian_relationship'] ?? null,
+        'secondary_contact' => $identity['secondary_contact_number'] ?? null,
         'emergency_token' => $identity['emergency_token'] ?? null,
         'updated_at' => $identity['patient_updated_at'] ?? $identity['updated_at'] ?? null,
         'height_cm' => $identity['height_cm'] ?? null,
@@ -149,6 +151,8 @@ function student_current_profile(): ?array
             pt.emergency_instructions,
             pt.guardian_or_contact_name,
             pt.guardian_or_contact_number,
+            pt.guardian_relationship,
+            pt.secondary_contact_number,
             pt.emergency_token,
             pt.updated_at AS patient_updated_at,
             pt.height_cm,
@@ -396,7 +400,7 @@ function render_student_header(string $title, string $active = ''): void
                 }
             };
         </script>
-        <link href="../public/assets/css/app.css?v=file-preview-2" rel="stylesheet">
+        <link href="../public/assets/css/app.css?v=emergency-contact-1" rel="stylesheet">
         <link href="assets/css/patient.css?v=ape-current-step-1" rel="stylesheet">
         <style>
             :root {

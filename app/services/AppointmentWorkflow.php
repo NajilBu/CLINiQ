@@ -115,9 +115,17 @@ function appointment_week_from_request(?string $value = null): DateTimeImmutable
 function appointment_week_bounds(DateTimeImmutable $week): array
 {
     $start = $week->modify('monday this week')->setTime(0, 0);
-    $end = $start->modify('+5 days')->setTime(23, 59, 59);
+    $end = $start->modify('+4 days')->setTime(23, 59, 59);
 
     return [$start->format('Y-m-d'), $end->format('Y-m-d')];
+}
+
+function appointment_date_is_clinic_day(string $date): bool
+{
+    $parsedDate = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+    return $parsedDate !== false
+        && $parsedDate->format('Y-m-d') === $date
+        && (int) $parsedDate->format('N') <= 5;
 }
 
 function appointment_blocks_for_week(DateTimeImmutable $week): array
@@ -194,6 +202,73 @@ function appointment_slot_is_reserved(string $appointmentDatetime): bool
     $stmt->execute([$appointmentDatetime]);
 
     return (bool) $stmt->fetchColumn();
+}
+
+function appointment_ape_batches_for_range(string $startDate, string $endDate): array
+{
+    $stmt = appointment_db()->prepare("
+        SELECT b.*,
+               COUNT(ar.ape_id) AS assigned_count
+        FROM ape_schedule_batches b
+        LEFT JOIN ape_records ar ON ar.schedule_batch_id = b.batch_id
+        WHERE b.status = 'Scheduled'
+          AND b.schedule_date BETWEEN ? AND ?
+        GROUP BY b.batch_id
+        ORDER BY b.schedule_date ASC, b.start_time ASC, b.batch_id ASC
+    ");
+    $stmt->execute([$startDate, $endDate]);
+
+    $byDate = [];
+    foreach ($stmt->fetchAll() as $batch) {
+        $byDate[$batch['schedule_date']][] = $batch;
+    }
+
+    return $byDate;
+}
+
+function appointment_time_overlaps_ape_batches(string $date, string $time, array $batchesByDate): bool
+{
+    $slotStart = strtotime($date . ' ' . $time);
+    if ($slotStart === false) {
+        return false;
+    }
+    $slotEnd = $slotStart + (appointment_duration_minutes() * 60);
+
+    foreach ($batchesByDate[$date] ?? [] as $batch) {
+        $batchStart = strtotime($date . ' ' . (string) $batch['start_time']);
+        $batchEnd = strtotime($date . ' ' . (string) $batch['end_time']);
+        if ($batchStart !== false && $batchEnd !== false && $slotStart < $batchEnd && $slotEnd > $batchStart) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function appointment_ape_batch_conflict(string $appointmentDatetime): ?array
+{
+    $slotStart = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $appointmentDatetime);
+    if (!$slotStart || $slotStart->format('Y-m-d H:i:s') !== $appointmentDatetime) {
+        return null;
+    }
+    $slotEnd = $slotStart->modify('+' . appointment_duration_minutes() . ' minutes');
+    $stmt = appointment_db()->prepare("
+        SELECT b.*
+        FROM ape_schedule_batches b
+        WHERE b.status = 'Scheduled'
+          AND b.schedule_date = ?
+          AND TIMESTAMP(b.schedule_date, b.start_time) < ?
+          AND TIMESTAMP(b.schedule_date, b.end_time) > ?
+        ORDER BY b.start_time ASC, b.batch_id ASC
+        LIMIT 1
+    ");
+    $stmt->execute([
+        $slotStart->format('Y-m-d'),
+        $slotEnd->format('Y-m-d H:i:s'),
+        $slotStart->format('Y-m-d H:i:s'),
+    ]);
+
+    return $stmt->fetch() ?: null;
 }
 
 function appointment_is_full_day_blocked(array $blocks): bool

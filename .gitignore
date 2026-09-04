@@ -8,5 +8,7 @@ vendor/
 !public/assets/vendor/ag-grid/ag-grid.css
 !public/assets/vendor/ag-grid/ag-theme-quartz.css
 node_modules/
+electron/node_modules/
+electron/dist/
 .DS_Store
 Thumbs.db

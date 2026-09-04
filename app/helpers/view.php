@@ -131,6 +131,21 @@ function status_badge_class(string $status): string
 function render_header(string $title): void
 {
     $user = current_user();
+    $isElectronRuntime = str_contains(strtolower((string) ($_SERVER['HTTP_USER_AGENT'] ?? '')), 'cliniqelectron/');
+    $patientPortalUrl = rtrim((string) env_value('PATIENT_PORTAL_URL', '/CLINiQ/patient-portal'), '/');
+
+    if (!headers_sent()) {
+        header_remove('X-Powered-By');
+        header('X-Content-Type-Options: nosniff');
+        header('X-Frame-Options: SAMEORIGIN');
+        header('Referrer-Policy: same-origin');
+        header('Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()');
+        if ($user) {
+            header('Cache-Control: no-store, private, max-age=0');
+            header('Pragma: no-cache');
+        }
+    }
+
     $clinicProfile = clinic_profile_settings();
     $clinicLogoUrl = app_url(clinic_profile_logo_path($clinicProfile));
     $theme = active_cliniq_theme();
@@ -170,6 +185,9 @@ function render_header(string $title): void
         }
     }
     $bodyClasses = 'bg-surface font-body text-on-surface min-h-screen overflow-x-hidden';
+    if ($isElectronRuntime) {
+        $bodyClasses .= ' is-electron-runtime';
+    }
     if ($activeAlertCount > 0) {
         $bodyClasses .= ' has-active-alerts';
     }
@@ -226,7 +244,7 @@ function render_header(string $title): void
         <link rel="stylesheet" href="<?= app_url('assets/vendor/ag-grid/ag-grid.css?v=31') ?>">
         <link rel="stylesheet" href="<?= app_url('assets/vendor/ag-grid/ag-theme-quartz.css?v=31') ?>">
         <script src="<?= app_url('assets/vendor/ag-grid/ag-grid-community.min.js?v=31') ?>"></script>
-        <link href="<?= app_url('assets/css/app.css?v=staff-profile-passwords-1') ?>" rel="stylesheet">
+        <link href="<?= app_url('assets/css/app.css?v=logo-warning-1') ?>" rel="stylesheet">
         <style>
             :root {
                 --cliniq-primary: <?= e($theme['primary']) ?>;
@@ -242,7 +260,7 @@ function render_header(string $title): void
             }
         </style>
     </head>
-    <body class="<?= e($bodyClasses) ?>"<?php if ($user): ?> data-alert-status-url="<?= e(app_url('api/alerts.php')) ?>" data-active-alert-count="<?= (int) $activeAlertCount ?>" data-critical-alert-count="<?= (int) $criticalAlertCount ?>"<?php endif; ?>>
+    <body class="<?= e($bodyClasses) ?>" data-cliniq-runtime="<?= $isElectronRuntime ? 'electron' : 'browser' ?>" data-cliniq-app-url="<?= e(app_url()) ?>" data-cliniq-patient-portal-url="<?= e($patientPortalUrl) ?>"<?php if ($user): ?> data-alert-status-url="<?= e(app_url('api/alerts.php')) ?>" data-active-alert-count="<?= (int) $activeAlertCount ?>" data-critical-alert-count="<?= (int) $criticalAlertCount ?>"<?php endif; ?>>
     <?php if ($user): ?>
         <div class="app-shell">
             <aside class="app-sidebar">
@@ -353,7 +371,7 @@ function render_footer(): void
         </div>
         <?php endif; ?>
     <?php render_flash_toasts(); ?>
-    <script src="<?= app_url('assets/js/app.js?v=staff-password-confirmation-1') ?>"></script>
+    <script src="<?= app_url('assets/js/app.js?v=' . filemtime(__DIR__ . '/../../public/assets/js/app.js')) ?>"></script>
     <script src="<?= app_url('assets/js/ag-grid-tables.js?v=name-tooltip-1') ?>"></script>
     <script src="<?= app_url('assets/js/file-preview.js?v=ape-popup-2') ?>"></script>
     </body>

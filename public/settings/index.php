@@ -65,6 +65,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($uploadedLogoPath !== '') {
                 $profileInput['logo_path'] = $uploadedLogoPath;
             }
+            if ((string) ($_POST['save_intent'] ?? '') === 'logo' && $uploadedLogoPath === '') {
+                throw new InvalidArgumentException('Choose a PNG, JPG, or WebP logo before saving.');
+            }
             save_clinic_profile_settings($profileInput, $updatedBy);
             flash_message('success', $uploadedLogoPath !== '' ? 'Clinic profile and system logo saved.' : 'Clinic profile settings saved.');
         } catch (Throwable $e) {
@@ -80,8 +83,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             header('Location: index.php?tab=general');
             exit;
         }
-        save_cliniq_theme_settings((string) ($_POST['theme'] ?? default_cliniq_theme_key()), $updatedBy);
-        flash_message('success', 'System color theme updated.');
+        try {
+            save_cliniq_theme_settings(
+                (string) ($_POST['theme'] ?? default_cliniq_theme_key()),
+                $updatedBy,
+                (string) ($_POST['custom_color'] ?? '#3F7D52')
+            );
+            flash_message('success', 'System color theme updated.');
+        } catch (InvalidArgumentException $e) {
+            flash_message('warning', $e->getMessage());
+        }
         header('Location: index.php?tab=general');
         exit;
     }
@@ -162,7 +173,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    if (in_array($action, ['start_ape_cycle', 'close_ape_cycle', 'archive_ape_cycle', 'reset_school_year', 'update_ape_cycle_schedule'], true)) {
+    if (in_array($action, ['start_ape_cycle', 'close_ape_cycle', 'archive_ape_cycle', 'reset_school_year'], true)) {
         if (!$canManageApeCycles) {
             flash_message('error', 'Only administrators and doctors can manage annual APE cycles.');
             header('Location: index.php?tab=general');
@@ -176,8 +187,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     (string) ($_POST['academic_year'] ?? ''),
                     (string) ($_POST['compliance_start'] ?? ''),
                     (string) ($_POST['compliance_end'] ?? ''),
-                    $actorPersonId,
-                    (string) ($_POST['exam_schedule_date'] ?? '')
+                    $actorPersonId
                 );
                 flash_message('success', sprintf(
                     'APE cycle %s started. %d active patient record(s) created and %d existing record(s) linked.',
@@ -191,9 +201,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } elseif ($action === 'archive_ape_cycle') {
                 $cycle = archive_ape_cycle((int) ($_POST['ape_cycle_id'] ?? 0), $actorPersonId);
                 flash_message('success', "APE cycle {$cycle['academic_year']} archived.");
-            } elseif ($action === 'update_ape_cycle_schedule') {
-                update_ape_cycle_schedule((int) ($_POST['ape_cycle_id'] ?? 0), (string) ($_POST['exam_schedule_date'] ?? ''));
-                flash_message('success', 'Exam schedule date updated.');
             } elseif ($action === 'reset_school_year') {
                 $result = reset_school_year_accounts();
                 $msg = "{$result['reset']} account(s) reset to inactive.";
@@ -276,6 +283,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    if ($action === 'save_mail_template' || $action === 'reset_mail_template') {
+        if (!$canManageSettings) {
+            flash_message('error', 'Only administrators, doctors, or IT experts can update email notification formats.');
+            header('Location: index.php?tab=email');
+            exit;
+        }
+        try {
+            $templateKey = trim((string) ($_POST['template_key'] ?? ''));
+            if ($action === 'reset_mail_template') {
+                reset_cliniq_mail_template($templateKey, (int) ($user['person_id'] ?? 0) ?: null);
+                flash_message('success', 'Email notification format restored to its default.');
+            } else {
+                save_cliniq_mail_template($templateKey, $_POST, (int) ($user['person_id'] ?? 0) ?: null);
+                flash_message('success', 'Email notification format saved.');
+            }
+        } catch (Throwable $e) {
+            flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $e->getMessage());
+        }
+        header('Location: index.php?tab=email');
+        exit;
+    }
+
     if ($action === 'send_test_email') {
         if (!$canManageSettings) {
             flash_message('error', 'Only administrators, doctors, or IT experts can send test emails.');
@@ -287,11 +316,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!filter_var($toEmail, FILTER_VALIDATE_EMAIL)) {
             flash_message('error', 'Enter a valid email address to send the test to.');
         } else {
+            $profile = clinic_profile_settings();
             $sent = send_cliniq_email(
                 $toEmail,
                 'CLINiQ Admin',
                 '[CLINiQ] SMTP Test Email',
-                '<p style="font-family:sans-serif;">Your CLINiQ SMTP configuration is working correctly! This is a test message.</p>'
+                cliniq_custom_email_body(
+                    'Your CLINiQ SMTP configuration is working correctly. This is a test message.',
+                    (string) ($profile['system_name'] ?? 'CLINiQ')
+                )
             );
             if ($sent) {
                 flash_message('success', "Test email sent to {$toEmail}. Check the inbox.");
@@ -387,13 +420,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $clinicProfile = clinic_profile_settings();
+$systemLogoPath = clinic_profile_logo_path($clinicProfile);
+$systemLogoUrl = app_url($systemLogoPath);
+$systemLogoExtension = strtolower((string) pathinfo($systemLogoPath, PATHINFO_EXTENSION));
+$systemLogoDownloadName = 'cliniq-system-logo.' . (in_array($systemLogoExtension, ['png', 'jpg', 'jpeg', 'webp'], true) ? $systemLogoExtension : 'png');
 $themePresets = cliniq_theme_presets();
-$activeTheme = cliniq_theme_settings()['theme'];
+$themeSettings = cliniq_theme_settings();
+$activeTheme = $themeSettings['theme'];
+$customThemeColor = $themeSettings['custom_color'];
 $staffProfiles = staff_profiles();
 $staffRoles = staff_profile_roles();
 $settings = risk_settings();
 $mailSettings = mail_settings();
 $mailConfigured = mail_settings_configured();
+$mailNotificationTemplates = cliniq_mail_templates();
 $mailRecipients = $canManageSettings ? cliniq_mail_recipients() : [];
 $activeApePatientCount = 0;
 $excludedApePatientCount = 0;
@@ -453,7 +493,7 @@ if (!isset($dropdownGroupsByCategory[$currentDropdownCategory][$currentDropdownG
     $currentDropdownGroup = (string) array_key_first($dropdownGroupsByCategory[$currentDropdownCategory]);
 }
 $currentTab = $_GET['tab'] ?? 'general';
-if (!in_array($currentTab, ['general', 'account', 'ape-cycle', 'dropdowns', 'clinical', 'email', 'maintenance'], true)) {
+if (!in_array($currentTab, ['general', 'account', 'ape-cycle', 'dropdowns', 'clinical', 'email', 'backup', 'maintenance'], true)) {
     $currentTab = 'general';
 }
 if ($currentTab === 'ape-cycle' && !$canManageApeCycles) {
@@ -520,6 +560,10 @@ render_clinic_command_header(
             <span class="material-symbols-outlined">mail</span>
             <span>Email</span>
         </a>
+        <a href="index.php?tab=backup" class="settings-tab-link <?= $currentTab === 'backup' ? 'active' : '' ?> text-decoration-none" data-settings-tab="backup" data-no-ajax="true">
+            <span class="material-symbols-outlined">backup</span>
+            <span>Backup</span>
+        </a>
         <a href="index.php?tab=maintenance" class="settings-tab-link <?= $currentTab === 'maintenance' ? 'active' : '' ?> text-decoration-none" data-settings-tab="maintenance" data-no-ajax="true">
             <span class="material-symbols-outlined">restart_alt</span>
             <span>Maintenance</span>
@@ -576,10 +620,18 @@ render_clinic_command_header(
                     <div class="settings-section settings-logo-layout">
                         <div class="settings-logo-preview-card">
                             <span class="clinic-label">Logo preview</span>
-                            <div class="settings-logo-preview">
-                                <img src="<?= app_url(clinic_profile_logo_path($clinicProfile)) ?>" alt="Current <?= e($clinicProfile['department']) ?> logo" data-logo-preview>
-                            </div>
-                            <p class="settings-help m-0 text-center">Current saved system logo</p>
+                            <a
+                                href="<?= e($systemLogoUrl) ?>"
+                                class="settings-logo-preview"
+                                data-file-preview
+                                data-preview-type="image"
+                                data-preview-title="<?= e($systemLogoDownloadName) ?>"
+                                data-logo-preview-link
+                                aria-label="View or download the current system logo"
+                            >
+                                <img src="<?= e($systemLogoUrl) ?>" alt="Current <?= e($clinicProfile['department']) ?> logo" data-logo-preview>
+                            </a>
+                            <p class="settings-help m-0 text-center">Click the logo to view or download it</p>
                         </div>
 
                         <div class="settings-logo-controls">
@@ -592,7 +644,7 @@ render_clinic_command_header(
                             <p class="settings-logo-file-name" data-logo-file-name>No new image selected.</p>
                             <div class="flex flex-wrap justify-end gap-3">
                                 <button type="button" class="btn btn-ghost hidden" data-logo-reset>Reset Preview</button>
-                                <button type="submit" form="clinicProfileForm" class="btn btn-primary" <?= !$canManageSettings ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Save system logo?" data-confirm-message="This will update the logo used across the staff and patient screens." data-confirm-toast="Saving logo...">
+                                <button type="submit" form="clinicProfileForm" name="save_intent" value="logo" class="btn btn-primary is-locked" <?= !$canManageSettings ? 'disabled' : '' ?> aria-disabled="true" data-logo-ready="0" data-logo-save data-confirm-submit data-confirm-type="primary" data-confirm-title="Save system logo?" data-confirm-message="This will update the logo used across the staff and patient screens." data-confirm-toast="Saving logo...">
                                     <span class="material-symbols-outlined text-[18px]">save</span>
                                     Save Logo
                                 </button>
@@ -616,6 +668,24 @@ render_clinic_command_header(
                                     <span><?= e($theme['label']) ?></span>
                                 </label>
                             <?php endforeach; ?>
+                            <label class="settings-theme-option settings-theme-custom-option <?= $activeTheme === 'custom' ? 'active' : '' ?>" id="customThemeOption">
+                                <input type="radio" name="theme" value="custom" id="customThemeRadio" <?= $activeTheme === 'custom' ? 'checked' : '' ?> <?= !$canManageSettings ? 'disabled' : '' ?>>
+                                <span class="settings-theme-swatch settings-theme-custom-swatch" id="customThemeSwatch" style="--theme-swatch: <?= e($customThemeColor) ?>">
+                                    <span class="material-symbols-outlined">check</span>
+                                    <input
+                                        type="color"
+                                        name="custom_color"
+                                        id="customThemeColor"
+                                        class="settings-theme-color-input"
+                                        value="<?= e($customThemeColor) ?>"
+                                        aria-label="Choose a custom theme color"
+                                        title="Choose a custom color"
+                                        <?= !$canManageSettings ? 'disabled' : '' ?>
+                                    >
+                                </span>
+                                <span>Custom</span>
+                                <span class="material-symbols-outlined settings-theme-picker-icon" aria-hidden="true">colorize</span>
+                            </label>
                         </div>
                         <div class="flex justify-end mt-5">
                             <button class="btn btn-primary" <?= !$canManageSettings ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Apply color theme?" data-confirm-message="This will update the CLINiQ interface theme for all pages using the shared shell." data-confirm-toast="Applying theme...">
@@ -624,6 +694,32 @@ render_clinic_command_header(
                             </button>
                         </div>
                     </form>
+                    <script>
+                        (() => {
+                            const picker = document.getElementById('customThemeColor');
+                            const radio = document.getElementById('customThemeRadio');
+                            const swatch = document.getElementById('customThemeSwatch');
+                            const option = document.getElementById('customThemeOption');
+                            if (!picker || !radio || !swatch || !option) return;
+
+                            const selectCustomTheme = () => {
+                                radio.checked = true;
+                                radio.dispatchEvent(new Event('change', { bubbles: true }));
+                            };
+
+                            picker.addEventListener('pointerdown', selectCustomTheme);
+                            picker.addEventListener('input', () => {
+                                selectCustomTheme();
+                                swatch.style.setProperty('--theme-swatch', picker.value);
+                            });
+                            option.addEventListener('click', (event) => {
+                                if (event.target === picker || picker.disabled) return;
+                                event.preventDefault();
+                                selectCustomTheme();
+                                picker.click();
+                            });
+                        })();
+                    </script>
                 </section>
             </div>
 
@@ -1234,15 +1330,11 @@ render_clinic_command_header(
                                 <label class="clinic-label" for="apePeriodEnd">Compliance End</label>
                                 <input class="settings-input" id="apePeriodEnd" type="date" value="<?= e($defaultApeEndDate) ?>" <?= $hasActiveApeCycle ? 'disabled' : '' ?>>
                             </div>
-                            <div class="settings-field md:col-span-3">
-                                <label class="clinic-label" for="apeExamScheduleDate">Exam Schedule Date <span class="font-normal text-slate-400">(optional)</span></label>
-                                <input class="settings-input" id="apeExamScheduleDate" type="date" <?= $hasActiveApeCycle ? 'disabled' : '' ?>>
-                                <p class="settings-help mb-0">The single day patients are scheduled for examination. If they miss this date without confirming vitals, their status will show as <strong>Missed</strong>.</p>
-                            </div>
                         </div>
                         <p class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-bold text-red-700" id="apeCycleError" role="alert"></p>
                     </section>
 
+                    <?php if (!$hasActiveApeCycle): ?>
                     <section class="settings-section bg-[var(--cliniq-surface-low)]">
                         <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
                             <div>
@@ -1250,42 +1342,14 @@ render_clinic_command_header(
                                 <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1" id="apeCyclePreviewTitle">School Year <?= e($defaultApeSchoolYear) ?></h3>
                                 <p class="settings-help mb-0"><span id="apeCyclePreviewCount"><?= number_format($activeApePatientCount) ?></span> active patient(s) &bull; <span id="apeCyclePreviewDates"><?= e(date('M j, Y', strtotime($defaultApeStartDate))) ?> to <?= e(date('M j, Y', strtotime($defaultApeEndDate))) ?></span></p>
                             </div>
-                            <button type="button" class="btn btn-primary justify-center shrink-0" id="startApeCycleButton" <?= ($activeApePatientCount < 1 || $hasActiveApeCycle) ? 'disabled' : '' ?>>
+                            <button type="button" class="btn btn-primary justify-center shrink-0" id="startApeCycleButton" <?= $activeApePatientCount < 1 ? 'disabled' : '' ?>>
                                 <span class="material-symbols-outlined text-[18px]">play_circle</span>
                                 Start This Year&rsquo;s APE
                             </button>
                         </div>
                         <?php if ($activeApePatientCount < 1): ?>
                             <p class="settings-help mt-3 mb-0">A cycle cannot start because there are no active patient accounts.</p>
-                        <?php elseif ($hasActiveApeCycle): ?>
-                            <p class="settings-help mt-3 mb-0">Close the active <?= e($apeCurrentCycle['academic_year']) ?> cycle before starting another school year.</p>
                         <?php endif; ?>
-                    </section>
-
-                    <?php if ($hasActiveApeCycle): ?>
-                    <section class="settings-section space-y-4">
-                        <div>
-                            <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Exam Schedule Date</h3>
-                            <p class="settings-help mb-0">
-                                <?php if (!empty($apeCurrentCycle['exam_schedule_date'])): ?>
-                                    Currently set to <strong><?= e(date('F j, Y', strtotime($apeCurrentCycle['exam_schedule_date']))) ?></strong>. Update below to change.
-                                <?php else: ?>
-                                    No exam date set yet. Set one to let patients know when to present for examination.
-                                <?php endif; ?>
-                            </p>
-                        </div>
-                        <form method="post" data-no-ajax="true" class="flex flex-col sm:flex-row gap-3 items-end">
-                            <input type="hidden" name="action" value="update_ape_cycle_schedule">
-                            <input type="hidden" name="ape_cycle_id" value="<?= (int) $apeCurrentCycle['ape_cycle_id'] ?>">
-                            <div class="settings-field mb-0 flex-1">
-                                <label class="clinic-label" for="updateExamScheduleDate">Exam Schedule Date</label>
-                                <input class="settings-input" id="updateExamScheduleDate" name="exam_schedule_date" type="date" value="<?= e($apeCurrentCycle['exam_schedule_date'] ?? '') ?>" required>
-                            </div>
-                            <button class="btn btn-primary justify-center shrink-0" data-confirm-submit data-confirm-type="primary" data-confirm-title="Set exam schedule date?" data-confirm-message="Patients who miss this date without confirming vitals will be marked as Missed." data-confirm-toast="Saving exam schedule...">
-                                <span class="material-symbols-outlined text-[18px]">event_available</span>
-                                Set Schedule
-                            </button>
-                        </form>
                     </section>
                     <?php endif; ?>
 
@@ -1305,6 +1369,7 @@ render_clinic_command_header(
 
                 </div>
             <?php endif; ?>
+
             <div id="settings-email" class="settings-tab-panel <?= $currentTab === 'email' ? 'active' : '' ?> space-y-6">
                 <section>
                     <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Email Settings</h2>
@@ -1354,6 +1419,34 @@ render_clinic_command_header(
                     <?php endif; ?>
                 </section>
 
+                <section class="settings-section space-y-4">
+                    <div>
+                        <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Email Notification Formats</h3>
+                        <p class="settings-help mb-0">Review every automated patient email. Formats stay locked until you explicitly unlock the editor.</p>
+                    </div>
+                    <div class="divide-y divide-slate-200 rounded-2xl border border-slate-200 overflow-hidden">
+                        <?php foreach ($mailNotificationTemplates as $templateKey => $definition): ?>
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-white">
+                                <div class="flex items-start gap-3 min-w-0">
+                                    <span class="w-10 h-10 rounded-xl bg-[var(--cliniq-surface-low)] text-[var(--cliniq-primary)] flex items-center justify-center shrink-0">
+                                        <span class="material-symbols-outlined text-[21px]"><?= e($definition['icon']) ?></span>
+                                    </span>
+                                    <div class="min-w-0">
+                                        <h4 class="font-headline text-sm font-extrabold text-slate-800 mb-1"><?= e($definition['label']) ?></h4>
+                                        <p class="text-xs font-bold text-slate-500 leading-5 mb-0"><?= e($definition['description']) ?></p>
+                                    </div>
+                                </div>
+                                <?php if ($canManageSettings): ?>
+                                    <button type="button" class="btn btn-secondary justify-center shrink-0" data-edit-email-template="<?= e($templateKey) ?>">
+                                        <span class="material-symbols-outlined text-[18px]">edit_note</span>
+                                        Edit Format
+                                    </button>
+                                <?php endif; ?>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </section>
+
                 <?php if ($mailConfigured && $canManageSettings): ?>
                 <section class="settings-section space-y-4">
                     <div>
@@ -1375,6 +1468,82 @@ render_clinic_command_header(
                     </form>
                 </section>
                 <?php endif; ?>
+            </div>
+
+            <div id="settings-backup" class="settings-tab-panel <?= $currentTab === 'backup' ? 'active' : '' ?> space-y-6" data-backup-placeholder>
+                <section>
+                    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                        <div>
+                            <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">System Backup</h2>
+                            <p class="text-xs font-bold text-slate-500 mb-0">Placeholder for the planned daily backup of CLINiQ records and uploaded files.</p>
+                        </div>
+                        <span class="badge badge-pending"><span class="material-symbols-outlined text-[14px]">construction</span> Not configured</span>
+                    </div>
+                </section>
+
+                <section class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4" aria-label="Planned backup configuration">
+                    <div class="settings-section">
+                        <span class="material-symbols-outlined text-primary mb-3">calendar_today</span>
+                        <p class="clinic-label mb-1">Frequency</p>
+                        <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Once daily</h3>
+                        <p class="settings-help mb-0">Planned after clinic hours.</p>
+                    </div>
+                    <div class="settings-section">
+                        <span class="material-symbols-outlined text-primary mb-3">schedule</span>
+                        <p class="clinic-label mb-1">Proposed Time</p>
+                        <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">6:00 PM</h3>
+                        <p class="settings-help mb-0">The server must be running.</p>
+                    </div>
+                    <div class="settings-section">
+                        <span class="material-symbols-outlined text-primary mb-3">hard_drive</span>
+                        <p class="clinic-label mb-1">Destination</p>
+                        <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Internal drive</h3>
+                        <p class="settings-help mb-0">A folder or drive has not been selected.</p>
+                    </div>
+                    <div class="settings-section">
+                        <span class="material-symbols-outlined text-primary mb-3">history</span>
+                        <p class="clinic-label mb-1">Last Backup</p>
+                        <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">No backup yet</h3>
+                        <p class="settings-help mb-0">History will appear after implementation.</p>
+                    </div>
+                </section>
+
+                <section class="settings-section space-y-4">
+                    <div>
+                        <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Planned Backup Coverage</h3>
+                        <p class="settings-help mb-0">The database and uploaded files must be backed up together so restored records keep their documents.</p>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div class="rounded-xl border border-outline-variant bg-[var(--cliniq-surface-low)] p-4 flex items-start gap-3">
+                            <span class="material-symbols-outlined text-primary">database</span>
+                            <div><strong class="text-sm block">CLINiQ database</strong><span class="settings-help">Accounts, patient records, visits, appointments, APE, inventory, and settings.</span></div>
+                        </div>
+                        <div class="rounded-xl border border-outline-variant bg-[var(--cliniq-surface-low)] p-4 flex items-start gap-3">
+                            <span class="material-symbols-outlined text-primary">folder_copy</span>
+                            <div><strong class="text-sm block">Uploaded files</strong><span class="settings-help">Patient documents, clinic logos, and other stored attachments.</span></div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="settings-section flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                    <div>
+                        <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Backup Controls</h3>
+                        <p class="settings-help mb-0">These controls are placeholders and cannot start or configure a backup yet.</p>
+                    </div>
+                    <div class="flex flex-col sm:flex-row gap-3">
+                        <button type="button" class="btn btn-secondary justify-center" disabled title="Backup implementation is not configured yet">
+                            <span class="material-symbols-outlined text-[18px]">settings</span> Configure Backup · Coming soon
+                        </button>
+                        <button type="button" class="btn btn-primary justify-center" disabled title="Backup implementation is not configured yet">
+                            <span class="material-symbols-outlined text-[18px]">backup</span> Run Backup · Coming soon
+                        </button>
+                    </div>
+                </section>
+
+                <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 flex items-start gap-3 text-amber-900">
+                    <span class="material-symbols-outlined">info</span>
+                    <p class="text-sm font-bold mb-0">No automatic backup is running. This page describes the agreed plan only.</p>
+                </div>
             </div>
 
             <div id="settings-maintenance" class="settings-tab-panel <?= $currentTab === 'maintenance' ? 'active' : '' ?> space-y-6">
@@ -1401,6 +1570,106 @@ render_clinic_command_header(
 </div>
 
 <?php if ($canManageSettings): ?>
+    <script type="application/json" id="emailNotificationTemplateData"><?= json_encode($mailNotificationTemplates, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES) ?></script>
+
+    <div id="emailTemplateModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="emailTemplateModalTitle">
+        <div class="modal-content bg-white rounded-[1.5rem] w-full max-w-5xl max-h-[calc(100vh-2rem)] overflow-y-auto p-7 shadow-2xl border border-outline-variant/10">
+            <div class="flex items-start justify-between gap-4 mb-6">
+                <div class="flex items-start gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-[var(--cliniq-surface-low)] text-[var(--cliniq-primary)] flex items-center justify-center shrink-0">
+                        <span class="material-symbols-outlined text-[26px]" id="emailTemplateModalIcon">mail</span>
+                    </div>
+                    <div>
+                        <p class="clinic-label mb-1">Automated Notification</p>
+                        <h3 class="font-headline text-2xl font-extrabold text-[#17261d] mb-1" id="emailTemplateModalTitle">Email Format</h3>
+                        <p class="text-sm font-bold text-slate-500 leading-6 mb-0" id="emailTemplateModalDescription"></p>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-ghost justify-center px-3" id="closeEmailTemplateButton" aria-label="Close email format editor">
+                    <span class="material-symbols-outlined text-[20px]">close</span>
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(300px,.8fr)] gap-6">
+                <form method="post" data-no-ajax="true" id="emailTemplateForm" class="space-y-4">
+                    <input type="hidden" name="action" value="save_mail_template">
+                    <input type="hidden" name="template_key" id="emailTemplateKey">
+
+                    <div class="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                        <span class="text-xs font-extrabold text-amber-800" id="emailTemplateLockStatus">Format is read-only.</span>
+                        <button type="button" class="btn btn-secondary justify-center shrink-0" id="unlockEmailTemplateButton">
+                            <span class="material-symbols-outlined text-[18px]">lock_open</span>
+                            Unlock Editing
+                        </button>
+                    </div>
+
+                    <div class="settings-field">
+                        <label class="clinic-label" for="emailTemplateSubject">Subject</label>
+                        <input class="settings-input" id="emailTemplateSubject" name="subject" type="text" maxlength="180" required readonly>
+                    </div>
+                    <div class="settings-field">
+                        <label class="clinic-label" for="emailTemplateHeading">Heading</label>
+                        <input class="settings-input" id="emailTemplateHeading" name="heading" type="text" maxlength="180" required readonly>
+                    </div>
+                    <div class="settings-field">
+                        <label class="clinic-label" for="emailTemplateMessage">Message</label>
+                        <textarea class="settings-input min-h-32 resize-y" id="emailTemplateMessage" name="message" maxlength="4000" required readonly></textarea>
+                    </div>
+                    <div class="settings-field">
+                        <label class="clinic-label" for="emailTemplateButtonLabel">Button Label</label>
+                        <input class="settings-input" id="emailTemplateButtonLabel" name="button_label" type="text" maxlength="60" required readonly>
+                        <p class="settings-help mb-0" id="emailTemplateActionHint"></p>
+                    </div>
+                    <div class="settings-field">
+                        <label class="clinic-label" for="emailTemplateFooter">Footer</label>
+                        <textarea class="settings-input min-h-24 resize-y" id="emailTemplateFooter" name="footer" maxlength="1000" readonly></textarea>
+                    </div>
+
+                    <div>
+                        <p class="clinic-label mb-2">Available Placeholders</p>
+                        <div class="flex flex-wrap gap-2" id="emailTemplatePlaceholders"></div>
+                        <p class="settings-help mt-2 mb-0">Required placeholders must remain somewhere in the format. Click a pill to insert it into the last selected field after unlocking.</p>
+                    </div>
+
+                    <div class="flex flex-col-reverse sm:flex-row sm:justify-between gap-3 pt-2">
+                        <button type="button" class="btn btn-secondary justify-center" id="cancelEmailTemplateButton">Cancel</button>
+                        <button type="submit" class="btn btn-primary justify-center" id="saveEmailTemplateButton" disabled>
+                            <span class="material-symbols-outlined text-[18px]">save</span>
+                            Save Format
+                        </button>
+                    </div>
+                </form>
+
+                <div class="space-y-4">
+                    <div>
+                        <p class="clinic-label mb-2">Live Preview</p>
+                        <div class="rounded-2xl overflow-hidden border border-slate-200 bg-white shadow-sm">
+                            <div class="flex items-center gap-3 bg-[var(--cliniq-primary)] px-5 py-4 text-white">
+                                <img src="<?= e($systemLogoUrl) ?>" alt="Clinic logo" class="w-11 h-11 rounded-xl bg-white object-contain p-1">
+                                <strong><?= e($clinicProfile['system_name'] ?? 'CLINiQ Clinic') ?></strong>
+                            </div>
+                            <div class="p-5">
+                                <p class="text-xs font-extrabold uppercase tracking-wider text-slate-400 mb-2" id="emailTemplatePreviewSubject"></p>
+                                <h4 class="font-headline text-xl font-extrabold text-slate-800 mb-3" id="emailTemplatePreviewHeading"></h4>
+                                <p class="text-sm font-semibold leading-6 text-slate-600 whitespace-pre-line mb-5" id="emailTemplatePreviewMessage"></p>
+                                <span class="btn btn-primary pointer-events-none inline-flex" id="emailTemplatePreviewButton"></span>
+                                <p class="text-xs font-bold leading-5 text-slate-400 whitespace-pre-line mt-5 mb-0" id="emailTemplatePreviewFooter"></p>
+                            </div>
+                        </div>
+                    </div>
+                    <form method="post" data-no-ajax="true" id="resetEmailTemplateForm">
+                        <input type="hidden" name="action" value="reset_mail_template">
+                        <input type="hidden" name="template_key" id="resetEmailTemplateKey">
+                        <button type="submit" class="btn btn-ghost justify-center w-full text-slate-600" data-confirm-submit data-confirm-type="warning" data-confirm-title="Restore default email format?" data-confirm-message="Your saved wording for this notification will be replaced by the system default." data-confirm-toast="Restoring email format...">
+                            <span class="material-symbols-outlined text-[18px]">restart_alt</span>
+                            Restore Default
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="emailConfigModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="emailConfigModalTitle">
         <div class="modal-content bg-white rounded-[1.5rem] w-full max-w-3xl p-7 shadow-2xl border border-outline-variant/10">
             <div class="flex items-start justify-between gap-4 mb-6">
@@ -1623,6 +1892,121 @@ render_clinic_command_header(
     </div>
 
     <script>
+        (() => {
+            const dataNode = document.getElementById('emailNotificationTemplateData');
+            if (!dataNode) return;
+            const templates = JSON.parse(dataNode.textContent || '{}');
+            const form = document.getElementById('emailTemplateForm');
+            const fields = {
+                subject: document.getElementById('emailTemplateSubject'),
+                heading: document.getElementById('emailTemplateHeading'),
+                message: document.getElementById('emailTemplateMessage'),
+                button_label: document.getElementById('emailTemplateButtonLabel'),
+                footer: document.getElementById('emailTemplateFooter'),
+            };
+            const preview = {
+                subject: document.getElementById('emailTemplatePreviewSubject'),
+                heading: document.getElementById('emailTemplatePreviewHeading'),
+                message: document.getElementById('emailTemplatePreviewMessage'),
+                button_label: document.getElementById('emailTemplatePreviewButton'),
+                footer: document.getElementById('emailTemplatePreviewFooter'),
+            };
+            const unlockButton = document.getElementById('unlockEmailTemplateButton');
+            const saveButton = document.getElementById('saveEmailTemplateButton');
+            const lockStatus = document.getElementById('emailTemplateLockStatus');
+            const placeholders = document.getElementById('emailTemplatePlaceholders');
+            let activeTemplate = null;
+            let lastFocusedField = fields.message;
+            let unlocked = false;
+
+            const sampleValues = {
+                patient_name: 'Alex',
+                clinic_name: <?= json_encode((string) ($clinicProfile['system_name'] ?? 'CLINiQ Clinic')) ?>,
+                expiry_minutes: '60',
+            };
+            const interpolatePreview = (value) => String(value || '').replace(/\{\{([a-z_]+)\}\}/g, (token, key) => sampleValues[key] ?? token);
+            const renderPreview = () => {
+                Object.entries(fields).forEach(([key, field]) => {
+                    if (preview[key]) preview[key].textContent = interpolatePreview(field.value);
+                });
+            };
+            const setLocked = (locked) => {
+                unlocked = !locked;
+                Object.values(fields).forEach((field) => field.readOnly = locked);
+                saveButton.disabled = locked;
+                unlockButton.hidden = !locked;
+                lockStatus.textContent = locked ? 'Format is read-only.' : 'Editing is unlocked. Save to apply changes.';
+                lockStatus.closest('div').classList.toggle('border-amber-200', locked);
+                lockStatus.closest('div').classList.toggle('bg-amber-50', locked);
+                lockStatus.closest('div').classList.toggle('border-emerald-200', !locked);
+                lockStatus.closest('div').classList.toggle('bg-emerald-50', !locked);
+            };
+            const openTemplate = (key) => {
+                const definition = templates[key];
+                if (!definition) return;
+                activeTemplate = definition;
+                document.getElementById('emailTemplateKey').value = key;
+                document.getElementById('resetEmailTemplateKey').value = key;
+                document.getElementById('emailTemplateModalTitle').textContent = definition.label;
+                document.getElementById('emailTemplateModalDescription').textContent = definition.description;
+                document.getElementById('emailTemplateModalIcon').textContent = definition.icon;
+                document.getElementById('emailTemplateActionHint').textContent = definition.action_hint;
+                Object.entries(fields).forEach(([field, input]) => input.value = definition.template[field] || '');
+                placeholders.replaceChildren(...definition.allowed_placeholders.map((placeholder) => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'badge badge-in-progress';
+                    button.textContent = placeholder;
+                    button.dataset.insertEmailPlaceholder = placeholder;
+                    if (definition.required_placeholders.includes(placeholder)) button.title = 'Required placeholder';
+                    return button;
+                }));
+                lastFocusedField = fields.message;
+                setLocked(true);
+                renderPreview();
+                showModal('emailTemplateModal');
+            };
+
+            document.querySelectorAll('[data-edit-email-template]').forEach((button) => {
+                button.addEventListener('click', () => openTemplate(button.dataset.editEmailTemplate));
+            });
+            [document.getElementById('closeEmailTemplateButton'), document.getElementById('cancelEmailTemplateButton')].forEach((button) => {
+                button?.addEventListener('click', () => {
+                    setLocked(true);
+                    closeModal('emailTemplateModal');
+                });
+            });
+            unlockButton?.addEventListener('click', () => {
+                setLocked(false);
+                fields.subject.focus();
+            });
+            Object.values(fields).forEach((field) => {
+                field.addEventListener('focus', () => lastFocusedField = field);
+                field.addEventListener('input', renderPreview);
+            });
+            placeholders?.addEventListener('click', (event) => {
+                const button = event.target.closest('[data-insert-email-placeholder]');
+                if (!button || !unlocked || !lastFocusedField) return;
+                const start = lastFocusedField.selectionStart ?? lastFocusedField.value.length;
+                const end = lastFocusedField.selectionEnd ?? start;
+                lastFocusedField.setRangeText(button.dataset.insertEmailPlaceholder, start, end, 'end');
+                lastFocusedField.focus();
+                renderPreview();
+            });
+            form?.addEventListener('submit', (event) => {
+                if (!unlocked || !activeTemplate) {
+                    event.preventDefault();
+                    return;
+                }
+                const combined = Object.values(fields).map((field) => field.value).join('\n');
+                const missing = activeTemplate.required_placeholders.filter((placeholder) => !combined.includes(placeholder));
+                if (missing.length > 0) {
+                    event.preventDefault();
+                    if (typeof showToast === 'function') showToast(`Keep required placeholder: ${missing.join(', ')}`, 'warning');
+                }
+            });
+        })();
+
         (() => {
             const openButton = document.getElementById('openEmailConfigButton');
             const closeButton = document.getElementById('closeEmailConfigButton');
@@ -1896,7 +2280,6 @@ render_clinic_command_header(
             <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3 text-sm">
                 <div class="flex justify-between gap-4"><span class="font-bold text-slate-500">School Year</span><strong id="apeConfirmSchoolYear"></strong></div>
                 <div class="flex justify-between gap-4"><span class="font-bold text-slate-500">Compliance Period</span><strong class="text-right" id="apeConfirmDates"></strong></div>
-                <div class="flex justify-between gap-4"><span class="font-bold text-slate-500">Exam Date</span><strong id="apeConfirmExamDate">Not set</strong></div>
                 <div class="flex justify-between gap-4"><span class="font-bold text-slate-500">Active Patients</span><strong><?= number_format($activeApePatientCount) ?></strong></div>
             </div>
             <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-bold text-amber-800">
@@ -1907,7 +2290,6 @@ render_clinic_command_header(
                 <input type="hidden" name="academic_year" id="apeSubmitSchoolYear">
                 <input type="hidden" name="compliance_start" id="apeSubmitPeriodStart">
                 <input type="hidden" name="compliance_end" id="apeSubmitPeriodEnd">
-                <input type="hidden" name="exam_schedule_date" id="apeSubmitExamDate">
                 <div class="grid grid-cols-2 gap-3 mt-6">
                     <button type="button" class="btn btn-secondary justify-center" id="cancelApeCycleButton">Cancel</button>
                     <button type="submit" class="btn btn-primary justify-center" id="confirmApeCycleButton">Start APE Cycle</button>
@@ -1999,13 +2381,6 @@ render_clinic_command_header(
                 if (!validate()) return;
                 document.getElementById('apeConfirmSchoolYear').textContent = schoolYear.value.trim();
                 document.getElementById('apeConfirmDates').textContent = `${formatDate(periodStart.value)} to ${formatDate(periodEnd.value)}`;
-                const examDateEl = document.getElementById('apeExamScheduleDate');
-                const examDateConfirmEl = document.getElementById('apeConfirmExamDate');
-                const examDateSubmitEl = document.getElementById('apeSubmitExamDate');
-                if (examDateEl && examDateConfirmEl && examDateSubmitEl) {
-                    examDateConfirmEl.textContent = examDateEl.value ? formatDate(examDateEl.value) : 'Not set';
-                    examDateSubmitEl.value = examDateEl.value;
-                }
                 document.getElementById('apeSubmitSchoolYear').value = schoolYear.value.trim();
                 document.getElementById('apeSubmitPeriodStart').value = periodStart.value;
                 document.getElementById('apeSubmitPeriodEnd').value = periodEnd.value;
@@ -2015,6 +2390,7 @@ render_clinic_command_header(
             document.getElementById('cancelApeCycleButton').addEventListener('click', () => closeModal('apeCycleModal'));
         })();
     </script>
+
 <?php endif; ?>
 
 <?php render_footer(); ?>

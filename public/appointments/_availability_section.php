@@ -2,13 +2,26 @@
 
 $availabilityWeek = appointment_week_from_request($_GET['week'] ?? null);
 $availabilityBlocksByDate = appointment_blocks_for_week($availabilityWeek);
+[$availabilityRangeStart, $availabilityRangeEnd] = appointment_week_bounds($availabilityWeek);
+$availabilityApeBatchesByDate = appointment_ape_batches_for_range($availabilityRangeStart, $availabilityRangeEnd);
 $availabilityWeekDays = [];
-for ($offset = 0; $offset < 6; $offset++) {
+for ($offset = 0; $offset < 5; $offset++) {
     $availabilityWeekDays[] = $availabilityWeek->modify('+' . $offset . ' days');
 }
 
-$usingAvailabilityPlaceholders = empty($availabilityBlocksByDate);
+$usingAvailabilityPlaceholders = empty($availabilityBlocksByDate) && empty($availabilityApeBatchesByDate);
 $calendarBlocksByDate = $availabilityBlocksByDate;
+foreach ($availabilityApeBatchesByDate as $date => $batches) {
+    foreach ($batches as $batch) {
+        $assignedCount = (int) ($batch['assigned_count'] ?? 0);
+        $calendarBlocksByDate[$date][] = [
+            'start_time' => $batch['start_time'],
+            'end_time' => $batch['end_time'],
+            'reason' => $batch['batch_name'] . ' • ' . $batch['patient_category'] . ' • ' . $assignedCount . ' patient' . ($assignedCount === 1 ? '' : 's'),
+            '_ape_batch' => true,
+        ];
+    }
+}
 if ($usingAvailabilityPlaceholders) {
     $calendarBlocksByDate[$availabilityWeekDays[0]->format('Y-m-d')][] = [
         'id' => 0, 'start_time' => '09:00:00', 'end_time' => '10:00:00',
@@ -18,7 +31,7 @@ if ($usingAvailabilityPlaceholders) {
         'id' => 0, 'start_time' => '13:00:00', 'end_time' => '15:00:00',
         'reason' => 'Clinic Maintenance', '_placeholder' => true,
     ];
-    $calendarBlocksByDate[$availabilityWeekDays[5]->format('Y-m-d')][] = [
+    $calendarBlocksByDate[$availabilityWeekDays[4]->format('Y-m-d')][] = [
         'id' => 0, 'start_time' => null, 'end_time' => null,
         'reason' => 'Campus Event', '_placeholder' => true,
     ];
@@ -27,11 +40,11 @@ if ($usingAvailabilityPlaceholders) {
 $availabilityPrevWeek = $availabilityWeek->modify('-1 week')->format('Y-m-d');
 $availabilityNextWeek = $availabilityWeek->modify('+1 week')->format('Y-m-d');
 $availabilityToday = new DateTimeImmutable('today');
-$availabilityMinimumDate = $availabilityToday->format('N') === '7'
-    ? $availabilityToday->modify('+1 day')
+$availabilityMinimumDate = (int) $availabilityToday->format('N') >= 6
+    ? $availabilityToday->modify('next monday')
     : $availabilityToday;
 $availabilityCurrentWeek = $availabilityToday->modify('monday this week')->format('Y-m-d');
-$availabilityWeekEnd = $availabilityWeek->modify('+5 days');
+$availabilityWeekEnd = $availabilityWeek->modify('+4 days');
 $availabilityRequestedDate = '';
 if (isset($_GET['block_date']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $_GET['block_date'])) {
     $requestedDate = DateTimeImmutable::createFromFormat('!Y-m-d', (string) $_GET['block_date']);
@@ -71,7 +84,7 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
         <div>
             <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Scheduling</p>
             <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Clinic Availability</h2>
-            <p class="text-xs font-bold text-slate-500 mb-0">Monday to Saturday, 8:00 AM–5:00 PM. Click an open hour to prepare a block.</p>
+            <p class="text-xs font-bold text-slate-500 mb-0">Monday to Friday, 8:00 AM–5:00 PM. Click an open hour to prepare a block.</p>
         </div>
         <div class="flex items-center gap-2">
             <a href="<?= e($availabilityUrlForWeek($availabilityPrevWeek)) ?>" class="btn btn-sm btn-ghost text-decoration-none" title="Previous week" data-no-ajax="true" data-availability-week-nav>
@@ -88,7 +101,7 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
         <div class="appointment-availability-calendar-panel">
             <div class="appointment-week-range">
                 <strong><?= e($availabilityWeek->format('M j')) ?>–<?= e($availabilityWeekEnd->format('M j, Y')) ?></strong>
-                <span>Unavailable periods appear in red.</span>
+                <span>Unavailable periods appear in red; APE examinations appear in green.</span>
             </div>
 
             <?php if ($usingAvailabilityPlaceholders): ?>
@@ -99,7 +112,7 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
             <?php endif; ?>
 
             <div class="appointment-week-scroll">
-                <div class="appointment-week-calendar">
+                <div class="appointment-week-calendar" style="grid-template-columns: 4.75rem repeat(5, minmax(8.5rem, 1fr)); min-width: 50rem;">
                     <div class="appointment-week-header appointment-week-time-heading">Time</div>
                     <?php foreach ($availabilityWeekDays as $day):
                         $date = $day->format('Y-m-d');
@@ -140,6 +153,7 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
 
                             <?php foreach ($blocks as $block):
                                 $isPlaceholder = !empty($block['_placeholder']);
+                                $isApeBatch = !empty($block['_ape_batch']);
                                 $isWholeDay = empty($block['start_time']) || empty($block['end_time']);
                                 $blockStart = $isWholeDay ? $availabilityStartMinutes : (((int) substr($block['start_time'], 0, 2) * 60) + (int) substr($block['start_time'], 3, 2));
                                 $blockEnd = $isWholeDay ? $availabilityEndMinutes : (((int) substr($block['end_time'], 0, 2) * 60) + (int) substr($block['end_time'], 3, 2));
@@ -151,13 +165,14 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
                                 $top = (($visibleStart - $availabilityStartMinutes) / $availabilityDurationMinutes) * 100;
                                 $height = (($visibleEnd - $visibleStart) / $availabilityDurationMinutes) * 100;
                                 ?>
-                                <div class="appointment-week-block <?= $isWholeDay ? 'is-all-day' : '' ?> <?= $isPlaceholder ? 'is-placeholder' : '' ?>"
+                                <div class="appointment-week-block <?= $isWholeDay ? 'is-all-day' : '' ?> <?= $isPlaceholder ? 'is-placeholder' : '' ?> <?= $isApeBatch ? 'is-ape' : '' ?>"
                                     style="top: calc(<?= number_format($top, 4, '.', '') ?>% + 2px); height: calc(<?= number_format($height, 4, '.', '') ?>% - 4px);"
                                     data-availability-block data-date="<?= e($date) ?>" data-start="<?= e($block['start_time'] ?? '') ?>" data-end="<?= e($block['end_time'] ?? '') ?>"
                                     <?= $isPlaceholder ? 'data-placeholder-block="true"' : '' ?>
+                                    <?= $isApeBatch ? 'data-ape-block="true"' : '' ?>
                                     title="<?= e(appointment_format_block_time($block) . ($block['reason'] ? ' — ' . $block['reason'] : '')) ?>">
-                                    <strong><?= $isWholeDay ? 'Unavailable' : e(appointment_format_block_time($block)) ?><?php if ($isPlaceholder): ?><span class="appointment-week-sample-badge">Sample</span><?php endif; ?></strong>
-                                    <span><?= e($block['reason'] ?: ($isWholeDay ? 'Whole day blocked' : 'Unavailable')) ?></span>
+                                    <strong><?= $isWholeDay ? 'Unavailable' : e(appointment_format_block_time($block)) ?><?php if ($isPlaceholder): ?><span class="appointment-week-sample-badge">Sample</span><?php endif; ?><?php if ($isApeBatch): ?><span class="appointment-week-sample-badge">APE</span><?php endif; ?></strong>
+                                    <span><?= $isApeBatch ? 'APE: ' : '' ?><?= e($block['reason'] ?: ($isWholeDay ? 'Whole day blocked' : 'Unavailable')) ?></span>
                                 </div>
                             <?php endforeach; ?>
                         </div>
@@ -349,11 +364,12 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
         return date !== '' && date < minimumAvailabilityDate;
     };
 
-    const isSunday = (dateString) => {
+    const isWeekend = (dateString) => {
         const date = normalizedDate(dateString);
         if (!date) return false;
         const [year, month, day] = date.split('-').map(Number);
-        return new Date(year, month - 1, day).getDay() === 0;
+        const weekday = new Date(year, month - 1, day).getDay();
+        return weekday === 0 || weekday === 6;
     };
 
     const formatDisplayDate = (dateString) => {
@@ -498,7 +514,7 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
 
             const date = new Date(year, month, dayNumber);
             const dateString = normalizedDate(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(dayNumber).padStart(2, '0')}`);
-            const disabled = isPastDate(dateString) || isSunday(dateString);
+            const disabled = isPastDate(dateString) || isWeekend(dateString);
             cell.textContent = String(dayNumber);
             cell.dataset.modalDate = dateString;
             cell.classList.toggle('is-selected', selectedCalendarDates.has(dateString));
@@ -725,7 +741,7 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
         const modalDay = event.target.closest('[data-modal-date]');
         if (modalDay) {
             const date = modalDay.dataset.modalDate || '';
-            if (modalDay.disabled || !date || isPastDate(date) || isSunday(date)) {
+            if (modalDay.disabled || !date || isPastDate(date) || isWeekend(date)) {
                 return;
             }
             if (selectedCalendarDates.has(date)) {
@@ -747,7 +763,7 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
         const block = event.target.closest('[data-availability-block]');
         if (block) {
             event.stopPropagation();
-            if (block.dataset.placeholderBlock === 'true') {
+            if (block.dataset.placeholderBlock === 'true' || block.dataset.apeBlock === 'true') {
                 return;
             }
             const elements = liveElements();

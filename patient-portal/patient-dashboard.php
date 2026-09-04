@@ -164,16 +164,9 @@ $latestAppointment = $appointmentStmt->fetch();
 
 $latestApe = ape_fetch_patient_record($appointmentPatientId);
 $apeStatus = $latestApe['workflow_status'] ?? 'Not Started';
-$apePercent = match ($apeStatus) {
-    'Registered' => 20,
-    'Batch Assigned' => 20,
-    'Exam Done' => 40,
-    'Requirements Checked', 'Scheduled' => 60,
-    'Submitted' => 80,
-    'Reviewed', 'Follow-up Required' => 80,
-    'Cleared' => 100,
-    default => 0,
-};
+$apeQueue = $latestApe ? ape_record_queue($latestApe) : 'examination';
+$apeStep = $latestApe ? ape_record_step_index($latestApe) : 0;
+$apePercent = $apeQueue === 'completed' ? 100 : $apeStep * 20;
 $apeBadgeClass = match ($latestApe['clearance_status'] ?? '') {
     'Cleared' => 'student-badge-success',
     'For Follow-up' => 'student-badge-warning',
@@ -192,7 +185,7 @@ $apeRequirementsVerified = $apePatientVitalsConfirmed && ($apeRequirementStatus 
 ], true));
 $apeRequirementsNeedCorrection = $apeRequirementStatus === 'Needs Correction';
 $apeExamCompleted = !empty($latestApe['exam_date']);
-$apeAllDocumentsUploaded = (int) ($latestApe['required_document_count'] ?? 0) >= count(ape_default_requirements());
+$apeAllDocumentsUploaded = ape_initial_uploads_present($latestApe ?? []);
 $apeDocumentsAwaitingReview = $apeAllDocumentsUploaded && (int) ($latestApe['required_unverified_count'] ?? 0) > 0;
 $clinicNotes = [];
 if (!$latestApe) {
@@ -214,7 +207,7 @@ if (!$latestApe) {
         $latestDocuments[$document['document_type']] ??= $document;
     }
     if ($apeRequirementsVerified) {
-        foreach (ape_default_requirements() as $documentType) {
+        foreach (ape_upload_requirement_names(ape_requirements_for_record((int) $latestApe['ape_id'])) as $documentType) {
             $document = $latestDocuments[$documentType] ?? null;
             if (!$document) {
                 $clinicNotes[] = ['type' => 'warning', 'icon' => 'info', 'text' => $documentType . ' is still missing.'];
@@ -228,6 +221,12 @@ if (!$latestApe) {
             };
         }
     }
+    if (!empty($latestApe['initial_upload_due_date'])) {
+        $clinicNotes[] = ['type' => 'info', 'icon' => 'calendar_month', 'text' => 'Initial clinic-verified uploads due ' . date('M j, Y', strtotime($latestApe['initial_upload_due_date'])) . '.'];
+    }
+    if (!empty($latestApe['deferred_upload_due_date']) && !ape_deferred_submission_complete($latestApe)) {
+        $clinicNotes[] = ['type' => 'warning', 'icon' => 'event', 'text' => 'Follow-up / correction documents due ' . date('M j, Y', strtotime($latestApe['deferred_upload_due_date'])) . '. These do not block the initial upload step.'];
+    }
     if (!$clinicNotes) {
         $clinicNotes[] = ['type' => 'info', 'icon' => 'info', 'text' => 'Complete the current APE step shown above.'];
     }
@@ -240,6 +239,8 @@ $clinicNoteClass = static fn(string $type): string => match ($type) {
 };
 $apeActionTitle = match (true) {
     ($latestApe['clearance_status'] ?? 'Pending') === 'Cleared' => 'APE completed',
+    $apeQueue === 'digital_submission' => $apeDocumentsAwaitingReview ? 'Wait for clinic document review' : 'Upload APE documents',
+    $apeQueue === 'follow_up' && !ape_document_follow_up($latestApe) && !ape_deferred_submission_complete($latestApe) => 'Submit follow-up documents for archive review',
     $apeRequirementsNeedCorrection => 'Return corrected hard-copy requirements',
     $apeStatus === 'Follow-up Required' => 'Complete the required follow-up',
     !$apePatientVitalsConfirmed => 'Complete your vitals and BMI',
@@ -250,6 +251,10 @@ $apeActionTitle = match (true) {
 };
 $apeActionCopy = match (true) {
     ($latestApe['clearance_status'] ?? 'Pending') === 'Cleared' => 'Your APE record is already cleared by the clinic.',
+    $apeQueue === 'digital_submission' => $apeDocumentsAwaitingReview
+        ? 'Your required uploads are waiting for clinic archive review. Any recorded follow-up remains pending.'
+        : 'Upload the initially clinic-verified group within seven days of examination. Deferred documents keep their assigned due date and do not block this step.',
+    $apeQueue === 'follow_up' && !ape_document_follow_up($latestApe) && !ape_deferred_submission_complete($latestApe) => 'The initial group is archived. Upload the returned documents by their assigned due date and wait for clinic archive review.',
     $apeRequirementsNeedCorrection => $apeNote ?: 'Return the corrected hard-copy requirements requested by the clinic.',
     $apeStatus === 'Follow-up Required' => $apeNote ?: 'Complete the referral or other follow-up requested by the clinic.',
     !$apePatientVitalsConfirmed => 'Enter and confirm your vitals and BMI before visiting the clinic for examination.',
@@ -438,7 +443,7 @@ render_student_header('Dashboard', 'dashboard');
                 <h2 class="student-card-title">APE Progress</h2>
                 <p class="student-card-copy">Your current clearance path</p>
             </div>
-            <span class="student-badge <?= student_e($apeBadgeClass) ?>"><?= student_e($apeStatus) ?></span>
+            <span class="student-badge <?= student_e($apeBadgeClass) ?>"><?= student_e($latestApe ? ape_record_stage_label($latestApe) : $apeStatus) ?></span>
         </div>
         <div class="student-card-pad">
             <div class="flex items-end justify-between mb-3">

@@ -21,6 +21,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
 
+        if ($status === 'Scheduled') {
+            $appointmentStmt = appointment_db()->prepare('SELECT appointment_datetime FROM appointments WHERE appointment_id = ? LIMIT 1');
+            $appointmentStmt->execute([$id]);
+            $appointmentDatetime = (string) ($appointmentStmt->fetchColumn() ?: '');
+            if (!appointment_date_is_clinic_day(substr($appointmentDatetime, 0, 10))) {
+                flash_message('error', 'Clinic appointments are available Monday through Friday only. Choose a weekday before approving this request.');
+                header('Location: ' . (in_array($redirect, $allowedRedirects, true) ? $redirect : 'index.php'));
+                exit;
+            }
+            $apeConflict = appointment_ape_batch_conflict($appointmentDatetime);
+            if ($apeConflict !== null) {
+                $batchTime = date('g:i A', strtotime((string) $apeConflict['start_time']))
+                    . '–' . date('g:i A', strtotime((string) $apeConflict['end_time']));
+                flash_message('error', 'This appointment overlaps the APE batch "' . $apeConflict['batch_name'] . '" at ' . $batchTime . '. Choose another appointment time before approving it.');
+                header('Location: ' . (in_array($redirect, $allowedRedirects, true) ? $redirect : 'index.php'));
+                exit;
+            }
+        }
+
         if ($status === 'Cancelled') {
             $stmt = appointment_db()->prepare('UPDATE appointments SET status = ?, cancellation_reason = ?, cancelled_by = ?, reviewed_by_person_id = ? WHERE appointment_id = ?');
             $stmt->execute([$status, $cancellationReason, 'Clinic', $reviewedByPersonId, $id]);
