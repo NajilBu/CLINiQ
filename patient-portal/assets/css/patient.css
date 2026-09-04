@@ -1899,9 +1899,26 @@ body.student-time-modal-open {
     margin-bottom: 0.55rem;
 }
 
-.passport-qr-svg {
+.passport-qr-svg,
+.passport-qr-wrap canvas,
+.passport-qr-wrap img {
     width: 140px;
     height: 140px;
+}
+
+.passport-qr-wrap img {
+    display: block;
+}
+
+.passport-qr-loading,
+.passport-qr-error {
+    color: var(--student-muted);
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+
+.passport-qr-error {
+    color: #b42318;
 }
 
 .passport-qr-label {
@@ -2379,7 +2396,9 @@ body.student-time-modal-open {
         padding: 0.9rem;
     }
 
-    .passport-qr-svg {
+    .passport-qr-svg,
+    .passport-qr-wrap canvas,
+    .passport-qr-wrap img {
         width: min(140px, 100%);
         height: auto;
     }

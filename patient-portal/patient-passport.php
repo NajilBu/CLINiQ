@@ -398,47 +398,18 @@ render_student_header('Emergency Health Passport', 'passport');
                 <span class="student-badge student-badge-success">Active</span>
             </div>
             <div class="student-card-pad" style="text-align:center;">
-                <div class="passport-qr-wrap" id="qr-container" aria-label="QR code for Emergency Health Passport">
-                    <!-- Inline SVG QR placeholder &mdash; in production use a real QR library -->
-                    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" class="passport-qr-svg" aria-hidden="true">
-                        <!-- Corner squares -->
-                        <rect x="10" y="10" width="55" height="55" rx="6" fill="none" stroke="#17261d" stroke-width="6"/>
-                        <rect x="22" y="22" width="31" height="31" rx="3" fill="#17261d"/>
-                        <rect x="135" y="10" width="55" height="55" rx="6" fill="none" stroke="#17261d" stroke-width="6"/>
-                        <rect x="147" y="22" width="31" height="31" rx="3" fill="#17261d"/>
-                        <rect x="10" y="135" width="55" height="55" rx="6" fill="none" stroke="#17261d" stroke-width="6"/>
-                        <rect x="22" y="147" width="31" height="31" rx="3" fill="#17261d"/>
-                        <!-- Data dots (simulated pattern) -->
-                        <?php
-                        // Pseudo-random dot grid for visual authenticity
-                        $seed = crc32($passport['token']);
-                        $positions = [];
-                        for ($row = 0; $row < 9; $row++) {
-                            for ($col = 0; $col < 9; $col++) {
-                                $x = 80 + $col * 13;
-                                $y = 10 + $row * 13;
-                                $on = ($seed >> (($row * 9 + $col) % 30)) & 1;
-                                if ($on) {
-                                    echo "<rect x=\"{$x}\" y=\"{$y}\" width=\"9\" height=\"9\" rx=\"2\" fill=\"#17261d\"/>";
-                                }
-                            }
-                        }
-                        for ($row = 0; $row < 9; $row++) {
-                            for ($col = 0; $col < 9; $col++) {
-                                $x = 10 + $col * 13;
-                                $y = 80 + $row * 13;
-                                $on = ($seed >> (($row * 9 + $col + 7) % 30)) & 1;
-                                if ($on) {
-                                    echo "<rect x=\"{$x}\" y=\"{$y}\" width=\"9\" height=\"9\" rx=\"2\" fill=\"#17261d\"/>";
-                                }
-                            }
-                        }
-                        ?>
-                    </svg>
+                <div
+                    class="passport-qr-wrap"
+                    id="qr-container"
+                    data-passport-url="<?= student_e($passportUrl) ?>"
+                    data-download-name="<?= student_e($passport['student_id']) ?>-emergency-passport-qr.png"
+                    aria-label="QR code for <?= student_e($passport['name']) ?>'s Emergency Health Passport"
+                >
+                    <span class="passport-qr-loading">Generating QR code&hellip;</span>
                 </div>
                 <p class="passport-qr-label">Scan to view Emergency Passport</p>
                 <div class="flex gap-2 mt-3">
-                    <button type="button" class="student-button-secondary" style="flex:1;font-size:0.72rem;" onclick="alert('QR download will be connected to the backend.')">
+                    <button type="button" class="student-button-secondary" id="download-passport-qr" style="flex:1;font-size:0.72rem;" disabled>
                         <span class="material-symbols-outlined" style="font-size:1rem;">download</span>
                         Download QR
                     </button>
@@ -650,6 +621,8 @@ render_student_header('Emergency Health Passport', 'passport');
 </div><!-- /student-grid -->
 </form>
 
+<script src="../public/assets/vendor/qrcode/qrcode.min.js?v=1.0.0"></script>
+<script src="../public/assets/js/patient-passport-qr.js?v=1"></script>
 <?php render_student_footer(); ?>
 
 <script src="../public/assets/js/emergency-contact.js?v=1"></script>
