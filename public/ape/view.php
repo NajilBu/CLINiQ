@@ -609,7 +609,16 @@ if ($examSaved && $savedExamResult === 'Referred') {
 $activities = ape_activities_for_patient_record($id, (int) $record['patient_id'], 20);
 $birthdateLabel = $record['birthdate'] ? date('M d, Y', strtotime($record['birthdate'])) : 'Not recorded';
 $sexLabel = $record['sex'] ?: 'Not specified';
-$clearanceUrl = !empty($record['clearance_document_path']) ? app_url($record['clearance_document_path']) : null;
+$clearanceDocument = null;
+foreach ($documents as $document) {
+    if (($document['document_type'] ?? '') === 'Clearance') {
+        $clearanceDocument = $document;
+        break;
+    }
+}
+$clearanceUrl = $clearanceDocument
+    ? app_url('ape/document.php?id=' . (int) $clearanceDocument['document_id'])
+    : null;
 
 set_page_back_link('index.php', 'Queues');
 render_header('APE Record - ' . $fullName);
@@ -1068,7 +1077,7 @@ render_header('APE Record - ' . $fullName);
                                             <p class="text-xs font-bold text-slate-500 truncate mb-1" title="<?= e($document['original_filename'] ?: basename($document['file_path'])) ?>"><?= e($document['original_filename'] ?: basename($document['file_path'])) ?></p>
                                             <p class="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-0"><?= e(date('M d, Y g:i A', strtotime($document['uploaded_at']))) ?></p>
                                         </div>
-                                        <a href="<?= e(app_url($document['file_path'])) ?>" class="ape-document-view-button btn btn-sm btn-outline text-decoration-none" data-file-preview data-preview-title="<?= e($document['original_filename'] ?: $document['document_type']) ?>">
+                                        <a href="<?= e(app_url('ape/document.php?id=' . (int) $document['document_id'])) ?>" class="ape-document-view-button btn btn-sm btn-outline text-decoration-none" data-file-preview data-preview-title="<?= e($document['original_filename'] ?: $document['document_type']) ?>">
                                             <span class="material-symbols-outlined text-[14px]">preview</span> View File
                                         </a>
                                     </div>
@@ -1404,7 +1413,7 @@ render_header('APE Record - ' . $fullName);
                                 </div>
                                 <div class="flex flex-wrap items-center gap-2">
                                     <span class="badge <?= ape_status_badge_class($document['verification_status']) ?>"><?= e($document['verification_status']) ?></span>
-                                    <a class="btn btn-sm btn-outline text-decoration-none" href="<?= e(app_url($document['file_path'])) ?>" data-file-preview data-preview-title="<?= e($document['original_filename'] ?: $document['document_type']) ?>">
+                                    <a class="btn btn-sm btn-outline text-decoration-none" href="<?= e(app_url('ape/document.php?id=' . (int) $document['document_id'])) ?>" data-file-preview data-preview-title="<?= e($document['original_filename'] ?: $document['document_type']) ?>">
                                         <span class="material-symbols-outlined text-[14px]">preview</span> Open
                                     </a>
                                 </div>

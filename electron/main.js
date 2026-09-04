@@ -26,6 +26,10 @@ function normalizedClinicUrl() {
 const clinicBaseUrl = normalizedClinicUrl();
 const clinicStartUrl = new URL('index.php', clinicBaseUrl);
 const healthUrl = new URL('api/health.php', clinicBaseUrl);
+const browserOnlyClinicPaths = [
+    new URL('emergency.php', clinicBaseUrl).pathname.toLowerCase(),
+];
+const patientPortalPath = new URL('../patient-portal/', clinicBaseUrl).pathname.toLowerCase();
 
 function desktopIconPath() {
     return app.isPackaged
@@ -36,13 +40,21 @@ function desktopIconPath() {
 function isAllowedClinicUrl(value) {
     try {
         const candidate = new URL(value);
-        if (candidate.origin !== clinicBaseUrl.origin || !candidate.pathname.startsWith(clinicBaseUrl.pathname)) {
-            return false;
-        }
+        return candidate.origin === clinicBaseUrl.origin
+            && candidate.pathname.toLowerCase().startsWith(clinicBaseUrl.pathname.toLowerCase())
+            && !isBrowserOnlyUrl(candidate.href);
+    } catch (error) {
+        return false;
+    }
+}
 
-        const relativePath = candidate.pathname.slice(clinicBaseUrl.pathname.length).replace(/^\/+/, '').toLowerCase();
-        const browserOnlyRoutes = new Set(['visitor-registration.php', 'emergency.php']);
-        return !browserOnlyRoutes.has(relativePath);
+function isBrowserOnlyUrl(value) {
+    try {
+        const candidate = new URL(value);
+        if (candidate.origin !== clinicBaseUrl.origin) return false;
+
+        const pathname = candidate.pathname.toLowerCase();
+        return browserOnlyClinicPaths.includes(pathname) || pathname.startsWith(patientPortalPath);
     } catch (error) {
         return false;
     }
@@ -127,7 +139,9 @@ function createMainWindow() {
     mainWindow.once('ready-to-show', () => mainWindow?.show());
 
     mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-        if (isAllowedClinicUrl(url)) {
+        if (isBrowserOnlyUrl(url)) {
+            void openExternal(url);
+        } else if (isAllowedClinicUrl(url)) {
             mainWindow?.loadURL(url);
         } else {
             void openExternal(url);
@@ -136,6 +150,11 @@ function createMainWindow() {
     });
 
     mainWindow.webContents.on('will-navigate', (event, url) => {
+        if (isBrowserOnlyUrl(url)) {
+            event.preventDefault();
+            void openExternal(url);
+            return;
+        }
         if (isAllowedClinicUrl(url) || url.startsWith('file:')) return;
         event.preventDefault();
         void openExternal(url);

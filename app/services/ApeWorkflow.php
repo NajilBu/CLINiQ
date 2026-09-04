@@ -883,6 +883,37 @@ function ape_log_activity(int $apeRecordId, ?int $personId, string $actionLabel,
     $stmt->execute([$apeRecordId, $personId ?: null, $actionLabel, $notes]);
 }
 
+function ape_document_storage_root(): string
+{
+    return dirname(__DIR__, 2) . '/storage/documents/ape';
+}
+
+function ape_document_absolute_path(string $storedPath): ?string
+{
+    $normalizedPath = ltrim(str_replace('\\', '/', trim($storedPath)), '/');
+    $allowedPrefixes = ['storage/documents/ape/', 'uploads/ape/'];
+    $relativeName = null;
+
+    foreach ($allowedPrefixes as $prefix) {
+        if (str_starts_with($normalizedPath, $prefix)) {
+            $relativeName = substr($normalizedPath, strlen($prefix));
+            break;
+        }
+    }
+
+    if ($relativeName === null || $relativeName === '' || basename($relativeName) !== $relativeName) {
+        return null;
+    }
+
+    $protectedPath = ape_document_storage_root() . DIRECTORY_SEPARATOR . $relativeName;
+    if (is_file($protectedPath)) {
+        return $protectedPath;
+    }
+
+    $legacyPath = dirname(__DIR__, 2) . '/public/uploads/ape/' . $relativeName;
+    return is_file($legacyPath) ? $legacyPath : null;
+}
+
 function ape_store_uploaded_file(array $file, string $prefix): array
 {
     if (empty($file['name']) || (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
@@ -897,9 +928,9 @@ function ape_store_uploaded_file(array $file, string $prefix): array
         throw new InvalidArgumentException('APE documents must be PDF, JPG, JPEG, or PNG files.');
     }
 
-    $uploadDir = dirname(__DIR__, 2) . '/public/uploads/ape/';
+    $uploadDir = ape_document_storage_root() . DIRECTORY_SEPARATOR;
     if (!is_dir($uploadDir) && !mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)) {
-        throw new RuntimeException('The APE upload folder could not be created.');
+        throw new RuntimeException('The protected APE document folder could not be created.');
     }
 
     $filename = preg_replace('/[^a-z0-9_-]+/i', '-', $prefix) . '_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $extension;
@@ -909,7 +940,7 @@ function ape_store_uploaded_file(array $file, string $prefix): array
 
     return [
         'original_filename' => basename((string) $file['name']),
-        'file_path' => 'uploads/ape/' . $filename,
+        'file_path' => 'storage/documents/ape/' . $filename,
         'absolute_path' => $uploadDir . $filename,
     ];
 }
