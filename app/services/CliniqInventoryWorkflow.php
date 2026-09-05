@@ -2,6 +2,41 @@
 
 require_once __DIR__ . '/../config/database.php';
 
+function cliniq_inventory_return_time_options(): string
+{
+    $html = '';
+    for ($minutes = 480; $minutes <= 1020; $minutes += 60) {
+        $hour = intdiv($minutes, 60);
+        $minute = $minutes % 60;
+        $value = sprintf('%02d:%02d', $hour, $minute);
+        $label = sprintf('%d:%02d %s', $hour % 12 ?: 12, $minute, $hour < 12 ? 'AM' : 'PM');
+        $html .= '<option value="' . $label . '"></option>';
+    }
+    return $html;
+}
+
+function cliniq_inventory_return_date(string $value): DateTimeImmutable
+{
+    $value = trim($value);
+    $value = preg_replace('/T(\d{1,2})(\d{2})(\s*(?:AM|PM))$/i', 'T$1:$2$3', $value);
+    if (preg_match('/^(\d{4}-\d{2}-\d{2})T(0?[1-9]|1[0-2])(?::([0-5][0-9]))?\s*(AM|PM)$/i', $value, $match)) {
+        $hour = (int) $match[2] % 12 + (strtoupper($match[4]) === 'PM' ? 12 : 0);
+        $value = $match[1] . 'T' . sprintf('%02d:%02d', $hour, (int) ($match[3] ?: 0));
+    }
+    $date = DateTimeImmutable::createFromFormat('!Y-m-d\TH:i', $value);
+    if (!$date || $date->format('Y-m-d\TH:i') !== $value) {
+        throw new InvalidArgumentException('Enter a valid expected return date and time.');
+    }
+    $minutes = (int) $date->format('H') * 60 + (int) $date->format('i');
+    if ($minutes < 480 || $minutes > 1020) {
+        throw new InvalidArgumentException('Expected return time must be between 8:00 AM and 5:00 PM.');
+    }
+    if ($date <= new DateTimeImmutable()) {
+        throw new InvalidArgumentException('The expected return date and time must be in the future.');
+    }
+    return $date;
+}
+
 function cliniq_inventory_db(): PDO
 {
     return auth_db();
@@ -124,6 +159,16 @@ function cliniq_inventory_dispensing_rows(array $source): array
     $itemIds = $source['dispensed_inventory_item_id'] ?? [];
     $quantities = $source['dispensed_quantity'] ?? [];
     $remarks = $source['dispensing_remarks'] ?? [];
+    $dueDates = (array) ($source['equipment_due_at'] ?? []);
+    if (isset($source['equipment_return_date']) || isset($source['equipment_return_time'])) {
+        $dates = (array) ($source['equipment_return_date'] ?? []);
+        $times = (array) ($source['equipment_return_time'] ?? []);
+        $periods = (array) ($source['equipment_return_period'] ?? []);
+        $dueDates = [];
+        foreach ($dates as $index => $date) {
+            $dueDates[$index] = trim((string) $date) . 'T' . trim((string) ($times[$index] ?? '')) . ' ' . trim((string) ($periods[$index] ?? ''));
+        }
+    }
     if (!is_array($itemIds)) {
         $itemIds = [$itemIds];
     }
@@ -148,6 +193,7 @@ function cliniq_inventory_dispensing_rows(array $source): array
             'item_id' => $itemId,
             'quantity' => $quantity,
             'remarks' => trim((string) ($remarks[$index] ?? '')) ?: null,
+            'due_at' => trim((string) ($dueDates[$index] ?? '')),
         ];
     }
     return $rows;
@@ -211,9 +257,9 @@ function cliniq_inventory_dispense_medicines(
         }
 
         $itemStmt = $db->prepare("
-            SELECT item_id, item_code, item_name, quantity, unit
+            SELECT item_id, item_code, item_name, quantity, unit, item_type
             FROM inventory_items
-            WHERE item_id = ? AND item_type = 'Medicine' AND is_active = 1
+            WHERE item_id = ? AND item_type IN ('Medicine', 'Equipment') AND is_active = 1
             FOR UPDATE
         ");
         $itemStmt->execute([$itemId]);
@@ -223,6 +269,22 @@ function cliniq_inventory_dispense_medicines(
         }
         if ((int) $item['quantity'] < $quantity) {
             throw new RuntimeException('Not enough stock for ' . $item['item_name'] . '. Available: ' . (int) $item['quantity'] . ' ' . $item['unit'] . '.');
+        }
+
+        if ($item['item_type'] === 'Equipment') {
+            $due = trim((string) ($row['due_at'] ?? ''));
+            $dueDate = cliniq_inventory_return_date($due);
+            $visitStmt = $db->prepare('SELECT v.visit_id, v.patient_person_id FROM visit_entries e JOIN visits v ON v.visit_id = e.visit_id WHERE e.entry_id = ?');
+            $visitStmt->execute([$entryId]);
+            $visit = $visitStmt->fetch();
+            if (!$visit) throw new RuntimeException('The equipment loan requires an existing patient visit.');
+            $newBalance = (int) $item['quantity'] - $quantity;
+            $db->prepare('UPDATE inventory_items SET quantity = ? WHERE item_id = ?')->execute([$newBalance, $itemId]);
+            $loan = $db->prepare('INSERT INTO equipment_loans (item_id, borrower_person_id, visit_id, quantity, due_at, released_by_person_id, remarks) VALUES (?, ?, ?, ?, ?, ?, ?)');
+            $loan->execute([$itemId, (int) $visit['patient_person_id'], (int) $visit['visit_id'], $quantity, $dueDate->format('Y-m-d H:i:s'), $staffPersonId, $row['remarks'] ?? null]);
+            $loanId = (int) $db->lastInsertId();
+            cliniq_inventory_record_transaction($db, $itemId, 'Loaned', -$quantity, $newBalance, $staffPersonId, null, $loanId, 'Equipment issued during visit #' . $visit['visit_id']);
+            continue;
         }
 
         $newBalance = (int) $item['quantity'] - $quantity;

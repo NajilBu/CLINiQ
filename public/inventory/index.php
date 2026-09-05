@@ -714,6 +714,14 @@ render_clinic_command_header(
             const form = event.target;
             if (!form.matches('[data-inventory-form]') || event.defaultPrevented) return;
             if (form.matches('[data-confirm-submit]') && form.dataset.confirmed !== '1') return;
+            if (form.dataset.confirmed !== '1') {
+                const confirmButton = form.querySelector('button[data-confirm-submit]');
+                if (confirmButton) {
+                    event.preventDefault();
+                    submitConfirmableAction(confirmButton);
+                    return;
+                }
+            }
 
             event.preventDefault();
             fetch(form.action, {
@@ -981,8 +989,11 @@ render_clinic_command_header(
                     <input class="clinic-input" name="borrowed_quantity" id="borrowQuantity" type="number" min="1" value="1" required>
                 </div>
                 <div class="md:col-span-2">
-                    <label class="clinic-label">Expected Return</label>
-                    <input class="clinic-input" name="due_at" type="datetime-local">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <label class="clinic-label">Expected Return Date<input class="clinic-input" name="return_date" value="<?= e(date('Y-m-d')) ?>" type="date" min="<?= e(date('Y-m-d')) ?>" required></label>
+                        <label class="clinic-label">Expected Return Time (8:00 AM–5:00 PM)<span class="flex gap-2" data-return-clock><input class="clinic-select" style="min-width:0;flex:1;" name="return_time" required type="text" inputmode="numeric" maxlength="5" data-equipment-return-time placeholder="h:mm" autocomplete="off" aria-label="Return time"><select class="clinic-select" style="width:100px;" name="return_period" data-return-period required aria-label="AM or PM"><option value="AM">AM</option><option value="PM">PM</option></select></span></label>
+                    </div>
+                    <p class="settings-help mt-2 mb-0">Choose a future return date and time before recording this loan.</p>
                 </div>
             </div>
             <div class="mt-6 flex justify-end gap-3">

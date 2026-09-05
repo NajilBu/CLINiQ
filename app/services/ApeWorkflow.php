@@ -18,7 +18,7 @@ function ape_requirement_status_options(): array
     return dropdown_options('ape_requirement_status');
 }
 
-/** Build one checklist save, preserving comments outside the selected documents. */
+/** Build one checklist save, preserving each document's remarks separately from shared instructions. */
 function ape_hard_copy_review_plan(array $requirements, string $mode, array $selectedIds, string $instructions, array $remarks = []): array
 {
     if (!in_array($mode, ['complete', 'correction', 'follow_up'], true)) {
@@ -61,7 +61,7 @@ function ape_hard_copy_review_plan(array $requirements, string $mode, array $sel
         $updates[] = [
             'requirement_id' => $requirementId,
             'status' => $selected ? $status : 'Verified',
-            'remarks' => $selected ? $instructions : ($requirement['remarks'] ?? null),
+            'remarks' => $requirement['remarks'] ?? null,
         ];
         if ($selected) $names[] = $requirement['requirement_name'];
     }
@@ -221,6 +221,35 @@ function ape_record_queue(array $record): string
     }
 
     return 'final_decision';
+}
+
+/** Count patients, not documents; requirement alerts can overlap work queues. */
+function ape_batch_progress(array $records): array
+{
+    $summaries = [];
+    foreach ($records as $record) {
+        $batchId = (int) ($record['schedule_batch_id'] ?? 0);
+        if ($batchId < 1) continue;
+        if (!isset($summaries[$batchId])) {
+            $summaries[$batchId] = array_fill_keys([
+                'total', 'completed', 'examination', 'digital_submission',
+                'final_decision', 'follow_up', 'incomplete', 'correction',
+            ], 0);
+        }
+        $summary = &$summaries[$batchId];
+        $summary['total']++;
+        $queue = ape_record_queue($record);
+        $summary[$queue]++;
+        if (!in_array($queue, ['examination', 'completed'], true)) {
+            if (trim((string) ($record['missing_items'] ?? '')) !== '') $summary['incomplete']++;
+            if (($record['requirement_status'] ?? '') === 'Needs Correction'
+                || ($record['verification_status'] ?? '') === 'Needs Correction') {
+                $summary['correction']++;
+            }
+        }
+        unset($summary);
+    }
+    return $summaries;
 }
 
 function ape_next_action(array $record): array

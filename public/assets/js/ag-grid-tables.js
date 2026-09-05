@@ -215,6 +215,17 @@
         }
 
         function navigateRow(gridEvent) {
+            if (isInteractiveClick(gridEvent)) return;
+            const rowModalId = gridEvent && gridEvent.data && gridEvent.data.rowModalId;
+            if (rowModalId && typeof window.showModal === 'function') {
+                const modal = document.getElementById(rowModalId);
+                if (modal && modal.style.display !== 'flex') {
+                    window.showModal(rowModalId);
+                    const closeButton = modal.querySelector('button');
+                    if (closeButton) closeButton.focus();
+                }
+                return;
+            }
             const rowUrl = gridEvent && gridEvent.data && gridEvent.data.rowUrl;
             if (!rowUrl || isInteractiveClick(gridEvent)) return;
             window.location.assign(rowUrl);
@@ -287,7 +298,7 @@
             overlayNoRowsTemplate: makeEmptyOverlay(grid.dataset.emptyTitle, grid.dataset.emptyText),
             getRowClass: (params) => {
                 const classes = [];
-                if (params.data && params.data.rowUrl) classes.push('ag-row-clickable');
+                if (params.data && (params.data.rowUrl || params.data.rowModalId)) classes.push('ag-row-clickable');
                 if (params.data && params.data.rowClass) classes.push(params.data.rowClass);
                 return classes.join(' ');
             },

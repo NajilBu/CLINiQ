@@ -13,10 +13,13 @@ $itemId = (int) ($_POST['item_id'] ?? 0);
 $borrowerIdentifier = strtoupper(trim((string) ($_POST['borrower_identifier'] ?? '')));
 $quantity = max(1, (int) ($_POST['borrowed_quantity'] ?? 1));
 $dueAt = trim((string) ($_POST['due_at'] ?? ''));
-$dueAtTimestamp = $dueAt !== '' ? strtotime($dueAt) : false;
+if (isset($_POST['return_date']) || isset($_POST['return_time'])) {
+    $dueAt = trim((string) ($_POST['return_date'] ?? '')) . 'T' . trim((string) ($_POST['return_time'] ?? '')) . ' ' . trim((string) ($_POST['return_period'] ?? ''));
+}
 $db = cliniq_inventory_db();
 
 try {
+    $dueAtDate = cliniq_inventory_return_date($dueAt);
     if ($itemId < 1 || $borrowerIdentifier === '') {
         throw new InvalidArgumentException('Equipment and an existing patient ID are required.');
     }
@@ -60,7 +63,7 @@ try {
         $itemId,
         (int) $patient['person_id'],
         $quantity,
-        $dueAtTimestamp ? date('Y-m-d H:i:s', $dueAtTimestamp) : null,
+        $dueAtDate->format('Y-m-d H:i:s'),
         $staffId,
         trim((string) ($_POST['remarks'] ?? '')) ?: null,
     ]);

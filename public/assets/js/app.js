@@ -7,6 +7,34 @@
 // DESKTOP RUNTIME BRIDGE
 // ============================================================
 
+function formatEquipmentClock(value, finish = false) {
+    const text = value.trim();
+    if (/^\d{1,2}:\d{3}$/.test(text)) { const digits = text.replace(':', ''); return digits.slice(0, -2) + ':' + digits.slice(-2); }
+    if (/^\d{3,4}$/.test(text)) return text.slice(0, -2) + ':' + text.slice(-2);
+    if (finish && /^\d{1,2}$/.test(text)) return text + ':00';
+    return text;
+}
+function validateEquipmentReturnTime(field) {
+    const value = formatEquipmentClock(field.value, true);
+    const period = field.closest('[data-return-clock]')?.querySelector('[data-return-period]')?.value || '';
+    const match = value.match(/^(0?[1-9]|1[0-2]):([0-5][0-9])$/);
+    const minutes = match ? (Number(match[1]) % 12 + (period === 'PM' ? 12 : 0)) * 60 + Number(match[2]) : null;
+    field.setCustomValidity(!value ? '' : minutes === null
+        ? 'Enter a valid time, such as 400 for 4:00.'
+        : period && (minutes < 480 || minutes > 1020)
+            ? 'Expected return time must be between 8:00 AM and 5:00 PM.' : '');
+}
+['input', 'change', 'focusout'].forEach(eventName => document.addEventListener(eventName, event => {
+    const target = event.target;
+    if (target.matches('[data-equipment-return-time]')) {
+        target.value = formatEquipmentClock(target.value, eventName !== 'input');
+        validateEquipmentReturnTime(target);
+    } else if (target.matches('[data-return-period]')) {
+        const field = target.closest('[data-return-clock]').querySelector('[data-equipment-return-time]');
+        validateEquipmentReturnTime(field);
+    }
+}));
+
 function cliniqDesktopBridge() {
     return window.cliniqDesktop && typeof window.cliniqDesktop.openExternal === 'function'
         ? window.cliniqDesktop
@@ -1150,11 +1178,6 @@ function initApeHardCopyReview(root = document) {
                     preview.value = nextStatus;
                     preview.dataset.status = nextStatus;
                 }
-            });
-            checklist?.querySelectorAll('[data-requirement-remark]').forEach((input) => {
-                const selected = selectedIds.has(input.dataset.requirementRemark);
-                input.readOnly = selected;
-                input.title = selected ? 'The instructions above will be used for this selected document.' : '';
             });
         };
         sync();

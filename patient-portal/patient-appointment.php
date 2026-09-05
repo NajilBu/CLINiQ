@@ -205,16 +205,6 @@ render_student_header('Appointments', 'appointment');
                 <input type="hidden" name="appt_time" id="appt-time-input" value="">
 
                 <div class="student-field">
-                    <label class="student-label" for="appt-type">Appointment Purpose</label>
-                    <select id="appt-type" name="appt_type" class="student-select" required>
-                        <option value="" disabled selected>Select appointment purpose...</option>
-                        <?php foreach (dropdown_options('appointment_purpose') as $purpose): ?>
-                            <option value="<?= student_e($purpose) ?>"><?= student_e($purpose) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-
-                <div class="student-field">
                     <div class="student-month-row">
                         <label class="student-label mb-0">Preferred Date</label>
                         <div class="student-month-nav">
@@ -289,6 +279,16 @@ render_student_header('Appointments', 'appointment');
                         <span class="material-symbols-outlined" aria-hidden="true">touch_app</span>
                         Double-click an available date to choose a time. On touchscreens, tap once.
                     </p>
+                </div>
+
+                <div class="student-field">
+                    <label class="student-label" for="appt-type">Appointment Purpose</label>
+                    <select id="appt-type" name="appt_type" class="student-select" required>
+                        <option value="" disabled selected>Select appointment purpose...</option>
+                        <?php foreach (dropdown_options('appointment_purpose') as $purpose): ?>
+                            <option value="<?= student_e($purpose) ?>"><?= student_e($purpose) ?></option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
 
                 <div class="student-field student-selected-schedule" id="selected-schedule-summary" hidden aria-live="polite">

@@ -206,7 +206,7 @@ if (!$visit) {
 $entries = cliniq_visit_entries($id);
 $entryDispensings = cliniq_inventory_entry_dispensings(array_column($entries, 'id'));
 $medicineInventory = cliniq_inventory_available_medicines();
-$equipmentInventory = [];
+$equipmentInventory = cliniq_inventory_db()->query("SELECT item_id AS id, item_name, quantity, unit FROM inventory_items WHERE item_type = 'Equipment' AND is_active = 1 ORDER BY item_name")->fetchAll();
 
 $fullName = trim($visit['first_name'] . ' ' . $visit['last_name']);
 $status = $visit['status'] ?: 'Unaddressed';
@@ -578,14 +578,14 @@ render_header($pageTitle);
             <div class="grid grid-cols-1 md:grid-cols-[0.7fr_1.6fr_0.55fr_auto] gap-4 items-end" data-dispensing-row>
                 <div>
                     <label class="clinic-label">Type</label>
-                    <select class="record-sheet-field px-4 js-dispensing-type" name="dispensing_type[]" disabled>
-                        <option value="Medicine">Medicine</option>
+                    <select class="record-sheet-field px-4 js-dispensing-type" name="dispensing_type[]" disabled data-amendable>
+                        <option value="Medicine">Medicine</option><option value="Equipment">Equipment</option>
                     </select>
                 </div>
                 <div>
-                    <label class="clinic-label">Medicine</label>
+                    <label class="clinic-label">Item</label>
                     <select class="record-sheet-field px-4 js-visit-inventory-item" name="dispensed_inventory_item_id[]" disabled data-amendable>
-                        <option value="" data-type="Medicine">No medicine selected</option>
+                        <option value="" data-type="Medicine">No item selected</option>
                         <?php foreach ($medicineInventory as $medicine): ?>
                             <option value="<?= (int) $medicine['id'] ?>" data-type="Medicine" <?= (int) $medicine['quantity'] <= 0 ? 'disabled' : '' ?>>
                                 <?= e(cliniq_inventory_medicine_option_label($medicine)) ?>
@@ -602,6 +602,7 @@ render_header($pageTitle);
                     <label class="clinic-label">Quantity</label>
                     <input class="record-sheet-field px-4" name="dispensed_quantity[]" type="number" min="1" placeholder="0" disabled data-amendable>
                 </div>
+                <div class="md:col-span-full" data-equipment-return style="display:none;"><div class="grid grid-cols-1 md:grid-cols-2 gap-4"><label class="clinic-label">Expected Return Date<input class="record-sheet-field px-4" type="date" name="equipment_return_date[]" value="<?= e(date('Y-m-d')) ?>" min="<?= e(date('Y-m-d')) ?>"></label><label class="clinic-label">Expected Return Time (8:00 AM–5:00 PM)<span class="flex gap-2" data-return-clock><input class="record-sheet-field px-4" style="min-width:0;flex:1;" name="equipment_return_time[]" type="text" inputmode="numeric" maxlength="5" data-equipment-return-time placeholder="h:mm" autocomplete="off" aria-label="Return time"><select class="record-sheet-field px-4" style="width:100px;" name="equipment_return_period[]" data-return-period aria-label="AM or PM"><option value="AM">AM</option><option value="PM">PM</option></select></span></label></div></div>
                 <button type="button" class="btn btn-ghost js-remove-dispensing-row amendment-only" title="Remove medicine" aria-label="Remove medicine">
                     <span class="material-symbols-outlined text-[18px]">delete</span>
                 </button>
@@ -785,7 +786,7 @@ render_header($pageTitle);
                     No Visit
                 </button>
             <?php elseif ($canTreatFromLogbook): ?>
-                <button type="submit" form="logbookIntakeForm" class="sheet-chip-button" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save and complete treatment?" data-confirm-message="This will save the current vitals, assessment, diagnosis, treatment, referral, and remarks, then mark the visit as completed." data-confirm-toast="Saving treatment...">
+                <button type="submit" form="logbookIntakeForm" class="sheet-chip-button" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save and complete treatment?" data-confirm-message="This will save the current vitals, assessment, diagnosis, treatment, referral, and remarks, issue selected medicines and equipment loans, then mark the visit as completed." data-confirm-toast="Saving treatment...">
                     <span class="material-symbols-outlined">save</span>
                     Save Treatment
                 </button>
@@ -913,14 +914,14 @@ render_header($pageTitle);
                 <div class="grid grid-cols-1 md:grid-cols-[0.7fr_1.6fr_0.55fr_auto] gap-4 items-end" data-dispensing-row>
                     <div>
                         <label class="clinic-label">Type</label>
-                        <select class="record-sheet-field px-4 js-dispensing-type" name="dispensing_type[]" disabled>
-                            <option value="Medicine">Medicine</option>
+                        <select class="record-sheet-field px-4 js-dispensing-type" name="dispensing_type[]">
+                            <option value="Medicine">Medicine</option><option value="Equipment">Equipment</option>
                         </select>
                     </div>
                     <div>
-                        <label class="clinic-label">Medicine</label>
+                        <label class="clinic-label">Item</label>
                         <select class="record-sheet-field px-4 js-visit-inventory-item" name="dispensed_inventory_item_id[]">
-                            <option value="" data-type="Medicine">No medicine selected</option>
+                            <option value="" data-type="Medicine">No item selected</option>
                             <?php foreach ($medicineInventory as $medicine): ?>
                                 <option value="<?= (int) $medicine['id'] ?>" data-type="Medicine" <?= (int) $medicine['quantity'] <= 0 ? 'disabled' : '' ?>>
                                     <?= e(cliniq_inventory_medicine_option_label($medicine)) ?>
@@ -937,6 +938,7 @@ render_header($pageTitle);
                         <label class="clinic-label">Quantity</label>
                         <input class="record-sheet-field px-4" name="dispensed_quantity[]" type="number" min="1" placeholder="0">
                     </div>
+                    <div class="md:col-span-full" data-equipment-return style="display:none;"><div class="grid grid-cols-1 md:grid-cols-2 gap-4"><label class="clinic-label">Expected Return Date<input class="record-sheet-field px-4" type="date" name="equipment_return_date[]" value="<?= e(date('Y-m-d')) ?>" min="<?= e(date('Y-m-d')) ?>"></label><label class="clinic-label">Expected Return Time (8:00 AM–5:00 PM)<span class="flex gap-2" data-return-clock><input class="record-sheet-field px-4" style="min-width:0;flex:1;" name="equipment_return_time[]" type="text" inputmode="numeric" maxlength="5" data-equipment-return-time placeholder="h:mm" autocomplete="off" aria-label="Return time"><select class="record-sheet-field px-4" style="width:100px;" name="equipment_return_period[]" data-return-period aria-label="AM or PM"><option value="AM">AM</option><option value="PM">PM</option></select></span></label></div></div>
                     <button type="button" class="btn btn-ghost js-remove-dispensing-row" title="Remove medicine" aria-label="Remove medicine">
                         <span class="material-symbols-outlined text-[18px]">delete</span>
                     </button>
@@ -946,7 +948,7 @@ render_header($pageTitle);
                 <span class="material-symbols-outlined text-[18px]">add</span>
                 Add Item
             </button>
-            <p class="settings-help mt-3 mb-0">Equipment borrowing is recorded separately in Inventory &amp; Tracking.</p>
+            <p class="settings-help mt-3 mb-0">Equipment is loaned to this patient when you save. Enter its expected return date and time; process returns in Inventory &amp; Tracking.</p>
         <?php endif; ?>
     </section>
 
@@ -988,7 +990,7 @@ render_header($pageTitle);
                         <span class="material-symbols-outlined text-[18px]">cancel</span>
                         Cancel Treatment
                     </button>
-                    <button class="btn btn-primary justify-center" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save and complete treatment?" data-confirm-message="This will save the current vitals, assessment, diagnosis, treatment, referral, and remarks, then mark the visit as completed." data-confirm-toast="Saving treatment...">
+                    <button class="btn btn-primary justify-center" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save and complete treatment?" data-confirm-message="This will save the current vitals, assessment, diagnosis, treatment, referral, and remarks, issue selected medicines and equipment loans, then mark the visit as completed." data-confirm-toast="Saving treatment...">
                         <span class="material-symbols-outlined text-[18px]">save</span>
                         Save Treatment
                     </button>
@@ -1054,6 +1056,19 @@ function syncDispensingRow(row) {
     if (!typeSelect || !itemSelect) return;
 
     const activeType = typeSelect.value || 'Medicine';
+    const returnGroup = row.querySelector('[data-equipment-return]');
+    if (returnGroup) {
+        const equipment = activeType === 'Equipment';
+        returnGroup.style.display = equipment ? '' : 'none';
+        returnGroup.querySelectorAll('input, select').forEach(field => {
+            field.required = equipment;
+            if (equipment && !field.value) {
+                if (field.type === 'date') field.value = field.min;
+                if (field.matches('[data-return-period]')) field.value = 'AM';
+            }
+            if (!equipment) { field.value = ''; field.setCustomValidity(''); }
+        });
+    }
     let currentVisible = false;
     Array.from(itemSelect.options).forEach((option) => {
         const optionType = option.dataset.type || 'Medicine';

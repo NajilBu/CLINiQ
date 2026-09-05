@@ -93,6 +93,7 @@ render_clinic_command_header(
                     <span class="badge badge-in-progress"><?= count($apeScheduleBatches) ?> batch<?= count($apeScheduleBatches) === 1 ? '' : 'es' ?></span>
                 </div>
                 <p class="text-xs font-bold text-slate-500 mb-0">School Year <?= e($apeCurrentCycle['academic_year']) ?> &bull; Categories cannot overlap at the same date and time.</p>
+                <p class="text-xs font-bold text-slate-500 mt-2 mb-0">Click a batch to view its details.</p>
             </div>
         </div>
 
@@ -103,7 +104,6 @@ render_clinic_command_header(
             ['headerName' => 'Date and Time', 'field' => 'scheduleHtml', 'cellRenderer' => 'html', 'sortField' => 'scheduleSort', 'minWidth' => 240],
             ['headerName' => 'Assigned', 'field' => 'assignedHtml', 'cellRenderer' => 'html', 'sortField' => 'assignedSort', 'width' => 130],
             ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'sortField' => 'statusSort', 'width' => 140],
-            ['headerName' => 'Actions', 'field' => 'actionHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 100, 'minWidth' => 90],
         ];
         $batchRows = [];
         foreach ($apeScheduleBatches as $batch) {
@@ -121,6 +121,7 @@ render_clinic_command_header(
                     . '<span class="material-symbols-outlined text-[16px]">event_busy</span>Cancel</button></form>';
             }
             $batchRows[] = [
+                'rowModalId' => 'apeBatchDetails' . (int) $batch['batch_id'],
                 'batchSort' => $batch['batch_name'],
                 'batchHtml' => '<strong class="text-sm text-slate-800 block">' . e($batch['batch_name']) . '</strong><span class="text-xs font-bold text-slate-400">Created ' . e(date('M j, Y', strtotime($batch['created_at']))) . '</span>',
                 'categorySort' => $batch['patient_category'],
@@ -131,8 +132,44 @@ render_clinic_command_header(
                 'assignedHtml' => '<strong class="text-sm text-slate-800">' . (int) $batch['assigned_count'] . '</strong><span class="text-xs font-bold text-slate-400"> / ' . (int) $batch['capacity'] . '</span>',
                 'statusSort' => $batchDisplayStatus,
                 'statusHtml' => '<span class="badge ' . $batchStatusClass . '">' . e($batchDisplayStatus) . '</span>',
-                'actionHtml' => row_actions_button('Batch actions', $batchActions),
             ];
+            $batchModalId = 'apeBatchDetails' . (int) $batch['batch_id'];
+            ?>
+            <div id="<?= e($batchModalId) ?>" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="<?= e($batchModalId) ?>Title" data-no-row-click>
+                <div class="modal-content bg-white rounded-[1.5rem] w-full max-w-xl p-7 shadow-2xl border border-outline-variant/10 max-h-[90vh] overflow-y-auto">
+                    <div class="flex items-start justify-between gap-4 mb-6">
+                        <div>
+                            <p class="text-xs font-bold text-slate-500 mb-1">APE Batch Details</p>
+                            <h3 id="<?= e($batchModalId) ?>Title" class="font-headline text-2xl font-extrabold text-[#17261d]"><?= e($batch['batch_name']) ?></h3>
+                        </div>
+                        <button type="button" class="btn btn-secondary !p-3" onclick="closeModal('<?= e($batchModalId) ?>')" aria-label="Close batch details"><span class="material-symbols-outlined">close</span></button>
+                    </div>
+                    <dl class="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-6">
+                        <?php
+                        $details = [
+                            'School Year' => $apeCurrentCycle['academic_year'],
+                            'Patient Category' => $batch['patient_category'],
+                            'Exam Date' => date('F j, Y', strtotime($batch['schedule_date'])),
+                            'Time' => date('g:i A', strtotime($batch['start_time'])) . '–' . date('g:i A', strtotime($batch['end_time'])),
+                            'Assigned Patients' => (int) $batch['assigned_count'] . ' / ' . (int) $batch['capacity'],
+                            'Status' => $batchDisplayStatus,
+                            'Created' => date('F j, Y', strtotime($batch['created_at'])),
+                            'Created By' => $batch['created_by_name'] ?: 'Not recorded',
+                        ];
+                        foreach ($details as $label => $value): ?>
+                            <div><dt class="text-xs font-bold text-slate-500 mb-1"><?= e($label) ?></dt><dd class="text-sm font-bold text-slate-800 m-0"><?= e((string) $value) ?></dd></div>
+                        <?php endforeach; ?>
+                    </dl>
+                    <?php if ($batchHasPassed && !$batchIsCancelled): ?>
+                        <p class="text-xs font-bold text-slate-500 mb-5">This batch’s scheduled time has ended. Individual patients may still have pending examination requirements.</p>
+                    <?php endif; ?>
+                    <div class="flex flex-wrap items-center justify-end gap-3">
+                        <?= $batchActions ?>
+                        <a class="btn btn-primary text-decoration-none" href="index.php?batch=<?= (int) $batch['batch_id'] ?>">View APE Records</a>
+                    </div>
+                </div>
+            </div>
+            <?php
         }
         render_ag_grid('apeSchedulingGrid', $batchColumns, $batchRows, [
             'pageSize' => 10,

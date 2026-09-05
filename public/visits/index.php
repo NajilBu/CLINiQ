@@ -31,9 +31,9 @@ $buildWhere = function (bool $includeStatus = true) use ($filters): array {
     $params = [];
 
     if ($filters['q'] !== '') {
-        $where[] = "(p.first_name LIKE ? OR p.last_name LIKE ? OR p.id_number LIKE ? OR v.chief_complaint LIKE ? OR EXISTS (SELECT 1 FROM visit_entries se WHERE se.visit_id = v.visit_id AND se.symptoms LIKE ?) OR v.action_taken LIKE ? OR v.visit_purpose LIKE ?)";
+        $where[] = "(p.first_name LIKE ? OR p.last_name LIKE ? OR p.id_number LIKE ? OR v.chief_complaint LIKE ? OR EXISTS (SELECT 1 FROM visit_entries se WHERE se.visit_id = v.visit_id AND se.symptoms LIKE ?) OR v.action_taken LIKE ? OR v.visit_purpose LIKE ? OR EXISTS (SELECT 1 FROM people attending WHERE attending.id = v.attended_by_person_id AND TRIM(CONCAT_WS(' ', attending.first_name, attending.middle_name, attending.last_name)) LIKE ?))";
         $like = '%' . $filters['q'] . '%';
-        array_push($params, $like, $like, $like, $like, $like, $like, $like);
+        array_push($params, $like, $like, $like, $like, $like, $like, $like, $like);
     }
 
     if ($includeStatus && $filters['status'] !== 'all') {

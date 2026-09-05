@@ -175,6 +175,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $checklistActions = ['save_document_review', 'save_requirements', 'save_hard_copy_review', 'mark_requirements_complete', 'mark_missing_requirements', 'add_requirement', 'update_requirement', 'delete_requirement'];
+        if (in_array($action, $checklistActions, true) && ($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed') {
+            throw new RuntimeException('The patient must confirm their vitals and BMI before the requirements checklist can be changed.');
+        }
         if (in_array($action, $checklistActions, true) && !empty($record['exam_date'])) {
             throw new RuntimeException('The saved examination checklist is locked. Review and archive the uploaded follow-up documents instead.');
         }
@@ -1306,6 +1309,18 @@ render_header('APE Record - ' . $fullName);
 
         <div class="grid grid-cols-1 gap-4">
             <?php if (!$apeIsCompleted): ?>
+            <?php if (($record['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed'): ?>
+            <section class="ape-flow-panel" id="apeRequirementsChecklist">
+                <h2 class="font-headline text-lg font-extrabold text-[#17261d] mb-4">Requirements Checklist</h2>
+                <div class="rounded-2xl border border-amber-200 bg-amber-50 p-5 flex items-start gap-3">
+                    <span class="material-symbols-outlined text-amber-700" aria-hidden="true">lock</span>
+                    <div>
+                        <h3 class="font-headline text-base font-extrabold text-amber-900 mb-1">Waiting for patient vitals and BMI</h3>
+                        <p class="text-sm font-bold text-amber-800 mb-0">The requirements checklist will open after the patient enters and confirms their vitals and BMI.</p>
+                    </div>
+                </div>
+            </section>
+            <?php else: ?>
             <section class="ape-flow-panel" id="apeRequirementsChecklist" data-ape-requirements data-locked="<?= $requirementsLocked ? 'true' : 'false' ?>">
                 <div class="flex items-center justify-between gap-3 mb-4">
                     <div>
@@ -1365,26 +1380,38 @@ render_header('APE Record - ' . $fullName);
                     </button>
                 </div>
                 <div class="modal-backdrop" id="apeAddRequirementModal" style="display:none;">
-                    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="apeAddRequirementTitle">
-                        <div class="flex items-center justify-between gap-3 mb-4">
-                            <h3 class="font-headline text-lg font-extrabold mb-0" id="apeAddRequirementTitle">Add Requirement</h3>
-                            <button type="button" class="btn btn-sm btn-ghost" onclick="closeModal('apeAddRequirementModal')" aria-label="Close add requirement"><span class="material-symbols-outlined">close</span></button>
+                    <div class="modal-content bg-white rounded-[1.75rem] border border-outline-variant/20 p-6 sm:p-8 w-full max-w-lg shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="apeAddRequirementTitle" aria-describedby="apeAddRequirementDescription">
+                        <div class="flex items-start justify-between gap-4 mb-3">
+                            <div class="flex items-center gap-3 min-w-0">
+                                <div class="w-11 h-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0" aria-hidden="true">
+                                    <span class="material-symbols-outlined">playlist_add</span>
+                                </div>
+                                <h3 class="font-headline text-xl font-extrabold text-[#17261d] mb-0" id="apeAddRequirementTitle">Add Requirement</h3>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-ghost shrink-0" onclick="closeModal('apeAddRequirementModal')" aria-label="Close add requirement"><span class="material-symbols-outlined">close</span></button>
                         </div>
-                        <p class="text-xs text-slate-500">New requirements start as Missing. Choose their outcome in the checklist; it is applied with Save Examination or, for later visits, Save Document Review.</p>
-                        <form method="post" class="grid gap-3">
+                        <p class="text-sm leading-relaxed text-slate-500 mb-6" id="apeAddRequirementDescription">New requirements start as Missing. Choose their outcome in the checklist; it is applied with Save Examination or, for later visits, Save Document Review.</p>
+                        <form method="post" class="space-y-5">
                             <input type="hidden" name="action" value="add_requirement">
                             <input type="hidden" name="requirement_item_status" value="Missing">
-                            <label class="clinic-label" for="apeNewRequirementName">Requirement name</label>
-                            <input class="clinic-input" id="apeNewRequirementName" name="requirement_name" maxlength="160" placeholder="Requirement name" required>
-                            <label class="clinic-label" for="apeNewRequirementRemarks">Optional remarks</label>
-                            <input class="clinic-input" id="apeNewRequirementRemarks" name="requirement_remarks" placeholder="Optional remarks">
-                            <button type="submit" class="btn btn-primary" data-confirm-submit data-confirm-title="Add requirement?" data-confirm-message="This adds a Missing requirement. Your other document choices remain unsaved until the examination or document review is saved." data-confirm-toast="Adding requirement...">Add Requirement</button>
+                            <div>
+                                <label class="clinic-label" for="apeNewRequirementName">Requirement name</label>
+                                <input class="clinic-input w-full" id="apeNewRequirementName" name="requirement_name" maxlength="160" placeholder="Enter requirement name" required>
+                            </div>
+                            <div>
+                                <label class="clinic-label" for="apeNewRequirementRemarks">Optional remarks</label>
+                                <input class="clinic-input w-full" id="apeNewRequirementRemarks" name="requirement_remarks" placeholder="Add instructions or notes">
+                            </div>
+                            <button type="submit" class="btn btn-primary w-full" data-confirm-submit data-confirm-title="Add requirement?" data-confirm-message="This adds a Missing requirement. Your other document choices remain unsaved until the examination or document review is saved." data-confirm-toast="Adding requirement...">
+                                <span class="material-symbols-outlined text-[18px]">playlist_add</span> Add Requirement
+                            </button>
                         </form>
                     </div>
                 </div>
                 <?php endif; ?>
                 </fieldset>
             </section>
+            <?php endif; ?>
             <?php else: ?>
 
             <section class="ape-flow-panel">

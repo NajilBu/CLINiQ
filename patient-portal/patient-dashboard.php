@@ -324,7 +324,8 @@ render_student_header('Dashboard', 'dashboard');
     </div>
 <?php endif; ?>
 
-<section class="student-page-header">
+<section class="student-card student-card-pad mb-4" aria-label="Patient dashboard overview">
+<div class="student-page-header">
     <div>
         <p class="student-eyebrow">Patient Health Portal</p>
         <h1 class="student-title">Welcome back, <?= student_e($profile['first_name']) ?></h1>
@@ -334,6 +335,7 @@ render_student_header('Dashboard', 'dashboard');
         <span class="material-symbols-outlined text-[14px]">verified</span>
         <?= student_e($accountBadgeLabel) ?>
     </span>
+</div>
 </section>
 
 <section class="student-required-actions mb-4" aria-label="Required student actions">
