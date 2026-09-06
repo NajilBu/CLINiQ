@@ -163,10 +163,19 @@ $appointmentStmt->execute([$appointmentPatientId]);
 $latestAppointment = $appointmentStmt->fetch();
 
 $latestApe = ape_fetch_patient_record($appointmentPatientId);
+$hasScheduledApeBatch = $latestApe
+    && !empty($latestApe['schedule_batch_id'])
+    && ($latestApe['batch_status'] ?? '') === 'Scheduled';
+$scheduledApeBatchLabel = $hasScheduledApeBatch
+    ? date('F j, Y', strtotime((string) $latestApe['batch_schedule_date'])) . ' · '
+        . date('g:i A', strtotime((string) $latestApe['batch_start_time'])) . '–'
+        . date('g:i A', strtotime((string) $latestApe['batch_end_time']))
+    : '';
 $apeStatus = $latestApe['workflow_status'] ?? 'Not Started';
 $apeQueue = $latestApe ? ape_record_queue($latestApe) : 'examination';
 $apeStep = $latestApe ? ape_record_step_index($latestApe) : 0;
 $apePercent = $apeQueue === 'completed' ? 100 : $apeStep * 20;
+$apeCompleted = $apePercent >= 100 || ($latestApe['clearance_status'] ?? '') === 'Cleared';
 $apeBadgeClass = match ($latestApe['clearance_status'] ?? '') {
     'Cleared' => 'student-badge-success',
     'For Follow-up' => 'student-badge-warning',
@@ -471,6 +480,21 @@ render_student_header('Dashboard', 'dashboard');
                     <span class="student-badge <?= student_e($apeBadgeClass) ?>"><?= student_e($latestApe['verification_status'] ?? 'Pending') ?></span>
                 </div>
             </div>
+            <?php if ($hasScheduledApeBatch): ?>
+                <div class="student-note student-note-info mt-4 mb-0">
+                    <span class="material-symbols-outlined">calendar_month</span>
+                    <div>
+                        <strong><?= $apeCompleted ? 'Completed APE batch' : 'Current APE batch' ?>: <?= student_e($latestApe['batch_name']) ?></strong><br>
+                        <?= student_e($latestApe['batch_patient_category'] ?? 'APE') ?> · <?= student_e($scheduledApeBatchLabel) ?><br>
+                        <span class="text-xs"><?= $apeCompleted ? 'This examination batch has been completed.' : 'Your assigned examination schedule is currently active.' ?></span>
+                    </div>
+                </div>
+            <?php elseif ($latestApe && ($latestApe['clearance_status'] ?? '') !== 'Cleared'): ?>
+                <div class="student-note student-note-warning mt-4 mb-0">
+                    <span class="material-symbols-outlined">event_busy</span>
+                    <div><strong>No active APE batch assigned yet.</strong><br>Wait for the clinic to schedule your examination.</div>
+                </div>
+            <?php endif; ?>
         </div>
     </section>
 

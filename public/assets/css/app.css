@@ -4310,10 +4310,11 @@ body.cliniq-drag-scroll-active * {
     box-shadow: 0 7px 16px rgba(127, 29, 29, 0.18);
 }
 
-.appointment-week-block.is-all-day {
-    justify-content: flex-start;
-    padding-top: 0.75rem;
-    background: repeating-linear-gradient(-45deg, #fff1f2, #fff1f2 8px, #ffe4e6 8px, #ffe4e6 16px);
+.appointment-week-block:not(.is-ape) {
+    justify-content: center;
+    text-align: center;
+    padding: 0.35rem 0.45rem;
+    background: #fff1f2;
 }
 
 .appointment-week-block.is-placeholder {
@@ -4558,4 +4559,29 @@ body.is-electron-runtime .app-content {
     body.is-electron-runtime .app-sidebar {
         border-radius: 0.5625rem 0 0 0.5625rem;
     }
+}
+
+/* Shared popup fades, including class/hidden-driven patient dialogs. */
+:is(.modal-backdrop, .file-preview-backdrop, .appointment-date-modal,
+    .student-modal, .student-calendar-time-modal,
+    #change-password-modal, #ape-upload-confirm-modal) {
+    transition: opacity 240ms ease, display 240ms allow-discrete;
+}
+:is(.file-preview-backdrop, .appointment-date-modal,
+    .student-modal.active, .student-calendar-time-modal.active,
+    #change-password-modal, #ape-upload-confirm-modal) { opacity: 1; }
+:is(.file-preview-backdrop, .appointment-date-modal)[hidden],
+.student-modal:not(.active), .student-calendar-time-modal:not(.active),
+#change-password-modal.hidden, #ape-upload-confirm-modal.hidden { opacity: 0; }
+.modal-backdrop .modal-content { transform: none; transition: none; }
+.student-calendar-time-dialog { animation: none !important; }
+@starting-style {
+    :is(.modal-backdrop.show, .file-preview-backdrop, .appointment-date-modal,
+        .student-modal.active, .student-calendar-time-modal.active,
+        #change-password-modal, #ape-upload-confirm-modal) { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+    :is(.modal-backdrop, .file-preview-backdrop, .appointment-date-modal,
+        .student-modal, .student-calendar-time-modal,
+        #change-password-modal, #ape-upload-confirm-modal) { transition: none; }
 }

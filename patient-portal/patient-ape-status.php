@@ -352,6 +352,8 @@ foreach ($requirements as $requirement) {
         $documents[] = [
             'name' => $name,
             'key' => $documentKey,
+            'document_id' => (int) ($uploadedDocument['document_id'] ?? 0),
+            'preview_url' => 'patient-ape-document.php?id=' . (int) ($uploadedDocument['document_id'] ?? 0),
             'icon' => $icon,
             'status' => $verification,
             'badge' => match ($verification) {
@@ -449,7 +451,7 @@ render_student_header('APE Status', 'ape');
                 <span class="material-symbols-outlined">event_available</span>
             </span>
             <div>
-                <p class="student-eyebrow mb-1">Your APE Schedule</p>
+                <p class="student-eyebrow mb-1">Your Current APE Batch</p>
                 <h2><?= student_e($apeRecord['batch_name']) ?></h2>
                 <p><?= student_e($batchScheduleLabel) ?></p>
             </div>
@@ -653,10 +655,17 @@ render_student_header('APE Status', 'ape');
                             <?php endif; ?>
                         </div>
                         <?php if ($doc['disabled']): ?>
-                            <button class="<?= student_e($doc['button']) ?>" type="button" disabled>
-                                <span class="material-symbols-outlined">lock</span>
-                                <?= student_e($doc['action']) ?>
-                            </button>
+                            <div class="student-appointment-actions">
+                                <?php if (!empty($doc['document_id'])): ?>
+                                    <a class="student-button-secondary text-decoration-none" href="<?= student_e($doc['preview_url']) ?>" data-file-preview data-preview-title="<?= student_e($doc['name']) ?>">
+                                        <span class="material-symbols-outlined">visibility</span> Preview
+                                    </a>
+                                <?php endif; ?>
+                                <button class="<?= student_e($doc['button']) ?>" type="button" disabled>
+                                    <span class="material-symbols-outlined">lock</span>
+                                    <?= student_e($doc['action']) ?>
+                                </button>
+                            </div>
                         <?php else: ?>
                             <div class="student-appointment-actions ape-document-actions" data-document-key="<?= student_e($doc['key']) ?>">
                                 <input class="hidden ape-document-input" type="file" name="documents[<?= student_e($doc['key']) ?>][]" id="ape-file-<?= student_e($doc['key']) ?>" accept=".pdf,.png,.jpg,.jpeg" data-document-name="<?= student_e($doc['name']) ?>" onchange="handleApeFileSelected(this)" multiple>

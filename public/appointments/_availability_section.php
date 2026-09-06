@@ -11,6 +11,46 @@ for ($offset = 0; $offset < 5; $offset++) {
 
 $usingAvailabilityPlaceholders = empty($availabilityBlocksByDate) && empty($availabilityApeBatchesByDate);
 $calendarBlocksByDate = $availabilityBlocksByDate;
+// Combine adjoining unavailable periods for display; retain the original saved records.
+foreach ($calendarBlocksByDate as $date => $dayBlocks) {
+    usort($dayBlocks, static fn(array $a, array $b): int => strcmp($a['start_time'] ?? '08:00:00', $b['start_time'] ?? '08:00:00'));
+    $merged = [];
+    foreach ($dayBlocks as $block) {
+        $last = count($merged) - 1;
+        $start = $block['start_time'] ?: '08:00:00';
+        $end = $block['end_time'] ?: '17:00:00';
+        if ($last >= 0 && $start <= ($merged[$last]['end_time'] ?: '17:00:00')) {
+            if (empty($merged[$last]['start_time']) || empty($block['start_time'])) {
+                $merged[$last]['start_time'] = null;
+                $merged[$last]['end_time'] = null;
+            } else {
+                $merged[$last]['end_time'] = max($merged[$last]['end_time'], $end);
+            }
+            $merged[$last]['reason'] = implode(' / ', array_unique(array_filter([$merged[$last]['reason'] ?? '', $block['reason'] ?? ''])));
+        } else {
+            $merged[] = $block;
+        }
+    }
+    $calendarBlocksByDate[$date] = $merged;
+}
+$availabilityDisplayBlocks = [];
+foreach ($availabilityBlocksByDate as $date => $dayBlocks) {
+    usort($dayBlocks, static fn(array $a, array $b): int => strcmp($a['start_time'] ?? '00:00:00', $b['start_time'] ?? '00:00:00'));
+    foreach ($dayBlocks as $block) {
+        $start = $block['start_time'] ?: '08:00:00';
+        $end = $block['end_time'] ?: '17:00:00';
+        $last = count($availabilityDisplayBlocks) - 1;
+        $sameDate = $last >= 0 && $availabilityDisplayBlocks[$last]['date'] === $date;
+        if ($sameDate && $start <= ($availabilityDisplayBlocks[$last]['end_time'] ?: '17:00:00')) {
+            $availabilityDisplayBlocks[$last]['end_time'] = empty($availabilityDisplayBlocks[$last]['start_time']) || empty($block['start_time']) ? null : max($availabilityDisplayBlocks[$last]['end_time'], $end);
+            $availabilityDisplayBlocks[$last]['start_time'] = empty($availabilityDisplayBlocks[$last]['start_time']) || empty($block['start_time']) ? null : $availabilityDisplayBlocks[$last]['start_time'];
+            $availabilityDisplayBlocks[$last]['reason'] = implode(' / ', array_unique(array_filter([$availabilityDisplayBlocks[$last]['reason'], $block['reason'] ?? ''])));
+            $availabilityDisplayBlocks[$last]['ids'][] = (int) $block['availability_block_id'];
+        } else {
+            $availabilityDisplayBlocks[] = ['date' => $date, 'start_time' => $block['start_time'], 'end_time' => $block['end_time'], 'reason' => $block['reason'] ?? '', 'ids' => [(int) $block['availability_block_id']]];
+        }
+    }
+}
 foreach ($availabilityApeBatchesByDate as $date => $batches) {
     foreach ($batches as $batch) {
         $assignedCount = (int) ($batch['assigned_count'] ?? 0);
@@ -84,13 +124,13 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
         <div>
             <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Scheduling</p>
             <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Clinic Availability</h2>
-            <p class="text-xs font-bold text-slate-500 mb-0">Monday to Friday, 8:00 AM–5:00 PM. Click an open hour to prepare a block.</p>
+            <p class="text-xs font-bold text-slate-500 mb-0">Monday to Friday, 8:00 AM–5:00 PM. Click or hold and drag across open hours to select a range.</p>
         </div>
         <div class="flex items-center gap-2">
             <a href="<?= e($availabilityUrlForWeek($availabilityPrevWeek)) ?>" class="btn btn-sm btn-ghost text-decoration-none" title="Previous week" data-no-ajax="true" data-availability-week-nav>
                 <span class="material-symbols-outlined">chevron_left</span>
             </a>
-            <a href="<?= e($availabilityUrlForWeek($availabilityCurrentWeek)) ?>" class="btn btn-sm btn-outline text-decoration-none" data-no-ajax="true" data-availability-week-nav><?= e($availabilityWeekLabel) ?></a>
+            <button type="button" class="btn btn-sm btn-outline" id="openAvailabilityWeekPicker" aria-haspopup="dialog" aria-controls="availabilityWeekPicker"><?= e($availabilityWeekLabel) ?></button>
             <a href="<?= e($availabilityUrlForWeek($availabilityNextWeek)) ?>" class="btn btn-sm btn-ghost text-decoration-none" title="Next week" data-no-ajax="true" data-availability-week-nav>
                 <span class="material-symbols-outlined">chevron_right</span>
             </a>
@@ -119,10 +159,10 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
                         $isToday = $date === $availabilityToday->format('Y-m-d');
                         $isPast = $day < $availabilityMinimumDate;
                         ?>
-                        <div class="appointment-week-header <?= $isToday ? 'is-today' : '' ?> <?= $isPast ? 'is-past' : '' ?>">
+                        <button type="button" class="appointment-week-header <?= $isToday ? 'is-today' : '' ?> <?= $isPast ? 'is-past' : '' ?>" data-week-day-toggle="<?= e($date) ?>" aria-pressed="false" aria-label="Select whole day <?= e($day->format('l, F j')) ?>" <?= $isPast ? 'disabled' : '' ?> style="cursor:<?= $isPast ? 'not-allowed' : 'pointer' ?>;">
                             <span><?= e($day->format('D')) ?></span>
                             <strong><?= e($day->format('M j')) ?></strong>
-                        </div>
+                        </button>
                     <?php endforeach; ?>
 
                     <div class="appointment-week-time-column" aria-hidden="true">
@@ -145,7 +185,7 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
                                 $height = (60 / $availabilityDurationMinutes) * 100;
                                 ?>
                                 <button type="button" class="appointment-week-hour-cell"
-                                    style="top: <?= number_format($top, 4, '.', '') ?>%; height: <?= number_format($height, 4, '.', '') ?>%;"
+                                    style="user-select:none; touch-action:none; top: <?= number_format($top, 4, '.', '') ?>%; height: <?= number_format($height, 4, '.', '') ?>%;"
                                     data-hour-slot data-start-hour="<?= $hour ?>" data-hour-date="<?= e($date) ?>"
                                     <?= $isPast ? 'disabled' : '' ?>
                                     aria-label="<?= e($day->format('l, M j') . ', ' . date('g:i A', mktime($hour, 0)) . ' to ' . date('g:i A', mktime($hour + 1, 0))) ?>"></button>
@@ -206,16 +246,6 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
                         <input type="checkbox" name="all_day" id="allDayToggle" checked>
                         Whole day unavailable
                     </label>
-                    <div class="grid grid-cols-2 gap-3" id="partialTimeFields" style="display: none;">
-                        <label class="grid gap-1">
-                            <span class="text-[11px] font-black uppercase tracking-widest text-slate-400">Start</span>
-                            <input type="time" name="start_time" class="form-input" value="08:00" min="08:00" max="16:00">
-                        </label>
-                        <label class="grid gap-1">
-                            <span class="text-[11px] font-black uppercase tracking-widest text-slate-400">End</span>
-                            <input type="time" name="end_time" class="form-input" value="12:00" min="09:00" max="17:00">
-                        </label>
-                    </div>
                     <div class="appointment-selected-time-slots" id="availabilitySelectedSlotSummary" aria-live="polite"></div>
                     <label class="grid gap-1">
                         <span class="text-[11px] font-black uppercase tracking-widest text-slate-400">Reason</span>
@@ -234,26 +264,21 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
                     <p class="text-xs font-bold text-slate-500 mb-0"><?= array_sum(array_map('count', $availabilityBlocksByDate)) ?> unavailable block(s)</p>
                 </div>
                 <div class="p-4 grid gap-3 max-h-[420px] overflow-y-auto">
-                    <?php if (empty($availabilityBlocksByDate)): ?>
+                    <?php if (empty($availabilityDisplayBlocks)): ?>
                         <div class="text-sm font-bold text-slate-500 p-4 rounded-xl bg-slate-50">No unavailable times for this week.</div>
                     <?php else: ?>
-                        <?php foreach ($availabilityBlocksByDate as $date => $blocks): ?>
-                            <?php foreach ($blocks as $block): ?>
-                                <div class="appointment-block-row">
+                        <?php foreach ($availabilityDisplayBlocks as $block): ?>
+                                <div class="appointment-block-row" data-edit-availability-block
+                                    data-ids="<?= e(implode(',', array_map('intval', $block['ids']))) ?>"
+                                    data-date="<?= e($block['date']) ?>"
+                                    data-start="<?= e($block['start_time'] ? substr($block['start_time'], 0, 5) : '') ?>"
+                                    data-end="<?= e($block['end_time'] ? substr($block['end_time'], 0, 5) : '') ?>"
+                                    data-reason="<?= e($block['reason']) ?>">
                                     <div>
-                                        <strong><?= e(date('M d, Y', strtotime($date))) ?></strong>
+                                        <strong><?= e(date('M d, Y', strtotime($block['date']))) ?></strong>
                                         <span><?= e(appointment_format_block_time($block)) ?><?= $block['reason'] ? ' — ' . e($block['reason']) : '' ?></span>
                                     </div>
-                                    <form method="POST" action="availability.php" data-no-ajax="true">
-                                        <input type="hidden" name="action" value="delete">
-                                        <input type="hidden" name="id" value="<?= (int) $block['availability_block_id'] ?>">
-                                        <input type="hidden" name="week" value="<?= e($availabilityWeek->format('Y-m-d')) ?>">
-                                        <button class="btn btn-sm btn-ghost btn-cancel-icon" title="Remove block" data-confirm-submit data-confirm-type="danger" data-confirm-title="Remove this unavailable block?" data-confirm-message="This will make the date or time available for appointment requests again." data-confirm-toast="Removing block...">
-                                            <span class="material-symbols-outlined">cancel</span>
-                                        </button>
-                                    </form>
                                 </div>
-                            <?php endforeach; ?>
                         <?php endforeach; ?>
                     <?php endif; ?>
                 </div>
@@ -311,12 +336,144 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
     </section>
 </div>
 
+<div id="availabilityEditModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="availabilityEditModalTitle" style="display:none">
+    <div class="modal-content bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
+        <div class="flex items-center justify-between gap-4 mb-5">
+            <h3 id="availabilityEditModalTitle" class="font-headline text-xl font-extrabold">Edit unavailable time</h3>
+            <button type="button" class="btn btn-ghost" data-close-availability-edit aria-label="Close"><span class="material-symbols-outlined">close</span></button>
+        </div>
+        <form method="POST" action="availability.php" data-no-ajax="true" class="grid gap-4">
+            <input type="hidden" name="action" value="update">
+            <input type="hidden" name="week" value="<?= e($availabilityWeek->format('Y-m-d')) ?>">
+            <div id="availabilityEditIds"></div>
+            <input type="hidden" name="block_date" id="availabilityEditDate">
+            <input type="hidden" name="original_start" id="availabilityEditOriginalStart">
+            <input type="hidden" name="original_end" id="availabilityEditOriginalEnd">
+            <div class="grid grid-cols-2 gap-3" id="availabilityEditTimes">
+                <label class="grid gap-1"><span class="text-[11px] font-black uppercase tracking-widest text-slate-400">Start</span><input class="form-input" type="time" name="start_time" id="availabilityEditStart" required></label>
+                <label class="grid gap-1"><span class="text-[11px] font-black uppercase tracking-widest text-slate-400">End</span><input class="form-input" type="time" name="end_time" id="availabilityEditEnd" required></label>
+            </div>
+            <label class="grid gap-1"><span class="text-[11px] font-black uppercase tracking-widest text-slate-400">Reason</span><textarea class="form-textarea" name="reason" id="availabilityEditReason" rows="3"></textarea></label>
+            <div class="flex justify-between gap-3">
+                <button type="submit" name="action" value="delete_group" class="btn btn-ghost text-red-700" data-confirm-submit data-confirm-type="danger" data-confirm-title="Delete entire unavailable time?" data-confirm-message="This will remove the complete unavailable period and make it available again." data-confirm-toast="Deleting unavailable time...">Delete entire unavailable time</button>
+                <button type="submit" class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save unavailable block?" data-confirm-toast="Saving availability...">Save changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="availabilityWeekPicker" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="availabilityWeekPickerTitle" data-selected-week="<?= e($availabilityWeek->format('Y-m-d')) ?>" data-week-url="<?= e($availabilityUrlForWeek($availabilityWeek->format('Y-m-d'))) ?>">
+    <div class="modal-content bg-white rounded-2xl p-6 w-full max-w-lg shadow-2xl" style="max-height:85vh;display:flex;flex-direction:column;">
+        <div class="flex items-center justify-between gap-4 mb-4">
+            <h3 id="availabilityWeekPickerTitle" class="font-headline text-xl font-extrabold">Select Week</h3>
+            <button type="button" class="btn btn-ghost" onclick="closeModal('availabilityWeekPicker')" aria-label="Close week picker"><span class="material-symbols-outlined">close</span></button>
+        </div>
+        <div class="flex items-center justify-between gap-3 mb-4">
+            <button type="button" class="btn btn-outline" data-week-picker-month="-1" aria-label="Previous month"><span class="material-symbols-outlined">chevron_left</span></button>
+            <strong id="availabilityWeekPickerYear" aria-live="polite"></strong>
+            <button type="button" class="btn btn-outline" data-week-picker-month="1" aria-label="Next month"><span class="material-symbols-outlined">chevron_right</span></button>
+        </div>
+        <div id="availabilityWeekPickerList" style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;overflow-y:auto;min-height:0;" aria-label="Week selection calendar"></div>
+        <a href="<?= e($availabilityUrlForWeek($availabilityCurrentWeek)) ?>" class="btn btn-outline mt-4" style="flex-shrink:0;" data-availability-week-nav>This Week</a>
+    </div>
+</div>
+
 <script>
 (() => {
     if (window.cliniqAvailabilityListenersReady) {
         return;
     }
     window.cliniqAvailabilityListenersReady = true;
+
+    let weekPickerMonth = null;
+    const mondayForDate = date => {
+        const monday = new Date(date);
+        monday.setUTCDate(monday.getUTCDate() - (monday.getUTCDay() + 6) % 7);
+        return monday;
+    };
+    const weekCalendarDays = month => {
+        const first = new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth(), 1));
+        const cursor = new Date(first);
+        cursor.setUTCDate(cursor.getUTCDate() - cursor.getUTCDay());
+        return Array.from({ length: 42 }, () => {
+            const date = new Date(cursor);
+            cursor.setUTCDate(cursor.getUTCDate() + 1);
+            return { date, week: mondayForDate(date).toISOString().slice(0, 10), inMonth: date.getUTCMonth() === first.getUTCMonth() };
+        });
+    };
+    const renderWeekPicker = () => {
+        const modal = document.getElementById('availabilityWeekPicker');
+        const list = document.getElementById('availabilityWeekPickerList');
+        document.getElementById('availabilityWeekPickerYear').textContent = weekPickerMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
+        list.replaceChildren();
+        ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].forEach(day => {
+            const heading = document.createElement('span');
+            heading.className = 'text-xs font-bold text-slate-500 text-center py-2';
+            heading.textContent = day;
+            heading.style.cssText = 'display:flex;align-items:center;justify-content:center;text-align:center;';
+            if (day === 'Sat' || day === 'Sun') { heading.style.opacity = '0.4'; heading.style.filter = 'blur(0.4px)'; }
+            list.appendChild(heading);
+        });
+        weekCalendarDays(weekPickerMonth).forEach(({ date, week, inMonth }) => {
+            const weekend = date.getUTCDay() === 0 || date.getUTCDay() === 6;
+            const link = document.createElement(weekend ? 'span' : 'a');
+            const url = new URL(modal.dataset.weekUrl, window.location.href);
+            url.searchParams.set('week', week);
+            if (!weekend) { link.href = url.href; link.dataset.availabilityWeekNav = ''; link.dataset.noAjax = 'true'; }
+            link.className = 'btn btn-ghost text-decoration-none';
+            link.style.cssText = 'padding:0;min-width:0;min-height:42px;display:flex;align-items:center;justify-content:center;text-align:center;';
+            link.textContent = date.getUTCDate();
+            const label = date.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+            link.setAttribute('aria-label', `Select week containing ${label}`);
+            if (!inMonth) link.style.color = '#94a3b8';
+            if (weekend) { link.style.opacity = '0.35'; link.style.filter = 'blur(0.5px)'; link.style.cursor = 'not-allowed'; link.setAttribute('aria-disabled', 'true'); link.setAttribute('aria-label', label + ', weekend unavailable'); }
+            if (week === modal.dataset.selectedWeek && (date.getUTCDay() + 6) % 7 < 5) {
+                link.setAttribute('aria-current', 'date');
+                link.style.background = '#e7f4eb';
+                link.style.color = '#245c36';
+                link.style.boxShadow = 'inset 0 -2px #43855b';
+            }
+            list.appendChild(link);
+        });
+    };
+
+    let weekLoadController = null;
+    const loadAvailabilityWeek = async href => {
+        weekLoadController?.abort();
+        const controller = new AbortController();
+        weekLoadController = controller;
+        const panel = document.getElementById('clinic-availability');
+        const modal = document.getElementById('availabilityWeekPicker');
+        panel.setAttribute('aria-busy', 'true');
+        try {
+            const response = await fetch(href, { credentials: 'same-origin', signal: controller.signal });
+            if (!response.ok) throw new Error('Unable to load week');
+            const parsed = new DOMParser().parseFromString(await response.text(), 'text/html');
+            const replacement = parsed.getElementById('clinic-availability');
+            const newPicker = parsed.getElementById('availabilityWeekPicker');
+            if (!replacement || !newPicker) throw new Error('The week could not be loaded. Your session may have expired.');
+            if (controller.signal.aborted) return;
+            panel.replaceWith(replacement);
+            modal.dataset.selectedWeek = newPicker.dataset.selectedWeek;
+            modal.dataset.weekUrl = newPicker.dataset.weekUrl;
+            selectedCalendarDates.clear();
+            selectedTimeSlots.clear();
+            const defaultDate = liveElements().date?.value;
+            if (defaultDate) selectedCalendarDates.add(defaultDate);
+            syncPartialFields();
+            history.replaceState(history.state, '', href);
+            renderWeekPickerIfOpen();
+            closeModal('availabilityWeekPicker');
+            document.getElementById('openAvailabilityWeekPicker')?.focus({ preventScroll: true });
+        } catch (error) {
+            if (error.name !== 'AbortError') showToast(error.message || 'Unable to load this week. Please try again.', 'error');
+        } finally {
+            if (weekLoadController === controller) document.getElementById('clinic-availability')?.removeAttribute('aria-busy');
+        }
+    };
+    const renderWeekPickerIfOpen = () => {
+        if (weekPickerMonth) renderWeekPicker();
+    };
 
     const liveElements = () => ({
         form: document.getElementById('availabilityForm'),
@@ -401,6 +558,43 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
         return (hour * 60) + minute;
     };
 
+    const groupConsecutiveDates = (dates) => {
+        const groups = [];
+        [...dates].sort().forEach(date => {
+            const group = groups[groups.length - 1];
+            const previous = group?.[group.length - 1];
+            const dayNumber = value => { const [y, m, d] = value.split('-').map(Number); return Date.UTC(y, m - 1, d) / 86400000; };
+            if (previous && dayNumber(date) === dayNumber(previous) + 1) group.push(date);
+            else groups.push([date]);
+        });
+        return groups;
+    };
+    const appendDateRangeChips = (container, dates) => {
+        groupConsecutiveDates(dates).forEach(group => {
+            const first = group[0], last = group[group.length - 1];
+            const label = first === last ? formatDisplayDate(first) : `${formatDisplayDate(first)} – ${formatDisplayDate(last)}`;
+            const chip = document.createElement('button');
+            chip.type = 'button';
+            chip.className = 'appointment-selected-date-chip';
+            chip.dataset.selectedDateChip = group.join(',');
+            chip.setAttribute('aria-label', `Remove ${label}`);
+            chip.textContent = label;
+            container.appendChild(chip);
+        });
+    };
+    const groupAdjacentSlots = (slots) => {
+        const groups = [];
+        [...slots].sort().forEach(slot => {
+            const { date, start, end } = parseSlotKey(slot);
+            const group = groups[groups.length - 1];
+            if (group && group.date === date && group.end === start) {
+                group.end = end;
+                group.slots.push(slot);
+            } else groups.push({ date, start, end, slots: [slot] });
+        });
+        return groups;
+    };
+
     const syncSelectedDateSummary = () => {
         const elements = liveElements();
         const dates = sortedSelectedDates();
@@ -423,15 +617,7 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
             elements.summary.appendChild(empty);
             return;
         }
-        dates.forEach((date) => {
-            const chip = document.createElement('button');
-            chip.type = 'button';
-            chip.className = 'appointment-selected-date-chip';
-            chip.dataset.selectedDateChip = date;
-            chip.setAttribute('aria-label', `Remove ${formatDisplayDate(date)}`);
-            chip.textContent = formatDisplayDate(date);
-            elements.summary.appendChild(chip);
-        });
+        appendDateRangeChips(elements.summary, dates);
     };
 
     const syncSelectedSlotSummary = () => {
@@ -468,12 +654,11 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
             return;
         }
 
-        slots.forEach((slot) => {
-            const { date, start, end } = parseSlotKey(slot);
+        groupAdjacentSlots(slots).forEach(({ date, start, end, slots: groupedSlots }) => {
             const chip = document.createElement('button');
             chip.type = 'button';
             chip.className = 'appointment-selected-date-chip appointment-selected-slot-chip';
-            chip.dataset.selectedSlotChip = slot;
+            chip.dataset.selectedSlotChip = groupedSlots.join(',');
             chip.setAttribute('aria-label', `Remove ${formatDisplayDate(date)} ${start} to ${end}`);
             chip.textContent = `${formatDisplayDate(date)} · ${start}–${end}`;
             elements.slotSummary.appendChild(chip);
@@ -525,15 +710,7 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
         }
 
         elements.modalSelected.replaceChildren();
-        sortedSelectedDates().forEach((date) => {
-            const chip = document.createElement('button');
-            chip.type = 'button';
-            chip.className = 'appointment-selected-date-chip';
-            chip.dataset.selectedDateChip = date;
-            chip.setAttribute('aria-label', `Remove ${formatDisplayDate(date)}`);
-            chip.textContent = formatDisplayDate(date);
-            elements.modalSelected.appendChild(chip);
-        });
+        appendDateRangeChips(elements.modalSelected, sortedSelectedDates());
         if (!elements.modalSelected.children.length) {
             const empty = document.createElement('span');
             empty.className = 'appointment-selected-date-empty';
@@ -577,8 +754,11 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
         }
 
         const isWholeDay = Boolean(elements.allDay?.checked);
-        const startMinutes = timeToMinutes(elements.form?.querySelector('[name="start_time"]')?.value);
-        const endMinutes = timeToMinutes(elements.form?.querySelector('[name="end_time"]')?.value);
+        document.querySelectorAll('[data-week-day-toggle]').forEach(header => {
+            const selected = isWholeDay && selectedCalendarDates.has(header.dataset.weekDayToggle);
+            header.setAttribute('aria-pressed', String(selected));
+            header.style.boxShadow = selected ? 'inset 0 -3px #43855b' : '';
+        });
 
         document.querySelectorAll('[data-week-date]').forEach((day) => {
             day.classList.toggle('is-selected', isWholeDay && selectedCalendarDates.has(day.dataset.weekDate || ''));
@@ -592,14 +772,6 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
             const selected = !isWholeDay
                 && (
                     selectedTimeSlots.has(exactSlot)
-                    || (
-                        selectedTimeSlots.size === 0
-                        && selectedCalendarDates.has(date)
-                        && startMinutes !== null
-                        && endMinutes !== null
-                        && hourStart < endMinutes
-                        && hourEnd > startMinutes
-                    )
                 );
             cell.classList.toggle('is-selected', selected);
         });
@@ -648,8 +820,6 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
         syncPartialFields();
         const startValue = String(startHour).padStart(2, '0') + ':00';
         const endValue = String(startHour + 1).padStart(2, '0') + ':00';
-        elements.form.querySelector('[name="start_time"]').value = startValue;
-        elements.form.querySelector('[name="end_time"]').value = endValue;
         const key = slotKey(dayColumn.dataset.weekDate, startValue, endValue);
         if (selectedTimeSlots.has(key)) {
             selectedTimeSlots.delete(key);
@@ -663,6 +833,79 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
         syncCalendarSelection();
     };
 
+    let hourDrag = null;
+    let suppressHourClick = false;
+    const hourCellKey = cell => slotKey(cell.dataset.hourDate,
+        `${String(cell.dataset.startHour).padStart(2, '0')}:00`,
+        `${String(Number(cell.dataset.startHour) + 1).padStart(2, '0')}:00`);
+    const availableDragCell = cell => {
+        if (!cell || cell.disabled) return false;
+        const hour = Number(cell.dataset.startHour) * 60;
+        return !Array.from(cell.closest('[data-week-date]').querySelectorAll('[data-availability-block]')).some(block => {
+            if (block.dataset.placeholderBlock === 'true') return false;
+            const start = block.dataset.start ? timeToMinutes(block.dataset.start.slice(0, 5)) : 480;
+            const end = block.dataset.end ? timeToMinutes(block.dataset.end.slice(0, 5)) : 1020;
+            return hour < end && hour + 60 > start;
+        });
+    };
+    const paintHourRange = cell => {
+        if (!hourDrag || !cell) return;
+        const minDate = [hourDrag.date, cell.dataset.hourDate].sort()[0];
+        const maxDate = [hourDrag.date, cell.dataset.hourDate].sort()[1];
+        const minHour = Math.min(hourDrag.hour, Number(cell.dataset.startHour));
+        const maxHour = Math.max(hourDrag.hour, Number(cell.dataset.startHour));
+        selectedTimeSlots.clear();
+        hourDrag.slots.forEach(key => selectedTimeSlots.add(key));
+        selectedCalendarDates.clear();
+        hourDrag.dates.forEach(date => selectedCalendarDates.add(date));
+        document.querySelectorAll('[data-hour-slot]').forEach(candidate => {
+            const date = candidate.dataset.hourDate, hour = Number(candidate.dataset.startHour);
+            if (date < minDate || date > maxDate || hour < minHour || hour > maxHour || !availableDragCell(candidate)) return;
+            const key = hourCellKey(candidate);
+            if (hourDrag.remove) {
+                selectedTimeSlots.delete(key);
+                if (!hasSlotsForDate(date)) selectedCalendarDates.delete(date);
+            } else {
+                selectedTimeSlots.add(key);
+                selectedCalendarDates.add(date);
+            }
+        });
+        syncCalendarSelection();
+    };
+    document.addEventListener('pointerdown', event => {
+        const cell = event.target.closest('[data-hour-slot]');
+        if (event.button !== 0 || !event.isPrimary || !availableDragCell(cell)) return;
+        event.preventDefault();
+        const elements = liveElements();
+        hourDrag = { pointer: event.pointerId, date: cell.dataset.hourDate, hour: Number(cell.dataset.startHour),
+            remove: selectedTimeSlots.has(hourCellKey(cell)), slots: new Set(selectedTimeSlots), dates: new Set(selectedCalendarDates) };
+        elements.allDay.checked = false;
+        syncPartialFields();
+        suppressHourClick = true;
+        cell.setPointerCapture(event.pointerId);
+        paintHourRange(cell);
+    });
+    document.addEventListener('pointermove', event => {
+        if (!hourDrag || event.pointerId !== hourDrag.pointer) return;
+        const target = document.elementFromPoint(event.clientX, event.clientY);
+        const day = target?.closest('[data-week-date]');
+        if (!day) return;
+        const rect = day.getBoundingClientRect();
+        const hour = 8 + Math.max(0, Math.min(8, Math.floor((event.clientY - rect.top) / rect.height * 9)));
+        paintHourRange(day.querySelector(`[data-start-hour="${hour}"]`));
+    });
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(type => document.addEventListener(type, event => {
+        if (!hourDrag || event.pointerId !== hourDrag.pointer) return;
+        hourDrag = null;
+        setTimeout(() => { suppressHourClick = false; }, 0);
+    }));
+    document.addEventListener('click', event => {
+        if (suppressHourClick && event.target.closest('[data-week-date]')) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+        }
+    }, true);
+
     document.addEventListener('change', (event) => {
         if (event.target.id === 'allDayToggle') {
             syncPartialFields();
@@ -673,12 +916,44 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
             }
             selectAvailabilityDate(event.target.value);
         }
-        if (event.target.matches('#availabilityForm [name="start_time"], #availabilityForm [name="end_time"]')) {
-            syncCalendarSelection();
-        }
     });
 
     document.addEventListener('click', (event) => {
+        if (event.target.closest('#openAvailabilityWeekPicker')) {
+            const modal = document.getElementById('availabilityWeekPicker');
+            const selected = new Date(modal.dataset.selectedWeek + 'T00:00:00Z');
+            selected.setUTCDate(selected.getUTCDate() + 3);
+            weekPickerMonth = new Date(Date.UTC(selected.getUTCFullYear(), selected.getUTCMonth(), 1));
+            renderWeekPicker();
+            showModal('availabilityWeekPicker');
+            const current = modal.querySelector('[aria-current="date"]');
+            if (current) { current.scrollIntoView({ block: 'center' }); current.focus({ preventScroll: true }); }
+            return;
+        }
+        const yearButton = event.target.closest('[data-week-picker-month]');
+        if (yearButton) {
+            weekPickerMonth = new Date(Date.UTC(weekPickerMonth.getUTCFullYear(), weekPickerMonth.getUTCMonth() + Number(yearButton.dataset.weekPickerMonth), 1));
+            renderWeekPicker();
+            return;
+        }
+        const dateHeader = event.target.closest('[data-week-day-toggle]');
+        if (dateHeader) {
+            const date = dateHeader.dataset.weekDayToggle;
+            const elements = liveElements();
+            if (dateHeader.disabled || isPastDate(date) || !elements.allDay) return;
+            if (!elements.allDay.checked) {
+                selectedCalendarDates.clear();
+                selectedTimeSlots.clear();
+            }
+            elements.allDay.checked = true;
+            if (selectedCalendarDates.has(date)) selectedCalendarDates.delete(date);
+            else selectedCalendarDates.add(date);
+            sortedSelectedSlots().forEach(slot => {
+                if (parseSlotKey(slot).date === date) selectedTimeSlots.delete(slot);
+            });
+            syncPartialFields();
+            return;
+        }
         if (event.target.closest('#openAvailabilityDateModal')) {
             openDateModal();
             return;
@@ -715,13 +990,15 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
 
         const selectedDateChip = event.target.closest('[data-selected-date-chip]');
         if (selectedDateChip) {
-            const date = selectedDateChip.dataset.selectedDateChip || '';
-            if (date) {
+            const dates = (selectedDateChip.dataset.selectedDateChip || '').split(',').filter(Boolean);
+            if (dates.length) {
+                dates.forEach(date => {
                 selectedCalendarDates.delete(date);
                 sortedSelectedSlots().forEach((slot) => {
                     if (parseSlotKey(slot).date === date) {
                         selectedTimeSlots.delete(slot);
                     }
+                });
                 });
                 syncCalendarSelection();
             }
@@ -732,7 +1009,7 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
         if (selectedSlotChip) {
             const slot = selectedSlotChip.dataset.selectedSlotChip || '';
             if (slot) {
-                selectedTimeSlots.delete(slot);
+                slot.split(',').forEach(key => selectedTimeSlots.delete(key));
                 syncCalendarSelection();
             }
             return;
@@ -756,7 +1033,7 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
         const weekNav = event.target.closest('[data-availability-week-nav]');
         if (weekNav) {
             event.preventDefault();
-            window.location.assign(weekNav.href);
+            loadAvailabilityWeek(weekNav.href);
             return;
         }
 
@@ -774,10 +1051,6 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
             const isAllDay = !block.dataset.start || !block.dataset.end;
             elements.allDay.checked = isAllDay;
             syncPartialFields();
-            if (!isAllDay) {
-                elements.form.querySelector('[name="start_time"]').value = block.dataset.start.slice(0, 5);
-                elements.form.querySelector('[name="end_time"]').value = block.dataset.end.slice(0, 5);
-            }
             return;
         }
 
@@ -807,6 +1080,32 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
         applyWeekHour(day, 8, true);
     });
 
+    document.addEventListener('click', (event) => {
+        const edit = event.target.closest('[data-edit-availability-block]');
+        const modal = document.getElementById('availabilityEditModal');
+        if (edit && modal) {
+            const ids = (edit.dataset.ids || '').split(',').filter(Boolean);
+            document.getElementById('availabilityEditIds').innerHTML = ids.map(id => `<input type="hidden" name="ids[]" value="${id}">`).join('');
+            document.getElementById('availabilityEditDate').value = edit.dataset.date || '';
+            const originalStart = edit.dataset.start || '08:00';
+            const originalEnd = edit.dataset.end || '17:00';
+            const startSelect = document.getElementById('availabilityEditStart');
+            const endSelect = document.getElementById('availabilityEditEnd');
+            startSelect.value = originalStart;
+            endSelect.value = originalEnd;
+            document.getElementById('availabilityEditReason').value = edit.dataset.reason || '';
+            document.getElementById('availabilityEditOriginalStart').value = edit.dataset.start || '';
+            document.getElementById('availabilityEditOriginalEnd').value = edit.dataset.end || '';
+            startSelect.min = originalStart;
+            startSelect.max = originalEnd;
+            endSelect.min = originalStart;
+            endSelect.max = originalEnd;
+            if (typeof showModal === 'function') showModal('availabilityEditModal');
+        }
+        if (event.target.closest('[data-close-availability-edit]')) {
+            if (typeof closeModal === 'function') closeModal('availabilityEditModal');
+        }
+    });
     syncPartialFields();
     syncCalendarSelection();
 })();

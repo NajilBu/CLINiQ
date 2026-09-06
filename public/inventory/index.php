@@ -68,7 +68,16 @@ $loanRowsRaw = cliniq_inventory_db()->query('
         CASE WHEN l.status IN ("Borrowed", "Overdue") THEN 0 ELSE 1 END,
         COALESCE(l.returned_at, l.borrowed_at) DESC
 ')->fetchAll();
-$activeLoans = array_values(array_filter($loanRowsRaw, fn(array $loan): bool => in_array(($loan['status'] ?? ''), ['Borrowed', 'Overdue'], true)));
+foreach ($loanRowsRaw as &$loan) {
+    if (in_array(($loan['status'] ?? ''), ['Borrowed', 'Active'], true) && !empty($loan['due_at'])) {
+        $secondsUntilDue = strtotime((string) $loan['due_at']) - time();
+        if ($secondsUntilDue < 0) $loan['status'] = 'Overdue';
+        elseif ($secondsUntilDue <= 1800) $loan['status'] = 'Due soon';
+    }
+}
+unset($loan);
+$activeLoans = array_values(array_filter($loanRowsRaw, fn(array $loan): bool => in_array(($loan['status'] ?? ''), ['Borrowed', 'Due soon', 'Overdue'], true)));
+$dueSoonLoans = array_values(array_filter($loanRowsRaw, fn(array $loan): bool => ($loan['status'] ?? '') === 'Due soon'));
 $returnedToday = array_values(array_filter($loanRowsRaw, fn(array $loan): bool => !empty($loan['returned_at']) && date('Y-m-d', strtotime($loan['returned_at'])) === date('Y-m-d')));
 $inventoryTransactions = cliniq_inventory_transactions();
 
@@ -278,7 +287,7 @@ foreach ($inventoryTransactions as $transaction) {
 
 $loanRows = [];
 foreach ($loanRowsRaw as $loan) {
-    $isBorrowed = in_array(($loan['status'] ?? ''), ['Borrowed', 'Overdue'], true);
+    $isBorrowed = in_array(($loan['status'] ?? ''), ['Borrowed', 'Due soon', 'Overdue'], true);
     $returnArgs = implode(', ', [
         (int) $loan['id'],
         e(json_encode($loan['item_name'])),
@@ -540,6 +549,7 @@ render_clinic_command_header(
                     <div>
                         <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Active Loans & Borrowing History</h2>
                         <p class="text-xs font-bold text-slate-500 mb-0">Track borrowed equipment, process returns, and keep condition notes.</p>
+                        <?php if ($dueSoonLoans): ?><p class="text-xs font-bold text-amber-700 mt-2 mb-0"><span class="material-symbols-outlined align-middle text-sm">notifications_active</span> <?= count($dueSoonLoans) ?> equipment loan(s) are due within 30 minutes.</p><?php endif; ?>
                     </div>
                 </div>
                 <div class="flex flex-col sm:flex-row sm:items-center gap-3 w-full md:w-auto">
@@ -549,6 +559,7 @@ render_clinic_command_header(
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
                         <span class="badge badge-in-progress"><?= count($activeLoans) ?> borrowed</span>
+                        <?php if ($dueSoonLoans): ?><span class="badge badge-pending"><?= count($dueSoonLoans) ?> due soon</span><?php endif; ?>
                         <span class="badge badge-completed"><?= count($returnedToday) ?> returned today</span>
                     </div>
                 </div>

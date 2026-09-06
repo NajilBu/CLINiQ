@@ -92,7 +92,10 @@ function showModal(modalId) {
     const modal = document.getElementById(modalId);
     if (!modal) return;
 
+    modal._closing = false;
+    clearTimeout(modal._closeTimer);
     modal.style.display = 'flex';
+    void modal.offsetWidth;
     modal.scrollTop = 0;
     const modalContent = modal.querySelector('.modal-content');
     if (modalContent) {
@@ -102,7 +105,7 @@ function showModal(modalId) {
 
     // Trigger reflow then add .show for CSS transition
     requestAnimationFrame(() => {
-        modal.classList.add('show');
+        if (!modal._closing) modal.classList.add('show');
     });
 
     // Close on backdrop click
@@ -121,12 +124,13 @@ function closeModal(modalId) {
     const modal = document.getElementById(modalId);
     if (!modal) return;
 
+    modal._closing = true;
     modal.classList.remove('show');
-    document.body.style.overflow = '';
-
-    setTimeout(() => {
+    clearTimeout(modal._closeTimer);
+    modal._closeTimer = setTimeout(() => {
         modal.style.display = 'none';
-    }, 300);
+        if (!document.querySelector('.modal-backdrop.show')) document.body.style.overflow = '';
+    }, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 240);
 }
 
 // Global ESC key handler for modals
