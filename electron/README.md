@@ -10,9 +10,11 @@ This folder contains the Electron shell for the clinic/staff side of CLINiQ. It 
 
 ## Install and run
 
+From the cloned repository root:
+
 ```powershell
-cd C:\xampp\htdocs\CLINiQ\electron
-npm install
+cd electron
+npm ci
 npm start
 ```
 
