@@ -587,12 +587,12 @@ render_header($pageTitle);
                     <select class="record-sheet-field px-4 js-visit-inventory-item" name="dispensed_inventory_item_id[]" disabled data-amendable>
                         <option value="" data-type="Medicine">No item selected</option>
                         <?php foreach ($medicineInventory as $medicine): ?>
-                            <option value="<?= (int) $medicine['id'] ?>" data-type="Medicine" <?= (int) $medicine['quantity'] <= 0 ? 'disabled' : '' ?>>
+                            <option value="<?= (int) $medicine['id'] ?>" data-type="Medicine" data-available="<?= (int) $medicine['quantity'] ?>" <?= (int) $medicine['quantity'] <= 0 ? 'disabled' : '' ?>>
                                 <?= e(cliniq_inventory_medicine_option_label($medicine)) ?>
                             </option>
                         <?php endforeach; ?>
                         <?php foreach ($equipmentInventory as $equipment): ?>
-                            <option value="<?= (int) $equipment['id'] ?>" data-type="Equipment" <?= (int) $equipment['quantity'] <= 0 ? 'disabled' : '' ?>>
+                            <option value="<?= (int) $equipment['id'] ?>" data-type="Equipment" data-available="<?= (int) $equipment['quantity'] ?>" <?= (int) $equipment['quantity'] <= 0 ? 'disabled' : '' ?>>
                                 <?= e($equipment['item_name']) ?> (<?= (int) $equipment['quantity'] ?> <?= e($equipment['unit']) ?>)
                             </option>
                         <?php endforeach; ?>
@@ -923,12 +923,12 @@ render_header($pageTitle);
                         <select class="record-sheet-field px-4 js-visit-inventory-item" name="dispensed_inventory_item_id[]">
                             <option value="" data-type="Medicine">No item selected</option>
                             <?php foreach ($medicineInventory as $medicine): ?>
-                                <option value="<?= (int) $medicine['id'] ?>" data-type="Medicine" <?= (int) $medicine['quantity'] <= 0 ? 'disabled' : '' ?>>
+                                <option value="<?= (int) $medicine['id'] ?>" data-type="Medicine" data-available="<?= (int) $medicine['quantity'] ?>" <?= (int) $medicine['quantity'] <= 0 ? 'disabled' : '' ?>>
                                     <?= e(cliniq_inventory_medicine_option_label($medicine)) ?>
                                 </option>
                             <?php endforeach; ?>
                             <?php foreach ($equipmentInventory as $equipment): ?>
-                                <option value="<?= (int) $equipment['id'] ?>" data-type="Equipment" <?= (int) $equipment['quantity'] <= 0 ? 'disabled' : '' ?>>
+                                <option value="<?= (int) $equipment['id'] ?>" data-type="Equipment" data-available="<?= (int) $equipment['quantity'] ?>" <?= (int) $equipment['quantity'] <= 0 ? 'disabled' : '' ?>>
                                     <?= e($equipment['item_name']) ?> (<?= (int) $equipment['quantity'] ?> <?= e($equipment['unit']) ?>)
                                 </option>
                             <?php endforeach; ?>
@@ -1068,6 +1068,18 @@ function syncDispensingRow(row) {
         if (option.selected && visible) currentVisible = true;
     });
     if (!currentVisible) itemSelect.value = '';
+
+    const quantityInput = row.querySelector('input[name="dispensed_quantity[]"]');
+    if (quantityInput) {
+        const selectedOption = itemSelect.selectedOptions?.[0];
+        const available = selectedOption?.value ? Number(selectedOption.dataset.available || 0) : 0;
+        if (selectedOption?.value) quantityInput.max = String(available);
+        else quantityInput.removeAttribute('max');
+        const entered = Number(quantityInput.value || 0);
+        quantityInput.setCustomValidity(selectedOption?.value && entered > available
+            ? 'Quantity dispensed exceeds the available item quantity.'
+            : '');
+    }
 }
 
 function updateDispensingRemoveButtons(list) {
@@ -1083,8 +1095,12 @@ document.querySelectorAll('[data-dispensing-list]').forEach((list) => {
     updateDispensingRemoveButtons(list);
 
     list.addEventListener('change', (event) => {
-        const typeSelect = event.target.closest('.js-dispensing-type');
-        if (typeSelect) syncDispensingRow(typeSelect.closest('[data-dispensing-row]'));
+        const changedField = event.target.closest('.js-dispensing-type, .js-visit-inventory-item');
+        if (changedField) syncDispensingRow(changedField.closest('[data-dispensing-row]'));
+    });
+    list.addEventListener('input', (event) => {
+        const quantityInput = event.target.closest('input[name="dispensed_quantity[]"]');
+        if (quantityInput) syncDispensingRow(quantityInput.closest('[data-dispensing-row]'));
     });
 });
 

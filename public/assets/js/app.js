@@ -8,7 +8,7 @@
 // ============================================================
 
 function formatEquipmentClock(value, finish = false) {
-    const text = value.trim();
+    const text = String(value || '').replace(/[^\d:]/g, '').slice(0, 5);
     if (/^\d{1,2}:\d{3}$/.test(text)) { const digits = text.replace(':', ''); return digits.slice(0, -2) + ':' + digits.slice(-2); }
     if (/^\d{3,4}$/.test(text)) return text.slice(0, -2) + ':' + text.slice(-2);
     if (finish && /^\d{1,2}$/.test(text)) return text + ':00';
@@ -20,7 +20,7 @@ function validateEquipmentReturnTime(field) {
     const match = value.match(/^(0?[1-9]|1[0-2]):([0-5][0-9])$/);
     const minutes = match ? (Number(match[1]) % 12 + (period === 'PM' ? 12 : 0)) * 60 + Number(match[2]) : null;
     field.setCustomValidity(!value ? '' : minutes === null
-        ? 'Enter a valid time, such as 400 for 4:00.'
+        ? 'Use the format h:mm, for example 8:00.'
         : period && (minutes < 480 || minutes > 1020)
             ? 'Expected return time must be between 8:00 AM and 5:00 PM.' : '');
 }

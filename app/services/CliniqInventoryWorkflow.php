@@ -227,7 +227,7 @@ function cliniq_inventory_dispense_medicines(
             throw new RuntimeException('The selected medicine is unavailable.');
         }
         if ((int) $item['quantity'] < $quantity) {
-            throw new RuntimeException('Not enough stock for ' . $item['item_name'] . '. Available: ' . (int) $item['quantity'] . ' ' . $item['unit'] . '.');
+            throw new RuntimeException('Quantity dispensed exceeds the available item quantity. Available: ' . (int) $item['quantity'] . ' ' . $item['unit'] . '.');
         }
 
         if ($item['item_type'] === 'Equipment') {

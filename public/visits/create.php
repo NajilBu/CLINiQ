@@ -86,6 +86,28 @@ render_clinic_command_header(
 );
 ?>
 
+<style>
+    .dispensing-entry-grid > div,
+    .dispensing-entry-grid label,
+    .dispensing-entry-grid [data-return-clock] {
+        min-width: 0;
+    }
+
+    @media (min-width: 1280px) {
+        .dispensing-entry-grid {
+            grid-template-columns: minmax(0, 0.55fr) minmax(0, 1.2fr) minmax(90px, 0.38fr) auto;
+        }
+
+        .dispensing-entry-grid.is-equipment {
+            grid-template-columns: minmax(0, 0.55fr) minmax(0, 1.2fr) minmax(90px, 0.38fr) minmax(0, 0.72fr) minmax(0, 1fr) auto;
+        }
+
+        .dispensing-entry-grid.is-equipment [data-equipment-return] .clinic-label {
+            white-space: nowrap;
+        }
+    }
+</style>
+
 <form method="post" id="visitForm" class="space-y-6">
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <section class="clinic-card p-6 space-y-5">
@@ -227,7 +249,7 @@ render_clinic_command_header(
         <div class="px-6 pb-6">
         <p class="settings-help mb-4">Medicines and equipment are saved with the treatment entry. Equipment loans require an expected return date and time.</p>
         <div class="space-y-3" data-dispensing-list>
-            <div class="grid grid-cols-1 md:grid-cols-[0.7fr_1.6fr_0.55fr_auto] xl:grid-cols-[0.55fr_1.2fr_0.38fr_0.72fr_0.9fr_auto] gap-4 items-end" data-dispensing-row>
+            <div class="dispensing-entry-grid grid grid-cols-1 md:grid-cols-[0.7fr_1.6fr_0.55fr_auto] gap-4 items-end" data-dispensing-row>
                 <div>
                     <label class="clinic-label">Type</label>
                     <select class="record-sheet-field px-4 js-dispensing-type" name="dispensing_type[]">
@@ -239,12 +261,12 @@ render_clinic_command_header(
                     <select class="record-sheet-field px-4 js-visit-inventory-item" name="dispensed_inventory_item_id[]">
                         <option value="" data-type="Medicine">No item selected</option>
                         <?php foreach ($medicineInventory as $medicine): ?>
-                            <option value="<?= (int) $medicine['id'] ?>" data-type="Medicine" <?= (int) $medicine['quantity'] <= 0 ? 'disabled' : '' ?>>
+                            <option value="<?= (int) $medicine['id'] ?>" data-type="Medicine" data-available="<?= (int) $medicine['quantity'] ?>" <?= (int) $medicine['quantity'] <= 0 ? 'disabled' : '' ?>>
                                 <?= e(cliniq_inventory_medicine_option_label($medicine)) ?>
                             </option>
                         <?php endforeach; ?>
                         <?php foreach ($equipmentInventory as $equipment): ?>
-                            <option value="<?= (int) $equipment['id'] ?>" data-type="Equipment" <?= (int) $equipment['quantity'] <= 0 ? 'disabled' : '' ?>>
+                            <option value="<?= (int) $equipment['id'] ?>" data-type="Equipment" data-available="<?= (int) $equipment['quantity'] ?>" <?= (int) $equipment['quantity'] <= 0 ? 'disabled' : '' ?>>
                                 <?= e($equipment['item_name']) ?> (<?= (int) $equipment['quantity'] ?> <?= e($equipment['unit']) ?>)
                             </option>
                         <?php endforeach; ?>
@@ -254,7 +276,21 @@ render_clinic_command_header(
                     <label class="clinic-label">Quantity</label>
                     <input class="record-sheet-field px-4" name="dispensed_quantity[]" type="number" min="1" placeholder="0">
                 </div>
-                <div class="md:col-span-full xl:contents" data-equipment-return style="display:none;"><div class="grid grid-cols-1 md:grid-cols-2 xl:contents gap-4"><label class="clinic-label">Expected Return Date<input class="record-sheet-field px-4" type="date" name="equipment_return_date[]" value="<?= e(date('Y-m-d')) ?>" min="<?= e(date('Y-m-d')) ?>"></label><label class="clinic-label">Expected Return Time (8:00 AM–5:00 PM)<span class="flex gap-2" data-return-clock><input class="record-sheet-field px-4" style="min-width:0;flex:1;" name="equipment_return_time[]" type="text" inputmode="numeric" maxlength="5" data-equipment-return-time placeholder="h:mm" autocomplete="off" aria-label="Return time"><select class="record-sheet-field px-4" style="width:86px;" name="equipment_return_period[]" data-return-period aria-label="AM or PM"><option value="AM">AM</option><option value="PM">PM</option></select></span></label></div></div>
+                <div class="md:col-span-full xl:contents" data-equipment-return style="display:none;">
+                    <div class="grid grid-cols-1 md:grid-cols-2 xl:contents gap-4">
+                        <div>
+                            <label class="clinic-label">Expected Return Date</label>
+                            <input class="record-sheet-field px-4" type="date" name="equipment_return_date[]" value="<?= e(date('Y-m-d')) ?>" min="<?= e(date('Y-m-d')) ?>">
+                        </div>
+                        <div>
+                            <label class="clinic-label">Expected Return Time</label>
+                            <span class="flex gap-2" data-return-clock title="Return time must be between 8:00 AM and 5:00 PM">
+                                <input class="record-sheet-field px-4" style="min-width:0;flex:1;" name="equipment_return_time[]" type="text" inputmode="numeric" maxlength="5" data-equipment-return-time placeholder="h:mm" autocomplete="off" aria-label="Return time">
+                                <select class="record-sheet-field px-4" style="width:86px;" name="equipment_return_period[]" data-return-period aria-label="AM or PM"><option value="AM">AM</option><option value="PM">PM</option></select>
+                            </span>
+                        </div>
+                    </div>
+                </div>
                 <button type="button" class="btn btn-ghost js-remove-dispensing-row" title="Remove medicine" aria-label="Remove medicine">
                     <span class="material-symbols-outlined text-[18px]">delete</span>
                 </button>
@@ -375,6 +411,7 @@ function syncDispensingRow(row) {
     const returnGroup = row.querySelector('[data-equipment-return]');
     if (returnGroup) {
         const equipment = activeType === 'Equipment';
+        row.classList.toggle('is-equipment', equipment);
         returnGroup.style.display = equipment ? '' : 'none';
         returnGroup.querySelectorAll('input, select').forEach(field => {
             field.required = equipment;
@@ -393,6 +430,18 @@ function syncDispensingRow(row) {
         if (option.selected && visible) currentVisible = true;
     });
     if (!currentVisible) itemSelect.value = '';
+
+    const quantityInput = row.querySelector('input[name="dispensed_quantity[]"]');
+    if (quantityInput) {
+        const selectedOption = itemSelect.selectedOptions?.[0];
+        const available = selectedOption?.value ? Number(selectedOption.dataset.available || 0) : 0;
+        if (selectedOption?.value) quantityInput.max = String(available);
+        else quantityInput.removeAttribute('max');
+        const entered = Number(quantityInput.value || 0);
+        quantityInput.setCustomValidity(selectedOption?.value && entered > available
+            ? 'Quantity dispensed exceeds the available item quantity.'
+            : '');
+    }
 }
 
 function updateDispensingRemoveButtons(list) {
@@ -408,15 +457,19 @@ document.querySelectorAll('[data-dispensing-list]').forEach((list) => {
     updateDispensingRemoveButtons(list);
 
     list.addEventListener('change', (event) => {
-        const typeSelect = event.target.closest('.js-dispensing-type');
-        if (typeSelect) syncDispensingRow(typeSelect.closest('[data-dispensing-row]'));
+        const changedField = event.target.closest('.js-dispensing-type, .js-visit-inventory-item');
+        if (changedField) syncDispensingRow(changedField.closest('[data-dispensing-row]'));
+    });
+    list.addEventListener('input', (event) => {
+        const quantityInput = event.target.closest('input[name="dispensed_quantity[]"]');
+        if (quantityInput) syncDispensingRow(quantityInput.closest('[data-dispensing-row]'));
     });
 });
 
 document.addEventListener('click', (event) => {
     const addButton = event.target.closest('.js-add-dispensing-row');
     if (addButton) {
-        const section = addButton.closest('section');
+        const section = addButton.closest('[data-collapsible-section]');
         const list = section?.querySelector('[data-dispensing-list]');
         const firstRow = list?.querySelector('[data-dispensing-row]');
         if (!list || !firstRow) return;
