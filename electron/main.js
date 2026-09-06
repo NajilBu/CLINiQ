@@ -136,7 +136,10 @@ function createMainWindow() {
     const defaultUserAgent = mainWindow.webContents.getUserAgent();
     mainWindow.webContents.setUserAgent(`${defaultUserAgent} CLINiQElectron/${app.getVersion()}`);
 
-    mainWindow.once('ready-to-show', () => mainWindow?.show());
+    mainWindow.once('ready-to-show', () => {
+        mainWindow?.maximize();
+        mainWindow?.show();
+    });
 
     mainWindow.webContents.setWindowOpenHandler(({ url }) => {
         if (isBrowserOnlyUrl(url)) {

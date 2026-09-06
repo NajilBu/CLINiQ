@@ -49,7 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $visitId = cliniq_visit_create([
             'patient_person_id' => $patientId,
             'chief_complaint' => trim($_POST['chief_complaint'] ?? ''),
-            'status' => 'Active',
+            'status' => 'Completed',
             'visit_purpose' => $purpose,
             'visit_source' => 'Staff Recorded',
             'action_taken' => $actionTaken,
@@ -145,95 +145,6 @@ render_clinic_command_header(
     </div>
 
     <section class="clinic-card p-6">
-        <div class="flex items-center justify-between gap-3 mb-6">
-            <h2 class="font-headline text-xl font-extrabold text-[#1c2a59] flex items-center gap-3 m-0">
-                <span class="material-symbols-outlined">monitor_heart</span>
-                Vitals & Measurements
-            </h2>
-            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Optional</span>
-        </div>
-        <div class="vitals-grid">
-            <div class="vital-tile">
-                <div class="vital-label"><span class="material-symbols-outlined">favorite</span>BP</div>
-                <div class="vital-value-wrap">
-                    <input class="vital-input" name="blood_pressure" placeholder="0">
-                    <span class="vital-unit">mmHg</span>
-                </div>
-            </div>
-            <div class="vital-tile">
-                <div class="vital-label"><span class="material-symbols-outlined">thermostat</span>Temp</div>
-                <div class="vital-value-wrap">
-                    <input class="vital-input" name="temperature" id="tempInput" type="number" step="0.1" placeholder="0">
-                    <span class="vital-unit">C</span>
-                </div>
-            </div>
-            <div class="vital-tile">
-                <div class="vital-label"><span class="material-symbols-outlined">ecg_heart</span>Heart</div>
-                <div class="vital-value-wrap">
-                    <input class="vital-input" name="pulse_rate" id="pulseInput" type="number" placeholder="0">
-                    <span class="vital-unit">BPM</span>
-                </div>
-            </div>
-            <?php foreach ([['air', 'SpO2', '%'], ['scale', 'Weight', 'kg'], ['height', 'Height', 'cm']] as [$icon, $label, $unit]): ?>
-                <div class="vital-tile">
-                    <div class="vital-label"><span class="material-symbols-outlined"><?= e($icon) ?></span><?= e($label) ?></div>
-                    <div class="vital-value-wrap">
-                        <input class="vital-input" placeholder="0">
-                        <span class="vital-unit"><?= e($unit) ?></span>
-                    </div>
-                </div>
-            <?php endforeach; ?>
-        </div>
-    </section>
-
-    <section class="clinic-card p-6">
-        <h2 class="font-headline text-lg font-extrabold text-[#1c2a59] flex items-center gap-2 mb-5">
-            <span class="material-symbols-outlined text-primary text-[19px]">inventory_2</span>
-            Inventory & Dispensing
-        </h2>
-        <p class="settings-help mb-4">Medicines and equipment are saved with the treatment entry. Equipment loans require an expected return date and time.</p>
-        <div class="space-y-3" data-dispensing-list>
-            <div class="grid grid-cols-1 md:grid-cols-[0.7fr_1.6fr_0.55fr_auto] gap-4 items-end" data-dispensing-row>
-                <div>
-                    <label class="clinic-label">Type</label>
-                    <select class="record-sheet-field px-4 js-dispensing-type" name="dispensing_type[]">
-                        <option value="Medicine">Medicine</option><option value="Equipment">Equipment</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="clinic-label">Item</label>
-                    <select class="record-sheet-field px-4 js-visit-inventory-item" name="dispensed_inventory_item_id[]">
-                        <option value="" data-type="Medicine">No item selected</option>
-                        <?php foreach ($medicineInventory as $medicine): ?>
-                            <option value="<?= (int) $medicine['id'] ?>" data-type="Medicine" <?= (int) $medicine['quantity'] <= 0 ? 'disabled' : '' ?>>
-                                <?= e(cliniq_inventory_medicine_option_label($medicine)) ?>
-                            </option>
-                        <?php endforeach; ?>
-                        <?php foreach ($equipmentInventory as $equipment): ?>
-                            <option value="<?= (int) $equipment['id'] ?>" data-type="Equipment" <?= (int) $equipment['quantity'] <= 0 ? 'disabled' : '' ?>>
-                                <?= e($equipment['item_name']) ?> (<?= (int) $equipment['quantity'] ?> <?= e($equipment['unit']) ?>)
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div>
-                    <label class="clinic-label">Quantity</label>
-                    <input class="record-sheet-field px-4" name="dispensed_quantity[]" type="number" min="1" placeholder="0">
-                </div>
-                <div class="md:col-span-full" data-equipment-return style="display:none;"><div class="grid grid-cols-1 md:grid-cols-2 gap-4"><label class="clinic-label">Expected Return Date<input class="record-sheet-field px-4" type="date" name="equipment_return_date[]" value="<?= e(date('Y-m-d')) ?>" min="<?= e(date('Y-m-d')) ?>"></label><label class="clinic-label">Expected Return Time (8:00 AM–5:00 PM)<span class="flex gap-2" data-return-clock><input class="record-sheet-field px-4" style="min-width:0;flex:1;" name="equipment_return_time[]" type="text" inputmode="numeric" maxlength="5" data-equipment-return-time placeholder="h:mm" autocomplete="off" aria-label="Return time"><select class="record-sheet-field px-4" style="width:100px;" name="equipment_return_period[]" data-return-period aria-label="AM or PM"><option value="AM">AM</option><option value="PM">PM</option></select></span></label></div></div>
-                <button type="button" class="btn btn-ghost js-remove-dispensing-row" title="Remove medicine" aria-label="Remove medicine">
-                    <span class="material-symbols-outlined text-[18px]">delete</span>
-                </button>
-            </div>
-        </div>
-        <button type="button" class="btn btn-outline mt-4 js-add-dispensing-row">
-            <span class="material-symbols-outlined text-[18px]">add</span>
-            Add Item
-        </button>
-        <p class="settings-help mt-3 mb-0">Equipment is loaned to this patient when you save. Enter its expected return date and time; process returns in Inventory &amp; Tracking.</p>
-    </section>
-
-    <section class="clinic-card p-6">
         <h2 class="font-headline text-lg font-extrabold text-[#1c2a59] flex items-center gap-2 mb-5">
             <span class="material-symbols-outlined text-primary text-[19px]">medical_information</span>
             Medical Record
@@ -264,7 +175,101 @@ render_clinic_command_header(
                 <textarea class="record-sheet-field p-4" name="remarks" rows="4" placeholder="General remarks or follow-up instruction..."></textarea>
             </div>
         </div>
-        <div class="mt-6 pt-5 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3">
+    </section>
+
+    <details class="clinic-card overflow-hidden" data-collapsible-section>
+        <summary class="flex items-center justify-between gap-3 p-6 cursor-pointer select-none" style="list-style:none">
+            <h2 class="font-headline text-xl font-extrabold text-[#1c2a59] flex items-center gap-3 m-0">
+                <span class="material-symbols-outlined">monitor_heart</span>
+                Vitals & Measurements
+            </h2>
+            <span class="flex items-center gap-3"><span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Optional</span><span class="material-symbols-outlined text-slate-500" data-collapse-icon>expand_more</span></span>
+        </summary>
+        <div class="px-6 pb-6"><div class="vitals-grid">
+            <div class="vital-tile">
+                <div class="vital-label"><span class="material-symbols-outlined">favorite</span>BP</div>
+                <div class="vital-value-wrap">
+                    <input class="vital-input" name="blood_pressure" placeholder="0">
+                    <span class="vital-unit">mmHg</span>
+                </div>
+            </div>
+            <div class="vital-tile">
+                <div class="vital-label"><span class="material-symbols-outlined">thermostat</span>Temp</div>
+                <div class="vital-value-wrap">
+                    <input class="vital-input" name="temperature" id="tempInput" type="number" step="0.1" placeholder="0">
+                    <span class="vital-unit">C</span>
+                </div>
+            </div>
+            <div class="vital-tile">
+                <div class="vital-label"><span class="material-symbols-outlined">ecg_heart</span>Heart</div>
+                <div class="vital-value-wrap">
+                    <input class="vital-input" name="pulse_rate" id="pulseInput" type="number" placeholder="0">
+                    <span class="vital-unit">BPM</span>
+                </div>
+            </div>
+            <?php foreach ([['air', 'SpO2', '%'], ['scale', 'Weight', 'kg'], ['height', 'Height', 'cm']] as [$icon, $label, $unit]): ?>
+                <div class="vital-tile">
+                    <div class="vital-label"><span class="material-symbols-outlined"><?= e($icon) ?></span><?= e($label) ?></div>
+                    <div class="vital-value-wrap">
+                        <input class="vital-input" placeholder="0">
+                        <span class="vital-unit"><?= e($unit) ?></span>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div></div>
+    </details>
+
+    <details class="clinic-card overflow-hidden" data-collapsible-section>
+        <summary class="flex items-center justify-between gap-3 p-6 cursor-pointer select-none" style="list-style:none">
+            <h2 class="font-headline text-lg font-extrabold text-[#1c2a59] flex items-center gap-2 m-0"><span class="material-symbols-outlined text-primary text-[19px]">inventory_2</span>Inventory & Dispensing</h2>
+            <span class="material-symbols-outlined text-slate-500" data-collapse-icon>expand_more</span>
+        </summary>
+        <div class="px-6 pb-6">
+        <p class="settings-help mb-4">Medicines and equipment are saved with the treatment entry. Equipment loans require an expected return date and time.</p>
+        <div class="space-y-3" data-dispensing-list>
+            <div class="grid grid-cols-1 md:grid-cols-[0.7fr_1.6fr_0.55fr_auto] xl:grid-cols-[0.55fr_1.2fr_0.38fr_0.72fr_0.9fr_auto] gap-4 items-end" data-dispensing-row>
+                <div>
+                    <label class="clinic-label">Type</label>
+                    <select class="record-sheet-field px-4 js-dispensing-type" name="dispensing_type[]">
+                        <option value="Medicine">Medicine</option><option value="Equipment">Equipment</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="clinic-label">Item</label>
+                    <select class="record-sheet-field px-4 js-visit-inventory-item" name="dispensed_inventory_item_id[]">
+                        <option value="" data-type="Medicine">No item selected</option>
+                        <?php foreach ($medicineInventory as $medicine): ?>
+                            <option value="<?= (int) $medicine['id'] ?>" data-type="Medicine" <?= (int) $medicine['quantity'] <= 0 ? 'disabled' : '' ?>>
+                                <?= e(cliniq_inventory_medicine_option_label($medicine)) ?>
+                            </option>
+                        <?php endforeach; ?>
+                        <?php foreach ($equipmentInventory as $equipment): ?>
+                            <option value="<?= (int) $equipment['id'] ?>" data-type="Equipment" <?= (int) $equipment['quantity'] <= 0 ? 'disabled' : '' ?>>
+                                <?= e($equipment['item_name']) ?> (<?= (int) $equipment['quantity'] ?> <?= e($equipment['unit']) ?>)
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div>
+                    <label class="clinic-label">Quantity</label>
+                    <input class="record-sheet-field px-4" name="dispensed_quantity[]" type="number" min="1" placeholder="0">
+                </div>
+                <div class="md:col-span-full xl:contents" data-equipment-return style="display:none;"><div class="grid grid-cols-1 md:grid-cols-2 xl:contents gap-4"><label class="clinic-label">Expected Return Date<input class="record-sheet-field px-4" type="date" name="equipment_return_date[]" value="<?= e(date('Y-m-d')) ?>" min="<?= e(date('Y-m-d')) ?>"></label><label class="clinic-label">Expected Return Time (8:00 AM–5:00 PM)<span class="flex gap-2" data-return-clock><input class="record-sheet-field px-4" style="min-width:0;flex:1;" name="equipment_return_time[]" type="text" inputmode="numeric" maxlength="5" data-equipment-return-time placeholder="h:mm" autocomplete="off" aria-label="Return time"><select class="record-sheet-field px-4" style="width:86px;" name="equipment_return_period[]" data-return-period aria-label="AM or PM"><option value="AM">AM</option><option value="PM">PM</option></select></span></label></div></div>
+                <button type="button" class="btn btn-ghost js-remove-dispensing-row" title="Remove medicine" aria-label="Remove medicine">
+                    <span class="material-symbols-outlined text-[18px]">delete</span>
+                </button>
+            </div>
+        </div>
+        <button type="button" class="btn btn-outline mt-4 js-add-dispensing-row">
+            <span class="material-symbols-outlined text-[18px]">add</span>
+            Add Item
+        </button>
+        <p class="settings-help mt-3 mb-0">Equipment is loaned to this patient when you save. Enter its expected return date and time; process returns in Inventory &amp; Tracking.</p>
+        </div>
+    </details>
+
+    <section class="clinic-card p-6">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3">
             <div class="flex flex-wrap gap-3 justify-end">
                 <a class="btn btn-ghost text-decoration-none justify-center" href="index.php">
                     <span class="material-symbols-outlined">cancel</span>
@@ -280,6 +285,15 @@ render_clinic_command_header(
 </form>
 
 <script>
+document.querySelectorAll('[data-collapsible-section]').forEach((section) => {
+    const icon = section.querySelector('[data-collapse-icon]');
+    const syncIcon = () => {
+        if (icon) icon.textContent = section.open ? 'expand_less' : 'expand_more';
+    };
+    section.addEventListener('toggle', syncIcon);
+    syncIcon();
+});
+
 const visitPatients = <?= json_encode(array_map(static function (array $patient): array {
     return [
         'id' => (int) $patient['id'],

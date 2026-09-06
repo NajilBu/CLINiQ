@@ -3556,8 +3556,8 @@ textarea.record-sheet-field {
 }
 
 .cliniq-ag-grid-patient-registry {
-    height: 888px;
-    min-height: 888px;
+    height: auto;
+    min-height: 0;
 }
 
 .cliniq-ag-grid-fill {

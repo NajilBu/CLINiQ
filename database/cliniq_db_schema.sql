@@ -296,7 +296,6 @@ CREATE TABLE vital_signs (
 
 CREATE TABLE inventory_items (
   item_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  item_code VARCHAR(40) NOT NULL,
   item_name VARCHAR(160) NOT NULL,
   item_type ENUM('Medicine', 'Equipment') NOT NULL,
   description TEXT NULL,
@@ -307,7 +306,6 @@ CREATE TABLE inventory_items (
   is_active TINYINT(1) NOT NULL DEFAULT 1,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT uq_inventory_items_code UNIQUE (item_code),
   INDEX idx_inventory_items_type_active (item_type, is_active),
   INDEX idx_inventory_items_stock (quantity, reorder_level),
   INDEX idx_inventory_items_expiration (expiration_date)

@@ -200,6 +200,7 @@
         const paginationControlsId = grid.dataset.paginationControls || '';
         const rowHeight = Number(grid.dataset.rowHeight || 70);
         const shouldFitColumns = grid.dataset.fitColumns !== 'false';
+        const autoHeight = grid.classList.contains('cliniq-ag-grid-patient-registry');
         const columnDefs = normalizeColumns(readGridJson(grid, '[data-grid-columns]', []), shouldFitColumns);
 
         function eventTarget(gridEvent) {
@@ -278,6 +279,7 @@
         const gridOptions = {
             rowData,
             columnDefs,
+            domLayout: autoHeight ? 'autoHeight' : 'normal',
             defaultColDef: {
                 sortable: true,
                 filter: true,

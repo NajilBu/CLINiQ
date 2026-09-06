@@ -129,7 +129,7 @@ $loanColumns = [
     ['headerName' => 'Qty', 'field' => 'quantityHtml', 'cellRenderer' => 'html', 'sortField' => 'quantitySort', 'sortType' => 'number', 'minWidth' => 90, 'flex' => 0.4],
     ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'sortField' => 'statusSort', 'sortType' => 'number', 'minWidth' => 130, 'flex' => 0.6],
     ['headerName' => 'Condition', 'field' => 'conditionHtml', 'cellRenderer' => 'html', 'sortField' => 'conditionSort', 'minWidth' => 140, 'flex' => 0.65],
-    ['headerName' => 'Actions / Notes', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'minWidth' => 160, 'flex' => 0.8],
+    ['headerName' => 'Expected Return', 'field' => 'dueHtml', 'cellRenderer' => 'html', 'sortField' => 'dueSort', 'sortType' => 'date', 'minWidth' => 180, 'flex' => 0.85],
 ];
 
 $activityColumns = [
@@ -187,7 +187,6 @@ foreach ($visibleItems as $item) {
     $expirationClass = $isExpiring && !$isArchived ? 'text-red-600' : 'text-slate-600';
     $editArgs = implode(', ', [
         (int) $item['id'],
-        e(json_encode($item['item_code'])),
         e(json_encode($item['item_name'])),
         e(json_encode($item['category'])),
         e(json_encode($item['description'])),
@@ -252,7 +251,7 @@ foreach ($visibleItems as $item) {
     $inventoryRows[] = [
         'highlightKeys' => $highlightKeys,
         'itemSort' => $item['item_name'],
-        'itemHtml' => '<div><strong class="text-sm text-slate-800">' . e($item['item_name']) . '</strong><p class="text-xs font-bold text-slate-400 mb-0">' . e($item['item_code'] . ' / ' . ($category !== '' ? $category : 'No type')) . '</p></div>',
+        'itemHtml' => '<div><strong class="text-sm text-slate-800">' . e($item['item_name']) . '</strong><p class="text-xs font-bold text-slate-400 mb-0">' . e($category !== '' ? $category : 'No type') . '</p></div>',
         'categorySort' => $category,
         'categoryHtml' => '<span class="text-sm font-bold text-slate-600">' . e($category !== '' ? $category : '-') . '</span>',
         'stockSort' => (int) $item['quantity'],
@@ -273,7 +272,7 @@ foreach ($inventoryTransactions as $transaction) {
         'dateSort' => $transaction['created_at'],
         'date' => date('M d, Y g:i A', strtotime($transaction['created_at'])),
         'itemSort' => $transaction['item_name'],
-        'itemHtml' => '<div><strong class="text-sm text-slate-800">' . e($transaction['item_name']) . '</strong><p class="text-xs font-bold text-slate-400 mb-0">' . e($transaction['item_code'] . ' / ' . $transaction['item_type']) . '</p></div>',
+        'itemHtml' => '<div><strong class="text-sm text-slate-800">' . e($transaction['item_name']) . '</strong><p class="text-xs font-bold text-slate-400 mb-0">' . e($transaction['item_type']) . '</p></div>',
         'typeSort' => $transaction['transaction_type'],
         'typeHtml' => '<span class="badge ' . ($change < 0 ? 'badge-pending' : 'badge-completed') . '">' . e($transaction['transaction_type']) . '</span>',
         'changeSort' => $change,
@@ -288,21 +287,11 @@ foreach ($inventoryTransactions as $transaction) {
 $loanRows = [];
 foreach ($loanRowsRaw as $loan) {
     $isBorrowed = in_array(($loan['status'] ?? ''), ['Borrowed', 'Due soon', 'Overdue'], true);
-    $returnArgs = implode(', ', [
-        (int) $loan['id'],
-        e(json_encode($loan['item_name'])),
-        e(json_encode($loan['borrower_name'])),
-        e(json_encode($loan['borrower_identifier'])),
-        e(json_encode(date('M d, g:i A', strtotime($loan['borrowed_at'])))),
-        (int) $loan['borrowed_quantity'],
-    ]);
-    $returnSummary = '';
-    if (!$isBorrowed) {
-        $returnSummary = '<div class="text-right"><p class="text-xs font-bold text-slate-500 mb-0">' . e($loan['returned_at'] ? 'Returned ' . date('M d, g:i A', strtotime($loan['returned_at'])) : 'Return recorded') . '</p>'
-            . '<p class="text-xs font-bold text-slate-400 mb-0 truncate">' . e($loan['return_notes'] ?: ($loan['returned_by_name'] ? 'By ' . $loan['returned_by_name'] : 'No notes')) . '</p></div>';
-    }
+    $dueAt = !empty($loan['due_at']) ? strtotime((string) $loan['due_at']) : false;
+    $dueClass = ($loan['status'] ?? '') === 'Overdue' ? 'text-red-600' : (($loan['status'] ?? '') === 'Due soon' ? 'text-amber-700' : 'text-slate-700');
 
     $loanRows[] = [
+        'rowModalId' => 'equipmentLoanDetailsModal-' . (int) $loan['id'],
         'highlightKeys' => $isBorrowed ? ['active-loans'] : [],
         'itemSort' => $loan['item_name'],
         'itemHtml' => '<div><strong class="text-sm text-slate-800">' . e($loan['item_name']) . '</strong><p class="text-xs font-bold text-slate-400 mb-0">' . e($loan['category'] ?: 'Equipment') . '</p></div>',
@@ -312,13 +301,14 @@ foreach ($loanRowsRaw as $loan) {
         'borrowedHtml' => '<div><strong class="text-sm text-slate-700">' . e(date('M d, g:i A', strtotime($loan['borrowed_at']))) . '</strong><p class="text-xs font-bold text-slate-400 mb-0">' . e($loan['borrowed_by_name'] ?: 'System') . '</p></div>',
         'quantitySort' => (int) $loan['borrowed_quantity'],
         'quantityHtml' => '<span class="text-sm font-bold text-slate-700">' . (int) $loan['borrowed_quantity'] . ' ' . e($loan['unit'] ?: 'unit') . '</span>',
-        'statusSort' => array_search((string) $loan['status'], ['Overdue', 'Borrowed', 'Returned', 'Cancelled'], true),
+        'statusSort' => array_search((string) $loan['status'], ['Overdue', 'Due soon', 'Borrowed', 'Returned', 'Cancelled'], true),
         'statusHtml' => inventory_loan_status_badge((string) $loan['status']),
         'conditionSort' => $loan['return_condition'] ?? '',
         'conditionHtml' => inventory_return_condition_badge($loan['return_condition'] ?? null),
-        'actionsHtml' => $isBorrowed
-            ? row_actions_button('Loan actions', '<button onclick="closeModal(\'rowActionsModal\'); openReturnLoan(' . $returnArgs . ')" class="btn btn-sm btn-outline"><span class="material-symbols-outlined text-[14px]">assignment_return</span>Return</button>')
-            : $returnSummary,
+        'dueSort' => $loan['due_at'] ?? '',
+        'dueHtml' => $dueAt
+            ? '<div><strong class="text-sm ' . $dueClass . '">' . e(date('M d, Y', $dueAt)) . '</strong><p class="text-xs font-bold text-slate-400 mb-0">' . e(date('g:i A', $dueAt)) . '</p></div>'
+            : '<span class="text-xs font-bold text-slate-400">Not set</span>',
     ];
 }
 
@@ -577,6 +567,44 @@ render_clinic_command_header(
         ]); ?>
         <nav id="inventoryLoansPagination" class="pagination" aria-label="Equipment loan pages"></nav>
     </section>
+
+    <?php foreach ($loanRowsRaw as $loan): ?>
+        <?php $loanIsActive = in_array(($loan['status'] ?? ''), ['Borrowed', 'Due soon', 'Overdue'], true); ?>
+        <div id="equipmentLoanDetailsModal-<?= (int) $loan['id'] ?>" class="modal-backdrop" data-no-row-click>
+            <div class="modal-content bg-white rounded-[2rem] p-8 w-full max-w-lg shadow-2xl">
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <h3 class="font-headline text-xl font-extrabold text-[#1c2a59]">Equipment Loan</h3>
+                        <p class="text-sm font-bold text-slate-500 mt-1"><?= e($loan['item_name']) ?></p>
+                    </div>
+                    <button type="button" onclick="closeModal('equipmentLoanDetailsModal-<?= (int) $loan['id'] ?>')" class="btn-icon btn-icon-slate" aria-label="Close loan details"><span class="material-symbols-outlined">close</span></button>
+                </div>
+                <div class="rounded-2xl border border-slate-100 bg-slate-50 p-4 space-y-3">
+                    <div class="flex justify-between gap-3"><span class="text-xs font-black text-slate-400 uppercase tracking-widest">Borrower</span><span class="text-sm font-bold text-slate-800 text-right"><?= e($loan['borrower_name']) ?><?= $loan['borrower_identifier'] ? ' (' . e($loan['borrower_identifier']) . ')' : '' ?></span></div>
+                    <div class="flex justify-between gap-3"><span class="text-xs font-black text-slate-400 uppercase tracking-widest">Quantity</span><span class="text-sm font-bold text-slate-800 text-right"><?= (int) $loan['borrowed_quantity'] ?> <?= e($loan['unit'] ?: 'unit') ?></span></div>
+                    <div class="flex justify-between gap-3"><span class="text-xs font-black text-slate-400 uppercase tracking-widest">Borrowed</span><span class="text-sm font-bold text-slate-700 text-right"><?= e(date('M d, Y g:i A', strtotime($loan['borrowed_at']))) ?></span></div>
+                    <div class="flex justify-between gap-3"><span class="text-xs font-black text-slate-400 uppercase tracking-widest">Expected Return</span><span class="text-sm font-bold text-slate-700 text-right"><?= !empty($loan['due_at']) ? e(date('M d, Y g:i A', strtotime($loan['due_at']))) : 'Not set' ?></span></div>
+                    <div class="flex justify-between gap-3"><span class="text-xs font-black text-slate-400 uppercase tracking-widest">Status</span><?= inventory_loan_status_badge((string) $loan['status']) ?></div>
+                    <?php if (!$loanIsActive): ?>
+                        <div class="flex justify-between gap-3"><span class="text-xs font-black text-slate-400 uppercase tracking-widest">Returned</span><span class="text-sm font-bold text-slate-700 text-right"><?= !empty($loan['returned_at']) ? e(date('M d, Y g:i A', strtotime($loan['returned_at']))) : 'Recorded' ?></span></div>
+                        <div class="flex justify-between gap-3"><span class="text-xs font-black text-slate-400 uppercase tracking-widest">Condition</span><?= inventory_return_condition_badge($loan['return_condition'] ?? null) ?></div>
+                        <div class="flex justify-between gap-3"><span class="text-xs font-black text-slate-400 uppercase tracking-widest">Received By</span><span class="text-sm font-bold text-slate-700 text-right"><?= e($loan['returned_by_name'] ?: 'System') ?></span></div>
+                        <div><span class="text-xs font-black text-slate-400 uppercase tracking-widest">Return Notes</span><p class="text-sm font-bold text-slate-700 mt-1 mb-0"><?= e($loan['return_notes'] ?: 'No notes recorded') ?></p></div>
+                    <?php endif; ?>
+                </div>
+                <?php if ($loanIsActive): ?>
+                    <form method="post" action="return.php" data-inventory-form class="mt-5 space-y-4">
+                        <input type="hidden" name="loan_id" value="<?= (int) $loan['id'] ?>">
+                        <div><label class="clinic-label">Equipment Condition</label><select class="clinic-select" name="return_condition"><?php foreach (dropdown_options('inventory_return_condition') as $condition): ?><option value="<?= e($condition) ?>"><?= e($condition) ?></option><?php endforeach; ?></select></div>
+                        <div><label class="clinic-label">Return Notes</label><textarea class="clinic-textarea" name="return_notes" rows="3" placeholder="Condition notes, damage details, or follow-up action."></textarea></div>
+                        <div class="flex justify-end gap-3"><button type="button" onclick="closeModal('equipmentLoanDetailsModal-<?= (int) $loan['id'] ?>')" class="btn btn-ghost">Cancel</button><button type="submit" class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Process this return?" data-confirm-message="This will close the active loan and record the return condition." data-confirm-toast="Processing equipment return..."><span class="material-symbols-outlined text-[18px]">assignment_return</span>Return Equipment</button></div>
+                    </form>
+                <?php else: ?>
+                    <div class="mt-5 flex justify-end"><button type="button" onclick="closeModal('equipmentLoanDetailsModal-<?= (int) $loan['id'] ?>')" class="btn btn-primary">Close</button></div>
+                <?php endif; ?>
+            </div>
+        </div>
+    <?php endforeach; ?>
 <?php endif; ?>
 </div>
 
@@ -777,10 +805,6 @@ render_clinic_command_header(
             <input type="hidden" name="category" value="Medicine">
             <div data-medicine-panel="new" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <label class="clinic-label">Item Code</label>
-                    <input class="clinic-input uppercase" name="item_code" required placeholder="e.g. MED-001">
-                </div>
-                <div>
                     <label class="clinic-label">Item Name</label>
                     <input class="clinic-input" name="item_name" required placeholder="e.g. Paracetamol 500mg">
                 </div>
@@ -862,10 +886,6 @@ render_clinic_command_header(
             <input type="hidden" name="expiration_date" value="">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <label class="clinic-label">Item Code</label>
-                    <input class="clinic-input uppercase" name="item_code" required placeholder="e.g. EQP-001">
-                </div>
-                <div>
                     <label class="clinic-label">Equipment Name</label>
                     <input class="clinic-input" name="item_name" required placeholder="e.g. Pulse Oximeter">
                 </div>
@@ -908,10 +928,6 @@ render_clinic_command_header(
         <form method="post" action="update.php" id="editItemForm" data-inventory-form>
             <input type="hidden" name="id" id="editItemId">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label class="clinic-label">Item Code</label>
-                    <input class="clinic-input uppercase" name="item_code" id="editItemCode" required>
-                </div>
                 <div>
                     <label class="clinic-label">Item Name</label>
                     <input class="clinic-input" name="item_name" id="editItemName" required>
@@ -1018,62 +1034,9 @@ render_clinic_command_header(
     </div>
 </div>
 
-<div id="returnEquipmentModal" class="modal-backdrop">
-    <div class="modal-content bg-white rounded-[2rem] p-8 w-full max-w-lg shadow-2xl">
-        <div class="flex items-center justify-between mb-6">
-            <div>
-                <h3 class="font-headline text-xl font-extrabold text-[#1c2a59]">Return Equipment</h3>
-                <p class="text-sm font-bold text-slate-500 mt-1">Confirm the returned item condition.</p>
-            </div>
-            <button onclick="closeModal('returnEquipmentModal')" class="btn-icon btn-icon-slate">
-                <span class="material-symbols-outlined">close</span>
-            </button>
-        </div>
-        <form method="post" action="return.php" data-inventory-form>
-            <input type="hidden" name="loan_id" id="returnLoanId">
-            <div class="rounded-2xl border border-slate-100 bg-slate-50 p-4 mb-5 space-y-2">
-                <div class="flex justify-between gap-3">
-                    <span class="text-xs font-black text-slate-400 uppercase tracking-widest">Item</span>
-                    <span class="text-sm font-bold text-slate-800 text-right" id="returnItemName">Equipment</span>
-                </div>
-                <div class="flex justify-between gap-3">
-                    <span class="text-xs font-black text-slate-400 uppercase tracking-widest">Borrower</span>
-                    <span class="text-sm font-bold text-slate-800 text-right" id="returnBorrowerName">Borrower</span>
-                </div>
-                <div class="flex justify-between gap-3">
-                    <span class="text-xs font-black text-slate-400 uppercase tracking-widest">Borrowed</span>
-                    <span class="text-sm font-bold text-slate-600 text-right" id="returnBorrowedAt">-</span>
-                </div>
-            </div>
-            <div class="space-y-4">
-                <div>
-                    <label class="clinic-label">Equipment Condition</label>
-                    <select class="clinic-select" name="return_condition">
-                        <?php foreach (dropdown_options('inventory_return_condition') as $condition): ?>
-                            <option value="<?= e($condition) ?>"><?= e($condition) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div>
-                    <label class="clinic-label">Return Notes</label>
-                    <textarea class="clinic-textarea" name="return_notes" rows="3" placeholder="Condition notes, damage details, or follow-up action."></textarea>
-                </div>
-            </div>
-            <div class="mt-6 flex justify-end gap-3">
-                <button type="button" onclick="closeModal('returnEquipmentModal')" class="btn btn-ghost">Cancel</button>
-                <button type="submit" class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Process this return?" data-confirm-message="This will close the active loan and record the return condition." data-confirm-toast="Processing equipment return...">
-                    <span class="material-symbols-outlined text-[18px]">assignment_return</span>
-                    Process Return
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
-
 <script>
-function editItem(id, code, name, category, description, quantity, unit, reorder, expiry) {
+function editItem(id, name, category, description, quantity, unit, reorder, expiry) {
     document.getElementById('editItemId').value = id;
-    document.getElementById('editItemCode').value = code || '';
     document.getElementById('editItemName').value = name;
     document.getElementById('editItemCategory').value = category || '';
     document.getElementById('editItemDescription').value = description || '';
@@ -1135,13 +1098,6 @@ function openBorrowItem(id, name, available, unit) {
     showModal('borrowEquipmentModal');
 }
 
-function openReturnLoan(id, itemName, borrowerName, borrowerIdentifier, borrowedAt, quantity) {
-    document.getElementById('returnLoanId').value = id;
-    document.getElementById('returnItemName').textContent = itemName;
-    document.getElementById('returnBorrowerName').textContent = borrowerIdentifier ? `${borrowerName} (${borrowerIdentifier})` : borrowerName;
-    document.getElementById('returnBorrowedAt').textContent = `${borrowedAt} · ${quantity} borrowed`;
-    showModal('returnEquipmentModal');
-}
 </script>
 
 <?php render_footer(); ?>

@@ -377,7 +377,7 @@ function cliniq_patient_profile_history(int $personId, int $limit = 100): array
     if ($entryIds) {
         $entryPlaceholders = implode(',', array_fill(0, count($entryIds), '?'));
         $dispensingStmt = $db->prepare("
-            SELECT md.*, i.item_code, i.item_name, i.unit,
+            SELECT md.*, i.item_name, i.unit,
                    TRIM(CONCAT_WS(' ', pe.first_name, pe.middle_name, pe.last_name)) AS dispensed_by_name
             FROM medicine_dispensings md
             JOIN inventory_items i ON i.item_id = md.item_id

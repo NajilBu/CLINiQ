@@ -114,7 +114,7 @@ render_clinic_command_header(
     'Emergency',
     'Nurse Alerts',
     'Live emergency reports from staff and QR/NFC scans.',
-    '<div class="flex items-center gap-2 text-xs font-semibold text-slate-400 bg-slate-100/50 px-3 py-1.5 rounded-full border border-slate-200/50"><span class="material-symbols-outlined text-[14px]">sync</span>Auto-refreshing every 5s</div><a class="btn btn-danger text-decoration-none" href="create.php"><span class="material-symbols-outlined text-[20px]">emergency_home</span>Submit Alert</a>'
+    '<div class="flex items-center gap-2 text-xs font-semibold text-slate-400 bg-slate-100/50 px-3 py-1.5 rounded-full border border-slate-200/50"><span class="material-symbols-outlined text-[14px]">sync</span>Auto-refreshing every 5s</div>'
 );
 ?>
 

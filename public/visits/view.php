@@ -114,7 +114,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $visitDb->commit();
             if ($newStatus === 'Completed') {
                 $returnTo = 'previous';
-                flash_message('success', 'Treatment saved and visit completed.');
+                flash_message('success', 'Assessment finished and visit completed.');
             } else {
                 flash_message('success', 'Visit addressed in Cliniq_db.');
             }
@@ -786,9 +786,9 @@ render_header($pageTitle);
                     No Visit
                 </button>
             <?php elseif ($canTreatFromLogbook): ?>
-                <button type="submit" form="logbookIntakeForm" class="sheet-chip-button" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save and complete treatment?" data-confirm-message="This will save the current vitals, assessment, diagnosis, treatment, referral, and remarks, issue selected medicines and equipment loans, then mark the visit as completed." data-confirm-toast="Saving treatment...">
-                    <span class="material-symbols-outlined">save</span>
-                    Save Treatment
+                <button type="submit" form="logbookIntakeForm" class="sheet-chip-button" data-confirm-submit data-confirm-type="primary" data-confirm-title="Finish assessment?" data-confirm-message="This will save the current vitals, assessment, diagnosis, treatment, referral, and remarks, issue selected medicines and equipment loans, then mark the visit as completed." data-confirm-toast="Finishing assessment...">
+                    <span class="material-symbols-outlined">task_alt</span>
+                    Finish Assessment
                 </button>
             <?php else: ?>
                 <a href="index.php" class="sheet-chip-button">
@@ -986,13 +986,9 @@ render_header($pageTitle);
         <?php if ($canTreatFromLogbook): ?>
             <div class="mt-6 pt-5 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3">
                 <div class="flex flex-col sm:flex-row gap-3">
-                    <button type="submit" form="cancelTreatmentForm" class="btn btn-danger justify-center" data-confirm-submit data-confirm-type="danger" data-confirm-title="Cancel this treatment?" data-confirm-message="This will cancel the active treatment session and mark the visit as Cancelled." data-confirm-toast="Cancelling treatment...">
-                        <span class="material-symbols-outlined text-[18px]">cancel</span>
-                        Cancel Treatment
-                    </button>
-                    <button class="btn btn-primary justify-center" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save and complete treatment?" data-confirm-message="This will save the current vitals, assessment, diagnosis, treatment, referral, and remarks, issue selected medicines and equipment loans, then mark the visit as completed." data-confirm-toast="Saving treatment...">
-                        <span class="material-symbols-outlined text-[18px]">save</span>
-                        Save Treatment
+                    <button class="btn btn-primary justify-center" data-confirm-submit data-confirm-type="primary" data-confirm-title="Finish assessment?" data-confirm-message="This will save the current vitals, assessment, diagnosis, treatment, referral, and remarks, issue selected medicines and equipment loans, then mark the visit as completed." data-confirm-toast="Finishing assessment...">
+                        <span class="material-symbols-outlined text-[18px]">task_alt</span>
+                        Finish Assessment
                     </button>
                 </div>
             </div>
@@ -1009,11 +1005,6 @@ render_header($pageTitle);
 
 <form id="beginTreatmentForm" method="post" style="display:none;">
     <input type="hidden" name="mode" value="begin_visit">
-    <input type="hidden" name="from" value="<?= e($entryPoint) ?>">
-</form>
-
-<form id="cancelTreatmentForm" method="post" style="display:none;">
-    <input type="hidden" name="mode" value="cancel_treatment">
     <input type="hidden" name="from" value="<?= e($entryPoint) ?>">
 </form>
 

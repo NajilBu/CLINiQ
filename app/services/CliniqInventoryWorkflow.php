@@ -64,50 +64,9 @@ function cliniq_inventory_item_type(string $value): string
     return str_contains(strtolower(trim($value)), 'equipment') ? 'Equipment' : 'Medicine';
 }
 
-function cliniq_inventory_item_code(string $value): string
-{
-    $value = strtoupper(trim($value));
-    if ($value === '' || !preg_match('/^[A-Z0-9][A-Z0-9-]{1,39}$/', $value)) {
-        throw new InvalidArgumentException('Item code must use 2 to 40 letters, numbers, or hyphens.');
-    }
-    return $value;
-}
-
-function cliniq_inventory_batch_code(PDO $db, string $sourceCode, string $expirationDate): string
-{
-    $baseCode = strtoupper(trim($sourceCode));
-    $baseCode = preg_replace('/-B\d{6}-[A-F0-9]{4}$/', '', $baseCode) ?: 'MED';
-    $date = DateTimeImmutable::createFromFormat('!Y-m-d', $expirationDate);
-    if (!$date || $date->format('Y-m-d') !== $expirationDate) {
-        throw new InvalidArgumentException('Enter a valid expiration date for the received batch.');
-    }
-
-    $suffixPrefix = '-B' . $date->format('ymd') . '-';
-    $baseCode = rtrim(substr($baseCode, 0, 40 - strlen($suffixPrefix) - 4), '-');
-    $baseCode = $baseCode !== '' ? $baseCode : 'MED';
-    $exists = $db->prepare('SELECT 1 FROM inventory_items WHERE item_code = ? LIMIT 1');
-
-    for ($attempt = 0; $attempt < 20; $attempt++) {
-        $candidate = $baseCode . $suffixPrefix . strtoupper(bin2hex(random_bytes(2)));
-        $exists->execute([$candidate]);
-        if (!$exists->fetchColumn()) {
-            return $candidate;
-        }
-    }
-
-    throw new RuntimeException('A unique batch code could not be generated. Please try again.');
-}
-
 function cliniq_inventory_medicine_option_label(array $medicine): string
 {
-    $expiration = trim((string) ($medicine['expiration_date'] ?? ''));
-    $expirationLabel = $expiration !== ''
-        ? date('M d, Y', strtotime($expiration))
-        : 'No expiry recorded';
-
     return trim((string) ($medicine['item_name'] ?? 'Medicine'))
-        . ' — ' . trim((string) ($medicine['item_code'] ?? 'No batch code'))
-        . ' — Expires ' . $expirationLabel
         . ' (' . (int) ($medicine['quantity'] ?? 0) . ' ' . trim((string) ($medicine['unit'] ?? 'unit')) . ')';
 }
 
@@ -144,7 +103,7 @@ function cliniq_inventory_items(?string $type = null, ?bool $active = null): arr
 function cliniq_inventory_available_medicines(): array
 {
     $stmt = cliniq_inventory_db()->query("
-        SELECT item_id AS id, item_id, item_code, item_name, item_type AS category,
+        SELECT item_id AS id, item_id, item_name, item_type AS category,
                quantity, unit, reorder_level, expiration_date
         FROM inventory_items
         WHERE item_type = 'Medicine' AND is_active = 1
@@ -257,7 +216,7 @@ function cliniq_inventory_dispense_medicines(
         }
 
         $itemStmt = $db->prepare("
-            SELECT item_id, item_code, item_name, quantity, unit, item_type
+            SELECT item_id, item_name, quantity, unit, item_type
             FROM inventory_items
             WHERE item_id = ? AND item_type IN ('Medicine', 'Equipment') AND is_active = 1
             FOR UPDATE
@@ -350,7 +309,7 @@ function cliniq_inventory_entry_dispensings(array $entryIds): array
 function cliniq_inventory_transactions(?int $limit = null): array
 {
     $sql = "
-        SELECT t.*, i.item_code, i.item_name, i.item_type, i.unit,
+        SELECT t.*, i.item_name, i.item_type, i.unit,
                TRIM(CONCAT_WS(' ', pe.first_name, pe.middle_name, pe.last_name)) AS performed_by_name
         FROM inventory_transactions t
         JOIN inventory_items i ON i.item_id = t.item_id
