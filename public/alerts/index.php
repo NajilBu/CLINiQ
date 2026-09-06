@@ -175,14 +175,6 @@ render_clinic_command_header(
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
-                    <label class="clinic-label">Status</label>
-                    <select class="clinic-select" name="status">
-                        <?php foreach ($allowedStatuses as $key => $label): ?>
-                            <option value="<?= e($key) ?>" <?= $filterKey === $key ? 'selected' : '' ?>><?= e($label) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div>
                     <label class="clinic-label">Risk</label>
                     <select class="clinic-select" name="risk">
                         <option value="all" <?= $filterRisk === 'all' ? 'selected' : '' ?>>All</option>

@@ -238,15 +238,6 @@ render_clinic_command_header(
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div>
-                        <label class="clinic-label">Status</label>
-                        <select class="clinic-select" name="status">
-                            <option value="all" <?= $filters['status'] === 'all' ? 'selected' : '' ?>>All Records</option>
-                            <?php foreach (visit_statuses() as $status): ?>
-                                <option value="<?= e($status) ?>" <?= $filters['status'] === $status ? 'selected' : '' ?>><?= e($status) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div>
                         <label class="clinic-label">Purpose</label>
                         <select class="clinic-select" name="purpose">
                             <option value="all">All Purposes</option>

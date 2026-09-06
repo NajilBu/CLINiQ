@@ -194,14 +194,6 @@ render_clinic_command_header(
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
-                    <label class="clinic-label">Status</label>
-                    <select class="clinic-select" name="status">
-                        <?php foreach ($tabs as $key => $label): ?>
-                            <option value="<?= e($key) ?>" <?= $filterStatus === $key ? 'selected' : '' ?>><?= e($label) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div>
                     <label class="clinic-label">Date From</label>
                     <input class="clinic-input" type="date" name="date_from" value="<?= e($dateFrom) ?>">
                 </div>
