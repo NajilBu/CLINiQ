@@ -35,6 +35,10 @@ function auth_db(): PDO
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
     ]);
 
+    $timezone = new DateTimeZone(date_default_timezone_get());
+    $offset = (new DateTimeImmutable('now', $timezone))->format('P');
+    $pdo->exec('SET time_zone = ' . $pdo->quote($offset));
+
     return $pdo;
 }
 
