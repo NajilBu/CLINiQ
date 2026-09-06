@@ -182,7 +182,7 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
                 </div>
                 <div>
                     <label class="clinic-label" for="id_number">ID Number</label>
-                    <input class="clinic-input uppercase" id="id_number" name="id_number" value="<?= e((string) ($individualValues['id_number'] ?? '')) ?>" placeholder="23-00262" aria-describedby="id_number_hint" autocapitalize="characters" pattern="<?= e(ID_NUMBER_HTML_PATTERN) ?>" maxlength="50" data-required-message="Enter the patient's ID number." required>
+                    <input class="clinic-input uppercase" id="id_number" name="id_number" value="<?= e((string) ($individualValues['id_number'] ?? '')) ?>" placeholder="23-00262" aria-describedby="id_number_hint" autocapitalize="characters" pattern="<?= e(ID_NUMBER_HTML_PATTERN) ?>" maxlength="21" data-id-number-format data-required-message="Enter the patient's ID number." required>
                     <p class="text-[11px] font-bold text-slate-500 mt-1" id="id_number_hint">Student example: 23-00262</p>
                 </div>
                 <div>

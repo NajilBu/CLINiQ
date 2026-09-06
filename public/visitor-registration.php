@@ -40,7 +40,7 @@ function split_visitor_name(string $fullName): array
 }
 
 if (isset($_GET['lookup_identifier'])) {
-    $identifier = trim((string) $_GET['lookup_identifier']);
+    $identifier = normalize_id_number((string) $_GET['lookup_identifier']);
     header('Content-Type: application/json');
 
     if (!is_valid_id_number($identifier)) {
@@ -78,6 +78,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $form[$key] = trim((string) ($_POST[$key] ?? ''));
     }
 
+    $form['identifier'] = normalize_id_number($form['identifier']);
+
     $isBorrowingEquipment = $form['reason'] === VISITOR_REASON_BORROW_EQUIPMENT;
     $requiredFields = ['full_name', 'identifier', 'category', 'department', 'reason'];
     if (!$isBorrowingEquipment) {
@@ -110,8 +112,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors['category'] = 'Select a valid category.';
     }
 
-    if ($form['category'] === 'Student' && !is_valid_id_number($form['identifier'])) {
-        $errors['identifier'] = 'Use the format ' . ID_NUMBER_FORMAT_LABEL;
+    if (!is_valid_id_number($form['identifier'])) {
+        $errors['identifier'] = 'Use ' . ID_NUMBER_FORMAT_LABEL . '.';
     }
 
     if (!$matchedPatient) {
@@ -703,6 +705,7 @@ $theme = active_cliniq_theme();
     </main>
 </div>
 
+<script src="<?= app_url('assets/js/id-number-format.js?v=' . filemtime(__DIR__ . '/assets/js/id-number-format.js')) ?>"></script>
 <script>
     const identifier = document.getElementById('identifier');
     const fullName = document.getElementById('full_name');
@@ -722,19 +725,6 @@ $theme = active_cliniq_theme();
     const lookupStatus = document.getElementById('visitorLookupStatus');
     let visitorLookupSequence = 0;
     let visitorLookupTimer = null;
-
-    function shouldFormatAsStudentId(value) {
-        return /^[\d-]*$/.test(String(value || ''));
-    }
-
-    function normalizeVisitorId(value) {
-        const digits = String(value || '').replace(/\D/g, '').slice(0, 7);
-        if (digits.length <= 2) {
-            return digits;
-        }
-
-        return `${digits.slice(0, 2)}-${digits.slice(2)}`;
-    }
 
     function setVisitorLookupStatus(message, state = '') {
         if (!lookupStatus) return;
@@ -810,9 +800,7 @@ $theme = active_cliniq_theme();
         if (!identifier) return;
 
         const rawValue = identifier.value;
-        const formatted = shouldFormatAsStudentId(rawValue)
-            ? normalizeVisitorId(rawValue)
-            : rawValue.trim().toUpperCase();
+        const formatted = window.CliniqIdNumber.format(rawValue);
         if (identifier.value !== formatted) {
             identifier.value = formatted;
         }
@@ -823,8 +811,7 @@ $theme = active_cliniq_theme();
             return;
         }
 
-        const isNumericStudentId = /^[\d-]+$/.test(formatted);
-        if ((isNumericStudentId && !/^\d{2}-\d{5}$/.test(formatted)) || formatted.length < 3) {
+        if (!window.CliniqIdNumber.isValid(formatted)) {
             setVisitorLookupStatus('Continue typing your ID.');
             return;
         }

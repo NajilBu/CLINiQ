@@ -11,7 +11,7 @@ $clinicProfile = clinic_profile_settings();
 $clinicLogoSrc = student_public_logo_src($clinicProfile);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $studentIdValue = trim($_POST['student_id'] ?? '');
+    $studentIdValue = normalize_id_number(trim($_POST['student_id'] ?? ''));
     $password = (string) ($_POST['password'] ?? '');
 
     if (!is_valid_id_number($studentIdValue)) {

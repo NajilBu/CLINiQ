@@ -1008,7 +1008,7 @@ render_clinic_command_header(
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="md:col-span-2">
                     <label class="clinic-label">Existing Patient ID</label>
-                    <input class="clinic-input uppercase" name="borrower_identifier" required placeholder="Student, faculty, or personnel ID">
+                    <input class="clinic-input uppercase" name="borrower_identifier" data-id-number-format required placeholder="Student, faculty, or personnel ID">
                     <p class="settings-help mt-2 mb-0">The ID must already exist in the Cliniq_db patient list.</p>
                 </div>
                 <div>

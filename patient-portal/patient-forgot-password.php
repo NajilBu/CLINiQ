@@ -9,7 +9,7 @@ $idNumber = '';
 $email = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $idNumber = trim((string) ($_POST['id_number'] ?? ''));
+    $idNumber = normalize_id_number(trim((string) ($_POST['id_number'] ?? '')));
     $email = trim((string) ($_POST['email'] ?? ''));
     if (!patient_password_reset_verify_csrf('request', (string) ($_POST['csrf_token'] ?? ''))) {
         $error = 'The form expired. Refresh the page and try again.';

@@ -18,7 +18,7 @@ foreach ($patients as $patient) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
-        $postedStudentNumber = trim($_POST['id_number'] ?? '');
+        $postedStudentNumber = normalize_id_number(trim($_POST['id_number'] ?? ''));
         $patientId = 0;
         if ($postedStudentNumber !== '') {
             if (!is_valid_id_number($postedStudentNumber)) {
@@ -311,13 +311,8 @@ const patientCourseDisplay = document.getElementById('patientCourseDisplay');
 const patientSexDisplay = document.getElementById('patientSexDisplay');
 const patientLookupStatus = document.getElementById('patientLookupStatus');
 
-function normalizeStudentId(value) {
-    const digits = String(value || '').replace(/\D/g, '').slice(0, 7);
-    if (digits.length <= 2) {
-        return digits;
-    }
-
-    return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+function normalizePatientId(value) {
+    return window.CliniqIdNumber.format(value);
 }
 
 function setLookupStatus(message, state = '') {
@@ -335,7 +330,7 @@ function clearPatientLookup(message = 'Enter a ID number to load patient details
 }
 
 function updatePatientLookup() {
-    const formatted = normalizeStudentId(studentIdLookup.value);
+    const formatted = normalizePatientId(studentIdLookup.value);
     if (studentIdLookup.value !== formatted) {
         studentIdLookup.value = formatted;
     }
@@ -347,7 +342,7 @@ function updatePatientLookup() {
 
     const patient = visitPatientsByStudentNumber.get(formatted);
     if (!patient) {
-        clearPatientLookup(formatted.length >= 8 ? 'No patient found for this ID number.' : 'Continue typing the ID number.', formatted.length >= 8 ? 'missing' : '');
+        clearPatientLookup(window.CliniqIdNumber.isValid(formatted) ? 'No patient found for this ID number.' : 'Continue typing the ID number.', window.CliniqIdNumber.isValid(formatted) ? 'missing' : '');
         return;
     }
 

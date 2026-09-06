@@ -20,9 +20,10 @@ $db = cliniq_inventory_db();
 
 try {
     $dueAtDate = cliniq_inventory_return_date($dueAt);
-    if ($itemId < 1 || $borrowerIdentifier === '') {
-        throw new InvalidArgumentException('Equipment and an existing patient ID are required.');
+    if ($itemId < 1 || !is_valid_id_number($borrowerIdentifier)) {
+        throw new InvalidArgumentException('Equipment and ' . id_number_validation_message('an existing patient ID'));
     }
+    $borrowerIdentifier = normalize_id_number($borrowerIdentifier);
     $staffId = cliniq_inventory_staff_person_id();
     $db->beginTransaction();
 

@@ -259,6 +259,7 @@ function render_header(string $title): void
                 --cliniq-shadow-rgb: <?= e($theme['shadow_rgb']) ?>;
             }
         </style>
+    <script src="<?= app_url('assets/js/id-number-format.js?v=' . filemtime(__DIR__ . '/../../public/assets/js/id-number-format.js')) ?>"></script>
     </head>
     <body class="<?= e($bodyClasses) ?>" data-cliniq-runtime="<?= $isElectronRuntime ? 'electron' : 'browser' ?>" data-cliniq-app-url="<?= e(app_url()) ?>" data-cliniq-patient-portal-url="<?= e($patientPortalUrl) ?>"<?php if ($user): ?> data-alert-status-url="<?= e(app_url('api/alerts.php')) ?>" data-active-alert-count="<?= (int) $activeAlertCount ?>" data-critical-alert-count="<?= (int) $criticalAlertCount ?>"<?php endif; ?>>
     <?php if ($user): ?>
