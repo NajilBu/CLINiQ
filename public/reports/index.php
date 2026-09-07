@@ -54,7 +54,7 @@ $mainSystemReport = build_system_report($dateFrom, $dateTo, []);
 
 render_header('Reports');
 ?>
-
+<link rel="stylesheet" href="<?= e(app_url('assets/css/reports.css?v=1')) ?>">
 <!-- ═══ Title ═══ -->
 <?php render_clinic_command_header(
     'Reports',
@@ -62,6 +62,8 @@ render_header('Reports');
     'Build, preview, and export consolidated clinic operational analytics.',
     '<a class="btn btn-primary text-decoration-none" id="reportHeaderPreviewLink" href="preview.php?from=' . e($dateFrom) . '&to=' . e($dateTo) . '&period=' . e($period) . '&semester=' . e((string) $semester) . '"><span class="material-symbols-outlined text-[20px]">preview</span>Preview Report</a>'
 ); ?>
+
+<div class="reports-page">
 
 <!-- ═══ Date Range Filter ═══ -->
 <form method="get" class="clinic-card overflow-hidden" data-no-ajax="true" id="reportDateForm">
@@ -102,38 +104,6 @@ render_header('Reports');
         <p class="text-xs font-bold text-slate-500 mb-0">Live operational summaries for <?= e(date('M j, Y', strtotime($dateFrom))) ?> - <?= e(date('M j, Y', strtotime($dateTo))) ?>.</p>
     </div>
 </section>
-<style>
-    .report-period-option {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        min-height: 3rem;
-        border: 1px solid #dbe7df;
-        border-radius: 1rem;
-        background: #fff;
-        color: #475569;
-        font-size: 0.82rem;
-        font-weight: 900;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        cursor: pointer;
-        transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
-    }
-
-    .report-period-option input {
-        position: absolute;
-        opacity: 0;
-        pointer-events: none;
-    }
-
-    .report-period-option.is-active,
-    .report-period-option:has(input:checked) {
-        border-color: rgba(var(--cliniq-focus-rgb), 0.45);
-        background: var(--cliniq-primary-fixed);
-        color: var(--cliniq-primary-hover);
-        box-shadow: 0 10px 22px rgba(var(--cliniq-shadow-rgb), 0.1);
-    }
-</style>
 <style><?= system_report_styles() ?></style>
 <?= render_system_report_document($mainSystemReport, false, ['include_cover' => false]) ?>
 
@@ -273,4 +243,5 @@ render_header('Reports');
 })();
 </script>
 
+</div>
 <?php render_footer(); ?>

@@ -20,9 +20,11 @@ render_clinic_command_header(
     '<a class="btn btn-outline text-decoration-none" data-no-ajax="true" href="index.php?' . e($adjustQuery) . '"><span class="material-symbols-outlined text-[18px]">arrow_back</span>Back to Reports</a>'
 );
 ?>
+<link rel="stylesheet" href="<?= e(app_url('assets/css/reports.css?v=1')) ?>">
+<div class="reports-page">
 
-<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-5 py-4 text-sm font-bold text-emerald-800 flex items-start gap-3">
-    <span class="material-symbols-outlined text-[20px]">visibility</span>
+<div class="report-inline-notice" role="status">
+    <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
     <p class="m-0">The checklist controls which report sections are included in the printable PDF view. The checklist itself is never included in the report.</p>
 </div>
 
@@ -40,18 +42,18 @@ render_clinic_command_header(
         </div>
         <div class="p-6 space-y-5">
             <div class="flex justify-end gap-4">
-                <button class="text-xs font-extrabold text-primary bg-transparent border-0 p-0" type="button" id="selectAllReportModules">Select all</button>
-                <button class="text-xs font-extrabold text-slate-500 bg-transparent border-0 p-0" type="button" id="clearReportModules">Clear all</button>
+                <button class="report-helper-action" type="button" id="selectAllReportModules">Select all</button>
+                <button class="report-helper-action secondary" type="button" id="clearReportModules">Clear all</button>
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                 <?php foreach ($moduleLabels as $moduleKey => $moduleLabel): ?>
-                    <label class="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 cursor-pointer hover:border-primary/40 transition-colors">
+                    <label class="report-module-card">
                         <input class="w-4 h-4 accent-[var(--cliniq-primary)]" type="checkbox" name="modules[]" value="<?= e($moduleKey) ?>" <?= in_array($moduleKey, $modules, true) ? 'checked' : '' ?>>
-                        <span class="text-sm font-extrabold text-slate-700"><?= e($moduleLabel) ?></span>
+                        <span><?= e($moduleLabel) ?></span>
                     </label>
                 <?php endforeach; ?>
             </div>
-            <p class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-bold text-red-700" id="reportModuleError" role="alert">Select at least one section before exporting.</p>
+            <p class="report-module-error hidden" id="reportModuleError" role="alert">Select at least one section before exporting.</p>
             <div class="flex justify-end">
                 <button class="btn btn-primary justify-center" type="submit" id="exportReportPdf"><span class="material-symbols-outlined text-[18px]">print</span>Open Printable PDF View</button>
             </div>
@@ -106,4 +108,5 @@ render_clinic_command_header(
 })();
 </script>
 
+</div>
 <?php render_footer(); ?>

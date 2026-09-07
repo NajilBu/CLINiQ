@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en" class="feedback-document"><head>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Give Clinic Feedback | CLINiQ</title>
+    <link rel="stylesheet" href="/cliniq/public/assets/vendor/fonts/inter-manrope.css?v=offline-1">
+    <link rel="stylesheet" href="/cliniq/public/assets/vendor/fonts/material-symbols.css?v=offline-1">
+    <link rel="stylesheet" href="/cliniq/public/assets/css/app.css?v=1788795052">
+    <link rel="stylesheet" href="/cliniq/public/assets/css/feedback.css?v=design-2">
+    <style>
+        :root {
+            --cliniq-primary: #00478d;
+            --cliniq-primary-hover: #003d7c;
+            --cliniq-primary-fixed: #d6e3ff;
+            --cliniq-accent: #e8f1ff;
+            --cliniq-accent-foreground: #003d7c;
+            --cliniq-surface: #f8f9fa;
+            --cliniq-surface-low: #eef4ff;
+            --cliniq-outline: #c2c6d4;
+            --cliniq-focus-rgb: 0, 71, 141;
+            --cliniq-shadow-rgb: 0, 61, 124;
+        }
+    </style>
+</head>
+<body class="feedback-page feedback-public">
+    <header class="cliniq-entry-header" aria-label="CLINiQ navigation">
+        <a href="/cliniq/public/index.php" class="cliniq-entry-back">
+            <span class="material-symbols-outlined">arrow_back</span>
+            Back
+        </a>
+        <span class="cliniq-entry-divider" aria-hidden="true"></span>
+        <a href="/cliniq/public/index.php" class="cliniq-entry-brand" aria-label="Go to CLINiQ access portal">
+            <span class="cliniq-entry-logo">
+                <img src="/cliniq/public/uploads/settings/clinic-logo-20260901064934-ad51692a.png" alt="University Health Services logo">
+            </span>
+            <span class="cliniq-entry-copy">
+                <span class="cliniq-entry-name">CLINiQ</span>
+                <span class="cliniq-entry-subtitle">University Health Services</span>
+            </span>
+        </a>
+    </header>
+    <main class="feedback-shell">
+    <header class="clinic-card feedback-section">
+        <span class="feedback-eyebrow">University Clinic · Student experience</span>
+        <h1>Give Clinic Feedback</h1>
+        <p>Help us improve your campus healthcare. Choose a clinic visit and share your actual experience.</p>
+        <p class="feedback-muted">Your student ID is all you need to find your visit. No login, password, or email required.</p>
+    </header>
+                <section class="clinic-card feedback-section">
+            <h2>Choose a clinic visit</h2>
+            <p class="feedback-muted">Active and Completed visits are listed newest first. Each visit accepts one response.</p>
+                                                    <form method="post" class="feedback-visit">
+                    <strong>September 2, 2026 · 8:00 AM</strong><br>
+                    Clinic service · <span class="badge badge-active">Active</span> · Visit #6                    <input type="hidden" name="csrf" value="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa">
+                    <input type="hidden" name="visit_token" value="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb">
+                    <input type="hidden" name="action" value="select">
+                    <input type="hidden" name="visit_id" value="6">
+                    <div class="feedback-actions"><button class="btn btn-primary" >Give feedback for this visit</button></div>
+                </form>
+                            <form method="post" class="feedback-visit">
+                    <strong>September 2, 2026 · 8:00 AM</strong><br>
+                    Clinic service · <span class="badge badge-completed">Completed</span> · Visit #5                    <input type="hidden" name="csrf" value="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa">
+                    <input type="hidden" name="visit_token" value="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb">
+                    <input type="hidden" name="action" value="select">
+                    <input type="hidden" name="visit_id" value="5">
+                    <div class="feedback-actions"><button class="btn btn-primary" disabled>Feedback submitted</button></div>
+                </form>
+                            <form method="post" class="feedback-visit">
+                    <strong>September 1, 2026 · 9:00 AM</strong><br>
+                    Clinic service · <span class="badge badge-completed">Completed</span> · Visit #2                    <input type="hidden" name="csrf" value="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa">
+                    <input type="hidden" name="visit_token" value="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb">
+                    <input type="hidden" name="action" value="select">
+                    <input type="hidden" name="visit_id" value="2">
+                    <div class="feedback-actions"><button class="btn btn-primary" disabled>Feedback submitted</button></div>
+                </form>
+                            <form method="post" class="feedback-visit">
+                    <strong>September 1, 2026 · 8:00 AM</strong><br>
+                    Clinic service · <span class="badge badge-completed">Completed</span> · Visit #1                    <input type="hidden" name="csrf" value="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa">
+                    <input type="hidden" name="visit_token" value="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb">
+                    <input type="hidden" name="action" value="select">
+                    <input type="hidden" name="visit_id" value="1">
+                    <div class="feedback-actions"><button class="btn btn-primary" >Give feedback for this visit</button></div>
+                </form>
+                        <form method="post"><input type="hidden" name="csrf" value="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"><input type="hidden" name="action" value="reset"><button class="btn btn-outline">Use a different student ID</button></form>
+        </section>
+    </main>
+<script>
+document.querySelectorAll('select[data-other]').forEach(select => {
+    const field = document.getElementById(select.dataset.other);
+    const sync = () => { field.hidden = select.value !== 'Other'; field.querySelector('input').required = !field.hidden; };
+    select.addEventListener('change', sync); sync();
+});
+document.getElementById('feedback-survey')?.addEventListener('submit', event => {
+    const button = event.target.querySelector('button[type="submit"]');
+    button.disabled = true; button.setAttribute('aria-busy', 'true'); button.textContent = 'Submitting…';
+});
+window.addEventListener('pageshow', () => {
+    const button = document.querySelector('#feedback-survey button[type="submit"]');
+    if (button) { button.disabled = false; button.removeAttribute('aria-busy'); button.textContent = 'Submit feedback'; }
+});
+document.getElementById('feedback-error')?.focus();
+</script>
+<script>document.addEventListener("submit", e => e.preventDefault(), true);</script></body></html>

@@ -186,7 +186,11 @@ function system_report_styles(): string
 .report-section-number { display: grid; place-items: center; flex: 0 0 34px; height: 34px; border-radius: 10px; background: #e6f4eb; color: #287548; font-size: 13px; font-weight: 900; }
 .report-section h2 { margin: 0 0 4px; color: #17261d; font-size: 20px; letter-spacing: -.3px; }
 .report-section-description { margin: 0; color: #64748b; font-size: 11px; font-weight: 600; line-height: 1.5; }
-.report-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 18px; }
+.report-document-dashboard .report-section-heading { gap: 14px; margin-bottom: 20px; }
+.report-document-dashboard .report-section-number { flex-basis: 36px; height: 36px; border-radius: 12px; background: #e6f4eb; color: #287548; font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 14px; }
+.report-document-dashboard .report-section h2 { color: #17261d; font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 1.25rem; font-weight: 800; letter-spacing: 0; line-height: 1.25; }
+.report-document-dashboard .report-section-description { color: #64748b; font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: .8125rem; font-weight: 600; line-height: 1.5; }
+.report-metrics { display: grid; grid-template-columns: repeat(var(--report-metric-columns, 4), minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
 .report-metric { min-height: 88px; padding: 14px; border: 1px solid #dfe9e2; border-radius: 12px; background: #fbfdfb; }
 .report-metric-label { min-height: 24px; margin: 0 0 8px; color: #64748b; font-size: 9px; font-weight: 900; letter-spacing: .07em; text-transform: uppercase; }
 .report-metric-value { margin: 0; color: #205f3d; font-size: 23px; font-weight: 900; line-height: 1; }
@@ -232,7 +236,7 @@ function system_report_styles(): string
 @media (max-width: 760px) {
   .report-document { width: 100%; margin: 0; }
   .report-cover, .report-body { padding: 28px 22px; }
-  .report-meta, .report-metrics, .report-charts { grid-template-columns: 1fr; }
+  .report-meta, .report-charts { grid-template-columns: 1fr; }
 }
 @page { size: A4 portrait; margin: 11mm 10mm 13mm; }
 @media print {
@@ -358,7 +362,8 @@ function render_system_report_document(array $report, bool $standalone = false, 
             <?php $sectionNumber = 0; foreach ($report['sections'] as $sectionKey => $section): $sectionNumber++; ?>
                 <section class="report-section" data-report-section="<?= system_report_escape((string) $sectionKey) ?>">
                     <div class="report-section-heading"><div class="report-section-number"><?= $sectionNumber ?></div><div><h2><?= system_report_escape($section['title']) ?></h2><p class="report-section-description"><?= system_report_escape($section['description']) ?></p></div></div>
-                    <div class="report-metrics">
+                    <?php $metricCount = max(1, min(8, count($section['metrics']))); ?>
+                    <div class="report-metrics" style="--report-metric-columns: <?= $metricCount ?>">
                         <?php foreach ($section['metrics'] as $metric): ?>
                             <div class="report-metric"><p class="report-metric-label"><?= system_report_escape($metric['label']) ?></p><p class="report-metric-value"><?= system_report_format_number($metric['value'], (int) ($metric['decimals'] ?? 0)) ?></p><?php if (($metric['note'] ?? '') !== ''): ?><p class="report-metric-note"><?= system_report_escape($metric['note']) ?></p><?php endif; ?></div>
                         <?php endforeach; ?>

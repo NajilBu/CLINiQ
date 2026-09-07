@@ -1,0 +1,113 @@
+/* Interactive Reports module styling. Printable report styles remain in SystemReportRenderer.php. */
+.reports-page .report-period-option {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 3rem;
+    padding: 0 0.75rem;
+    border: 1px solid var(--cliniq-outline);
+    border-radius: 0.75rem;
+    background: var(--cliniq-card);
+    color: var(--cliniq-muted-foreground);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
+}
+
+.reports-page .report-period-option:hover,
+.reports-page .report-period-option:focus-within {
+    border-color: color-mix(in srgb, var(--cliniq-primary) 48%, var(--cliniq-outline));
+    color: var(--cliniq-accent-foreground);
+}
+
+.reports-page .report-period-option input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.reports-page .report-period-option input:focus-visible + span {
+    outline: 3px solid rgba(var(--cliniq-focus-rgb), 0.42);
+    outline-offset: 3px;
+}
+
+.reports-page .report-period-option.is-active,
+.reports-page .report-period-option:has(input:checked) {
+    border-color: var(--cliniq-primary);
+    background: var(--cliniq-primary-fixed);
+    color: var(--cliniq-accent-foreground);
+    box-shadow: 0 6px 16px rgba(var(--cliniq-shadow-rgb), 0.08);
+}
+
+.reports-page .report-module-card {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 3.25rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--cliniq-outline);
+    border-radius: 0.75rem;
+    background: var(--cliniq-card);
+    color: var(--cliniq-foreground);
+    cursor: pointer;
+    transition: border-color 150ms ease, background-color 150ms ease;
+}
+
+.reports-page .report-module-card:hover,
+.reports-page .report-module-card:focus-within {
+    border-color: color-mix(in srgb, var(--cliniq-primary) 48%, var(--cliniq-outline));
+    background: var(--cliniq-surface-low);
+}
+
+.reports-page .report-module-card input {
+    width: 1rem;
+    height: 1rem;
+    flex: 0 0 auto;
+    accent-color: var(--cliniq-primary);
+}
+
+.reports-page .report-module-card span {
+    font-size: 0.8125rem;
+    font-weight: 600;
+}
+
+.reports-page .report-inline-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    border: 1px solid var(--cliniq-outline);
+    border-radius: 0.75rem;
+    background: var(--cliniq-surface-low);
+    color: var(--cliniq-accent-foreground);
+    font-size: 0.8125rem;
+    font-weight: 600;
+}
+
+.reports-page .report-inline-notice .material-symbols-outlined { font-size: 1.25rem; }
+.reports-page .report-helper-action {
+    border: 0;
+    background: transparent;
+    color: var(--cliniq-primary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.reports-page .report-helper-action.secondary { color: var(--cliniq-muted-foreground); }
+.reports-page .report-helper-action:hover { color: var(--cliniq-accent-foreground); }
+.reports-page .report-helper-action:focus-visible { outline: 3px solid rgba(var(--cliniq-focus-rgb), 0.42); outline-offset: 3px; }
+.reports-page .report-module-error {
+    padding: 0.75rem 1rem;
+    border: 1px solid #fecaca;
+    border-radius: 0.75rem;
+    background: #fef2f2;
+    color: #b91c1c;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .reports-page .report-period-option,
+    .reports-page .report-module-card { transition: none; }
+}

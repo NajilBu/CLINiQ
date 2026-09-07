@@ -2,6 +2,11 @@
 
 CLINiQ is a simple PHP and MySQL web application for a school clinic information management system. It is designed for a capstone prototype with electronic health records, clinic visits, APE document tracking, QR/NFC emergency health passport links, patient risk classification, and real-time nurse alerting through lightweight polling.
 
+## Design guide
+
+See [the CLINiQ design system](DESIGN_SYSTEM.md) for shared styles, reusable UI
+components, page-family conventions, and the checklist for correcting inconsistent designs.
+
 ## Tech Stack
 
 - PHP 8+
