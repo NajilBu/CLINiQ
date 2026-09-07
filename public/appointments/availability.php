@@ -46,8 +46,8 @@ if ($action === 'delete') {
     $originalStart = trim((string) ($_POST['original_start'] ?? ''));
     $originalEnd = trim((string) ($_POST['original_end'] ?? ''));
     $rangeError = !preg_match('/^\d{2}:\d{2}$/', $start) || !preg_match('/^\d{2}:\d{2}$/', $end) || $start >= $end || $start < '08:00' || $end > '17:00' || ($originalStart !== '' && $start < $originalStart) || ($originalEnd !== '' && $end > $originalEnd);
-    if (!$ids || $dateError || $rangeError) {
-        flash_message('error', $dateError ?: 'Choose a valid time between 8:00 AM and 5:00 PM.');
+    if (!$ids || $dateError || $rangeError || $reason === '') {
+        flash_message('error', $dateError ?: ($reason === '' ? 'Enter a reason for the unavailable time.' : 'Choose a valid time between 8:00 AM and 5:00 PM.'));
     } else {
         $db = appointment_db();
         $db->beginTransaction();
@@ -133,6 +133,8 @@ if ($action === 'delete') {
 
     if (!$allDay && $submittedSlots && !$validSlots) {
         // Validation message is already set above.
+    } elseif (!$allDay && $validSlots && $reason === '') {
+        flash_message('error', 'Enter a reason for the unavailable time.');
     } elseif (!$allDay && $validSlots) {
         $stmt = appointment_db()->prepare("
             INSERT INTO appointment_availability_blocks (block_date, start_time, end_time, reason, created_by_person_id)
@@ -152,6 +154,8 @@ if ($action === 'delete') {
         flash_message('error', 'Choose at least one date to block.');
     } elseif (!$allDay && ($start === '' || $end === '' || $start >= $end || $start < '08:00' || $end > '17:00')) {
         flash_message('error', 'Choose a valid start and end time between 8:00 AM and 5:00 PM.');
+    } elseif ($reason === '') {
+        flash_message('error', 'Enter a reason for the unavailable time.');
     } else {
         $stmt = appointment_db()->prepare("
             INSERT INTO appointment_availability_blocks (block_date, start_time, end_time, reason, created_by_person_id)

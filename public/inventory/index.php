@@ -477,16 +477,7 @@ render_clinic_command_header(
                 </button>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div>
-                    <label class="clinic-label">Section</label>
-                    <select class="clinic-select" name="tab">
-                        <option value="medicine" <?= $activeTab === 'medicine' ? 'selected' : '' ?>>Medicine Inventory</option>
-                        <option value="equipment" <?= $activeTab === 'equipment' ? 'selected' : '' ?>>Equipment Tracking</option>
-                        <option value="expiring" <?= $activeTab === 'expiring' ? 'selected' : '' ?>>Expiring Soon</option>
-                        <option value="archived" <?= $activeTab === 'archived' ? 'selected' : '' ?>>Archived</option>
-                        <option value="activity" <?= $activeTab === 'activity' ? 'selected' : '' ?>>Activity</option>
-                    </select>
-                </div>
+                <input type="hidden" name="tab" value="<?= e($activeTab) ?>">
                 <div>
                     <label class="clinic-label">Stock Status</label>
                     <select class="clinic-select" name="stock_status">

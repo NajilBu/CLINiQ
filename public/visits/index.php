@@ -129,35 +129,15 @@ $visitColumns = [
     ['headerName' => 'Complaint', 'field' => 'complaint', 'minWidth' => 210],
     ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'sortField' => 'statusSort', 'sortType' => 'number', 'width' => 145],
     ['headerName' => 'Attended By', 'field' => 'attendedBy', 'minWidth' => 165],
-    ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 100, 'minWidth' => 90],
 ];
 
 $visitRows = [];
 foreach ($visits as $visit) {
     $fullName = trim($visit['first_name'] . ' ' . $visit['last_name']);
     $visitStatus = $visit['status'] ?? 'Unaddressed';
-    $openLabel = match ($visitStatus) {
-        'Unaddressed' => 'Address',
-        'Active' => 'Treat',
-        default => '',
-    };
-    $actionUrl = app_url('visits/view.php?id=' . (int) $visit['id'] . '&from=logbook' . ($visitStatus === 'Unaddressed' ? '&begin=1' : ''));
-    $actionParts = [];
-    if ($openLabel !== '') {
-        $actionParts[] = '<a href="' . e($actionUrl) . '" class="btn btn-sm btn-ghost text-decoration-none"><span class="material-symbols-outlined text-[14px]">medical_services</span>' . e($openLabel) . '</a>';
-    }
-    if ($visitStatus === 'Unaddressed') {
-        $actionParts[] = '<form method="post" action="' . e(app_url('visits/view.php?id=' . (int) $visit['id'] . '&from=logbook')) . '" style="margin:0;">'
-            . '<input type="hidden" name="mode" value="no_show">'
-            . '<input type="hidden" name="from" value="logbook">'
-            . '<input type="hidden" name="return_to" value="index">'
-            . '<button class="btn btn-sm btn-ghost" title="Mark no show" aria-label="Mark no show" data-confirm-submit data-confirm-type="danger" data-confirm-title="Mark as no show?" data-confirm-message="This will cancel the unaddressed logbook entry because the patient did not proceed to the nurse station." data-confirm-toast="Marking no show..."><span class="material-symbols-outlined text-[14px]">cancel</span> No Show</button>'
-            . '</form>';
-    }
-    $actionsHtml = $actionParts ? '<div class="row-actions-list">' . implode('', $actionParts) . '</div>' : '';
 
     $visitRows[] = [
-        'rowUrl' => $actionUrl,
+        'rowUrl' => app_url('visits/view.php?id=' . (int) $visit['id'] . '&from=logbook'),
         'dateTimeSort' => $visit['visit_datetime'],
         'dateTimeHtml' => '<p class="text-sm font-bold text-slate-700 mb-0">' . e(date('M d, Y', strtotime($visit['visit_datetime']))) . '</p><p class="text-xs font-bold text-slate-400 mb-0">' . e(date('g:i A', strtotime($visit['visit_datetime']))) . '</p>',
         'patientSort' => trim($visit['last_name'] . ' ' . $visit['first_name']),
@@ -166,7 +146,6 @@ foreach ($visits as $visit) {
         'statusHtml' => '<span class="badge ' . e(visit_status_badge_class($visitStatus)) . '">' . e($visitStatus) . '</span>',
         'statusSort' => array_search($visitStatus, ['Unaddressed', 'Active', 'Completed', 'Cancelled'], true),
         'attendedBy' => $visit['attended_by_name'] ?: 'Not yet attended',
-        'actionsHtml' => row_actions_button('Visit actions', $actionsHtml),
     ];
 }
 

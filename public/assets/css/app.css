@@ -4561,6 +4561,13 @@ body.is-electron-runtime .app-content {
     }
 }
 
+/* Fixed overlays must not inherit the page's space-y sibling margins. */
+:is(.modal-backdrop, .file-preview-backdrop, .appointment-date-modal,
+    .student-modal, .student-calendar-time-modal,
+    #change-password-modal, #ape-upload-confirm-modal) {
+    margin: 0 !important;
+    inset: 0;
+}
 /* Shared popup fades, including class/hidden-driven patient dialogs. */
 :is(.modal-backdrop, .file-preview-backdrop, .appointment-date-modal,
     .student-modal, .student-calendar-time-modal,

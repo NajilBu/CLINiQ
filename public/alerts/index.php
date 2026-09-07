@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/AlertWorkflow.php';
@@ -9,10 +9,12 @@ $allowedStatuses = [
     'pending' => 'Pending',
     'in progress' => 'In Progress',
     'resolved' => 'Resolved',
-    'cancelled' => 'Cancelled',
 ];
 $filterKey = strtolower(trim($_GET['status'] ?? 'pending'));
-$filterStatus = $allowedStatuses[$filterKey] ?? 'Pending';
+if (!isset($allowedStatuses[$filterKey])) {
+    $filterKey = 'pending';
+}
+$filterStatus = $allowedStatuses[$filterKey];
 $allowedRisks = ['all', 'Critical', 'High', 'Moderate', 'Low'];
 $filterRisk = trim((string) ($_GET['risk'] ?? 'all'));
 if (!in_array($filterRisk, $allowedRisks, true)) {
@@ -146,7 +148,6 @@ render_clinic_command_header(
                 'pending' => 'Pending',
                 'in progress' => 'In Progress',
                 'resolved' => 'Resolved',
-                'cancelled' => 'Cancelled',
             ];
             foreach ($statusTabs as $key => $label):
                 $isActive = strtolower($filterStatus) === $key;

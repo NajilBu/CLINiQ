@@ -207,6 +207,8 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
                                 ?>
                                 <div class="appointment-week-block <?= $isWholeDay ? 'is-all-day' : '' ?> <?= $isPlaceholder ? 'is-placeholder' : '' ?> <?= $isApeBatch ? 'is-ape' : '' ?>"
                                     style="top: calc(<?= number_format($top, 4, '.', '') ?>% + 2px); height: calc(<?= number_format($height, 4, '.', '') ?>% - 4px);"
+                                    role="button" tabindex="0" aria-haspopup="dialog"
+                                    data-reason="<?= e($block['reason'] ?? '') ?>" data-time-label="<?= e($isWholeDay ? 'Whole day unavailable' : appointment_format_block_time($block)) ?>"
                                     data-availability-block data-date="<?= e($date) ?>" data-start="<?= e($block['start_time'] ?? '') ?>" data-end="<?= e($block['end_time'] ?? '') ?>"
                                     <?= $isPlaceholder ? 'data-placeholder-block="true"' : '' ?>
                                     <?= $isApeBatch ? 'data-ape-block="true"' : '' ?>
@@ -355,13 +357,26 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
             </div>
             <label class="grid gap-1"><span class="text-[11px] font-black uppercase tracking-widest text-slate-400">Reason</span><textarea class="form-textarea" name="reason" id="availabilityEditReason" rows="3"></textarea></label>
             <div class="flex justify-between gap-3">
-                <button type="submit" name="action" value="delete_group" class="btn btn-ghost text-red-700" data-confirm-submit data-confirm-type="danger" data-confirm-title="Delete entire unavailable time?" data-confirm-message="This will remove the complete unavailable period and make it available again." data-confirm-toast="Deleting unavailable time...">Delete entire unavailable time</button>
+                <button type="submit" name="action" value="delete_group" formnovalidate class="btn btn-ghost text-red-700" data-confirm-submit data-confirm-type="danger" data-confirm-title="Delete entire unavailable time?" data-confirm-message="This will remove the complete unavailable period and make it available again." data-confirm-toast="Deleting unavailable time...">Delete entire unavailable time</button>
                 <button type="submit" class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save unavailable block?" data-confirm-toast="Saving availability...">Save changes</button>
             </div>
         </form>
     </div>
 </div>
 
+<div id="availabilityBlockDetails" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="availabilityBlockDetailsTitle" style="display:none">
+    <div class="modal-content bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
+        <div class="flex items-center justify-between gap-4 mb-5">
+            <h3 id="availabilityBlockDetailsTitle" class="font-headline text-xl font-extrabold">Unavailable time details</h3>
+            <button type="button" class="btn btn-ghost" onclick="closeModal('availabilityBlockDetails')" aria-label="Close details"><span class="material-symbols-outlined">close</span></button>
+        </div>
+        <dl class="grid gap-4">
+            <div><dt class="text-xs font-bold text-slate-400">DATE</dt><dd id="availabilityBlockDetailsDate" class="font-bold"></dd></div>
+            <div><dt class="text-xs font-bold text-slate-400">TIME</dt><dd id="availabilityBlockDetailsTime" class="font-bold"></dd></div>
+            <div><dt class="text-xs font-bold text-slate-400">REASON</dt><dd id="availabilityBlockDetailsReason" style="white-space:pre-wrap;overflow-wrap:anywhere"></dd></div>
+        </dl>
+    </div>
+</div>
 <div id="availabilityWeekPicker" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="availabilityWeekPickerTitle" data-selected-week="<?= e($availabilityWeek->format('Y-m-d')) ?>" data-week-url="<?= e($availabilityUrlForWeek($availabilityWeek->format('Y-m-d'))) ?>">
     <div class="modal-content bg-white rounded-2xl p-6 w-full max-w-lg shadow-2xl" style="max-height:85vh;display:flex;flex-direction:column;">
         <div class="flex items-center justify-between gap-4 mb-4">
@@ -458,8 +473,8 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
             modal.dataset.weekUrl = newPicker.dataset.weekUrl;
             selectedCalendarDates.clear();
             selectedTimeSlots.clear();
-            const defaultDate = liveElements().date?.value;
-            if (defaultDate) selectedCalendarDates.add(defaultDate);
+            const refreshedElements = liveElements();
+            if (refreshedElements.allDay) refreshedElements.allDay.checked = false;
             syncPartialFields();
             history.replaceState(history.state, '', href);
             renderWeekPickerIfOpen();
@@ -489,6 +504,64 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
         allDay: document.getElementById('allDayToggle'),
         partial: document.getElementById('partialTimeFields'),
     });
+
+    let modalDateDrag = null;
+    let suppressDatePointerClick = false;
+    const previewModalDateDrag = (endDate) => {
+        const grid = liveElements().modalGrid;
+        if (!grid || !modalDateDrag) return;
+        const [first, last] = [modalDateDrag.start, endDate].sort();
+        selectedCalendarDates.clear();
+        modalDateDrag.original.forEach(date => selectedCalendarDates.add(date));
+        grid.querySelectorAll('[data-modal-date]').forEach(day => {
+            const date = day.dataset.modalDate;
+            if (!day.disabled && !isPastDate(date) && !isWeekend(date) && date >= first && date <= last) {
+                if (modalDateDrag.remove) selectedCalendarDates.delete(date);
+                else selectedCalendarDates.add(date);
+            }
+            day.classList.toggle('is-selected', selectedCalendarDates.has(date));
+            day.setAttribute('aria-pressed', String(selectedCalendarDates.has(date)));
+        });
+    };
+    document.addEventListener('pointerdown', event => {
+        const day = event.target.closest('[data-modal-date]');
+        if (!day || day.disabled || event.button !== 0 || !event.isPrimary) return;
+        const grid = liveElements().modalGrid;
+        if (!grid?.contains(day)) return;
+        suppressDatePointerClick = false;
+        modalDateDrag = { pointer: event.pointerId, start: day.dataset.modalDate,
+            remove: selectedCalendarDates.has(day.dataset.modalDate), original: new Set(selectedCalendarDates), grid };
+        event.preventDefault();
+        grid.setPointerCapture(event.pointerId);
+        previewModalDateDrag(day.dataset.modalDate);
+    });
+    document.addEventListener('pointermove', event => {
+        if (!modalDateDrag || event.pointerId !== modalDateDrag.pointer) return;
+        const day = document.elementFromPoint(event.clientX, event.clientY)?.closest('[data-modal-date]');
+        if (day && !day.disabled && modalDateDrag.grid.contains(day)) previewModalDateDrag(day.dataset.modalDate);
+    });
+    const finishModalDateDrag = event => {
+        if (!modalDateDrag || event.pointerId !== modalDateDrag.pointer) return;
+        const drag = modalDateDrag;
+        modalDateDrag = null;
+        if (event.type === 'pointercancel') {
+            selectedCalendarDates.clear();
+            drag.original.forEach(date => selectedCalendarDates.add(date));
+        }
+        suppressDatePointerClick = true;
+        if (drag.grid.hasPointerCapture(drag.pointer)) drag.grid.releasePointerCapture(drag.pointer);
+        syncCalendarSelection();
+        window.setTimeout(() => { suppressDatePointerClick = false; }, 0);
+    };
+    document.addEventListener('pointerup', finishModalDateDrag);
+    document.addEventListener('pointercancel', finishModalDateDrag);
+    document.addEventListener('lostpointercapture', finishModalDateDrag);
+    document.addEventListener('click', event => {
+        if (!suppressDatePointerClick || event.detail === 0) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        suppressDatePointerClick = false;
+    }, true);
 
     const selectedCalendarDates = new Set();
     const selectedTimeSlots = new Set();
@@ -689,6 +762,8 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
             const cell = document.createElement('button');
             cell.type = 'button';
             cell.className = 'appointment-date-modal-day';
+            cell.style.touchAction = 'none';
+            cell.style.userSelect = 'none';
 
             if (dayNumber < 1 || dayNumber > daysInMonth) {
                 cell.classList.add('is-empty');
@@ -699,7 +774,9 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
 
             const date = new Date(year, month, dayNumber);
             const dateString = normalizedDate(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(dayNumber).padStart(2, '0')}`);
-            const disabled = isPastDate(dateString) || isWeekend(dateString);
+            const dayColumn = document.querySelector(`[data-week-date="${dateString}"]`);
+            const alreadyUnavailable = Boolean(dayColumn?.querySelector('[data-availability-block]:not([data-placeholder-block="true"])'));
+            const disabled = isPastDate(dateString) || isWeekend(dateString) || alreadyUnavailable;
             cell.textContent = String(dayNumber);
             cell.dataset.modalDate = dateString;
             cell.classList.toggle('is-selected', selectedCalendarDates.has(dateString));
@@ -742,6 +819,16 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
 
     const syncCalendarSelection = () => {
         const elements = liveElements();
+        selectedCalendarDates.forEach((date) => {
+            const dayColumn = document.querySelector(`[data-week-date="${date}"]`);
+            if (dayColumn?.querySelector('[data-availability-block]:not([data-placeholder-block="true"])')) {
+                selectedCalendarDates.delete(date);
+                selectedTimeSlots.forEach((slot) => {
+                    if (parseSlotKey(slot).date === date) selectedTimeSlots.delete(slot);
+                });
+            }
+        });
+        if (!selectedCalendarDates.size && elements.allDay?.checked) elements.allDay.checked = false;
         if (elements.selectedDates) {
             elements.selectedDates.replaceChildren();
             selectedCalendarDates.forEach((date) => {
@@ -796,6 +883,7 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
         } else {
             selectedCalendarDates.add(date);
         }
+        if (elements.allDay) elements.allDay.checked = selectedCalendarDates.size > 0;
         syncCalendarSelection();
     };
 
@@ -813,6 +901,10 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
             return;
         }
         if (dayColumn.dataset.isPast === 'true') {
+            return;
+        }
+        const targetCell = dayColumn.querySelector(`[data-start-hour="${startHour}"]`);
+        if (!availableDragCell(targetCell)) {
             return;
         }
         selectedCalendarDates.add(dayColumn.dataset.weekDate);
@@ -906,8 +998,39 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
         }
     }, true);
 
+    const validateUnavailableReason = (event, form, submitter) => {
+        if (!form?.matches('#availabilityForm, #availabilityEditModal form')) return;
+        const action = submitter?.name === 'action'
+            ? submitter.value : form.querySelector('input[name="action"]')?.value;
+        if (action === 'delete_group' || action === 'delete') return;
+        const reason = form.querySelector('textarea[name="reason"]');
+        if (!reason || reason.value.trim()) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        confirmAction('Reason required',
+            'Enter a reason for the unavailable time before saving. Your selected dates and times have been kept.',
+            () => reason.focus({ preventScroll: true }), 'primary');
+        const warning = document.getElementById('confirmActionModal');
+        warning.setAttribute('role', 'alertdialog');
+        warning.querySelector('.btn-ghost')?.remove();
+        warning.querySelector('.material-symbols-outlined').textContent = 'warning';
+        const okay = warning.querySelector('#confirmActionBtn');
+        okay.textContent = 'OK';
+        okay.focus();
+    };
+    document.addEventListener('click', event => {
+        const button = event.target.closest('[data-confirm-submit]');
+        if (button) validateUnavailableReason(event, button.form, button);
+    }, true);
+    document.addEventListener('submit', event => {
+        validateUnavailableReason(event, event.target, event.submitter);
+    }, true);
     document.addEventListener('change', (event) => {
         if (event.target.id === 'allDayToggle') {
+            if (!event.target.checked) {
+                selectedCalendarDates.clear();
+                selectedTimeSlots.clear();
+            }
             syncPartialFields();
         }
         if (event.target.id === 'blockDateInput') {
@@ -941,6 +1064,8 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
             const date = dateHeader.dataset.weekDayToggle;
             const elements = liveElements();
             if (dateHeader.disabled || isPastDate(date) || !elements.allDay) return;
+            const dayColumn = document.querySelector(`[data-week-date="${date}"]`);
+            if (dayColumn?.querySelector('[data-availability-block]:not([data-placeholder-block="true"])')) return;
             if (!elements.allDay.checked) {
                 selectedCalendarDates.clear();
                 selectedTimeSlots.clear();
@@ -948,6 +1073,7 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
             elements.allDay.checked = true;
             if (selectedCalendarDates.has(date)) selectedCalendarDates.delete(date);
             else selectedCalendarDates.add(date);
+            elements.allDay.checked = selectedCalendarDates.size > 0;
             sortedSelectedSlots().forEach(slot => {
                 if (parseSlotKey(slot).date === date) selectedTimeSlots.delete(slot);
             });
@@ -1026,6 +1152,8 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
             } else {
                 selectedCalendarDates.add(date);
             }
+            const elements = liveElements();
+            if (elements.allDay) elements.allDay.checked = selectedCalendarDates.size > 0;
             syncCalendarSelection();
             return;
         }
@@ -1043,14 +1171,11 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
             if (block.dataset.placeholderBlock === 'true' || block.dataset.apeBlock === 'true') {
                 return;
             }
-            const elements = liveElements();
-            if (!elements.form || !elements.date || !elements.allDay) {
-                return;
-            }
-            selectAvailabilityDate(block.dataset.date);
-            const isAllDay = !block.dataset.start || !block.dataset.end;
-            elements.allDay.checked = isAllDay;
-            syncPartialFields();
+            document.getElementById('availabilityBlockDetailsDate').textContent = formatDisplayDate(block.dataset.date);
+            document.getElementById('availabilityBlockDetailsTime').textContent = block.dataset.timeLabel;
+            document.getElementById('availabilityBlockDetailsReason').textContent = block.dataset.reason || 'No reason recorded';
+            showModal('availabilityBlockDetails');
+            document.querySelector('#availabilityBlockDetails button').focus();
             return;
         }
 
@@ -1072,6 +1197,13 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
     });
 
     document.addEventListener('keydown', (event) => {
+        const block = event.target.closest('[data-availability-block]');
+        if (block && (event.key === 'Enter' || event.key === ' ')) {
+            event.preventDefault();
+            block.click();
+            return;
+        }
+
         const day = event.target.closest('[data-week-date]');
         if (!day || (event.key !== 'Enter' && event.key !== ' ')) {
             return;

@@ -217,6 +217,13 @@
 
         function navigateRow(gridEvent) {
             if (isInteractiveClick(gridEvent)) return;
+            if (gridEvent?.data?.rowActionsHtml && typeof window.showModal === 'function') {
+                document.getElementById('rowActionsModalTitle').textContent = gridEvent.data.rowActionsTitle || 'Actions';
+                document.getElementById('rowActionsModalBody').innerHTML = gridEvent.data.rowActionsHtml;
+                window.showModal('rowActionsModal');
+                document.querySelector('#rowActionsModal button')?.focus();
+                return;
+            }
             const rowModalId = gridEvent && gridEvent.data && gridEvent.data.rowModalId;
             if (rowModalId && typeof window.showModal === 'function') {
                 const modal = document.getElementById(rowModalId);
@@ -300,7 +307,7 @@
             overlayNoRowsTemplate: makeEmptyOverlay(grid.dataset.emptyTitle, grid.dataset.emptyText),
             getRowClass: (params) => {
                 const classes = [];
-                if (params.data && (params.data.rowUrl || params.data.rowModalId)) classes.push('ag-row-clickable');
+                if (params.data && (params.data.rowUrl || params.data.rowModalId || params.data.rowActionsHtml)) classes.push('ag-row-clickable');
                 if (params.data && params.data.rowClass) classes.push(params.data.rowClass);
                 return classes.join(' ');
             },
