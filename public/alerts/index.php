@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/AlertWorkflow.php';
@@ -9,11 +9,13 @@ $allowedStatuses = [
     'pending' => 'Pending',
     'in progress' => 'In Progress',
     'resolved' => 'Resolved',
-    'cancelled' => 'Cancelled',
 ];
 $filterKey = strtolower(trim($_GET['status'] ?? 'pending'));
-$filterStatus = $allowedStatuses[$filterKey] ?? 'Pending';
-$allowedRisks = ['all', 'Critical', 'High', 'Moderate', 'Low'];
+if (!isset($allowedStatuses[$filterKey])) {
+    $filterKey = 'pending';
+}
+$filterStatus = $allowedStatuses[$filterKey];
+$allowedRisks = ['all', 'Critical', 'High', 'Moderate', 'Low', 'Not assessed'];
 $filterRisk = trim((string) ($_GET['risk'] ?? 'all'));
 if (!in_array($filterRisk, $allowedRisks, true)) {
     $filterRisk = 'all';
@@ -94,7 +96,7 @@ foreach ($alerts as $alert) {
         'rowUrl' => 'view.php?id=' . (int)$alert['id'],
         'statusSort' => array_search($alert['status'], ['Pending', 'In Progress', 'Resolved', 'Cancelled'], true),
         'statusHtml' => '<span class="badge ' . e(status_badge_class($alert['status'])) . '">' . e($alert['status']) . '</span>',
-        'riskSort' => array_search($riskLevel, ['Critical', 'High', 'Moderate', 'Low'], true),
+        'riskSort' => array_search($riskLevel, ['Critical', 'High', 'Moderate', 'Low', 'Not assessed'], true),
         'riskHtml' => '<span class="badge ' . e(risk_badge_class($riskLevel)) . '">' . e($riskLevel) . '</span><p class="text-[10px] font-bold text-slate-400 mb-0 mt-1">Score ' . $riskScore . '</p>',
         'patient' => $patientName !== '' ? $patientName : 'Unlisted',
         'reporterSort' => $alert['reporter_name'],
@@ -114,7 +116,7 @@ render_clinic_command_header(
     'Emergency',
     'Nurse Alerts',
     'Live emergency reports from staff and QR/NFC scans.',
-    '<div class="flex items-center gap-2 text-xs font-semibold text-slate-400 bg-slate-100/50 px-3 py-1.5 rounded-full border border-slate-200/50"><span class="material-symbols-outlined text-[14px]">sync</span>Auto-refreshing every 5s</div><a class="btn btn-danger text-decoration-none" href="create.php"><span class="material-symbols-outlined text-[20px]">emergency_home</span>Submit Alert</a>'
+    '<div class="flex items-center gap-2 text-xs font-semibold text-slate-400 bg-slate-100/50 px-3 py-1.5 rounded-full border border-slate-200/50"><span class="material-symbols-outlined text-[14px]">sync</span>Auto-refreshing every 5s</div>'
 );
 ?>
 
@@ -146,7 +148,6 @@ render_clinic_command_header(
                 'pending' => 'Pending',
                 'in progress' => 'In Progress',
                 'resolved' => 'Resolved',
-                'cancelled' => 'Cancelled',
             ];
             foreach ($statusTabs as $key => $label):
                 $isActive = strtolower($filterStatus) === $key;
@@ -160,26 +161,6 @@ render_clinic_command_header(
             <?php endforeach; ?>
         </div>
     </div>
-    <?php if ($filterKey !== 'pending' || $filterRisk !== 'all' || $dateFrom !== '' || $dateTo !== ''): ?>
-        <div class="flex flex-wrap items-center gap-2 px-6 py-4 bg-white border-b border-outline-variant/10">
-            <span class="material-symbols-outlined text-slate-400 text-sm">filter_alt</span>
-            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-2">Active Filters</span>
-            <?php if ($filterKey !== 'pending'): ?>
-                <span class="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold border border-slate-200"><?= e($filterStatus) ?></span>
-            <?php endif; ?>
-            <?php if ($filterRisk !== 'all'): ?>
-                <span class="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold border border-slate-200"><?= e($filterRisk) ?> Risk</span>
-            <?php endif; ?>
-            <?php if ($dateFrom !== ''): ?>
-                <span class="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold border border-slate-200">From <?= e($dateFrom) ?></span>
-            <?php endif; ?>
-            <?php if ($dateTo !== ''): ?>
-                <span class="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold border border-slate-200">To <?= e($dateTo) ?></span>
-            <?php endif; ?>
-            <a href="index.php" class="ml-auto text-[10px] font-black text-primary uppercase tracking-widest hover:underline text-decoration-none">Clear All</a>
-        </div>
-    <?php endif; ?>
-
     <div id="alertAdvancedFilterModal" class="modal-backdrop">
         <div class="modal-content bg-white rounded-[2rem] w-full max-w-2xl p-8 shadow-2xl border border-outline-variant/10">
             <div class="flex items-center justify-between mb-8">
@@ -195,18 +176,10 @@ render_clinic_command_header(
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
-                    <label class="clinic-label">Status</label>
-                    <select class="clinic-select" name="status">
-                        <?php foreach ($allowedStatuses as $key => $label): ?>
-                            <option value="<?= e($key) ?>" <?= $filterKey === $key ? 'selected' : '' ?>><?= e($label) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div>
                     <label class="clinic-label">Risk</label>
                     <select class="clinic-select" name="risk">
                         <option value="all" <?= $filterRisk === 'all' ? 'selected' : '' ?>>All</option>
-                        <?php foreach (['Critical', 'High', 'Moderate', 'Low'] as $risk): ?>
+                        <?php foreach (['Critical', 'High', 'Moderate', 'Low', 'Not assessed'] as $risk): ?>
                             <option value="<?= e($risk) ?>" <?= $filterRisk === $risk ? 'selected' : '' ?>><?= e($risk) ?></option>
                         <?php endforeach; ?>
                     </select>

@@ -8,7 +8,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $db = cliniq_inventory_db();
     $type = cliniq_inventory_item_type((string) ($_POST['category'] ?? 'Medicine'));
     try {
-        $code = cliniq_inventory_item_code((string) ($_POST['item_code'] ?? ''));
         $name = trim((string) ($_POST['item_name'] ?? ''));
         $unit = trim((string) ($_POST['unit'] ?? ''));
         $quantity = max(0, (int) ($_POST['quantity'] ?? 0));
@@ -21,12 +20,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $db->beginTransaction();
         $stmt = $db->prepare('
             INSERT INTO inventory_items (
-                item_code, item_name, item_type, description, unit,
+                item_name, item_type, description, unit,
                 quantity, reorder_level, expiration_date
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
         ');
         $stmt->execute([
-            $code,
             $name,
             $type,
             trim((string) ($_POST['description'] ?? '')) ?: null,
@@ -48,10 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($db->inTransaction()) {
             $db->rollBack();
         }
-        $message = str_contains(strtolower($e->getMessage()), 'duplicate')
-            ? 'That item code already exists.'
-            : $e->getMessage();
-        flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $message);
+        flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $e->getMessage());
     }
     header('Location: index.php?tab=' . ($type === 'Equipment' ? 'equipment' : 'medicine'));
     exit;

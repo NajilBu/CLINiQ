@@ -54,15 +54,6 @@ if ($hasActiveApeCycle) {
     $apeScheduleGroups = ape_schedule_candidate_groups($cycleId);
 }
 
-// Explicit AM/PM labels avoid browser/OS-dependent military-time controls.
-$apeBatchTimeOptions = [];
-for ($minutes = 8 * 60; $minutes <= 17 * 60; $minutes++) {
-    $hour = intdiv($minutes, 60);
-    $minute = $minutes % 60;
-    $value = sprintf('%02d:%02d', $hour, $minute);
-    $apeBatchTimeOptions[$value] = sprintf('%d:%02d %s', $hour % 12 ?: 12, $minute, $hour < 12 ? 'AM' : 'PM');
-}
-
 set_page_back_link('index.php', 'APE');
 render_header('APE Scheduling');
 
@@ -102,6 +93,7 @@ render_clinic_command_header(
                     <span class="badge badge-in-progress"><?= count($apeScheduleBatches) ?> batch<?= count($apeScheduleBatches) === 1 ? '' : 'es' ?></span>
                 </div>
                 <p class="text-xs font-bold text-slate-500 mb-0">School Year <?= e($apeCurrentCycle['academic_year']) ?> &bull; Categories cannot overlap at the same date and time.</p>
+                <p class="text-xs font-bold text-slate-500 mt-2 mb-0">Click a batch to view its details.</p>
             </div>
         </div>
 
@@ -112,7 +104,6 @@ render_clinic_command_header(
             ['headerName' => 'Date and Time', 'field' => 'scheduleHtml', 'cellRenderer' => 'html', 'sortField' => 'scheduleSort', 'minWidth' => 240],
             ['headerName' => 'Assigned', 'field' => 'assignedHtml', 'cellRenderer' => 'html', 'sortField' => 'assignedSort', 'width' => 130],
             ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'sortField' => 'statusSort', 'width' => 140],
-            ['headerName' => 'Actions', 'field' => 'actionHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 100, 'minWidth' => 90],
         ];
         $batchRows = [];
         foreach ($apeScheduleBatches as $batch) {
@@ -130,6 +121,7 @@ render_clinic_command_header(
                     . '<span class="material-symbols-outlined text-[16px]">event_busy</span>Cancel</button></form>';
             }
             $batchRows[] = [
+                'rowModalId' => 'apeBatchDetails' . (int) $batch['batch_id'],
                 'batchSort' => $batch['batch_name'],
                 'batchHtml' => '<strong class="text-sm text-slate-800 block">' . e($batch['batch_name']) . '</strong><span class="text-xs font-bold text-slate-400">Created ' . e(date('M j, Y', strtotime($batch['created_at']))) . '</span>',
                 'categorySort' => $batch['patient_category'],
@@ -140,8 +132,44 @@ render_clinic_command_header(
                 'assignedHtml' => '<strong class="text-sm text-slate-800">' . (int) $batch['assigned_count'] . '</strong><span class="text-xs font-bold text-slate-400"> / ' . (int) $batch['capacity'] . '</span>',
                 'statusSort' => $batchDisplayStatus,
                 'statusHtml' => '<span class="badge ' . $batchStatusClass . '">' . e($batchDisplayStatus) . '</span>',
-                'actionHtml' => row_actions_button('Batch actions', $batchActions),
             ];
+            $batchModalId = 'apeBatchDetails' . (int) $batch['batch_id'];
+            ?>
+            <div id="<?= e($batchModalId) ?>" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="<?= e($batchModalId) ?>Title" data-no-row-click>
+                <div class="modal-content bg-white rounded-[1.5rem] w-full max-w-xl p-7 shadow-2xl border border-outline-variant/10 max-h-[90vh] overflow-y-auto">
+                    <div class="flex items-start justify-between gap-4 mb-6">
+                        <div>
+                            <p class="text-xs font-bold text-slate-500 mb-1">APE Batch Details</p>
+                            <h3 id="<?= e($batchModalId) ?>Title" class="font-headline text-2xl font-extrabold text-[#17261d]"><?= e($batch['batch_name']) ?></h3>
+                        </div>
+                        <button type="button" class="btn btn-secondary !p-3" onclick="closeModal('<?= e($batchModalId) ?>')" aria-label="Close batch details"><span class="material-symbols-outlined">close</span></button>
+                    </div>
+                    <dl class="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-6">
+                        <?php
+                        $details = [
+                            'School Year' => $apeCurrentCycle['academic_year'],
+                            'Patient Category' => $batch['patient_category'],
+                            'Exam Date' => date('F j, Y', strtotime($batch['schedule_date'])),
+                            'Time' => date('g:i A', strtotime($batch['start_time'])) . '–' . date('g:i A', strtotime($batch['end_time'])),
+                            'Assigned Patients' => (int) $batch['assigned_count'] . ' / ' . (int) $batch['capacity'],
+                            'Status' => $batchDisplayStatus,
+                            'Created' => date('F j, Y', strtotime($batch['created_at'])),
+                            'Created By' => $batch['created_by_name'] ?: 'Not recorded',
+                        ];
+                        foreach ($details as $label => $value): ?>
+                            <div><dt class="text-xs font-bold text-slate-500 mb-1"><?= e($label) ?></dt><dd class="text-sm font-bold text-slate-800 m-0"><?= e((string) $value) ?></dd></div>
+                        <?php endforeach; ?>
+                    </dl>
+                    <?php if ($batchHasPassed && !$batchIsCancelled): ?>
+                        <p class="text-xs font-bold text-slate-500 mb-5">This batch’s scheduled time has ended. Individual patients may still have pending examination requirements.</p>
+                    <?php endif; ?>
+                    <div class="flex flex-wrap items-center justify-end gap-3">
+                        <?= $batchActions ?>
+                        <a class="btn btn-primary text-decoration-none" href="index.php?batch=<?= (int) $batch['batch_id'] ?>">View APE Records</a>
+                    </div>
+                </div>
+            </div>
+            <?php
         }
         render_ag_grid('apeSchedulingGrid', $batchColumns, $batchRows, [
             'pageSize' => 10,
@@ -202,23 +230,13 @@ render_clinic_command_header(
                     </div>
                     <div>
                         <label class="clinic-label" for="apeBatchStart">Start Time</label>
-                        <select class="clinic-select" id="apeBatchStart" name="start_time" aria-describedby="apeBatchHours" required>
-                            <option value="" disabled selected>Select start time</option>
-                            <?php foreach ($apeBatchTimeOptions as $value => $label): ?>
-                                <option value="<?= e($value) ?>"><?= e($label) ?></option>
-                            <?php endforeach; ?>
-                        </select>
+                        <input class="clinic-input" id="apeBatchStart" name="start_time" type="text" inputmode="text" maxlength="8" placeholder="8:00 AM" autocomplete="off" autocapitalize="characters" aria-describedby="apeBatchHours" required>
                     </div>
                     <div>
                         <label class="clinic-label" for="apeBatchEnd">End Time</label>
-                        <select class="clinic-select" id="apeBatchEnd" name="end_time" aria-describedby="apeBatchHours" required>
-                            <option value="" disabled selected>Select end time</option>
-                            <?php foreach ($apeBatchTimeOptions as $value => $label): ?>
-                                <option value="<?= e($value) ?>"><?= e($label) ?></option>
-                            <?php endforeach; ?>
-                        </select>
+                        <input class="clinic-input" id="apeBatchEnd" name="end_time" type="text" inputmode="text" maxlength="8" placeholder="5:00 PM" autocomplete="off" autocapitalize="characters" aria-describedby="apeBatchHours" required>
                     </div>
-                    <p class="md:col-span-2 text-xs font-bold text-slate-500 mb-0" id="apeBatchHours">Clinic hours: 8:00 AM–5:00 PM. End time must be later than start time.</p>
+                    <p class="md:col-span-2 text-xs font-bold text-slate-500 mb-0" id="apeBatchHours">Enter time using AM or PM. Clinic hours: 8:00 AM–5:00 PM. End time must be later than start time.</p>
                 </div>
 
                 <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-4">
@@ -365,15 +383,35 @@ render_clinic_command_header(
             next.addEventListener('click', () => { currentPage += 1; render(); });
             const startField = document.getElementById('apeBatchStart');
             const endField = document.getElementById('apeBatchEnd');
+            const parseBatchTime = (value) => {
+                const match = String(value || '').trim().match(/^(0?[1-9]|1[0-2]):([0-5][0-9])\s*(AM|PM)$/i);
+                if (!match) return null;
+                let hour = Number(match[1]) % 12;
+                if (match[3].toUpperCase() === 'PM') hour += 12;
+                return (hour * 60) + Number(match[2]);
+            };
+            const formatBatchTime = (minutes) => {
+                const hour24 = Math.floor(minutes / 60);
+                const minute = minutes % 60;
+                const hour12 = hour24 % 12 || 12;
+                return `${hour12}:${String(minute).padStart(2, '0')} ${hour24 < 12 ? 'AM' : 'PM'}`;
+            };
             const validateBatchTimes = () => {
                 let message = '';
                 [startField, endField].forEach((field) => {
-                    const outsideHours = field.value && (field.value < '08:00' || field.value > '17:00');
-                    const fieldMessage = outsideHours ? 'APE batch times must be between 8:00 AM and 5:00 PM.' : '';
+                    const minutes = parseBatchTime(field.value);
+                    let fieldMessage = '';
+                    if (field.value && minutes === null) {
+                        fieldMessage = 'Enter time in 12-hour format, such as 8:00 AM.';
+                    } else if (minutes !== null && (minutes < 8 * 60 || minutes > 17 * 60)) {
+                        fieldMessage = 'APE batch times must be between 8:00 AM and 5:00 PM.';
+                    }
                     field.setCustomValidity(fieldMessage);
                     if (fieldMessage) message = fieldMessage;
                 });
-                if (!message && startField.value && endField.value && startField.value >= endField.value) {
+                const startMinutes = parseBatchTime(startField.value);
+                const endMinutes = parseBatchTime(endField.value);
+                if (!message && startMinutes !== null && endMinutes !== null && startMinutes >= endMinutes) {
                     message = 'The batch end time must be later than its start time.';
                     endField.setCustomValidity(message);
                 }
@@ -382,6 +420,11 @@ render_clinic_command_header(
             [startField, endField].forEach((field) => {
                 field.addEventListener('input', validateBatchTimes);
                 field.addEventListener('change', validateBatchTimes);
+                field.addEventListener('blur', () => {
+                    const minutes = parseBatchTime(field.value);
+                    if (minutes !== null) field.value = formatBatchTime(minutes);
+                    validateBatchTimes();
+                });
             });
             validateBatchTimes();
             form.addEventListener('submit', (event) => {

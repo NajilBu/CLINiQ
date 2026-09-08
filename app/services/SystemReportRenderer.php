@@ -162,8 +162,8 @@ function system_report_styles(): string
     return <<<'CSS'
 * { box-sizing: border-box; }
 .system-report-standalone { margin: 0; background: #edf4ef; }
-.report-document { width: min(1120px, calc(100% - 32px)); margin: 28px auto; background: #fff; color: #17261d; font-family: Arial, Helvetica, sans-serif; box-shadow: 0 18px 50px rgba(23, 38, 29, .09); }
-.report-document-dashboard { width: 100%; margin: 0; border: 1px solid #dfe9e2; border-radius: 20px; box-shadow: 0 12px 34px rgba(23,38,29,.05); overflow: hidden; }
+.report-document { width: min(1120px, calc(100% - 32px)); margin: 28px auto; background: #fff; color: var(--cliniq-foreground, #17261d); font-family: Inter, ui-sans-serif, system-ui, sans-serif; box-shadow: 0 18px 50px rgba(23, 38, 29, .09); }
+.report-document-dashboard { width: 100%; margin: 1.25rem 0 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; overflow: visible; }
 .report-cover { padding: 46px 52px 38px; background: linear-gradient(135deg, #174d32, #2f8553); color: #fff; }
 .report-cover-card { display: contents; }
 .report-cover-details { display: none; }
@@ -179,27 +179,41 @@ function system_report_styles(): string
 .report-meta span { display: block; margin-bottom: 5px; color: #c9e8d5; font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
 .report-meta strong { font-size: 12px; }
 .report-body { padding: 34px 40px 42px; }
-.report-section { margin-bottom: 30px; padding-bottom: 30px; border-bottom: 1px solid #dfe9e2; }
+.report-section { margin-bottom: 30px; padding-bottom: 30px; border-bottom: 1px solid var(--cliniq-outline, #dfe9e2); }
 .report-section[hidden] { display: none !important; }
 .report-section:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: 0; }
 .report-section-heading { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 18px; }
 .report-section-number { display: grid; place-items: center; flex: 0 0 34px; height: 34px; border-radius: 10px; background: #e6f4eb; color: #287548; font-size: 13px; font-weight: 900; }
 .report-section h2 { margin: 0 0 4px; color: #17261d; font-size: 20px; letter-spacing: -.3px; }
 .report-section-description { margin: 0; color: #64748b; font-size: 11px; font-weight: 600; line-height: 1.5; }
-.report-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 18px; }
-.report-metric { min-height: 88px; padding: 14px; border: 1px solid #dfe9e2; border-radius: 12px; background: #fbfdfb; }
+.report-document-dashboard .report-section-heading { gap: .75rem; margin-bottom: 1rem; }
+.report-document-dashboard .report-section-number { flex-basis: 2rem; height: 2rem; border-radius: .625rem; background: var(--cliniq-primary-fixed, #e6f4eb); color: var(--cliniq-primary, #287548); font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: .75rem; font-weight: 700; }
+.report-document-dashboard .report-section h2 { color: var(--cliniq-foreground, #17261d); font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 1.125rem; font-weight: 700; letter-spacing: 0; line-height: 1.3; }
+.report-document-dashboard .report-section-description { color: #64748b; font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: .8125rem; font-weight: 600; line-height: 1.5; }
+.report-document-dashboard .report-body { padding: 0; }
+.report-document-dashboard .report-section { margin: 0 0 1.5rem; padding: 1.25rem; border: 1px solid oklch(92% .01 230 / .72); border-radius: .75rem; background: #fff; box-shadow: 0 1px 2px rgba(23,38,29,.035), 0 8px 22px rgba(23,38,29,.035); }
+.report-document-dashboard .report-section:last-child { margin-bottom: 0; padding-bottom: 1.25rem; border-bottom: 1px solid oklch(92% .01 230 / .72); }
+.report-document-dashboard .report-metrics { gap: .75rem; margin-bottom: 1rem; }
+.report-document-dashboard .report-metric { min-height: 4.5rem; padding: .75rem; border-color: oklch(92% .01 230 / .72); border-radius: .75rem; background: #fff; }
+.report-document-dashboard .report-metric-label { min-height: 1.125rem; margin-bottom: .375rem; font-size: .6875rem; font-weight: 700; }
+.report-document-dashboard .report-metric-value { font-size: 1.375rem; font-weight: 700; }
+.report-document-dashboard .report-metric-note { margin-top: .25rem; font-size: .6875rem; font-weight: 600; }
+.report-document-dashboard .report-charts { gap: .75rem; }
+.report-document-dashboard .report-chart { min-height: 10rem; padding: .875rem; border-color: oklch(92% .01 230 / .72); border-radius: .75rem; box-shadow: none; }
+.report-metrics { display: grid; grid-template-columns: repeat(var(--report-metric-columns, 4), minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
+.report-metric { min-height: 88px; padding: 14px; border: 1px solid var(--cliniq-outline, #dfe9e2); border-radius: 12px; background: var(--cliniq-surface-low, #fbfdfb); }
 .report-metric-label { min-height: 24px; margin: 0 0 8px; color: #64748b; font-size: 9px; font-weight: 900; letter-spacing: .07em; text-transform: uppercase; }
-.report-metric-value { margin: 0; color: #205f3d; font-size: 23px; font-weight: 900; line-height: 1; }
+.report-metric-value { margin: 0; color: var(--cliniq-primary, #205f3d); font-size: 23px; font-weight: 900; line-height: 1; }
 .report-metric-note { margin: 5px 0 0; color: #94a3b8; font-size: 9px; font-weight: 700; }
 .report-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.report-chart { min-height: 180px; padding: 15px; border: 1px solid #dfe9e2; border-radius: 12px; background: #fff; break-inside: avoid; page-break-inside: avoid; }
+.report-chart { min-height: 180px; padding: 15px; border: 1px solid var(--cliniq-outline, #dfe9e2); border-radius: 12px; background: #fff; break-inside: avoid; page-break-inside: avoid; }
 .report-chart h3 { margin: 0 0 13px; color: #334155; font-size: 12px; }
 .report-chart-kind { float: right; color: #94a3b8; font-size: 8px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }
 .report-chart-row { display: grid; grid-template-columns: minmax(82px, 34%) minmax(80px, 1fr) 35px; align-items: center; gap: 8px; margin: 7px 0; }
 .report-chart-label { overflow: hidden; color: #475569; font-size: 9px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .report-chart-track { height: 8px; overflow: hidden; border-radius: 99px; background: #edf3ef; }
 .report-chart-fill { height: 100%; min-width: 2px; border-radius: 99px; background: linear-gradient(90deg, #3b8b5d, #6bb689); }
-.report-chart-value { color: #205f3d; font-size: 9px; font-weight: 900; text-align: right; }
+.report-chart-value { color: var(--cliniq-primary, #205f3d); font-size: 9px; font-weight: 900; text-align: right; }
 .report-donut-layout { display: grid; grid-template-columns: 116px minmax(0,1fr); align-items: center; gap: 13px; }
 .report-donut { width: 112px; height: 112px; }
 .report-donut-total { fill: #205f3d; font-size: 12px; font-weight: 900; }
@@ -229,10 +243,18 @@ function system_report_styles(): string
 .report-remarks-print { min-height: 65px; padding: 10px 12px; border: 1px solid #d8e4dc; border-radius: 9px; background: repeating-linear-gradient(#fff 0, #fff 20px, #e8efe9 21px); color: #334155; font-size: 10px; font-weight: 600; line-height: 21px; white-space: pre-wrap; }
 .report-empty { display: grid; place-items: center; min-height: 112px; margin: 0; border: 1px dashed #d8e2db; border-radius: 9px; color: #94a3b8; font-size: 10px; font-weight: 700; text-align: center; }
 .report-footer { display: flex; justify-content: space-between; padding: 16px 40px; border-top: 1px solid #dfe9e2; color: #94a3b8; font-size: 9px; font-weight: 700; }
+.report-document-dashboard .report-chart-fill,
+.report-document-dashboard .report-column-track div { background: var(--cliniq-primary, #3b8b5d); }
+.report-document-dashboard .report-chart-track,
+.report-document-dashboard .report-progress-track { background: var(--cliniq-surface-low, #edf3ef); }
+.report-document-dashboard .report-donut-total,
+.report-document-dashboard .report-point-value,
+.report-document-dashboard .report-column-item strong { fill: var(--cliniq-primary, #205f3d); color: var(--cliniq-primary, #205f3d); }
+.report-document-dashboard .report-remarks textarea { border-color: var(--cliniq-outline, #cfded3); background: var(--cliniq-surface-low, #fbfdfb); color: var(--cliniq-foreground, #334155); font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
 @media (max-width: 760px) {
   .report-document { width: 100%; margin: 0; }
   .report-cover, .report-body { padding: 28px 22px; }
-  .report-meta, .report-metrics, .report-charts { grid-template-columns: 1fr; }
+  .report-meta, .report-charts { grid-template-columns: 1fr; }
 }
 @page { size: A4 portrait; margin: 11mm 10mm 13mm; }
 @media print {
@@ -356,9 +378,10 @@ function render_system_report_document(array $report, bool $standalone = false, 
         <?php endif; ?>
         <main class="report-body">
             <?php $sectionNumber = 0; foreach ($report['sections'] as $sectionKey => $section): $sectionNumber++; ?>
-                <section class="report-section" data-report-section="<?= system_report_escape((string) $sectionKey) ?>">
+                <section class="report-section" id="report-section-<?= system_report_escape((string) $sectionKey) ?>" data-report-section="<?= system_report_escape((string) $sectionKey) ?>">
                     <div class="report-section-heading"><div class="report-section-number"><?= $sectionNumber ?></div><div><h2><?= system_report_escape($section['title']) ?></h2><p class="report-section-description"><?= system_report_escape($section['description']) ?></p></div></div>
-                    <div class="report-metrics">
+                    <?php $metricCount = max(1, min(8, count($section['metrics']))); ?>
+                    <div class="report-metrics" style="--report-metric-columns: <?= $metricCount ?>">
                         <?php foreach ($section['metrics'] as $metric): ?>
                             <div class="report-metric"><p class="report-metric-label"><?= system_report_escape($metric['label']) ?></p><p class="report-metric-value"><?= system_report_format_number($metric['value'], (int) ($metric['decimals'] ?? 0)) ?></p><?php if (($metric['note'] ?? '') !== ''): ?><p class="report-metric-note"><?= system_report_escape($metric['note']) ?></p><?php endif; ?></div>
                         <?php endforeach; ?>

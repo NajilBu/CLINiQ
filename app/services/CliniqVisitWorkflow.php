@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/CliniqInventoryWorkflow.php';
+require_once __DIR__ . '/AuditLog.php';
 
 function cliniq_visit_db(): PDO
 {
@@ -339,6 +340,7 @@ function cliniq_visit_create(array $visit, array $entry = [], array $vitals = []
         cliniq_visit_insert_vitals($db, $visitId, $entryId, $vitals, $staffId);
         cliniq_inventory_dispense_medicines($db, (int) $entryId, $dispensings, $staffId);
         $db->commit();
+        audit_log_event('visits', 'visit_created', $staffId, 'staff', 'visit', $visitId, ['patient_person_id' => $patientPersonId, 'source' => $visit['visit_source'] ?? 'Staff Recorded']);
         return $visitId;
     } catch (Throwable $e) {
         if ($db->inTransaction()) {

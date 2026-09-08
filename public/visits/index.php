@@ -31,9 +31,9 @@ $buildWhere = function (bool $includeStatus = true) use ($filters): array {
     $params = [];
 
     if ($filters['q'] !== '') {
-        $where[] = "(p.first_name LIKE ? OR p.last_name LIKE ? OR p.id_number LIKE ? OR v.chief_complaint LIKE ? OR EXISTS (SELECT 1 FROM visit_entries se WHERE se.visit_id = v.visit_id AND se.symptoms LIKE ?) OR v.action_taken LIKE ? OR v.visit_purpose LIKE ?)";
+        $where[] = "(p.first_name LIKE ? OR p.last_name LIKE ? OR p.id_number LIKE ? OR v.chief_complaint LIKE ? OR EXISTS (SELECT 1 FROM visit_entries se WHERE se.visit_id = v.visit_id AND se.symptoms LIKE ?) OR v.action_taken LIKE ? OR v.visit_purpose LIKE ? OR EXISTS (SELECT 1 FROM people attending WHERE attending.id = v.attended_by_person_id AND TRIM(CONCAT_WS(' ', attending.first_name, attending.middle_name, attending.last_name)) LIKE ?))";
         $like = '%' . $filters['q'] . '%';
-        array_push($params, $like, $like, $like, $like, $like, $like, $like);
+        array_push($params, $like, $like, $like, $like, $like, $like, $like, $like);
     }
 
     if ($includeStatus && $filters['status'] !== 'all') {
@@ -121,32 +121,7 @@ $purposeRows = cliniq_visit_db()->query("
 $purposeOptions = array_values(array_unique(array_merge(visit_purposes(), array_column($purposeRows, 'visit_purpose'))));
 
 $baseParams = array_filter($filters, fn ($value) => $value !== '' && $value !== 'all');
-$activeChips = [];
-$chipParams = $baseParams;
-foreach ([
-    'status' => 'Status',
-    'purpose' => 'Purpose',
-    'staff' => 'Attended By',
-    'date_from' => 'From',
-    'date_to' => 'To',
-    'q' => 'Search',
-] as $key => $label) {
-    if (!isset($baseParams[$key])) {
-        continue;
-    }
-    $value = $baseParams[$key];
-    if ($key === 'staff') {
-        foreach ($staffMembers as $staff) {
-            if ((string) $staff['id'] === (string) $value) {
-                $value = $staff['name'];
-                break;
-            }
-        }
-    }
-    $remove = $chipParams;
-    unset($remove[$key]);
-    $activeChips[] = ['label' => $label . ': ' . $value, 'href' => '?' . http_build_query($remove)];
-}
+$hasActiveFilters = $baseParams !== [];
 
 $visitColumns = [
     ['headerName' => 'Date/Time', 'field' => 'dateTimeHtml', 'cellRenderer' => 'html', 'sortField' => 'dateTimeSort', 'sortType' => 'date', 'width' => 150],
@@ -154,35 +129,15 @@ $visitColumns = [
     ['headerName' => 'Complaint', 'field' => 'complaint', 'minWidth' => 210],
     ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'sortField' => 'statusSort', 'sortType' => 'number', 'width' => 145],
     ['headerName' => 'Attended By', 'field' => 'attendedBy', 'minWidth' => 165],
-    ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 100, 'minWidth' => 90],
 ];
 
 $visitRows = [];
 foreach ($visits as $visit) {
     $fullName = trim($visit['first_name'] . ' ' . $visit['last_name']);
     $visitStatus = $visit['status'] ?? 'Unaddressed';
-    $openLabel = match ($visitStatus) {
-        'Unaddressed' => 'Address',
-        'Active' => 'Treat',
-        default => '',
-    };
-    $actionUrl = app_url('visits/view.php?id=' . (int) $visit['id'] . '&from=logbook' . ($visitStatus === 'Unaddressed' ? '&begin=1' : ''));
-    $actionParts = [];
-    if ($openLabel !== '') {
-        $actionParts[] = '<a href="' . e($actionUrl) . '" class="btn btn-sm btn-ghost text-decoration-none"><span class="material-symbols-outlined text-[14px]">medical_services</span>' . e($openLabel) . '</a>';
-    }
-    if ($visitStatus === 'Unaddressed') {
-        $actionParts[] = '<form method="post" action="' . e(app_url('visits/view.php?id=' . (int) $visit['id'] . '&from=logbook')) . '" style="margin:0;">'
-            . '<input type="hidden" name="mode" value="no_show">'
-            . '<input type="hidden" name="from" value="logbook">'
-            . '<input type="hidden" name="return_to" value="index">'
-            . '<button class="btn btn-sm btn-ghost" title="Mark no show" aria-label="Mark no show" data-confirm-submit data-confirm-type="danger" data-confirm-title="Mark as no show?" data-confirm-message="This will cancel the unaddressed logbook entry because the patient did not proceed to the nurse station." data-confirm-toast="Marking no show..."><span class="material-symbols-outlined text-[14px]">cancel</span> No Show</button>'
-            . '</form>';
-    }
-    $actionsHtml = $actionParts ? '<div class="row-actions-list">' . implode('', $actionParts) . '</div>' : '';
 
     $visitRows[] = [
-        'rowUrl' => $actionUrl,
+        'rowUrl' => app_url('visits/view.php?id=' . (int) $visit['id'] . '&from=logbook'),
         'dateTimeSort' => $visit['visit_datetime'],
         'dateTimeHtml' => '<p class="text-sm font-bold text-slate-700 mb-0">' . e(date('M d, Y', strtotime($visit['visit_datetime']))) . '</p><p class="text-xs font-bold text-slate-400 mb-0">' . e(date('g:i A', strtotime($visit['visit_datetime']))) . '</p>',
         'patientSort' => trim($visit['last_name'] . ' ' . $visit['first_name']),
@@ -191,7 +146,6 @@ foreach ($visits as $visit) {
         'statusHtml' => '<span class="badge ' . e(visit_status_badge_class($visitStatus)) . '">' . e($visitStatus) . '</span>',
         'statusSort' => array_search($visitStatus, ['Unaddressed', 'Active', 'Completed', 'Cancelled'], true),
         'attendedBy' => $visit['attended_by_name'] ?: 'Not yet attended',
-        'actionsHtml' => row_actions_button('Visit actions', $actionsHtml),
     ];
 }
 
@@ -247,20 +201,6 @@ render_clinic_command_header(
             </div>
         </div>
 
-        <?php if ($activeChips): ?>
-            <div class="flex flex-wrap items-center gap-2 px-6 py-4 bg-white border-b border-outline-variant/10">
-                <span class="material-symbols-outlined text-slate-400 text-sm">filter_alt</span>
-                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-2">Active Filters</span>
-                <?php foreach ($activeChips as $chip): ?>
-                    <a href="<?= e($chip['href']) ?>" class="flex items-center gap-1.5 px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold border border-slate-200 text-decoration-none">
-                        <?= e($chip['label']) ?>
-                        <span class="material-symbols-outlined text-[14px]">close</span>
-                    </a>
-                <?php endforeach; ?>
-                <a href="index.php" class="ml-auto text-[10px] font-black text-primary uppercase tracking-widest hover:underline text-decoration-none">Clear All</a>
-            </div>
-        <?php endif; ?>
-
         <div id="advancedFilterModal" class="modal-backdrop">
             <div class="modal-content bg-white rounded-[2rem] w-full max-w-2xl p-8 shadow-2xl border border-outline-variant/10">
                 <div class="flex items-center justify-between mb-8">
@@ -276,15 +216,6 @@ render_clinic_command_header(
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <div>
-                        <label class="clinic-label">Status</label>
-                        <select class="clinic-select" name="status">
-                            <option value="all" <?= $filters['status'] === 'all' ? 'selected' : '' ?>>All Records</option>
-                            <?php foreach (visit_statuses() as $status): ?>
-                                <option value="<?= e($status) ?>" <?= $filters['status'] === $status ? 'selected' : '' ?>><?= e($status) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
                     <div>
                         <label class="clinic-label">Purpose</label>
                         <select class="clinic-select" name="purpose">
@@ -329,8 +260,8 @@ render_clinic_command_header(
         'pageSize' => 10,
         'pagination' => true,
         'paginationControls' => 'visitsPagination',
-        'emptyTitle' => $activeChips ? 'No matching visits' : 'No clinic visits yet',
-        'emptyText' => $activeChips ? 'Try a different search or filter.' : 'Record a clinic visit to get started.',
+        'emptyTitle' => $hasActiveFilters ? 'No matching visits' : 'No clinic visits yet',
+        'emptyText' => $hasActiveFilters ? 'Try a different search or filter.' : 'Record a clinic visit to get started.',
     ]); ?>
     <nav id="visitsPagination" class="pagination" aria-label="Visit log pages"></nav>
 </section>

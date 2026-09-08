@@ -1,0 +1,9 @@
+{
+  "name": "cliniq",
+  "private": true,
+  "scripts": {
+    "desktop:install": "npm --prefix electron ci",
+    "desktop": "npm --prefix electron start",
+    "desktop:build": "npm --prefix electron run build:win"
+  }
+}

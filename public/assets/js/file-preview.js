@@ -61,7 +61,7 @@
     const closePreview = () => {
         if (!modal || modal.hidden) return;
         modal.hidden = true;
-        previewBody.replaceChildren();
+        setTimeout(() => { if (modal.hidden) previewBody.replaceChildren(); }, 240);
         document.body.classList.remove('file-preview-open');
         if (previousTrigger && typeof previousTrigger.focus === 'function') previousTrigger.focus();
         previousTrigger = null;

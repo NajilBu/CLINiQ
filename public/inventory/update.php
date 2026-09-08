@@ -9,12 +9,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $id = (int) ($_POST['id'] ?? 0);
     $type = cliniq_inventory_item_type((string) ($_POST['category'] ?? 'Medicine'));
     try {
-        $code = cliniq_inventory_item_code((string) ($_POST['item_code'] ?? ''));
         $name = trim((string) ($_POST['item_name'] ?? ''));
         $unit = trim((string) ($_POST['unit'] ?? ''));
         $quantity = max(0, (int) ($_POST['quantity'] ?? 0));
         if ($id < 1 || $name === '' || $unit === '') {
-            throw new InvalidArgumentException('Item code, name, and unit are required.');
+            throw new InvalidArgumentException('Item name and unit are required.');
         }
 
         $staffId = cliniq_inventory_staff_person_id();
@@ -28,12 +27,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $stmt = $db->prepare('
             UPDATE inventory_items
-            SET item_code = ?, item_name = ?, item_type = ?, description = ?,
+            SET item_name = ?, item_type = ?, description = ?,
                 quantity = ?, unit = ?, reorder_level = ?, expiration_date = ?
             WHERE item_id = ?
         ');
         $stmt->execute([
-            $code,
             $name,
             $type,
             trim((string) ($_POST['description'] ?? '')) ?: null,
@@ -56,10 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($db->inTransaction()) {
             $db->rollBack();
         }
-        $message = str_contains(strtolower($e->getMessage()), 'duplicate')
-            ? 'That item code already exists.'
-            : $e->getMessage();
-        flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $message);
+        flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $e->getMessage());
     }
     header('Location: index.php?tab=' . ($type === 'Equipment' ? 'equipment' : 'medicine'));
     exit;

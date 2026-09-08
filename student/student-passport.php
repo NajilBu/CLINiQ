@@ -22,7 +22,7 @@ $passport = [
     'last_updated'    => $profile['updated_at'] ? date('F j, Y', strtotime($profile['updated_at'])) : date('F j, Y'),
     'token'           => $profile['emergency_token'] ?: 'not-generated',
 ];
-$passportUrl = 'passport-demo.php?token=' . urlencode($passport['token']);
+$passportUrl = '../public/emergency.php?token=' . urlencode($passport['token']);
 
 $saved = false;
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

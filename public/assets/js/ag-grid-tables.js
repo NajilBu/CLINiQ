@@ -200,6 +200,7 @@
         const paginationControlsId = grid.dataset.paginationControls || '';
         const rowHeight = Number(grid.dataset.rowHeight || 70);
         const shouldFitColumns = grid.dataset.fitColumns !== 'false';
+        const autoHeight = grid.classList.contains('cliniq-ag-grid-patient-registry');
         const columnDefs = normalizeColumns(readGridJson(grid, '[data-grid-columns]', []), shouldFitColumns);
 
         function eventTarget(gridEvent) {
@@ -215,6 +216,24 @@
         }
 
         function navigateRow(gridEvent) {
+            if (isInteractiveClick(gridEvent)) return;
+            if (gridEvent?.data?.rowActionsHtml && typeof window.showModal === 'function') {
+                document.getElementById('rowActionsModalTitle').textContent = gridEvent.data.rowActionsTitle || 'Actions';
+                document.getElementById('rowActionsModalBody').innerHTML = gridEvent.data.rowActionsHtml;
+                window.showModal('rowActionsModal');
+                document.querySelector('#rowActionsModal button')?.focus();
+                return;
+            }
+            const rowModalId = gridEvent && gridEvent.data && gridEvent.data.rowModalId;
+            if (rowModalId && typeof window.showModal === 'function') {
+                const modal = document.getElementById(rowModalId);
+                if (modal && modal.style.display !== 'flex') {
+                    window.showModal(rowModalId);
+                    const closeButton = modal.querySelector('button');
+                    if (closeButton) closeButton.focus();
+                }
+                return;
+            }
             const rowUrl = gridEvent && gridEvent.data && gridEvent.data.rowUrl;
             if (!rowUrl || isInteractiveClick(gridEvent)) return;
             window.location.assign(rowUrl);
@@ -267,6 +286,7 @@
         const gridOptions = {
             rowData,
             columnDefs,
+            domLayout: autoHeight ? 'autoHeight' : 'normal',
             defaultColDef: {
                 sortable: true,
                 filter: true,
@@ -287,7 +307,7 @@
             overlayNoRowsTemplate: makeEmptyOverlay(grid.dataset.emptyTitle, grid.dataset.emptyText),
             getRowClass: (params) => {
                 const classes = [];
-                if (params.data && params.data.rowUrl) classes.push('ag-row-clickable');
+                if (params.data && (params.data.rowUrl || params.data.rowModalId || params.data.rowActionsHtml)) classes.push('ag-row-clickable');
                 if (params.data && params.data.rowClass) classes.push(params.data.rowClass);
                 return classes.join(' ');
             },

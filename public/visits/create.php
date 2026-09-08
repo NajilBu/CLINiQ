@@ -6,7 +6,7 @@ require_login();
 
 $patients = cliniq_visit_patients();
 $medicineInventory = cliniq_inventory_available_medicines();
-$equipmentInventory = [];
+$equipmentInventory = cliniq_inventory_db()->query("SELECT item_id AS id, item_name, quantity, unit FROM inventory_items WHERE item_type = 'Equipment' AND is_active = 1 ORDER BY item_name")->fetchAll();
 $preselectedPatientId = (int) ($_GET['patient_id'] ?? 0);
 $preselectedPatient = null;
 foreach ($patients as $patient) {
@@ -18,7 +18,7 @@ foreach ($patients as $patient) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
-        $postedStudentNumber = trim($_POST['id_number'] ?? '');
+        $postedStudentNumber = normalize_id_number(trim($_POST['id_number'] ?? ''));
         $patientId = 0;
         if ($postedStudentNumber !== '') {
             if (!is_valid_id_number($postedStudentNumber)) {
@@ -49,7 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $visitId = cliniq_visit_create([
             'patient_person_id' => $patientId,
             'chief_complaint' => trim($_POST['chief_complaint'] ?? ''),
-            'status' => 'Active',
+            'status' => 'Completed',
             'visit_purpose' => $purpose,
             'visit_source' => 'Staff Recorded',
             'action_taken' => $actionTaken,
@@ -85,6 +85,28 @@ render_clinic_command_header(
     'Record a walk-in visit directly with vitals, treatment, and clinical notes.'
 );
 ?>
+
+<style>
+    .dispensing-entry-grid > div,
+    .dispensing-entry-grid label,
+    .dispensing-entry-grid [data-return-clock] {
+        min-width: 0;
+    }
+
+    @media (min-width: 1280px) {
+        .dispensing-entry-grid {
+            grid-template-columns: minmax(0, 0.55fr) minmax(0, 1.2fr) minmax(90px, 0.38fr) auto;
+        }
+
+        .dispensing-entry-grid.is-equipment {
+            grid-template-columns: minmax(0, 0.55fr) minmax(0, 1.2fr) minmax(90px, 0.38fr) minmax(0, 0.72fr) minmax(0, 1fr) auto;
+        }
+
+        .dispensing-entry-grid.is-equipment [data-equipment-return] .clinic-label {
+            white-space: nowrap;
+        }
+    }
+</style>
 
 <form method="post" id="visitForm" class="space-y-6">
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -145,94 +167,6 @@ render_clinic_command_header(
     </div>
 
     <section class="clinic-card p-6">
-        <div class="flex items-center justify-between gap-3 mb-6">
-            <h2 class="font-headline text-xl font-extrabold text-[#1c2a59] flex items-center gap-3 m-0">
-                <span class="material-symbols-outlined">monitor_heart</span>
-                Vitals & Measurements
-            </h2>
-            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Optional</span>
-        </div>
-        <div class="vitals-grid">
-            <div class="vital-tile">
-                <div class="vital-label"><span class="material-symbols-outlined">favorite</span>BP</div>
-                <div class="vital-value-wrap">
-                    <input class="vital-input" name="blood_pressure" placeholder="0">
-                    <span class="vital-unit">mmHg</span>
-                </div>
-            </div>
-            <div class="vital-tile">
-                <div class="vital-label"><span class="material-symbols-outlined">thermostat</span>Temp</div>
-                <div class="vital-value-wrap">
-                    <input class="vital-input" name="temperature" id="tempInput" type="number" step="0.1" placeholder="0">
-                    <span class="vital-unit">C</span>
-                </div>
-            </div>
-            <div class="vital-tile">
-                <div class="vital-label"><span class="material-symbols-outlined">ecg_heart</span>Heart</div>
-                <div class="vital-value-wrap">
-                    <input class="vital-input" name="pulse_rate" id="pulseInput" type="number" placeholder="0">
-                    <span class="vital-unit">BPM</span>
-                </div>
-            </div>
-            <?php foreach ([['air', 'SpO2', '%'], ['scale', 'Weight', 'kg'], ['height', 'Height', 'cm']] as [$icon, $label, $unit]): ?>
-                <div class="vital-tile">
-                    <div class="vital-label"><span class="material-symbols-outlined"><?= e($icon) ?></span><?= e($label) ?></div>
-                    <div class="vital-value-wrap">
-                        <input class="vital-input" placeholder="0">
-                        <span class="vital-unit"><?= e($unit) ?></span>
-                    </div>
-                </div>
-            <?php endforeach; ?>
-        </div>
-    </section>
-
-    <section class="clinic-card p-6">
-        <h2 class="font-headline text-lg font-extrabold text-[#1c2a59] flex items-center gap-2 mb-5">
-            <span class="material-symbols-outlined text-primary text-[19px]">inventory_2</span>
-            Inventory & Dispensing
-        </h2>
-        <p class="settings-help mb-4">Optional medicines are saved with the treatment entry and deducted from Cliniq_db stock.</p>
-        <div class="space-y-3" data-dispensing-list>
-            <div class="grid grid-cols-1 md:grid-cols-[0.7fr_1.6fr_0.55fr_auto] gap-4 items-end" data-dispensing-row>
-                <div>
-                    <label class="clinic-label">Type</label>
-                    <select class="record-sheet-field px-4 js-dispensing-type" name="dispensing_type[]" disabled>
-                        <option value="Medicine">Medicine</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="clinic-label">Medicine</label>
-                    <select class="record-sheet-field px-4 js-visit-inventory-item" name="dispensed_inventory_item_id[]">
-                        <option value="" data-type="Medicine">No medicine selected</option>
-                        <?php foreach ($medicineInventory as $medicine): ?>
-                            <option value="<?= (int) $medicine['id'] ?>" data-type="Medicine" <?= (int) $medicine['quantity'] <= 0 ? 'disabled' : '' ?>>
-                                <?= e($medicine['item_name']) ?> (<?= (int) $medicine['quantity'] ?> <?= e($medicine['unit']) ?>)
-                            </option>
-                        <?php endforeach; ?>
-                        <?php foreach ($equipmentInventory as $equipment): ?>
-                            <option value="<?= (int) $equipment['id'] ?>" data-type="Equipment" <?= (int) $equipment['quantity'] <= 0 ? 'disabled' : '' ?>>
-                                <?= e($equipment['item_name']) ?> (<?= (int) $equipment['quantity'] ?> <?= e($equipment['unit']) ?>)
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div>
-                    <label class="clinic-label">Quantity</label>
-                    <input class="record-sheet-field px-4" name="dispensed_quantity[]" type="number" min="1" placeholder="0">
-                </div>
-                <button type="button" class="btn btn-ghost js-remove-dispensing-row" title="Remove medicine" aria-label="Remove medicine">
-                    <span class="material-symbols-outlined text-[18px]">delete</span>
-                </button>
-            </div>
-        </div>
-        <button type="button" class="btn btn-outline mt-4 js-add-dispensing-row">
-            <span class="material-symbols-outlined text-[18px]">add</span>
-            Add Item
-        </button>
-        <p class="settings-help mt-3 mb-0">Equipment borrowing is recorded separately in Inventory &amp; Tracking.</p>
-    </section>
-
-    <section class="clinic-card p-6">
         <h2 class="font-headline text-lg font-extrabold text-[#1c2a59] flex items-center gap-2 mb-5">
             <span class="material-symbols-outlined text-primary text-[19px]">medical_information</span>
             Medical Record
@@ -263,13 +197,121 @@ render_clinic_command_header(
                 <textarea class="record-sheet-field p-4" name="remarks" rows="4" placeholder="General remarks or follow-up instruction..."></textarea>
             </div>
         </div>
-        <div class="mt-6 pt-5 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3">
+    </section>
+
+    <details class="clinic-card overflow-hidden" data-collapsible-section>
+        <summary class="flex items-center justify-between gap-3 p-6 cursor-pointer select-none" style="list-style:none">
+            <h2 class="font-headline text-xl font-extrabold text-[#1c2a59] flex items-center gap-3 m-0">
+                <span class="material-symbols-outlined">monitor_heart</span>
+                Vitals & Measurements
+            </h2>
+            <span class="flex items-center gap-3"><span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Optional</span><span class="material-symbols-outlined text-slate-500" data-collapse-icon>expand_more</span></span>
+        </summary>
+        <div class="px-6 pb-6"><div class="vitals-grid">
+            <div class="vital-tile">
+                <div class="vital-label"><span class="material-symbols-outlined">favorite</span>BP</div>
+                <div class="vital-value-wrap">
+                    <input class="vital-input" name="blood_pressure" placeholder="0">
+                    <span class="vital-unit">mmHg</span>
+                </div>
+            </div>
+            <div class="vital-tile">
+                <div class="vital-label"><span class="material-symbols-outlined">thermostat</span>Temp</div>
+                <div class="vital-value-wrap">
+                    <input class="vital-input" name="temperature" id="tempInput" type="number" step="0.1" placeholder="0">
+                    <span class="vital-unit">C</span>
+                </div>
+            </div>
+            <div class="vital-tile">
+                <div class="vital-label"><span class="material-symbols-outlined">ecg_heart</span>Heart</div>
+                <div class="vital-value-wrap">
+                    <input class="vital-input" name="pulse_rate" id="pulseInput" type="number" placeholder="0">
+                    <span class="vital-unit">BPM</span>
+                </div>
+            </div>
+            <?php foreach ([['air', 'SpO2', '%'], ['scale', 'Weight', 'kg'], ['height', 'Height', 'cm']] as [$icon, $label, $unit]): ?>
+                <div class="vital-tile">
+                    <div class="vital-label"><span class="material-symbols-outlined"><?= e($icon) ?></span><?= e($label) ?></div>
+                    <div class="vital-value-wrap">
+                        <input class="vital-input" placeholder="0">
+                        <span class="vital-unit"><?= e($unit) ?></span>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div></div>
+    </details>
+
+    <details class="clinic-card overflow-hidden" data-collapsible-section>
+        <summary class="flex items-center justify-between gap-3 p-6 cursor-pointer select-none" style="list-style:none">
+            <h2 class="font-headline text-lg font-extrabold text-[#1c2a59] flex items-center gap-2 m-0"><span class="material-symbols-outlined text-primary text-[19px]">inventory_2</span>Inventory & Dispensing</h2>
+            <span class="material-symbols-outlined text-slate-500" data-collapse-icon>expand_more</span>
+        </summary>
+        <div class="px-6 pb-6">
+        <p class="settings-help mb-4">Medicines and equipment are saved with the treatment entry. Equipment loans require an expected return date and time.</p>
+        <div class="space-y-3" data-dispensing-list>
+            <div class="dispensing-entry-grid grid grid-cols-1 md:grid-cols-[0.7fr_1.6fr_0.55fr_auto] gap-4 items-end" data-dispensing-row>
+                <div>
+                    <label class="clinic-label">Type</label>
+                    <select class="record-sheet-field px-4 js-dispensing-type" name="dispensing_type[]">
+                        <option value="Medicine">Medicine</option><option value="Equipment">Equipment</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="clinic-label">Item</label>
+                    <select class="record-sheet-field px-4 js-visit-inventory-item" name="dispensed_inventory_item_id[]">
+                        <option value="" data-type="Medicine">No item selected</option>
+                        <?php foreach ($medicineInventory as $medicine): ?>
+                            <option value="<?= (int) $medicine['id'] ?>" data-type="Medicine" data-available="<?= (int) $medicine['quantity'] ?>" <?= (int) $medicine['quantity'] <= 0 ? 'disabled' : '' ?>>
+                                <?= e(cliniq_inventory_medicine_option_label($medicine)) ?>
+                            </option>
+                        <?php endforeach; ?>
+                        <?php foreach ($equipmentInventory as $equipment): ?>
+                            <option value="<?= (int) $equipment['id'] ?>" data-type="Equipment" data-available="<?= (int) $equipment['quantity'] ?>" <?= (int) $equipment['quantity'] <= 0 ? 'disabled' : '' ?>>
+                                <?= e($equipment['item_name']) ?> (<?= (int) $equipment['quantity'] ?> <?= e($equipment['unit']) ?>)
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div>
+                    <label class="clinic-label">Quantity</label>
+                    <input class="record-sheet-field px-4" name="dispensed_quantity[]" type="number" min="1" placeholder="0">
+                </div>
+                <div class="md:col-span-full xl:contents" data-equipment-return style="display:none;">
+                    <div class="grid grid-cols-1 md:grid-cols-2 xl:contents gap-4">
+                        <div>
+                            <label class="clinic-label">Expected Return Date</label>
+                            <input class="record-sheet-field px-4" type="date" name="equipment_return_date[]" value="<?= e(date('Y-m-d')) ?>" min="<?= e(date('Y-m-d')) ?>">
+                        </div>
+                        <div>
+                            <label class="clinic-label">Expected Return Time</label>
+                            <span class="flex gap-2" data-return-clock title="Return time must be between 8:00 AM and 5:00 PM">
+                                <input class="record-sheet-field px-4" style="min-width:0;flex:1;" name="equipment_return_time[]" type="text" inputmode="numeric" maxlength="5" data-equipment-return-time placeholder="h:mm" autocomplete="off" aria-label="Return time">
+                                <select class="record-sheet-field px-4" style="width:86px;" name="equipment_return_period[]" data-return-period aria-label="AM or PM"><option value="AM">AM</option><option value="PM">PM</option></select>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-ghost js-remove-dispensing-row" title="Remove medicine" aria-label="Remove medicine">
+                    <span class="material-symbols-outlined text-[18px]">delete</span>
+                </button>
+            </div>
+        </div>
+        <button type="button" class="btn btn-outline mt-4 js-add-dispensing-row">
+            <span class="material-symbols-outlined text-[18px]">add</span>
+            Add Item
+        </button>
+        <p class="settings-help mt-3 mb-0">Equipment is loaned to this patient when you save. Enter its expected return date and time; process returns in Inventory &amp; Tracking.</p>
+        </div>
+    </details>
+
+    <section class="clinic-card p-6">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3">
             <div class="flex flex-wrap gap-3 justify-end">
                 <a class="btn btn-ghost text-decoration-none justify-center" href="index.php">
                     <span class="material-symbols-outlined">cancel</span>
                     Cancel
                 </a>
-                <button class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save this manual visit?" data-confirm-message="This will create the visit and deduct any selected medicine from Cliniq_db inventory." data-confirm-toast="Saving visit...">
+                <button class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save this manual visit?" data-confirm-message="This will create the visit, dispense selected medicines, and loan selected equipment to this patient until the expected return date and time." data-confirm-toast="Saving visit...">
                     <span class="material-symbols-outlined text-[18px]">save</span>
                     Save Visit
                 </button>
@@ -279,6 +321,15 @@ render_clinic_command_header(
 </form>
 
 <script>
+document.querySelectorAll('[data-collapsible-section]').forEach((section) => {
+    const icon = section.querySelector('[data-collapse-icon]');
+    const syncIcon = () => {
+        if (icon) icon.textContent = section.open ? 'expand_less' : 'expand_more';
+    };
+    section.addEventListener('toggle', syncIcon);
+    syncIcon();
+});
+
 const visitPatients = <?= json_encode(array_map(static function (array $patient): array {
     return [
         'id' => (int) $patient['id'],
@@ -296,13 +347,8 @@ const patientCourseDisplay = document.getElementById('patientCourseDisplay');
 const patientSexDisplay = document.getElementById('patientSexDisplay');
 const patientLookupStatus = document.getElementById('patientLookupStatus');
 
-function normalizeStudentId(value) {
-    const digits = String(value || '').replace(/\D/g, '').slice(0, 7);
-    if (digits.length <= 2) {
-        return digits;
-    }
-
-    return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+function normalizePatientId(value) {
+    return window.CliniqIdNumber.format(value);
 }
 
 function setLookupStatus(message, state = '') {
@@ -320,7 +366,7 @@ function clearPatientLookup(message = 'Enter a ID number to load patient details
 }
 
 function updatePatientLookup() {
-    const formatted = normalizeStudentId(studentIdLookup.value);
+    const formatted = normalizePatientId(studentIdLookup.value);
     if (studentIdLookup.value !== formatted) {
         studentIdLookup.value = formatted;
     }
@@ -332,7 +378,7 @@ function updatePatientLookup() {
 
     const patient = visitPatientsByStudentNumber.get(formatted);
     if (!patient) {
-        clearPatientLookup(formatted.length >= 8 ? 'No patient found for this ID number.' : 'Continue typing the ID number.', formatted.length >= 8 ? 'missing' : '');
+        clearPatientLookup(window.CliniqIdNumber.isValid(formatted) ? 'No patient found for this ID number.' : 'Continue typing the ID number.', window.CliniqIdNumber.isValid(formatted) ? 'missing' : '');
         return;
     }
 
@@ -362,6 +408,20 @@ function syncDispensingRow(row) {
     if (!typeSelect || !itemSelect) return;
 
     const activeType = typeSelect.value || 'Medicine';
+    const returnGroup = row.querySelector('[data-equipment-return]');
+    if (returnGroup) {
+        const equipment = activeType === 'Equipment';
+        row.classList.toggle('is-equipment', equipment);
+        returnGroup.style.display = equipment ? '' : 'none';
+        returnGroup.querySelectorAll('input, select').forEach(field => {
+            field.required = equipment;
+            if (equipment && !field.value) {
+                if (field.type === 'date') field.value = field.min;
+                if (field.matches('[data-return-period]')) field.value = 'AM';
+            }
+            if (!equipment) { field.value = ''; field.setCustomValidity(''); }
+        });
+    }
     let currentVisible = false;
     Array.from(itemSelect.options).forEach((option) => {
         const optionType = option.dataset.type || 'Medicine';
@@ -370,6 +430,18 @@ function syncDispensingRow(row) {
         if (option.selected && visible) currentVisible = true;
     });
     if (!currentVisible) itemSelect.value = '';
+
+    const quantityInput = row.querySelector('input[name="dispensed_quantity[]"]');
+    if (quantityInput) {
+        const selectedOption = itemSelect.selectedOptions?.[0];
+        const available = selectedOption?.value ? Number(selectedOption.dataset.available || 0) : 0;
+        if (selectedOption?.value) quantityInput.max = String(available);
+        else quantityInput.removeAttribute('max');
+        const entered = Number(quantityInput.value || 0);
+        quantityInput.setCustomValidity(selectedOption?.value && entered > available
+            ? 'Quantity dispensed exceeds the available item quantity.'
+            : '');
+    }
 }
 
 function updateDispensingRemoveButtons(list) {
@@ -385,15 +457,19 @@ document.querySelectorAll('[data-dispensing-list]').forEach((list) => {
     updateDispensingRemoveButtons(list);
 
     list.addEventListener('change', (event) => {
-        const typeSelect = event.target.closest('.js-dispensing-type');
-        if (typeSelect) syncDispensingRow(typeSelect.closest('[data-dispensing-row]'));
+        const changedField = event.target.closest('.js-dispensing-type, .js-visit-inventory-item');
+        if (changedField) syncDispensingRow(changedField.closest('[data-dispensing-row]'));
+    });
+    list.addEventListener('input', (event) => {
+        const quantityInput = event.target.closest('input[name="dispensed_quantity[]"]');
+        if (quantityInput) syncDispensingRow(quantityInput.closest('[data-dispensing-row]'));
     });
 });
 
 document.addEventListener('click', (event) => {
     const addButton = event.target.closest('.js-add-dispensing-row');
     if (addButton) {
-        const section = addButton.closest('section');
+        const section = addButton.closest('[data-collapsible-section]');
         const list = section?.querySelector('[data-dispensing-list]');
         const firstRow = list?.querySelector('[data-dispensing-row]');
         if (!list || !firstRow) return;

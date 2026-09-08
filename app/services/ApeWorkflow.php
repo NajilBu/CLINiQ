@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/SystemSettings.php';
+require_once __DIR__ . '/AuditLog.php';
 
 function ape_workflow_steps(): array
 {
@@ -18,7 +19,7 @@ function ape_requirement_status_options(): array
     return dropdown_options('ape_requirement_status');
 }
 
-/** Build one checklist save, preserving comments outside the selected documents. */
+/** Build one checklist save, preserving each document's remarks separately from shared instructions. */
 function ape_hard_copy_review_plan(array $requirements, string $mode, array $selectedIds, string $instructions, array $remarks = []): array
 {
     if (!in_array($mode, ['complete', 'correction', 'follow_up'], true)) {
@@ -61,7 +62,7 @@ function ape_hard_copy_review_plan(array $requirements, string $mode, array $sel
         $updates[] = [
             'requirement_id' => $requirementId,
             'status' => $selected ? $status : 'Verified',
-            'remarks' => $selected ? $instructions : ($requirement['remarks'] ?? null),
+            'remarks' => $requirement['remarks'] ?? null,
         ];
         if ($selected) $names[] = $requirement['requirement_name'];
     }
@@ -221,6 +222,35 @@ function ape_record_queue(array $record): string
     }
 
     return 'final_decision';
+}
+
+/** Count patients, not documents; requirement alerts can overlap work queues. */
+function ape_batch_progress(array $records): array
+{
+    $summaries = [];
+    foreach ($records as $record) {
+        $batchId = (int) ($record['schedule_batch_id'] ?? 0);
+        if ($batchId < 1) continue;
+        if (!isset($summaries[$batchId])) {
+            $summaries[$batchId] = array_fill_keys([
+                'total', 'completed', 'examination', 'digital_submission',
+                'final_decision', 'follow_up', 'incomplete', 'correction',
+            ], 0);
+        }
+        $summary = &$summaries[$batchId];
+        $summary['total']++;
+        $queue = ape_record_queue($record);
+        $summary[$queue]++;
+        if (!in_array($queue, ['examination', 'completed'], true)) {
+            if (trim((string) ($record['missing_items'] ?? '')) !== '') $summary['incomplete']++;
+            if (($record['requirement_status'] ?? '') === 'Needs Correction'
+                || ($record['verification_status'] ?? '') === 'Needs Correction') {
+                $summary['correction']++;
+            }
+        }
+        unset($summary);
+    }
+    return $summaries;
 }
 
 function ape_next_action(array $record): array
@@ -881,6 +911,38 @@ function ape_log_activity(int $apeRecordId, ?int $personId, string $actionLabel,
 {
     $stmt = auth_db()->prepare('INSERT INTO ape_activity_logs (ape_id, performed_by_person_id, action, notes) VALUES (?, ?, ?, ?)');
     $stmt->execute([$apeRecordId, $personId ?: null, $actionLabel, $notes]);
+    audit_log_event('ape', $actionLabel, $personId ?: null, 'staff', 'ape_record', $apeRecordId, ['notes' => $notes]);
+}
+
+function ape_document_storage_root(): string
+{
+    return dirname(__DIR__, 2) . '/storage/documents/ape';
+}
+
+function ape_document_absolute_path(string $storedPath): ?string
+{
+    $normalizedPath = ltrim(str_replace('\\', '/', trim($storedPath)), '/');
+    $allowedPrefixes = ['storage/documents/ape/', 'uploads/ape/'];
+    $relativeName = null;
+
+    foreach ($allowedPrefixes as $prefix) {
+        if (str_starts_with($normalizedPath, $prefix)) {
+            $relativeName = substr($normalizedPath, strlen($prefix));
+            break;
+        }
+    }
+
+    if ($relativeName === null || $relativeName === '' || basename($relativeName) !== $relativeName) {
+        return null;
+    }
+
+    $protectedPath = ape_document_storage_root() . DIRECTORY_SEPARATOR . $relativeName;
+    if (is_file($protectedPath)) {
+        return $protectedPath;
+    }
+
+    $legacyPath = dirname(__DIR__, 2) . '/public/uploads/ape/' . $relativeName;
+    return is_file($legacyPath) ? $legacyPath : null;
 }
 
 function ape_store_uploaded_file(array $file, string $prefix): array
@@ -897,9 +959,9 @@ function ape_store_uploaded_file(array $file, string $prefix): array
         throw new InvalidArgumentException('APE documents must be PDF, JPG, JPEG, or PNG files.');
     }
 
-    $uploadDir = dirname(__DIR__, 2) . '/public/uploads/ape/';
+    $uploadDir = ape_document_storage_root() . DIRECTORY_SEPARATOR;
     if (!is_dir($uploadDir) && !mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)) {
-        throw new RuntimeException('The APE upload folder could not be created.');
+        throw new RuntimeException('The protected APE document folder could not be created.');
     }
 
     $filename = preg_replace('/[^a-z0-9_-]+/i', '-', $prefix) . '_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $extension;
@@ -909,7 +971,7 @@ function ape_store_uploaded_file(array $file, string $prefix): array
 
     return [
         'original_filename' => basename((string) $file['name']),
-        'file_path' => 'uploads/ape/' . $filename,
+        'file_path' => 'storage/documents/ape/' . $filename,
         'absolute_path' => $uploadDir . $filename,
     ];
 }

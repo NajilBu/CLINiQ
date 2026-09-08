@@ -365,6 +365,12 @@ render_header($fullName . ' - Patient Profile');
                     <span class="material-symbols-outlined text-[18px]">edit</span>
                     Edit Profile
                 </a>
+                <?php if ($canEmailPatient): ?>
+                    <button type="button" class="btn btn-outline" id="openPatientEmailComposerButton" title="Email this patient">
+                        <span class="material-symbols-outlined text-[18px]">mail</span>
+                        Email Patient
+                    </button>
+                <?php endif; ?>
                 <a class="btn btn-primary text-decoration-none" href="<?= app_url('visits/create.php?patient_id=' . $id) ?>">
                     <span class="material-symbols-outlined text-[18px]">add_notes</span>
                     Record Visit
@@ -454,14 +460,7 @@ render_header($fullName . ' - Patient Profile');
                     </div>
                     <div class="patient-profile-field md:col-span-2">
                         <span class="clinic-label">Email</span>
-                        <?php if ($canEmailPatient): ?>
-                            <button type="button" class="inline-flex items-center gap-2 text-left font-extrabold text-primary hover:underline" id="openPatientEmailComposerButton" title="Email this patient">
-                                <span><?= e($emailLabel) ?></span>
-                                <span class="material-symbols-outlined text-[17px]">edit_square</span>
-                            </button>
-                        <?php else: ?>
-                            <strong><?= e($emailLabel) ?></strong>
-                        <?php endif; ?>
+                        <strong><?= e($emailLabel) ?></strong>
                     </div>
                     <div class="patient-profile-field md:col-span-2">
                         <span class="clinic-label">Guardian</span>

@@ -567,6 +567,13 @@ h6,
     scrollbar-gutter: stable;
 }
 
+/* Page-family wrappers already own their internal spacing; do not add the
+   shell's sibling spacing above the authenticated Reports/Feedback canvas. */
+#cliniqPageContent > .reports-page,
+#cliniqPageContent > .feedback-admin {
+    margin-top: 0 !important;
+}
+
 .app-mobile-nav {
     display: flex;
     gap: 0.4rem;
@@ -1080,6 +1087,11 @@ h6,
 
 .modal-backdrop.show .modal-content {
     transform: scale(1);
+}
+
+#apeBatchModal .modal-content {
+    max-height: calc(100vh - 2rem);
+    max-height: calc(100dvh - 2rem);
 }
 
 .row-actions-trigger {
@@ -3270,6 +3282,94 @@ textarea.record-sheet-field {
     background: var(--cliniq-primary-hover);
 }
 
+/* Shared staff audit table treatment. */
+.audit-page {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.audit-page > .clinic-card {
+    margin-bottom: 0 !important;
+}
+
+.audit-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+}
+
+.audit-table th,
+.audit-table td {
+    padding: 0.875rem 1.25rem;
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid var(--cliniq-border);
+}
+
+.audit-table th {
+    background: var(--cliniq-surface-low);
+    color: var(--cliniq-muted-foreground);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.audit-table tbody tr:hover {
+    background: var(--cliniq-surface-low);
+}
+
+.audit-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.audit-primary-text,
+.audit-secondary-text {
+    margin: 0;
+}
+
+.audit-primary-text {
+    color: var(--cliniq-foreground);
+    font-weight: 700;
+}
+
+.audit-secondary-text {
+    margin-top: 0.2rem;
+    color: var(--cliniq-muted-foreground);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.audit-target-text {
+    color: var(--cliniq-foreground);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.audit-detail-text {
+    max-width: 24rem;
+    color: var(--cliniq-muted-foreground);
+    font-size: 0.75rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.audit-nowrap {
+    color: var(--cliniq-muted-foreground);
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+    .audit-table th,
+    .audit-table td {
+        padding: 0.75rem 1rem;
+    }
+}
+
 .btn-danger {
     background: #dc2626;
     color: white;
@@ -3551,8 +3651,8 @@ textarea.record-sheet-field {
 }
 
 .cliniq-ag-grid-patient-registry {
-    height: 888px;
-    min-height: 888px;
+    height: auto;
+    min-height: 0;
 }
 
 .cliniq-ag-grid-fill {
@@ -4305,10 +4405,11 @@ body.cliniq-drag-scroll-active * {
     box-shadow: 0 7px 16px rgba(127, 29, 29, 0.18);
 }
 
-.appointment-week-block.is-all-day {
-    justify-content: flex-start;
-    padding-top: 0.75rem;
-    background: repeating-linear-gradient(-45deg, #fff1f2, #fff1f2 8px, #ffe4e6 8px, #ffe4e6 16px);
+.appointment-week-block:not(.is-ape) {
+    justify-content: center;
+    text-align: center;
+    padding: 0.35rem 0.45rem;
+    background: #fff1f2;
 }
 
 .appointment-week-block.is-placeholder {
@@ -4553,4 +4654,36 @@ body.is-electron-runtime .app-content {
     body.is-electron-runtime .app-sidebar {
         border-radius: 0.5625rem 0 0 0.5625rem;
     }
+}
+
+/* Fixed overlays must not inherit the page's space-y sibling margins. */
+:is(.modal-backdrop, .file-preview-backdrop, .appointment-date-modal,
+    .student-modal, .student-calendar-time-modal,
+    #change-password-modal, #ape-upload-confirm-modal) {
+    margin: 0 !important;
+    inset: 0;
+}
+/* Shared popup fades, including class/hidden-driven patient dialogs. */
+:is(.modal-backdrop, .file-preview-backdrop, .appointment-date-modal,
+    .student-modal, .student-calendar-time-modal,
+    #change-password-modal, #ape-upload-confirm-modal) {
+    transition: opacity 240ms ease, display 240ms allow-discrete;
+}
+:is(.file-preview-backdrop, .appointment-date-modal,
+    .student-modal.active, .student-calendar-time-modal.active,
+    #change-password-modal, #ape-upload-confirm-modal) { opacity: 1; }
+:is(.file-preview-backdrop, .appointment-date-modal)[hidden],
+.student-modal:not(.active), .student-calendar-time-modal:not(.active),
+#change-password-modal.hidden, #ape-upload-confirm-modal.hidden { opacity: 0; }
+.modal-backdrop .modal-content { transform: none; transition: none; }
+.student-calendar-time-dialog { animation: none !important; }
+@starting-style {
+    :is(.modal-backdrop.show, .file-preview-backdrop, .appointment-date-modal,
+        .student-modal.active, .student-calendar-time-modal.active,
+        #change-password-modal, #ape-upload-confirm-modal) { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+    :is(.modal-backdrop, .file-preview-backdrop, .appointment-date-modal,
+        .student-modal, .student-calendar-time-modal,
+        #change-password-modal, #ape-upload-confirm-modal) { transition: none; }
 }

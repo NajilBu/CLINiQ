@@ -273,6 +273,9 @@ $nextActionCopy = match (true) {
 };
 $currentStep = $apeRecord ? ape_record_step_index($apeRecord) + 1 : 1;
 $apePercent = $currentStep === 5 ? 100 : ($currentStep - 1) * 20;
+$showFindings = $currentStep >= 2;
+$showDocuments = $currentStep >= 3;
+$showActivity = $currentStep >= 2;
 $headerBadge = $clearanceStatus === 'Cleared' ? 'student-badge-success' : ($actionNeeded ? 'student-badge-warning' : 'student-badge-info');
 $actionBadgeLabel = match (true) {
     $apeQueue === 'digital_submission' => $documentsAwaitingReview ? 'Under Clinic Review' : 'Digital Submission',
@@ -352,6 +355,8 @@ foreach ($requirements as $requirement) {
         $documents[] = [
             'name' => $name,
             'key' => $documentKey,
+            'document_id' => (int) ($uploadedDocument['document_id'] ?? 0),
+            'preview_url' => 'patient-ape-document.php?id=' . (int) ($uploadedDocument['document_id'] ?? 0),
             'icon' => $icon,
             'status' => $verification,
             'badge' => match ($verification) {
@@ -449,7 +454,7 @@ render_student_header('APE Status', 'ape');
                 <span class="material-symbols-outlined">event_available</span>
             </span>
             <div>
-                <p class="student-eyebrow mb-1">Your APE Schedule</p>
+                <p class="student-eyebrow mb-1">Your Current APE Batch</p>
                 <h2><?= student_e($apeRecord['batch_name']) ?></h2>
                 <p><?= student_e($batchScheduleLabel) ?></p>
             </div>
@@ -501,6 +506,8 @@ render_student_header('APE Status', 'ape');
                     $stepClass = $isDone ? 'is-done' : ($isCurrent ? 'is-current' : 'is-locked');
                     $badgeClass = $isDone ? 'student-badge-success' : ($isCurrent ? 'student-badge-warning' : 'student-badge-info');
                     $badgeLabel = $isDone ? 'Done' : ($isCurrent ? 'Current' : ($stepNumber === 2 && !$requirementsVerified ? 'Locked' : 'Next'));
+                    $stepTitle = $isDone || $isCurrent ? $step['title'] : 'Next APE step';
+                    $stepCopy = $isDone || $isCurrent ? $step['copy'] : 'This step will appear after you complete the current stage.';
                     ?>
                     <div class="student-ape-step <?= student_e($stepClass) ?>">
                         <span class="student-ape-step-rail" aria-hidden="true"></span>
@@ -512,8 +519,8 @@ render_student_header('APE Status', 'ape');
                                 <span class="student-ape-step-count">Step <?= (int) $stepNumber ?> of 5</span>
                                 <span class="student-badge <?= student_e($badgeClass) ?>"><?= student_e($badgeLabel) ?></span>
                             </div>
-                            <strong><?= student_e($step['title']) ?></strong>
-                            <span><?= student_e($step['copy']) ?></span>
+                            <strong><?= student_e($stepTitle) ?></strong>
+                            <span><?= student_e($stepCopy) ?></span>
                         </div>
                     </div>
                 <?php endforeach; ?>
@@ -522,6 +529,7 @@ render_student_header('APE Status', 'ape');
     </section>
 
     <div class="student-span-7 grid gap-4">
+    <?php if ($showFindings): ?>
     <section class="student-card">
         <div class="student-card-header">
             <div>
@@ -545,6 +553,7 @@ render_student_header('APE Status', 'ape');
             <?php endif; ?>
         </div>
     </section>
+    <?php endif; ?>
 
     <?php if ($apeRecord): ?>
     <section class="student-card">
@@ -616,6 +625,7 @@ render_student_header('APE Status', 'ape');
     <?php endif; ?>
     </div>
 
+    <?php if ($showDocuments): ?>
     <section class="student-card student-span-12">
         <div class="student-card-header">
             <div>
@@ -653,10 +663,17 @@ render_student_header('APE Status', 'ape');
                             <?php endif; ?>
                         </div>
                         <?php if ($doc['disabled']): ?>
-                            <button class="<?= student_e($doc['button']) ?>" type="button" disabled>
-                                <span class="material-symbols-outlined">lock</span>
-                                <?= student_e($doc['action']) ?>
-                            </button>
+                            <div class="student-appointment-actions">
+                                <?php if (!empty($doc['document_id'])): ?>
+                                    <a class="student-button-secondary text-decoration-none" href="<?= student_e($doc['preview_url']) ?>" data-file-preview data-preview-title="<?= student_e($doc['name']) ?>">
+                                        <span class="material-symbols-outlined">visibility</span> Preview
+                                    </a>
+                                <?php endif; ?>
+                                <button class="<?= student_e($doc['button']) ?>" type="button" disabled>
+                                    <span class="material-symbols-outlined">lock</span>
+                                    <?= student_e($doc['action']) ?>
+                                </button>
+                            </div>
                         <?php else: ?>
                             <div class="student-appointment-actions ape-document-actions" data-document-key="<?= student_e($doc['key']) ?>">
                                 <input class="hidden ape-document-input" type="file" name="documents[<?= student_e($doc['key']) ?>][]" id="ape-file-<?= student_e($doc['key']) ?>" accept=".pdf,.png,.jpg,.jpeg" data-document-name="<?= student_e($doc['name']) ?>" onchange="handleApeFileSelected(this)" multiple>
@@ -694,6 +711,7 @@ render_student_header('APE Status', 'ape');
             </form>
         </div>
     </section>
+    <?php endif; ?>
 </div>
 
 <div id="ape-upload-confirm-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
@@ -717,6 +735,7 @@ render_student_header('APE Status', 'ape');
     </div>
 </div>
 
+<?php if ($showActivity): ?>
 <section class="student-card mt-4" id="ape-activity-timeline">
     <div class="student-card-header">
         <div>
@@ -776,6 +795,7 @@ render_student_header('APE Status', 'ape');
         <?php endif; ?>
     </div>
 </section>
+<?php endif; ?>
 
 <script>
     const apeHeightInput = document.getElementById('patient_height_cm');

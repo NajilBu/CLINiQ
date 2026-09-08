@@ -10,9 +10,11 @@ This folder contains the Electron shell for the clinic/staff side of CLINiQ. It 
 
 ## Install and run
 
+From the cloned repository root:
+
 ```powershell
-cd C:\xampp\htdocs\CLINiQ\electron
-npm install
+cd electron
+npm ci
 npm start
 ```
 
@@ -39,7 +41,7 @@ Build output is written to `electron/dist/` and is excluded from Git.
 
 - Node integration is disabled for clinic pages.
 - Context isolation and renderer sandboxing are enabled.
-- Only the configured clinic URL stays inside Electron.
-- Patient portal and external links open in the default browser.
+- Only staff-facing routes on the configured clinic URL stay inside Electron.
+- Visitor registration stays inside Electron. Emergency registration, the patient portal, and external links open in the default browser.
 - Browser permission requests are denied.
 - Database, SMTP, and tunnel credentials remain in the PHP application, not Electron.

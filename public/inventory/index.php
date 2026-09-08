@@ -28,14 +28,14 @@ $lowStockKeys = array_fill_keys(array_keys(array_filter($medicineStockGroups, fn
 $expiring = array_values(array_filter($medicineItems, fn(array $item): bool => $item['expiration_date'] && strtotime($item['expiration_date']) <= strtotime('+30 days')));
 $outOfStock = array_values(array_filter($medicineItems, fn(array $item): bool => (int) $item['quantity'] === 0));
 $medicineRestockOptions = [];
-foreach ($allItems as $item) {
+foreach ($activeItems as $item) {
     $category = (string) ($item['category'] ?? '');
     if (str_contains(strtolower($category), 'equipment')) {
         continue;
     }
 
     $key = strtolower(trim((string) $item['item_name'])) . '|' . strtolower(trim($category)) . '|' . strtolower(trim((string) $item['unit'])) . '|' . (int) $item['reorder_level'];
-    if (!isset($medicineRestockOptions[$key]) || empty($item['archived_at'])) {
+    if (!isset($medicineRestockOptions[$key])) {
         $medicineRestockOptions[$key] = $item;
     }
 }
@@ -68,7 +68,16 @@ $loanRowsRaw = cliniq_inventory_db()->query('
         CASE WHEN l.status IN ("Borrowed", "Overdue") THEN 0 ELSE 1 END,
         COALESCE(l.returned_at, l.borrowed_at) DESC
 ')->fetchAll();
-$activeLoans = array_values(array_filter($loanRowsRaw, fn(array $loan): bool => in_array(($loan['status'] ?? ''), ['Borrowed', 'Overdue'], true)));
+foreach ($loanRowsRaw as &$loan) {
+    if (in_array(($loan['status'] ?? ''), ['Borrowed', 'Active'], true) && !empty($loan['due_at'])) {
+        $secondsUntilDue = strtotime((string) $loan['due_at']) - time();
+        if ($secondsUntilDue < 0) $loan['status'] = 'Overdue';
+        elseif ($secondsUntilDue <= 1800) $loan['status'] = 'Due soon';
+    }
+}
+unset($loan);
+$activeLoans = array_values(array_filter($loanRowsRaw, fn(array $loan): bool => in_array(($loan['status'] ?? ''), ['Borrowed', 'Due soon', 'Overdue'], true)));
+$dueSoonLoans = array_values(array_filter($loanRowsRaw, fn(array $loan): bool => ($loan['status'] ?? '') === 'Due soon'));
 $returnedToday = array_values(array_filter($loanRowsRaw, fn(array $loan): bool => !empty($loan['returned_at']) && date('Y-m-d', strtotime($loan['returned_at'])) === date('Y-m-d')));
 $inventoryTransactions = cliniq_inventory_transactions();
 
@@ -120,7 +129,7 @@ $loanColumns = [
     ['headerName' => 'Qty', 'field' => 'quantityHtml', 'cellRenderer' => 'html', 'sortField' => 'quantitySort', 'sortType' => 'number', 'minWidth' => 90, 'flex' => 0.4],
     ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'sortField' => 'statusSort', 'sortType' => 'number', 'minWidth' => 130, 'flex' => 0.6],
     ['headerName' => 'Condition', 'field' => 'conditionHtml', 'cellRenderer' => 'html', 'sortField' => 'conditionSort', 'minWidth' => 140, 'flex' => 0.65],
-    ['headerName' => 'Actions / Notes', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'minWidth' => 160, 'flex' => 0.8],
+    ['headerName' => 'Expected Return', 'field' => 'dueHtml', 'cellRenderer' => 'html', 'sortField' => 'dueSort', 'sortType' => 'date', 'minWidth' => 180, 'flex' => 0.85],
 ];
 
 $activityColumns = [
@@ -174,11 +183,10 @@ foreach ($visibleItems as $item) {
     $maxQty = max((int) $item['reorder_level'] * 4, (int) $item['quantity'], 1);
     $pct = min(100, round(((int) $item['quantity'] / $maxQty) * 100));
     $barClass = $isLow ? ($pct <= 20 ? 'stock-critical' : 'stock-warning') : ($pct <= 20 ? 'stock-warning' : 'stock-healthy');
-    $expirationLabel = $item['expiration_date'] ? date('M Y', strtotime($item['expiration_date'])) : '-';
+    $expirationLabel = $item['expiration_date'] ? date('M d, Y', strtotime($item['expiration_date'])) : '-';
     $expirationClass = $isExpiring && !$isArchived ? 'text-red-600' : 'text-slate-600';
     $editArgs = implode(', ', [
         (int) $item['id'],
-        e(json_encode($item['item_code'])),
         e(json_encode($item['item_name'])),
         e(json_encode($item['category'])),
         e(json_encode($item['description'])),
@@ -243,7 +251,7 @@ foreach ($visibleItems as $item) {
     $inventoryRows[] = [
         'highlightKeys' => $highlightKeys,
         'itemSort' => $item['item_name'],
-        'itemHtml' => '<div><strong class="text-sm text-slate-800">' . e($item['item_name']) . '</strong><p class="text-xs font-bold text-slate-400 mb-0">' . e($item['item_code'] . ' / ' . ($category !== '' ? $category : 'No type')) . '</p></div>',
+        'itemHtml' => '<div><strong class="text-sm text-slate-800">' . e($item['item_name']) . '</strong><p class="text-xs font-bold text-slate-400 mb-0">' . e($category !== '' ? $category : 'No type') . '</p></div>',
         'categorySort' => $category,
         'categoryHtml' => '<span class="text-sm font-bold text-slate-600">' . e($category !== '' ? $category : '-') . '</span>',
         'stockSort' => (int) $item['quantity'],
@@ -264,7 +272,7 @@ foreach ($inventoryTransactions as $transaction) {
         'dateSort' => $transaction['created_at'],
         'date' => date('M d, Y g:i A', strtotime($transaction['created_at'])),
         'itemSort' => $transaction['item_name'],
-        'itemHtml' => '<div><strong class="text-sm text-slate-800">' . e($transaction['item_name']) . '</strong><p class="text-xs font-bold text-slate-400 mb-0">' . e($transaction['item_code'] . ' / ' . $transaction['item_type']) . '</p></div>',
+        'itemHtml' => '<div><strong class="text-sm text-slate-800">' . e($transaction['item_name']) . '</strong><p class="text-xs font-bold text-slate-400 mb-0">' . e($transaction['item_type']) . '</p></div>',
         'typeSort' => $transaction['transaction_type'],
         'typeHtml' => '<span class="badge ' . ($change < 0 ? 'badge-pending' : 'badge-completed') . '">' . e($transaction['transaction_type']) . '</span>',
         'changeSort' => $change,
@@ -278,22 +286,12 @@ foreach ($inventoryTransactions as $transaction) {
 
 $loanRows = [];
 foreach ($loanRowsRaw as $loan) {
-    $isBorrowed = in_array(($loan['status'] ?? ''), ['Borrowed', 'Overdue'], true);
-    $returnArgs = implode(', ', [
-        (int) $loan['id'],
-        e(json_encode($loan['item_name'])),
-        e(json_encode($loan['borrower_name'])),
-        e(json_encode($loan['borrower_identifier'])),
-        e(json_encode(date('M d, g:i A', strtotime($loan['borrowed_at'])))),
-        (int) $loan['borrowed_quantity'],
-    ]);
-    $returnSummary = '';
-    if (!$isBorrowed) {
-        $returnSummary = '<div class="text-right"><p class="text-xs font-bold text-slate-500 mb-0">' . e($loan['returned_at'] ? 'Returned ' . date('M d, g:i A', strtotime($loan['returned_at'])) : 'Return recorded') . '</p>'
-            . '<p class="text-xs font-bold text-slate-400 mb-0 truncate">' . e($loan['return_notes'] ?: ($loan['returned_by_name'] ? 'By ' . $loan['returned_by_name'] : 'No notes')) . '</p></div>';
-    }
+    $isBorrowed = in_array(($loan['status'] ?? ''), ['Borrowed', 'Due soon', 'Overdue'], true);
+    $dueAt = !empty($loan['due_at']) ? strtotime((string) $loan['due_at']) : false;
+    $dueClass = ($loan['status'] ?? '') === 'Overdue' ? 'text-red-600' : (($loan['status'] ?? '') === 'Due soon' ? 'text-amber-700' : 'text-slate-700');
 
     $loanRows[] = [
+        'rowModalId' => 'equipmentLoanDetailsModal-' . (int) $loan['id'],
         'highlightKeys' => $isBorrowed ? ['active-loans'] : [],
         'itemSort' => $loan['item_name'],
         'itemHtml' => '<div><strong class="text-sm text-slate-800">' . e($loan['item_name']) . '</strong><p class="text-xs font-bold text-slate-400 mb-0">' . e($loan['category'] ?: 'Equipment') . '</p></div>',
@@ -303,13 +301,14 @@ foreach ($loanRowsRaw as $loan) {
         'borrowedHtml' => '<div><strong class="text-sm text-slate-700">' . e(date('M d, g:i A', strtotime($loan['borrowed_at']))) . '</strong><p class="text-xs font-bold text-slate-400 mb-0">' . e($loan['borrowed_by_name'] ?: 'System') . '</p></div>',
         'quantitySort' => (int) $loan['borrowed_quantity'],
         'quantityHtml' => '<span class="text-sm font-bold text-slate-700">' . (int) $loan['borrowed_quantity'] . ' ' . e($loan['unit'] ?: 'unit') . '</span>',
-        'statusSort' => array_search((string) $loan['status'], ['Overdue', 'Borrowed', 'Returned', 'Cancelled'], true),
+        'statusSort' => array_search((string) $loan['status'], ['Overdue', 'Due soon', 'Borrowed', 'Returned', 'Cancelled'], true),
         'statusHtml' => inventory_loan_status_badge((string) $loan['status']),
         'conditionSort' => $loan['return_condition'] ?? '',
         'conditionHtml' => inventory_return_condition_badge($loan['return_condition'] ?? null),
-        'actionsHtml' => $isBorrowed
-            ? row_actions_button('Loan actions', '<button onclick="closeModal(\'rowActionsModal\'); openReturnLoan(' . $returnArgs . ')" class="btn btn-sm btn-outline"><span class="material-symbols-outlined text-[14px]">assignment_return</span>Return</button>')
-            : $returnSummary,
+        'dueSort' => $loan['due_at'] ?? '',
+        'dueHtml' => $dueAt
+            ? '<div><strong class="text-sm ' . $dueClass . '">' . e(date('M d, Y', $dueAt)) . '</strong><p class="text-xs font-bold text-slate-400 mb-0">' . e(date('g:i A', $dueAt)) . '</p></div>'
+            : '<span class="text-xs font-bold text-slate-400">Not set</span>',
     ];
 }
 
@@ -464,15 +463,6 @@ render_clinic_command_header(
             </a>
         </div>
     </div>
-    <?php if ($stockFilter !== 'all'): ?>
-        <div class="flex flex-wrap items-center gap-2 px-6 py-4 bg-white border-b border-outline-variant/10">
-            <span class="material-symbols-outlined text-slate-400 text-sm">filter_alt</span>
-            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-2">Active Filters</span>
-            <span class="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold border border-slate-200"><?= e(ucwords(str_replace('_', ' ', $stockFilter))) ?></span>
-            <a href="?tab=<?= e(urlencode($activeTab)) ?>" data-inventory-nav class="ml-auto text-[10px] font-black text-primary uppercase tracking-widest hover:underline text-decoration-none">Clear All</a>
-        </div>
-    <?php endif; ?>
-
     <form method="get" id="inventoryAdvancedFilterModal" class="modal-backdrop">
         <div class="modal-content bg-white rounded-[2rem] w-full max-w-2xl p-8 shadow-2xl border border-outline-variant/10">
             <div class="flex items-center justify-between mb-8">
@@ -487,16 +477,7 @@ render_clinic_command_header(
                 </button>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div>
-                    <label class="clinic-label">Section</label>
-                    <select class="clinic-select" name="tab">
-                        <option value="medicine" <?= $activeTab === 'medicine' ? 'selected' : '' ?>>Medicine Inventory</option>
-                        <option value="equipment" <?= $activeTab === 'equipment' ? 'selected' : '' ?>>Equipment Tracking</option>
-                        <option value="expiring" <?= $activeTab === 'expiring' ? 'selected' : '' ?>>Expiring Soon</option>
-                        <option value="archived" <?= $activeTab === 'archived' ? 'selected' : '' ?>>Archived</option>
-                        <option value="activity" <?= $activeTab === 'activity' ? 'selected' : '' ?>>Activity</option>
-                    </select>
-                </div>
+                <input type="hidden" name="tab" value="<?= e($activeTab) ?>">
                 <div>
                     <label class="clinic-label">Stock Status</label>
                     <select class="clinic-select" name="stock_status">
@@ -549,6 +530,7 @@ render_clinic_command_header(
                     <div>
                         <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Active Loans & Borrowing History</h2>
                         <p class="text-xs font-bold text-slate-500 mb-0">Track borrowed equipment, process returns, and keep condition notes.</p>
+                        <?php if ($dueSoonLoans): ?><p class="text-xs font-bold text-amber-700 mt-2 mb-0"><span class="material-symbols-outlined align-middle text-sm">notifications_active</span> <?= count($dueSoonLoans) ?> equipment loan(s) are due within 30 minutes.</p><?php endif; ?>
                     </div>
                 </div>
                 <div class="flex flex-col sm:flex-row sm:items-center gap-3 w-full md:w-auto">
@@ -558,6 +540,7 @@ render_clinic_command_header(
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
                         <span class="badge badge-in-progress"><?= count($activeLoans) ?> borrowed</span>
+                        <?php if ($dueSoonLoans): ?><span class="badge badge-pending"><?= count($dueSoonLoans) ?> due soon</span><?php endif; ?>
                         <span class="badge badge-completed"><?= count($returnedToday) ?> returned today</span>
                     </div>
                 </div>
@@ -575,6 +558,44 @@ render_clinic_command_header(
         ]); ?>
         <nav id="inventoryLoansPagination" class="pagination" aria-label="Equipment loan pages"></nav>
     </section>
+
+    <?php foreach ($loanRowsRaw as $loan): ?>
+        <?php $loanIsActive = in_array(($loan['status'] ?? ''), ['Borrowed', 'Due soon', 'Overdue'], true); ?>
+        <div id="equipmentLoanDetailsModal-<?= (int) $loan['id'] ?>" class="modal-backdrop" data-no-row-click>
+            <div class="modal-content bg-white rounded-[2rem] p-8 w-full max-w-lg shadow-2xl">
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <h3 class="font-headline text-xl font-extrabold text-[#1c2a59]">Equipment Loan</h3>
+                        <p class="text-sm font-bold text-slate-500 mt-1"><?= e($loan['item_name']) ?></p>
+                    </div>
+                    <button type="button" onclick="closeModal('equipmentLoanDetailsModal-<?= (int) $loan['id'] ?>')" class="btn-icon btn-icon-slate" aria-label="Close loan details"><span class="material-symbols-outlined">close</span></button>
+                </div>
+                <div class="rounded-2xl border border-slate-100 bg-slate-50 p-4 space-y-3">
+                    <div class="flex justify-between gap-3"><span class="text-xs font-black text-slate-400 uppercase tracking-widest">Borrower</span><span class="text-sm font-bold text-slate-800 text-right"><?= e($loan['borrower_name']) ?><?= $loan['borrower_identifier'] ? ' (' . e($loan['borrower_identifier']) . ')' : '' ?></span></div>
+                    <div class="flex justify-between gap-3"><span class="text-xs font-black text-slate-400 uppercase tracking-widest">Quantity</span><span class="text-sm font-bold text-slate-800 text-right"><?= (int) $loan['borrowed_quantity'] ?> <?= e($loan['unit'] ?: 'unit') ?></span></div>
+                    <div class="flex justify-between gap-3"><span class="text-xs font-black text-slate-400 uppercase tracking-widest">Borrowed</span><span class="text-sm font-bold text-slate-700 text-right"><?= e(date('M d, Y g:i A', strtotime($loan['borrowed_at']))) ?></span></div>
+                    <div class="flex justify-between gap-3"><span class="text-xs font-black text-slate-400 uppercase tracking-widest">Expected Return</span><span class="text-sm font-bold text-slate-700 text-right"><?= !empty($loan['due_at']) ? e(date('M d, Y g:i A', strtotime($loan['due_at']))) : 'Not set' ?></span></div>
+                    <div class="flex justify-between gap-3"><span class="text-xs font-black text-slate-400 uppercase tracking-widest">Status</span><?= inventory_loan_status_badge((string) $loan['status']) ?></div>
+                    <?php if (!$loanIsActive): ?>
+                        <div class="flex justify-between gap-3"><span class="text-xs font-black text-slate-400 uppercase tracking-widest">Returned</span><span class="text-sm font-bold text-slate-700 text-right"><?= !empty($loan['returned_at']) ? e(date('M d, Y g:i A', strtotime($loan['returned_at']))) : 'Recorded' ?></span></div>
+                        <div class="flex justify-between gap-3"><span class="text-xs font-black text-slate-400 uppercase tracking-widest">Condition</span><?= inventory_return_condition_badge($loan['return_condition'] ?? null) ?></div>
+                        <div class="flex justify-between gap-3"><span class="text-xs font-black text-slate-400 uppercase tracking-widest">Received By</span><span class="text-sm font-bold text-slate-700 text-right"><?= e($loan['returned_by_name'] ?: 'System') ?></span></div>
+                        <div><span class="text-xs font-black text-slate-400 uppercase tracking-widest">Return Notes</span><p class="text-sm font-bold text-slate-700 mt-1 mb-0"><?= e($loan['return_notes'] ?: 'No notes recorded') ?></p></div>
+                    <?php endif; ?>
+                </div>
+                <?php if ($loanIsActive): ?>
+                    <form method="post" action="return.php" data-inventory-form class="mt-5 space-y-4">
+                        <input type="hidden" name="loan_id" value="<?= (int) $loan['id'] ?>">
+                        <div><label class="clinic-label">Equipment Condition</label><select class="clinic-select" name="return_condition"><?php foreach (dropdown_options('inventory_return_condition') as $condition): ?><option value="<?= e($condition) ?>"><?= e($condition) ?></option><?php endforeach; ?></select></div>
+                        <div><label class="clinic-label">Return Notes</label><textarea class="clinic-textarea" name="return_notes" rows="3" placeholder="Condition notes, damage details, or follow-up action."></textarea></div>
+                        <div class="flex justify-end gap-3"><button type="button" onclick="closeModal('equipmentLoanDetailsModal-<?= (int) $loan['id'] ?>')" class="btn btn-ghost">Cancel</button><button type="submit" class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Process this return?" data-confirm-message="This will close the active loan and record the return condition." data-confirm-toast="Processing equipment return..."><span class="material-symbols-outlined text-[18px]">assignment_return</span>Return Equipment</button></div>
+                    </form>
+                <?php else: ?>
+                    <div class="mt-5 flex justify-end"><button type="button" onclick="closeModal('equipmentLoanDetailsModal-<?= (int) $loan['id'] ?>')" class="btn btn-primary">Close</button></div>
+                <?php endif; ?>
+            </div>
+        </div>
+    <?php endforeach; ?>
 <?php endif; ?>
 </div>
 
@@ -723,6 +744,14 @@ render_clinic_command_header(
             const form = event.target;
             if (!form.matches('[data-inventory-form]') || event.defaultPrevented) return;
             if (form.matches('[data-confirm-submit]') && form.dataset.confirmed !== '1') return;
+            if (form.dataset.confirmed !== '1') {
+                const confirmButton = form.querySelector('button[data-confirm-submit]');
+                if (confirmButton) {
+                    event.preventDefault();
+                    submitConfirmableAction(confirmButton);
+                    return;
+                }
+            }
 
             event.preventDefault();
             fetch(form.action, {
@@ -766,10 +795,6 @@ render_clinic_command_header(
         <form method="post" action="create.php" data-inventory-form>
             <input type="hidden" name="category" value="Medicine">
             <div data-medicine-panel="new" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label class="clinic-label">Item Code</label>
-                    <input class="clinic-input uppercase" name="item_code" required placeholder="e.g. MED-001">
-                </div>
                 <div>
                     <label class="clinic-label">Item Name</label>
                     <input class="clinic-input" name="item_name" required placeholder="e.g. Paracetamol 500mg">
@@ -822,14 +847,15 @@ render_clinic_command_header(
                         <input class="clinic-input" name="quantity" type="number" min="1" required value="1">
                     </div>
                     <div>
-                        <label class="clinic-label">Expiration Date</label>
-                        <input class="clinic-input" name="expiration_date" type="date">
+                        <label class="clinic-label">Batch Expiration Date</label>
+                        <input class="clinic-input" name="expiration_date" type="date" required>
+                        <p class="settings-help mt-2 mb-0">Each restock is saved as a separate batch so existing expiry dates and quantities remain unchanged.</p>
                     </div>
                 </div>
             </div>
             <div class="mt-6 flex justify-end gap-3">
                 <button type="button" onclick="closeModal('addMedicineModal')" class="btn btn-ghost">Cancel</button>
-                <button type="submit" class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Restock this medicine?" data-confirm-message="This will add the received quantity and record a Stock In transaction." data-confirm-toast="Restocking medicine...">
+                <button type="submit" class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Create this medicine batch?" data-confirm-message="This will save the received stock as a separate batch with its own expiration date." data-confirm-toast="Creating medicine batch...">
                     <span class="material-symbols-outlined text-[18px]">add_box</span>
                     Restock Medicine
                 </button>
@@ -850,10 +876,6 @@ render_clinic_command_header(
             <input type="hidden" name="category" value="Equipment">
             <input type="hidden" name="expiration_date" value="">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label class="clinic-label">Item Code</label>
-                    <input class="clinic-input uppercase" name="item_code" required placeholder="e.g. EQP-001">
-                </div>
                 <div>
                     <label class="clinic-label">Equipment Name</label>
                     <input class="clinic-input" name="item_name" required placeholder="e.g. Pulse Oximeter">
@@ -897,10 +919,6 @@ render_clinic_command_header(
         <form method="post" action="update.php" id="editItemForm" data-inventory-form>
             <input type="hidden" name="id" id="editItemId">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label class="clinic-label">Item Code</label>
-                    <input class="clinic-input uppercase" name="item_code" id="editItemCode" required>
-                </div>
                 <div>
                     <label class="clinic-label">Item Name</label>
                     <input class="clinic-input" name="item_name" id="editItemName" required>
@@ -981,7 +999,7 @@ render_clinic_command_header(
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="md:col-span-2">
                     <label class="clinic-label">Existing Patient ID</label>
-                    <input class="clinic-input uppercase" name="borrower_identifier" required placeholder="Student, faculty, or personnel ID">
+                    <input class="clinic-input uppercase" name="borrower_identifier" data-id-number-format required placeholder="Student, faculty, or personnel ID">
                     <p class="settings-help mt-2 mb-0">The ID must already exist in the Cliniq_db patient list.</p>
                 </div>
                 <div>
@@ -989,8 +1007,11 @@ render_clinic_command_header(
                     <input class="clinic-input" name="borrowed_quantity" id="borrowQuantity" type="number" min="1" value="1" required>
                 </div>
                 <div class="md:col-span-2">
-                    <label class="clinic-label">Expected Return</label>
-                    <input class="clinic-input" name="due_at" type="datetime-local">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <label class="clinic-label">Expected Return Date<input class="clinic-input" name="return_date" value="<?= e(date('Y-m-d')) ?>" type="date" min="<?= e(date('Y-m-d')) ?>" required></label>
+                        <label class="clinic-label">Expected Return Time (8:00 AM–5:00 PM)<span class="flex gap-2" data-return-clock><input class="clinic-select" style="min-width:0;flex:1;" name="return_time" required type="text" inputmode="numeric" maxlength="5" data-equipment-return-time placeholder="h:mm" autocomplete="off" aria-label="Return time"><select class="clinic-select" style="width:100px;" name="return_period" data-return-period required aria-label="AM or PM"><option value="AM">AM</option><option value="PM">PM</option></select></span></label>
+                    </div>
+                    <p class="settings-help mt-2 mb-0">Choose a future return date and time before recording this loan.</p>
                 </div>
             </div>
             <div class="mt-6 flex justify-end gap-3">
@@ -1004,62 +1025,9 @@ render_clinic_command_header(
     </div>
 </div>
 
-<div id="returnEquipmentModal" class="modal-backdrop">
-    <div class="modal-content bg-white rounded-[2rem] p-8 w-full max-w-lg shadow-2xl">
-        <div class="flex items-center justify-between mb-6">
-            <div>
-                <h3 class="font-headline text-xl font-extrabold text-[#1c2a59]">Return Equipment</h3>
-                <p class="text-sm font-bold text-slate-500 mt-1">Confirm the returned item condition.</p>
-            </div>
-            <button onclick="closeModal('returnEquipmentModal')" class="btn-icon btn-icon-slate">
-                <span class="material-symbols-outlined">close</span>
-            </button>
-        </div>
-        <form method="post" action="return.php" data-inventory-form>
-            <input type="hidden" name="loan_id" id="returnLoanId">
-            <div class="rounded-2xl border border-slate-100 bg-slate-50 p-4 mb-5 space-y-2">
-                <div class="flex justify-between gap-3">
-                    <span class="text-xs font-black text-slate-400 uppercase tracking-widest">Item</span>
-                    <span class="text-sm font-bold text-slate-800 text-right" id="returnItemName">Equipment</span>
-                </div>
-                <div class="flex justify-between gap-3">
-                    <span class="text-xs font-black text-slate-400 uppercase tracking-widest">Borrower</span>
-                    <span class="text-sm font-bold text-slate-800 text-right" id="returnBorrowerName">Borrower</span>
-                </div>
-                <div class="flex justify-between gap-3">
-                    <span class="text-xs font-black text-slate-400 uppercase tracking-widest">Borrowed</span>
-                    <span class="text-sm font-bold text-slate-600 text-right" id="returnBorrowedAt">-</span>
-                </div>
-            </div>
-            <div class="space-y-4">
-                <div>
-                    <label class="clinic-label">Equipment Condition</label>
-                    <select class="clinic-select" name="return_condition">
-                        <?php foreach (dropdown_options('inventory_return_condition') as $condition): ?>
-                            <option value="<?= e($condition) ?>"><?= e($condition) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div>
-                    <label class="clinic-label">Return Notes</label>
-                    <textarea class="clinic-textarea" name="return_notes" rows="3" placeholder="Condition notes, damage details, or follow-up action."></textarea>
-                </div>
-            </div>
-            <div class="mt-6 flex justify-end gap-3">
-                <button type="button" onclick="closeModal('returnEquipmentModal')" class="btn btn-ghost">Cancel</button>
-                <button type="submit" class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Process this return?" data-confirm-message="This will close the active loan and record the return condition." data-confirm-toast="Processing equipment return...">
-                    <span class="material-symbols-outlined text-[18px]">assignment_return</span>
-                    Process Return
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
-
 <script>
-function editItem(id, code, name, category, description, quantity, unit, reorder, expiry) {
+function editItem(id, name, category, description, quantity, unit, reorder, expiry) {
     document.getElementById('editItemId').value = id;
-    document.getElementById('editItemCode').value = code || '';
     document.getElementById('editItemName').value = name;
     document.getElementById('editItemCategory').value = category || '';
     document.getElementById('editItemDescription').value = description || '';
@@ -1121,13 +1089,6 @@ function openBorrowItem(id, name, available, unit) {
     showModal('borrowEquipmentModal');
 }
 
-function openReturnLoan(id, itemName, borrowerName, borrowerIdentifier, borrowedAt, quantity) {
-    document.getElementById('returnLoanId').value = id;
-    document.getElementById('returnItemName').textContent = itemName;
-    document.getElementById('returnBorrowerName').textContent = borrowerIdentifier ? `${borrowerName} (${borrowerIdentifier})` : borrowerName;
-    document.getElementById('returnBorrowedAt').textContent = `${borrowedAt} · ${quantity} borrowed`;
-    showModal('returnEquipmentModal');
-}
 </script>
 
 <?php render_footer(); ?>

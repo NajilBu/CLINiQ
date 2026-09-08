@@ -4,6 +4,7 @@ require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/SystemSettings.php';
 require_once __DIR__ . '/../../app/services/RiskSettings.php';
 require_once __DIR__ . '/../../app/services/ApeCycleService.php';
+require_once __DIR__ . '/../../app/services/AuditLog.php';
 
 require_login();
 ensure_system_settings_schema();
@@ -69,6 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new InvalidArgumentException('Choose a PNG, JPG, or WebP logo before saving.');
             }
             save_clinic_profile_settings($profileInput, $updatedBy);
+            audit_log_event('settings', 'clinic_profile_updated', $updatedBy, 'staff', 'settings', null);
             flash_message('success', $uploadedLogoPath !== '' ? 'Clinic profile and system logo saved.' : 'Clinic profile settings saved.');
         } catch (Throwable $e) {
             flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $e->getMessage());
@@ -89,6 +91,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $updatedBy,
                 (string) ($_POST['custom_color'] ?? '#3F7D52')
             );
+            audit_log_event('settings', 'theme_updated', $updatedBy, 'staff', 'settings', null);
             flash_message('success', 'System color theme updated.');
         } catch (InvalidArgumentException $e) {
             flash_message('warning', $e->getMessage());
@@ -107,9 +110,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             if ($action === 'create_staff_profile') {
                 create_staff_profile($_POST);
+                audit_log_event('accounts', 'staff_profile_created', $updatedBy, 'staff', 'account', null);
                 flash_message('success', 'Staff profile created. The user can now sign in with their own account.');
             } elseif ($action === 'update_staff_profile') {
                 update_staff_profile($_POST);
+                audit_log_event('accounts', 'staff_profile_updated', $updatedBy, 'staff', 'account', (int) ($_POST['user_id'] ?? 0) ?: null);
                 if ((int) ($_POST['user_id'] ?? 0) === (int) ($user['id'] ?? 0)) {
                     $_SESSION['user']['name'] = trim((string) ($_POST['name'] ?? $user['name']));
                     $_SESSION['user']['id_number'] = strtoupper(trim((string) ($_POST['id_number'] ?? $user['id_number'])));
@@ -120,6 +125,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 flash_message('success', 'Staff profile updated.');
             } else {
                 reset_staff_profile_password($_POST);
+                audit_log_event('accounts', 'staff_password_reset', $updatedBy, 'staff', 'account', (int) ($_POST['user_id'] ?? 0) ?: null);
                 flash_message('success', 'Staff password reset. Share the new password only with that staff member.');
             }
         } catch (Throwable $e) {
@@ -142,6 +148,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $update = auth_db()->prepare('UPDATE accounts SET password_hash = ? WHERE person_id = ?');
             $update->execute([password_hash($newPassword, PASSWORD_DEFAULT), (int) $user['id']]);
+            audit_log_event('auth', 'staff_password_changed', (int) $user['id'], 'staff', 'person', (int) $user['id']);
             flash_message('success', 'Your password has been updated.');
         }
 
@@ -156,6 +163,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
         save_risk_settings($_POST, $updatedBy);
+        audit_log_event('settings', 'risk_settings_updated', $updatedBy, 'staff', 'settings', null);
         flash_message('success', 'Incident risk classification settings saved.');
         header('Location: index.php?tab=clinical');
         exit;
@@ -168,6 +176,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
         save_risk_settings(default_risk_settings(), $updatedBy);
+        audit_log_event('settings', 'risk_settings_reset', $updatedBy, 'staff', 'settings', null);
         flash_message('success', 'Incident risk classification settings were restored to the default CLINiQ rules.');
         header('Location: index.php?tab=clinical');
         exit;

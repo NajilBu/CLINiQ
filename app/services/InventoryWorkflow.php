@@ -32,6 +32,8 @@ function inventory_status_badge(array $item): string
 function inventory_loan_status_badge(string $status): string
 {
     return match ($status) {
+        'Due soon' => '<span class="badge badge-pending">Due soon</span>',
+        'Overdue' => '<span class="badge badge-critical">Overdue</span>',
         'Returned' => '<span class="badge badge-completed">Returned</span>',
         'Lost' => '<span class="badge badge-critical">Lost</span>',
         default => '<span class="badge badge-in-progress">Borrowed</span>',

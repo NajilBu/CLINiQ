@@ -1,0 +1,226 @@
+    <!doctype html>
+    <html class="light" lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Clinic Feedback | CLINiQ</title>
+        <link href="/cliniq/public/assets/vendor/fonts/inter-manrope.css?v=offline-1" rel="stylesheet">
+        <link href="/cliniq/public/assets/vendor/fonts/material-symbols.css?v=offline-1" rel="stylesheet">
+        <script src="/cliniq/public/assets/vendor/tailwind/tailwind-cdn.js?v=offline-1"></script>
+        <script>
+            tailwind.config = {
+                darkMode: 'class',
+                theme: {
+                    extend: {
+                        colors: {
+                            primary: "#3F7D52",
+                            'primary-fixed': "#e8f6ec",
+                            'primary-container': "#23422C",
+                            'on-primary': '#ffffff',
+                            surface: "#f4fbf6",
+                            'on-surface': '#17261d',
+                            'surface-container-low': "#edf8f0",
+                            'outline-variant': "#c7dccd"                        },
+                        fontFamily: {
+                            headline: ['Manrope', 'sans-serif'],
+                            body: ['Inter', 'sans-serif']
+                        }
+                    }
+                }
+            };
+        </script>
+        <link rel="stylesheet" href="/cliniq/public/assets/vendor/ag-grid/ag-grid.css?v=31">
+        <link rel="stylesheet" href="/cliniq/public/assets/vendor/ag-grid/ag-theme-quartz.css?v=31">
+        <script src="/cliniq/public/assets/vendor/ag-grid/ag-grid-community.min.js?v=31"></script>
+        <link href="/cliniq/public/assets/css/app.css?v=1788795052" rel="stylesheet">
+        <style>
+            :root {
+                --cliniq-primary: #00478d;
+                --cliniq-primary-hover: #003d7c;
+                --cliniq-primary-fixed: #d6e3ff;
+                --cliniq-accent: #e8f1ff;
+                --cliniq-accent-foreground: #003d7c;
+                --cliniq-surface: #f8f9fa;
+                --cliniq-surface-low: #eef4ff;
+                --cliniq-outline: #c2c6d4;
+                --cliniq-focus-rgb: 0, 71, 141;
+                --cliniq-shadow-rgb: 0, 61, 124;
+            }
+        </style>
+    <script src="/cliniq/public/assets/js/id-number-format.js?v=1788795052"></script>
+    </head>
+    <body class="bg-surface font-body text-on-surface min-h-screen overflow-x-hidden" data-cliniq-runtime="browser" data-cliniq-app-url="/cliniq/public/" data-cliniq-patient-portal-url="/CLINiQ/patient-portal" data-alert-status-url="/cliniq/public/api/alerts.php" data-active-alert-count="0" data-critical-alert-count="0">
+            <div class="app-shell">
+            <aside class="app-sidebar">
+                <a href="/cliniq/public/dashboard.php" class="app-brand text-decoration-none" data-no-ajax="true">
+                    <span class="app-brand-mark">
+                        <img src="/cliniq/public/uploads/settings/clinic-logo-20260901064934-ad51692a.png" alt="University Health Services logo">
+                    </span>
+                    <span class="app-brand-copy">
+                        <span class="app-brand-title">CLINiQ</span>
+                        <span class="app-brand-subtitle">University Health Services</span>
+                    </span>
+                </a>
+                <nav class="app-nav">
+                                                                                            <a href="/cliniq/public/dashboard.php" class="app-nav-link  text-decoration-none" title="Dashboard" data-no-ajax="true">
+                            <span class="material-symbols-outlined">dashboard</span>
+                            <span class="app-nav-label">Dashboard</span>
+                        </a>
+                                                                                            <a href="/cliniq/public/patients/index.php" class="app-nav-link  text-decoration-none" title="Patients" data-no-ajax="true">
+                            <span class="material-symbols-outlined">personal_injury</span>
+                            <span class="app-nav-label">Patients</span>
+                        </a>
+                                                                                            <a href="/cliniq/public/visits/index.php" class="app-nav-link  text-decoration-none" title="Visits" data-no-ajax="true">
+                            <span class="material-symbols-outlined">clinical_notes</span>
+                            <span class="app-nav-label">Visits</span>
+                        </a>
+                                                                                            <a href="/cliniq/public/alerts/index.php" class="app-nav-link  text-decoration-none" title="Alerts" data-no-ajax="true">
+                            <span class="material-symbols-outlined">notification_important</span>
+                            <span class="app-nav-label">Alerts</span>
+                        </a>
+                                                                                            <a href="/cliniq/public/inventory/index.php" class="app-nav-link  text-decoration-none" title="Inventory" data-no-ajax="true">
+                            <span class="material-symbols-outlined">inventory_2</span>
+                            <span class="app-nav-label">Inventory</span>
+                        </a>
+                                                                                            <a href="/cliniq/public/ape/index.php" class="app-nav-link  text-decoration-none" title="APE" data-no-ajax="true">
+                            <span class="material-symbols-outlined">description</span>
+                            <span class="app-nav-label">APE</span>
+                        </a>
+                                                                                            <a href="/cliniq/public/appointments/index.php" class="app-nav-link  text-decoration-none" title="Appointments" data-no-ajax="true">
+                            <span class="material-symbols-outlined">calendar_month</span>
+                            <span class="app-nav-label">Appointments</span>
+                        </a>
+                                                                                            <a href="/cliniq/public/referrals/index.php" class="app-nav-link  text-decoration-none" title="Referrals" data-no-ajax="true">
+                            <span class="material-symbols-outlined">send</span>
+                            <span class="app-nav-label">Referrals</span>
+                        </a>
+                                                                                            <a href="/cliniq/public/reports/index.php" class="app-nav-link  text-decoration-none" title="Reports" data-no-ajax="true">
+                            <span class="material-symbols-outlined">analytics</span>
+                            <span class="app-nav-label">Reports</span>
+                        </a>
+                                                                                            <a href="/cliniq/public/feedback/index.php" class="app-nav-link  text-decoration-none" title="Feedback" data-no-ajax="true">
+                            <span class="material-symbols-outlined">rate_review</span>
+                            <span class="app-nav-label">Feedback</span>
+                        </a>
+                                                                                            <a href="/cliniq/public/settings/index.php" class="app-nav-link  text-decoration-none" title="Settings" data-no-ajax="true">
+                            <span class="material-symbols-outlined">settings</span>
+                            <span class="app-nav-label">Settings</span>
+                        </a>
+                                    </nav>
+                <details class="app-sidebar-footer app-user-menu">
+                    <summary class="app-user-menu-trigger">
+                        <span class="app-user-copy">
+                            <span class="app-user-label">Signed in as</span>
+                            <strong>Test Evaluator</strong>
+                        </span>
+                        <span class="material-symbols-outlined app-user-menu-icon" aria-hidden="true">expand_more</span>
+                    </summary>
+                    <div class="app-user-menu-popover">
+                        <a href="/cliniq/public/logout.php" class="app-logout text-decoration-none" data-no-ajax="true">
+                            <span class="material-symbols-outlined">logout</span>
+                            Logout
+                        </a>
+                    </div>
+                </details>
+            </aside>
+            <div class="app-main">
+                <header class="app-topbar">
+                                        <div class="app-topbar-controls">
+                        <button class="app-sidebar-toggle" type="button" id="sidebarToggle" aria-label="Collapse sidebar" aria-expanded="true">
+                            <span class="material-symbols-outlined" aria-hidden="true">left_panel_close</span>
+                        </button>
+                    </div>
+                    <form class="app-search" action="/cliniq/public/patients/index.php" method="get">
+                        <span class="material-symbols-outlined">search</span>
+                        <input name="q" placeholder="Search student name or ID..." autocomplete="off" value="">
+                    </form>
+                    <div class="app-topbar-meta">
+                                                <span>Tuesday, September 8</span>
+                    </div>
+                </header>
+                <main class="app-content">
+                    <div class="max-w-7xl mx-auto w-full space-y-6 pb-14" id="cliniqPageContent" data-cliniq-page-content>
+                                <link rel="stylesheet" href="/cliniq/public/assets/css/feedback.css?v=design-2">
+<div class="feedback-page feedback-admin">
+        <div class="dashboard-hero flex flex-col lg:flex-row lg:items-center justify-between gap-5 mb-8">
+        <div>
+            <p class="text-[11px] font-black text-primary uppercase tracking-widest mb-2">Service evaluation</p>
+            <h1 class="font-headline text-3xl md:text-4xl font-extrabold text-[#17261d]">Clinic Feedback</h1>
+                            <p class="text-sm font-bold text-slate-500 mt-1">Student feedback for Active and Completed clinic visits.</p>
+                    </div>
+            </div>
+        <form method="get" class="clinic-card feedback-section">
+        <div class="feedback-filter-grid">
+            <label class="feedback-field"><span class="clinic-label">Submitted from</span><input class="clinic-input" type="date" name="from" value=""></label>
+            <label class="feedback-field"><span class="clinic-label">Submitted through</span><input class="clinic-input" type="date" name="to" value=""></label>
+            <label class="feedback-field"><span class="clinic-label">Service</span><select class="clinic-select" name="service"><option value="">All services</option><option >General Medical Consultation (Check-up, illness, sick leave validation)</option><option >Dental Service (Cleaning, filling, extraction, oral check-up etc.)</option><option >Mandatory Health Clearance / Annual Physical Examination (APE)</option><option >Emergency Care / First Aid / Minor Injury Treatment</option><option >Other</option></select></label>
+        </div>
+        <div class="feedback-actions"><button class="btn btn-primary">Apply filters</button><a class="btn btn-ghost" href="/cliniq/public/feedback/index.php">Clear filters</a></div>
+    </form>
+            <section class="clinic-card feedback-section"><h2>Evaluation summary</h2>
+            <div class="feedback-summary-grid"><div class="feedback-stat">Responses<strong>3</strong></div>
+                <div class="feedback-stat">Tangibles<strong>4.50</strong></div><div class="feedback-stat">Reliability<strong>5.00</strong></div><div class="feedback-stat">Responsiveness<strong>5.00</strong></div><div class="feedback-stat">Assurance<strong>5.00</strong></div><div class="feedback-stat">Empathy<strong>5.00</strong></div><div class="feedback-stat">Overall SERVPERF<strong>4.90</strong></div>            </div>
+            <p><strong>Satisfactory</strong> · 3 responses</p>            <p class="feedback-muted">Each section averages its questions. Overall SERVPERF averages the five sections equally. Summary scores average individual responses, including all responses matching these filters.</p>
+            <p class="feedback-muted">Excellent: 6–7 · Satisfactory: 4–below 6 · Critical: 1–below 4. Scores display two decimals; tiers use unrounded scores.</p>
+        </section>
+        <section class="clinic-card feedback-section"><h2>Scores by service</h2>
+                        <div class="feedback-table-wrap" tabindex="0" role="region" aria-label="Service score comparison"><table class="feedback-table"><caption class="feedback-sr-only">Average feedback scores by service, rated from 1 to 7.</caption><thead><tr><th scope="col">Service</th><th scope="col">Responses</th><th scope="col">Tangibles</th><th scope="col">Reliability</th><th scope="col">Responsiveness</th><th scope="col">Assurance</th><th scope="col">Empathy</th><th scope="col">Overall</th><th scope="col">Performance</th></tr></thead><tbody>
+            <tr><td>Dental Service (Cleaning, filling, extraction, oral check-up etc.)</td><td>1</td><td>1.00</td><td>1.00</td><td>1.00</td><td>1.00</td><td>1.00</td><td>1.00</td><td>Critical</td></tr><tr><td>General Medical Consultation (Check-up, illness, sick leave validation)</td><td>2</td><td>6.25</td><td>7.00</td><td>7.00</td><td>7.00</td><td>7.00</td><td>6.85</td><td>Excellent</td></tr>            <tr><th scope="row">Grand total</th><td>3</td><td>4.50</td><td>5.00</td><td>5.00</td><td>5.00</td><td>5.00</td><td>4.90</td><td>Satisfactory</td></tr>
+            </tbody></table></div>        </section>
+        <section class="clinic-card feedback-section"><h2>Student responses</h2><p class="feedback-muted">Confidential · For authorized clinic evaluation only. Names and student IDs are omitted from this view.</p>
+                                        <details class="feedback-response">
+                    <summary><strong>Dental Service (Cleaning, filling, extraction, oral check-up etc.)</strong><br><span class="feedback-muted">Submitted 2026-09-08 00:32:18 · Overall 1.00 · Critical</span></summary>
+                    <p>Visit #6 · 2026-09-02 08:00:00<br>1st Semester · 1st Year · BSIT</p>
+                    <h3>Written feedback</h3><p class="feedback-comment">&lt;script&gt;test&lt;/script&gt;</p>
+                                            <h3>Tangibles · 1.00</h3>
+                        <p>T1. The campus clinic has modern medical and dental equipment. <strong>1/7</strong></p><p>T2. The clinic&#039;s physical facilities (waiting rooms, treatment areas) are clean and comfortable. <strong>1/7</strong></p><p>T3. Clinic employees and medical staff look clean, professional, and neat. <strong>1/7</strong></p><p>T4. Digital platforms (online booking, health portals, signage) are easy for students to use. <strong>1/7</strong></p>                                            <h3>Reliability · 1.00</h3>
+                        <p>R1. When the clinic promises to provide a service by a certain time, it does so. <strong>1/7</strong></p><p>R2. The clinic staff shows a sincere interest in solving student health problems. <strong>1/7</strong></p><p>R3. The clinic performs its medical and dental services correctly the first time. <strong>1/7</strong></p><p>R4. The clinic provides its services at the exact times it promises to students. <strong>1/7</strong></p><p>R5. The clinic maintains error-free medical charts, prescriptions, and dental records. <strong>1/7</strong></p>                                            <h3>Responsiveness · 1.00</h3>
+                        <p>RES1. Clinic staff tell students exactly when medical or dental services will be performed. <strong>1/7</strong></p><p>RES2. Clinic employees give students prompt and speedy medical or dental care. <strong>1/7</strong></p><p>RES3. Medical and dental staff are always willing and ready to help students. <strong>1/7</strong></p><p>RES4. Clinic employees are never too busy to respond to student requests or questions. <strong>1/7</strong></p>                                            <h3>Assurance · 1.00</h3>
+                        <p>A1. The behavior of clinic employees instills confidence and trust in students. <strong>1/7</strong></p><p>A2. Students feel completely safe and secure during their medical and dental treatments. <strong>1/7</strong></p><p>A3. Clinic employees and doctors are consistently polite and courteous to students. <strong>1/7</strong></p><p>A4. Medical and dental staff have the adequate knowledge to answer student questions. <strong>1/7</strong></p>                                            <h3>Empathy · 1.00</h3>
+                        <p>E1. The clinic gives students individual, one-on-one attention during consultations. <strong>1/7</strong></p><p>E2. The clinic operates during hours that are highly convenient for all students. <strong>1/7</strong></p><p>E3. Clinic employees give students personal, warm, and caring attention. <strong>1/7</strong></p><p>E4. The clinic staff keeps the best interest of the student at heart. <strong>1/7</strong></p><p>E5. The clinic staff understands the specific health needs and stresses of college students. <strong>1/7</strong></p>                                    </details>
+                            <details class="feedback-response">
+                    <summary><strong>General Medical Consultation (Check-up, illness, sick leave validation)</strong><br><span class="feedback-muted">Submitted 2026-09-08 00:32:18 · Overall 6.85 · Excellent</span></summary>
+                    <p>Visit #5 · 2026-09-02 08:00:00<br>1st Semester · 1st Year · BSIT</p>
+                    <h3>Written feedback</h3><p class="feedback-comment">No written feedback provided.</p>
+                                            <h3>Tangibles · 6.25</h3>
+                        <p>T1. The campus clinic has modern medical and dental equipment. <strong>4/7</strong></p><p>T2. The clinic&#039;s physical facilities (waiting rooms, treatment areas) are clean and comfortable. <strong>7/7</strong></p><p>T3. Clinic employees and medical staff look clean, professional, and neat. <strong>7/7</strong></p><p>T4. Digital platforms (online booking, health portals, signage) are easy for students to use. <strong>7/7</strong></p>                                            <h3>Reliability · 7.00</h3>
+                        <p>R1. When the clinic promises to provide a service by a certain time, it does so. <strong>7/7</strong></p><p>R2. The clinic staff shows a sincere interest in solving student health problems. <strong>7/7</strong></p><p>R3. The clinic performs its medical and dental services correctly the first time. <strong>7/7</strong></p><p>R4. The clinic provides its services at the exact times it promises to students. <strong>7/7</strong></p><p>R5. The clinic maintains error-free medical charts, prescriptions, and dental records. <strong>7/7</strong></p>                                            <h3>Responsiveness · 7.00</h3>
+                        <p>RES1. Clinic staff tell students exactly when medical or dental services will be performed. <strong>7/7</strong></p><p>RES2. Clinic employees give students prompt and speedy medical or dental care. <strong>7/7</strong></p><p>RES3. Medical and dental staff are always willing and ready to help students. <strong>7/7</strong></p><p>RES4. Clinic employees are never too busy to respond to student requests or questions. <strong>7/7</strong></p>                                            <h3>Assurance · 7.00</h3>
+                        <p>A1. The behavior of clinic employees instills confidence and trust in students. <strong>7/7</strong></p><p>A2. Students feel completely safe and secure during their medical and dental treatments. <strong>7/7</strong></p><p>A3. Clinic employees and doctors are consistently polite and courteous to students. <strong>7/7</strong></p><p>A4. Medical and dental staff have the adequate knowledge to answer student questions. <strong>7/7</strong></p>                                            <h3>Empathy · 7.00</h3>
+                        <p>E1. The clinic gives students individual, one-on-one attention during consultations. <strong>7/7</strong></p><p>E2. The clinic operates during hours that are highly convenient for all students. <strong>7/7</strong></p><p>E3. Clinic employees give students personal, warm, and caring attention. <strong>7/7</strong></p><p>E4. The clinic staff keeps the best interest of the student at heart. <strong>7/7</strong></p><p>E5. The clinic staff understands the specific health needs and stresses of college students. <strong>7/7</strong></p>                                    </details>
+                            <details class="feedback-response">
+                    <summary><strong>General Medical Consultation (Check-up, illness, sick leave validation)</strong><br><span class="feedback-muted">Submitted 2026-09-08 00:32:18 · Overall 6.85 · Excellent</span></summary>
+                    <p>Visit #2 · 2026-09-01 09:00:00<br>1st Semester · 1st Year · BSIT</p>
+                    <h3>Written feedback</h3><p class="feedback-comment">No written feedback provided.</p>
+                                            <h3>Tangibles · 6.25</h3>
+                        <p>T1. The campus clinic has modern medical and dental equipment. <strong>4/7</strong></p><p>T2. The clinic&#039;s physical facilities (waiting rooms, treatment areas) are clean and comfortable. <strong>7/7</strong></p><p>T3. Clinic employees and medical staff look clean, professional, and neat. <strong>7/7</strong></p><p>T4. Digital platforms (online booking, health portals, signage) are easy for students to use. <strong>7/7</strong></p>                                            <h3>Reliability · 7.00</h3>
+                        <p>R1. When the clinic promises to provide a service by a certain time, it does so. <strong>7/7</strong></p><p>R2. The clinic staff shows a sincere interest in solving student health problems. <strong>7/7</strong></p><p>R3. The clinic performs its medical and dental services correctly the first time. <strong>7/7</strong></p><p>R4. The clinic provides its services at the exact times it promises to students. <strong>7/7</strong></p><p>R5. The clinic maintains error-free medical charts, prescriptions, and dental records. <strong>7/7</strong></p>                                            <h3>Responsiveness · 7.00</h3>
+                        <p>RES1. Clinic staff tell students exactly when medical or dental services will be performed. <strong>7/7</strong></p><p>RES2. Clinic employees give students prompt and speedy medical or dental care. <strong>7/7</strong></p><p>RES3. Medical and dental staff are always willing and ready to help students. <strong>7/7</strong></p><p>RES4. Clinic employees are never too busy to respond to student requests or questions. <strong>7/7</strong></p>                                            <h3>Assurance · 7.00</h3>
+                        <p>A1. The behavior of clinic employees instills confidence and trust in students. <strong>7/7</strong></p><p>A2. Students feel completely safe and secure during their medical and dental treatments. <strong>7/7</strong></p><p>A3. Clinic employees and doctors are consistently polite and courteous to students. <strong>7/7</strong></p><p>A4. Medical and dental staff have the adequate knowledge to answer student questions. <strong>7/7</strong></p>                                            <h3>Empathy · 7.00</h3>
+                        <p>E1. The clinic gives students individual, one-on-one attention during consultations. <strong>7/7</strong></p><p>E2. The clinic operates during hours that are highly convenient for all students. <strong>7/7</strong></p><p>E3. Clinic employees give students personal, warm, and caring attention. <strong>7/7</strong></p><p>E4. The clinic staff keeps the best interest of the student at heart. <strong>7/7</strong></p><p>E5. The clinic staff understands the specific health needs and stresses of college students. <strong>7/7</strong></p>                                    </details>
+                                </section>
+    </div>
+            </div>
+        </main>
+                    </div>
+        </div>
+        <div id="rowActionsModal" class="modal-backdrop" data-no-row-click>
+            <div class="modal-content row-actions-modal">
+                <div class="row-actions-modal-header">
+                    <div>
+                        <p class="row-actions-eyebrow">Available Actions</p>
+                        <h3 id="rowActionsModalTitle">Actions</h3>
+                    </div>
+                    <button type="button" class="row-actions-close" onclick="closeModal('rowActionsModal')" aria-label="Close actions">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <div id="rowActionsModalBody" class="row-actions-modal-body"></div>
+            </div>
+        </div>
+                <script src="/cliniq/public/assets/js/app.js?v=1788795052"></script>
+    <script src="/cliniq/public/assets/js/ag-grid-tables.js?v=1788795052"></script>
+    <script src="/cliniq/public/assets/js/file-preview.js?v=ape-popup-2"></script>
+    <script>document.addEventListener("submit", e => e.preventDefault(), true);</script></body>
+    </html>
+    

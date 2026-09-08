@@ -3,10 +3,6 @@
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_login();
 
-$filterStatus = strtolower((string) ($_GET['status'] ?? 'all'));
-if (!in_array($filterStatus, ['all', 'pending', 'completed', 'cancelled'], true)) {
-    $filterStatus = 'all';
-}
 $dateFrom = trim((string) ($_GET['date_from'] ?? ''));
 $dateTo = trim((string) ($_GET['date_to'] ?? ''));
 if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateFrom)) {
@@ -18,10 +14,6 @@ if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateTo)) {
 
 $where = '1=1';
 $params = [];
-if ($filterStatus !== 'all') {
-    $where = 'r.status = ?';
-    $params[] = $filterStatus;
-}
 if ($dateFrom !== '') {
     $where .= ' AND DATE(r.referral_date) >= ?';
     $params[] = $dateFrom;
@@ -42,39 +34,23 @@ $stmt = auth_db()->prepare("
 $stmt->execute($params);
 $referrals = $stmt->fetchAll();
 
-$statusCounts = ['all' => 0];
-$countQuery = auth_db()->query("SELECT status, COUNT(*) AS cnt FROM referrals GROUP BY status");
-foreach ($countQuery->fetchAll() as $sc) {
-    $statusCounts[strtolower($sc['status'])] = (int)$sc['cnt'];
-    $statusCounts['all'] += (int)$sc['cnt'];
-}
-
 $referralColumns = [
     ['headerName' => 'Patient', 'field' => 'patientHtml', 'cellRenderer' => 'html', 'sortField' => 'patientSort', 'minWidth' => 240],
     ['headerName' => 'Referred To', 'field' => 'referredTo', 'minWidth' => 200],
     ['headerName' => 'Reason', 'field' => 'reason', 'minWidth' => 240],
     ['headerName' => 'Date', 'field' => 'date', 'sortField' => 'dateSort', 'sortType' => 'date', 'width' => 150],
-    ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'sortField' => 'statusSort', 'sortType' => 'number', 'width' => 150],
-    ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 100, 'minWidth' => 90],
 ];
 $referralRows = [];
 foreach ($referrals as $ref) {
     $fullName = trim($ref['first_name'] . ' ' . $ref['last_name']);
-    $actions = '';
-    if ($ref['status'] === 'Pending') {
-        $actions = '<form method="post" action="update.php" style="display:inline;"><input type="hidden" name="id" value="' . (int)$ref['referral_id'] . '"><input type="hidden" name="status" value="Completed"><button class="btn btn-sm btn-primary" title="Mark Completed" data-confirm-submit data-confirm-type="primary" data-confirm-title="Complete this referral?" data-confirm-message="This will mark the referral as Completed." data-confirm-toast="Completing referral..."><span class="material-symbols-outlined text-[14px]">check</span> Complete</button></form>';
-    }
     $referralRows[] = [
-        'rowUrl' => app_url('patients/view.php?id=' . (int)$ref['patient_person_id']),
+        'rowModalId' => 'referralDetails-' . (int)$ref['referral_id'],
         'patientSort' => trim($ref['last_name'] . ' ' . $ref['first_name']),
         'patientHtml' => '<div class="flex items-center gap-3"><div class="avatar ' . e(avatar_color($fullName)) . '">' . e(initials($fullName)) . '</div><div><strong class="text-sm text-slate-800">' . e($fullName) . '</strong><div class="text-xs font-bold text-slate-400">' . e($ref['id_number']) . '</div></div></div>',
         'referredTo' => $ref['referred_to'],
         'reason' => $ref['reason'],
         'date' => date('M d, Y', strtotime($ref['referral_date'])),
         'dateSort' => $ref['referral_date'],
-        'statusHtml' => '<span class="badge ' . e(status_badge_class($ref['status'])) . '">' . e($ref['status']) . '</span>',
-        'statusSort' => array_search($ref['status'], ['Pending', 'Completed', 'Cancelled'], true),
-        'actionsHtml' => row_actions_button('Referral actions', $actions),
     ];
 }
 
@@ -94,7 +70,7 @@ render_clinic_command_header(
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
                 <h2 class="font-headline text-xl font-extrabold text-[#1c2a59] mb-1">Referral Records</h2>
-                <p class="text-xs font-bold text-slate-500 mb-0"><?= $statusCounts['all'] ?> referral(s)</p>
+                <p class="text-xs font-bold text-slate-500 mb-0"><?= count($referrals) ?> referral(s)</p>
             </div>
             <div class="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
                 <div class="search-input-wrap w-full sm:w-80">
@@ -108,38 +84,8 @@ render_clinic_command_header(
             </div>
         </div>
 
-        <div class="flex items-center gap-2 mt-4 border-t border-slate-100 pt-4 overflow-x-auto scrollbar-hide">
-            <?php
-            $tabs = ['all' => 'All', 'completed' => 'Completed', 'cancelled' => 'Cancelled'];
-            foreach ($tabs as $key => $label):
-                $isActive = $filterStatus === $key;
-                $count = $statusCounts[$key] ?? 0;
-                $href = $key === 'all' ? '?' : '?status=' . urlencode($key);
-            ?>
-                <a href="<?= $href ?>" class="status-tab <?= $isActive ? 'active' : '' ?> text-decoration-none whitespace-nowrap">
-                    <?= $label ?>
-                    <span class="ml-1.5 px-2 py-0.5 rounded-full <?= $isActive ? 'bg-blue-100 text-primary' : 'bg-slate-100 text-slate-500' ?> text-[10px]"><?= $count ?></span>
-                </a>
-            <?php endforeach; ?>
-        </div>
+        
     </div>
-    <?php if ($filterStatus !== 'all' || $dateFrom !== '' || $dateTo !== ''): ?>
-        <div class="flex flex-wrap items-center gap-2 px-6 py-4 bg-white border-b border-outline-variant/10">
-            <span class="material-symbols-outlined text-slate-400 text-sm">filter_alt</span>
-            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-2">Active Filters</span>
-            <?php if ($filterStatus !== 'all'): ?>
-                <span class="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold border border-slate-200"><?= e(ucwords($filterStatus)) ?></span>
-            <?php endif; ?>
-            <?php if ($dateFrom !== ''): ?>
-                <span class="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold border border-slate-200">From <?= e($dateFrom) ?></span>
-            <?php endif; ?>
-            <?php if ($dateTo !== ''): ?>
-                <span class="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold border border-slate-200">To <?= e($dateTo) ?></span>
-            <?php endif; ?>
-            <a href="index.php" class="ml-auto text-[10px] font-black text-primary uppercase tracking-widest hover:underline text-decoration-none">Clear All</a>
-        </div>
-    <?php endif; ?>
-
     <div id="referralAdvancedFilterModal" class="modal-backdrop">
         <div class="modal-content bg-white rounded-[2rem] w-full max-w-2xl p-8 shadow-2xl border border-outline-variant/10">
             <div class="flex items-center justify-between mb-8">
@@ -154,14 +100,7 @@ render_clinic_command_header(
                 </button>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div>
-                    <label class="clinic-label">Status</label>
-                    <select class="clinic-select" name="status">
-                        <?php foreach (['all' => 'All', 'pending' => 'Pending', 'completed' => 'Completed', 'cancelled' => 'Cancelled'] as $key => $label): ?>
-                            <option value="<?= e($key) ?>" <?= $filterStatus === $key ? 'selected' : '' ?>><?= e($label) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
+                
                 <div>
                     <label class="clinic-label">Date From</label>
                     <input class="clinic-input" type="date" name="date_from" value="<?= e($dateFrom) ?>">
@@ -191,4 +130,25 @@ render_clinic_command_header(
     ]); ?>
     <nav id="referralsPagination" class="pagination" aria-label="Referral pages"></nav>
 </section>
+<?php foreach ($referrals as $ref):
+    $referralModalId = 'referralDetails-' . (int) $ref['referral_id'];
+?>
+<div id="<?= e($referralModalId) ?>" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="<?= e($referralModalId) ?>-title">
+    <div class="modal-content bg-white rounded-2xl w-full max-w-2xl p-6 md:p-8 shadow-2xl">
+        <div class="flex items-center justify-between gap-4 mb-6">
+            <h2 id="<?= e($referralModalId) ?>-title" class="font-headline text-2xl font-extrabold m-0">Referral Details</h2>
+            <button type="button" class="btn-icon btn-icon-slate" onclick="closeModal('<?= e($referralModalId) ?>')" aria-label="Close referral details"><span class="material-symbols-outlined">close</span></button>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div><span class="clinic-label">Patient</span><strong><?= e(trim($ref['first_name'] . ' ' . $ref['last_name'])) ?></strong><p class="text-sm text-slate-500 mt-1"><?= e($ref['id_number']) ?></p></div>
+            <div><span class="clinic-label">Referral Date</span><strong><?= e(date('M d, Y', strtotime($ref['referral_date']))) ?></strong></div>
+            <div class="md:col-span-2"><span class="clinic-label">Referred To</span><p class="m-0" style="overflow-wrap:anywhere"><?= e($ref['referred_to']) ?></p></div>
+            <div class="md:col-span-2"><span class="clinic-label">Reason</span><p class="m-0" style="white-space:pre-wrap;overflow-wrap:anywhere"><?= e($ref['reason']) ?></p></div>
+            <?php if (trim((string) ($ref['notes'] ?? '')) !== ''): ?>
+                <div class="md:col-span-2"><span class="clinic-label">Notes</span><p class="m-0" style="white-space:pre-wrap;overflow-wrap:anywhere"><?= e($ref['notes']) ?></p></div>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+<?php endforeach; ?>
 <?php render_footer(); ?>

@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/RiskSettings.php';
+require_once __DIR__ . '/AuditLog.php';
 
 function ensure_alert_workflow_schema(): void
 {
@@ -14,11 +15,15 @@ function ensure_alert_workflow_schema(): void
         CREATE TABLE IF NOT EXISTS passport_access_logs (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             patient_id BIGINT UNSIGNED NOT NULL,
+            viewer_person_id BIGINT UNSIGNED NULL,
+            audit_log_id BIGINT UNSIGNED NULL,
             ip_address VARCHAR(45) NULL,
             user_agent VARCHAR(255) NULL,
             accessed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             CONSTRAINT fk_cliniq_passport_access_logs_patient
                 FOREIGN KEY (patient_id) REFERENCES patients(person_id) ON DELETE CASCADE,
+            CONSTRAINT fk_cliniq_passport_access_logs_viewer
+                FOREIGN KEY (viewer_person_id) REFERENCES people(id) ON DELETE SET NULL,
             INDEX idx_passport_access_logs_patient_accessed (patient_id, accessed_at)
         )
     ");
@@ -31,6 +36,7 @@ function ensure_alert_workflow_schema(): void
             reporter_contact VARCHAR(80) NULL,
             location VARCHAR(160) NOT NULL,
             notes TEXT NULL,
+            reporter_risk_rating VARCHAR(20) NULL,
             ip_address VARCHAR(45) NULL,
             user_agent VARCHAR(255) NULL,
             status VARCHAR(40) NOT NULL DEFAULT 'New',
@@ -53,7 +59,8 @@ function ensure_alert_workflow_schema(): void
             incident_type VARCHAR(120) NULL,
             details TEXT NULL,
             report_answers MEDIUMTEXT NULL,
-            risk_level VARCHAR(40) NOT NULL DEFAULT 'Low',
+            reporter_risk_rating VARCHAR(20) NULL,
+            risk_level VARCHAR(40) NOT NULL DEFAULT 'Not assessed',
             risk_score INT NOT NULL DEFAULT 0,
             risk_reasons TEXT NULL,
             response_guidance TEXT NULL,
@@ -74,6 +81,27 @@ function ensure_alert_workflow_schema(): void
         )
     ");
     ensure_passport_patient_columns($db);
+    ensure_audit_log_schema();
+
+    $passportColumns = [];
+    foreach ($db->query('SHOW COLUMNS FROM passport_access_logs')->fetchAll() as $column) {
+        $passportColumns[$column['Field']] = true;
+    }
+    if (!isset($passportColumns['viewer_person_id'])) {
+        $db->exec('ALTER TABLE passport_access_logs ADD COLUMN viewer_person_id BIGINT UNSIGNED NULL AFTER patient_id');
+    }
+    if (!isset($passportColumns['audit_log_id'])) {
+        $db->exec('ALTER TABLE passport_access_logs ADD COLUMN audit_log_id BIGINT UNSIGNED NULL AFTER viewer_person_id');
+    }
+
+    $incidentColumns = [];
+    foreach ($db->query('SHOW COLUMNS FROM incident_reports')->fetchAll() as $column) {
+        $incidentColumns[$column['Field']] = true;
+    }
+    if (!isset($incidentColumns['reporter_risk_rating'])) {
+        $db->exec('ALTER TABLE incident_reports ADD COLUMN reporter_risk_rating VARCHAR(20) NULL AFTER notes');
+    }
+
     $stmt = $db->query('SHOW COLUMNS FROM nurse_alerts');
     $columns = [];
     foreach ($stmt->fetchAll() as $column) {
@@ -90,7 +118,10 @@ function ensure_alert_workflow_schema(): void
     $addColumn('photo_path', 'VARCHAR(255) NULL AFTER details');
     $addColumn('incident_type', 'VARCHAR(120) NULL AFTER concern');
     $addColumn('report_answers', 'MEDIUMTEXT NULL AFTER details');
-    $addColumn('risk_level', "ENUM('Low','Moderate','High','Critical') NOT NULL DEFAULT 'Low' AFTER report_answers");
+    $addColumn('reporter_risk_rating', 'VARCHAR(20) NULL AFTER report_answers');
+    if (isset($columns['risk_level'])) {
+        $db->exec("ALTER TABLE nurse_alerts MODIFY COLUMN risk_level VARCHAR(40) NOT NULL DEFAULT 'Not assessed'");
+    }
     $addColumn('risk_score', 'INT NOT NULL DEFAULT 0 AFTER risk_level');
     $addColumn('risk_reasons', 'TEXT NULL AFTER risk_score');
     $addColumn('response_guidance', 'TEXT NULL AFTER risk_reasons');
@@ -234,6 +265,14 @@ function classify_reported_incident(array $answers): array
     $settings = risk_settings();
     $score = 0;
     $reasons = [];
+    $assessmentFields = ['incident_type', 'observed_condition', 'breathing_status', 'bleeding_status', 'pain_level', 'mobility_status', 'notes'];
+    $hasAssessmentInput = false;
+    foreach ($assessmentFields as $field) {
+        if (trim((string) ($answers[$field] ?? '')) !== '') {
+            $hasAssessmentInput = true;
+            break;
+        }
+    }
 
     $text = strtolower(implode(' ', array_filter([
         $answers['incident_type'] ?? '',
@@ -323,7 +362,10 @@ function classify_reported_incident(array $answers): array
         }
     }
 
-    if ($score >= (int) $settings['critical_min']) {
+    if (!$hasAssessmentInput) {
+        $level = 'Not assessed';
+        $reasons[] = 'No clinical details were provided for risk classification';
+    } elseif ($score >= (int) $settings['critical_min']) {
         $level = 'Critical';
     } elseif ($score >= (int) $settings['high_min']) {
         $level = 'High';
@@ -353,6 +395,7 @@ function incident_response_guidance(string $level): string
     $settings = risk_settings();
 
     return match ($level) {
+        'Not assessed' => 'The report did not include enough clinical details for risk classification. Verify the student condition promptly and contact the clinic if the situation may be urgent.',
         'Critical' => (string) $settings['guidance_critical'],
         'High' => (string) $settings['guidance_high'],
         'Moderate' => (string) $settings['guidance_moderate'],

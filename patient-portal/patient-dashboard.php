@@ -163,10 +163,19 @@ $appointmentStmt->execute([$appointmentPatientId]);
 $latestAppointment = $appointmentStmt->fetch();
 
 $latestApe = ape_fetch_patient_record($appointmentPatientId);
+$hasScheduledApeBatch = $latestApe
+    && !empty($latestApe['schedule_batch_id'])
+    && ($latestApe['batch_status'] ?? '') === 'Scheduled';
+$scheduledApeBatchLabel = $hasScheduledApeBatch
+    ? date('F j, Y', strtotime((string) $latestApe['batch_schedule_date'])) . ' · '
+        . date('g:i A', strtotime((string) $latestApe['batch_start_time'])) . '–'
+        . date('g:i A', strtotime((string) $latestApe['batch_end_time']))
+    : '';
 $apeStatus = $latestApe['workflow_status'] ?? 'Not Started';
 $apeQueue = $latestApe ? ape_record_queue($latestApe) : 'examination';
 $apeStep = $latestApe ? ape_record_step_index($latestApe) : 0;
 $apePercent = $apeQueue === 'completed' ? 100 : $apeStep * 20;
+$apeCompleted = $apePercent >= 100 || ($latestApe['clearance_status'] ?? '') === 'Cleared';
 $apeBadgeClass = match ($latestApe['clearance_status'] ?? '') {
     'Cleared' => 'student-badge-success',
     'For Follow-up' => 'student-badge-warning',
@@ -324,7 +333,8 @@ render_student_header('Dashboard', 'dashboard');
     </div>
 <?php endif; ?>
 
-<section class="student-page-header">
+<section class="student-card student-card-pad mb-4" aria-label="Patient dashboard overview">
+<div class="student-page-header">
     <div>
         <p class="student-eyebrow">Patient Health Portal</p>
         <h1 class="student-title">Welcome back, <?= student_e($profile['first_name']) ?></h1>
@@ -334,13 +344,15 @@ render_student_header('Dashboard', 'dashboard');
         <span class="material-symbols-outlined text-[14px]">verified</span>
         <?= student_e($accountBadgeLabel) ?>
     </span>
+</div>
 </section>
 
 <section class="student-required-actions mb-4" aria-label="Required student actions">
     <div class="student-required-actions-head">
         <div>
-            <p class="student-eyebrow" style="margin-bottom:0.28rem;">Required Actions</p>
-            <h2>Complete these to keep your clinic profile ready</h2>
+            <p class="student-eyebrow student-eyebrow-compact">Your next steps</p>
+            <h2>Start here to keep your clinic profile ready</h2>
+            <p class="student-required-actions-copy">Complete the items below in order. The portal will unlock the next action when it is ready.</p>
         </div>
         <span class="student-badge <?= $requiredActionCount > 0 ? 'student-badge-warning' : 'student-badge-success' ?>">
             <?= (int) $requiredActionCount ?> Pending
@@ -469,6 +481,21 @@ render_student_header('Dashboard', 'dashboard');
                     <span class="student-badge <?= student_e($apeBadgeClass) ?>"><?= student_e($latestApe['verification_status'] ?? 'Pending') ?></span>
                 </div>
             </div>
+            <?php if ($hasScheduledApeBatch): ?>
+                <div class="student-note student-note-info mt-4 mb-0">
+                    <span class="material-symbols-outlined">calendar_month</span>
+                    <div>
+                        <strong><?= $apeCompleted ? 'Completed APE batch' : 'Current APE batch' ?>: <?= student_e($latestApe['batch_name']) ?></strong><br>
+                        <?= student_e($latestApe['batch_patient_category'] ?? 'APE') ?> · <?= student_e($scheduledApeBatchLabel) ?><br>
+                        <span class="text-xs"><?= $apeCompleted ? 'This examination batch has been completed.' : 'Your assigned examination schedule is currently active.' ?></span>
+                    </div>
+                </div>
+            <?php elseif ($latestApe && ($latestApe['clearance_status'] ?? '') !== 'Cleared'): ?>
+                <div class="student-note student-note-warning mt-4 mb-0">
+                    <span class="material-symbols-outlined">event_busy</span>
+                    <div><strong>No active APE batch assigned yet.</strong><br>Wait for the clinic to schedule your examination.</div>
+                </div>
+            <?php endif; ?>
         </div>
     </section>
 

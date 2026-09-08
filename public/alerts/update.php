@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/AlertWorkflow.php';
+require_once __DIR__ . '/../../app/services/AuditLog.php';
 require_login();
 ensure_alert_workflow_schema();
 
@@ -25,10 +26,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $user = current_user();
             $stmt = auth_db()->prepare('UPDATE nurse_alerts SET status = ?, resolution_report = ?, resolved_by = ?, resolved_at = NOW() WHERE id = ?');
             $stmt->execute([$status, $resolutionReport, (int) ($user['person_id'] ?? $user['id'] ?? 0) ?: null, $id]);
+            audit_log_event('incident', 'alert_resolved', (int) ($user['person_id'] ?? $user['id'] ?? 0) ?: null, 'staff', 'nurse_alert', $id);
             flash_message('success', 'Alert resolved with report.');
         } else {
             $stmt = auth_db()->prepare('UPDATE nurse_alerts SET status = ? WHERE id = ?');
             $stmt->execute([$status, $id]);
+            $user = current_user();
+            audit_log_event('incident', 'alert_status_updated', (int) ($user['person_id'] ?? $user['id'] ?? 0) ?: null, 'staff', 'nurse_alert', $id, ['status' => $status]);
             flash_message('success', 'Alert status updated to "' . $status . '".');
         }
     }

@@ -24,6 +24,12 @@ function env_value(string $key, ?string $default = null): ?string
     return $env[$key] ?? $default;
 }
 
+$appTimezone = env_value('APP_TIMEZONE', 'Asia/Manila');
+if (!in_array($appTimezone, timezone_identifiers_list(), true)) {
+    $appTimezone = 'Asia/Manila';
+}
+date_default_timezone_set($appTimezone);
+
 function app_url(string $path = ''): string
 {
     return rtrim(env_value('APP_URL', '/cliniq/public'), '/') . '/' . ltrim($path, '/');

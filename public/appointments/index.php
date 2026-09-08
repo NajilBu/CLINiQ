@@ -6,10 +6,10 @@ require_login();
 ensure_appointment_schema();
 appointment_sync_overdue_confirmations();
 
-$filterStatus = $_GET['status'] ?? 'today';
-$allowedFilters = ['today', 'all', 'Pending', 'Scheduled', 'For Confirmation', 'Completed', 'Cancelled', 'No Show'];
+$filterStatus = $_GET['status'] ?? 'Pending';
+$allowedFilters = ['all', 'Pending', 'Scheduled', 'For Confirmation', 'Completed', 'Cancelled', 'No Show'];
 if (!in_array($filterStatus, $allowedFilters, true)) {
-    $filterStatus = 'today';
+    $filterStatus = 'Pending';
 }
 $dateFrom = trim((string) ($_GET['date_from'] ?? ''));
 $dateTo = trim((string) ($_GET['date_to'] ?? ''));
@@ -22,9 +22,7 @@ if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateTo)) {
 
 $where = '1=1';
 $params = [];
-if ($filterStatus === 'today') {
-    $where = 'DATE(a.appointment_datetime) = CURDATE()';
-} elseif ($filterStatus !== 'all') {
+if ($filterStatus !== 'all') {
     $where = 'a.status = ?';
     $params[] = $filterStatus;
 }
@@ -60,8 +58,7 @@ $stmt = appointment_db()->prepare("
 $stmt->execute($params);
 $appointments = $stmt->fetchAll();
 
-$todayCountStmt = appointment_db()->query("SELECT COUNT(*) AS cnt FROM appointments WHERE DATE(appointment_datetime) = CURDATE()");
-$statusCounts = ['today' => (int) ($todayCountStmt->fetch()['cnt'] ?? 0), 'all' => 0];
+$statusCounts = ['all' => 0];
 $countQuery = appointment_db()->query("SELECT status, COUNT(*) AS cnt FROM appointments GROUP BY status");
 foreach ($countQuery->fetchAll() as $sc) {
     $statusCounts[$sc['status']] = (int)$sc['cnt'];
@@ -69,13 +66,12 @@ foreach ($countQuery->fetchAll() as $sc) {
 }
 
 $columns = [
-    ['headerName' => 'Requested Slot', 'field' => 'slotHtml', 'cellRenderer' => 'html', 'sortField' => 'slotSort', 'sortType' => 'date', 'minWidth' => 190],
-    ['headerName' => 'Student', 'field' => 'studentHtml', 'cellRenderer' => 'html', 'sortField' => 'studentSort', 'minWidth' => 240],
+    ['headerName' => 'Requested Slot', 'field' => 'slotHtml', 'cellRenderer' => 'html', 'sortField' => 'slotSort', 'sortType' => 'date', 'width' => 165, 'minWidth' => 165, 'maxWidth' => 165, 'flex' => 0, 'suppressSizeToFit' => true],
+    ['headerName' => 'Student', 'field' => 'studentHtml', 'cellRenderer' => 'html', 'sortField' => 'studentSort', 'minWidth' => 315],
     ['headerName' => 'Purpose', 'field' => 'purpose', 'minWidth' => 220],
     ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'sortField' => 'statusSort', 'sortType' => 'number', 'width' => 150],
     ['headerName' => 'Notes', 'field' => 'notes', 'minWidth' => 220],
     ['headerName' => 'Requested', 'field' => 'created', 'sortField' => 'createdSort', 'sortType' => 'date', 'width' => 150],
-    ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 100, 'minWidth' => 90],
 ];
 if (in_array($filterStatus, ['Cancelled', 'all'], true)) {
     array_splice($columns, 5, 0, [[
@@ -89,6 +85,14 @@ $rows = [];
 foreach ($appointments as $appointment) {
     $fullName = trim($appointment['first_name'] . ' ' . $appointment['last_name']);
     $status = $appointment['status'];
+    $patientNote = trim((string) ($appointment['notes'] ?? ''));
+    $portalNotePrefix = 'Patient requested this appointment through the patient portal. Awaiting clinic approval.';
+    if (str_starts_with($patientNote, $portalNotePrefix)) {
+        $patientNote = trim(substr($patientNote, strlen($portalNotePrefix)));
+        if (str_starts_with($patientNote, 'Patient note:')) {
+            $patientNote = trim(substr($patientNote, strlen('Patient note:')));
+        }
+    }
     $actions = '';
 
     if ($status === 'Pending') {
@@ -109,7 +113,6 @@ foreach ($appointments as $appointment) {
     }
 
     $rows[] = [
-        'rowUrl' => app_url('patients/view.php?id=' . (int)$appointment['patient_id']),
         'slotSort' => $appointment['appointment_datetime'],
         'slotHtml' => '<p class="text-sm font-bold text-slate-800 mb-0">' . e(date('M d, Y', strtotime($appointment['appointment_datetime']))) . '</p><p class="text-xs font-bold text-slate-400 mb-0">' . e(date('g:i A', strtotime($appointment['appointment_datetime']))) . '</p>',
         'studentSort' => trim($appointment['last_name'] . ' ' . $appointment['first_name']),
@@ -117,11 +120,12 @@ foreach ($appointments as $appointment) {
         'purpose' => $appointment['purpose'],
         'statusHtml' => '<span class="badge ' . e(appointment_status_badge_class($status)) . '">' . e($status) . '</span>',
         'statusSort' => array_search($status, ['Pending', 'Scheduled', 'For Confirmation', 'Completed', 'No Show', 'Cancelled'], true),
-        'notes' => $appointment['notes'] ?: '-',
+        'notes' => $patientNote !== '' ? $patientNote : '—',
         'cancelReason' => $appointment['cancellation_reason'] ?: '-',
         'created' => date('M d, g:i A', strtotime($appointment['created_at'])),
         'createdSort' => $appointment['created_at'],
-        'actionsHtml' => row_actions_button('Appointment actions', $actions),
+        'rowActionsTitle' => 'Appointment actions — ' . $fullName,
+        'rowActionsHtml' => $actions ?: '<p class="text-sm text-slate-500">No actions available for this appointment.</p>',
     ];
 }
 
@@ -158,7 +162,6 @@ render_clinic_command_header(
         <div class="flex items-center gap-2 mt-4 border-t border-slate-100 pt-4 overflow-x-auto scrollbar-hide">
             <?php
             $tabs = [
-                'today' => 'Today',
                 'Pending' => 'For Approval',
                 'Scheduled' => 'Approved',
                 'For Confirmation' => 'For Confirmation',
@@ -170,7 +173,7 @@ render_clinic_command_header(
             foreach ($tabs as $key => $label):
                 $isActive = $filterStatus === $key;
                 $count = $statusCounts[$key] ?? 0;
-                $href = $key === 'today' ? '?' : '?status=' . urlencode($key);
+                $href = '?status=' . urlencode($key);
             ?>
                 <a href="<?= e($href) ?>" class="status-tab <?= $isActive ? 'active' : '' ?> text-decoration-none whitespace-nowrap">
                     <?= e($label) ?>
@@ -179,23 +182,6 @@ render_clinic_command_header(
             <?php endforeach; ?>
         </div>
     </div>
-    <?php if ($filterStatus !== 'today' || $dateFrom !== '' || $dateTo !== ''): ?>
-        <div class="flex flex-wrap items-center gap-2 px-6 py-4 bg-white border-b border-outline-variant/10">
-            <span class="material-symbols-outlined text-slate-400 text-sm">filter_alt</span>
-            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-2">Active Filters</span>
-            <?php if ($filterStatus !== 'today'): ?>
-                <span class="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold border border-slate-200"><?= e($filterStatus === 'all' ? 'All' : $filterStatus) ?></span>
-            <?php endif; ?>
-            <?php if ($dateFrom !== ''): ?>
-                <span class="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold border border-slate-200">From <?= e($dateFrom) ?></span>
-            <?php endif; ?>
-            <?php if ($dateTo !== ''): ?>
-                <span class="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold border border-slate-200">To <?= e($dateTo) ?></span>
-            <?php endif; ?>
-            <a href="index.php" class="ml-auto text-[10px] font-black text-primary uppercase tracking-widest hover:underline text-decoration-none">Clear All</a>
-        </div>
-    <?php endif; ?>
-
     <div id="appointmentAdvancedFilterModal" class="modal-backdrop">
         <div class="modal-content bg-white rounded-[2rem] w-full max-w-2xl p-8 shadow-2xl border border-outline-variant/10">
             <div class="flex items-center justify-between mb-8">
@@ -210,14 +196,6 @@ render_clinic_command_header(
                 </button>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div>
-                    <label class="clinic-label">Status</label>
-                    <select class="clinic-select" name="status">
-                        <?php foreach ($tabs as $key => $label): ?>
-                            <option value="<?= e($key) ?>" <?= $filterStatus === $key ? 'selected' : '' ?>><?= e($label) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
                 <div>
                     <label class="clinic-label">Date From</label>
                     <input class="clinic-input" type="date" name="date_from" value="<?= e($dateFrom) ?>">
@@ -242,8 +220,8 @@ render_clinic_command_header(
         'pageSize' => 10,
         'pagination' => true,
         'paginationControls' => 'appointmentsPagination',
-        'emptyTitle' => $filterStatus === 'today' ? 'No appointments today' : ($filterStatus === 'Pending' ? 'No appointment requests' : 'No appointments found'),
-        'emptyText' => $filterStatus === 'today' ? 'Today’s appointment schedule is clear.' : ($filterStatus === 'Pending' ? 'Student appointment requests will appear here for clinic approval.' : 'Try another status filter.'),
+        'emptyTitle' => $filterStatus === 'Pending' ? 'No appointment requests' : 'No appointments found',
+        'emptyText' => $filterStatus === 'Pending' ? 'Student appointment requests will appear here for clinic approval.' : 'Try another status filter.',
     ]); ?>
     <nav id="appointmentsPagination" class="pagination" aria-label="Appointment pages"></nav>
 </section>

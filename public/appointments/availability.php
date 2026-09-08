@@ -23,6 +23,42 @@ if ($action === 'delete') {
         $stmt->execute([$id]);
         flash_message('success', 'Availability block removed.');
     }
+} elseif ($action === 'delete_group') {
+    $ids = array_values(array_filter(array_map('intval', (array) ($_POST['ids'] ?? []))));
+    if ($ids) {
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        appointment_db()->prepare("DELETE FROM appointment_availability_blocks WHERE availability_block_id IN ($placeholders)")->execute($ids);
+        flash_message('success', 'Unavailable block removed.');
+    }
+} elseif ($action === 'update') {
+    $ids = array_values(array_filter(array_map('intval', (array) ($_POST['ids'] ?? []))));
+    $date = trim((string) ($_POST['block_date'] ?? ''));
+    $allDay = false;
+    $start = trim((string) ($_POST['start_time'] ?? ''));
+    $end = trim((string) ($_POST['end_time'] ?? ''));
+    $reason = trim((string) ($_POST['reason'] ?? ''));
+    $dateError = (function () use ($date) {
+        $selected = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || !$selected || $selected->format('Y-m-d') !== $date) return 'Choose a valid date.';
+        if (!appointment_date_is_clinic_day($date)) return 'Unavailable time can only be set Monday through Friday.';
+        return null;
+    })();
+    $originalStart = trim((string) ($_POST['original_start'] ?? ''));
+    $originalEnd = trim((string) ($_POST['original_end'] ?? ''));
+    $rangeError = !preg_match('/^\d{2}:\d{2}$/', $start) || !preg_match('/^\d{2}:\d{2}$/', $end) || $start >= $end || $start < '08:00' || $end > '17:00' || ($originalStart !== '' && $start < $originalStart) || ($originalEnd !== '' && $end > $originalEnd);
+    if (!$ids || $dateError || $rangeError || $reason === '') {
+        flash_message('error', $dateError ?: ($reason === '' ? 'Enter a reason for the unavailable time.' : 'Choose a valid time between 8:00 AM and 5:00 PM.'));
+    } else {
+        $db = appointment_db();
+        $db->beginTransaction();
+        $db->prepare('UPDATE appointment_availability_blocks SET block_date = ?, start_time = ?, end_time = ?, reason = ? WHERE availability_block_id = ?')->execute([$date, $allDay ? null : $start, $allDay ? null : $end, $reason !== '' ? $reason : null, $ids[0]]);
+        if (count($ids) > 1) {
+            $placeholders = implode(',', array_fill(0, count($ids) - 1, '?'));
+            $db->prepare("DELETE FROM appointment_availability_blocks WHERE availability_block_id IN ($placeholders)")->execute(array_slice($ids, 1));
+        }
+        $db->commit();
+        flash_message('success', 'Unavailable block updated.');
+    }
 } else {
     $submittedSlots = array_values(array_unique(array_filter(array_map(
         static fn($value): string => trim((string) $value),
@@ -97,6 +133,8 @@ if ($action === 'delete') {
 
     if (!$allDay && $submittedSlots && !$validSlots) {
         // Validation message is already set above.
+    } elseif (!$allDay && $validSlots && $reason === '') {
+        flash_message('error', 'Enter a reason for the unavailable time.');
     } elseif (!$allDay && $validSlots) {
         $stmt = appointment_db()->prepare("
             INSERT INTO appointment_availability_blocks (block_date, start_time, end_time, reason, created_by_person_id)
@@ -116,6 +154,8 @@ if ($action === 'delete') {
         flash_message('error', 'Choose at least one date to block.');
     } elseif (!$allDay && ($start === '' || $end === '' || $start >= $end || $start < '08:00' || $end > '17:00')) {
         flash_message('error', 'Choose a valid start and end time between 8:00 AM and 5:00 PM.');
+    } elseif ($reason === '') {
+        flash_message('error', 'Enter a reason for the unavailable time.');
     } else {
         $stmt = appointment_db()->prepare("
             INSERT INTO appointment_availability_blocks (block_date, start_time, end_time, reason, created_by_person_id)

@@ -7,6 +7,34 @@
 // DESKTOP RUNTIME BRIDGE
 // ============================================================
 
+function formatEquipmentClock(value, finish = false) {
+    const text = String(value || '').replace(/[^\d:]/g, '').slice(0, 5);
+    if (/^\d{1,2}:\d{3}$/.test(text)) { const digits = text.replace(':', ''); return digits.slice(0, -2) + ':' + digits.slice(-2); }
+    if (/^\d{3,4}$/.test(text)) return text.slice(0, -2) + ':' + text.slice(-2);
+    if (finish && /^\d{1,2}$/.test(text)) return text + ':00';
+    return text;
+}
+function validateEquipmentReturnTime(field) {
+    const value = formatEquipmentClock(field.value, true);
+    const period = field.closest('[data-return-clock]')?.querySelector('[data-return-period]')?.value || '';
+    const match = value.match(/^(0?[1-9]|1[0-2]):([0-5][0-9])$/);
+    const minutes = match ? (Number(match[1]) % 12 + (period === 'PM' ? 12 : 0)) * 60 + Number(match[2]) : null;
+    field.setCustomValidity(!value ? '' : minutes === null
+        ? 'Use the format h:mm, for example 8:00.'
+        : period && (minutes < 480 || minutes > 1020)
+            ? 'Expected return time must be between 8:00 AM and 5:00 PM.' : '');
+}
+['input', 'change', 'focusout'].forEach(eventName => document.addEventListener(eventName, event => {
+    const target = event.target;
+    if (target.matches('[data-equipment-return-time]')) {
+        target.value = formatEquipmentClock(target.value, eventName !== 'input');
+        validateEquipmentReturnTime(target);
+    } else if (target.matches('[data-return-period]')) {
+        const field = target.closest('[data-return-clock]').querySelector('[data-equipment-return-time]');
+        validateEquipmentReturnTime(field);
+    }
+}));
+
 function cliniqDesktopBridge() {
     return window.cliniqDesktop && typeof window.cliniqDesktop.openExternal === 'function'
         ? window.cliniqDesktop
@@ -64,12 +92,20 @@ function showModal(modalId) {
     const modal = document.getElementById(modalId);
     if (!modal) return;
 
+    modal._closing = false;
+    clearTimeout(modal._closeTimer);
     modal.style.display = 'flex';
+    void modal.offsetWidth;
+    modal.scrollTop = 0;
+    const modalContent = modal.querySelector('.modal-content');
+    if (modalContent) {
+        modalContent.scrollTop = 0;
+    }
     document.body.style.overflow = 'hidden';
 
     // Trigger reflow then add .show for CSS transition
     requestAnimationFrame(() => {
-        modal.classList.add('show');
+        if (!modal._closing) modal.classList.add('show');
     });
 
     // Close on backdrop click
@@ -88,12 +124,13 @@ function closeModal(modalId) {
     const modal = document.getElementById(modalId);
     if (!modal) return;
 
+    modal._closing = true;
     modal.classList.remove('show');
-    document.body.style.overflow = '';
-
-    setTimeout(() => {
+    clearTimeout(modal._closeTimer);
+    modal._closeTimer = setTimeout(() => {
         modal.style.display = 'none';
-    }, 300);
+        if (!document.querySelector('.modal-backdrop.show')) document.body.style.overflow = '';
+    }, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 240);
 }
 
 // Global ESC key handler for modals
@@ -1145,11 +1182,6 @@ function initApeHardCopyReview(root = document) {
                     preview.value = nextStatus;
                     preview.dataset.status = nextStatus;
                 }
-            });
-            checklist?.querySelectorAll('[data-requirement-remark]').forEach((input) => {
-                const selected = selectedIds.has(input.dataset.requirementRemark);
-                input.readOnly = selected;
-                input.title = selected ? 'The instructions above will be used for this selected document.' : '';
             });
         };
         sync();

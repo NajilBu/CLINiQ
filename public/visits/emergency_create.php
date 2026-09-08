@@ -23,7 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $patientId = (int) ($_POST['patient_id'] ?? 0);
 
     if (!$patientId) {
-        $identifier = trim($_POST['identifier'] ?? '');
+        $identifier = normalize_id_number(trim($_POST['identifier'] ?? ''));
         if ($identifier === '') {
             flash_message('error', 'Select an existing patient or enter an ID listed in Cliniq_db.');
             header('Location: emergency_create.php');

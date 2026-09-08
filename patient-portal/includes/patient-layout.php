@@ -274,6 +274,7 @@ function student_require_login(): array
 function student_logout(): void
 {
     student_start_session();
+    audit_log_event('auth', 'student_logout', (int) ($_SESSION['patient_person_id'] ?? $_SESSION['student_person_id'] ?? 0) ?: null, 'student', 'person', (int) ($_SESSION['patient_person_id'] ?? $_SESSION['student_person_id'] ?? 0) ?: null);
     $_SESSION = [];
     if (ini_get('session.use_cookies')) {
         $params = session_get_cookie_params();
@@ -436,7 +437,12 @@ function render_student_header(string $title, string $active = ''): void
                     </span>
                 </a>
 
-                <nav class="student-nav" aria-label="Patient navigation">
+                <button type="button" class="student-nav-toggle" aria-expanded="false" aria-controls="student-navigation">
+                    <span class="material-symbols-outlined" aria-hidden="true">menu</span>
+                    <span>Menu</span>
+                </button>
+
+                <nav id="student-navigation" class="student-nav" aria-label="Patient navigation">
                     <?php foreach ($navItems as $key => $item): ?>
                         <a href="<?= student_e($item['url']) ?>" class="student-nav-link <?= $active === $key ? 'active' : '' ?> text-decoration-none">
                             <span class="material-symbols-outlined"><?= student_e($item['icon']) ?></span>
@@ -553,6 +559,27 @@ function render_student_footer(): void
         </div>
 
         <script>
+            (() => {
+                const topbar = document.querySelector('.student-topbar');
+                const toggle = document.querySelector('.student-nav-toggle');
+                const navigation = document.getElementById('student-navigation');
+                if (!topbar || !toggle || !navigation) return;
+
+                toggle.addEventListener('click', () => {
+                    const isOpen = topbar.classList.toggle('nav-open');
+                    toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+                    toggle.querySelector('.material-symbols-outlined').textContent = isOpen ? 'close' : 'menu';
+                });
+
+                navigation.querySelectorAll('a').forEach((link) => {
+                    link.addEventListener('click', () => {
+                        topbar.classList.remove('nav-open');
+                        toggle.setAttribute('aria-expanded', 'false');
+                        toggle.querySelector('.material-symbols-outlined').textContent = 'menu';
+                    });
+                });
+            })();
+
             function toggleModalPwVisibility(inputId, btn) {
                 const inp = document.getElementById(inputId);
                 if (inp) {
@@ -626,6 +653,7 @@ function render_student_auth_header(string $title): void
                 --student-muted-soft: <?= student_e($theme['surface_container_low']) ?>;
             }
         </style>
+    <script src="../public/assets/js/id-number-format.js?v=<?= filemtime(__DIR__ . '/../../public/assets/js/id-number-format.js') ?>"></script>
     </head>
     <body class="student-body student-auth-page">
     <?php
@@ -634,36 +662,6 @@ function render_student_auth_header(string $title): void
 function render_student_auth_footer(): void
 {
     ?>
-    <script>
-        function formatStudentId(value) {
-            const digits = String(value || '').replace(/\D/g, '').slice(0, 7);
-            if (digits.length <= 2) {
-                return digits;
-            }
-            return `${digits.slice(0, 2)}-${digits.slice(2)}`;
-        }
-
-        function initStudentIdFormatting(root = document) {
-            const scope = root.querySelectorAll ? root : document;
-            scope.querySelectorAll('[data-legacy-student-id-format]').forEach((input) => {
-                if (!(input instanceof HTMLInputElement) || input.dataset.studentIdFormatterReady === '1') {
-                    return;
-                }
-
-                input.dataset.studentIdFormatterReady = '1';
-                input.inputMode = 'numeric';
-                input.maxLength = 8;
-                input.pattern = '\\d{2}-\\d{5}';
-                input.title = 'Use the format Enter ID number.';
-                input.placeholder = input.placeholder || 'Enter ID number';
-                input.addEventListener('input', () => {
-                    input.value = formatStudentId(input.value);
-                });
-            });
-        }
-
-        initStudentIdFormatting();
-    </script>
     </body>
     </html>
     <?php

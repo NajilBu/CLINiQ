@@ -156,6 +156,27 @@ $theme = active_cliniq_theme();
             color: #ffffff;
         }
 
+        .portal-feedback-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            margin-top: 1.25rem;
+            color: var(--cliniq-accent-foreground);
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-decoration: none;
+            transition: color 0.16s ease;
+        }
+
+        .portal-feedback-link:hover,
+        .portal-feedback-link:focus-visible {
+            color: var(--cliniq-primary);
+        }
+
+        .portal-feedback-link .material-symbols-outlined {
+            font-size: 1rem;
+        }
+
         @media (max-width: 640px) {
             .portal-option {
                 align-items: flex-start;
@@ -228,6 +249,12 @@ $theme = active_cliniq_theme();
                     </span>
                 </a>
             </div>
+
+            <a href="<?= e(app_url('clinic-feedback.php')) ?>" class="portal-feedback-link">
+                <span class="material-symbols-outlined" aria-hidden="true">rate_review</span>
+                Give feedback about a clinic visit
+                <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span>
+            </a>
 
             <div class="mt-9 flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-8">
                 <div class="flex items-center gap-2">

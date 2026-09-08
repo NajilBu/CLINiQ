@@ -17,7 +17,7 @@ $departmentOptions = cliniq_patient_profile_departments();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
-        $postedIdNumber = strtoupper(trim((string) ($_POST['id_number'] ?? '')));
+        $postedIdNumber = normalize_id_number(strtoupper(trim((string) ($_POST['id_number'] ?? ''))));
         if (!is_valid_id_number($postedIdNumber)) {
             throw new InvalidArgumentException(id_number_validation_message('ID number'));
         }

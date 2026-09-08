@@ -11,7 +11,7 @@ $clinicProfile = clinic_profile_settings();
 $clinicLogoSrc = student_public_logo_src($clinicProfile);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $studentIdValue = trim($_POST['student_id'] ?? '');
+    $studentIdValue = normalize_id_number(trim($_POST['student_id'] ?? ''));
     $password = (string) ($_POST['password'] ?? '');
 
     if (!is_valid_id_number($studentIdValue)) {
@@ -20,8 +20,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $patient = student_find_patient_by_number($studentIdValue);
         if ($patient === null) {
             $error = 'Patient account not found or currently suspended.';
+            audit_log_event('auth', 'student_login_failed', null, 'guest', 'account', null, ['id_number' => $studentIdValue], 'failure');
         } elseif (!student_password_is_valid($patient, $password)) {
             $error = 'Invalid ID number or password. Please try again.';
+            audit_log_event('auth', 'student_login_failed', (int) ($patient['person_id'] ?? 0) ?: null, 'guest', 'account', (int) ($patient['account_id'] ?? 0) ?: null, [], 'failure');
         } elseif ($patient['account_status'] === 'inactive') {
             // Distinguish: was this account previously activated (school year reset) or brand new?
             $wasActivated = !empty($patient['activated_at']);
@@ -38,6 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['patient_account_id'] = (int) $patient['account_id'];
             $_SESSION['patient_person_id'] = (int) $patient['person_id'];
             student_record_successful_login((int) $patient['account_id']);
+            audit_log_event('auth', 'student_login_success', (int) $patient['person_id'], 'student', 'person', (int) $patient['person_id']);
             header('Location: patient-dashboard.php');
             exit;
         }

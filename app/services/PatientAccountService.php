@@ -251,7 +251,7 @@ function normalize_person_sex(string $value): string
  */
 function create_inactive_patient_account(array $input): array
 {
-    $idNumber = strtoupper(trim((string) ($input['id_number'] ?? '')));
+    $idNumber = normalize_id_number((string) ($input['id_number'] ?? ''));
     $rawType = trim((string) ($input['patient_type'] ?? $input['category'] ?? ''));
     $normalizedType = preg_replace('/[^a-z0-9]+/', '_', strtolower($rawType)) ?? '';
     if (!in_array($normalizedType, ['student', 'faculty', 'school_personnel'], true)) {

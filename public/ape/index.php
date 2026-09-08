@@ -39,6 +39,9 @@ $todayScheduleRecords = array_values(array_filter(
 ));
 // A selected batch scopes every queue. By default, only Examination is date-scoped.
 $scopeRecords = ape_fetch_records($search, null, null, $selectedBatchId);
+$batchProgress = ape_batch_progress($schoolYearBatches === [] ? [] : (
+    $search === '' && $selectedBatchId === null ? $scopeRecords : ape_fetch_records()
+));
 $allRecords = array_values(array_filter(
     $scopeRecords,
     static fn(array $record): bool => $selectedBatchId !== null
@@ -326,7 +329,7 @@ render_clinic_command_header(
 </div>
 
 <div id="apeBatchPickerModal" class="modal-backdrop" data-no-row-click>
-    <div class="modal-content bg-white rounded-[2rem] w-full max-w-3xl p-8 shadow-2xl border border-outline-variant/10">
+    <div class="modal-content bg-white rounded-[2rem] w-full max-w-3xl p-8 shadow-2xl border border-outline-variant/10" style="max-height:90vh;display:flex;flex-direction:column;overflow:hidden;">
         <div class="flex items-start justify-between gap-4 mb-6">
             <div class="flex items-start gap-3">
                 <div class="w-11 h-11 bg-primary-fixed text-primary rounded-xl flex items-center justify-center shrink-0">
@@ -366,7 +369,7 @@ render_clinic_command_header(
             <?php endif; ?>
         </a>
 
-        <div class="space-y-3 max-h-[55vh] overflow-y-auto pr-1">
+        <div id="apeBatchPickerList" class="space-y-3 overflow-y-auto pr-1" style="min-height:0;flex:1;overscroll-behavior:contain;" tabindex="0" aria-label="Scheduled batches">
             <?php if ($schoolYearBatches === []): ?>
                 <div class="rounded-2xl border border-dashed border-outline-variant p-8 text-center">
                     <span class="material-symbols-outlined text-4xl text-slate-300 mb-2">event_busy</span>
@@ -382,8 +385,9 @@ render_clinic_command_header(
                         $batchQuery['q'] = $search;
                     }
                     $isSelectedBatch = $selectedBatchId === $batchId;
+                    $progress = $batchProgress[$batchId] ?? ['total' => 0, 'completed' => 0];
                     ?>
-                    <a href="?<?= e(http_build_query($batchQuery)) ?>" class="flex items-center justify-between gap-4 rounded-2xl border <?= $isSelectedBatch ? 'border-primary bg-primary-fixed' : 'border-outline-variant bg-white' ?> p-4 text-decoration-none hover:border-primary hover:bg-primary-fixed transition-colors">
+                    <a data-batch-picker-card data-selected="<?= $isSelectedBatch ? 'true' : 'false' ?>" href="?<?= e(http_build_query($batchQuery)) ?>" class="flex items-center justify-between gap-4 rounded-2xl border <?= $isSelectedBatch ? 'border-primary bg-primary-fixed' : 'border-outline-variant bg-white' ?> p-4 text-decoration-none hover:border-primary hover:bg-primary-fixed transition-colors">
                         <div class="min-w-0">
                             <div class="flex flex-wrap items-center gap-2 mb-1">
                                 <strong class="text-sm text-slate-800"><?= e((string) $batch['batch_name']) ?></strong>
@@ -394,6 +398,24 @@ render_clinic_command_header(
                                 &bull; <?= e(date('g:i A', strtotime((string) $batch['start_time']))) ?>&ndash;<?= e(date('g:i A', strtotime((string) $batch['end_time']))) ?>
                                 &bull; <?= (int) $batch['assigned_count'] ?> patient(s)
                             </p>
+                            <div class="flex flex-wrap items-center gap-2 mt-3" aria-label="Batch patient progress">
+                                <?php foreach ([
+                                    'examination' => ['Awaiting examination', 'badge-pending'],
+                                    'incomplete' => ['Incomplete requirements', 'badge-high'],
+                                    'correction' => ['Needs correction', 'badge-high'],
+                                    'digital_submission' => ['Digital submission pending', 'badge-pending'],
+                                    'final_decision' => ['Awaiting final decision', 'badge-in-progress'],
+                                    'follow_up' => ['Follow-up', 'badge-high'],
+                                ] as $progressKey => [$progressLabel, $progressClass]): ?>
+                                    <?php if (($progress[$progressKey] ?? 0) > 0): ?>
+                                        <span class="badge <?= e($progressClass) ?>"><?= (int) $progress[$progressKey] ?> <?= e($progressLabel) ?></span>
+                                    <?php endif; ?>
+                                <?php endforeach; ?>
+                                <span class="badge <?= $progress['total'] > 0 && $progress['completed'] === $progress['total'] ? 'badge-completed' : 'badge-in-progress' ?>"><?= (int) $progress['completed'] ?> / <?= (int) $progress['total'] ?> completed</span>
+                            </div>
+                            <?php if (($progress['incomplete'] ?? 0) > 0 || ($progress['correction'] ?? 0) > 0): ?>
+                                <p class="text-xs font-bold text-slate-500 mt-2 mb-0">Counts are patients. Requirement alerts may overlap with pending stages.</p>
+                            <?php endif; ?>
                         </div>
                         <?php if ($isSelectedBatch): ?>
                             <span class="badge badge-completed shrink-0">Viewing</span>
@@ -404,7 +426,55 @@ render_clinic_command_header(
                 <?php endforeach; ?>
             <?php endif; ?>
         </div>
+        <div class="flex flex-wrap items-center justify-between gap-3 pt-4 mt-4 border-t border-outline-variant" style="flex-shrink:0;">
+            <label class="flex items-center gap-2 text-xs font-bold text-slate-500" for="apeBatchPickerLimit">Batches per page
+                <select id="apeBatchPickerLimit" class="clinic-select" style="width:auto;">
+                    <option value="5">5</option>
+                    <option value="10">10</option>
+                    <option value="20">20</option>
+                </select>
+            </label>
+            <span id="apeBatchPickerRange" class="text-xs font-bold text-slate-500" role="status" aria-live="polite"></span>
+            <nav class="flex items-center gap-2" aria-label="Batch list pages">
+                <button id="apeBatchPickerPrevious" type="button" class="btn btn-secondary btn-sm">Previous</button>
+                <span id="apeBatchPickerPage" class="text-xs font-bold text-slate-500"></span>
+                <button id="apeBatchPickerNext" type="button" class="btn btn-secondary btn-sm">Next</button>
+            </nav>
+        </div>
     </div>
 </div>
+
+<script>
+(() => {
+    const list = document.getElementById('apeBatchPickerList');
+    const cards = Array.from(list.querySelectorAll('[data-batch-picker-card]'));
+    const limit = document.getElementById('apeBatchPickerLimit');
+    const previous = document.getElementById('apeBatchPickerPrevious');
+    const next = document.getElementById('apeBatchPickerNext');
+    const selectedIndex = cards.findIndex(card => card.dataset.selected === 'true');
+    let page = Math.floor(Math.max(0, selectedIndex) / Number(limit.value));
+    function render() {
+        const size = Number(limit.value);
+        const pages = Math.max(1, Math.ceil(cards.length / size));
+        page = Math.max(0, Math.min(page, pages - 1));
+        const start = page * size;
+        cards.forEach((card, index) => {
+            card.style.display = index >= start && index < start + size ? '' : 'none';
+        });
+        previous.disabled = page === 0;
+        next.disabled = page >= pages - 1;
+        limit.disabled = cards.length === 0;
+        document.getElementById('apeBatchPickerPage').textContent = `Page ${page + 1} of ${pages}`;
+        document.getElementById('apeBatchPickerRange').textContent = cards.length
+            ? `${start + 1}–${Math.min(start + size, cards.length)} of ${cards.length} batches`
+            : '0 batches';
+        list.scrollTop = 0;
+    }
+    previous.addEventListener('click', () => { page--; render(); });
+    next.addEventListener('click', () => { page++; render(); });
+    limit.addEventListener('change', () => { page = 0; render(); });
+    render();
+})();
+</script>
 
 <?php render_footer(); ?>

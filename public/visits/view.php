@@ -114,7 +114,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $visitDb->commit();
             if ($newStatus === 'Completed') {
                 $returnTo = 'previous';
-                flash_message('success', 'Treatment saved and visit completed.');
+                flash_message('success', 'Assessment finished and visit completed.');
             } else {
                 flash_message('success', 'Visit addressed in Cliniq_db.');
             }
@@ -206,7 +206,7 @@ if (!$visit) {
 $entries = cliniq_visit_entries($id);
 $entryDispensings = cliniq_inventory_entry_dispensings(array_column($entries, 'id'));
 $medicineInventory = cliniq_inventory_available_medicines();
-$equipmentInventory = [];
+$equipmentInventory = cliniq_inventory_db()->query("SELECT item_id AS id, item_name, quantity, unit FROM inventory_items WHERE item_type = 'Equipment' AND is_active = 1 ORDER BY item_name")->fetchAll();
 
 $fullName = trim($visit['first_name'] . ' ' . $visit['last_name']);
 $status = $visit['status'] ?: 'Unaddressed';
@@ -215,7 +215,6 @@ $showLogbookSheet = !$isProfileMode;
 $canAddressFromLogbook = !$isProfileMode && $status === 'Unaddressed';
 $canTreatFromLogbook = !$isProfileMode && $status === 'Active';
 $isReadOnlyLogbook = $showLogbookSheet && !$canAddressFromLogbook && !$canTreatFromLogbook;
-$showBeginTreatmentModal = $canAddressFromLogbook && ($_GET['begin'] ?? '') === '1';
 $existingActionForIntake = trim((string) $visit['action_taken']);
 if (str_contains(strtolower($existingActionForIntake), 'awaiting')) {
     $existingActionForIntake = '';
@@ -261,6 +260,9 @@ if ($courseDepartment === '' && count($courseParts) >= 3) {
 if ($yearLevel === '' && count($courseParts) >= 2) {
     $yearLevel = $courseParts[1];
 }
+if ($yearLevel === '' && preg_match('/-(1|2|3|4)[A-Za-z]$/', (string) ($visit['course_section'] ?? ''), $yearMatch)) {
+    $yearLevel = $yearMatch[1];
+}
 if ($courseDepartment === '') {
     $courseDepartment = $visit['course_section'] ?: 'Not specified';
 }
@@ -285,6 +287,27 @@ render_header($pageTitle);
 ?>
 
 <?php if ($isProfileMode || $showLogbookSheet): ?>
+<style>
+    .dispensing-entry-grid > div,
+    .dispensing-entry-grid label,
+    .dispensing-entry-grid [data-return-clock] {
+        min-width: 0;
+    }
+
+    @media (min-width: 1280px) {
+        .dispensing-entry-grid {
+            grid-template-columns: minmax(0, 0.55fr) minmax(0, 1.2fr) minmax(90px, 0.38fr) auto;
+        }
+
+        .dispensing-entry-grid.is-equipment {
+            grid-template-columns: minmax(0, 0.55fr) minmax(0, 1.2fr) minmax(90px, 0.38fr) minmax(0, 0.72fr) minmax(0, 1fr) auto;
+        }
+
+        .dispensing-entry-grid.is-equipment [data-equipment-return] .clinic-label {
+            white-space: nowrap;
+        }
+    }
+</style>
 <style>
     .record-sheet-field {
         width: 100%;
@@ -460,7 +483,8 @@ render_header($pageTitle);
         }
     }
 </style>
-<?php endif; ?>
+<?php endif;
+?>
 
 <?php if ($isProfileMode): ?>
 <form id="profileTreatmentForm" method="post" class="treatment-sheet mx-auto space-y-5">
@@ -554,7 +578,8 @@ render_header($pageTitle);
                         <span class="vital-unit"><?= e($unit) ?></span>
                     </div>
                 </div>
-            <?php endforeach; ?>
+            <?php endforeach;
+?>
         </div>
     </section>
 
@@ -570,38 +595,43 @@ render_header($pageTitle);
                 <div class="flex flex-wrap gap-2">
                     <?php foreach ($sheetDispensings as $item): ?>
                         <span class="badge badge-in-progress"><?= e($item['item_type'] . ': ' . $item['item_name'] . ' - Qty: ' . (int) $item['quantity'] . ' ' . $item['unit']) ?></span>
-                    <?php endforeach; ?>
+                    <?php endforeach;
+?>
                 </div>
             </div>
-        <?php endif; ?>
+        <?php endif;
+?>
         <div class="space-y-3" data-dispensing-list>
             <div class="grid grid-cols-1 md:grid-cols-[0.7fr_1.6fr_0.55fr_auto] gap-4 items-end" data-dispensing-row>
                 <div>
                     <label class="clinic-label">Type</label>
-                    <select class="record-sheet-field px-4 js-dispensing-type" name="dispensing_type[]" disabled>
-                        <option value="Medicine">Medicine</option>
+                    <select class="record-sheet-field px-4 js-dispensing-type" name="dispensing_type[]" disabled data-amendable>
+                        <option value="Medicine">Medicine</option><option value="Equipment">Equipment</option>
                     </select>
                 </div>
                 <div>
-                    <label class="clinic-label">Medicine</label>
+                    <label class="clinic-label">Item</label>
                     <select class="record-sheet-field px-4 js-visit-inventory-item" name="dispensed_inventory_item_id[]" disabled data-amendable>
-                        <option value="" data-type="Medicine">No medicine selected</option>
+                        <option value="" data-type="Medicine">No item selected</option>
                         <?php foreach ($medicineInventory as $medicine): ?>
-                            <option value="<?= (int) $medicine['id'] ?>" data-type="Medicine" <?= (int) $medicine['quantity'] <= 0 ? 'disabled' : '' ?>>
-                                <?= e($medicine['item_name']) ?> (<?= (int) $medicine['quantity'] ?> <?= e($medicine['unit']) ?>)
+                            <option value="<?= (int) $medicine['id'] ?>" data-type="Medicine" data-available="<?= (int) $medicine['quantity'] ?>" <?= (int) $medicine['quantity'] <= 0 ? 'disabled' : '' ?>>
+                                <?= e(cliniq_inventory_medicine_option_label($medicine)) ?>
                             </option>
-                        <?php endforeach; ?>
+                        <?php endforeach;
+?>
                         <?php foreach ($equipmentInventory as $equipment): ?>
-                            <option value="<?= (int) $equipment['id'] ?>" data-type="Equipment" <?= (int) $equipment['quantity'] <= 0 ? 'disabled' : '' ?>>
+                            <option value="<?= (int) $equipment['id'] ?>" data-type="Equipment" data-available="<?= (int) $equipment['quantity'] ?>" <?= (int) $equipment['quantity'] <= 0 ? 'disabled' : '' ?>>
                                 <?= e($equipment['item_name']) ?> (<?= (int) $equipment['quantity'] ?> <?= e($equipment['unit']) ?>)
                             </option>
-                        <?php endforeach; ?>
+                        <?php endforeach;
+?>
                     </select>
                 </div>
                 <div>
                     <label class="clinic-label">Quantity</label>
                     <input class="record-sheet-field px-4" name="dispensed_quantity[]" type="number" min="1" placeholder="0" disabled data-amendable>
                 </div>
+                <div class="md:col-span-full" data-equipment-return style="display:none;"><div class="grid grid-cols-1 md:grid-cols-2 gap-4"><label class="clinic-label">Expected Return Date<input class="record-sheet-field px-4" type="date" name="equipment_return_date[]" value="<?= e(date('Y-m-d')) ?>" min="<?= e(date('Y-m-d')) ?>"></label><label class="clinic-label">Expected Return Time (8:00 AM–5:00 PM)<span class="flex gap-2" data-return-clock><input class="record-sheet-field px-4" style="min-width:0;flex:1;" name="equipment_return_time[]" type="text" inputmode="numeric" maxlength="5" data-equipment-return-time placeholder="h:mm" autocomplete="off" aria-label="Return time"><select class="record-sheet-field px-4" style="width:100px;" name="equipment_return_period[]" data-return-period aria-label="AM or PM"><option value="AM">AM</option><option value="PM">PM</option></select></span></label></div></div>
                 <button type="button" class="btn btn-ghost js-remove-dispensing-row amendment-only" title="Remove medicine" aria-label="Remove medicine">
                     <span class="material-symbols-outlined text-[18px]">delete</span>
                 </button>
@@ -624,7 +654,8 @@ render_header($pageTitle);
                 <select class="record-sheet-field px-4 amendable-field" name="status" disabled data-amendable>
                     <?php foreach (visit_statuses() as $option): ?>
                         <option value="<?= e($option) ?>" <?= $status === $option ? 'selected' : '' ?>><?= e($option) ?></option>
-                    <?php endforeach; ?>
+                    <?php endforeach;
+?>
                 </select>
             </div>
         </div>
@@ -647,7 +678,8 @@ render_header($pageTitle);
                 <select class="record-sheet-field px-4 amendable-field" name="referral_type" disabled data-amendable>
                     <?php foreach (visit_referral_options() as $option): ?>
                         <option value="<?= e($option) ?>" <?= $sheetReferral === $option ? 'selected' : '' ?>><?= e($option) ?></option>
-                    <?php endforeach; ?>
+                    <?php endforeach;
+?>
                 </select>
             </div>
             <div class="md:col-span-2">
@@ -682,8 +714,10 @@ render_header($pageTitle);
         <?php if ($entries): ?>
             <div class="divide-y divide-outline-variant/10">
                 <?php foreach ($entries as $entry): ?>
-                    <?php $dispensedItems = $entryDispensings[(int) $entry['id']] ?? []; ?>
-                    <?php $entryAuthor = $entry['created_by_name'] ?: ($isSelfLogbookVisit ? 'Submitted by patient' : 'Clinic Staff'); ?>
+                    <?php $dispensedItems = $entryDispensings[(int) $entry['id']] ?? [];
+?>
+                    <?php $entryAuthor = $entry['created_by_name'] ?: ($isSelfLogbookVisit ? 'Submitted by patient' : 'Clinic Staff');
+?>
                     <?php
                     $entrySymptomsValue = cliniq_visit_extract_patient_concerns((string) ($entry['symptoms_note'] ?? ''));
                     $isPatientSubmittedEntry = $isSelfLogbookVisit
@@ -698,7 +732,8 @@ render_header($pageTitle);
                             </div>
                             <?php if ($entry['referral_type']): ?>
                                 <span class="badge badge-in-progress"><?= e($entry['referral_type']) ?></span>
-                            <?php endif; ?>
+                            <?php endif;
+?>
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <?php foreach ([
@@ -713,21 +748,26 @@ render_header($pageTitle);
                                         <p class="clinic-label"><?= e($label) ?></p>
                                         <p class="text-sm font-bold text-slate-700 leading-relaxed"><?= nl2br(e($field === 'symptoms_note' ? $entrySymptomsValue : $entry[$field])) ?></p>
                                     </div>
-                                <?php endif; ?>
-                            <?php endforeach; ?>
+                                <?php endif;
+?>
+                            <?php endforeach;
+?>
                             <?php if ($dispensedItems): ?>
                                 <div>
                                     <p class="clinic-label mb-1">Dispensed Inventory</p>
                                     <div class="flex flex-wrap gap-2">
                                         <?php foreach ($dispensedItems as $item): ?>
                                             <span class="badge badge-in-progress"><?= e($item['item_type'] . ': ' . $item['item_name'] . ' - Qty: ' . (int) $item['quantity'] . ' ' . $item['unit']) ?></span>
-                                        <?php endforeach; ?>
+                                        <?php endforeach;
+?>
                                     </div>
                                 </div>
-                            <?php endif; ?>
+                            <?php endif;
+?>
                         </div>
                     </article>
-                <?php endforeach; ?>
+                <?php endforeach;
+?>
             </div>
         <?php else: ?>
             <div class="empty-state">
@@ -735,7 +775,8 @@ render_header($pageTitle);
                 <p class="empty-state-title">No appended treatment yet</p>
                 <p class="empty-state-text">Amendments and appended treatment information will appear here.</p>
             </div>
-        <?php endif; ?>
+        <?php endif;
+?>
     </section>
 </form>
 
@@ -752,8 +793,11 @@ render_header($pageTitle);
     }
 </script>
 
-<?php render_footer(); exit; ?>
-<?php endif; ?>
+<?php render_footer();
+exit;
+?>
+<?php endif;
+?>
 
 <?php if ($showLogbookSheet): ?>
 <form id="logbookIntakeForm" method="post" class="treatment-sheet mx-auto space-y-5">
@@ -776,19 +820,15 @@ render_header($pageTitle);
             <span class="badge <?= visit_status_badge_class($status) ?>"><?= e($status) ?></span>
             <?php if ($canAddressFromLogbook): ?>
                 <span class="badge badge-active">Ready to Start</span>
-                <button type="submit" form="beginTreatmentForm" class="sheet-chip-button" data-confirm-submit data-confirm-type="primary" data-confirm-title="Begin treatment?" data-confirm-message="This will mark the visit as Active because the nurse is now attending to the patient." data-confirm-toast="Starting treatment...">
+                <button type="submit" form="beginTreatmentForm" class="sheet-chip-button">
                     <span class="material-symbols-outlined">play_arrow</span>
-                    Begin Treatment
+                    Begin Assessment
                 </button>
                 <button type="submit" form="logbookNoShowForm" class="sheet-chip-button danger" data-confirm-submit data-confirm-type="danger" data-confirm-title="Mark as no visit?" data-confirm-message="This will cancel the unaddressed logbook entry because the patient did not proceed to the nurse station." data-confirm-toast="Marking no visit...">
                     <span class="material-symbols-outlined">cancel</span>
                     No Visit
                 </button>
             <?php elseif ($canTreatFromLogbook): ?>
-                <button type="submit" form="logbookIntakeForm" class="sheet-chip-button" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save and complete treatment?" data-confirm-message="This will save the current vitals, assessment, diagnosis, treatment, referral, and remarks, then mark the visit as completed." data-confirm-toast="Saving treatment...">
-                    <span class="material-symbols-outlined">save</span>
-                    Save Treatment
-                </button>
             <?php else: ?>
                 <a href="index.php" class="sheet-chip-button">
                     <span class="material-symbols-outlined">list</span>
@@ -798,7 +838,8 @@ render_header($pageTitle);
                     <span class="material-symbols-outlined">person</span>
                     Profile
                 </a>
-            <?php endif; ?>
+            <?php endif;
+?>
         </div>
     </section>
 
@@ -844,13 +885,48 @@ render_header($pageTitle);
     </div>
 
     <section class="clinic-card p-6">
-        <div class="flex items-center justify-between gap-3 mb-6">
+        <h2 class="font-headline text-lg font-extrabold text-[#1c2a59] flex items-center gap-2 mb-5">
+            <span class="material-symbols-outlined text-primary text-[19px]">medical_information</span>
+            Medical Record
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+                <label class="clinic-label">Nurse Symptoms / Assessment</label>
+                <textarea class="record-sheet-field p-4" name="symptoms" placeholder="Confirm symptoms and add nurse observations..."<?= $readOnlyAttr ?>><?= e($logbookSymptomsValue) ?></textarea>
+            </div>
+            <div>
+                <label class="clinic-label">Diagnosis</label>
+                <textarea class="record-sheet-field p-4" name="diagnosis" placeholder="Clinical impression or diagnosis..."<?= $readOnlyAttr ?>><?= e($logbookDiagnosisValue) ?></textarea>
+            </div>
+            <div>
+                <label class="clinic-label">Management / Treatment</label>
+                <textarea class="record-sheet-field p-4" name="action_taken" placeholder="Treatment given, medication, monitoring, advice..."<?= $readOnlyAttr ?>><?= e($logbookTreatmentValue) ?></textarea>
+            </div>
+            <div>
+                <label class="clinic-label">Referral</label>
+                <select class="record-sheet-field px-4" name="referral_type"<?= $disabledAttr ?>>
+                    <?php foreach (visit_referral_options() as $option): ?>
+                        <option value="<?= e($option) ?>" <?= $logbookReferralValue === $option ? 'selected' : '' ?>><?= e($option) ?></option>
+                    <?php endforeach;
+?>
+                </select>
+            </div>
+            <div class="md:col-span-2">
+                <label class="clinic-label">Remarks</label>
+                <textarea class="record-sheet-field p-4" name="remarks" rows="4" placeholder="General remarks or follow-up instruction..."<?= $readOnlyAttr ?>><?= e($logbookRemarksValue) ?></textarea>
+            </div>
+        </div>
+        </section>
+
+    <details class="clinic-card overflow-hidden" data-collapsible-section>
+<summary class="flex items-center justify-between gap-3 p-6 cursor-pointer select-none" style="list-style:none">
             <h2 class="font-headline text-xl font-extrabold text-[#1c2a59] flex items-center gap-3 m-0">
                 <span class="material-symbols-outlined">monitor_heart</span>
                 Vitals & Measurements
             </h2>
             <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nurse Input</span>
-        </div>
+        <span class="material-symbols-outlined text-slate-500" data-collapse-icon>expand_more</span></summary>
+<div class="px-6 pb-6">
         <div class="vitals-grid">
             <div class="vital-tile">
                 <div class="vital-label"><span class="material-symbols-outlined">favorite</span>BP</div>
@@ -885,16 +961,16 @@ render_header($pageTitle);
                         <span class="vital-unit"><?= e($unit) ?></span>
                     </div>
                 </div>
-            <?php endforeach; ?>
+            <?php endforeach;
+?>
         </div>
-    </section>
+    </div></details>
 
-    <section class="clinic-card p-6">
-        <h2 class="font-headline text-lg font-extrabold text-[#1c2a59] flex items-center gap-2 mb-5">
+    <details class="clinic-card overflow-hidden" data-collapsible-section><summary class="flex items-center justify-between gap-3 p-6 cursor-pointer select-none" style="list-style:none"><h2 class="font-headline text-lg font-extrabold text-[#1c2a59] flex items-center gap-2 m-0">
             <span class="material-symbols-outlined text-primary text-[19px]">inventory_2</span>
             Inventory & Dispensing
-        </h2>
-        <p class="settings-help mb-4">Medicines saved with treatment are deducted from Cliniq_db inventory.</p>
+        </h2><span class="material-symbols-outlined text-slate-500" data-collapse-icon>expand_more</span></summary><div class="px-6 pb-6">
+        <p class="settings-help mb-4">Medicines and equipment are saved with the treatment entry. Equipment loans require an expected return date and time.</p>
         <?php if ($isReadOnlyLogbook): ?>
             <?php if ($sheetDispensings): ?>
                 <div class="rounded-xl border border-slate-100 bg-slate-50 p-4">
@@ -902,42 +978,61 @@ render_header($pageTitle);
                     <div class="flex flex-wrap gap-2">
                         <?php foreach ($sheetDispensings as $item): ?>
                             <span class="badge badge-in-progress"><?= e($item['item_type'] . ': ' . $item['item_name'] . ' - Qty: ' . (int) $item['quantity'] . ' ' . $item['unit']) ?></span>
-                        <?php endforeach; ?>
+                        <?php endforeach;
+?>
                     </div>
                 </div>
             <?php else: ?>
                 <p class="settings-help mb-0">No inventory was dispensed for this treatment entry.</p>
-            <?php endif; ?>
+            <?php endif;
+?>
         <?php else: ?>
             <div class="space-y-3" data-dispensing-list>
-                <div class="grid grid-cols-1 md:grid-cols-[0.7fr_1.6fr_0.55fr_auto] gap-4 items-end" data-dispensing-row>
+                <div class="dispensing-entry-grid grid grid-cols-1 md:grid-cols-[0.7fr_1.6fr_0.55fr_auto] gap-4 items-end" data-dispensing-row>
                     <div>
                         <label class="clinic-label">Type</label>
-                        <select class="record-sheet-field px-4 js-dispensing-type" name="dispensing_type[]" disabled>
-                            <option value="Medicine">Medicine</option>
+                        <select class="record-sheet-field px-4 js-dispensing-type" name="dispensing_type[]">
+                            <option value="Medicine">Medicine</option><option value="Equipment">Equipment</option>
                         </select>
                     </div>
                     <div>
-                        <label class="clinic-label">Medicine</label>
+                        <label class="clinic-label">Item</label>
                         <select class="record-sheet-field px-4 js-visit-inventory-item" name="dispensed_inventory_item_id[]">
-                            <option value="" data-type="Medicine">No medicine selected</option>
+                            <option value="" data-type="Medicine">No item selected</option>
                             <?php foreach ($medicineInventory as $medicine): ?>
-                                <option value="<?= (int) $medicine['id'] ?>" data-type="Medicine" <?= (int) $medicine['quantity'] <= 0 ? 'disabled' : '' ?>>
-                                    <?= e($medicine['item_name']) ?> (<?= (int) $medicine['quantity'] ?> <?= e($medicine['unit']) ?>)
+                                <option value="<?= (int) $medicine['id'] ?>" data-type="Medicine" data-available="<?= (int) $medicine['quantity'] ?>" <?= (int) $medicine['quantity'] <= 0 ? 'disabled' : '' ?>>
+                                    <?= e(cliniq_inventory_medicine_option_label($medicine)) ?>
                                 </option>
-                            <?php endforeach; ?>
+                            <?php endforeach;
+?>
                             <?php foreach ($equipmentInventory as $equipment): ?>
-                                <option value="<?= (int) $equipment['id'] ?>" data-type="Equipment" <?= (int) $equipment['quantity'] <= 0 ? 'disabled' : '' ?>>
+                                <option value="<?= (int) $equipment['id'] ?>" data-type="Equipment" data-available="<?= (int) $equipment['quantity'] ?>" <?= (int) $equipment['quantity'] <= 0 ? 'disabled' : '' ?>>
                                     <?= e($equipment['item_name']) ?> (<?= (int) $equipment['quantity'] ?> <?= e($equipment['unit']) ?>)
                                 </option>
-                            <?php endforeach; ?>
+                            <?php endforeach;
+?>
                         </select>
                     </div>
                     <div>
                         <label class="clinic-label">Quantity</label>
                         <input class="record-sheet-field px-4" name="dispensed_quantity[]" type="number" min="1" placeholder="0">
                     </div>
-                    <button type="button" class="btn btn-ghost js-remove-dispensing-row" title="Remove medicine" aria-label="Remove medicine">
+                    <div class="md:col-span-full xl:contents" data-equipment-return style="display:none;">
+                    <div class="grid grid-cols-1 md:grid-cols-2 xl:contents gap-4">
+                        <div>
+                            <label class="clinic-label">Expected Return Date</label>
+                            <input class="record-sheet-field px-4" type="date" name="equipment_return_date[]" value="<?= e(date('Y-m-d')) ?>" min="<?= e(date('Y-m-d')) ?>">
+                        </div>
+                        <div>
+                            <label class="clinic-label">Expected Return Time</label>
+                            <span class="flex gap-2" data-return-clock title="Return time must be between 8:00 AM and 5:00 PM">
+                                <input class="record-sheet-field px-4" style="min-width:0;flex:1;" name="equipment_return_time[]" type="text" inputmode="numeric" maxlength="5" data-equipment-return-time placeholder="h:mm" autocomplete="off" aria-label="Return time">
+                                <select class="record-sheet-field px-4" style="width:86px;" name="equipment_return_period[]" data-return-period aria-label="AM or PM"><option value="AM">AM</option><option value="PM">PM</option></select>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-ghost js-remove-dispensing-row" title="Remove medicine" aria-label="Remove medicine">
                         <span class="material-symbols-outlined text-[18px]">delete</span>
                     </button>
                 </div>
@@ -946,51 +1041,20 @@ render_header($pageTitle);
                 <span class="material-symbols-outlined text-[18px]">add</span>
                 Add Item
             </button>
-            <p class="settings-help mt-3 mb-0">Equipment borrowing is recorded separately in Inventory &amp; Tracking.</p>
-        <?php endif; ?>
-    </section>
+            <p class="settings-help mt-3 mb-0">Equipment is loaned to this patient when you save. Enter its expected return date and time;
+process returns in Inventory &amp;
+Tracking.</p>
+        <?php endif;
+?>
+    </div></details>
 
-    <section class="clinic-card p-6">
-        <h2 class="font-headline text-lg font-extrabold text-[#1c2a59] flex items-center gap-2 mb-5">
-            <span class="material-symbols-outlined text-primary text-[19px]">medical_information</span>
-            Medical Record
-        </h2>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-                <label class="clinic-label">Nurse Symptoms / Assessment</label>
-                <textarea class="record-sheet-field p-4" name="symptoms" placeholder="Confirm symptoms and add nurse observations..."<?= $readOnlyAttr ?>><?= e($logbookSymptomsValue) ?></textarea>
-            </div>
-            <div>
-                <label class="clinic-label">Diagnosis</label>
-                <textarea class="record-sheet-field p-4" name="diagnosis" placeholder="Clinical impression or diagnosis..."<?= $readOnlyAttr ?>><?= e($logbookDiagnosisValue) ?></textarea>
-            </div>
-            <div>
-                <label class="clinic-label">Management / Treatment</label>
-                <textarea class="record-sheet-field p-4" name="action_taken" placeholder="Treatment given, medication, monitoring, advice..."<?= $readOnlyAttr ?>><?= e($logbookTreatmentValue) ?></textarea>
-            </div>
-            <div>
-                <label class="clinic-label">Referral</label>
-                <select class="record-sheet-field px-4" name="referral_type"<?= $disabledAttr ?>>
-                    <?php foreach (visit_referral_options() as $option): ?>
-                        <option value="<?= e($option) ?>" <?= $logbookReferralValue === $option ? 'selected' : '' ?>><?= e($option) ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="md:col-span-2">
-                <label class="clinic-label">Remarks</label>
-                <textarea class="record-sheet-field p-4" name="remarks" rows="4" placeholder="General remarks or follow-up instruction..."<?= $readOnlyAttr ?>><?= e($logbookRemarksValue) ?></textarea>
-            </div>
-        </div>
-        <?php if ($canTreatFromLogbook): ?>
+    
+<?php if ($canTreatFromLogbook): ?>
             <div class="mt-6 pt-5 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3">
                 <div class="flex flex-col sm:flex-row gap-3">
-                    <button type="submit" form="cancelTreatmentForm" class="btn btn-danger justify-center" data-confirm-submit data-confirm-type="danger" data-confirm-title="Cancel this treatment?" data-confirm-message="This will cancel the active treatment session and mark the visit as Cancelled." data-confirm-toast="Cancelling treatment...">
-                        <span class="material-symbols-outlined text-[18px]">cancel</span>
-                        Cancel Treatment
-                    </button>
-                    <button class="btn btn-primary justify-center" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save and complete treatment?" data-confirm-message="This will save the current vitals, assessment, diagnosis, treatment, referral, and remarks, then mark the visit as completed." data-confirm-toast="Saving treatment...">
-                        <span class="material-symbols-outlined text-[18px]">save</span>
-                        Save Treatment
+                    <button class="btn btn-primary justify-center" data-confirm-submit data-confirm-type="primary" data-confirm-title="Finish assessment?" data-confirm-message="This will save the current vitals, assessment, diagnosis, treatment, referral, and remarks, issue selected medicines and equipment loans, then mark the visit as completed." data-confirm-toast="Finishing assessment...">
+                        <span class="material-symbols-outlined text-[18px]">task_alt</span>
+                        Finish Assessment
                     </button>
                 </div>
             </div>
@@ -1001,17 +1065,13 @@ render_header($pageTitle);
                     Open Student Profile
                 </a>
             </div>
-        <?php endif; ?>
-    </section>
+        <?php endif;
+?>
+    
 </form>
 
 <form id="beginTreatmentForm" method="post" style="display:none;">
     <input type="hidden" name="mode" value="begin_visit">
-    <input type="hidden" name="from" value="<?= e($entryPoint) ?>">
-</form>
-
-<form id="cancelTreatmentForm" method="post" style="display:none;">
-    <input type="hidden" name="mode" value="cancel_treatment">
     <input type="hidden" name="from" value="<?= e($entryPoint) ?>">
 </form>
 
@@ -1020,32 +1080,6 @@ render_header($pageTitle);
     <input type="hidden" name="from" value="<?= e($entryPoint) ?>">
 </form>
 
-<?php if ($showBeginTreatmentModal): ?>
-<div id="beginTreatmentModal" class="modal-backdrop show" style="display:flex; align-items:center; justify-content:center;">
-    <div class="modal-content bg-white rounded-xl w-full max-w-md p-8 shadow-2xl border border-outline-variant/10">
-        <div class="w-12 h-12 rounded-xl bg-primary-fixed text-primary flex items-center justify-center mb-5">
-            <span class="material-symbols-outlined">medical_services</span>
-        </div>
-        <h2 class="font-headline text-2xl font-extrabold text-[#1c2a59] mb-2">Begin Treatment?</h2>
-        <p class="text-sm font-bold text-slate-500 leading-relaxed mb-6">
-            This will mark the visit as Active now because the nurse is already attending to the patient while filling out the treatment sheet.
-        </p>
-        <div class="flex flex-col sm:flex-row gap-3">
-            <a href="<?= e($visitBackUrl) ?>" class="btn btn-ghost flex-1 text-decoration-none justify-center">Cancel</a>
-            <button type="submit" form="beginTreatmentForm" class="btn btn-primary flex-1" data-confirm-submit data-confirm-type="primary" data-confirm-title="Begin treatment?" data-confirm-message="This will mark the visit as Active because the nurse is now attending to the patient." data-confirm-toast="Starting treatment...">
-                <span class="material-symbols-outlined text-[18px]">play_arrow</span>
-                Begin Treatment
-            </button>
-        </div>
-    </div>
-</div>
-<script>
-    const beginTreatmentModal = document.getElementById('beginTreatmentModal');
-    if (beginTreatmentModal && beginTreatmentModal.parentElement !== document.body) {
-        document.body.appendChild(beginTreatmentModal);
-    }
-</script>
-<?php endif; ?>
 
 <script>
 function syncDispensingRow(row) {
@@ -1054,6 +1088,22 @@ function syncDispensingRow(row) {
     if (!typeSelect || !itemSelect) return;
 
     const activeType = typeSelect.value || 'Medicine';
+    const returnGroup = row.querySelector('[data-equipment-return]');
+    if (returnGroup) {
+        const equipment = activeType === 'Equipment';
+        row.classList.toggle('is-equipment', equipment);
+        returnGroup.style.display = equipment ? '' : 'none';
+        returnGroup.querySelectorAll('input, select').forEach(field => {
+            field.required = equipment;
+            if (equipment && !field.value) {
+                if (field.type === 'date') field.value = field.min;
+                if (field.matches('[data-return-period]')) field.value = 'AM';
+            }
+            if (!equipment) { field.value = '';
+field.setCustomValidity('');
+}
+        });
+    }
     let currentVisible = false;
     Array.from(itemSelect.options).forEach((option) => {
         const optionType = option.dataset.type || 'Medicine';
@@ -1062,6 +1112,18 @@ function syncDispensingRow(row) {
         if (option.selected && visible) currentVisible = true;
     });
     if (!currentVisible) itemSelect.value = '';
+
+    const quantityInput = row.querySelector('input[name="dispensed_quantity[]"]');
+    if (quantityInput) {
+        const selectedOption = itemSelect.selectedOptions?.[0];
+        const available = selectedOption?.value ? Number(selectedOption.dataset.available || 0) : 0;
+        if (selectedOption?.value) quantityInput.max = String(available);
+        else quantityInput.removeAttribute('max');
+        const entered = Number(quantityInput.value || 0);
+        quantityInput.setCustomValidity(selectedOption?.value && entered > available
+            ? 'Quantity dispensed exceeds the available item quantity.'
+            : '');
+    }
 }
 
 function updateDispensingRemoveButtons(list) {
@@ -1077,15 +1139,19 @@ document.querySelectorAll('[data-dispensing-list]').forEach((list) => {
     updateDispensingRemoveButtons(list);
 
     list.addEventListener('change', (event) => {
-        const typeSelect = event.target.closest('.js-dispensing-type');
-        if (typeSelect) syncDispensingRow(typeSelect.closest('[data-dispensing-row]'));
+        const changedField = event.target.closest('.js-dispensing-type, .js-visit-inventory-item');
+        if (changedField) syncDispensingRow(changedField.closest('[data-dispensing-row]'));
+    });
+    list.addEventListener('input', (event) => {
+        const quantityInput = event.target.closest('input[name="dispensed_quantity[]"]');
+        if (quantityInput) syncDispensingRow(quantityInput.closest('[data-dispensing-row]'));
     });
 });
 
 document.addEventListener('click', (event) => {
     const addButton = event.target.closest('.js-add-dispensing-row');
     if (addButton) {
-        const section = addButton.closest('section');
+        const section = addButton.closest('[data-collapsible-section], section');
         const list = section?.querySelector('[data-dispensing-list]');
         const firstRow = list?.querySelector('[data-dispensing-row]');
         if (!list || !firstRow) return;
@@ -1115,5 +1181,8 @@ document.addEventListener('click', (event) => {
 });
 </script>
 
-<?php render_footer(); exit; ?>
-<?php endif; ?>
+<?php render_footer();
+exit;
+?>
+<?php endif;
+?>

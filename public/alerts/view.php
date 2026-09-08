@@ -119,6 +119,12 @@ render_header('Alert Report');
                     <strong><?= e($alert['incident_type']) ?></strong>
                 </div>
             <?php endif; ?>
+            <?php if (!empty($alert['reporter_risk_rating'])): ?>
+                <div class="alert-report-field">
+                    <span class="clinic-label">Reporter Urgency Rating</span>
+                    <strong><?= e($alert['reporter_risk_rating']) ?></strong>
+                </div>
+            <?php endif; ?>
             <?php if ($reportAnswers !== ''): ?>
                 <div class="md:col-span-2">
                     <span class="clinic-label">Reporter Answers</span>

@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en" class="feedback-document"><head>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Give Clinic Feedback | CLINiQ</title>
+    <link rel="stylesheet" href="/cliniq/public/assets/vendor/fonts/inter-manrope.css?v=offline-1">
+    <link rel="stylesheet" href="/cliniq/public/assets/vendor/fonts/material-symbols.css?v=offline-1">
+    <link rel="stylesheet" href="/cliniq/public/assets/css/app.css?v=1788795052">
+    <link rel="stylesheet" href="/cliniq/public/assets/css/feedback.css?v=design-2">
+    <style>
+        :root {
+            --cliniq-primary: #00478d;
+            --cliniq-primary-hover: #003d7c;
+            --cliniq-primary-fixed: #d6e3ff;
+            --cliniq-accent: #e8f1ff;
+            --cliniq-accent-foreground: #003d7c;
+            --cliniq-surface: #f8f9fa;
+            --cliniq-surface-low: #eef4ff;
+            --cliniq-outline: #c2c6d4;
+            --cliniq-focus-rgb: 0, 71, 141;
+            --cliniq-shadow-rgb: 0, 61, 124;
+        }
+    </style>
+</head>
+<body class="feedback-page feedback-public">
+    <header class="cliniq-entry-header" aria-label="CLINiQ navigation">
+        <a href="/cliniq/public/index.php" class="cliniq-entry-back">
+            <span class="material-symbols-outlined">arrow_back</span>
+            Back
+        </a>
+        <span class="cliniq-entry-divider" aria-hidden="true"></span>
+        <a href="/cliniq/public/index.php" class="cliniq-entry-brand" aria-label="Go to CLINiQ access portal">
+            <span class="cliniq-entry-logo">
+                <img src="/cliniq/public/uploads/settings/clinic-logo-20260901064934-ad51692a.png" alt="University Health Services logo">
+            </span>
+            <span class="cliniq-entry-copy">
+                <span class="cliniq-entry-name">CLINiQ</span>
+                <span class="cliniq-entry-subtitle">University Health Services</span>
+            </span>
+        </a>
+    </header>
+    <main class="feedback-shell">
+    <header class="clinic-card feedback-section">
+        <span class="feedback-eyebrow">University Clinic · Student experience</span>
+        <h1>Give Clinic Feedback</h1>
+        <p>Help us improve your campus healthcare. Choose a clinic visit and share your actual experience.</p>
+        <p class="feedback-muted">Your student ID is all you need to find your visit. No login, password, or email required.</p>
+    </header>
+                <section class="clinic-card feedback-section">
+            <h2>Your clinic visit</h2>
+            <div class="feedback-visit"><strong>September 2, 2026 · 8:00 AM</strong><br>Clinic service · <span class="badge badge-active">Active</span></div>
+            <form method="post" class="feedback-actions"><input type="hidden" name="csrf" value="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"><input type="hidden" name="visit_token" value="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"><input type="hidden" name="action" value="choose_again"><button class="btn btn-outline">Choose another visit</button></form>
+            <form method="post"><input type="hidden" name="csrf" value="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"><input type="hidden" name="action" value="reset"><button class="btn btn-outline">Use a different student ID</button></form>
+        </section>
+        <form method="post" id="feedback-survey">
+            <input type="hidden" name="csrf" value="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa">
+            <input type="hidden" name="action" value="submit">
+            <input type="hidden" name="visit_token" value="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb">
+            <section class="clinic-card feedback-section">
+                <h2>Privacy notice and consent</h2>
+                <p>Participation is voluntary and does not affect your access to clinic services. Your ratings, student/visit information, and comments will be linked to this clinic visit and used for service evaluation and improvement.</p>
+                <p>Responses are confidential, but not anonymous. Authorized clinic administrators and doctors can review feedback. Summary reports combine responses from students. Please avoid including medical details or other people's personal information in your comments.</p>
+                <label class="feedback-consent"><input type="checkbox" name="consent" value="1" required ><span>I have read this notice and voluntarily consent to the clinic collecting, storing, and using my response for service quality improvement.</span></label>
+            </section>
+            <section class="clinic-card feedback-section">
+                <h2>Section 1: Student &amp; Visit Information</h2><p class="feedback-muted" id="feedback-details-help">Confirm the information that matches this visit. All fields in this section are required.</p>
+                                    <label class="feedback-field">What service did you receive? (Main reason for your visit)<select class="clinic-select" name="service_type" required aria-describedby="feedback-details-help" data-other="service_other"><option value="">Select an option</option><option >General Medical Consultation (Check-up, illness, sick leave validation)</option><option >Dental Service (Cleaning, filling, extraction, oral check-up etc.)</option><option >Mandatory Health Clearance / Annual Physical Examination (APE)</option><option >Emergency Care / First Aid / Minor Injury Treatment</option><option selected>Other</option></select></label>
+                    <label class="feedback-field" id="service_other">If Other, please specify<input class="clinic-input" name="service_other" maxlength="160" value=""></label>
+                                    <label class="feedback-field">Current Academic Term<select class="clinic-select" name="academic_term" required aria-describedby="feedback-details-help" data-other="term_other"><option value="">Select an option</option><option >1st Semester</option><option >2nd Semester</option><option >Mid-Year Term</option><option >Other</option></select></label>
+                    <label class="feedback-field" id="term_other">If Other, please specify<input class="clinic-input" name="term_other" maxlength="80" value=""></label>
+                                    <label class="feedback-field">Year Level<select class="clinic-select" name="year_level" required aria-describedby="feedback-details-help" data-other="year_other"><option value="">Select an option</option><option >1st Year</option><option selected>2nd Year</option><option >3rd Year</option><option >4th Year</option><option >Other</option></select></label>
+                    <label class="feedback-field" id="year_other">If Other, please specify<input class="clinic-input" name="year_other" maxlength="80" value=""></label>
+                                <label class="feedback-field">College Department / Program<input class="clinic-input" name="program" value="" maxlength="160" required></label>
+            </section>
+            <section class="clinic-card feedback-section"><h2 id="feedback-rating-title">Section 2: Service Evaluation (SERVPERF)</h2><p id="feedback-rating-help">Based on your actual experience during the visit shown above, rate each statement from <strong>1 (Strongly Disagree)</strong> to <strong>7 (Strongly Agree)</strong>. All 22 statements are required.</p></section>
+                            <section class="clinic-card feedback-section"><h3>Tangibles</h3>
+                                            <fieldset class="feedback-question" aria-describedby="feedback-rating-help"><legend>T1. The campus clinic has modern medical and dental equipment. <span aria-label="required">*</span></legend>
+                            <div class="feedback-scale">                                <label class="feedback-rating"><span>1</span><input type="radio" name="ratings[T1]" value="1" aria-label="1 of 7 — Strongly Disagree" required ></label>
+                                                            <label class="feedback-rating"><span>2</span><input type="radio" name="ratings[T1]" value="2" aria-label="2 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>3</span><input type="radio" name="ratings[T1]" value="3" aria-label="3 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>4</span><input type="radio" name="ratings[T1]" value="4" aria-label="4 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>5</span><input type="radio" name="ratings[T1]" value="5" aria-label="5 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>6</span><input type="radio" name="ratings[T1]" value="6" aria-label="6 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>7</span><input type="radio" name="ratings[T1]" value="7" aria-label="7 of 7 — Strongly Agree" required ></label>
+                            </div><div class="feedback-scale-labels" aria-hidden="true"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+                        </fieldset>
+                                            <fieldset class="feedback-question" aria-describedby="feedback-rating-help"><legend>T2. The clinic&#039;s physical facilities (waiting rooms, treatment areas) are clean and comfortable. <span aria-label="required">*</span></legend>
+                            <div class="feedback-scale">                                <label class="feedback-rating"><span>1</span><input type="radio" name="ratings[T2]" value="1" aria-label="1 of 7 — Strongly Disagree" required ></label>
+                                                            <label class="feedback-rating"><span>2</span><input type="radio" name="ratings[T2]" value="2" aria-label="2 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>3</span><input type="radio" name="ratings[T2]" value="3" aria-label="3 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>4</span><input type="radio" name="ratings[T2]" value="4" aria-label="4 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>5</span><input type="radio" name="ratings[T2]" value="5" aria-label="5 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>6</span><input type="radio" name="ratings[T2]" value="6" aria-label="6 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>7</span><input type="radio" name="ratings[T2]" value="7" aria-label="7 of 7 — Strongly Agree" required ></label>
+                            </div><div class="feedback-scale-labels" aria-hidden="true"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+                        </fieldset>
+                                            <fieldset class="feedback-question" aria-describedby="feedback-rating-help"><legend>T3. Clinic employees and medical staff look clean, professional, and neat. <span aria-label="required">*</span></legend>
+                            <div class="feedback-scale">                                <label class="feedback-rating"><span>1</span><input type="radio" name="ratings[T3]" value="1" aria-label="1 of 7 — Strongly Disagree" required ></label>
+                                                            <label class="feedback-rating"><span>2</span><input type="radio" name="ratings[T3]" value="2" aria-label="2 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>3</span><input type="radio" name="ratings[T3]" value="3" aria-label="3 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>4</span><input type="radio" name="ratings[T3]" value="4" aria-label="4 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>5</span><input type="radio" name="ratings[T3]" value="5" aria-label="5 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>6</span><input type="radio" name="ratings[T3]" value="6" aria-label="6 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>7</span><input type="radio" name="ratings[T3]" value="7" aria-label="7 of 7 — Strongly Agree" required ></label>
+                            </div><div class="feedback-scale-labels" aria-hidden="true"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+                        </fieldset>
+                                            <fieldset class="feedback-question" aria-describedby="feedback-rating-help"><legend>T4. Digital platforms (online booking, health portals, signage) are easy for students to use. <span aria-label="required">*</span></legend>
+                            <div class="feedback-scale">                                <label class="feedback-rating"><span>1</span><input type="radio" name="ratings[T4]" value="1" aria-label="1 of 7 — Strongly Disagree" required ></label>
+                                                            <label class="feedback-rating"><span>2</span><input type="radio" name="ratings[T4]" value="2" aria-label="2 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>3</span><input type="radio" name="ratings[T4]" value="3" aria-label="3 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>4</span><input type="radio" name="ratings[T4]" value="4" aria-label="4 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>5</span><input type="radio" name="ratings[T4]" value="5" aria-label="5 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>6</span><input type="radio" name="ratings[T4]" value="6" aria-label="6 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>7</span><input type="radio" name="ratings[T4]" value="7" aria-label="7 of 7 — Strongly Agree" required ></label>
+                            </div><div class="feedback-scale-labels" aria-hidden="true"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+                        </fieldset>
+                                    </section>
+                            <section class="clinic-card feedback-section"><h3>Reliability</h3>
+                                            <fieldset class="feedback-question" aria-describedby="feedback-rating-help"><legend>R1. When the clinic promises to provide a service by a certain time, it does so. <span aria-label="required">*</span></legend>
+                            <div class="feedback-scale">                                <label class="feedback-rating"><span>1</span><input type="radio" name="ratings[R1]" value="1" aria-label="1 of 7 — Strongly Disagree" required ></label>
+                                                            <label class="feedback-rating"><span>2</span><input type="radio" name="ratings[R1]" value="2" aria-label="2 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>3</span><input type="radio" name="ratings[R1]" value="3" aria-label="3 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>4</span><input type="radio" name="ratings[R1]" value="4" aria-label="4 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>5</span><input type="radio" name="ratings[R1]" value="5" aria-label="5 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>6</span><input type="radio" name="ratings[R1]" value="6" aria-label="6 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>7</span><input type="radio" name="ratings[R1]" value="7" aria-label="7 of 7 — Strongly Agree" required ></label>
+                            </div><div class="feedback-scale-labels" aria-hidden="true"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+                        </fieldset>
+                                            <fieldset class="feedback-question" aria-describedby="feedback-rating-help"><legend>R2. The clinic staff shows a sincere interest in solving student health problems. <span aria-label="required">*</span></legend>
+                            <div class="feedback-scale">                                <label class="feedback-rating"><span>1</span><input type="radio" name="ratings[R2]" value="1" aria-label="1 of 7 — Strongly Disagree" required ></label>
+                                                            <label class="feedback-rating"><span>2</span><input type="radio" name="ratings[R2]" value="2" aria-label="2 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>3</span><input type="radio" name="ratings[R2]" value="3" aria-label="3 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>4</span><input type="radio" name="ratings[R2]" value="4" aria-label="4 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>5</span><input type="radio" name="ratings[R2]" value="5" aria-label="5 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>6</span><input type="radio" name="ratings[R2]" value="6" aria-label="6 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>7</span><input type="radio" name="ratings[R2]" value="7" aria-label="7 of 7 — Strongly Agree" required ></label>
+                            </div><div class="feedback-scale-labels" aria-hidden="true"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+                        </fieldset>
+                                            <fieldset class="feedback-question" aria-describedby="feedback-rating-help"><legend>R3. The clinic performs its medical and dental services correctly the first time. <span aria-label="required">*</span></legend>
+                            <div class="feedback-scale">                                <label class="feedback-rating"><span>1</span><input type="radio" name="ratings[R3]" value="1" aria-label="1 of 7 — Strongly Disagree" required ></label>
+                                                            <label class="feedback-rating"><span>2</span><input type="radio" name="ratings[R3]" value="2" aria-label="2 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>3</span><input type="radio" name="ratings[R3]" value="3" aria-label="3 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>4</span><input type="radio" name="ratings[R3]" value="4" aria-label="4 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>5</span><input type="radio" name="ratings[R3]" value="5" aria-label="5 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>6</span><input type="radio" name="ratings[R3]" value="6" aria-label="6 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>7</span><input type="radio" name="ratings[R3]" value="7" aria-label="7 of 7 — Strongly Agree" required ></label>
+                            </div><div class="feedback-scale-labels" aria-hidden="true"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+                        </fieldset>
+                                            <fieldset class="feedback-question" aria-describedby="feedback-rating-help"><legend>R4. The clinic provides its services at the exact times it promises to students. <span aria-label="required">*</span></legend>
+                            <div class="feedback-scale">                                <label class="feedback-rating"><span>1</span><input type="radio" name="ratings[R4]" value="1" aria-label="1 of 7 — Strongly Disagree" required ></label>
+                                                            <label class="feedback-rating"><span>2</span><input type="radio" name="ratings[R4]" value="2" aria-label="2 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>3</span><input type="radio" name="ratings[R4]" value="3" aria-label="3 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>4</span><input type="radio" name="ratings[R4]" value="4" aria-label="4 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>5</span><input type="radio" name="ratings[R4]" value="5" aria-label="5 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>6</span><input type="radio" name="ratings[R4]" value="6" aria-label="6 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>7</span><input type="radio" name="ratings[R4]" value="7" aria-label="7 of 7 — Strongly Agree" required ></label>
+                            </div><div class="feedback-scale-labels" aria-hidden="true"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+                        </fieldset>
+                                            <fieldset class="feedback-question" aria-describedby="feedback-rating-help"><legend>R5. The clinic maintains error-free medical charts, prescriptions, and dental records. <span aria-label="required">*</span></legend>
+                            <div class="feedback-scale">                                <label class="feedback-rating"><span>1</span><input type="radio" name="ratings[R5]" value="1" aria-label="1 of 7 — Strongly Disagree" required ></label>
+                                                            <label class="feedback-rating"><span>2</span><input type="radio" name="ratings[R5]" value="2" aria-label="2 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>3</span><input type="radio" name="ratings[R5]" value="3" aria-label="3 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>4</span><input type="radio" name="ratings[R5]" value="4" aria-label="4 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>5</span><input type="radio" name="ratings[R5]" value="5" aria-label="5 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>6</span><input type="radio" name="ratings[R5]" value="6" aria-label="6 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>7</span><input type="radio" name="ratings[R5]" value="7" aria-label="7 of 7 — Strongly Agree" required ></label>
+                            </div><div class="feedback-scale-labels" aria-hidden="true"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+                        </fieldset>
+                                    </section>
+                            <section class="clinic-card feedback-section"><h3>Responsiveness</h3>
+                                            <fieldset class="feedback-question" aria-describedby="feedback-rating-help"><legend>RES1. Clinic staff tell students exactly when medical or dental services will be performed. <span aria-label="required">*</span></legend>
+                            <div class="feedback-scale">                                <label class="feedback-rating"><span>1</span><input type="radio" name="ratings[RES1]" value="1" aria-label="1 of 7 — Strongly Disagree" required ></label>
+                                                            <label class="feedback-rating"><span>2</span><input type="radio" name="ratings[RES1]" value="2" aria-label="2 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>3</span><input type="radio" name="ratings[RES1]" value="3" aria-label="3 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>4</span><input type="radio" name="ratings[RES1]" value="4" aria-label="4 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>5</span><input type="radio" name="ratings[RES1]" value="5" aria-label="5 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>6</span><input type="radio" name="ratings[RES1]" value="6" aria-label="6 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>7</span><input type="radio" name="ratings[RES1]" value="7" aria-label="7 of 7 — Strongly Agree" required ></label>
+                            </div><div class="feedback-scale-labels" aria-hidden="true"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+                        </fieldset>
+                                            <fieldset class="feedback-question" aria-describedby="feedback-rating-help"><legend>RES2. Clinic employees give students prompt and speedy medical or dental care. <span aria-label="required">*</span></legend>
+                            <div class="feedback-scale">                                <label class="feedback-rating"><span>1</span><input type="radio" name="ratings[RES2]" value="1" aria-label="1 of 7 — Strongly Disagree" required ></label>
+                                                            <label class="feedback-rating"><span>2</span><input type="radio" name="ratings[RES2]" value="2" aria-label="2 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>3</span><input type="radio" name="ratings[RES2]" value="3" aria-label="3 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>4</span><input type="radio" name="ratings[RES2]" value="4" aria-label="4 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>5</span><input type="radio" name="ratings[RES2]" value="5" aria-label="5 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>6</span><input type="radio" name="ratings[RES2]" value="6" aria-label="6 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>7</span><input type="radio" name="ratings[RES2]" value="7" aria-label="7 of 7 — Strongly Agree" required ></label>
+                            </div><div class="feedback-scale-labels" aria-hidden="true"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+                        </fieldset>
+                                            <fieldset class="feedback-question" aria-describedby="feedback-rating-help"><legend>RES3. Medical and dental staff are always willing and ready to help students. <span aria-label="required">*</span></legend>
+                            <div class="feedback-scale">                                <label class="feedback-rating"><span>1</span><input type="radio" name="ratings[RES3]" value="1" aria-label="1 of 7 — Strongly Disagree" required ></label>
+                                                            <label class="feedback-rating"><span>2</span><input type="radio" name="ratings[RES3]" value="2" aria-label="2 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>3</span><input type="radio" name="ratings[RES3]" value="3" aria-label="3 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>4</span><input type="radio" name="ratings[RES3]" value="4" aria-label="4 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>5</span><input type="radio" name="ratings[RES3]" value="5" aria-label="5 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>6</span><input type="radio" name="ratings[RES3]" value="6" aria-label="6 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>7</span><input type="radio" name="ratings[RES3]" value="7" aria-label="7 of 7 — Strongly Agree" required ></label>
+                            </div><div class="feedback-scale-labels" aria-hidden="true"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+                        </fieldset>
+                                            <fieldset class="feedback-question" aria-describedby="feedback-rating-help"><legend>RES4. Clinic employees are never too busy to respond to student requests or questions. <span aria-label="required">*</span></legend>
+                            <div class="feedback-scale">                                <label class="feedback-rating"><span>1</span><input type="radio" name="ratings[RES4]" value="1" aria-label="1 of 7 — Strongly Disagree" required ></label>
+                                                            <label class="feedback-rating"><span>2</span><input type="radio" name="ratings[RES4]" value="2" aria-label="2 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>3</span><input type="radio" name="ratings[RES4]" value="3" aria-label="3 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>4</span><input type="radio" name="ratings[RES4]" value="4" aria-label="4 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>5</span><input type="radio" name="ratings[RES4]" value="5" aria-label="5 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>6</span><input type="radio" name="ratings[RES4]" value="6" aria-label="6 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>7</span><input type="radio" name="ratings[RES4]" value="7" aria-label="7 of 7 — Strongly Agree" required ></label>
+                            </div><div class="feedback-scale-labels" aria-hidden="true"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+                        </fieldset>
+                                    </section>
+                            <section class="clinic-card feedback-section"><h3>Assurance</h3>
+                                            <fieldset class="feedback-question" aria-describedby="feedback-rating-help"><legend>A1. The behavior of clinic employees instills confidence and trust in students. <span aria-label="required">*</span></legend>
+                            <div class="feedback-scale">                                <label class="feedback-rating"><span>1</span><input type="radio" name="ratings[A1]" value="1" aria-label="1 of 7 — Strongly Disagree" required ></label>
+                                                            <label class="feedback-rating"><span>2</span><input type="radio" name="ratings[A1]" value="2" aria-label="2 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>3</span><input type="radio" name="ratings[A1]" value="3" aria-label="3 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>4</span><input type="radio" name="ratings[A1]" value="4" aria-label="4 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>5</span><input type="radio" name="ratings[A1]" value="5" aria-label="5 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>6</span><input type="radio" name="ratings[A1]" value="6" aria-label="6 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>7</span><input type="radio" name="ratings[A1]" value="7" aria-label="7 of 7 — Strongly Agree" required ></label>
+                            </div><div class="feedback-scale-labels" aria-hidden="true"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+                        </fieldset>
+                                            <fieldset class="feedback-question" aria-describedby="feedback-rating-help"><legend>A2. Students feel completely safe and secure during their medical and dental treatments. <span aria-label="required">*</span></legend>
+                            <div class="feedback-scale">                                <label class="feedback-rating"><span>1</span><input type="radio" name="ratings[A2]" value="1" aria-label="1 of 7 — Strongly Disagree" required ></label>
+                                                            <label class="feedback-rating"><span>2</span><input type="radio" name="ratings[A2]" value="2" aria-label="2 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>3</span><input type="radio" name="ratings[A2]" value="3" aria-label="3 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>4</span><input type="radio" name="ratings[A2]" value="4" aria-label="4 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>5</span><input type="radio" name="ratings[A2]" value="5" aria-label="5 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>6</span><input type="radio" name="ratings[A2]" value="6" aria-label="6 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>7</span><input type="radio" name="ratings[A2]" value="7" aria-label="7 of 7 — Strongly Agree" required ></label>
+                            </div><div class="feedback-scale-labels" aria-hidden="true"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+                        </fieldset>
+                                            <fieldset class="feedback-question" aria-describedby="feedback-rating-help"><legend>A3. Clinic employees and doctors are consistently polite and courteous to students. <span aria-label="required">*</span></legend>
+                            <div class="feedback-scale">                                <label class="feedback-rating"><span>1</span><input type="radio" name="ratings[A3]" value="1" aria-label="1 of 7 — Strongly Disagree" required ></label>
+                                                            <label class="feedback-rating"><span>2</span><input type="radio" name="ratings[A3]" value="2" aria-label="2 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>3</span><input type="radio" name="ratings[A3]" value="3" aria-label="3 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>4</span><input type="radio" name="ratings[A3]" value="4" aria-label="4 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>5</span><input type="radio" name="ratings[A3]" value="5" aria-label="5 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>6</span><input type="radio" name="ratings[A3]" value="6" aria-label="6 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>7</span><input type="radio" name="ratings[A3]" value="7" aria-label="7 of 7 — Strongly Agree" required ></label>
+                            </div><div class="feedback-scale-labels" aria-hidden="true"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+                        </fieldset>
+                                            <fieldset class="feedback-question" aria-describedby="feedback-rating-help"><legend>A4. Medical and dental staff have the adequate knowledge to answer student questions. <span aria-label="required">*</span></legend>
+                            <div class="feedback-scale">                                <label class="feedback-rating"><span>1</span><input type="radio" name="ratings[A4]" value="1" aria-label="1 of 7 — Strongly Disagree" required ></label>
+                                                            <label class="feedback-rating"><span>2</span><input type="radio" name="ratings[A4]" value="2" aria-label="2 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>3</span><input type="radio" name="ratings[A4]" value="3" aria-label="3 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>4</span><input type="radio" name="ratings[A4]" value="4" aria-label="4 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>5</span><input type="radio" name="ratings[A4]" value="5" aria-label="5 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>6</span><input type="radio" name="ratings[A4]" value="6" aria-label="6 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>7</span><input type="radio" name="ratings[A4]" value="7" aria-label="7 of 7 — Strongly Agree" required ></label>
+                            </div><div class="feedback-scale-labels" aria-hidden="true"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+                        </fieldset>
+                                    </section>
+                            <section class="clinic-card feedback-section"><h3>Empathy</h3>
+                                            <fieldset class="feedback-question" aria-describedby="feedback-rating-help"><legend>E1. The clinic gives students individual, one-on-one attention during consultations. <span aria-label="required">*</span></legend>
+                            <div class="feedback-scale">                                <label class="feedback-rating"><span>1</span><input type="radio" name="ratings[E1]" value="1" aria-label="1 of 7 — Strongly Disagree" required ></label>
+                                                            <label class="feedback-rating"><span>2</span><input type="radio" name="ratings[E1]" value="2" aria-label="2 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>3</span><input type="radio" name="ratings[E1]" value="3" aria-label="3 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>4</span><input type="radio" name="ratings[E1]" value="4" aria-label="4 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>5</span><input type="radio" name="ratings[E1]" value="5" aria-label="5 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>6</span><input type="radio" name="ratings[E1]" value="6" aria-label="6 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>7</span><input type="radio" name="ratings[E1]" value="7" aria-label="7 of 7 — Strongly Agree" required ></label>
+                            </div><div class="feedback-scale-labels" aria-hidden="true"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+                        </fieldset>
+                                            <fieldset class="feedback-question" aria-describedby="feedback-rating-help"><legend>E2. The clinic operates during hours that are highly convenient for all students. <span aria-label="required">*</span></legend>
+                            <div class="feedback-scale">                                <label class="feedback-rating"><span>1</span><input type="radio" name="ratings[E2]" value="1" aria-label="1 of 7 — Strongly Disagree" required ></label>
+                                                            <label class="feedback-rating"><span>2</span><input type="radio" name="ratings[E2]" value="2" aria-label="2 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>3</span><input type="radio" name="ratings[E2]" value="3" aria-label="3 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>4</span><input type="radio" name="ratings[E2]" value="4" aria-label="4 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>5</span><input type="radio" name="ratings[E2]" value="5" aria-label="5 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>6</span><input type="radio" name="ratings[E2]" value="6" aria-label="6 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>7</span><input type="radio" name="ratings[E2]" value="7" aria-label="7 of 7 — Strongly Agree" required ></label>
+                            </div><div class="feedback-scale-labels" aria-hidden="true"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+                        </fieldset>
+                                            <fieldset class="feedback-question" aria-describedby="feedback-rating-help"><legend>E3. Clinic employees give students personal, warm, and caring attention. <span aria-label="required">*</span></legend>
+                            <div class="feedback-scale">                                <label class="feedback-rating"><span>1</span><input type="radio" name="ratings[E3]" value="1" aria-label="1 of 7 — Strongly Disagree" required ></label>
+                                                            <label class="feedback-rating"><span>2</span><input type="radio" name="ratings[E3]" value="2" aria-label="2 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>3</span><input type="radio" name="ratings[E3]" value="3" aria-label="3 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>4</span><input type="radio" name="ratings[E3]" value="4" aria-label="4 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>5</span><input type="radio" name="ratings[E3]" value="5" aria-label="5 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>6</span><input type="radio" name="ratings[E3]" value="6" aria-label="6 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>7</span><input type="radio" name="ratings[E3]" value="7" aria-label="7 of 7 — Strongly Agree" required ></label>
+                            </div><div class="feedback-scale-labels" aria-hidden="true"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+                        </fieldset>
+                                            <fieldset class="feedback-question" aria-describedby="feedback-rating-help"><legend>E4. The clinic staff keeps the best interest of the student at heart. <span aria-label="required">*</span></legend>
+                            <div class="feedback-scale">                                <label class="feedback-rating"><span>1</span><input type="radio" name="ratings[E4]" value="1" aria-label="1 of 7 — Strongly Disagree" required ></label>
+                                                            <label class="feedback-rating"><span>2</span><input type="radio" name="ratings[E4]" value="2" aria-label="2 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>3</span><input type="radio" name="ratings[E4]" value="3" aria-label="3 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>4</span><input type="radio" name="ratings[E4]" value="4" aria-label="4 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>5</span><input type="radio" name="ratings[E4]" value="5" aria-label="5 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>6</span><input type="radio" name="ratings[E4]" value="6" aria-label="6 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>7</span><input type="radio" name="ratings[E4]" value="7" aria-label="7 of 7 — Strongly Agree" required ></label>
+                            </div><div class="feedback-scale-labels" aria-hidden="true"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+                        </fieldset>
+                                            <fieldset class="feedback-question" aria-describedby="feedback-rating-help"><legend>E5. The clinic staff understands the specific health needs and stresses of college students. <span aria-label="required">*</span></legend>
+                            <div class="feedback-scale">                                <label class="feedback-rating"><span>1</span><input type="radio" name="ratings[E5]" value="1" aria-label="1 of 7 — Strongly Disagree" required ></label>
+                                                            <label class="feedback-rating"><span>2</span><input type="radio" name="ratings[E5]" value="2" aria-label="2 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>3</span><input type="radio" name="ratings[E5]" value="3" aria-label="3 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>4</span><input type="radio" name="ratings[E5]" value="4" aria-label="4 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>5</span><input type="radio" name="ratings[E5]" value="5" aria-label="5 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>6</span><input type="radio" name="ratings[E5]" value="6" aria-label="6 of 7" required ></label>
+                                                            <label class="feedback-rating"><span>7</span><input type="radio" name="ratings[E5]" value="7" aria-label="7 of 7 — Strongly Agree" required ></label>
+                            </div><div class="feedback-scale-labels" aria-hidden="true"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+                        </fieldset>
+                                    </section>
+                        <section class="clinic-card feedback-section"><h2>Section 3: Open Feedback</h2>
+                <label class="feedback-field">Is there anything else you would like to share about your experience? <span class="feedback-muted">(Optional, up to 5,000 characters)</span><textarea class="clinic-textarea" name="comments" maxlength="5000" placeholder="Suggestions, compliments, or specific issues encountered"></textarea></label>
+                <p class="feedback-muted" id="feedback-submit-help">Please review your answers. Each visit accepts one response and submitted answers cannot be edited.</p>
+                <button class="btn btn-primary" type="submit" aria-describedby="feedback-submit-help">Submit feedback</button>
+            </section>
+        </form>
+    </main>
+<script>
+document.querySelectorAll('select[data-other]').forEach(select => {
+    const field = document.getElementById(select.dataset.other);
+    const sync = () => { field.hidden = select.value !== 'Other'; field.querySelector('input').required = !field.hidden; };
+    select.addEventListener('change', sync); sync();
+});
+document.getElementById('feedback-survey')?.addEventListener('submit', event => {
+    const button = event.target.querySelector('button[type="submit"]');
+    button.disabled = true; button.setAttribute('aria-busy', 'true'); button.textContent = 'Submitting…';
+});
+window.addEventListener('pageshow', () => {
+    const button = document.querySelector('#feedback-survey button[type="submit"]');
+    if (button) { button.disabled = false; button.removeAttribute('aria-busy'); button.textContent = 'Submit feedback'; }
+});
+document.getElementById('feedback-error')?.focus();
+</script>
+<script>document.addEventListener("submit", e => e.preventDefault(), true);</script></body></html>
