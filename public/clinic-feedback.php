@@ -135,7 +135,7 @@ $theme = active_cliniq_theme();
     <link rel="stylesheet" href="<?= e(app_url('assets/vendor/fonts/inter-manrope.css?v=offline-1')) ?>">
     <link rel="stylesheet" href="<?= e(app_url('assets/vendor/fonts/material-symbols.css?v=offline-1')) ?>">
     <link rel="stylesheet" href="<?= e(app_url('assets/css/app.css?v=' . filemtime(__DIR__ . '/assets/css/app.css'))) ?>">
-    <link rel="stylesheet" href="<?= e(app_url('assets/css/feedback.css?v=design-2')) ?>">
+    <link rel="stylesheet" href="<?= e(app_url('assets/css/feedback.css?v=design-3')) ?>">
     <style>
         :root {
             --cliniq-primary: <?= e($theme['primary']) ?>;

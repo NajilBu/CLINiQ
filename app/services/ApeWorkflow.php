@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/SystemSettings.php';
+require_once __DIR__ . '/AuditLog.php';
 
 function ape_workflow_steps(): array
 {
@@ -910,6 +911,7 @@ function ape_log_activity(int $apeRecordId, ?int $personId, string $actionLabel,
 {
     $stmt = auth_db()->prepare('INSERT INTO ape_activity_logs (ape_id, performed_by_person_id, action, notes) VALUES (?, ?, ?, ?)');
     $stmt->execute([$apeRecordId, $personId ?: null, $actionLabel, $notes]);
+    audit_log_event('ape', $actionLabel, $personId ?: null, 'staff', 'ape_record', $apeRecordId, ['notes' => $notes]);
 }
 
 function ape_document_storage_root(): string

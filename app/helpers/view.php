@@ -94,6 +94,7 @@ function risk_badge_class(string $level): string
         'high' => 'badge-high',
         'moderate' => 'badge-moderate',
         'low' => 'badge-low',
+        'not assessed' => 'badge-pending',
         default => 'badge-pending',
     };
 }
@@ -203,6 +204,7 @@ function render_header(string $title): void
         'Reports' => ['url' => app_url('reports/index.php'), 'match' => '/reports/', 'icon' => 'analytics'],
         'Feedback' => ['url' => app_url('feedback/index.php'), 'match' => '/feedback/', 'icon' => 'rate_review', 'roles' => ['admin', 'doctor']],
         'Settings' => ['url' => app_url('settings/index.php'), 'match' => '/settings/', 'icon' => 'settings'],
+        'Audit Log' => ['url' => app_url('audit/index.php'), 'match' => '/audit/', 'icon' => 'history', 'roles' => ['admin']],
     ];
     if (first_registration_pending('staff')) {
         $nav = [

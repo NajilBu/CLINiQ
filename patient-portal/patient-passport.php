@@ -3,6 +3,7 @@ require_once __DIR__ . '/includes/patient-layout.php';
 require_once __DIR__ . '/../app/services/AlertWorkflow.php';
 require_once __DIR__ . '/../app/services/ApeWorkflow.php';
 require_once __DIR__ . '/../app/helpers/emergency_contact.php';
+require_once __DIR__ . '/../app/services/AuditLog.php';
 
 ensure_alert_workflow_schema();
 ensure_ape_workflow_schema();
@@ -45,7 +46,8 @@ $passport = [
     'bmi'             => $latestBmiRecord['patient_bmi'] ?? null,
     'bmi_recorded_at' => $latestBmiRecord['patient_vitals_confirmed_at'] ?? null,
 ];
-$passportUrl = 'passport-demo.php?token=' . urlencode($passport['token']);
+$passportUrl = '../public/emergency.php?token=' . urlencode($passport['token']);
+$passportPreviewUrl = 'passport-demo.php?token=' . urlencode($passport['token']);
 
 $saved = false;
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -88,6 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $patientId,
         ]);
         $saved = true;
+        audit_log_event('passport', 'passport_profile_updated', $patientId, 'student', 'patient', $patientId, ['fields' => ['blood_type', 'allergies', 'conditions', 'medications', 'instructions', 'emergency_contacts']]);
         $passport['last_updated'] = date('F j, Y');
     } catch (InvalidArgumentException $e) {
         $saved = false;
@@ -110,7 +113,7 @@ render_student_header('Emergency Health Passport', 'passport');
         <p class="student-subtitle">Manage the information shown on your Emergency Health Passport accessed via QR or NFC.</p>
     </div>
     <span class="student-badge passport-badge-emergency">
-        <span class="material-symbols-outlined" style="font-size:14px;">emergency</span>
+        <span class="material-symbols-outlined passport-icon-sm">emergency</span>
         Emergency Access
     </span>
 </section>
@@ -152,29 +155,29 @@ render_student_header('Emergency Health Passport', 'passport');
                     <p class="student-card-copy">Basic identity fields pulled from your student record</p>
                 </div>
                 <span class="student-badge student-badge-info">
-                    <span class="material-symbols-outlined" style="font-size:12px;">lock</span>
+                        <span class="material-symbols-outlined passport-icon-xs">lock</span>
                     Mostly Read-only
                 </span>
             </div>
             <div class="student-card-pad">
-                <div class="student-grid" style="gap:0.75rem;">
-                    <div class="student-span-6 student-field" style="margin-bottom:0;">
+                <div class="student-grid passport-grid-tight">
+                    <div class="student-span-6 student-field passport-field-compact">
                         <label class="student-label">Full Name</label>
                         <div class="passport-readonly-field"><?= student_e($passport['name']) ?></div>
                     </div>
-                    <div class="student-span-6 student-field" style="margin-bottom:0;">
+                    <div class="student-span-6 student-field passport-field-compact">
                         <label class="student-label">ID Number</label>
                         <div class="passport-readonly-field"><?= student_e($passport['student_id']) ?></div>
                     </div>
-                    <div class="student-span-6 student-field" style="margin-bottom:0;">
+                    <div class="student-span-6 student-field passport-field-compact">
                         <label class="student-label">Date of Birth</label>
                         <div class="passport-readonly-field"><?= student_e($passport['dob']) ?></div>
                     </div>
-                    <div class="student-span-6 student-field" style="margin-bottom:0;">
+                    <div class="student-span-6 student-field passport-field-compact">
                         <label class="student-label">Sex</label>
                         <div class="passport-readonly-field"><?= student_e($passport['sex']) ?></div>
                     </div>
-                    <div class="student-span-12 student-field" style="margin-bottom:0;">
+                    <div class="student-span-12 student-field passport-field-compact">
                         <label class="student-label" for="blood_type">Blood Type <span class="passport-editable-tag">Editable</span></label>
                         <select id="blood_type" name="blood_type" class="student-select">
                             <?php
@@ -197,21 +200,21 @@ render_student_header('Emergency Health Passport', 'passport');
                     <p class="student-card-copy">Latest height, weight, and BMI confirmed from your APE record</p>
                 </div>
                 <span class="student-badge student-badge-info">
-                    <span class="material-symbols-outlined" style="font-size:12px;">monitor_heart</span>
+                        <span class="material-symbols-outlined passport-icon-xs">monitor_heart</span>
                     BMI
                 </span>
             </div>
             <div class="student-card-pad">
-                <div class="student-grid" style="gap:0.75rem;">
-                    <div class="student-span-4 student-field" style="margin-bottom:0;">
+                <div class="student-grid passport-grid-tight">
+                    <div class="student-span-4 student-field passport-field-compact">
                         <label class="student-label">Height</label>
                         <div class="passport-readonly-field"><?= $passport['height_cm'] !== null ? student_e(number_format((float) $passport['height_cm'], 2)) . ' cm' : 'Not recorded from APE yet' ?></div>
                     </div>
-                    <div class="student-span-4 student-field" style="margin-bottom:0;">
+                    <div class="student-span-4 student-field passport-field-compact">
                         <label class="student-label">Weight</label>
                         <div class="passport-readonly-field"><?= $passport['weight_kg'] !== null ? student_e(number_format((float) $passport['weight_kg'], 2)) . ' kg' : 'Not recorded from APE yet' ?></div>
                     </div>
-                    <div class="student-span-4 student-field" style="margin-bottom:0;">
+                    <div class="student-span-4 student-field passport-field-compact">
                         <label class="student-label">BMI</label>
                         <div class="passport-readonly-field"><?= $passport['bmi'] !== null ? student_e(number_format((float) $passport['bmi'], 2)) : 'Not recorded from APE yet' ?></div>
                     </div>
@@ -227,7 +230,7 @@ render_student_header('Emergency Health Passport', 'passport');
                     <p class="student-card-copy">Shown to responders when your QR or NFC is scanned</p>
                 </div>
                 <span class="student-badge passport-badge-emergency-soft">
-                    <span class="material-symbols-outlined" style="font-size:12px;">edit</span>
+                        <span class="material-symbols-outlined passport-icon-xs">edit</span>
                     Editable
                 </span>
             </div>
@@ -257,9 +260,8 @@ render_student_header('Emergency Health Passport', 'passport');
                     <textarea
                         id="conditions"
                         name="conditions"
-                        class="student-textarea"
+                        class="student-textarea passport-textarea-md"
                         placeholder="e.g. Asthma (mild), Iron-deficiency anaemia"
-                        style="min-height:5rem;"
                     ><?= student_e($passport['conditions']) ?></textarea>
                 </div>
 
@@ -271,13 +273,12 @@ render_student_header('Emergency Health Passport', 'passport');
                     <textarea
                         id="medications"
                         name="medications"
-                        class="student-textarea"
+                        class="student-textarea passport-textarea-sm"
                         placeholder="e.g. Salbutamol inhaler (as needed), Ferrous sulfate 325 mg daily"
-                        style="min-height:4.5rem;"
                     ><?= student_e($passport['medications']) ?></textarea>
                 </div>
 
-                <div class="student-field" style="margin-bottom:0;">
+                <div class="student-field passport-field-compact">
                     <label class="student-label" for="instructions">
                         <span class="passport-dot passport-dot-blue"></span>
                         Emergency Instructions
@@ -285,9 +286,8 @@ render_student_header('Emergency Health Passport', 'passport');
                     <textarea
                         id="instructions"
                         name="instructions"
-                        class="student-textarea"
+                        class="student-textarea passport-textarea-lg"
                         placeholder="e.g. Do NOT give penicillin. Inhaler is in the bag. Call guardian if unconscious."
-                        style="min-height:6rem;"
                     ><?= student_e($passport['instructions']) ?></textarea>
                     <p class="passport-hint">Keep this concise. Responders need to read it fast.</p>
                 </div>
@@ -302,13 +302,13 @@ render_student_header('Emergency Health Passport', 'passport');
                     <p class="student-card-copy">Guardian or next-of-kin shown on your passport</p>
                 </div>
                 <span class="student-badge student-badge-info">
-                    <span class="material-symbols-outlined" style="font-size:12px;">contacts</span>
+                    <span class="material-symbols-outlined passport-icon-xs">contacts</span>
                     Guardian
                 </span>
             </div>
             <div class="student-card-pad">
-                <div class="student-grid" style="gap:0.75rem;">
-                    <div class="student-span-6 student-field" style="margin-bottom:0;">
+                <div class="student-grid passport-grid-tight">
+                    <div class="student-span-6 student-field passport-field-compact">
                         <label class="student-label" for="guardian_name">Guardian Name</label>
                         <input
                             id="guardian_name"
@@ -324,7 +324,7 @@ render_student_header('Emergency Health Passport', 'passport');
                         >
                         <p class="passport-contact-error" data-contact-error="guardian_name" hidden></p>
                     </div>
-                    <div class="student-span-6 student-field" style="margin-bottom:0;">
+                    <div class="student-span-6 student-field passport-field-compact">
                         <label class="student-label" for="relationship">Relationship</label>
                         <select id="relationship" name="relationship" class="student-select" required>
                             <?php
@@ -336,7 +336,7 @@ render_student_header('Emergency Health Passport', 'passport');
                         </select>
                         <p class="passport-contact-error" data-contact-error="relationship" hidden></p>
                     </div>
-                    <div class="student-span-6 student-field" style="margin-bottom:0;">
+                    <div class="student-span-6 student-field passport-field-compact">
                         <label class="student-label" for="primary_contact">Primary Contact Number</label>
                         <input
                             id="primary_contact"
@@ -352,7 +352,7 @@ render_student_header('Emergency Health Passport', 'passport');
                         >
                         <p class="passport-contact-error" data-contact-error="primary_contact" hidden></p>
                     </div>
-                    <div class="student-span-6 student-field" style="margin-bottom:0;">
+                    <div class="student-span-6 student-field passport-field-compact">
                         <label class="student-label" for="secondary_contact">Secondary Contact Number</label>
                         <input
                             id="secondary_contact"
@@ -377,7 +377,7 @@ render_student_header('Emergency Health Passport', 'passport');
                 <span class="material-symbols-outlined">save</span>
                 Save Passport Settings
             </button>
-            <a href="<?= student_e($passportUrl) ?>" target="_blank" class="student-button-secondary passport-preview-button text-decoration-none">
+            <a href="<?= student_e($passportPreviewUrl) ?>" target="_blank" class="student-button-secondary passport-preview-button text-decoration-none">
                 <span class="material-symbols-outlined">open_in_new</span>
                 View Live Passport
             </a>
@@ -397,7 +397,7 @@ render_student_header('Emergency Health Passport', 'passport');
                 </div>
                 <span class="student-badge student-badge-success">Active</span>
             </div>
-            <div class="student-card-pad" style="text-align:center;">
+            <div class="student-card-pad passport-qr-card-body">
                 <div
                     class="passport-qr-wrap"
                     id="qr-container"
@@ -409,17 +409,17 @@ render_student_header('Emergency Health Passport', 'passport');
                 </div>
                 <p class="passport-qr-label">Scan to view Emergency Passport</p>
                 <div class="flex gap-2 mt-3">
-                    <button type="button" class="student-button-secondary" id="download-passport-qr" style="flex:1;font-size:0.72rem;" disabled>
-                        <span class="material-symbols-outlined" style="font-size:1rem;">download</span>
+                    <button type="button" class="student-button-secondary passport-qr-action" id="download-passport-qr" disabled>
+                        <span class="material-symbols-outlined">download</span>
                         Download QR
                     </button>
-                    <button type="button" class="student-button-secondary" style="flex:1;font-size:0.72rem;" onclick="alert('NFC write feature requires a physical NFC device.')">
-                        <span class="material-symbols-outlined" style="font-size:1rem;">nfc</span>
+                    <button type="button" class="student-button-secondary passport-qr-action" onclick="alert('NFC write feature requires a physical NFC device.')">
+                        <span class="material-symbols-outlined">nfc</span>
                         Write NFC
                     </button>
                 </div>
                 <div class="passport-token-chip mt-3">
-                    <span class="material-symbols-outlined" style="font-size:0.85rem;">key</span>
+                    <span class="material-symbols-outlined passport-icon-key">key</span>
                     Token: <code><?= student_e($passport['token']) ?></code>
                 </div>
             </div>
@@ -433,187 +433,123 @@ render_student_header('Emergency Health Passport', 'passport');
                     <p class="student-card-copy">What emergency responders will see</p>
                 </div>
                 <span class="student-badge passport-badge-emergency-soft">
-                    <span class="material-symbols-outlined" style="font-size:12px;">visibility</span>
+                    <span class="material-symbols-outlined passport-icon-xs">visibility</span>
                     Live
                 </span>
             </div>
 
-            <!-- Preview shell mimicking the live passport style -->
-            <div class="passport-preview">
-
-                <!-- Preview header -->
-                <div class="pv-head">
-                    <div class="pv-avatar" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                            <circle cx="12" cy="7" r="4"/>
-                        </svg>
+            <div class="passport-preview passport-preview-modern">
+                <div class="passport-modern-hero">
+                    <div class="passport-modern-avatar" aria-hidden="true">
+                        <span class="material-symbols-outlined">person</span>
                     </div>
-                    <div class="pv-head-info">
-                        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 6px;">
-                            <div class="pv-pill" style="margin: 0;">
-                                <svg width="6" height="6" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="10"/></svg>
-                                Emergency Passport
-                            </div>
-                            <div class="pv-status-badge">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                    <div class="passport-modern-identity">
+                        <div class="passport-modern-kicker-row">
+                            <span class="passport-modern-pill">Emergency Passport</span>
+                            <span class="passport-modern-status">
+                                <span class="material-symbols-outlined">check_circle</span>
                                 No Active Incident
+                            </span>
+                        </div>
+                        <div class="passport-modern-name" id="prev-name"><?= student_e($passport['name']) ?></div>
+                        <div class="passport-modern-meta">
+                            <span id="prev-sid"><?= student_e($passport['student_id']) ?></span>
+                            <span aria-hidden="true">&bull;</span>
+                            <span><?= student_e($profile['course'] ?? 'Not recorded') ?></span>
+                        </div>
+                    </div>
+                    <div class="passport-modern-blood" role="img" aria-label="Blood type">
+                        <span>Blood type</span>
+                        <strong id="prev-blood"><?= student_e($passport['blood_type']) ?></strong>
+                    </div>
+                </div>
+
+                <div class="passport-modern-content">
+                    <div class="passport-modern-info-grid">
+                        <article class="passport-modern-info passport-modern-info-allergy">
+                            <div class="passport-modern-info-heading">
+                                <span class="material-symbols-outlined">allergy</span>
+                                <span>Allergies</span>
                             </div>
-                        </div>
-                        <div class="pv-name" id="prev-name"><?= student_e($passport['name']) ?></div>
-                        <div class="pv-meta" id="prev-sid"><?= student_e($passport['student_id']) ?></div>
-                    </div>
-                    <div class="pv-blood" role="img" aria-label="Blood type">
-                        <div class="pv-blood-lbl">Blood</div>
-                        <div class="pv-blood-val" id="prev-blood"><?= student_e($passport['blood_type']) ?></div>
-                    </div>
-                </div>
-
-                <!-- Preview rows -->
-                <div class="pv-body">
-                    <div class="pv-row">
-                        <div class="pv-row-lbl">
-                            <span class="passport-dot passport-dot-red"></span>
-                            Allergies
-                        </div>
-                        <div class="pv-tags" id="prev-allergies">
-                            <?php
-                            $tags = array_filter(array_map('trim', explode(',', $passport['allergies'])));
-                            foreach ($tags as $tag):
-                            ?>
-                                <span class="pv-tag"><?= student_e($tag) ?></span>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
-
-                    <div class="pv-row">
-                        <div class="pv-row-lbl">
-                            <span class="passport-dot passport-dot-amber"></span>
-                            Medical Conditions
-                        </div>
-                        <div class="pv-val" id="prev-conditions"><?= nl2br(student_e($passport['conditions'])) ?></div>
-                    </div>
-
-                    <div class="pv-row">
-                        <div class="pv-row-lbl">
-                            <span class="passport-dot passport-dot-blue"></span>
-                            Emergency Instructions
-                        </div>
-                        <div class="pv-instr" id="prev-instructions"><?= nl2br(student_e($passport['instructions'])) ?></div>
-                    </div>
-                </div>
-
-                <!-- Preview contact -->
-                <div class="pv-contact">
-                    <div class="pv-contact-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.8 19.8 0 0 1 3.09 4.18 2 2 0 0 1 5.09 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L9.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 23 17Z"/>
-                        </svg>
-                    </div>
-                    <div>
-                        <div class="pv-contact-name" id="prev-guardian"><?= student_e($passport['guardian_name']) ?></div>
-                        <div class="pv-contact-tel">
-                            <span id="prev-phone"><?= student_e($passport['primary_contact']) ?></span>
-                            &middot;
-                            <span id="prev-rel"><?= student_e($passport['relationship']) ?></span>
-                        </div>
-                    </div>
-                    <a class="pv-call" href="tel:<?= student_e($passport['primary_contact']) ?>" id="prev-call-link">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:13px;height:13px;">
-                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.8 19.8 0 0 1 3.09 4.18 2 2 0 0 1 5.09 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L9.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 23 17Z"/>
-                        </svg>
-                        Call Now
-                    </a>
-                </div>
-
-                <!-- ── Emergency Guidance ── -->
-                <div class="pv-section-title">What To Do In Case of Emergency</div>
-
-                <div class="pv-card pv-guidance-card pv-guidance-asthma">
-                    <div class="pv-guidance-head">
-                        <span class="pv-guidance-icon">&#129505;</span>
-                        <span class="pv-guidance-title">Asthma Attack</span>
-                    </div>
-                    <ul class="pv-guidance-list">
-                        <li>Help patient sit upright</li>
-                        <li>Assist with inhaler</li>
-                        <li>Monitor breathing</li>
-                    </ul>
-                </div>
-
-                <div class="pv-card pv-guidance-card pv-guidance-allergy">
-                    <div class="pv-guidance-head">
-                        <span class="pv-guidance-icon">&#9888;&#65039;</span>
-                        <span class="pv-guidance-title">Allergic Reaction</span>
-                    </div>
-                    <ul class="pv-guidance-list">
-                        <li>Avoid allergen exposure</li>
-                        <li>Monitor airway</li>
-                        <li>Seek medical assistance</li>
-                    </ul>
-                </div>
-
-                <div class="pv-card pv-guidance-card pv-guidance-unconscious">
-                    <div class="pv-guidance-head">
-                        <span class="pv-guidance-icon">&#128716;</span>
-                        <span class="pv-guidance-title">Unconscious Patient</span>
-                    </div>
-                    <ul class="pv-guidance-list">
-                        <li>Place in recovery position</li>
-                        <li>Monitor breathing</li>
-                        <li>Contact guardian</li>
-                    </ul>
-                </div>
-
-                <!-- ── Incident Response Actions ── -->
-                <div class="pv-section-title">&#128680; Incident Response</div>
-                
-                <div class="pv-card" style="padding: 16px;">
-                    <p style="font-size: 0.8rem; color: #64748b; margin-bottom: 14px; margin-top: -4px;">
-                        Document the incident and notify the clinic.
-                    </p>
-
-                    <div class="pv-form-group">
-                        <label class="pv-label">&#128247; Upload Incident Photos</label>
-                        <div class="pv-file-dropzone">
-                            <div class="pv-dropzone-icon">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                    <polyline points="17 8 12 3 7 8"></polyline>
-                                    <line x1="12" y1="3" x2="12" y2="15"></line>
-                                </svg>
+                            <div class="passport-modern-tags" id="prev-allergies">
+                                <?php foreach (array_filter(array_map('trim', preg_split('/[,;\r\n]+/', $passport['allergies']) ?: [])) as $tag): ?>
+                                    <span class="passport-modern-tag"><?= student_e($tag) ?></span>
+                                <?php endforeach; ?>
                             </div>
-                            <div class="pv-dropzone-text">Drag photos here or click to upload</div>
-                            <div class="pv-dropzone-sub">Supported: JPG, PNG, WEBP</div>
-                        </div>
+                        </article>
+
+                        <article class="passport-modern-info passport-modern-info-condition">
+                            <div class="passport-modern-info-heading">
+                                <span class="material-symbols-outlined">cardiology</span>
+                                <span>Medical Conditions</span>
+                            </div>
+                            <div class="passport-modern-value" id="prev-conditions"><?= nl2br(student_e($passport['conditions'])) ?></div>
+                        </article>
+
+                        <article class="passport-modern-info passport-modern-info-medication">
+                            <div class="passport-modern-info-heading">
+                                <span class="material-symbols-outlined">medication</span>
+                                <span>Current Medications</span>
+                            </div>
+                            <div class="passport-modern-value" id="prev-medications"><?= nl2br(student_e($passport['medications'])) ?></div>
+                        </article>
+
+                        <article class="passport-modern-info passport-modern-info-instructions">
+                            <div class="passport-modern-info-heading">
+                                <span class="material-symbols-outlined">emergency_home</span>
+                                <span>Emergency Instructions</span>
+                            </div>
+                            <div class="passport-modern-instructions" id="prev-instructions"><?= nl2br(student_e($passport['instructions'])) ?></div>
+                        </article>
+
+                        <?php if ($passport['height_cm'] || $passport['weight_kg'] || $passport['bmi']): ?>
+                            <article class="passport-modern-info passport-modern-info-bmi">
+                                <div class="passport-modern-info-heading">
+                                    <span class="material-symbols-outlined">monitor_weight</span>
+                                    <span>Body Measurements</span>
+                                </div>
+                                <div class="passport-modern-metrics">
+                                    <span><strong><?= student_e((string) ($passport['height_cm'] ?: '—')) ?></strong><small>Height (cm)</small></span>
+                                    <span><strong><?= student_e((string) ($passport['weight_kg'] ?: '—')) ?></strong><small>Weight (kg)</small></span>
+                                    <span><strong><?= student_e((string) ($passport['bmi'] ?: '—')) ?></strong><small>BMI</small></span>
+                                </div>
+                            </article>
+                        <?php endif; ?>
                     </div>
 
-                    <div class="pv-form-group">
-                        <label class="pv-label">&#128221; Incident Description</label>
-                        <textarea class="pv-textarea" style="min-height: 100px;" placeholder="Describe:
-&bull; What happened
-&bull; Patient condition
-&bull; Actions already taken
-&bull; Other observations"></textarea>
+                    <div class="passport-modern-contact">
+                        <div class="passport-modern-contact-icon" aria-hidden="true">
+                            <span class="material-symbols-outlined">phone_in_talk</span>
+                        </div>
+                        <div class="passport-modern-contact-details">
+                            <span>Emergency Contact</span>
+                            <strong id="prev-guardian"><?= student_e($passport['guardian_name'] ?: 'Not provided') ?></strong>
+                            <small><span id="prev-rel"><?= student_e($passport['relationship']) ?></span> &bull; <span id="prev-phone"><?= student_e($passport['primary_contact'] ?: 'No phone number') ?></span></small>
+                        </div>
+                        <a class="passport-modern-call" href="tel:<?= student_e($passport['primary_contact']) ?>" id="prev-call-link">
+                            <span class="material-symbols-outlined">call</span>
+                            Call Now
+                        </a>
                     </div>
 
-                    <button class="pv-btn-primary">
-                        <div style="font-size: 1.05rem; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                            &#128680; Notify Clinic
+                    <details class="passport-modern-guidance">
+                        <summary>
+                            <span><span class="material-symbols-outlined">emergency</span> Emergency response guidance</span>
+                            <span class="material-symbols-outlined passport-modern-guidance-caret">expand_more</span>
+                        </summary>
+                        <div class="passport-modern-guidance-grid">
+                            <div><strong>Breathing difficulty</strong><span>Sit the patient upright, assist with prescribed medication, and monitor breathing.</span></div>
+                            <div><strong>Allergic reaction</strong><span>Avoid further exposure, monitor the airway, and seek medical assistance.</span></div>
+                            <div><strong>Unconscious patient</strong><span>Place in the recovery position, monitor breathing, and contact the guardian.</span></div>
                         </div>
-                        <div style="font-size: 0.7rem; font-weight: 500; opacity: 0.9; margin-top: 4px; text-transform: none; letter-spacing: normal;">
-                            Send incident report, photos, and notes to clinic personnel.
-                        </div>
-                    </button>
-                </div>
+                    </details>
 
-                <div class="pv-updated">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;flex-shrink:0;" aria-hidden="true">
-                        <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-                    </svg>
-                    Last updated: <strong><?= student_e($passport['last_updated']) ?></strong>
+                    <div class="passport-modern-updated">
+                        <span class="material-symbols-outlined">schedule</span>
+                        Last updated: <strong><?= student_e($passport['last_updated']) ?></strong>
+                    </div>
                 </div>
-            </div><!-- /passport-preview -->
+            </div>
         </section>
 
     </div><!-- /right column -->
@@ -660,14 +596,15 @@ render_student_header('Emergency Health Passport', 'passport');
     const allergyInp = $('allergies');
     if (allergyInp) {
         allergyInp.addEventListener('input', () => {
-            const tags = allergyInp.value.split(',').map(t => t.trim()).filter(Boolean);
+            const tags = allergyInp.value.split(/[,;\n]+/).map(t => t.trim()).filter(Boolean);
             $('prev-allergies').innerHTML = tags.map(t =>
-                `<span class="pv-tag">${escHtml(t)}</span>`
+                `<span class="passport-modern-tag">${escHtml(t)}</span>`
             ).join('');
         });
     }
 
     syncField('conditions',   'prev-conditions',   nl2br);
+    syncField('medications',  'prev-medications',  nl2br);
     syncField('instructions', 'prev-instructions', nl2br);
     syncField('guardian_name','prev-guardian',      null);
     syncField('primary_contact', 'prev-phone',      null);

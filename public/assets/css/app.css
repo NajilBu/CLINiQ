@@ -567,6 +567,13 @@ h6,
     scrollbar-gutter: stable;
 }
 
+/* Page-family wrappers already own their internal spacing; do not add the
+   shell's sibling spacing above the authenticated Reports/Feedback canvas. */
+#cliniqPageContent > .reports-page,
+#cliniqPageContent > .feedback-admin {
+    margin-top: 0 !important;
+}
+
 .app-mobile-nav {
     display: flex;
     gap: 0.4rem;
@@ -3273,6 +3280,94 @@ textarea.record-sheet-field {
 
 .btn-primary:hover {
     background: var(--cliniq-primary-hover);
+}
+
+/* Shared staff audit table treatment. */
+.audit-page {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.audit-page > .clinic-card {
+    margin-bottom: 0 !important;
+}
+
+.audit-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+}
+
+.audit-table th,
+.audit-table td {
+    padding: 0.875rem 1.25rem;
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid var(--cliniq-border);
+}
+
+.audit-table th {
+    background: var(--cliniq-surface-low);
+    color: var(--cliniq-muted-foreground);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.audit-table tbody tr:hover {
+    background: var(--cliniq-surface-low);
+}
+
+.audit-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.audit-primary-text,
+.audit-secondary-text {
+    margin: 0;
+}
+
+.audit-primary-text {
+    color: var(--cliniq-foreground);
+    font-weight: 700;
+}
+
+.audit-secondary-text {
+    margin-top: 0.2rem;
+    color: var(--cliniq-muted-foreground);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.audit-target-text {
+    color: var(--cliniq-foreground);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.audit-detail-text {
+    max-width: 24rem;
+    color: var(--cliniq-muted-foreground);
+    font-size: 0.75rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.audit-nowrap {
+    color: var(--cliniq-muted-foreground);
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+    .audit-table th,
+    .audit-table td {
+        padding: 0.75rem 1rem;
+    }
 }
 
 .btn-danger {

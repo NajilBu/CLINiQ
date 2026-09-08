@@ -15,7 +15,7 @@ if (!isset($allowedStatuses[$filterKey])) {
     $filterKey = 'pending';
 }
 $filterStatus = $allowedStatuses[$filterKey];
-$allowedRisks = ['all', 'Critical', 'High', 'Moderate', 'Low'];
+$allowedRisks = ['all', 'Critical', 'High', 'Moderate', 'Low', 'Not assessed'];
 $filterRisk = trim((string) ($_GET['risk'] ?? 'all'));
 if (!in_array($filterRisk, $allowedRisks, true)) {
     $filterRisk = 'all';
@@ -96,7 +96,7 @@ foreach ($alerts as $alert) {
         'rowUrl' => 'view.php?id=' . (int)$alert['id'],
         'statusSort' => array_search($alert['status'], ['Pending', 'In Progress', 'Resolved', 'Cancelled'], true),
         'statusHtml' => '<span class="badge ' . e(status_badge_class($alert['status'])) . '">' . e($alert['status']) . '</span>',
-        'riskSort' => array_search($riskLevel, ['Critical', 'High', 'Moderate', 'Low'], true),
+        'riskSort' => array_search($riskLevel, ['Critical', 'High', 'Moderate', 'Low', 'Not assessed'], true),
         'riskHtml' => '<span class="badge ' . e(risk_badge_class($riskLevel)) . '">' . e($riskLevel) . '</span><p class="text-[10px] font-bold text-slate-400 mb-0 mt-1">Score ' . $riskScore . '</p>',
         'patient' => $patientName !== '' ? $patientName : 'Unlisted',
         'reporterSort' => $alert['reporter_name'],
@@ -179,7 +179,7 @@ render_clinic_command_header(
                     <label class="clinic-label">Risk</label>
                     <select class="clinic-select" name="risk">
                         <option value="all" <?= $filterRisk === 'all' ? 'selected' : '' ?>>All</option>
-                        <?php foreach (['Critical', 'High', 'Moderate', 'Low'] as $risk): ?>
+                        <?php foreach (['Critical', 'High', 'Moderate', 'Low', 'Not assessed'] as $risk): ?>
                             <option value="<?= e($risk) ?>" <?= $filterRisk === $risk ? 'selected' : '' ?>><?= e($risk) ?></option>
                         <?php endforeach; ?>
                     </select>

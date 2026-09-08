@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/../app/helpers/view.php';
 require_once __DIR__ . '/../app/services/AlertWorkflow.php';
+require_once __DIR__ . '/../app/services/PassportAccess.php';
 ensure_alert_workflow_schema();
 
 $token = $_GET['token'] ?? '';
@@ -45,22 +46,47 @@ $stmt->execute([$token]);
 $patient = $stmt->fetch();
 $message = null;
 $error = null;
+$authError = null;
+$viewer = passport_current_viewer();
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'passport_auth' && $patient) {
+    $viewer = passport_authenticate_viewer((string) ($_POST['student_number'] ?? ''), (string) ($_POST['password'] ?? ''));
+    if (!$viewer) {
+        $authError = 'The student number or password is incorrect.';
+        audit_log_event('passport', 'viewer_authentication_failed', null, 'guest', 'patient', (int) $patient['id'], [], 'failure');
+    }
+}
+
+$viewerPersonId = (int) ($viewer['person_id'] ?? 0);
 
 if ($patient) {
-    $log = auth_db()->prepare('INSERT INTO passport_access_logs (patient_id, ip_address, user_agent) VALUES (?, ?, ?)');
+    $auditId = audit_log_event('passport', 'passport_viewed', $viewerPersonId ?: null, $viewerPersonId ? 'student' : 'guest', 'patient', (int) $patient['id'], [
+        'route' => 'public/emergency.php',
+        'authenticated' => $viewerPersonId > 0,
+    ]);
+    $log = auth_db()->prepare('INSERT INTO passport_access_logs (patient_id, viewer_person_id, audit_log_id, ip_address, user_agent) VALUES (?, ?, ?, ?, ?)');
     $log->execute([
         $patient['id'],
+        $viewerPersonId ?: null,
+        $auditId ?: null,
         $_SERVER['REMOTE_ADDR'] ?? null,
         substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255),
     ]);
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patient) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patient && ($_POST['action'] ?? '') !== 'passport_auth') {
     $ipAddress = $_SERVER['REMOTE_ADDR'] ?? null;
     $location = trim($_POST['location'] ?? '');
     $notes = trim($_POST['notes'] ?? '');
     $reporterName = trim($_POST['reporter_name'] ?? '');
     $reporterContact = trim($_POST['reporter_contact'] ?? '');
+    if ($viewer) {
+        $reporterName = (string) ($viewer['name'] ?? 'Authenticated student viewer');
+    }
+    $reporterRiskRating = trim((string) ($_POST['reporter_risk_rating'] ?? ''));
+    if (!in_array($reporterRiskRating, ['Low', 'Moderate', 'High', 'Critical'], true)) {
+        $reporterRiskRating = null;
+    }
     $answers = collect_incident_report_answers([
         'incident_type' => $_POST['incident_type'] ?? '',
         'observed_condition' => $_POST['observed_condition'] ?? '',
@@ -94,8 +120,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patient) {
         } else {
             $incident = auth_db()->prepare("
                 INSERT INTO incident_reports
-                    (patient_id, emergency_token, reporter_name, reporter_contact, location, notes, ip_address, user_agent)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    (patient_id, emergency_token, reporter_name, reporter_contact, location, notes, reporter_risk_rating, ip_address, user_agent)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             $incident->execute([
                 $patient['id'],
@@ -104,6 +130,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patient) {
                 $reporterContact ?: null,
                 $location,
                 $notes ?: null,
+                $reporterRiskRating,
                 $ipAddress,
                 substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255),
             ]);
@@ -118,9 +145,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patient) {
 
             $alert = auth_db()->prepare("
                 INSERT INTO nurse_alerts
-                    (patient_id, reporter_name, reporter_role, location, concern, incident_type, details, report_answers,
+                    (patient_id, reporter_name, reporter_role, location, concern, incident_type, details, report_answers, reporter_risk_rating,
                      risk_level, risk_score, risk_reasons, response_guidance, photo_path, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')
             ");
             $alert->execute([
                 $patient['id'],
@@ -131,6 +158,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patient) {
                 $answers['incident_type'] ?: null,
                 $details ?: null,
                 $reportAnswers,
+                $reporterRiskRating,
                 $classification['level'],
                 $classification['score'],
                 $riskReasons,
@@ -139,6 +167,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patient) {
             ]);
 
             $message = 'The clinic has been notified. Please stay with the student and call the clinic directly if the situation is urgent.';
+            audit_log_event('incident', 'incident_report_submitted', $viewerPersonId ?: null, $viewerPersonId ? 'student' : 'guest', 'patient', (int) $patient['id'], ['location' => $location, 'risk_rating' => $reporterRiskRating]);
         }
     }
 }
@@ -156,8 +185,41 @@ render_header('Emergency QR/NFC Response');
                 <p class="clinic-label">Student Emergency Tag</p>
                 <h1 class="font-headline text-3xl font-extrabold text-[#1c2a59] mb-2">Possible emergency?</h1>
                 <p class="text-sm font-bold text-slate-500 mb-6">
-                    This page notifies the clinic. Private health details are visible only to authorized clinic staff.
+                    This page notifies the clinic. Authenticate with your student account to view emergency essentials for this student.
                 </p>
+
+                <?php if ($authError): ?>
+                    <div class="rounded-2xl bg-red-50 border border-red-100 text-red-700 px-5 py-4 font-bold mb-4"><?= e($authError) ?></div>
+                <?php endif; ?>
+
+                <?php if (!$viewer): ?>
+                    <form method="post" class="rounded-2xl bg-slate-50 border border-slate-200 p-5 mb-6">
+                        <input type="hidden" name="action" value="passport_auth">
+                        <p class="font-black text-slate-800 mb-1">Student access</p>
+                        <p class="text-xs font-bold text-slate-500 mb-4">Students must sign in to view emergency passport essentials. Responders without an account may continue with the limited report form below.</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <input class="clinic-input" name="student_number" required placeholder="Student number">
+                            <input class="clinic-input" name="password" type="password" required placeholder="Password">
+                        </div>
+                        <button class="mt-4 px-5 py-3 bg-slate-800 text-white rounded-2xl text-sm font-black" type="submit">View Emergency Essentials</button>
+                    </form>
+                    <div class="rounded-2xl bg-amber-50 border border-amber-100 text-amber-800 px-5 py-4 mb-6">
+                        <p class="font-black mb-1">Limited responder view</p>
+                        <p class="text-sm font-bold mb-0">Stay with the student, notify the clinic, and provide the current location. Do not rely on this page alone for urgent care.</p>
+                    </div>
+                <?php else: ?>
+                    <div class="rounded-2xl bg-emerald-50 border border-emerald-100 p-5 mb-6">
+                        <p class="font-black text-emerald-900 mb-3">Emergency essentials</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm font-bold text-emerald-950">
+                            <div><span class="text-emerald-700">Blood type:</span> <?= e($patient['blood_type'] ?: 'Unknown') ?></div>
+                            <div><span class="text-emerald-700">Allergies:</span> <?= e($patient['allergies'] ?: 'None recorded') ?></div>
+                            <div><span class="text-emerald-700">Conditions:</span> <?= e($patient['existing_conditions'] ?: 'None recorded') ?></div>
+                            <div><span class="text-emerald-700">Medications:</span> <?= e($patient['medications'] ?: 'None recorded') ?></div>
+                            <div class="md:col-span-2"><span class="text-emerald-700">Emergency instructions:</span> <?= e($patient['emergency_instructions'] ?: 'Notify the clinic immediately.') ?></div>
+                            <div class="md:col-span-2"><span class="text-emerald-700">Guardian:</span> <?= e(trim(($patient['guardian_name'] ?: 'Not recorded') . ' ' . ($patient['guardian_contact'] ?: ''))) ?></div>
+                        </div>
+                    </div>
+                <?php endif; ?>
 
                 <?php if ($message): ?>
                     <div class="rounded-2xl bg-emerald-50 border border-emerald-100 text-emerald-700 px-5 py-4 font-bold mb-4">
@@ -177,7 +239,7 @@ render_header('Emergency QR/NFC Response');
                     </div>
                     <div>
                         <label class="clinic-label">Reporter Name</label>
-                        <input class="clinic-input" name="reporter_name" placeholder="Optional">
+                        <input class="clinic-input" name="reporter_name" placeholder="Optional for responders" <?= $viewer ? 'value="' . e($viewer['name']) . '" readonly' : '' ?>>
                     </div>
                     <div>
                         <label class="clinic-label">Reporter Contact</label>
@@ -185,7 +247,7 @@ render_header('Emergency QR/NFC Response');
                     </div>
                     <div>
                         <label class="clinic-label">Incident Type</label>
-                        <select class="clinic-input" name="incident_type" required>
+                        <select class="clinic-input" name="incident_type">
                             <option value="">Select the closest type</option>
                             <?php foreach (incident_type_options() as $option): ?>
                                 <option value="<?= e($option) ?>"><?= e($option) ?></option>
@@ -194,7 +256,7 @@ render_header('Emergency QR/NFC Response');
                     </div>
                     <div>
                         <label class="clinic-label">Student Condition</label>
-                        <select class="clinic-input" name="observed_condition" required>
+                        <select class="clinic-input" name="observed_condition">
                             <option value="">Select condition</option>
                             <?php foreach (incident_condition_options() as $option): ?>
                                 <option value="<?= e($option) ?>"><?= e($option) ?></option>
@@ -203,7 +265,7 @@ render_header('Emergency QR/NFC Response');
                     </div>
                     <div>
                         <label class="clinic-label">Breathing</label>
-                        <select class="clinic-input" name="breathing_status" required>
+                        <select class="clinic-input" name="breathing_status">
                             <option value="">Select breathing status</option>
                             <?php foreach (incident_breathing_options() as $option): ?>
                                 <option value="<?= e($option) ?>"><?= e($option) ?></option>
@@ -212,7 +274,7 @@ render_header('Emergency QR/NFC Response');
                     </div>
                     <div>
                         <label class="clinic-label">Bleeding</label>
-                        <select class="clinic-input" name="bleeding_status" required>
+                        <select class="clinic-input" name="bleeding_status">
                             <option value="">Select bleeding status</option>
                             <?php foreach (incident_bleeding_options() as $option): ?>
                                 <option value="<?= e($option) ?>"><?= e($option) ?></option>
@@ -221,7 +283,7 @@ render_header('Emergency QR/NFC Response');
                     </div>
                     <div>
                         <label class="clinic-label">Pain Level</label>
-                        <select class="clinic-input" name="pain_level" required>
+                        <select class="clinic-input" name="pain_level">
                             <option value="">Select pain level</option>
                             <?php foreach (incident_pain_level_options() as $option): ?>
                                 <option value="<?= e($option) ?>"><?= e($option) ?></option>
@@ -230,10 +292,19 @@ render_header('Emergency QR/NFC Response');
                     </div>
                     <div>
                         <label class="clinic-label">Mobility</label>
-                        <select class="clinic-input" name="mobility_status" required>
+                        <select class="clinic-input" name="mobility_status">
                             <option value="">Select mobility</option>
                             <?php foreach (incident_mobility_options() as $option): ?>
                                 <option value="<?= e($option) ?>"><?= e($option) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="clinic-label">How urgent does this seem? <span class="font-normal">(Optional)</span></label>
+                        <select class="clinic-input" name="reporter_risk_rating">
+                            <option value="">Not sure / skip</option>
+                            <?php foreach (['Low', 'Moderate', 'High', 'Critical'] as $rating): ?>
+                                <option value="<?= e($rating) ?>"><?= e($rating) ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>

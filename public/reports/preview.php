@@ -20,7 +20,7 @@ render_clinic_command_header(
     '<a class="btn btn-outline text-decoration-none" data-no-ajax="true" href="index.php?' . e($adjustQuery) . '"><span class="material-symbols-outlined text-[18px]">arrow_back</span>Back to Reports</a>'
 );
 ?>
-<link rel="stylesheet" href="<?= e(app_url('assets/css/reports.css?v=1')) ?>">
+<link rel="stylesheet" href="<?= e(app_url('assets/css/reports.css?v=3')) ?>">
 <div class="reports-page">
 
 <div class="report-inline-notice" role="status">

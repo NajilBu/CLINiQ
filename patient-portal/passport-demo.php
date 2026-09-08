@@ -4,6 +4,13 @@ require_once __DIR__ . '/../app/services/AlertWorkflow.php';
 require_once __DIR__ . '/../app/services/ApeWorkflow.php';
 require_once __DIR__ . '/../app/services/SystemSettings.php';
 
+// Keep the development preview on the same authenticated production flow.
+$developmentToken = trim((string) ($_GET['token'] ?? ''));
+if ($developmentToken !== '') {
+    header('Location: ../public/emergency.php?token=' . urlencode($developmentToken));
+    exit;
+}
+
 ensure_ape_workflow_schema();
 ensure_alert_workflow_schema();
 $clinicProfile = clinic_profile_settings();

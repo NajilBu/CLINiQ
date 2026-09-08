@@ -8,7 +8,7 @@ $script = file_get_contents($root . '/public/assets/js/patient-passport-qr.js');
 $library = $root . '/public/assets/vendor/qrcode/qrcode.min.js';
 
 $assertions = [
-    'patient page still builds a tokenized passport URL' => str_contains($page, "passport-demo.php?token="),
+    'patient page builds the deployed emergency passport URL' => str_contains($page, "../public/emergency.php?token="),
     'QR container receives the patient passport URL' => str_contains($page, 'data-passport-url="<?= student_e($passportUrl) ?>"'),
     'local QR library is loaded' => str_contains($page, '../public/assets/vendor/qrcode/qrcode.min.js'),
     'QR renderer encodes the provided passport URL' => str_contains($script, 'text: passportUrl'),

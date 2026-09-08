@@ -54,7 +54,7 @@ $mainSystemReport = build_system_report($dateFrom, $dateTo, []);
 
 render_header('Reports');
 ?>
-<link rel="stylesheet" href="<?= e(app_url('assets/css/reports.css?v=1')) ?>">
+<link rel="stylesheet" href="<?= e(app_url('assets/css/reports.css?v=3')) ?>">
 <!-- ═══ Title ═══ -->
 <?php render_clinic_command_header(
     'Reports',
@@ -97,15 +97,27 @@ render_header('Reports');
     </div>
 </form>
 
-<section class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 pt-2">
-    <div>
-        <p class="text-[10px] font-black uppercase tracking-[0.16em] text-primary mb-1">Complete Analytics</p>
-        <h2 class="font-headline text-2xl font-extrabold text-[#17261d] mb-1">All System Graphs</h2>
-        <p class="text-xs font-bold text-slate-500 mb-0">Live operational summaries for <?= e(date('M j, Y', strtotime($dateFrom))) ?> - <?= e(date('M j, Y', strtotime($dateTo))) ?>.</p>
+<p class="report-analytics-range">
+    <span class="material-symbols-outlined" aria-hidden="true">date_range</span>
+    <span>Showing activity from <?= e(date('M j, Y', strtotime($dateFrom))) ?> to <?= e(date('M j, Y', strtotime($dateTo))) ?></span>
+</p>
+<div class="report-analytics-layout">
+    <div class="report-analytics-content">
+        <style><?= system_report_styles() ?></style>
+        <?= render_system_report_document($mainSystemReport, false, ['include_cover' => false]) ?>
     </div>
-</section>
-<style><?= system_report_styles() ?></style>
-<?= render_system_report_document($mainSystemReport, false, ['include_cover' => false]) ?>
+    <aside class="report-section-navigation" aria-label="Report section navigation">
+        <p class="report-section-navigation-label">Jump to section</p>
+        <nav class="report-section-navigation-list">
+            <?php $sectionIndex = 0; foreach ($mainSystemReport['sections'] as $sectionKey => $section): ?>
+                <a class="report-section-navigation-link<?= $sectionIndex === 0 ? ' is-active' : '' ?>" href="#report-section-<?= e((string) $sectionKey) ?>">
+                    <span class="report-section-navigation-number"><?= $sectionIndex + 1 ?></span>
+                    <span class="report-section-navigation-name"><?= e((string) $section['title']) ?></span>
+                </a>
+            <?php $sectionIndex++; endforeach; ?>
+        </nav>
+    </aside>
+</div>
 
 <script>
 (() => {
@@ -240,6 +252,38 @@ render_header('Reports');
 
     syncPeriodUi();
     syncPreviewLink();
+
+    const sectionLinks = Array.from(document.querySelectorAll('.report-section-navigation-link'));
+    const sectionTargets = sectionLinks
+        .map((link) => document.querySelector(link.getAttribute('href')))
+        .filter(Boolean);
+    const setActiveSection = (sectionId) => {
+        sectionLinks.forEach((link) => {
+            const isActive = link.getAttribute('href') === `#${sectionId}`;
+            link.classList.toggle('is-active', isActive);
+            if (isActive) link.setAttribute('aria-current', 'location');
+            else link.removeAttribute('aria-current');
+        });
+    };
+    sectionLinks.forEach((link) => link.addEventListener('click', (event) => {
+        const target = document.querySelector(link.getAttribute('href'));
+        if (!target) return;
+        event.preventDefault();
+        target.scrollIntoView({
+            behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+            block: 'start',
+        });
+        setActiveSection(target.id);
+    }));
+    if ('IntersectionObserver' in window && sectionTargets.length) {
+        const observer = new IntersectionObserver((entries) => {
+            const visible = entries
+                .filter((entry) => entry.isIntersecting)
+                .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+            if (visible[0]) setActiveSection(visible[0].target.id);
+        }, { root: document.querySelector('.app-content'), rootMargin: '-16px 0px -65% 0px', threshold: 0 });
+        sectionTargets.forEach((section) => observer.observe(section));
+    }
 })();
 </script>
 

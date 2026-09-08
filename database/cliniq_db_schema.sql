@@ -162,12 +162,36 @@ CREATE TABLE patients (
 CREATE TABLE passport_access_logs (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   patient_id BIGINT UNSIGNED NOT NULL,
+  viewer_person_id BIGINT UNSIGNED NULL,
+  audit_log_id BIGINT UNSIGNED NULL,
   ip_address VARCHAR(45) NULL,
   user_agent VARCHAR(255) NULL,
   accessed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_passport_access_logs_patient
-    FOREIGN KEY (patient_id) REFERENCES patients(person_id) ON DELETE CASCADE,
+  FOREIGN KEY (patient_id) REFERENCES patients(person_id) ON DELETE CASCADE,
+  FOREIGN KEY (viewer_person_id) REFERENCES people(id) ON DELETE SET NULL,
   INDEX idx_passport_access_logs_patient_accessed (patient_id, accessed_at)
+);
+
+CREATE TABLE audit_logs (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  actor_person_id BIGINT UNSIGNED NULL,
+  actor_type VARCHAR(30) NOT NULL DEFAULT 'system',
+  module VARCHAR(60) NOT NULL,
+  action VARCHAR(100) NOT NULL,
+  target_type VARCHAR(60) NULL,
+  target_id BIGINT UNSIGNED NULL,
+  outcome VARCHAR(30) NOT NULL DEFAULT 'success',
+  metadata JSON NULL,
+  ip_address VARCHAR(45) NULL,
+  user_agent VARCHAR(255) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_audit_logs_actor
+    FOREIGN KEY (actor_person_id) REFERENCES people(id) ON DELETE SET NULL,
+  INDEX idx_audit_logs_created (created_at),
+  INDEX idx_audit_logs_module_action (module, action),
+  INDEX idx_audit_logs_actor (actor_person_id, created_at),
+  INDEX idx_audit_logs_target (target_type, target_id, created_at)
 );
 
 CREATE TABLE nurse_alerts (
@@ -180,7 +204,8 @@ CREATE TABLE nurse_alerts (
   incident_type VARCHAR(120) NULL,
   details TEXT NULL,
   report_answers MEDIUMTEXT NULL,
-  risk_level VARCHAR(40) NOT NULL DEFAULT 'Low',
+  reporter_risk_rating VARCHAR(20) NULL,
+  risk_level VARCHAR(40) NOT NULL DEFAULT 'Not assessed',
   risk_score INT NOT NULL DEFAULT 0,
   risk_reasons TEXT NULL,
   response_guidance TEXT NULL,
@@ -208,6 +233,7 @@ CREATE TABLE incident_reports (
   reporter_contact VARCHAR(80) NULL,
   location VARCHAR(160) NOT NULL,
   notes TEXT NULL,
+  reporter_risk_rating VARCHAR(20) NULL,
   ip_address VARCHAR(45) NULL,
   user_agent VARCHAR(255) NULL,
   status VARCHAR(40) NOT NULL DEFAULT 'New',

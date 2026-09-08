@@ -350,8 +350,9 @@ render_student_header('Dashboard', 'dashboard');
 <section class="student-required-actions mb-4" aria-label="Required student actions">
     <div class="student-required-actions-head">
         <div>
-            <p class="student-eyebrow" style="margin-bottom:0.28rem;">Required Actions</p>
-            <h2>Complete these to keep your clinic profile ready</h2>
+            <p class="student-eyebrow student-eyebrow-compact">Your next steps</p>
+            <h2>Start here to keep your clinic profile ready</h2>
+            <p class="student-required-actions-copy">Complete the items below in order. The portal will unlock the next action when it is ready.</p>
         </div>
         <span class="student-badge <?= $requiredActionCount > 0 ? 'student-badge-warning' : 'student-badge-success' ?>">
             <?= (int) $requiredActionCount ?> Pending

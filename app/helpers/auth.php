@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/env.php';
+require_once __DIR__ . '/../services/AuditLog.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     $configuredAppUrl = (string) env_value('APP_URL', '');
@@ -250,6 +251,7 @@ function login_attempt(string $idNumber, string $password): bool
     $account = $stmt->fetch();
 
     if (!$account || $account['account_status'] === 'suspended') {
+        audit_log_event('auth', 'staff_login_failed', null, 'guest', 'account', null, ['id_number' => trim($idNumber)], 'failure');
         return false;
     }
 
@@ -258,6 +260,7 @@ function login_attempt(string $idNumber, string $password): bool
             empty($account['password_hash'])
             || !password_verify($password, $account['password_hash'])
         ) {
+            audit_log_event('auth', 'staff_login_failed', null, 'guest', 'account', null, ['id_number' => trim($idNumber)], 'failure');
             return false;
         }
 
@@ -271,6 +274,7 @@ function login_attempt(string $idNumber, string $password): bool
         || empty($account['password_hash'])
         || !password_verify($password, $account['password_hash'])
     ) {
+        audit_log_event('auth', 'staff_login_failed', null, 'guest', 'account', null, ['id_number' => trim($idNumber)], 'failure');
         return false;
     }
 
@@ -292,12 +296,15 @@ function login_attempt(string $idNumber, string $password): bool
 
     $update = auth_db()->prepare('UPDATE accounts SET last_login_at = NOW() WHERE id = ?');
     $update->execute([(int) $account['account_id']]);
+    audit_log_event('auth', 'staff_login_success', (int) $account['person_id'], 'staff', 'person', (int) $account['person_id']);
 
     return true;
 }
 
 function logout_user(): void
 {
+    $user = current_user();
+    audit_log_event('auth', 'staff_logout', (int) ($user['person_id'] ?? 0) ?: null, 'staff', 'person', (int) ($user['person_id'] ?? 0) ?: null);
     $_SESSION = [];
     session_destroy();
 }

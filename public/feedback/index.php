@@ -81,18 +81,27 @@ try {
 }
 render_header('Clinic Feedback');
 ?>
-<link rel="stylesheet" href="<?= e(app_url('assets/css/feedback.css?v=design-2')) ?>">
+<link rel="stylesheet" href="<?= e(app_url('assets/css/feedback.css?v=design-3')) ?>">
+<?php render_clinic_command_header('Service evaluation', 'Clinic Feedback', 'Student feedback for Active and Completed clinic visits.'); ?>
 <div class="feedback-page feedback-admin">
-    <?php render_clinic_command_header('Service evaluation', 'Clinic Feedback', 'Student feedback for Active and Completed clinic visits.'); ?>
-    <form method="get" class="clinic-card feedback-section" id="feedbackFilterForm">
-        <div class="feedback-filter-heading"><span class="clinic-label">Quick period</span><div class="feedback-period-grid" role="radiogroup" aria-label="Feedback period">
-            <?php foreach ($periodOptions as $periodValue => $periodLabel): ?><label class="feedback-period-option <?= $period === $periodValue && !$hasManualRange ? 'is-active' : '' ?>"><input type="radio" name="period" value="<?= e($periodValue) ?>" <?= $period === $periodValue && !$hasManualRange ? 'checked' : '' ?>><span><?= e($periodLabel) ?></span></label><?php endforeach; ?>
-        </div></div>
-        <div class="feedback-filter-grid">
-            <label class="feedback-field"><span class="clinic-label">Submitted from</span><input class="clinic-input" type="date" name="from" value="<?= e($from) ?>"></label>
-            <label class="feedback-field"><span class="clinic-label">Submitted through</span><input class="clinic-input" type="date" name="to" value="<?= e($to) ?>"></label>
-            <label class="feedback-field"><span class="clinic-label">Service</span><select class="clinic-select" name="service"><option value="">All services</option><?php foreach (clinic_feedback_services() as $option): ?><option <?= $service === $option ? 'selected' : '' ?>><?= e($option) ?></option><?php endforeach; ?></select></label>
-            <label class="feedback-field" data-feedback-semester-wrap <?= $period !== 'semestral' || $hasManualRange ? 'hidden' : '' ?>><span class="clinic-label">Semester</span><select class="clinic-select" name="semester" <?= $period !== 'semestral' || $hasManualRange ? 'disabled' : '' ?>><option value="1" <?= $semester === 1 ? 'selected' : '' ?>>1st Sem</option><option value="2" <?= $semester === 2 ? 'selected' : '' ?>>2nd Sem</option></select></label>
+    <form method="get" class="clinic-card overflow-hidden mb-6" id="feedbackFilterForm">
+        <div class="p-6 border-b border-slate-100">
+            <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Feedback Filters</h2>
+            <p class="text-xs font-bold text-slate-500 mb-0">Review student evaluations by reporting period, submission date, or clinic service.</p>
+        </div>
+        <div class="p-6 grid grid-cols-1 xl:grid-cols-[1fr_auto] gap-5 items-end">
+            <div class="space-y-3">
+                <span class="clinic-label">Quick period</span>
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-3" role="radiogroup" aria-label="Feedback period">
+                    <?php foreach ($periodOptions as $periodValue => $periodLabel): ?><label class="report-period-option feedback-period-option <?= $period === $periodValue && !$hasManualRange ? 'is-active' : '' ?>"><input type="radio" name="period" value="<?= e($periodValue) ?>" <?= $period === $periodValue && !$hasManualRange ? 'checked' : '' ?>><span><?= e($periodLabel) ?></span></label><?php endforeach; ?>
+                </div>
+            </div>
+            <label class="care-timeline-filter min-w-[13rem]" data-feedback-semester-wrap <?= $period !== 'semestral' || $hasManualRange ? 'hidden' : '' ?>><span class="clinic-label">Semester</span><select class="clinic-select" name="semester" <?= $period !== 'semestral' || $hasManualRange ? 'disabled' : '' ?>><option value="1" <?= $semester === 1 ? 'selected' : '' ?>>1st Sem</option><option value="2" <?= $semester === 2 ? 'selected' : '' ?>>2nd Sem</option></select></label>
+        </div>
+        <div class="p-6 pt-0 grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div><label class="clinic-label" for="feedbackFrom">Submitted from</label><input class="clinic-input" id="feedbackFrom" type="date" name="from" value="<?= e($from) ?>"></div>
+            <div><label class="clinic-label" for="feedbackTo">Submitted through</label><input class="clinic-input" id="feedbackTo" type="date" name="to" value="<?= e($to) ?>"></div>
+            <div><label class="clinic-label" for="feedbackService">Service</label><select class="clinic-select" id="feedbackService" name="service"><option value="">All services</option><?php foreach (clinic_feedback_services() as $option): ?><option <?= $service === $option ? 'selected' : '' ?>><?= e($option) ?></option><?php endforeach; ?></select></div>
         </div>
     </form>
     <?php if ($error): ?><div class="feedback-notice" role="alert"><?= e($error) ?></div><?php else: ?>
@@ -126,7 +135,7 @@ render_header('Clinic Feedback');
             <?php endforeach; ?>
             <?php if ($total > 25): ?><nav class="pagination" aria-label="Response pages">
                 <?php foreach ([$page - 1 => 'Previous', $page + 1 => 'Next'] as $target => $label): if ($target < 1 || $target > ceil($total / 25)) continue; ?>
-                    <a href="?<?= e(http_build_query(['from' => $from, 'to' => $to, 'service' => $service, 'page' => $target])) ?>"><?= e($label) ?></a>
+                    <a href="?<?= e(http_build_query(['from' => $from, 'to' => $to, 'service' => $service, 'period' => $period, 'semester' => $semester, 'page' => $target])) ?>"><?= e($label) ?></a>
                 <?php endforeach; ?><span>Page <?= $page ?> of <?= (int) ceil($total / 25) ?></span></nav><?php endif; ?>
         </section>
     <?php endif; ?>

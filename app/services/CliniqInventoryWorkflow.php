@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/AuditLog.php';
 
 function cliniq_inventory_return_time_options(): string
 {
@@ -190,7 +191,9 @@ function cliniq_inventory_record_transaction(
         trim((string) $notes) ?: null,
         $staffPersonId ?: null,
     ]);
-    return (int) $db->lastInsertId();
+    $transactionId = (int) $db->lastInsertId();
+    audit_log_event('inventory', 'inventory_transaction_recorded', $staffPersonId, 'staff', 'inventory_transaction', $transactionId, ['item_id' => $itemId, 'type' => $type, 'quantity_change' => $quantityChange]);
+    return $transactionId;
 }
 
 /** @param array<int,array{item_id:int,quantity:int,remarks:?string}> $rows */
