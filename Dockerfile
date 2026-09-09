@@ -21,7 +21,7 @@ WORKDIR /var/www/html
 COPY . /var/www/html
 COPY docker/entrypoint.sh /usr/local/bin/cliniq-entrypoint
 
-RUN chmod 0755 /usr/local/bin/cliniq-entrypoint \
+RUN chmod 0755 /usr/local/bin/cliniq-entrypoint /var/www/html/scripts/backup/container_scheduler.sh \
     && mkdir -p /var/www/html/storage/documents/ape /var/www/html/public/uploads /var/backups/cliniq \
     && chown -R www-data:www-data /var/www/html/storage /var/www/html/public/uploads /var/backups/cliniq
 

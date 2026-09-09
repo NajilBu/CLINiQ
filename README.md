@@ -24,10 +24,9 @@ components, page-family conventions, and the checklist for correcting inconsiste
    only migrations that have not already been recorded.
 4. Open `http://localhost/cliniq/public/` in your browser.
 
-Default account after importing the schema:
-
-- Email: `admin@cliniq.local`
-- Password: `password`
+The production schema creates no default users or passwords. Create the initial
+clinic administrator through the controlled clinic setup process and use a
+unique password.
 
 ## Main Modules
 

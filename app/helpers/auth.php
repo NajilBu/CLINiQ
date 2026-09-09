@@ -26,6 +26,9 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+require_once __DIR__ . '/security.php';
+csrf_enforce_request();
+
 function current_user(): ?array
 {
     return $_SESSION['user'] ?? null;
@@ -229,7 +232,11 @@ function login_attempt(string $idNumber, string $password): bool
     require_once __DIR__ . '/../services/SystemSettings.php';
     ensure_staff_profiles_schema();
 
-    $stmt = auth_db()->prepare('
+    $authDb = auth_db();
+    $idNumber = trim($idNumber);
+    auth_throttle_assert_allowed($authDb, 'staff', $idNumber);
+
+    $stmt = $authDb->prepare('
         SELECT
             a.id AS account_id,
             a.password_hash,
@@ -247,10 +254,11 @@ function login_attempt(string $idNumber, string $password): bool
         WHERE p.id_number = ?
         LIMIT 1
     ');
-    $stmt->execute([trim($idNumber)]);
+    $stmt->execute([$idNumber]);
     $account = $stmt->fetch();
 
     if (!$account || $account['account_status'] === 'suspended') {
+        auth_throttle_record_failure($authDb, 'staff', $idNumber);
         audit_log_event('auth', 'staff_login_failed', null, 'guest', 'account', null, ['id_number' => trim($idNumber)], 'failure');
         return false;
     }
@@ -260,11 +268,13 @@ function login_attempt(string $idNumber, string $password): bool
             empty($account['password_hash'])
             || !password_verify($password, $account['password_hash'])
         ) {
+            auth_throttle_record_failure($authDb, 'staff', $idNumber);
             audit_log_event('auth', 'staff_login_failed', null, 'guest', 'account', null, ['id_number' => trim($idNumber)], 'failure');
             return false;
         }
 
         $account['account_type'] = 'clinic_staff';
+        auth_throttle_clear($authDb, 'staff', $idNumber);
         begin_first_registration($account);
         return true;
     }
@@ -274,6 +284,7 @@ function login_attempt(string $idNumber, string $password): bool
         || empty($account['password_hash'])
         || !password_verify($password, $account['password_hash'])
     ) {
+        auth_throttle_record_failure($authDb, 'staff', $idNumber);
         audit_log_event('auth', 'staff_login_failed', null, 'guest', 'account', null, ['id_number' => trim($idNumber)], 'failure');
         return false;
     }
@@ -294,7 +305,10 @@ function login_attempt(string $idNumber, string $password): bool
         'role' => $account['staff_role'],
     ];
 
-    $update = auth_db()->prepare('UPDATE accounts SET last_login_at = NOW() WHERE id = ?');
+    auth_throttle_clear($authDb, 'staff', $idNumber);
+    csrf_rotate_token();
+
+    $update = $authDb->prepare('UPDATE accounts SET last_login_at = NOW() WHERE id = ?');
     $update->execute([(int) $account['account_id']]);
     audit_log_event('auth', 'staff_login_success', (int) $account['person_id'], 'staff', 'person', (int) $account['person_id']);
 

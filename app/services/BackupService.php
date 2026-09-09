@@ -7,6 +7,8 @@ require_once __DIR__ . '/../config/database.php';
 const CLINIQ_BACKUP_DAILY_RETENTION = 14;
 const CLINIQ_BACKUP_WEEKLY_RETENTION = 12;
 const CLINIQ_BACKUP_START_HOUR = 8;
+const CLINIQ_BACKUP_ENCRYPTION_CIPHER = 'aes-256-gcm';
+const CLINIQ_BACKUP_ENCRYPTION_MAGIC = 'CLINIQENC1';
 
 function cliniq_backup_root(): string
 {
@@ -146,6 +148,137 @@ function cliniq_backup_copy_tree(string $source, string $destination): int
         $count++;
     }
     return $count;
+}
+
+function cliniq_backup_encryption_key(): string
+{
+    $configured = (string) env_value('BACKUP_ENCRYPTION_KEY', '');
+    if (strlen($configured) < 32 || str_contains(strtolower($configured), 'replace-with')) {
+        throw new RuntimeException('BACKUP_ENCRYPTION_KEY must contain at least 32 secret characters.');
+    }
+    return hash('sha256', $configured, true);
+}
+
+function cliniq_backup_encrypt_file(string $path): array
+{
+    $plaintext = file_get_contents($path);
+    if ($plaintext === false) {
+        throw new RuntimeException('Unable to read a backup payload for encryption.');
+    }
+    $nonce = random_bytes(12);
+    $tag = '';
+    $ciphertext = openssl_encrypt(
+        $plaintext,
+        CLINIQ_BACKUP_ENCRYPTION_CIPHER,
+        cliniq_backup_encryption_key(),
+        OPENSSL_RAW_DATA,
+        $nonce,
+        $tag,
+        '',
+        16
+    );
+    if ($ciphertext === false || strlen($tag) !== 16) {
+        throw new RuntimeException('Unable to encrypt a backup payload.');
+    }
+
+    $encryptedPath = $path . '.enc';
+    $payload = CLINIQ_BACKUP_ENCRYPTION_MAGIC . $nonce . $tag . $ciphertext;
+    if (file_put_contents($encryptedPath, $payload, LOCK_EX) === false) {
+        throw new RuntimeException('Unable to write an encrypted backup payload.');
+    }
+    @chmod($encryptedPath, 0600);
+    if (!unlink($path)) {
+        @unlink($encryptedPath);
+        throw new RuntimeException('Unable to remove a plaintext backup payload after encryption.');
+    }
+
+    return [
+        'encrypted_path' => basename($encryptedPath),
+        'encrypted_bytes' => strlen($payload),
+        'encrypted_sha256' => hash('sha256', $payload),
+    ];
+}
+
+function cliniq_backup_decrypt_file(string $encryptedPath, string $destination): void
+{
+    $payload = file_get_contents($encryptedPath);
+    $magicLength = strlen(CLINIQ_BACKUP_ENCRYPTION_MAGIC);
+    if ($payload === false || strlen($payload) < $magicLength + 28) {
+        throw new RuntimeException('Encrypted backup payload is truncated.');
+    }
+    if (!hash_equals(CLINIQ_BACKUP_ENCRYPTION_MAGIC, substr($payload, 0, $magicLength))) {
+        throw new RuntimeException('Encrypted backup payload has an invalid header.');
+    }
+    $nonce = substr($payload, $magicLength, 12);
+    $tag = substr($payload, $magicLength + 12, 16);
+    $ciphertext = substr($payload, $magicLength + 28);
+    $plaintext = openssl_decrypt(
+        $ciphertext,
+        CLINIQ_BACKUP_ENCRYPTION_CIPHER,
+        cliniq_backup_encryption_key(),
+        OPENSSL_RAW_DATA,
+        $nonce,
+        $tag
+    );
+    if ($plaintext === false) {
+        throw new RuntimeException('Encrypted backup authentication failed. The key or payload is invalid.');
+    }
+    if (file_put_contents($destination, $plaintext, LOCK_EX) === false) {
+        throw new RuntimeException('Unable to write a decrypted recovery payload.');
+    }
+    @chmod($destination, 0600);
+}
+
+function cliniq_backup_encrypt_payloads(string $staging, array $files): array
+{
+    $encrypted = [];
+    foreach ($files as $file) {
+        $relative = (string) $file['path'];
+        $absolute = $staging . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relative);
+        $details = cliniq_backup_encrypt_file($absolute);
+        $encryptedRelative = $relative . '.enc';
+        $encrypted[] = array_merge($file, [
+            'encrypted_path' => $encryptedRelative,
+            'encrypted_bytes' => $details['encrypted_bytes'],
+            'encrypted_sha256' => $details['encrypted_sha256'],
+        ]);
+    }
+    return $encrypted;
+}
+
+function cliniq_backup_materialize_file(string $snapshotPath, array $manifest, string $relative): array
+{
+    if ((int) ($manifest['format_version'] ?? 1) < 2) {
+        return [$snapshotPath . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relative), false];
+    }
+    $entry = null;
+    foreach (($manifest['files'] ?? []) as $candidate) {
+        if (($candidate['path'] ?? '') === $relative) {
+            $entry = $candidate;
+            break;
+        }
+    }
+    if (!is_array($entry)) {
+        throw new RuntimeException("Encrypted backup manifest does not contain {$relative}.");
+    }
+    $encryptedRelative = (string) ($entry['encrypted_path'] ?? '');
+    if ($encryptedRelative === '' || str_contains($encryptedRelative, '..')) {
+        throw new RuntimeException('Encrypted backup manifest contains an unsafe payload path.');
+    }
+    $temporary = tempnam(sys_get_temp_dir(), 'cliniq-recovery-');
+    if ($temporary === false) {
+        throw new RuntimeException('Unable to allocate temporary recovery storage.');
+    }
+    try {
+        cliniq_backup_decrypt_file(
+            $snapshotPath . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $encryptedRelative),
+            $temporary
+        );
+        return [$temporary, true];
+    } catch (Throwable $e) {
+        @unlink($temporary);
+        throw $e;
+    }
 }
 
 function cliniq_backup_delete_tree(string $path, string $expectedParent): void
@@ -325,17 +458,20 @@ function cliniq_backup_run(string $type = 'daily', bool $force = false, bool $sc
         file_put_contents($staging . '/configuration.json', json_encode($configuration, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), LOCK_EX);
 
         $files = cliniq_backup_manifest_files($staging);
+        $files = cliniq_backup_encrypt_payloads($staging, $files);
         $manifest = [
-            'format_version' => 1,
+            'format_version' => 2,
             'application' => 'CLINiQ',
             'type' => $type,
             'created_at' => date(DATE_ATOM),
+            'encryption' => CLINIQ_BACKUP_ENCRYPTION_CIPHER,
             'database' => $dbName,
             'database_tables' => $tableCount,
             'ape_document_rows' => $apeDocumentRows,
             'copied_document_files' => $documentCount,
             'file_count' => count($files),
             'total_bytes' => array_sum(array_column($files, 'bytes')),
+            'encrypted_total_bytes' => array_sum(array_column($files, 'encrypted_bytes')),
             'files' => $files,
         ];
         file_put_contents($staging . '/manifest.json', json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), LOCK_EX);
@@ -414,14 +550,43 @@ function cliniq_backup_verify(?string $path = null, bool $updateStatus = true): 
         throw new RuntimeException('The backup manifest is missing or invalid.');
     }
 
+    $encryptedFormat = (int) ($manifest['format_version'] ?? 1) >= 2;
     foreach ($manifest['files'] as $file) {
         $relative = str_replace('/', DIRECTORY_SEPARATOR, (string) ($file['path'] ?? ''));
         if ($relative === '' || str_contains($relative, '..')) {
             throw new RuntimeException('The backup manifest contains an unsafe file path.');
         }
-        $absolute = $path . DIRECTORY_SEPARATOR . $relative;
-        if (!is_file($absolute) || filesize($absolute) !== (int) $file['bytes'] || !hash_equals((string) $file['sha256'], hash_file('sha256', $absolute))) {
-            throw new RuntimeException("Backup verification failed for {$relative}.");
+        if (!$encryptedFormat) {
+            $absolute = $path . DIRECTORY_SEPARATOR . $relative;
+            if (!is_file($absolute) || filesize($absolute) !== (int) $file['bytes'] || !hash_equals((string) $file['sha256'], hash_file('sha256', $absolute))) {
+                throw new RuntimeException("Backup verification failed for {$relative}.");
+            }
+            continue;
+        }
+
+        $encryptedRelative = str_replace('/', DIRECTORY_SEPARATOR, (string) ($file['encrypted_path'] ?? ''));
+        if ($encryptedRelative === '' || str_contains($encryptedRelative, '..')) {
+            throw new RuntimeException('The encrypted backup manifest contains an unsafe file path.');
+        }
+        $encryptedAbsolute = $path . DIRECTORY_SEPARATOR . $encryptedRelative;
+        if (
+            !is_file($encryptedAbsolute)
+            || filesize($encryptedAbsolute) !== (int) ($file['encrypted_bytes'] ?? -1)
+            || !hash_equals((string) ($file['encrypted_sha256'] ?? ''), (string) hash_file('sha256', $encryptedAbsolute))
+        ) {
+            throw new RuntimeException("Encrypted backup verification failed for {$relative}.");
+        }
+        $temporary = tempnam(sys_get_temp_dir(), 'cliniq-verify-');
+        if ($temporary === false) {
+            throw new RuntimeException('Unable to allocate temporary verification storage.');
+        }
+        try {
+            cliniq_backup_decrypt_file($encryptedAbsolute, $temporary);
+            if (filesize($temporary) !== (int) $file['bytes'] || !hash_equals((string) $file['sha256'], (string) hash_file('sha256', $temporary))) {
+                throw new RuntimeException("Decrypted backup verification failed for {$relative}.");
+            }
+        } finally {
+            @unlink($temporary);
         }
     }
 
@@ -455,27 +620,39 @@ function cliniq_backup_restore_test(?string $path = null): array
         throw new RuntimeException('The backup manifest is unreadable.');
     }
     $databaseName = (string) ($manifest['database'] ?? 'Cliniq_db');
-    $dumpPath = $path . DIRECTORY_SEPARATOR . 'database' . DIRECTORY_SEPARATOR . $databaseName . '.sql';
+    $dumpRelative = 'database/' . $databaseName . '.sql';
+    [$dumpPath, $temporaryDump] = cliniq_backup_materialize_file($path, $manifest, $dumpRelative);
     if (!is_file($dumpPath)) {
+        if ($temporaryDump) @unlink($dumpPath);
         throw new RuntimeException('The database dump is missing from the backup.');
     }
     $dumpHeader = @file_get_contents($dumpPath, false, null, 0, min(1048576, filesize($dumpPath)));
     if ($dumpHeader === false) {
+        if ($temporaryDump) @unlink($dumpPath);
         throw new RuntimeException('The database dump cannot be read for restore verification.');
     }
     if (preg_match('/^\s*(CREATE\s+DATABASE|USE\s+`?)/mi', $dumpHeader)) {
+        if ($temporaryDump) @unlink($dumpPath);
         throw new RuntimeException('This backup uses the older database-bound dump format. Create a new backup before running a restore test.');
     }
 
     $testDatabase = 'cliniq_restore_verify_' . date('Ymd_His') . '_' . bin2hex(random_bytes(3));
-    $root = cliniq_backup_root();
-    $clientConfig = $root . DIRECTORY_SEPARATOR . '.restore-client-' . bin2hex(random_bytes(4)) . '.cnf';
+    $clientConfig = tempnam(sys_get_temp_dir(), 'cliniq-restore-');
+    if ($clientConfig === false) {
+        if ($temporaryDump) @unlink($dumpPath);
+        throw new RuntimeException('Unable to create the temporary restore credential file.');
+    }
     $clientSettings = "[client]\r\n"
         . 'host=' . cliniq_backup_mysql_option((string) env_value('DB_HOST', '127.0.0.1')) . "\r\n"
         . 'port=' . cliniq_backup_mysql_option((string) env_value('DB_PORT', '3306')) . "\r\n"
         . 'user=' . cliniq_backup_mysql_option((string) env_value('DB_USER', 'root')) . "\r\n"
         . 'password=' . cliniq_backup_mysql_option((string) env_value('DB_PASS', '')) . "\r\n";
-    file_put_contents($clientConfig, $clientSettings, LOCK_EX);
+    if (file_put_contents($clientConfig, $clientSettings, LOCK_EX) === false) {
+        @unlink($clientConfig);
+        if ($temporaryDump) @unlink($dumpPath);
+        throw new RuntimeException('Unable to write the temporary restore credential file.');
+    }
+    @chmod($clientConfig, 0600);
 
     $db = auth_db();
     try {
@@ -528,6 +705,9 @@ function cliniq_backup_restore_test(?string $path = null): array
         }
         if (is_file($clientConfig)) {
             unlink($clientConfig);
+        }
+        if ($temporaryDump && is_file($dumpPath)) {
+            unlink($dumpPath);
         }
     }
 }

@@ -44,7 +44,15 @@ function passport_current_viewer(): ?array
 
 function passport_authenticate_viewer(string $studentNumber, string $password): ?array
 {
-    $stmt = auth_db()->prepare('
+    $db = auth_db();
+    $studentNumber = trim($studentNumber);
+    try {
+        auth_throttle_assert_allowed($db, 'passport', $studentNumber);
+    } catch (LoginThrottleException $e) {
+        return null;
+    }
+
+    $stmt = $db->prepare('
         SELECT a.id AS account_id, a.password_hash, a.account_status,
                p.id AS person_id, p.id_number, p.first_name, p.middle_name, p.last_name, a.email
         FROM accounts a
@@ -53,11 +61,14 @@ function passport_authenticate_viewer(string $studentNumber, string $password): 
         WHERE p.id_number = ?
         LIMIT 1
     ');
-    $stmt->execute([trim($studentNumber)]);
+    $stmt->execute([$studentNumber]);
     $account = $stmt->fetch();
     if (!$account || $account['account_status'] !== 'active' || !password_verify($password, (string) $account['password_hash'])) {
+        auth_throttle_record_failure($db, 'passport', $studentNumber);
         return null;
     }
+
+    auth_throttle_clear($db, 'passport', $studentNumber);
 
     if (session_status() !== PHP_SESSION_ACTIVE) {
         session_start();

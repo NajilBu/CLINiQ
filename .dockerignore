@@ -10,7 +10,11 @@ vendor
 outputs
 tmp
 tests
+student
 database/backups
+database/schema.sql
+database/seed_*.php
+database/seeder.php
 public/uploads/*
 !public/uploads/.gitkeep
 storage/documents/*

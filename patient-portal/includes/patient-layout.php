@@ -6,8 +6,6 @@ require_once __DIR__ . '/../../app/helpers/brand.php';
 require_once __DIR__ . '/../../app/helpers/student_id.php';
 require_once __DIR__ . '/../../app/services/SystemSettings.php';
 
-const STUDENT_DEMO_PASSWORD = 'student123';
-
 function student_start_session(): void
 {
     if (session_status() !== PHP_SESSION_ACTIVE) {
@@ -216,18 +214,6 @@ function student_current_profile(): ?array
     return $profile;
 }
 
-function student_demo_profile(): array
-{
-    return student_current_profile() ?? [
-        'patient_id' => 0,
-        'name' => 'Sofia L. Bautista',
-        'first_name' => 'Sofia',
-        'student_id' => '26-01024',
-        'course' => 'BS Psychology 1-2',
-        'email' => '2601024@plpasig.edu.ph',
-    ];
-}
-
 function student_require_login(): array
 {
     $profile = student_current_profile();
@@ -374,6 +360,10 @@ function render_student_header(string $title, string $active = ''): void
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title><?= student_e($title) ?> | <?= student_e($clinicProfile['system_name']) ?> Patient Portal</title>
+        <meta name="csrf-token" content="<?= student_e(csrf_token()) ?>">
+        <script src="../public/assets/js/csrf.js?v=1" defer></script>
+        <link rel="icon" href="<?= student_e($clinicLogoSrc) ?>">
+        <link rel="apple-touch-icon" href="<?= student_e($clinicLogoSrc) ?>">
         <link href="../public/assets/vendor/fonts/inter-manrope.css?v=offline-1" rel="stylesheet">
         <link href="../public/assets/vendor/fonts/material-symbols.css?v=offline-1" rel="stylesheet">
         <script src="../public/assets/vendor/tailwind/tailwind-cdn.js?v=offline-1"></script>
@@ -598,6 +588,7 @@ function render_student_footer(): void
 function render_student_auth_header(string $title): void
 {
     $clinicProfile = clinic_profile_settings();
+    $clinicLogoSrc = student_public_logo_src($clinicProfile);
     $theme = active_cliniq_theme();
     ?>
     <!DOCTYPE html>
@@ -606,6 +597,10 @@ function render_student_auth_header(string $title): void
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title><?= student_e($title) ?> | <?= student_e($clinicProfile['system_name']) ?> Patient Portal</title>
+        <meta name="csrf-token" content="<?= student_e(csrf_token()) ?>">
+        <script src="../public/assets/js/csrf.js?v=1" defer></script>
+        <link rel="icon" href="<?= student_e($clinicLogoSrc) ?>">
+        <link rel="apple-touch-icon" href="<?= student_e($clinicLogoSrc) ?>">
         <link href="../public/assets/vendor/fonts/inter-manrope.css?v=offline-1" rel="stylesheet">
         <link href="../public/assets/vendor/fonts/material-symbols.css?v=offline-1" rel="stylesheet">
         <script src="../public/assets/vendor/tailwind/tailwind-cdn.js?v=offline-1"></script>

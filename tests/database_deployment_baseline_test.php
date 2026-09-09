@@ -17,14 +17,14 @@ if ($schema === false || $runner === false || $envLoader === false) {
 preg_match_all('/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`?([a-zA-Z0-9_]+)`?/i', $schema, $matches);
 $tables = array_values(array_unique($matches[1] ?? []));
 
-foreach (['people', 'patients', 'visits', 'appointments', 'ape_records', 'ape_documents', 'clinic_feedback', 'schema_migrations'] as $table) {
+foreach (['people', 'patients', 'visits', 'appointments', 'ape_records', 'ape_documents', 'clinic_feedback', 'login_attempts', 'schema_migrations'] as $table) {
     if (!in_array($table, $tables, true)) {
         throw new RuntimeException("Production baseline is missing {$table}.");
     }
 }
 
-if (count($tables) !== 33) {
-    throw new RuntimeException('Expected 33 production tables including schema_migrations; found ' . count($tables) . '.');
+if (count($tables) !== 34) {
+    throw new RuntimeException('Expected 34 production tables including login_attempts and schema_migrations; found ' . count($tables) . '.');
 }
 
 $schemaBeforeTriggers = explode('DELIMITER //', $schema, 2)[0];

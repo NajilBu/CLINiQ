@@ -14,36 +14,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $studentIdValue = normalize_id_number(trim($_POST['student_id'] ?? ''));
     $password = (string) ($_POST['password'] ?? '');
 
-    if (!is_valid_id_number($studentIdValue)) {
-        $error = id_number_validation_message();
-    } else {
-        $patient = student_find_patient_by_number($studentIdValue);
-        if ($patient === null) {
-            $error = 'Patient account not found or currently suspended.';
-            audit_log_event('auth', 'student_login_failed', null, 'guest', 'account', null, ['id_number' => $studentIdValue], 'failure');
-        } elseif (!student_password_is_valid($patient, $password)) {
-            $error = 'Invalid ID number or password. Please try again.';
-            audit_log_event('auth', 'student_login_failed', (int) ($patient['person_id'] ?? 0) ?: null, 'guest', 'account', (int) ($patient['account_id'] ?? 0) ?: null, [], 'failure');
-        } elseif ($patient['account_status'] === 'inactive') {
-            // Distinguish: was this account previously activated (school year reset) or brand new?
-            $wasActivated = !empty($patient['activated_at']);
-            if ($wasActivated) {
-                begin_re_enrollment($patient);
-            } else {
-                begin_first_registration($patient);
-            }
-            header('Location: patient-dashboard.php');
-            exit;
+    try {
+        $db = auth_db();
+        auth_throttle_assert_allowed($db, 'patient', $studentIdValue);
+
+        if (!is_valid_id_number($studentIdValue)) {
+            auth_throttle_record_failure($db, 'patient', $studentIdValue);
+            $error = id_number_validation_message();
         } else {
-            student_start_session();
-            $_SESSION['patient_legacy_id'] = (int) $patient['legacy_patient_id'];
-            $_SESSION['patient_account_id'] = (int) $patient['account_id'];
-            $_SESSION['patient_person_id'] = (int) $patient['person_id'];
-            student_record_successful_login((int) $patient['account_id']);
-            audit_log_event('auth', 'student_login_success', (int) $patient['person_id'], 'student', 'person', (int) $patient['person_id']);
-            header('Location: patient-dashboard.php');
-            exit;
+            $patient = student_find_patient_by_number($studentIdValue);
+            if ($patient === null) {
+                auth_throttle_record_failure($db, 'patient', $studentIdValue);
+                $error = 'Invalid ID number or password. Please try again.';
+                audit_log_event('auth', 'student_login_failed', null, 'guest', 'account', null, ['id_number' => $studentIdValue], 'failure');
+            } elseif (!student_password_is_valid($patient, $password)) {
+                auth_throttle_record_failure($db, 'patient', $studentIdValue);
+                $error = 'Invalid ID number or password. Please try again.';
+                audit_log_event('auth', 'student_login_failed', (int) ($patient['person_id'] ?? 0) ?: null, 'guest', 'account', (int) ($patient['account_id'] ?? 0) ?: null, [], 'failure');
+            } elseif ($patient['account_status'] === 'inactive') {
+                auth_throttle_clear($db, 'patient', $studentIdValue);
+                $wasActivated = !empty($patient['activated_at']);
+                if ($wasActivated) {
+                    begin_re_enrollment($patient);
+                } else {
+                    begin_first_registration($patient);
+                }
+                csrf_rotate_token();
+                header('Location: patient-dashboard.php');
+                exit;
+            } else {
+                auth_throttle_clear($db, 'patient', $studentIdValue);
+                student_start_session();
+                $_SESSION['patient_legacy_id'] = (int) $patient['legacy_patient_id'];
+                $_SESSION['patient_account_id'] = (int) $patient['account_id'];
+                $_SESSION['patient_person_id'] = (int) $patient['person_id'];
+                student_record_successful_login((int) $patient['account_id']);
+                audit_log_event('auth', 'student_login_success', (int) $patient['person_id'], 'student', 'person', (int) $patient['person_id']);
+                csrf_rotate_token();
+                header('Location: patient-dashboard.php');
+                exit;
+            }
         }
+    } catch (LoginThrottleException $e) {
+        $error = $e->getMessage();
     }
 }
 
@@ -53,6 +66,7 @@ render_student_auth_header('Patient Login');
 <?php render_cliniq_entry_header([
     'homeUrl' => '../public/index.php',
     'logoUrl' => $clinicLogoSrc,
+    'showBack' => false,
 ]); ?>
 
 <main class="student-auth-wrap">

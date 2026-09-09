@@ -218,6 +218,8 @@ function render_header(string $title): void
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title><?= e($title) ?> | <?= e($clinicProfile['system_name']) ?></title>
+        <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
+        <script src="<?= app_url('assets/js/csrf.js?v=' . filemtime(__DIR__ . '/../../public/assets/js/csrf.js')) ?>" defer></script>
         <link href="<?= app_url('assets/vendor/fonts/inter-manrope.css?v=offline-1') ?>" rel="stylesheet">
         <link href="<?= app_url('assets/vendor/fonts/material-symbols.css?v=offline-1') ?>" rel="stylesheet">
         <script src="<?= app_url('assets/vendor/tailwind/tailwind-cdn.js?v=offline-1') ?>"></script>

@@ -10,12 +10,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $idNumber = trim($_POST['id_number'] ?? '');
     $password = $_POST['password'] ?? '';
 
-    if (login_attempt($idNumber, $password)) {
-        header('Location: dashboard.php');
-        exit;
+    try {
+        if (login_attempt($idNumber, $password)) {
+            header('Location: dashboard.php');
+            exit;
+        }
+        $error = 'Invalid ID number or password, or the account is not active.';
+    } catch (LoginThrottleException $e) {
+        $error = $e->getMessage();
     }
-
-    $error = 'Invalid ID number or password, or the account is not active.';
 }
 
 render_header('Login');

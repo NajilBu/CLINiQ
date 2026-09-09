@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+putenv('BACKUP_ENCRYPTION_KEY=test-only-backup-key-with-at-least-32-characters');
 require_once dirname(__DIR__) . '/app/services/BackupService.php';
 
 if (cliniq_backup_format_bytes(1000) !== '1000 B') {
@@ -22,4 +23,32 @@ if (!str_contains($source, "if (\$scheduled && (int) date('G') < CLINIQ_BACKUP_S
     throw new RuntimeException('Scheduled backups must wait until 8:00 AM.');
 }
 
-echo "Backup service policy test passed. No filesystem or database writes.\n";
+$temporaryDirectory = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'cliniq-backup-crypto-' . bin2hex(random_bytes(5));
+if (!mkdir($temporaryDirectory, 0700, true) && !is_dir($temporaryDirectory)) {
+    throw new RuntimeException('Unable to create backup encryption test directory.');
+}
+$plaintextPath = $temporaryDirectory . DIRECTORY_SEPARATOR . 'payload.sql';
+$recoveredPath = $temporaryDirectory . DIRECTORY_SEPARATOR . 'recovered.sql';
+$expected = "CREATE TABLE encrypted_test (id INT);\n";
+file_put_contents($plaintextPath, $expected);
+try {
+    $details = cliniq_backup_encrypt_file($plaintextPath);
+    $encryptedPath = $plaintextPath . '.enc';
+    if (is_file($plaintextPath) || !is_file($encryptedPath)) {
+        throw new RuntimeException('Backup encryption must replace the plaintext payload.');
+    }
+    if (!hash_equals($details['encrypted_sha256'], (string) hash_file('sha256', $encryptedPath))) {
+        throw new RuntimeException('Encrypted payload checksum does not match.');
+    }
+    cliniq_backup_decrypt_file($encryptedPath, $recoveredPath);
+    if (file_get_contents($recoveredPath) !== $expected) {
+        throw new RuntimeException('Encrypted backup payload did not decrypt exactly.');
+    }
+} finally {
+    @unlink($plaintextPath);
+    @unlink($plaintextPath . '.enc');
+    @unlink($recoveredPath);
+    @rmdir($temporaryDirectory);
+}
+
+echo "Backup policy and authenticated-encryption test passed.\n";
