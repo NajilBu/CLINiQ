@@ -121,6 +121,23 @@ function migration_baseline_tables(string $schemaFile): array
     return $tables;
 }
 
+function migration_post_baseline_tables(string $migrationDirectory): array
+{
+    $tables = [];
+    foreach (migration_files($migrationDirectory) as $file) {
+        if (strcmp(basename($file), CLINIQ_BASELINE_THROUGH) <= 0) {
+            continue;
+        }
+        $sql = file_get_contents($file);
+        if ($sql === false) {
+            throw new RuntimeException('Unable to read migration: ' . basename($file));
+        }
+        preg_match_all('/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`?([a-zA-Z0-9_]+)`?/i', $sql, $matches);
+        $tables = array_merge($tables, $matches[1] ?? []);
+    }
+    return array_values(array_unique($tables));
+}
+
 try {
     $projectRoot = dirname(__DIR__, 2);
     $schemaFile = $projectRoot . '/database/production_schema.sql';
@@ -153,7 +170,10 @@ try {
         echo 'Creating fresh database from production_schema.sql...', PHP_EOL;
         migration_run_sql_file($database, $schemaFile);
     } else {
-        $required = array_values(array_diff(migration_baseline_tables($schemaFile), ['schema_migrations']));
+        $required = array_values(array_diff(
+            migration_baseline_tables($schemaFile),
+            array_merge(['schema_migrations'], migration_post_baseline_tables($migrationDirectory))
+        ));
         $actual = $pdo->query(
             'SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = \'BASE TABLE\''
         )->fetchAll(PDO::FETCH_COLUMN);

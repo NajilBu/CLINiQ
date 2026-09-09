@@ -41,6 +41,9 @@ if (!str_contains($runner, 'hash_file(\'sha256\'')) {
 if (!str_contains($runner, 'Existing database is not a complete CLINiQ baseline')) {
     throw new RuntimeException('Migration runner must reject incomplete existing databases.');
 }
+if (!str_contains($runner, 'migration_post_baseline_tables')) {
+    throw new RuntimeException('Existing databases must be checked before post-baseline tables are migrated.');
+}
 if (!str_contains($envLoader, 'getenv($key)')) {
     throw new RuntimeException('Container environment variables must override local .env values.');
 }
