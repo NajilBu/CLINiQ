@@ -155,7 +155,6 @@ $scheduleItems = [];
 $dashboardToday = date('Y-m-d');
 $todayApeBatchesByDate = appointment_ape_batches_for_range($dashboardToday, $dashboardToday);
 $todayApeBatches = $todayApeBatchesByDate[$dashboardToday] ?? [];
-$usingAppointmentPlaceholders = count($appointments) === 0 && count($todayApeBatches) === 0;
 
 $appointmentRows = $appointments;
 $appointmentRows = array_merge($appointmentRows, array_map(static function (array $batch): array {
@@ -173,15 +172,6 @@ $appointmentRows = array_merge($appointmentRows, array_map(static function (arra
         '_is_ape' => true,
     ];
 }, $todayApeBatches));
-if ($usingAppointmentPlaceholders) {
-    // UI-only examples make the empty timeline understandable. They are never saved.
-    $today = date('Y-m-d');
-    $appointmentRows = [
-        ['id' => 0, 'patient_id' => 0, 'appointment_datetime' => $today . ' 08:30:00', 'first_name' => 'Sofia', 'last_name' => 'Bautista', 'id_number' => '26-01024', 'purpose' => 'General consultation', 'status' => 'Scheduled', '_placeholder' => true],
-        ['id' => 0, 'patient_id' => 0, 'appointment_datetime' => $today . ' 10:00:00', 'first_name' => 'Najil', 'last_name' => 'Bumacod', 'id_number' => '23-00262', 'purpose' => 'Follow-up checkup', 'status' => 'Scheduled', '_placeholder' => true],
-        ['id' => 0, 'patient_id' => 0, 'appointment_datetime' => $today . ' 13:30:00', 'first_name' => 'Maria', 'last_name' => 'Santos', 'id_number' => 'FAC-0001', 'purpose' => 'Medical consultation', 'status' => 'Scheduled', '_placeholder' => true],
-    ];
-}
 
 foreach ($appointmentRows as $row) {
     $timestamp = strtotime((string) $row['appointment_datetime']);
@@ -690,10 +680,9 @@ render_header('Main Dashboard');
                                         ? strtotime((string) $apt['_end_datetime'])
                                         : strtotime((string) $apt['appointment_datetime']) + ($appointmentDurationMinutes * 60));
                                     $fullName = trim($apt['first_name'] . ' ' . $apt['last_name']);
-                                    $isPlaceholder = !empty($apt['_placeholder']);
                                     $isApe = !empty($apt['_is_ape']);
                                     ?>
-                                    <article class="dashboard-calendar-event <?= $isPlaceholder ? 'is-placeholder' : '' ?> <?= $isApe ? 'is-ape' : '' ?>"
+                                    <article class="dashboard-calendar-event <?= $isApe ? 'is-ape' : '' ?>"
                                         style="top: calc(<?= number_format($top, 4, '.', '') ?>% + 2px); height: calc(<?= number_format($height, 4, '.', '') ?>% - 4px); left: calc(<?= number_format($left, 4, '.', '') ?>% + 3px); width: calc(<?= number_format($width, 4, '.', '') ?>% - 6px);"
                                         title="<?= e($fullName . ' — ' . $apt['purpose'] . ' — ' . $time . ' to ' . $endTime) ?>">
                                         <div class="dashboard-calendar-event-main">
@@ -701,7 +690,6 @@ render_header('Main Dashboard');
                                                 <div class="dashboard-calendar-event-time">
                                                     <span class="material-symbols-outlined" aria-hidden="true">schedule</span>
                                                     <?= e($time) ?>–<?= e($endTime) ?>
-                                                    <?php if ($isPlaceholder): ?><span class="dashboard-calendar-sample-badge">Sample</span><?php endif; ?>
                                                     <?php if ($isApe): ?><span class="dashboard-calendar-sample-badge">APE</span><?php endif; ?>
                                                 </div>
                                                 <strong><?= e($fullName) ?></strong>

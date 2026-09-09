@@ -1,0 +1,51 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - docker/.env
+    depends_on:
+      database:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:80"
+    volumes:
+      - cliniq_documents:/var/www/html/storage/documents
+      - cliniq_uploads:/var/www/html/public/uploads
+      - cliniq_backups:/var/backups/cliniq
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost/public/api/health.php"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - cliniq_internal
+
+  database:
+    image: mariadb:11.4
+    restart: unless-stopped
+    env_file:
+      - docker/.env
+    volumes:
+      - cliniq_database:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks:
+      - cliniq_internal
+
+volumes:
+  cliniq_database:
+  cliniq_documents:
+  cliniq_uploads:
+  cliniq_backups:
+
+networks:
+  cliniq_internal:
+    driver: bridge

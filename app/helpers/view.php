@@ -203,8 +203,8 @@ function render_header(string $title): void
         'Referrals' => ['url' => app_url('referrals/index.php'), 'match' => '/referrals/', 'icon' => 'send'],
         'Reports' => ['url' => app_url('reports/index.php'), 'match' => '/reports/', 'icon' => 'analytics'],
         'Feedback' => ['url' => app_url('feedback/index.php'), 'match' => '/feedback/', 'icon' => 'rate_review', 'roles' => ['admin', 'doctor']],
-        'Settings' => ['url' => app_url('settings/index.php'), 'match' => '/settings/', 'icon' => 'settings'],
         'Audit Log' => ['url' => app_url('audit/index.php'), 'match' => '/audit/', 'icon' => 'history', 'roles' => ['admin']],
+        'Settings' => ['url' => app_url('settings/index.php'), 'match' => '/settings/', 'icon' => 'settings'],
     ];
     if (first_registration_pending('staff')) {
         $nav = [

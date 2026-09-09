@@ -1,9 +1,22 @@
 const { app, BrowserWindow, ipcMain, net, session, shell } = require('electron');
 const path = require('node:path');
+const { execFile } = require('node:child_process');
 
-const DEFAULT_CLINIC_URL = 'http://localhost/CLINiQ/public/';
+const DEFAULT_CLINIC_URL = 'http://localhost:8080/public/';
 const HEALTH_TIMEOUT_MS = 5000;
 let mainWindow = null;
+let backupTaskRequested = false;
+
+function requestMissedDailyBackup() {
+    if (process.platform !== 'win32' || backupTaskRequested || new Date().getHours() < 8) return;
+    backupTaskRequested = true;
+    execFile(
+        'schtasks.exe',
+        ['/Run', '/TN', 'CLINiQ Daily Backup'],
+        { windowsHide: true },
+        () => {}
+    );
+}
 
 function normalizedClinicUrl() {
     const configuredUrl = String(process.env.CLINIQ_CLINIC_URL || DEFAULT_CLINIC_URL).trim();
@@ -109,6 +122,7 @@ async function loadClinicWhenReady() {
     }
 
     await mainWindow.loadURL(clinicStartUrl.href);
+    requestMissedDailyBackup();
     return true;
 }
 

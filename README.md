@@ -18,10 +18,11 @@ components, page-family conventions, and the checklist for correcting inconsiste
 ## Quick Setup
 
 1. Copy this folder to your XAMPP `htdocs` directory, or point Apache to this folder.
-2. Create a MySQL database named `cliniq`.
-3. Import `database/schema.sql` using phpMyAdmin.
-4. Copy `.env.example` to `.env` and update the database credentials.
-5. Open `http://localhost/cliniq/public/` in your browser.
+2. Copy `.env.example` to `.env` and update the database credentials.
+3. Run `php scripts/database/migrate.php`.
+   This imports `database/production_schema.sql` for a fresh database and applies
+   only migrations that have not already been recorded.
+4. Open `http://localhost/cliniq/public/` in your browser.
 
 Default account after importing the schema:
 

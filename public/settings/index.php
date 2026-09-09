@@ -5,6 +5,7 @@ require_once __DIR__ . '/../../app/services/SystemSettings.php';
 require_once __DIR__ . '/../../app/services/RiskSettings.php';
 require_once __DIR__ . '/../../app/services/ApeCycleService.php';
 require_once __DIR__ . '/../../app/services/AuditLog.php';
+require_once __DIR__ . '/../../app/services/BackupService.php';
 
 require_login();
 ensure_system_settings_schema();
@@ -179,6 +180,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         audit_log_event('settings', 'risk_settings_reset', $updatedBy, 'staff', 'settings', null);
         flash_message('success', 'Incident risk classification settings were restored to the default CLINiQ rules.');
         header('Location: index.php?tab=clinical');
+        exit;
+    }
+
+    if ($action === 'save_ape_required_documents') {
+        if (!$canManageApeCycles) {
+            flash_message('error', 'Only administrators and doctors can manage required APE documents.');
+            header('Location: index.php?tab=general');
+            exit;
+        }
+
+        try {
+            $result = update_ape_required_documents(
+                (array) ($_POST['ape_required_documents'] ?? []),
+                (int) ($user['person_id'] ?? 0) ?: null
+            );
+            $message = sprintf(
+                'Required APE documents saved. %d item(s) added and %d untouched item(s) removed from unlocked active-cycle checklists.',
+                (int) $result['added_rows'],
+                (int) $result['removed_rows']
+            );
+            flash_message('success', $message);
+        } catch (Throwable $e) {
+            flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $e->getMessage());
+        }
+
+        header('Location: index.php?tab=ape-cycle');
+        exit;
+    }
+
+    if (in_array($action, ['run_backup', 'verify_backup', 'run_semester_backup'], true)) {
+        if (!$canManageSettings) {
+            flash_message('error', 'Only authorized clinic administrators can manage system backups.');
+            header('Location: index.php?tab=backup');
+            exit;
+        }
+
+        try {
+            if ($action === 'verify_backup') {
+                $result = cliniq_backup_restore_test();
+                flash_message('success', sprintf('Latest backup verified: %d file(s), %s, %d restored table(s).', (int) $result['file_count'], cliniq_backup_format_bytes((int) $result['total_bytes']), (int) $result['restored_tables']));
+                audit_log_event('settings', 'backup_verified', $updatedBy, 'staff', 'backup', null, ['path' => $result['path']]);
+            } else {
+                $type = $action === 'run_semester_backup' ? 'semester' : 'daily';
+                $result = cliniq_backup_run($type, false, false);
+                flash_message($result['state'] === 'skipped' ? 'warning' : 'success', $result['message']);
+                audit_log_event('settings', 'backup_' . $result['state'], $updatedBy, 'staff', 'backup', null, ['type' => $type]);
+            }
+        } catch (Throwable $e) {
+            flash_message('error', $e->getMessage());
+            audit_log_event('settings', 'backup_failed', $updatedBy, 'staff', 'backup', null, ['message' => $e->getMessage()], 'failed');
+        }
+
+        header('Location: index.php?tab=backup');
         exit;
     }
 
@@ -444,6 +498,9 @@ $mailSettings = mail_settings();
 $mailConfigured = mail_settings_configured();
 $mailNotificationTemplates = cliniq_mail_templates();
 $mailRecipients = $canManageSettings ? cliniq_mail_recipients() : [];
+$backupStatus = cliniq_backup_status();
+$backupHistory = cliniq_backup_history();
+$backupRoot = cliniq_backup_root();
 $activeApePatientCount = 0;
 $excludedApePatientCount = 0;
 $apeCurrentCycle = null;
@@ -473,6 +530,7 @@ $apeCycleProgress = $apeCurrentCycle['progress'] ?? [
     'follow_up' => 0,
     'compliance_percent' => 0,
 ];
+$apeRequiredDocuments = ape_required_documents();
 $hasActiveApeCycle = ($apeCurrentCycle['status'] ?? '') === 'Active';
 $apeYearStart = (int) date('Y');
 if ((int) date('n') < 6) {
@@ -1241,6 +1299,51 @@ render_clinic_command_header(
                         </div>
                     </section>
 
+                    <section class="settings-section space-y-5">
+                        <div class="flex items-start gap-4">
+                            <div class="w-12 h-12 rounded-xl bg-[var(--cliniq-surface-low)] text-[var(--cliniq-primary)] flex items-center justify-center shrink-0">
+                                <span class="material-symbols-outlined text-[24px]">fact_check</span>
+                            </div>
+                            <div>
+                                <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Required APE Documents</h3>
+                                <p class="settings-help mb-0">Set the checklist used for new APE records. During an active cycle, saving also updates only patient checklists that have not been saved, reviewed, or uploaded.</p>
+                            </div>
+                        </div>
+
+                        <form method="post" data-no-ajax="true" id="apeRequiredDocumentsForm" class="space-y-4">
+                            <input type="hidden" name="action" value="save_ape_required_documents">
+                            <div class="space-y-3" id="apeRequiredDocumentsList">
+                                <?php foreach ($apeRequiredDocuments as $documentIndex => $documentName): ?>
+                                    <div class="flex items-center gap-2" data-ape-document-row>
+                                        <span class="w-8 text-center text-xs font-extrabold text-slate-400" data-ape-document-position><?= $documentIndex + 1 ?></span>
+                                        <input class="settings-input flex-1" name="ape_required_documents[]" value="<?= e($documentName) ?>" maxlength="120" required aria-label="Required document <?= $documentIndex + 1 ?>">
+                                        <button type="button" class="btn btn-secondary !px-3" data-move-ape-document="up" aria-label="Move document up" title="Move up">
+                                            <span class="material-symbols-outlined text-[18px]">arrow_upward</span>
+                                        </button>
+                                        <button type="button" class="btn btn-secondary !px-3" data-move-ape-document="down" aria-label="Move document down" title="Move down">
+                                            <span class="material-symbols-outlined text-[18px]">arrow_downward</span>
+                                        </button>
+                                        <button type="button" class="btn btn-danger !px-3" data-remove-ape-document aria-label="Remove document" title="Remove">
+                                            <span class="material-symbols-outlined text-[18px]">delete</span>
+                                        </button>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+
+                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                <button type="button" class="btn btn-secondary justify-center" id="addApeRequiredDocument">
+                                    <span class="material-symbols-outlined text-[18px]">add</span>
+                                    Add Document
+                                </button>
+                                <button class="btn btn-primary justify-center" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save required APE documents?" data-confirm-message="New records will use this list. Only unlocked and untouched items in the active cycle will be synchronized." data-confirm-toast="Saving required documents...">
+                                    <span class="material-symbols-outlined text-[18px]">save</span>
+                                    Save Required Documents
+                                </button>
+                            </div>
+                            <p class="settings-help mb-0">Use the arrow buttons to control the order shown to clinic staff and patients. Patient-specific requirements added from an APE record are preserved.</p>
+                        </form>
+                    </section>
+
                     <?php if ($apeCurrentCycle): ?>
                         <section class="settings-section space-y-5">
                             <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
@@ -1479,48 +1582,53 @@ render_clinic_command_header(
                 <?php endif; ?>
             </div>
 
-            <div id="settings-backup" class="settings-tab-panel <?= $currentTab === 'backup' ? 'active' : '' ?> space-y-6" data-backup-placeholder>
+            <div id="settings-backup" class="settings-tab-panel <?= $currentTab === 'backup' ? 'active' : '' ?> space-y-6">
                 <section>
                     <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                         <div>
                             <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">System Backup</h2>
-                            <p class="text-xs font-bold text-slate-500 mb-0">Placeholder for the planned daily backup of CLINiQ records and uploaded files.</p>
+                            <p class="text-xs font-bold text-slate-500 mb-0">Internal database and document snapshots with automatic integrity verification.</p>
                         </div>
-                        <span class="badge badge-pending"><span class="material-symbols-outlined text-[14px]">construction</span> Not configured</span>
+                        <?php
+                        $backupState = (string) ($backupStatus['state'] ?? 'not_run');
+                        $backupBadgeClass = $backupState === 'success' ? 'badge-completed' : ($backupState === 'error' ? 'badge-cancelled' : 'badge-pending');
+                        $backupBadgeLabel = $backupState === 'success' ? 'Healthy' : ($backupState === 'error' ? 'Attention needed' : 'Waiting for first backup');
+                        ?>
+                        <span class="badge <?= e($backupBadgeClass) ?>"><span class="material-symbols-outlined text-[14px]"><?= $backupState === 'success' ? 'verified' : 'schedule' ?></span> <?= e($backupBadgeLabel) ?></span>
                     </div>
                 </section>
 
-                <section class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4" aria-label="Planned backup configuration">
+                <section class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4" aria-label="Backup configuration">
                     <div class="settings-section">
                         <span class="material-symbols-outlined text-primary mb-3">calendar_today</span>
                         <p class="clinic-label mb-1">Frequency</p>
                         <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Once daily</h3>
-                        <p class="settings-help mb-0">Planned after clinic hours.</p>
+                        <p class="settings-help mb-0">Sunday snapshots are also retained weekly.</p>
                     </div>
                     <div class="settings-section">
                         <span class="material-symbols-outlined text-primary mb-3">schedule</span>
-                        <p class="clinic-label mb-1">Proposed Time</p>
-                        <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">6:00 PM</h3>
-                        <p class="settings-help mb-0">The server must be running.</p>
+                        <p class="clinic-label mb-1">Daily Time</p>
+                        <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">8:00 AM</h3>
+                        <p class="settings-help mb-0">Runs at the next startup when 8:00 AM is missed.</p>
                     </div>
                     <div class="settings-section">
                         <span class="material-symbols-outlined text-primary mb-3">hard_drive</span>
                         <p class="clinic-label mb-1">Destination</p>
                         <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Internal drive</h3>
-                        <p class="settings-help mb-0">A folder or drive has not been selected.</p>
+                        <p class="settings-help mb-0 break-all"><?= e($backupRoot) ?></p>
                     </div>
                     <div class="settings-section">
                         <span class="material-symbols-outlined text-primary mb-3">history</span>
                         <p class="clinic-label mb-1">Last Backup</p>
-                        <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">No backup yet</h3>
-                        <p class="settings-help mb-0">History will appear after implementation.</p>
+                        <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1"><?= !empty($backupStatus['last_success_at']) ? e(date('M j, Y g:i A', strtotime((string) $backupStatus['last_success_at']))) : 'No backup yet' ?></h3>
+                        <p class="settings-help mb-0"><?= e((string) ($backupStatus['message'] ?? 'Waiting for the first run.')) ?></p>
                     </div>
                 </section>
 
                 <section class="settings-section space-y-4">
                     <div>
-                        <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Planned Backup Coverage</h3>
-                        <p class="settings-help mb-0">The database and uploaded files must be backed up together so restored records keep their documents.</p>
+                        <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Backup Coverage</h3>
+                        <p class="settings-help mb-0">The database and uploaded files are captured and verified together so restored records keep their documents.</p>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div class="rounded-xl border border-outline-variant bg-[var(--cliniq-surface-low)] p-4 flex items-start gap-3">
@@ -1537,21 +1645,55 @@ render_clinic_command_header(
                 <section class="settings-section flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                     <div>
                         <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Backup Controls</h3>
-                        <p class="settings-help mb-0">These controls are placeholders and cannot start or configure a backup yet.</p>
+                        <p class="settings-help mb-0">Daily backups are retained for 14 days and Sunday copies for 12 weeks. Semester archives are retained until manually removed.</p>
                     </div>
                     <div class="flex flex-col sm:flex-row gap-3">
-                        <button type="button" class="btn btn-secondary justify-center" disabled title="Backup implementation is not configured yet">
-                            <span class="material-symbols-outlined text-[18px]">settings</span> Configure Backup · Coming soon
-                        </button>
-                        <button type="button" class="btn btn-primary justify-center" disabled title="Backup implementation is not configured yet">
-                            <span class="material-symbols-outlined text-[18px]">backup</span> Run Backup · Coming soon
-                        </button>
+                        <form method="post" data-no-ajax="true">
+                            <input type="hidden" name="action" value="verify_backup">
+                            <button class="btn btn-secondary justify-center" <?= !$canManageSettings || !$backupHistory ? 'disabled' : '' ?>>
+                                <span class="material-symbols-outlined text-[18px]">verified</span> Verify Latest
+                            </button>
+                        </form>
+                        <form method="post" data-no-ajax="true">
+                            <input type="hidden" name="action" value="run_semester_backup">
+                            <button class="btn btn-secondary justify-center" <?= !$canManageSettings ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Create semester archive?" data-confirm-message="This creates a permanent full database and document snapshot." data-confirm-toast="Creating semester archive...">
+                                <span class="material-symbols-outlined text-[18px]">archive</span> Semester Archive
+                            </button>
+                        </form>
+                        <form method="post" data-no-ajax="true">
+                            <input type="hidden" name="action" value="run_backup">
+                            <button class="btn btn-primary justify-center" <?= !$canManageSettings ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Run backup now?" data-confirm-message="This creates today's internal database and document backup if one has not already completed." data-confirm-toast="Running backup...">
+                                <span class="material-symbols-outlined text-[18px]">backup</span> Run Backup Now
+                            </button>
+                        </form>
                     </div>
                 </section>
 
-                <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 flex items-start gap-3 text-amber-900">
-                    <span class="material-symbols-outlined">info</span>
-                    <p class="text-sm font-bold mb-0">No automatic backup is running. This page describes the agreed plan only.</p>
+                <section class="settings-section space-y-4">
+                    <div>
+                        <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Recent Backups</h3>
+                        <p class="settings-help mb-0">Every completed snapshot includes a checksum manifest. Database credentials are never included.</p>
+                    </div>
+                    <?php if (!$backupHistory): ?>
+                        <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-5 text-sm font-bold text-slate-500">No completed backups yet.</div>
+                    <?php else: ?>
+                        <div class="space-y-2">
+                            <?php foreach ($backupHistory as $backup): ?>
+                                <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                    <div>
+                                        <strong class="text-sm text-[#17261d] block"><?= e(ucfirst((string) $backup['type'])) ?> backup</strong>
+                                        <span class="settings-help"><?= e(date('M j, Y g:i A', strtotime((string) $backup['created_at']))) ?> &bull; <?= (int) $backup['files'] ?> file(s)</span>
+                                    </div>
+                                    <span class="text-xs font-extrabold text-slate-500"><?= e(cliniq_backup_format_bytes((int) $backup['bytes'])) ?></span>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </section>
+
+                <div class="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 flex items-start gap-3 text-blue-900">
+                    <span class="material-symbols-outlined">shield</span>
+                    <p class="text-sm font-bold mb-0">Internal backups protect against database corruption and accidental deletion, but not failure or loss of this computer's drive.</p>
                 </div>
             </div>
 
@@ -2397,6 +2539,68 @@ render_clinic_command_header(
             });
 
             document.getElementById('cancelApeCycleButton').addEventListener('click', () => closeModal('apeCycleModal'));
+        })();
+    </script>
+
+    <script>
+        (() => {
+            const list = document.getElementById('apeRequiredDocumentsList');
+            const addButton = document.getElementById('addApeRequiredDocument');
+            if (!list || !addButton) return;
+
+            const refreshRows = () => {
+                const rows = [...list.querySelectorAll('[data-ape-document-row]')];
+                rows.forEach((row, index) => {
+                    row.querySelector('[data-ape-document-position]').textContent = String(index + 1);
+                    const input = row.querySelector('input');
+                    input.setAttribute('aria-label', `Required document ${index + 1}`);
+                    row.querySelector('[data-move-ape-document="up"]').disabled = index === 0;
+                    row.querySelector('[data-move-ape-document="down"]').disabled = index === rows.length - 1;
+                    row.querySelector('[data-remove-ape-document]').disabled = rows.length === 1;
+                });
+                addButton.disabled = rows.length >= 20;
+            };
+
+            const createRow = () => {
+                const row = document.createElement('div');
+                row.className = 'flex items-center gap-2';
+                row.dataset.apeDocumentRow = '';
+                row.innerHTML = `
+                    <span class="w-8 text-center text-xs font-extrabold text-slate-400" data-ape-document-position></span>
+                    <input class="settings-input flex-1" name="ape_required_documents[]" maxlength="120" required aria-label="New required document" placeholder="Document name">
+                    <button type="button" class="btn btn-secondary !px-3" data-move-ape-document="up" aria-label="Move document up" title="Move up"><span class="material-symbols-outlined text-[18px]">arrow_upward</span></button>
+                    <button type="button" class="btn btn-secondary !px-3" data-move-ape-document="down" aria-label="Move document down" title="Move down"><span class="material-symbols-outlined text-[18px]">arrow_downward</span></button>
+                    <button type="button" class="btn btn-danger !px-3" data-remove-ape-document aria-label="Remove document" title="Remove"><span class="material-symbols-outlined text-[18px]">delete</span></button>
+                `;
+                return row;
+            };
+
+            addButton.addEventListener('click', () => {
+                if (list.querySelectorAll('[data-ape-document-row]').length >= 20) return;
+                const row = createRow();
+                list.appendChild(row);
+                refreshRows();
+                row.querySelector('input').focus();
+            });
+
+            list.addEventListener('click', (event) => {
+                const row = event.target.closest('[data-ape-document-row]');
+                if (!row) return;
+                if (event.target.closest('[data-remove-ape-document]')) {
+                    if (list.querySelectorAll('[data-ape-document-row]').length > 1) row.remove();
+                } else {
+                    const moveButton = event.target.closest('[data-move-ape-document]');
+                    if (!moveButton) return;
+                    if (moveButton.dataset.moveApeDocument === 'up' && row.previousElementSibling) {
+                        list.insertBefore(row, row.previousElementSibling);
+                    } else if (moveButton.dataset.moveApeDocument === 'down' && row.nextElementSibling) {
+                        list.insertBefore(row.nextElementSibling, row);
+                    }
+                }
+                refreshRows();
+            });
+
+            refreshRows();
         })();
     </script>
 

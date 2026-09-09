@@ -887,13 +887,7 @@ function ape_activities_for_patient_record(int $apeId, int $patientId, int $limi
 
 function ape_default_requirements(): array
 {
-    return [
-        'Lab Request Form',
-        'UHS Consent Form',
-        'UHS Medical Record',
-        'UHS Dental Record',
-        'Referral Form',
-    ];
+    return ape_required_documents();
 }
 
 function ape_seed_default_requirements(int $apeId, string $status = 'Missing'): void

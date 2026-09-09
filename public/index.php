@@ -7,10 +7,7 @@ if (current_user()) {
     exit;
 }
 
-$publicBase = rtrim(app_url(''), '/');
-$appBase = preg_replace('#/public$#', '', $publicBase);
 $visitorRegisterUrl = app_url('visitor-registration.php');
-$studentLoginUrl = $appBase . '/patient-portal/patient-login.php';
 $staffLoginUrl = app_url('login.php');
 $clinicProfile = clinic_profile_settings();
 $clinicLogoUrl = app_url(clinic_profile_logo_path($clinicProfile));
@@ -206,10 +203,6 @@ $theme = active_cliniq_theme();
                 <span class="block font-headline font-extrabold text-base leading-none text-[#17261d]"><?= e($clinicProfile['system_name']) ?></span>
                 <span class="block text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1"><?= e($clinicProfile['department']) ?></span>
             </span>
-        </a>
-        <a href="<?= e($studentLoginUrl) ?>" class="btn btn-sm btn-ghost text-decoration-none">
-            <span class="material-symbols-outlined text-[16px]">school</span>
-            Patient
         </a>
     </header>
 

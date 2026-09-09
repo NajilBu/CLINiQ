@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../helpers/mail.php';
+require_once __DIR__ . '/ApeWorkflow.php';
 
 function ensure_ape_cycle_schema(): void
 {
@@ -159,21 +160,17 @@ function start_ape_cycle(string $academicYear, string $complianceStart, string $
         $adoptRecords->execute([$cycleId, $academicYear]);
         $adopted = $adoptRecords->rowCount();
 
-        $seedRequirements = $db->prepare("
+        $seedRequirement = $db->prepare("
             INSERT IGNORE INTO ape_requirements (ape_id, requirement_name, status)
-            SELECT ar.ape_id, defaults.requirement_name, 'Missing'
+            SELECT ar.ape_id, ?, 'Missing'
             FROM ape_records ar
-            CROSS JOIN (
-                SELECT 'Lab Request Form' AS requirement_name
-                UNION ALL SELECT 'UHS Consent Form'
-                UNION ALL SELECT 'UHS Medical Record'
-                UNION ALL SELECT 'UHS Dental Record'
-                UNION ALL SELECT 'Referral Form'
-            ) defaults
             WHERE ar.ape_cycle_id = ?
         ");
-        $seedRequirements->execute([$cycleId]);
-        $requirementsCreated = $seedRequirements->rowCount();
+        $requirementsCreated = 0;
+        foreach (ape_default_requirements() as $requirementName) {
+            $seedRequirement->execute([$requirementName, $cycleId]);
+            $requirementsCreated += $seedRequirement->rowCount();
+        }
 
         $log = $db->prepare("
             INSERT INTO ape_activity_logs (ape_id, performed_by_person_id, action, notes)
@@ -191,6 +188,91 @@ function start_ape_cycle(string $academicYear, string $complianceStart, string $
         $cycle['adopted_records'] = $adopted;
         $cycle['created_requirements'] = $requirementsCreated;
         return $cycle;
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        throw $e;
+    }
+}
+
+function update_ape_required_documents(array $documents, ?int $actorPersonId): array
+{
+    ensure_ape_cycle_schema();
+    $normalized = normalize_ape_required_documents($documents);
+    $previous = ape_required_documents();
+    $newKeys = array_map(static fn(string $name): string => mb_strtolower($name), $normalized);
+    $removed = array_values(array_filter(
+        $previous,
+        static fn(string $name): bool => !in_array(mb_strtolower($name), $newKeys, true)
+    ));
+
+    $db = auth_db();
+    $db->beginTransaction();
+    try {
+        $activeCycleId = (int) ($db->query("SELECT ape_cycle_id FROM ape_cycles WHERE status = 'Active' LIMIT 1 FOR UPDATE")->fetchColumn() ?: 0);
+        save_ape_required_documents($normalized, $actorPersonId);
+
+        $addedRows = 0;
+        $removedRows = 0;
+        if ($activeCycleId > 0) {
+            $insert = $db->prepare("
+                INSERT IGNORE INTO ape_requirements (ape_id, requirement_name, status)
+                SELECT ar.ape_id, ?, 'Missing'
+                FROM ape_records ar
+                WHERE ar.ape_cycle_id = ?
+                  AND ar.requirements_saved_at IS NULL
+            ");
+            foreach ($normalized as $documentName) {
+                $insert->execute([$documentName, $activeCycleId]);
+                $addedRows += $insert->rowCount();
+            }
+
+            if ($removed) {
+                $placeholders = implode(', ', array_fill(0, count($removed), '?'));
+                $delete = $db->prepare("
+                    DELETE requirement
+                    FROM ape_requirements requirement
+                    INNER JOIN ape_records record ON record.ape_id = requirement.ape_id
+                    LEFT JOIN ape_documents document
+                      ON document.ape_id = requirement.ape_id
+                     AND document.document_type = requirement.requirement_name
+                    WHERE record.ape_cycle_id = ?
+                      AND record.requirements_saved_at IS NULL
+                      AND requirement.requirement_name IN ({$placeholders})
+                      AND requirement.status = 'Missing'
+                      AND requirement.checked_at IS NULL
+                      AND requirement.upload_group IS NULL
+                      AND requirement.upload_due_date IS NULL
+                      AND (requirement.remarks IS NULL OR TRIM(requirement.remarks) = '')
+                      AND document.document_id IS NULL
+                ");
+                $delete->execute(array_merge([$activeCycleId], $removed));
+                $removedRows = $delete->rowCount();
+            }
+        }
+
+        $db->commit();
+        audit_log_event(
+            'settings',
+            'ape_required_documents_updated',
+            $actorPersonId,
+            'staff',
+            'ape_cycle',
+            $activeCycleId ?: null,
+            [
+                'documents' => $normalized,
+                'active_cycle_added_rows' => $addedRows,
+                'active_cycle_removed_rows' => $removedRows,
+            ]
+        );
+
+        return [
+            'documents' => $normalized,
+            'active_cycle_id' => $activeCycleId ?: null,
+            'added_rows' => $addedRows,
+            'removed_rows' => $removedRows,
+        ];
     } catch (Throwable $e) {
         if ($db->inTransaction()) {
             $db->rollBack();

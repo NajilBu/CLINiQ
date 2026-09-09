@@ -212,19 +212,18 @@ Put here:
 - Database migrations, if added later
 - Backup sample data
 
-### `database/schema.sql`
+### `database/production_schema.sql`
 
 Main database structure.
 
 Put here:
 
-- `CREATE DATABASE`
 - `CREATE TABLE`
 - Foreign keys
-- Default admin account
 - Starter reference data
 
-Update this file whenever a new table or column is needed.
+Add future changes as ordered SQL files in `database/migrations/`. After a
+release is verified, roll those structural changes into the production baseline.
 
 Important tables currently included:
 
@@ -600,9 +599,10 @@ Example:
 app/services/RiskClassifier.php
 ```
 
-### 3. Put database changes in `database/schema.sql`
+### 3. Put database changes in `database/migrations/`
 
-If you add a new table, update the schema file.
+Add an ordered migration and run `php scripts/database/migrate.php`. Do not edit
+an already-applied migration; the runner verifies its SHA-256 checksum.
 
 ### 4. Keep emergency passport data limited
 

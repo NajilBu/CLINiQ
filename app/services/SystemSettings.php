@@ -344,6 +344,73 @@ function cliniq_setting_write(string $key, array $value, ?int $updatedBy = null)
     ]);
 }
 
+function default_ape_required_documents(): array
+{
+    return [
+        'Lab Request Form',
+        'UHS Consent Form',
+        'UHS Medical Record',
+        'UHS Dental Record',
+        'Referral Form',
+    ];
+}
+
+function normalize_ape_required_documents(array $documents): array
+{
+    $normalized = [];
+    $seen = [];
+
+    foreach ($documents as $document) {
+        if (!is_scalar($document)) {
+            continue;
+        }
+
+        $name = trim((string) preg_replace('/\s+/u', ' ', strip_tags((string) $document)));
+        if ($name === '') {
+            continue;
+        }
+        if (mb_strlen($name) > 120) {
+            throw new InvalidArgumentException('Each required document name must be 120 characters or fewer.');
+        }
+
+        $key = mb_strtolower($name);
+        if (isset($seen[$key])) {
+            throw new InvalidArgumentException("The required document '{$name}' is listed more than once.");
+        }
+
+        $seen[$key] = true;
+        $normalized[] = $name;
+    }
+
+    if (!$normalized) {
+        throw new InvalidArgumentException('Keep at least one required APE document.');
+    }
+    if (count($normalized) > 20) {
+        throw new InvalidArgumentException('A maximum of 20 required APE documents is allowed.');
+    }
+
+    return $normalized;
+}
+
+function ape_required_documents(): array
+{
+    $defaults = default_ape_required_documents();
+    $settings = cliniq_setting_read('ape_required_documents', ['documents' => $defaults]);
+
+    try {
+        return normalize_ape_required_documents((array) ($settings['documents'] ?? $defaults));
+    } catch (Throwable $e) {
+        return $defaults;
+    }
+}
+
+function save_ape_required_documents(array $documents, ?int $updatedBy = null): array
+{
+    $normalized = normalize_ape_required_documents($documents);
+    cliniq_setting_write('ape_required_documents', ['documents' => $normalized], $updatedBy);
+    return $normalized;
+}
+
 function ensure_dropdown_options_schema(): void
 {
     static $ready = false;

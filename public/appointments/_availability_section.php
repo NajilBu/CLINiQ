@@ -9,7 +9,6 @@ for ($offset = 0; $offset < 5; $offset++) {
     $availabilityWeekDays[] = $availabilityWeek->modify('+' . $offset . ' days');
 }
 
-$usingAvailabilityPlaceholders = empty($availabilityBlocksByDate) && empty($availabilityApeBatchesByDate);
 $calendarBlocksByDate = $availabilityBlocksByDate;
 // Combine adjoining unavailable periods for display; retain the original saved records.
 foreach ($calendarBlocksByDate as $date => $dayBlocks) {
@@ -62,21 +61,6 @@ foreach ($availabilityApeBatchesByDate as $date => $batches) {
         ];
     }
 }
-if ($usingAvailabilityPlaceholders) {
-    $calendarBlocksByDate[$availabilityWeekDays[0]->format('Y-m-d')][] = [
-        'id' => 0, 'start_time' => '09:00:00', 'end_time' => '10:00:00',
-        'reason' => 'Staff Meeting', '_placeholder' => true,
-    ];
-    $calendarBlocksByDate[$availabilityWeekDays[2]->format('Y-m-d')][] = [
-        'id' => 0, 'start_time' => '13:00:00', 'end_time' => '15:00:00',
-        'reason' => 'Clinic Maintenance', '_placeholder' => true,
-    ];
-    $calendarBlocksByDate[$availabilityWeekDays[4]->format('Y-m-d')][] = [
-        'id' => 0, 'start_time' => null, 'end_time' => null,
-        'reason' => 'Campus Event', '_placeholder' => true,
-    ];
-}
-
 $availabilityPrevWeek = $availabilityWeek->modify('-1 week')->format('Y-m-d');
 $availabilityNextWeek = $availabilityWeek->modify('+1 week')->format('Y-m-d');
 $availabilityToday = new DateTimeImmutable('today');
@@ -144,13 +128,6 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
                 <span>Unavailable periods appear in red; APE examinations appear in green.</span>
             </div>
 
-            <?php if ($usingAvailabilityPlaceholders): ?>
-                <div class="appointment-week-sample-note" role="note">
-                    <span class="material-symbols-outlined" aria-hidden="true">info</span>
-                    <span>This week has no saved availability blocks. Faded blocks are UI-only examples and do not affect booking.</span>
-                </div>
-            <?php endif; ?>
-
             <div class="appointment-week-scroll">
                 <div class="appointment-week-calendar" style="grid-template-columns: 4.75rem repeat(5, minmax(8.5rem, 1fr)); min-width: 50rem;">
                     <div class="appointment-week-header appointment-week-time-heading">Time</div>
@@ -192,7 +169,6 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
                             <?php endfor; ?>
 
                             <?php foreach ($blocks as $block):
-                                $isPlaceholder = !empty($block['_placeholder']);
                                 $isApeBatch = !empty($block['_ape_batch']);
                                 $isWholeDay = empty($block['start_time']) || empty($block['end_time']);
                                 $blockStart = $isWholeDay ? $availabilityStartMinutes : (((int) substr($block['start_time'], 0, 2) * 60) + (int) substr($block['start_time'], 3, 2));
@@ -205,15 +181,14 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
                                 $top = (($visibleStart - $availabilityStartMinutes) / $availabilityDurationMinutes) * 100;
                                 $height = (($visibleEnd - $visibleStart) / $availabilityDurationMinutes) * 100;
                                 ?>
-                                <div class="appointment-week-block <?= $isWholeDay ? 'is-all-day' : '' ?> <?= $isPlaceholder ? 'is-placeholder' : '' ?> <?= $isApeBatch ? 'is-ape' : '' ?>"
+                                <div class="appointment-week-block <?= $isWholeDay ? 'is-all-day' : '' ?> <?= $isApeBatch ? 'is-ape' : '' ?>"
                                     style="top: calc(<?= number_format($top, 4, '.', '') ?>% + 2px); height: calc(<?= number_format($height, 4, '.', '') ?>% - 4px);"
                                     role="button" tabindex="0" aria-haspopup="dialog"
                                     data-reason="<?= e($block['reason'] ?? '') ?>" data-time-label="<?= e($isWholeDay ? 'Whole day unavailable' : appointment_format_block_time($block)) ?>"
                                     data-availability-block data-date="<?= e($date) ?>" data-start="<?= e($block['start_time'] ?? '') ?>" data-end="<?= e($block['end_time'] ?? '') ?>"
-                                    <?= $isPlaceholder ? 'data-placeholder-block="true"' : '' ?>
                                     <?= $isApeBatch ? 'data-ape-block="true"' : '' ?>
                                     title="<?= e(appointment_format_block_time($block) . ($block['reason'] ? ' — ' . $block['reason'] : '')) ?>">
-                                    <strong><?= $isWholeDay ? 'Unavailable' : e(appointment_format_block_time($block)) ?><?php if ($isPlaceholder): ?><span class="appointment-week-sample-badge">Sample</span><?php endif; ?><?php if ($isApeBatch): ?><span class="appointment-week-sample-badge">APE</span><?php endif; ?></strong>
+                                    <strong><?= $isWholeDay ? 'Unavailable' : e(appointment_format_block_time($block)) ?><?php if ($isApeBatch): ?><span class="appointment-week-sample-badge">APE</span><?php endif; ?></strong>
                                     <span><?= $isApeBatch ? 'APE: ' : '' ?><?= e($block['reason'] ?: ($isWholeDay ? 'Whole day blocked' : 'Unavailable')) ?></span>
                                 </div>
                             <?php endforeach; ?>
@@ -775,7 +750,7 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
             const date = new Date(year, month, dayNumber);
             const dateString = normalizedDate(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(dayNumber).padStart(2, '0')}`);
             const dayColumn = document.querySelector(`[data-week-date="${dateString}"]`);
-            const alreadyUnavailable = Boolean(dayColumn?.querySelector('[data-availability-block]:not([data-placeholder-block="true"])'));
+            const alreadyUnavailable = Boolean(dayColumn?.querySelector('[data-availability-block]'));
             const disabled = isPastDate(dateString) || isWeekend(dateString) || alreadyUnavailable;
             cell.textContent = String(dayNumber);
             cell.dataset.modalDate = dateString;
@@ -821,7 +796,7 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
         const elements = liveElements();
         selectedCalendarDates.forEach((date) => {
             const dayColumn = document.querySelector(`[data-week-date="${date}"]`);
-            if (dayColumn?.querySelector('[data-availability-block]:not([data-placeholder-block="true"])')) {
+            if (dayColumn?.querySelector('[data-availability-block]')) {
                 selectedCalendarDates.delete(date);
                 selectedTimeSlots.forEach((slot) => {
                     if (parseSlotKey(slot).date === date) selectedTimeSlots.delete(slot);
@@ -934,7 +909,6 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
         if (!cell || cell.disabled) return false;
         const hour = Number(cell.dataset.startHour) * 60;
         return !Array.from(cell.closest('[data-week-date]').querySelectorAll('[data-availability-block]')).some(block => {
-            if (block.dataset.placeholderBlock === 'true') return false;
             const start = block.dataset.start ? timeToMinutes(block.dataset.start.slice(0, 5)) : 480;
             const end = block.dataset.end ? timeToMinutes(block.dataset.end.slice(0, 5)) : 1020;
             return hour < end && hour + 60 > start;
@@ -1065,7 +1039,7 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
             const elements = liveElements();
             if (dateHeader.disabled || isPastDate(date) || !elements.allDay) return;
             const dayColumn = document.querySelector(`[data-week-date="${date}"]`);
-            if (dayColumn?.querySelector('[data-availability-block]:not([data-placeholder-block="true"])')) return;
+            if (dayColumn?.querySelector('[data-availability-block]')) return;
             if (!elements.allDay.checked) {
                 selectedCalendarDates.clear();
                 selectedTimeSlots.clear();
@@ -1168,7 +1142,7 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
         const block = event.target.closest('[data-availability-block]');
         if (block) {
             event.stopPropagation();
-            if (block.dataset.placeholderBlock === 'true' || block.dataset.apeBlock === 'true') {
+            if (block.dataset.apeBlock === 'true') {
                 return;
             }
             document.getElementById('availabilityBlockDetailsDate').textContent = formatDisplayDate(block.dataset.date);

@@ -1,4 +1,5 @@
 .env
+docker/.env
 uploads/*
 !uploads/.gitkeep
 vendor/

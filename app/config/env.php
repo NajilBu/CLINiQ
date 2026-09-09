@@ -4,6 +4,11 @@ function env_value(string $key, ?string $default = null): ?string
 {
     static $env = null;
 
+    $runtimeValue = getenv($key);
+    if ($runtimeValue !== false) {
+        return $runtimeValue;
+    }
+
     if ($env === null) {
         $env = [];
         $path = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . '.env';

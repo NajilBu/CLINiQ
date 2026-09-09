@@ -1,8 +1,5 @@
-CREATE DATABASE IF NOT EXISTS Cliniq_db
-  CHARACTER SET utf8mb4
-  COLLATE utf8mb4_unicode_ci;
-
-USE Cliniq_db;
+-- Canonical production baseline. Import this into the database selected by
+-- AUTH_DB_NAME. Database creation is handled by scripts/database/migrate.php.
 
 -- Academic reference data used by student, faculty, and school personnel profiles.
 CREATE TABLE departments (
@@ -434,7 +431,7 @@ CREATE TABLE referrals (
   visit_id BIGINT UNSIGNED NULL,
   referred_to VARCHAR(160) NOT NULL,
   reason TEXT NOT NULL,
-  status ENUM('Pending', 'Completed', 'Cancelled') NOT NULL DEFAULT 'Pending',
+  status VARCHAR(40) NOT NULL DEFAULT 'Completed',
   referred_by_person_id BIGINT UNSIGNED NULL,
   referral_date DATE NOT NULL,
   remarks TEXT NULL,
@@ -457,8 +454,7 @@ CREATE TABLE appointments (
   patient_id BIGINT UNSIGNED NOT NULL,
   appointment_datetime DATETIME NOT NULL,
   purpose VARCHAR(255) NOT NULL,
-  status ENUM('Pending', 'Scheduled', 'For Confirmation', 'Completed', 'Cancelled', 'No Show')
-    NOT NULL DEFAULT 'Pending',
+  status VARCHAR(40) NOT NULL DEFAULT 'Pending',
   request_source ENUM('Patient Portal', 'Clinic Staff')
     NOT NULL DEFAULT 'Patient Portal',
   notes TEXT NULL,
@@ -574,22 +570,10 @@ CREATE TABLE ape_records (
   academic_year VARCHAR(20) NOT NULL,
   exam_date DATE NULL,
   appointment_id BIGINT UNSIGNED NULL,
-  requirement_status ENUM('Not Checked', 'Checked', 'Needs Correction')
-    NOT NULL DEFAULT 'Not Checked',
+  requirement_status VARCHAR(80) NOT NULL DEFAULT 'Not Checked',
   requirements_saved_at DATETIME NULL,
-  workflow_status ENUM(
-    'Registered',
-    'Batch Assigned',
-    'Requirements Checked',
-    'Submitted',
-    'Reviewed',
-    'Scheduled',
-    'Exam Done',
-    'Follow-up Required',
-    'Cleared'
-  ) NOT NULL DEFAULT 'Registered',
-  clearance_status ENUM('Pending', 'Cleared', 'For Follow-up')
-    NOT NULL DEFAULT 'Pending',
+  workflow_status VARCHAR(80) NOT NULL DEFAULT 'Submitted',
+  clearance_status VARCHAR(80) NOT NULL DEFAULT 'Pending',
   follow_up_required TINYINT(1) NOT NULL DEFAULT 0,
   follow_up_due_date DATE NULL,
   follow_up_due_time TIME NULL,
@@ -718,6 +702,48 @@ CREATE TABLE ape_activity_logs (
   INDEX idx_ape_activity_logs_timeline (ape_id, created_at),
   INDEX idx_ape_activity_logs_performed_by (performed_by_person_id)
 );
+
+-- Visit-linked patient feedback. This belongs in the production baseline so a
+-- fresh deployment does not need to replay the historical feedback migration.
+CREATE TABLE clinic_feedback (
+  feedback_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  visit_id BIGINT UNSIGNED NOT NULL,
+  survey_version VARCHAR(20) NOT NULL DEFAULT 'servperf-v1',
+  consent_version VARCHAR(20) NOT NULL DEFAULT 'visit-linked-v1',
+  service_type VARCHAR(160) NOT NULL,
+  service_other VARCHAR(160) NULL,
+  academic_term VARCHAR(80) NOT NULL,
+  term_other VARCHAR(80) NULL,
+  year_level VARCHAR(80) NOT NULL,
+  year_other VARCHAR(80) NULL,
+  program VARCHAR(160) NOT NULL,
+  comments TEXT NOT NULL,
+  ratings_json LONGTEXT NOT NULL,
+  tangibles DECIMAL(9,6) NOT NULL,
+  reliability DECIMAL(9,6) NOT NULL,
+  responsiveness DECIMAL(9,6) NOT NULL,
+  assurance DECIMAL(9,6) NOT NULL,
+  empathy DECIMAL(9,6) NOT NULL,
+  overall DECIMAL(9,6) NOT NULL,
+  submitted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_clinic_feedback_visit (visit_id),
+  INDEX idx_clinic_feedback_submitted (submitted_at),
+  CONSTRAINT fk_clinic_feedback_visit
+    FOREIGN KEY (visit_id) REFERENCES visits(visit_id),
+  CONSTRAINT chk_clinic_feedback_scores CHECK (
+    tangibles BETWEEN 1 AND 7 AND reliability BETWEEN 1 AND 7 AND
+    responsiveness BETWEEN 1 AND 7 AND assurance BETWEEN 1 AND 7 AND
+    empathy BETWEEN 1 AND 7 AND overall BETWEEN 1 AND 7
+  )
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Migration history is deployment metadata only. It never stores patient data.
+CREATE TABLE schema_migrations (
+  migration VARCHAR(255) PRIMARY KEY,
+  checksum CHAR(64) NOT NULL,
+  execution_ms INT UNSIGNED NOT NULL DEFAULT 0,
+  applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 DELIMITER //
 CREATE TRIGGER trg_people_create_inactive_account

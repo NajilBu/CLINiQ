@@ -5,10 +5,9 @@ The public entry is `public/clinic-feedback.php`; admin/doctor reporting is at
 
 ## Database setup
 
-Apply `database/migrations/20260907_create_clinic_feedback.sql` to the configured
-`AUTH_DB_NAME` database after the visit migrations. It creates the new table only;
-public requests never run migrations. The migration was applied to this local
-workspace's configured database during implementation.
+Run `php scripts/database/migrate.php`. Fresh databases receive the table from
+`database/production_schema.sql`; existing deployments apply only migrations not
+yet recorded in `schema_migrations`. Public requests never run migrations.
 
 ## Behavior
 
