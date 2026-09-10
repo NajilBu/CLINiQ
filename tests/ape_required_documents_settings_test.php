@@ -60,5 +60,11 @@ foreach (['save_ape_required_documents', 'ape_required_documents[]', 'addApeRequ
         throw new RuntimeException("The APE settings interface is missing {$expected}.");
     }
 }
+if (!str_contains($settingsPage, 'data-ape-document-handle') || !str_contains($settingsPage, "addEventListener('dragstart'") || !str_contains($settingsPage, "addEventListener('pointermove'")) {
+    throw new RuntimeException('Required APE documents must support mouse and touch drag ordering.');
+}
+if (str_contains($settingsPage, 'data-move-ape-document')) {
+    throw new RuntimeException('Required APE document arrow controls must be removed.');
+}
 
 echo "APE required documents settings test passed. No database writes.\n";

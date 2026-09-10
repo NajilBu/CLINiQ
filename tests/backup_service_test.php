@@ -15,6 +15,16 @@ if (CLINIQ_BACKUP_START_HOUR !== 8 || CLINIQ_BACKUP_DAILY_RETENTION !== 14 || CL
     throw new RuntimeException('The agreed backup schedule or retention policy changed unexpectedly.');
 }
 
+$fakeHistory = array_map(static fn(int $index): array => ['name' => 'backup-' . $index], range(1, 12));
+$pageOne = cliniq_paginate_backup_history($fakeHistory, 1, 5);
+$pageThree = cliniq_paginate_backup_history($fakeHistory, 99, 5);
+if (count($pageOne['items']) !== 5 || $pageOne['page'] !== 1 || $pageOne['total_pages'] !== 3 || $pageOne['total'] !== 12) {
+    throw new RuntimeException('Backup history must paginate at five records per page.');
+}
+if (count($pageThree['items']) !== 2 || $pageThree['page'] !== 3) {
+    throw new RuntimeException('Backup history must clamp out-of-range pages and retain the final records.');
+}
+
 $source = file_get_contents(dirname(__DIR__) . '/app/services/BackupService.php');
 if (!str_contains($source, "if (\$type === 'daily' && !\$force && cliniq_backup_today_exists())")) {
     throw new RuntimeException('Daily duplicate protection is missing.');

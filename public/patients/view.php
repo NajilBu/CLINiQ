@@ -351,7 +351,14 @@ render_header($fullName . ' - Patient Profile');
     <section class="clinic-card p-5 md:p-6">
         <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-5">
             <div class="flex items-center gap-4 min-w-0">
-                <div class="avatar w-16 h-16 text-xl <?= avatar_color($fullName) ?> shrink-0"><?= initials($fullName) ?></div>
+                <?php $patientPhotoPath = profile_photo_normalize_path($patient['profile_photo_path'] ?? null); ?>
+                <div class="avatar w-16 h-16 text-xl <?= avatar_color($fullName) ?> shrink-0 overflow-hidden">
+                    <?php if ($patientPhotoPath !== null): ?>
+                        <img class="profile-photo-cover" src="<?= e(app_url($patientPhotoPath)) ?>" alt="<?= e($fullName) ?> profile picture">
+                    <?php else: ?>
+                        <?= initials($fullName) ?>
+                    <?php endif; ?>
+                </div>
                 <div class="min-w-0">
                     <p class="text-[11px] font-black text-primary uppercase tracking-widest mb-1">Patient Profile</p>
                     <h1 class="font-headline text-3xl md:text-4xl font-extrabold text-[#17261d] leading-tight m-0"><?= e($fullName) ?></h1>

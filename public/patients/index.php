@@ -48,12 +48,20 @@ $patientRows = [];
 foreach ($patients as $patientIndex => $patient) {
     $fullName = trim($patient['last_name'] . ', ' . $patient['first_name']);
     $displayName = trim($patient['first_name'] . ' ' . $patient['last_name']);
+    $profilePhotoPath = profile_photo_normalize_path($patient['profile_photo_path'] ?? null);
+    $avatarHtml = '<div class="avatar ' . e(avatar_color($displayName)) . '">';
+    if ($profilePhotoPath !== null) {
+        $avatarHtml .= '<img class="avatar-photo" src="' . e(app_url($profilePhotoPath)) . '" alt="' . e($displayName) . ' profile picture">';
+    } else {
+        $avatarHtml .= e(initials($displayName));
+    }
+    $avatarHtml .= '</div>';
     $patientRows[] = [
         'rowUrl' => 'view.php?id=' . (int)$patient['id'],
         'rowNumber' => $patientIndex + 1,
         'idNumber' => $patient['id_number'],
         'nameSort' => trim($patient['last_name'] . ' ' . $patient['first_name'] . ' ' . ($patient['middle_name'] ?? '')),
-        'nameHtml' => '<div class="flex items-center gap-3" data-tooltip-text="' . e($fullName) . '"><div class="avatar ' . e(avatar_color($displayName)) . '">' . e(initials($displayName)) . '</div><strong class="text-sm text-slate-800">' . e($fullName) . '</strong></div>',
+        'nameHtml' => '<div class="flex items-center gap-3" data-tooltip-text="' . e($fullName) . '">' . $avatarHtml . '<strong class="text-sm text-slate-800">' . e($fullName) . '</strong></div>',
         'patientType' => $patient['patient_type'] === 'School Personnel' ? 'Personnel' : $patient['patient_type'],
         'courseSection' => $patient['course_section'] ?: 'Patient',
         'guardianContact' => $patient['guardian_contact'] ?: '-',

@@ -17,6 +17,7 @@ function cliniq_patient_profile_select(): string
             pe.first_name,
             pe.middle_name,
             pe.last_name,
+            pe.profile_photo_path,
             pe.birthdate,
             pe.sex,
             pt.blood_type,

@@ -107,6 +107,7 @@ function staff_profiles(): array
         SELECT
             pe.id,
             pe.id_number,
+            pe.profile_photo_path,
             TRIM(CONCAT_WS(" ", pe.first_name, pe.middle_name, pe.last_name)) AS name,
             a.email,
             cs.staff_role AS role,

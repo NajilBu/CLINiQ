@@ -44,6 +44,7 @@ $passport = [
     'height_cm'       => $latestBmiRecord['patient_height_cm'] ?? null,
     'weight_kg'       => $latestBmiRecord['patient_weight_kg'] ?? null,
     'bmi'             => $latestBmiRecord['patient_bmi'] ?? null,
+    'show_bmi'        => (int) ($profile['show_bmi_on_passport'] ?? 1) === 1,
     'bmi_recorded_at' => $latestBmiRecord['patient_vitals_confirmed_at'] ?? null,
 ];
 $passportUrl = '../public/emergency.php?token=' . urlencode($passport['token']);
@@ -60,6 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $passport['conditions']       = trim($_POST['conditions'] ?? $passport['conditions']);
     $passport['medications']      = trim($_POST['medications'] ?? $passport['medications']);
     $passport['instructions']     = trim($_POST['instructions'] ?? $passport['instructions']);
+    $passport['show_bmi']         = isset($_POST['show_bmi_on_passport']);
     $passport['guardian_name'] = trim((string) ($_POST['guardian_name'] ?? ''));
     $passport['relationship'] = trim((string) ($_POST['relationship'] ?? ''));
     $passport['primary_contact'] = trim((string) ($_POST['primary_contact'] ?? ''));
@@ -74,7 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             UPDATE patients
             SET blood_type = ?, allergies = ?, existing_conditions = ?, medications = ?, emergency_instructions = ?,
                 guardian_or_contact_name = ?, guardian_or_contact_number = ?,
-                guardian_relationship = ?, secondary_contact_number = ?
+                guardian_relationship = ?, secondary_contact_number = ?, show_bmi_on_passport = ?
             WHERE person_id = ?
         ");
         $stmt->execute([
@@ -87,10 +89,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $passport['primary_contact'],
             $passport['relationship'],
             $passport['secondary_contact'] !== '' ? $passport['secondary_contact'] : null,
+            $passport['show_bmi'] ? 1 : 0,
             $patientId,
         ]);
         $saved = true;
-        audit_log_event('passport', 'passport_profile_updated', $patientId, 'student', 'patient', $patientId, ['fields' => ['blood_type', 'allergies', 'conditions', 'medications', 'instructions', 'emergency_contacts']]);
+        audit_log_event('passport', 'passport_profile_updated', $patientId, 'student', 'patient', $patientId, ['fields' => ['blood_type', 'allergies', 'conditions', 'medications', 'instructions', 'emergency_contacts', 'show_bmi_on_passport']]);
         $passport['last_updated'] = date('F j, Y');
     } catch (InvalidArgumentException $e) {
         $saved = false;
@@ -217,6 +220,16 @@ render_student_header('Emergency Health Passport', 'passport');
                     <div class="student-span-4 student-field passport-field-compact">
                         <label class="student-label">BMI</label>
                         <div class="passport-readonly-field"><?= $passport['bmi'] !== null ? student_e(number_format((float) $passport['bmi'], 2)) : 'Not recorded from APE yet' ?></div>
+                    </div>
+                    <div class="student-span-12 student-field passport-field-compact">
+                        <label class="passport-visibility-toggle" for="show_bmi_on_passport">
+                            <input type="checkbox" id="show_bmi_on_passport" name="show_bmi_on_passport" value="1" role="switch" <?= $passport['show_bmi'] ? 'checked' : '' ?>>
+                            <span class="passport-visibility-track" aria-hidden="true"><span></span></span>
+                            <span class="passport-visibility-copy">
+                                <strong>Show BMI on Emergency Passport</strong>
+                                <small>Turn this off to hide only your BMI value from the QR/NFC passport.</small>
+                            </span>
+                        </label>
                     </div>
                 </div>
             </div>
@@ -413,11 +426,12 @@ render_student_header('Emergency Health Passport', 'passport');
                         <span class="material-symbols-outlined">download</span>
                         Download QR
                     </button>
-                    <button type="button" class="student-button-secondary passport-qr-action" onclick="alert('NFC write feature requires a physical NFC device.')">
+                    <button type="button" class="student-button-secondary passport-qr-action" id="write-passport-nfc" aria-describedby="passport-nfc-status">
                         <span class="material-symbols-outlined">nfc</span>
                         Write NFC
                     </button>
                 </div>
+                <p id="passport-nfc-status" class="student-card-copy mt-3" role="status" aria-live="polite" hidden></p>
                 <div class="passport-token-chip mt-3">
                     <span class="material-symbols-outlined passport-icon-key">key</span>
                     Token: <code><?= student_e($passport['token']) ?></code>
@@ -440,8 +454,13 @@ render_student_header('Emergency Health Passport', 'passport');
 
             <div class="passport-preview passport-preview-modern">
                 <div class="passport-modern-hero">
-                    <div class="passport-modern-avatar" aria-hidden="true">
-                        <span class="material-symbols-outlined">person</span>
+                    <div class="passport-modern-avatar">
+                        <?php $passportPhotoPath = profile_photo_normalize_path($profile['profile_photo_path'] ?? null); ?>
+                        <?php if ($passportPhotoPath !== null): ?>
+                            <img src="<?= student_e('../public/' . $passportPhotoPath) ?>" alt="<?= student_e($passport['name']) ?> profile picture">
+                        <?php else: ?>
+                            <span class="material-symbols-outlined" aria-hidden="true">person</span>
+                        <?php endif; ?>
                     </div>
                     <div class="passport-modern-identity">
                         <div class="passport-modern-kicker-row">
@@ -511,7 +530,7 @@ render_student_header('Emergency Health Passport', 'passport');
                                 <div class="passport-modern-metrics">
                                     <span><strong><?= student_e((string) ($passport['height_cm'] ?: '—')) ?></strong><small>Height (cm)</small></span>
                                     <span><strong><?= student_e((string) ($passport['weight_kg'] ?: '—')) ?></strong><small>Weight (kg)</small></span>
-                                    <span><strong><?= student_e((string) ($passport['bmi'] ?: '—')) ?></strong><small>BMI</small></span>
+                                                <span id="prev-bmi-metric" <?= $passport['show_bmi'] ? '' : 'hidden' ?>><strong><?= student_e((string) ($passport['bmi'] ?: '—')) ?></strong><small>BMI</small></span>
                                 </div>
                             </article>
                         <?php endif; ?>
@@ -558,7 +577,7 @@ render_student_header('Emergency Health Passport', 'passport');
 </form>
 
 <script src="../public/assets/vendor/qrcode/qrcode.min.js?v=1.0.0"></script>
-<script src="../public/assets/js/patient-passport-qr.js?v=1"></script>
+<script src="../public/assets/js/patient-passport-qr.js?v=2"></script>
 <?php render_student_footer(); ?>
 
 <script src="../public/assets/js/emergency-contact.js?v=1"></script>
@@ -622,6 +641,16 @@ render_student_header('Emergency Health Passport', 'passport');
             const link = $('prev-call-link');
             if (link) link.href = 'tel:' + pcInp.value;
         });
+    }
+
+    const bmiVisibility = $('show_bmi_on_passport');
+    const bmiMetric = $('prev-bmi-metric');
+    if (bmiVisibility && bmiMetric) {
+        const syncBmiVisibility = () => {
+            bmiMetric.hidden = !bmiVisibility.checked;
+        };
+        bmiVisibility.addEventListener('change', syncBmiVisibility);
+        syncBmiVisibility();
     }
 
 })();

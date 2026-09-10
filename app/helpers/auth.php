@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/env.php';
 require_once __DIR__ . '/../services/AuditLog.php';
+require_once __DIR__ . '/../services/ProfilePhoto.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     $configuredAppUrl = (string) env_value('APP_URL', '');
@@ -80,6 +81,7 @@ function begin_first_registration(array $account): string
             ]))),
             'email' => $account['email'] ?? (strtolower(str_replace(' ', '', $account['last_name'] ?? '') . '_' . str_replace(' ', '', $account['first_name'] ?? '')) . '@plpasig.edu.ph'),
             'role' => (string) ($account['staff_role'] ?? 'staff'),
+            'profile_photo_path' => profile_photo_normalize_path($account['profile_photo_path'] ?? null),
         ];
     } else {
         $_SESSION['patient_legacy_id'] = $personId;
@@ -247,6 +249,7 @@ function login_attempt(string $idNumber, string $password): bool
             p.first_name,
             p.middle_name,
             p.last_name,
+            p.profile_photo_path,
             cs.staff_role
         FROM accounts a
         JOIN people p ON p.id = a.person_id
@@ -303,6 +306,7 @@ function login_attempt(string $idNumber, string $password): bool
         'name' => $name,
         'email' => $account['email'] ?? (strtolower(str_replace(' ', '', $account['last_name'] ?? '') . '_' . str_replace(' ', '', $account['first_name'] ?? '')) . '@plpasig.edu.ph'),
         'role' => $account['staff_role'],
+        'profile_photo_path' => profile_photo_normalize_path($account['profile_photo_path'] ?? null),
     ];
 
     auth_throttle_clear($authDb, 'staff', $idNumber);

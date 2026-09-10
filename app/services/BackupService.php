@@ -363,6 +363,27 @@ function cliniq_backup_history(int $limit = 12): array
     return array_slice($history, 0, max(1, $limit));
 }
 
+function cliniq_paginate_backup_history(array $history, int $page = 1, int $perPage = 5): array
+{
+    $perPage = max(1, $perPage);
+    $total = count($history);
+    $totalPages = max(1, (int) ceil($total / $perPage));
+    $page = min(max(1, $page), $totalPages);
+
+    return [
+        'items' => array_slice($history, ($page - 1) * $perPage, $perPage),
+        'page' => $page,
+        'per_page' => $perPage,
+        'total' => $total,
+        'total_pages' => $totalPages,
+    ];
+}
+
+function cliniq_backup_history_page(int $page = 1, int $perPage = 5): array
+{
+    return cliniq_paginate_backup_history(cliniq_backup_history(PHP_INT_MAX), $page, $perPage);
+}
+
 function cliniq_backup_run(string $type = 'daily', bool $force = false, bool $scheduled = false): array
 {
     if (!in_array($type, ['daily', 'semester'], true)) {

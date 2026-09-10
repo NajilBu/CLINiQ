@@ -34,16 +34,16 @@ function system_report_chart_colors(): array
     return ['#2f8553', '#58a978', '#89c79f', '#d4a72c', '#5377b8', '#8b69c7', '#d26b6b', '#64748b', '#38a3a5', '#b7791f'];
 }
 
-function render_system_report_bar_chart(array $rows): string
+function render_system_report_bar_chart(array $rows, int $decimals = 0): string
 {
     $maxValue = max(array_column($rows, 'value')) ?: 1;
     ob_start();
     foreach ($rows as $row):
         $width = max(2, round(((float) $row['value'] / $maxValue) * 100, 1)); ?>
-        <div class="report-chart-row" title="<?= system_report_escape($row['label']) ?>: <?= system_report_format_number($row['value']) ?>">
+        <div class="report-chart-row" title="<?= system_report_escape($row['label']) ?>: <?= system_report_format_number($row['value'], $decimals) ?>">
             <span class="report-chart-label"><?= system_report_escape($row['label']) ?></span>
             <div class="report-chart-track"><div class="report-chart-fill" style="width: <?= $width ?>%"></div></div>
-            <span class="report-chart-value"><?= system_report_format_number($row['value']) ?></span>
+            <span class="report-chart-value"><?= system_report_format_number($row['value'], $decimals) ?></span>
         </div>
     <?php endforeach;
     return (string) ob_get_clean();
@@ -153,7 +153,7 @@ function render_system_report_chart(array $chart): string
         'line' => render_system_report_line_chart($chart['rows']),
         'column' => render_system_report_column_chart($chart['rows']),
         'progress' => render_system_report_progress_chart($chart['rows']),
-        default => render_system_report_bar_chart($chart['rows']),
+        default => render_system_report_bar_chart($chart['rows'], (int) ($chart['decimals'] ?? 0)),
     };
 }
 

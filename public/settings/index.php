@@ -499,7 +499,8 @@ $mailConfigured = mail_settings_configured();
 $mailNotificationTemplates = cliniq_mail_templates();
 $mailRecipients = $canManageSettings ? cliniq_mail_recipients() : [];
 $backupStatus = cliniq_backup_status();
-$backupHistory = cliniq_backup_history();
+$backupPagination = cliniq_backup_history_page((int) ($_GET['backup_page'] ?? 1), 5);
+$backupHistory = $backupPagination['items'];
 $backupRoot = cliniq_backup_root();
 $activeApePatientCount = 0;
 $excludedApePatientCount = 0;
@@ -532,6 +533,7 @@ $apeCycleProgress = $apeCurrentCycle['progress'] ?? [
 ];
 $apeRequiredDocuments = ape_required_documents();
 $hasActiveApeCycle = ($apeCurrentCycle['status'] ?? '') === 'Active';
+$canStartNewSchoolYear = can_start_new_school_year($apeCurrentCycle);
 $apeYearStart = (int) date('Y');
 if ((int) date('n') < 6) {
     $apeYearStart--;
@@ -1314,15 +1316,12 @@ render_clinic_command_header(
                             <input type="hidden" name="action" value="save_ape_required_documents">
                             <div class="space-y-3" id="apeRequiredDocumentsList">
                                 <?php foreach ($apeRequiredDocuments as $documentIndex => $documentName): ?>
-                                    <div class="flex items-center gap-2" data-ape-document-row>
+                                    <div class="ape-document-row flex items-center gap-2" data-ape-document-row>
                                         <span class="w-8 text-center text-xs font-extrabold text-slate-400" data-ape-document-position><?= $documentIndex + 1 ?></span>
+                                        <button type="button" class="ape-document-drag-handle btn btn-secondary !px-3" data-ape-document-handle aria-label="Drag required document <?= $documentIndex + 1 ?> to reorder" title="Drag to reorder">
+                                            <span class="material-symbols-outlined text-[18px]">drag_indicator</span>
+                                        </button>
                                         <input class="settings-input flex-1" name="ape_required_documents[]" value="<?= e($documentName) ?>" maxlength="120" required aria-label="Required document <?= $documentIndex + 1 ?>">
-                                        <button type="button" class="btn btn-secondary !px-3" data-move-ape-document="up" aria-label="Move document up" title="Move up">
-                                            <span class="material-symbols-outlined text-[18px]">arrow_upward</span>
-                                        </button>
-                                        <button type="button" class="btn btn-secondary !px-3" data-move-ape-document="down" aria-label="Move document down" title="Move down">
-                                            <span class="material-symbols-outlined text-[18px]">arrow_downward</span>
-                                        </button>
                                         <button type="button" class="btn btn-danger !px-3" data-remove-ape-document aria-label="Remove document" title="Remove">
                                             <span class="material-symbols-outlined text-[18px]">delete</span>
                                         </button>
@@ -1340,7 +1339,7 @@ render_clinic_command_header(
                                     Save Required Documents
                                 </button>
                             </div>
-                            <p class="settings-help mb-0">Use the arrow buttons to control the order shown to clinic staff and patients. Patient-specific requirements added from an APE record are preserved.</p>
+                            <p class="settings-help mb-0">Drag documents to change the order shown to clinic staff and patients. Patient-specific requirements added from an APE record are preserved.</p>
                         </form>
                     </section>
 
@@ -1465,6 +1464,7 @@ render_clinic_command_header(
                     </section>
                     <?php endif; ?>
 
+                    <?php if ($canStartNewSchoolYear): ?>
                     <section class="settings-section border-2 border-red-200 bg-red-50 space-y-4">
                         <div>
                             <h3 class="font-headline text-lg font-extrabold text-red-800 mb-1">Start New School Year</h3>
@@ -1478,6 +1478,7 @@ render_clinic_command_header(
                             </button>
                         </form>
                     </section>
+                    <?php endif; ?>
 
                 </div>
             <?php endif; ?>
@@ -1688,6 +1689,34 @@ render_clinic_command_header(
                                 </div>
                             <?php endforeach; ?>
                         </div>
+                        <?php if ((int) $backupPagination['total_pages'] > 1): ?>
+                            <nav class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2" aria-label="Backup history pagination">
+                                <p class="settings-help mb-0">
+                                    Page <?= (int) $backupPagination['page'] ?> of <?= (int) $backupPagination['total_pages'] ?>
+                                    &bull; <?= number_format((int) $backupPagination['total']) ?> backup(s)
+                                </p>
+                                <div class="flex items-center gap-2">
+                                    <?php if ((int) $backupPagination['page'] > 1): ?>
+                                        <a class="btn btn-secondary justify-center" href="?tab=backup&amp;backup_page=<?= (int) $backupPagination['page'] - 1 ?>">
+                                            <span class="material-symbols-outlined text-[18px]">chevron_left</span> Previous
+                                        </a>
+                                    <?php else: ?>
+                                        <span class="btn btn-secondary justify-center opacity-50 pointer-events-none" aria-disabled="true">
+                                            <span class="material-symbols-outlined text-[18px]">chevron_left</span> Previous
+                                        </span>
+                                    <?php endif; ?>
+                                    <?php if ((int) $backupPagination['page'] < (int) $backupPagination['total_pages']): ?>
+                                        <a class="btn btn-secondary justify-center" href="?tab=backup&amp;backup_page=<?= (int) $backupPagination['page'] + 1 ?>">
+                                            Next <span class="material-symbols-outlined text-[18px]">chevron_right</span>
+                                        </a>
+                                    <?php else: ?>
+                                        <span class="btn btn-secondary justify-center opacity-50 pointer-events-none" aria-disabled="true">
+                                            Next <span class="material-symbols-outlined text-[18px]">chevron_right</span>
+                                        </span>
+                                    <?php endif; ?>
+                                </div>
+                            </nav>
+                        <?php endif; ?>
                     <?php endif; ?>
                 </section>
 
@@ -2554,8 +2583,7 @@ render_clinic_command_header(
                     row.querySelector('[data-ape-document-position]').textContent = String(index + 1);
                     const input = row.querySelector('input');
                     input.setAttribute('aria-label', `Required document ${index + 1}`);
-                    row.querySelector('[data-move-ape-document="up"]').disabled = index === 0;
-                    row.querySelector('[data-move-ape-document="down"]').disabled = index === rows.length - 1;
+                    row.querySelector('[data-ape-document-handle]').setAttribute('aria-label', `Drag required document ${index + 1} to reorder`);
                     row.querySelector('[data-remove-ape-document]').disabled = rows.length === 1;
                 });
                 addButton.disabled = rows.length >= 20;
@@ -2563,13 +2591,12 @@ render_clinic_command_header(
 
             const createRow = () => {
                 const row = document.createElement('div');
-                row.className = 'flex items-center gap-2';
+                row.className = 'ape-document-row flex items-center gap-2';
                 row.dataset.apeDocumentRow = '';
                 row.innerHTML = `
                     <span class="w-8 text-center text-xs font-extrabold text-slate-400" data-ape-document-position></span>
+                    <button type="button" class="ape-document-drag-handle btn btn-secondary !px-3" data-ape-document-handle aria-label="Drag new required document to reorder" title="Drag to reorder"><span class="material-symbols-outlined text-[18px]">drag_indicator</span></button>
                     <input class="settings-input flex-1" name="ape_required_documents[]" maxlength="120" required aria-label="New required document" placeholder="Document name">
-                    <button type="button" class="btn btn-secondary !px-3" data-move-ape-document="up" aria-label="Move document up" title="Move up"><span class="material-symbols-outlined text-[18px]">arrow_upward</span></button>
-                    <button type="button" class="btn btn-secondary !px-3" data-move-ape-document="down" aria-label="Move document down" title="Move down"><span class="material-symbols-outlined text-[18px]">arrow_downward</span></button>
                     <button type="button" class="btn btn-danger !px-3" data-remove-ape-document aria-label="Remove document" title="Remove"><span class="material-symbols-outlined text-[18px]">delete</span></button>
                 `;
                 return row;
@@ -2588,16 +2615,117 @@ render_clinic_command_header(
                 if (!row) return;
                 if (event.target.closest('[data-remove-ape-document]')) {
                     if (list.querySelectorAll('[data-ape-document-row]').length > 1) row.remove();
-                } else {
-                    const moveButton = event.target.closest('[data-move-ape-document]');
-                    if (!moveButton) return;
-                    if (moveButton.dataset.moveApeDocument === 'up' && row.previousElementSibling) {
-                        list.insertBefore(row, row.previousElementSibling);
-                    } else if (moveButton.dataset.moveApeDocument === 'down' && row.nextElementSibling) {
-                        list.insertBefore(row.nextElementSibling, row);
-                    }
                 }
                 refreshRows();
+            });
+
+            let draggedRow = null;
+            let dropTarget = null;
+
+            const clearDropTarget = () => {
+                if (!dropTarget) return;
+                dropTarget.classList.remove('is-drop-before', 'is-drop-after');
+                dropTarget = null;
+            };
+
+            const markAndMove = (clientY, targetRow, moveNow = false) => {
+                if (!draggedRow || !targetRow || targetRow === draggedRow) return;
+                clearDropTarget();
+                const insertBefore = clientY < targetRow.getBoundingClientRect().top + (targetRow.offsetHeight / 2);
+                dropTarget = targetRow;
+                dropTarget.classList.add(insertBefore ? 'is-drop-before' : 'is-drop-after');
+                if (moveNow) {
+                    list.insertBefore(draggedRow, insertBefore ? targetRow : targetRow.nextElementSibling);
+                    refreshRows();
+                }
+            };
+
+            const finishDragging = () => {
+                clearDropTarget();
+                if (draggedRow) {
+                    draggedRow.classList.remove('is-dragging');
+                    draggedRow.draggable = false;
+                }
+                draggedRow = null;
+                refreshRows();
+            };
+
+            list.addEventListener('pointerdown', (event) => {
+                const handle = event.target.closest('[data-ape-document-handle]');
+                if (!handle) return;
+                const row = handle.closest('[data-ape-document-row]');
+                if (event.pointerType === 'mouse') {
+                    row.draggable = true;
+                    return;
+                }
+                event.preventDefault();
+                draggedRow = row;
+                draggedRow.classList.add('is-dragging');
+                handle.setPointerCapture(event.pointerId);
+            });
+
+            list.addEventListener('pointermove', (event) => {
+                if (!draggedRow || event.pointerType === 'mouse') return;
+                event.preventDefault();
+                const targetRow = document.elementFromPoint(event.clientX, event.clientY)?.closest('[data-ape-document-row]');
+                if (targetRow && list.contains(targetRow)) markAndMove(event.clientY, targetRow, true);
+            });
+
+            list.addEventListener('pointerup', (event) => {
+                if (event.pointerType !== 'mouse') {
+                    finishDragging();
+                    return;
+                }
+                if (!draggedRow) {
+                    const row = event.target.closest('[data-ape-document-row]');
+                    if (row) row.draggable = false;
+                }
+            });
+            list.addEventListener('pointercancel', (event) => {
+                if (event.pointerType !== 'mouse') finishDragging();
+            });
+
+            list.addEventListener('dragstart', (event) => {
+                const row = event.target.closest('[data-ape-document-row]');
+                if (!row || !row.draggable) {
+                    event.preventDefault();
+                    return;
+                }
+                draggedRow = row;
+                draggedRow.classList.add('is-dragging');
+                event.dataTransfer.effectAllowed = 'move';
+                event.dataTransfer.setData('text/plain', 'ape-document');
+            });
+
+            list.addEventListener('dragover', (event) => {
+                if (!draggedRow) return;
+                event.preventDefault();
+                const targetRow = event.target.closest('[data-ape-document-row]');
+                if (targetRow) markAndMove(event.clientY, targetRow);
+            });
+
+            list.addEventListener('drop', (event) => {
+                if (!draggedRow || !dropTarget) return;
+                event.preventDefault();
+                const insertBefore = dropTarget.classList.contains('is-drop-before');
+                list.insertBefore(draggedRow, insertBefore ? dropTarget : dropTarget.nextElementSibling);
+                finishDragging();
+            });
+
+            list.addEventListener('dragend', finishDragging);
+
+            list.addEventListener('keydown', (event) => {
+                const handle = event.target.closest('[data-ape-document-handle]');
+                if (!handle || !['ArrowUp', 'ArrowDown'].includes(event.key)) return;
+                event.preventDefault();
+                const row = handle.closest('[data-ape-document-row]');
+                if (event.key === 'ArrowUp' && row.previousElementSibling) {
+                    list.insertBefore(row, row.previousElementSibling);
+                } else if (event.key === 'ArrowDown' && row.nextElementSibling) {
+                    list.insertBefore(row.nextElementSibling, row);
+                }
+                refreshRows();
+                handle.focus();
             });
 
             refreshRows();

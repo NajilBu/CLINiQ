@@ -5,6 +5,7 @@ require_once __DIR__ . '/../../app/helpers/auth.php';
 require_once __DIR__ . '/../../app/helpers/brand.php';
 require_once __DIR__ . '/../../app/helpers/student_id.php';
 require_once __DIR__ . '/../../app/services/SystemSettings.php';
+require_once __DIR__ . '/../../app/services/ProfilePhoto.php';
 
 function student_start_session(): void
 {
@@ -16,6 +17,16 @@ function student_start_session(): void
 function student_e(?string $value): string
 {
     return htmlspecialchars($value ?? '', ENT_QUOTES, 'UTF-8');
+}
+
+function student_initials(string $name): string
+{
+    $parts = preg_split('/\s+/', trim($name)) ?: [];
+    $result = '';
+    foreach (array_slice(array_filter($parts), 0, 2) as $part) {
+        $result .= mb_strtoupper(mb_substr($part, 0, 1));
+    }
+    return $result !== '' ? $result : 'P';
 }
 
 function student_public_logo_src(?array $clinicProfile = null): string
@@ -78,6 +89,7 @@ function student_profile_from_identity(array $identity): array
         'name' => $fullName !== '' ? $fullName : 'Patient',
         'first_name' => (string) ($identity['first_name'] ?? 'Patient'),
         'student_id' => $idNumber,
+        'profile_photo_path' => profile_photo_normalize_path($identity['profile_photo_path'] ?? null),
         'course' => (string) (
             $identity['program']
             ?? $identity['faculty_department']
@@ -103,6 +115,7 @@ function student_profile_from_identity(array $identity): array
         'height_cm' => $identity['height_cm'] ?? null,
         'weight_kg' => $identity['weight_kg'] ?? null,
         'bmi' => $identity['bmi'] ?? null,
+        'show_bmi_on_passport' => (int) ($identity['show_bmi_on_passport'] ?? 1),
         'temperature' => $identity['temperature'] ?? null,
         'blood_pressure' => $identity['blood_pressure'] ?? null,
         'pulse_rate' => $identity['pulse_rate'] ?? null,
@@ -132,6 +145,7 @@ function student_current_profile(): ?array
             p.first_name,
             p.middle_name,
             p.last_name,
+            p.profile_photo_path,
             p.birthdate,
             p.sex,
             p.updated_at,
@@ -156,6 +170,7 @@ function student_current_profile(): ?array
             pt.height_cm,
             pt.weight_kg,
             pt.bmi,
+            pt.show_bmi_on_passport,
             vs.temperature,
             vs.blood_pressure,
             vs.pulse_rate,
@@ -329,6 +344,8 @@ function render_student_header(string $title, string $active = ''): void
     $clinicLogoSrc = student_public_logo_src($clinicProfile);
     $theme = active_cliniq_theme();
     $navItems = student_nav_items();
+    $profilePhotoPath = profile_photo_normalize_path($profile['profile_photo_path'] ?? null);
+    $profilePhotoSrc = $profilePhotoPath !== null ? '../public/' . $profilePhotoPath : null;
     if (!empty($profile['first_registration'])) {
         $navItems = array_intersect_key($navItems, ['dashboard' => true]);
     }
@@ -392,7 +409,7 @@ function render_student_header(string $title, string $active = ''): void
             };
         </script>
         <link href="../public/assets/css/app.css?v=emergency-contact-1" rel="stylesheet">
-        <link href="assets/css/patient.css?v=ape-current-step-1" rel="stylesheet">
+        <link href="assets/css/patient.css?v=profile-photo-2" rel="stylesheet">
         <style>
             :root {
                 --cliniq-primary: <?= student_e($theme['primary']) ?>;
@@ -442,6 +459,16 @@ function render_student_header(string $title, string $active = ''): void
                 </nav>
 
                 <div class="student-profile-chip">
+                    <?php if (empty($profile['first_registration'])): ?>
+                        <button type="button" class="student-profile-photo" data-profile-photo-open="patient-profile-photo-modal" title="Change profile picture" aria-label="Change profile picture">
+                            <?php if ($profilePhotoSrc !== null): ?>
+                                <img src="<?= student_e($profilePhotoSrc) ?>" alt="<?= student_e($profile['name']) ?> profile picture">
+                            <?php else: ?>
+                                <span class="student-profile-photo-fallback"><?= student_e(student_initials($profile['name'])) ?></span>
+                            <?php endif; ?>
+                            <span class="profile-photo-camera material-symbols-outlined" aria-hidden="true">photo_camera</span>
+                        </button>
+                    <?php endif; ?>
                     <div class="student-profile-text">
                         <strong><?= student_e($profile['name']) ?></strong>
                         <span><?= student_e($profile['student_id']) ?></span>
@@ -492,8 +519,56 @@ function render_student_header(string $title, string $active = ''): void
 
 function render_student_footer(): void
 {
+    $profile = student_require_login();
+    $photoPath = profile_photo_normalize_path($profile['profile_photo_path'] ?? null);
+    $photoSrc = $photoPath !== null ? '../public/' . $photoPath : null;
+    $returnTo = basename((string) ($_SERVER['SCRIPT_NAME'] ?? 'patient-dashboard.php'));
     ?>
             </main>
+        </div>
+
+        <div id="patient-profile-photo-modal" class="profile-photo-modal" role="dialog" aria-modal="true" aria-labelledby="patient-profile-photo-title" hidden>
+            <div class="profile-photo-dialog">
+                <div class="profile-photo-dialog-header">
+                    <div>
+                        <p class="profile-photo-eyebrow">Patient profile</p>
+                        <h3 id="patient-profile-photo-title">Change profile picture</h3>
+                    </div>
+                    <button type="button" class="profile-photo-close" data-profile-photo-close aria-label="Close profile-picture dialog">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <form action="update-profile-photo.php" method="post" enctype="multipart/form-data" class="profile-photo-preview-form" data-profile-photo-form>
+                    <input type="hidden" name="return_to" value="<?= student_e($returnTo) ?>">
+                    <div class="profile-photo-stage is-active" data-profile-photo-editor>
+                        <div class="profile-photo-preview-frame">
+                            <img data-profile-photo-preview src="<?= student_e($photoSrc ?? '') ?>" alt="Selected profile-picture preview" <?= $photoSrc === null ? 'hidden' : '' ?>>
+                            <span data-profile-photo-fallback <?= $photoSrc !== null ? 'hidden' : '' ?>><?= student_e(student_initials($profile['name'] ?? 'Patient')) ?></span>
+                        </div>
+                        <p class="profile-photo-help">Choose a clear JPG, PNG, or WebP image up to 5 MB.</p>
+                        <input id="patient-profile-photo-input" class="profile-photo-input" type="file" name="profile_photo" accept="image/jpeg,image/png,image/webp" required data-profile-photo-input>
+                        <div class="profile-photo-dialog-actions">
+                            <label for="patient-profile-photo-input" class="student-button profile-photo-choose">
+                                <span class="material-symbols-outlined">image</span>
+                                Choose Photo
+                            </label>
+                            <button type="button" class="student-button profile-photo-cancel" data-profile-photo-close>Cancel</button>
+                            <button type="submit" class="student-button" data-profile-photo-save disabled>Review Photo</button>
+                        </div>
+                    </div>
+                    <div class="profile-photo-stage profile-photo-confirmation" data-profile-photo-confirmation aria-hidden="true">
+                        <div class="profile-photo-preview-frame profile-photo-confirm-preview-frame">
+                            <img data-profile-photo-confirm-preview src="" alt="Profile picture ready to save" hidden>
+                        </div>
+                        <h4>Use this profile picture?</h4>
+                        <p class="profile-photo-help">Your patient profile will display this photo after you confirm.</p>
+                        <div class="profile-photo-dialog-actions">
+                            <button type="button" class="student-button profile-photo-cancel" data-profile-photo-confirm-cancel>Go Back</button>
+                            <button type="submit" class="student-button" data-profile-photo-confirm-submit>Confirm &amp; Save</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
         </div>
 
         <!-- Change Password Modal -->
@@ -570,6 +645,118 @@ function render_student_footer(): void
                 });
             })();
 
+            const profilePhotoMotionMs = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 240;
+
+            function setProfilePhotoConfirmation(form, confirming) {
+                const editor = form.querySelector('[data-profile-photo-editor]');
+                const confirmation = form.querySelector('[data-profile-photo-confirmation]');
+                if (!editor || !confirmation) return;
+                editor.classList.toggle('is-active', !confirming);
+                editor.setAttribute('aria-hidden', confirming ? 'true' : 'false');
+                confirmation.classList.toggle('is-active', confirming);
+                confirmation.setAttribute('aria-hidden', confirming ? 'false' : 'true');
+                form.dataset.profilePhotoConfirmed = 'false';
+                if (confirming) {
+                    const preview = form.querySelector('[data-profile-photo-preview]');
+                    const confirmationPreview = form.querySelector('[data-profile-photo-confirm-preview]');
+                    if (preview && confirmationPreview) {
+                        confirmationPreview.src = preview.src;
+                        confirmationPreview.hidden = false;
+                    }
+                    form.querySelector('[data-profile-photo-confirm-submit]')?.focus();
+                }
+            }
+
+            function openProfilePhotoModal(modal) {
+                clearTimeout(modal._profilePhotoCloseTimer);
+                modal.hidden = false;
+                modal._profilePhotoClosing = false;
+                document.body.style.overflow = 'hidden';
+                requestAnimationFrame(() => {
+                    if (!modal._profilePhotoClosing) modal.classList.add('is-open');
+                });
+            }
+
+            function closeProfilePhotoModal(modal) {
+                modal._profilePhotoClosing = true;
+                modal.classList.remove('is-open');
+                clearTimeout(modal._profilePhotoCloseTimer);
+                modal._profilePhotoCloseTimer = setTimeout(() => {
+                    modal.hidden = true;
+                    const form = modal.querySelector('[data-profile-photo-form]');
+                    if (form) setProfilePhotoConfirmation(form, false);
+                    if (!document.querySelector('.profile-photo-modal.is-open, .modal-backdrop.show')) {
+                        document.body.style.overflow = '';
+                    }
+                }, profilePhotoMotionMs);
+            }
+
+            document.querySelectorAll('[data-profile-photo-open]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const modal = document.getElementById(button.dataset.profilePhotoOpen);
+                    if (modal) openProfilePhotoModal(modal);
+                });
+            });
+
+            document.querySelectorAll('[data-profile-photo-close]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const modal = button.closest('.profile-photo-modal');
+                    if (modal) closeProfilePhotoModal(modal);
+                });
+            });
+            document.querySelectorAll('.profile-photo-modal').forEach((modal) => {
+                modal.addEventListener('click', (event) => {
+                    if (event.target === modal) closeProfilePhotoModal(modal);
+                });
+            });
+
+            document.querySelectorAll('[data-profile-photo-input]').forEach((input) => {
+                input.addEventListener('change', () => {
+                    const form = input.closest('[data-profile-photo-form]');
+                    const file = input.files && input.files[0];
+                    if (!form || !file) return;
+                    const preview = form.querySelector('[data-profile-photo-preview]');
+                    const fallback = form.querySelector('[data-profile-photo-fallback]');
+                    const save = form.querySelector('[data-profile-photo-save]');
+                    const reader = new FileReader();
+                    reader.addEventListener('load', () => {
+                        preview.src = String(reader.result || '');
+                        preview.hidden = false;
+                        if (fallback) fallback.hidden = true;
+                        if (save) save.disabled = false;
+                        setProfilePhotoConfirmation(form, false);
+                    });
+                    reader.readAsDataURL(file);
+                });
+            });
+
+            document.querySelectorAll('[data-profile-photo-form]').forEach((form) => {
+                form.addEventListener('submit', (event) => {
+                    if (form.dataset.profilePhotoConfirmed !== 'true') {
+                        event.preventDefault();
+                        setProfilePhotoConfirmation(form, true);
+                        return;
+                    }
+                    const submit = form.querySelector('[data-profile-photo-confirm-submit]');
+                    if (submit) {
+                        submit.disabled = true;
+                        submit.textContent = 'Saving...';
+                    }
+                });
+                form.querySelector('[data-profile-photo-confirm-cancel]')?.addEventListener('click', () => {
+                    setProfilePhotoConfirmation(form, false);
+                    form.querySelector('[data-profile-photo-save]')?.focus();
+                });
+                form.querySelector('[data-profile-photo-confirm-submit]')?.addEventListener('click', () => {
+                    form.dataset.profilePhotoConfirmed = 'true';
+                });
+            });
+
+            document.addEventListener('keydown', (event) => {
+                if (event.key !== 'Escape') return;
+                document.querySelectorAll('.profile-photo-modal.is-open').forEach(closeProfilePhotoModal);
+            });
+
             function toggleModalPwVisibility(inputId, btn) {
                 const inp = document.getElementById(inputId);
                 if (inp) {
@@ -627,7 +814,7 @@ function render_student_auth_header(string $title): void
             };
         </script>
         <link href="../public/assets/css/app.css?v=file-preview-2" rel="stylesheet">
-        <link href="assets/css/patient.css?v=ape-current-step-1" rel="stylesheet">
+        <link href="assets/css/patient.css?v=profile-photo-2" rel="stylesheet">
         <style>
             :root {
                 --cliniq-primary: <?= student_e($theme['primary']) ?>;

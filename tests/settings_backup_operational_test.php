@@ -21,6 +21,10 @@ function expect_operational_backup(bool $condition, string $message): void
 foreach (['run_backup', 'verify_backup', 'run_semester_backup', 'Run Backup Now', 'Verify Latest', 'Semester Archive', '8:00 AM', 'Recent Backups'] as $expected) {
     expect_operational_backup(str_contains($settings, $expected), "Backup Settings is missing {$expected}.");
 }
+foreach (['backup_page', 'Page <?= (int) $backupPagination', 'Previous', 'Next'] as $expected) {
+    expect_operational_backup(str_contains($settings, $expected), "Backup pagination is missing {$expected}.");
+}
+expect_operational_backup(str_contains($settings, "cliniq_backup_history_page((int) (\$_GET['backup_page'] ?? 1), 5)"), 'Backup Settings must show five records per page.');
 expect_operational_backup(!str_contains($settings, 'data-backup-placeholder'), 'The Backup tab must no longer be marked as a placeholder.');
 expect_operational_backup(!str_contains($settings, 'Run Backup · Coming soon'), 'The Run Backup control must be operational.');
 

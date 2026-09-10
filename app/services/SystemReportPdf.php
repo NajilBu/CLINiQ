@@ -233,6 +233,7 @@ function render_system_report_pdf(array $report, array $options = []): string
             $pdf->text(42, $y, (string) $chart['title'], 12, [51, 65, 85], 'F2');
             $y -= 18;
             $rows = array_slice($chart['rows'] ?? [], 0, 8);
+            $chartDecimals = max(0, min(2, (int) ($chart['decimals'] ?? 0)));
             $max = max(1.0, ...array_map(static fn(array $row): float => (float) ($row['value'] ?? 0), $rows ?: [['value' => 0]]));
             if (!$rows) {
                 $pdf->text(54, $y, (string) ($chart['empty'] ?? 'No data available for this period.'), 9, [148, 163, 184]);
@@ -245,7 +246,7 @@ function render_system_report_pdf(array $report, array $options = []): string
                 $pdf->textBlock(54, $y, 125, (string) ($row['label'] ?? 'Not specified'), 8, [71, 85, 105], 9);
                 $pdf->rect(190, $y - 6, 260, 7, [237, 243, 239]);
                 $pdf->rect(190, $y - 6, max(2, $barW), 7, [47, 133, 83]);
-                $pdf->text(462, $y - 4, system_report_format_number($value), 8, [32, 95, 61], 'F2');
+                $pdf->text(462, $y - 4, system_report_format_number($value, $chartDecimals), 8, [32, 95, 61], 'F2');
                 $y -= 15;
             }
             $y -= 14;

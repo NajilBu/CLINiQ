@@ -89,6 +89,11 @@ $toolbarStyles = <<<'CSS'
     background: #eaf7ef;
     color: #14532d;
 }
+.print-toolbar button[aria-pressed="true"] {
+    border-color: #205f3d;
+    background: #205f3d;
+    color: #fff;
+}
 .system-report-standalone {
     background: #e8efeb;
     padding-bottom: 36px;
@@ -190,6 +195,39 @@ $toolbarStyles = <<<'CSS'
 .system-report-standalone .report-section:last-child {
     margin-bottom: 26px;
 }
+.system-report-standalone.report-preview-multi-page .report-document {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(31rem, 1fr));
+    align-items: start;
+    gap: 26px;
+    width: min(1780px, calc(100vw - 32px));
+    padding: 26px 0;
+}
+.system-report-standalone.report-preview-multi-page .report-body {
+    display: contents;
+}
+.system-report-standalone.report-preview-multi-page :is(.report-cover, .report-section) {
+    width: 210mm;
+    min-height: 297mm;
+    margin: 0 auto;
+    zoom: .68;
+}
+.system-report-standalone.report-preview-multi-page .report-section:last-child {
+    margin-bottom: 0;
+}
+@media (max-width: 900px) {
+    .system-report-standalone.report-preview-multi-page .report-document {
+        display: block;
+        width: 100%;
+        padding: 0;
+    }
+    .system-report-standalone.report-preview-multi-page :is(.report-cover, .report-section) {
+        width: min(210mm, calc(100vw - 32px));
+        min-height: auto;
+        margin: 20px auto;
+        zoom: 1;
+    }
+}
 @media print {
     .print-toolbar {
         display: none !important;
@@ -200,10 +238,26 @@ $toolbarStyles = <<<'CSS'
     .system-report-standalone .report-document,
     .system-report-standalone .report-cover,
     .system-report-standalone .report-section {
+        display: block;
         width: auto;
         min-height: 0;
         margin: 0;
         box-shadow: none;
+        zoom: 1;
+    }
+    .system-report-standalone .report-document {
+        padding: 0;
+    }
+    .system-report-standalone.report-preview-multi-page .report-document,
+    .system-report-standalone.report-preview-multi-page .report-body {
+        display: block;
+        width: auto;
+    }
+    .system-report-standalone.report-preview-multi-page :is(.report-cover, .report-section) {
+        width: auto;
+        min-height: 0;
+        margin: 0;
+        zoom: 1;
     }
 }
 CSS;
@@ -212,10 +266,11 @@ $toolbar = '
     <div class="print-toolbar">
         <div>
             <strong>PDF Preview</strong>
-            <span>This preview follows the printable page layout.</span>
+            <span>' . (count($report['sections']) + 1) . ' pages shown in the printable page layout.</span>
         </div>
         <div class="print-toolbar-actions">
             <a href="preview.php?' . system_report_escape($backQuery) . '">Back to Preview</a>
+            <button type="button" id="reportPreviewLayoutToggle" aria-pressed="true">Single Page View</button>
             <button type="button" class="secondary" onclick="window.print()">Print</button>
             <form method="post" action="download.php">
                 ' . $downloadFields . '
@@ -227,6 +282,29 @@ $toolbar = '
 
 $html = render_system_report_document($report, true, ['remarks_mode' => 'print', 'remarks' => $remarks, 'prepared_by' => $currentUser]);
 $html = str_replace('</style>', "\n{$toolbarStyles}\n</style>", $html);
-$html = str_replace('<body class="system-report-standalone">', '<body class="system-report-standalone">' . $toolbar, $html);
+$layoutScript = <<<'HTML'
+<script>
+(() => {
+    const toggle = document.getElementById('reportPreviewLayoutToggle');
+    if (!toggle) return;
+    const sync = () => {
+        const multiPage = document.body.classList.contains('report-preview-multi-page');
+        toggle.setAttribute('aria-pressed', multiPage ? 'true' : 'false');
+        toggle.textContent = multiPage ? 'Single Page View' : 'Multiple Pages View';
+    };
+    toggle.addEventListener('click', () => {
+        document.body.classList.toggle('report-preview-multi-page');
+        sync();
+    });
+    sync();
+})();
+</script>
+HTML;
+$html = str_replace(
+    '<body class="system-report-standalone">',
+    '<body class="system-report-standalone report-preview-multi-page">' . $toolbar,
+    $html
+);
+$html = str_replace('</body>', $layoutScript . '</body>', $html);
 
 echo $html;

@@ -13,6 +13,7 @@ function system_report_module_labels(): array
         'ape' => 'Annual Physical Examination',
         'referrals' => 'Referrals',
         'alerts' => 'Alerts and Incidents',
+        'feedback' => 'Clinic Feedback',
     ];
 }
 
@@ -62,9 +63,9 @@ function system_report_metric(string $label, float|int $value, string $note = ''
     return ['label' => $label, 'value' => $value, 'note' => $note, 'decimals' => $decimals];
 }
 
-function system_report_chart(string $title, array $rows, string $empty = 'No data available for this period.'): array
+function system_report_chart(string $title, array $rows, string $empty = 'No data available for this period.', int $decimals = 0): array
 {
-    return ['title' => $title, 'rows' => $rows, 'empty' => $empty];
+    return ['title' => $title, 'rows' => $rows, 'empty' => $empty, 'decimals' => max(0, min(2, $decimals))];
 }
 
 function build_system_report(string $dateFrom, string $dateTo, array $modules): array
@@ -240,6 +241,61 @@ function build_system_report(string $dateFrom, string $dateTo, array $modules): 
                 system_report_chart('Alerts by Day', system_report_rows($newDb, "SELECT DATE_FORMAT(created_at, '%b %e') label, COUNT(*) value FROM nurse_alerts WHERE DATE(created_at) BETWEEN ? AND ? GROUP BY DATE(created_at), label ORDER BY DATE(created_at)", $range)),
                 system_report_chart('Incident Report Status', system_report_rows($newDb, "SELECT COALESCE(NULLIF(status, ''), 'Not specified') label, COUNT(*) value FROM incident_reports WHERE DATE(reported_at) BETWEEN ? AND ? GROUP BY label ORDER BY value DESC", $range)),
                 system_report_chart('Passport Access by Day', system_report_rows($newDb, "SELECT DATE_FORMAT(accessed_at, '%b %e') label, COUNT(*) value FROM passport_access_logs WHERE DATE(accessed_at) BETWEEN ? AND ? GROUP BY DATE(accessed_at), label ORDER BY DATE(accessed_at)", $range)),
+            ],
+        ];
+    }
+
+    if (in_array('feedback', $modules, true)) {
+        $feedbackDimensions = [];
+        foreach ([
+            'tangibles' => 'Tangibles',
+            'reliability' => 'Reliability',
+            'responsiveness' => 'Responsiveness',
+            'assurance' => 'Assurance',
+            'empathy' => 'Empathy',
+            'overall' => 'Overall SERVPERF',
+        ] as $column => $label) {
+            $feedbackDimensions[] = [
+                'label' => $label,
+                'value' => system_report_scalar(
+                    $newDb,
+                    "SELECT COALESCE(AVG({$column}), 0) FROM clinic_feedback WHERE DATE(submitted_at) BETWEEN ? AND ?",
+                    $range
+                ),
+            ];
+        }
+
+        $sections['feedback'] = [
+            'title' => 'Clinic Feedback',
+            'description' => 'Anonymous student service evaluations summarized using the five SERVPERF dimensions and the selected reporting period.',
+            'metrics' => [
+                system_report_metric('Responses', system_report_scalar($newDb, 'SELECT COUNT(*) FROM clinic_feedback WHERE DATE(submitted_at) BETWEEN ? AND ?', $range)),
+                system_report_metric('Average Overall Score', system_report_scalar($newDb, 'SELECT COALESCE(AVG(overall), 0) FROM clinic_feedback WHERE DATE(submitted_at) BETWEEN ? AND ?', $range), 'out of 7', 2),
+                system_report_metric('Excellent', system_report_scalar($newDb, 'SELECT COUNT(*) FROM clinic_feedback WHERE overall >= 6 AND DATE(submitted_at) BETWEEN ? AND ?', $range)),
+                system_report_metric('Satisfactory', system_report_scalar($newDb, 'SELECT COUNT(*) FROM clinic_feedback WHERE overall >= 4 AND overall < 6 AND DATE(submitted_at) BETWEEN ? AND ?', $range)),
+                system_report_metric('Critical', system_report_scalar($newDb, 'SELECT COUNT(*) FROM clinic_feedback WHERE overall < 4 AND DATE(submitted_at) BETWEEN ? AND ?', $range)),
+                system_report_metric('Written Comments', system_report_scalar($newDb, "SELECT COUNT(*) FROM clinic_feedback WHERE NULLIF(TRIM(comments), '') IS NOT NULL AND DATE(submitted_at) BETWEEN ? AND ?", $range)),
+            ],
+            'charts' => [
+                system_report_chart('Average SERVPERF Scores', $feedbackDimensions, 'No feedback was submitted during this period.', 2),
+                system_report_chart('Responses by Service', system_report_rows($newDb, "
+                    SELECT COALESCE(NULLIF(CASE WHEN service_type = 'Other' THEN service_other ELSE service_type END, ''), 'Other') label, COUNT(*) value
+                    FROM clinic_feedback
+                    WHERE DATE(submitted_at) BETWEEN ? AND ?
+                    GROUP BY label ORDER BY value DESC, label LIMIT 10
+                ", $range), 'No feedback was submitted during this period.'),
+                system_report_chart('Feedback Performance', system_report_rows($newDb, "
+                    SELECT CASE WHEN overall >= 6 THEN 'Excellent' WHEN overall >= 4 THEN 'Satisfactory' ELSE 'Critical' END label, COUNT(*) value
+                    FROM clinic_feedback
+                    WHERE DATE(submitted_at) BETWEEN ? AND ?
+                    GROUP BY label ORDER BY FIELD(label, 'Excellent', 'Satisfactory', 'Critical')
+                ", $range), 'No feedback was submitted during this period.'),
+                system_report_chart('Feedback by Day', system_report_rows($newDb, "
+                    SELECT DATE_FORMAT(submitted_at, '%b %e') label, COUNT(*) value
+                    FROM clinic_feedback
+                    WHERE DATE(submitted_at) BETWEEN ? AND ?
+                    GROUP BY DATE(submitted_at), label ORDER BY DATE(submitted_at)
+                ", $range), 'No feedback was submitted during this period.'),
             ],
         ];
     }

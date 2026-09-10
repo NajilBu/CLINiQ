@@ -5,6 +5,7 @@ require_once __DIR__ . '/../config/env.php';
 require_once __DIR__ . '/brand.php';
 require_once __DIR__ . '/student_id.php';
 require_once __DIR__ . '/../services/SystemSettings.php';
+require_once __DIR__ . '/../services/ProfilePhoto.php';
 
 function e(?string $value): string
 {
@@ -152,6 +153,8 @@ function render_header(string $title): void
     $theme = active_cliniq_theme();
     $pageBackLink = $GLOBALS['cliniq_page_back_link'] ?? null;
     $currentPath = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
+    $staffPhotoPath = $user ? profile_photo_path_for_person((int) ($user['person_id'] ?? $user['id'] ?? 0)) : null;
+    $staffPhotoUrl = $staffPhotoPath !== null ? app_url($staffPhotoPath) : null;
     $activeAlertCount = 0;
     $criticalAlertCount = 0;
     $pendingAlertUrl = app_url('alerts/index.php?status=pending');
@@ -289,21 +292,23 @@ function render_header(string $title): void
                         </a>
                     <?php endforeach; ?>
                 </nav>
-                <details class="app-sidebar-footer app-user-menu">
-                    <summary class="app-user-menu-trigger">
+                <div class="app-sidebar-footer">
+                    <details class="app-user-menu">
+                        <summary class="app-user-menu-trigger">
                         <span class="app-user-copy">
                             <span class="app-user-label">Signed in as</span>
                             <strong><?= e($user['name']) ?></strong>
                         </span>
                         <span class="material-symbols-outlined app-user-menu-icon" aria-hidden="true">expand_more</span>
-                    </summary>
-                    <div class="app-user-menu-popover">
+                        </summary>
+                        <div class="app-user-menu-popover">
                         <a href="<?= app_url('logout.php') ?>" class="app-logout text-decoration-none" data-no-ajax="true">
                             <span class="material-symbols-outlined">logout</span>
                             Logout
                         </a>
-                    </div>
-                </details>
+                        </div>
+                    </details>
+                </div>
             </aside>
             <div class="app-main">
                 <header class="app-topbar">
@@ -333,6 +338,14 @@ function render_header(string $title): void
                             </a>
                         <?php endif; ?>
                         <span><?= e(date('l, F j')) ?></span>
+                        <button type="button" class="app-profile-photo" data-profile-photo-open="staff-profile-photo-modal" title="Change profile picture" aria-label="Change profile picture">
+                            <?php if ($staffPhotoUrl !== null): ?>
+                                <img src="<?= e($staffPhotoUrl) ?>" alt="<?= e($user['name']) ?> profile picture">
+                            <?php else: ?>
+                                <span><?= e(initials((string) $user['name'])) ?></span>
+                            <?php endif; ?>
+                            <span class="profile-photo-camera material-symbols-outlined" aria-hidden="true">photo_camera</span>
+                        </button>
                     </div>
                 </header>
                 <main class="app-content">
@@ -355,6 +368,11 @@ function render_header(string $title): void
 function render_footer(): void
 {
     $user = current_user();
+    $personId = (int) ($user['person_id'] ?? $user['id'] ?? 0);
+    $photoPath = $personId > 0 ? profile_photo_path_for_person($personId) : null;
+    $photoUrl = $photoPath !== null ? app_url($photoPath) : null;
+    $requestPath = ltrim((string) parse_url($_SERVER['REQUEST_URI'] ?? '/public/dashboard.php', PHP_URL_PATH), '/');
+    $returnTo = preg_replace('#^public/#', '', $requestPath) ?: 'dashboard.php';
     ?>
             </div>
         </main>
@@ -375,11 +393,163 @@ function render_footer(): void
                 <div id="rowActionsModalBody" class="row-actions-modal-body"></div>
             </div>
         </div>
+        <div id="staff-profile-photo-modal" class="profile-photo-modal" role="dialog" aria-modal="true" aria-labelledby="staff-profile-photo-title" hidden>
+            <div class="profile-photo-dialog">
+                <div class="profile-photo-dialog-header">
+                    <div>
+                        <p class="profile-photo-eyebrow">Clinic profile</p>
+                        <h3 id="staff-profile-photo-title">Change profile picture</h3>
+                    </div>
+                    <button type="button" class="profile-photo-close" data-profile-photo-close aria-label="Close profile-picture dialog">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <form action="<?= app_url('profile-photo-update.php') ?>" method="post" enctype="multipart/form-data" class="profile-photo-preview-form" data-profile-photo-form>
+                    <input type="hidden" name="return_to" value="<?= e($returnTo) ?>">
+                    <div class="profile-photo-stage is-active" data-profile-photo-editor>
+                        <div class="profile-photo-preview-frame">
+                            <img data-profile-photo-preview src="<?= e($photoUrl ?? '') ?>" alt="Selected profile-picture preview" <?= $photoUrl === null ? 'hidden' : '' ?>>
+                            <span data-profile-photo-fallback <?= $photoUrl !== null ? 'hidden' : '' ?>><?= e(initials((string) ($user['name'] ?? 'Staff'))) ?></span>
+                        </div>
+                        <p class="profile-photo-help">Choose a clear JPG, PNG, or WebP image up to 5 MB.</p>
+                        <input id="staff-profile-photo-input" class="profile-photo-input" type="file" name="profile_photo" accept="image/jpeg,image/png,image/webp" required data-profile-photo-input>
+                        <div class="profile-photo-dialog-actions">
+                            <label for="staff-profile-photo-input" class="btn btn-ghost profile-photo-choose">
+                                <span class="material-symbols-outlined">image</span>
+                                Choose Photo
+                            </label>
+                            <button type="button" class="btn btn-ghost" data-profile-photo-close>Cancel</button>
+                            <button type="submit" class="btn btn-primary" data-profile-photo-save disabled>Review Photo</button>
+                        </div>
+                    </div>
+                    <div class="profile-photo-stage profile-photo-confirmation" data-profile-photo-confirmation aria-hidden="true">
+                        <div class="profile-photo-preview-frame profile-photo-confirm-preview-frame">
+                            <img data-profile-photo-confirm-preview src="" alt="Profile picture ready to save" hidden>
+                        </div>
+                        <h4>Use this profile picture?</h4>
+                        <p class="profile-photo-help">Your clinic profile will display this photo after you confirm.</p>
+                        <div class="profile-photo-dialog-actions">
+                            <button type="button" class="btn btn-ghost" data-profile-photo-confirm-cancel>Go Back</button>
+                            <button type="submit" class="btn btn-primary" data-profile-photo-confirm-submit>Confirm &amp; Save</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
         <?php endif; ?>
     <?php render_flash_toasts(); ?>
     <script src="<?= app_url('assets/js/app.js?v=' . filemtime(__DIR__ . '/../../public/assets/js/app.js')) ?>"></script>
     <script src="<?= app_url('assets/js/ag-grid-tables.js?v=' . filemtime(__DIR__ . '/../../public/assets/js/ag-grid-tables.js')) ?>"></script>
     <script src="<?= app_url('assets/js/file-preview.js?v=ape-popup-2') ?>"></script>
+    <script>
+        const profilePhotoMotionMs = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 240;
+
+        function setProfilePhotoConfirmation(form, confirming) {
+            const editor = form.querySelector('[data-profile-photo-editor]');
+            const confirmation = form.querySelector('[data-profile-photo-confirmation]');
+            if (!editor || !confirmation) return;
+            editor.classList.toggle('is-active', !confirming);
+            editor.setAttribute('aria-hidden', confirming ? 'true' : 'false');
+            confirmation.classList.toggle('is-active', confirming);
+            confirmation.setAttribute('aria-hidden', confirming ? 'false' : 'true');
+            form.dataset.profilePhotoConfirmed = 'false';
+            if (confirming) {
+                const preview = form.querySelector('[data-profile-photo-preview]');
+                const confirmationPreview = form.querySelector('[data-profile-photo-confirm-preview]');
+                if (preview && confirmationPreview) {
+                    confirmationPreview.src = preview.src;
+                    confirmationPreview.hidden = false;
+                }
+                form.querySelector('[data-profile-photo-confirm-submit]')?.focus();
+            }
+        }
+
+        function openProfilePhotoModal(modal) {
+            clearTimeout(modal._profilePhotoCloseTimer);
+            modal.hidden = false;
+            modal._profilePhotoClosing = false;
+            document.body.style.overflow = 'hidden';
+            requestAnimationFrame(() => {
+                if (!modal._profilePhotoClosing) modal.classList.add('is-open');
+            });
+        }
+
+        function closeProfilePhotoModal(modal) {
+            modal._profilePhotoClosing = true;
+            modal.classList.remove('is-open');
+            clearTimeout(modal._profilePhotoCloseTimer);
+            modal._profilePhotoCloseTimer = setTimeout(() => {
+                modal.hidden = true;
+                const form = modal.querySelector('[data-profile-photo-form]');
+                if (form) setProfilePhotoConfirmation(form, false);
+                if (!document.querySelector('.profile-photo-modal.is-open, .modal-backdrop.show')) {
+                    document.body.style.overflow = '';
+                }
+            }, profilePhotoMotionMs);
+        }
+
+        document.querySelectorAll('[data-profile-photo-open]').forEach((button) => {
+            button.addEventListener('click', () => {
+                const modal = document.getElementById(button.dataset.profilePhotoOpen);
+                if (modal) openProfilePhotoModal(modal);
+            });
+        });
+        document.querySelectorAll('[data-profile-photo-close]').forEach((button) => {
+            button.addEventListener('click', () => {
+                const modal = button.closest('.profile-photo-modal');
+                if (modal) closeProfilePhotoModal(modal);
+            });
+        });
+        document.querySelectorAll('.profile-photo-modal').forEach((modal) => {
+            modal.addEventListener('click', (event) => {
+                if (event.target === modal) closeProfilePhotoModal(modal);
+            });
+        });
+        document.querySelectorAll('[data-profile-photo-input]').forEach((input) => {
+            input.addEventListener('change', () => {
+                const form = input.closest('[data-profile-photo-form]');
+                const file = input.files && input.files[0];
+                if (!form || !file) return;
+                const preview = form.querySelector('[data-profile-photo-preview]');
+                const fallback = form.querySelector('[data-profile-photo-fallback]');
+                const save = form.querySelector('[data-profile-photo-save]');
+                const reader = new FileReader();
+                reader.addEventListener('load', () => {
+                    preview.src = String(reader.result || '');
+                    preview.hidden = false;
+                    if (fallback) fallback.hidden = true;
+                    if (save) save.disabled = false;
+                    setProfilePhotoConfirmation(form, false);
+                });
+                reader.readAsDataURL(file);
+            });
+        });
+        document.querySelectorAll('[data-profile-photo-form]').forEach((form) => {
+            form.addEventListener('submit', (event) => {
+                if (form.dataset.profilePhotoConfirmed !== 'true') {
+                    event.preventDefault();
+                    setProfilePhotoConfirmation(form, true);
+                    return;
+                }
+                const submit = form.querySelector('[data-profile-photo-confirm-submit]');
+                if (submit) {
+                    submit.disabled = true;
+                    submit.textContent = 'Saving...';
+                }
+            });
+            form.querySelector('[data-profile-photo-confirm-cancel]')?.addEventListener('click', () => {
+                setProfilePhotoConfirmation(form, false);
+                form.querySelector('[data-profile-photo-save]')?.focus();
+            });
+            form.querySelector('[data-profile-photo-confirm-submit]')?.addEventListener('click', () => {
+                form.dataset.profilePhotoConfirmed = 'true';
+            });
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key !== 'Escape') return;
+            document.querySelectorAll('.profile-photo-modal.is-open').forEach(closeProfilePhotoModal);
+        });
+    </script>
     </body>
     </html>
     <?php

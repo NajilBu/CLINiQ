@@ -1,0 +1,249 @@
+.public-passport {
+    --passport-primary: #3f7d52;
+    --passport-primary-dark: #23422c;
+    --passport-primary-soft: #e8f6ec;
+    --passport-border: #d8e9dd;
+    --passport-muted: #64756a;
+    --passport-fg: #17261d;
+    overflow: hidden;
+    border: 1px solid var(--passport-border);
+    border-radius: 1.25rem;
+    background: #f7fbf8;
+}
+
+.public-passport .passport-modern-hero {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.35rem;
+    color: #fff;
+    background: linear-gradient(135deg, var(--passport-primary-dark), var(--passport-primary));
+}
+
+.public-passport .passport-modern-avatar {
+    width: 4rem;
+    height: 4rem;
+    display: grid;
+    place-items: center;
+    border: 2px solid rgba(255, 255, 255, 0.42);
+    border-radius: 1.15rem;
+    background: rgba(255, 255, 255, 0.14);
+    overflow: hidden;
+}
+
+.public-passport .passport-modern-avatar img {
+    width: 100%;
+    height: 100%;
+    border-radius: calc(1.15rem - 2px);
+    object-fit: cover;
+}
+
+.public-passport .passport-modern-avatar .material-symbols-outlined { font-size: 2rem; }
+.public-passport .passport-modern-identity { min-width: 0; }
+.public-passport .passport-modern-kicker-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.45rem;
+    margin-bottom: 0.55rem;
+}
+
+.public-passport .passport-modern-pill,
+.public-passport .passport-modern-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    border-radius: 999px;
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    line-height: 1;
+    text-transform: uppercase;
+}
+
+.public-passport .passport-modern-pill {
+    padding: 0.38rem 0.62rem;
+    border: 1px solid rgba(255, 255, 255, 0.34);
+    background: rgba(255, 255, 255, 0.14);
+}
+
+.public-passport .passport-modern-status {
+    padding: 0.34rem 0.58rem;
+    color: #174d2b;
+    background: #f0fff4;
+}
+
+.public-passport .passport-modern-status.is-active { color: #991b1b; background: #fff1f2; }
+.public-passport .passport-modern-status .material-symbols-outlined { font-size: 0.82rem; }
+.public-passport .passport-modern-name {
+    overflow: hidden;
+    color: #fff;
+    font-size: clamp(1.15rem, 4vw, 1.55rem);
+    font-weight: 850;
+    line-height: 1.15;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.public-passport .passport-modern-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.38rem;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.74rem;
+}
+
+.public-passport .passport-modern-blood {
+    min-width: 5.6rem;
+    padding: 0.8rem 0.9rem;
+    border-radius: 1rem;
+    color: #7f1d1d;
+    text-align: center;
+    background: #fff;
+    box-shadow: 0 10px 24px rgba(22, 55, 34, 0.16);
+}
+
+.public-passport .passport-modern-blood span,
+.public-passport .passport-modern-blood strong { display: block; }
+.public-passport .passport-modern-blood span {
+    font-size: 0.58rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+.public-passport .passport-modern-blood strong { margin-top: 0.15rem; font-size: 1.45rem; line-height: 1; }
+.public-passport .passport-modern-content { display: grid; gap: 0.9rem; padding: 1rem; }
+.public-passport .passport-modern-info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.public-passport .passport-modern-info {
+    min-width: 0;
+    padding: 0.95rem;
+    border: 1px solid var(--passport-border);
+    border-left-width: 4px;
+    border-radius: 0.9rem;
+    background: #fff;
+}
+
+.public-passport .passport-modern-info-allergy { border-left-color: #dc2626; }
+.public-passport .passport-modern-info-condition { border-left-color: #d97706; }
+.public-passport .passport-modern-info-medication { border-left-color: #2563eb; }
+.public-passport .passport-modern-info-instructions { grid-column: 1 / -1; border-left-color: #d97706; background: #fffcf2; }
+.public-passport .passport-modern-info-bmi { grid-column: 1 / -1; border-left-color: var(--passport-primary); }
+.public-passport .passport-modern-info-heading {
+    display: flex;
+    align-items: center;
+    gap: 0.42rem;
+    margin-bottom: 0.65rem;
+    color: var(--passport-muted);
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+}
+
+.public-passport .passport-modern-info-heading .material-symbols-outlined { font-size: 1rem; }
+.public-passport .passport-modern-value,
+.public-passport .passport-modern-instructions {
+    color: var(--passport-fg);
+    font-size: 0.82rem;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+}
+
+.public-passport .passport-modern-tags { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.public-passport .passport-modern-tag {
+    padding: 0.28rem 0.55rem;
+    border: 1px solid #fecaca;
+    border-radius: 999px;
+    color: #991b1b;
+    background: #fff5f5;
+    font-size: 0.7rem;
+    font-weight: 700;
+}
+
+.public-passport .passport-modern-instructions {
+    padding: 0.7rem 0.8rem;
+    border-radius: 0.7rem;
+    color: #854d0e;
+    background: #fff7dc;
+}
+
+.public-passport .passport-modern-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
+}
+.public-passport .passport-modern-metrics span { padding: 0.65rem; border-radius: 0.7rem; text-align: center; background: var(--passport-primary-soft); }
+.public-passport .passport-modern-metrics strong,
+.public-passport .passport-modern-metrics small { display: block; }
+.public-passport .passport-modern-metrics strong { color: var(--passport-primary-dark); font-size: 1rem; }
+.public-passport .passport-modern-metrics small { margin-top: 0.15rem; color: var(--passport-muted); font-size: 0.58rem; }
+.public-passport .passport-modern-contact {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.9rem;
+    border: 1px solid var(--passport-border);
+    border-radius: 0.9rem;
+    background: #fff;
+}
+
+.public-passport .passport-modern-contact-icon {
+    width: 2.6rem;
+    height: 2.6rem;
+    display: grid;
+    place-items: center;
+    border-radius: 0.8rem;
+    color: var(--passport-primary-dark);
+    background: var(--passport-primary-soft);
+}
+.public-passport .passport-modern-contact-details { min-width: 0; }
+.public-passport .passport-modern-contact-details > span,
+.public-passport .passport-modern-contact-details strong,
+.public-passport .passport-modern-contact-details small { display: block; }
+.public-passport .passport-modern-contact-details > span { color: var(--passport-muted); font-size: 0.6rem; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; }
+.public-passport .passport-modern-contact-details strong { margin-top: 0.18rem; color: var(--passport-fg); font-size: 0.85rem; overflow-wrap: anywhere; }
+.public-passport .passport-modern-contact-details small { margin-top: 0.12rem; color: var(--passport-muted); font-size: 0.7rem; overflow-wrap: anywhere; }
+.public-passport .passport-modern-call {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    padding: 0.62rem 0.8rem;
+    border-radius: 999px;
+    color: #fff;
+    background: var(--passport-primary);
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-decoration: none;
+}
+
+.public-passport .passport-modern-call:hover { color: #fff; background: var(--passport-primary-dark); }
+.public-passport .passport-modern-call .material-symbols-outlined { font-size: 1rem; }
+.public-passport .passport-modern-updated {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+    color: var(--passport-muted);
+    font-size: 0.66rem;
+}
+.public-passport .passport-modern-updated .material-symbols-outlined { font-size: 0.85rem; }
+
+@media (max-width: 640px) {
+    .public-passport .passport-modern-hero { grid-template-columns: auto minmax(0, 1fr); padding: 1rem; }
+    .public-passport .passport-modern-blood { grid-column: 1 / -1; width: 100%; }
+    .public-passport .passport-modern-name { white-space: normal; }
+    .public-passport .passport-modern-info-grid { grid-template-columns: 1fr; }
+    .public-passport .passport-modern-info-instructions,
+    .public-passport .passport-modern-info-bmi { grid-column: auto; }
+    .public-passport .passport-modern-contact { grid-template-columns: auto minmax(0, 1fr); }
+    .public-passport .passport-modern-call { grid-column: 1 / -1; width: 100%; }
+}

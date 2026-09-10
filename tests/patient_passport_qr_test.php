@@ -15,7 +15,14 @@ $assertions = [
     'download button saves the rendered QR image' => str_contains($script, "canvas.toDataURL('image/png')"),
     'old QR placeholder is removed' => !str_contains($page, 'Inline SVG QR placeholder'),
     'old QR download alert is removed' => !str_contains($page, 'QR download will be connected to the backend.'),
-    'NFC placeholder remains unchanged' => str_contains($page, 'NFC write feature requires a physical NFC device.'),
+    'NFC placeholder is removed' => !str_contains($page, 'NFC write feature requires a physical NFC device.'),
+    'NFC write control is available' => str_contains($page, 'id="write-passport-nfc"'),
+    'NFC status is announced accessibly' => str_contains($page, 'id="passport-nfc-status"') && str_contains($page, 'aria-live="polite"'),
+    'NFC support is feature detected' => str_contains($script, "'NDEFReader' in window"),
+    'NFC writer stores the passport URL' => str_contains($script, "recordType: 'url'") && str_contains($script, 'data: passportUrl'),
+    'NFC writing requires a secure context' => str_contains($script, 'window.isSecureContext'),
+    'patient controls BMI passport visibility' => str_contains($page, 'name="show_bmi_on_passport"') && str_contains($page, 'role="switch"'),
+    'patient preview follows BMI visibility' => str_contains($page, 'id="prev-bmi-metric"') && str_contains($page, 'syncBmiVisibility'),
     'local QR library file exists' => is_file($library) && filesize($library) > 10000,
 ];
 

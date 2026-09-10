@@ -110,6 +110,11 @@ function ape_cycle_current(): ?array
     return $cycleId ? ape_cycle_fetch((int) $cycleId) : null;
 }
 
+function can_start_new_school_year(?array $currentCycle): bool
+{
+    return ($currentCycle['status'] ?? '') === 'Closed';
+}
+
 function start_ape_cycle(string $academicYear, string $complianceStart, string $complianceEnd, ?int $actorPersonId, ?string $examScheduleDate = null): array
 {
     ensure_ape_cycle_schema();
@@ -658,6 +663,12 @@ function cancel_ape_schedule_batch(int $batchId, int $cycleId, ?int $actorPerson
  */
 function reset_school_year_accounts(): array
 {
+    ensure_ape_cycle_schema();
+    $currentCycle = ape_cycle_current();
+    if (!can_start_new_school_year($currentCycle)) {
+        throw new RuntimeException('Close the current APE cycle before starting a new school year.');
+    }
+
     $db = auth_db();
 
     // Fetch all patients that will be deactivated BEFORE the reset, so we have their info.

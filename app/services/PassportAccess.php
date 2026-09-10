@@ -15,7 +15,6 @@ function passport_viewer_from_person_id(int $personId): ?array
                p.first_name, p.middle_name, p.last_name, a.email
         FROM people p
         JOIN accounts a ON a.person_id = p.id
-        JOIN students s ON s.person_id = p.id
         WHERE p.id = ? AND a.account_status = \'active\'
         LIMIT 1
     ');
@@ -57,7 +56,6 @@ function passport_authenticate_viewer(string $studentNumber, string $password): 
                p.id AS person_id, p.id_number, p.first_name, p.middle_name, p.last_name, a.email
         FROM accounts a
         JOIN people p ON p.id = a.person_id
-        JOIN students s ON s.person_id = p.id
         WHERE p.id_number = ?
         LIMIT 1
     ');

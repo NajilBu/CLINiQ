@@ -715,6 +715,236 @@ h6,
     display: none;
 }
 
+.profile-photo-input {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    overflow: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+.app-profile-photo-form {
+    flex: 0 0 auto;
+}
+
+.app-profile-photo {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    width: 2.7rem;
+    height: 2.7rem;
+    padding: 0;
+    border: 2px solid #fff;
+    border-radius: 999px;
+    color: #fff;
+    background: var(--cliniq-primary);
+    box-shadow: 0 0 0 1px var(--cliniq-outline), 0 5px 14px rgba(23, 38, 29, 0.14);
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 800;
+}
+
+.app-profile-photo img,
+.profile-photo-cover,
+.settings-profile-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.app-profile-photo .profile-photo-camera {
+    position: absolute;
+    right: -0.08rem;
+    bottom: -0.08rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.15rem;
+    height: 1.15rem;
+    border: 2px solid #fff;
+    border-radius: 999px;
+    color: #fff;
+    background: var(--cliniq-primary-hover);
+    font-size: 0.65rem;
+}
+
+.app-profile-photo:hover,
+.app-profile-photo:focus-visible {
+    box-shadow: 0 0 0 3px rgba(var(--cliniq-focus-rgb), 0.2), 0 5px 14px rgba(23, 38, 29, 0.14);
+}
+
+.profile-photo-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 120;
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+    background: rgba(15, 23, 42, 0.62);
+    backdrop-filter: blur(6px);
+    opacity: 0;
+    transition: opacity 240ms ease;
+}
+
+.profile-photo-modal[hidden] {
+    display: none;
+}
+
+.profile-photo-dialog {
+    width: min(100%, 30rem);
+    padding: 1.4rem;
+    border: 1px solid var(--cliniq-outline);
+    border-radius: 1.25rem;
+    background: #fff;
+    box-shadow: 0 24px 70px rgba(15, 23, 42, 0.26);
+    opacity: 0;
+    transform: translateY(0.75rem) scale(0.98);
+    transition: opacity 240ms ease, transform 240ms ease;
+}
+
+.profile-photo-modal.is-open {
+    opacity: 1;
+}
+
+.profile-photo-modal.is-open .profile-photo-dialog {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+.profile-photo-preview-form {
+    display: grid;
+}
+
+.profile-photo-stage {
+    grid-area: 1 / 1;
+    min-width: 0;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateY(0.35rem);
+    transition: opacity 180ms ease, transform 180ms ease, visibility 0s linear 180ms;
+}
+
+.profile-photo-stage.is-active {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateY(0);
+    transition-delay: 0s;
+}
+
+.profile-photo-confirmation h4 {
+    margin: 0 0 0.35rem;
+    color: #17261d;
+    font-size: 1.05rem;
+    font-weight: 800;
+    text-align: center;
+}
+
+.profile-photo-confirm-preview-frame {
+    width: 9rem;
+    height: 9rem;
+}
+
+.profile-photo-dialog-header,
+.profile-photo-dialog-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.profile-photo-dialog-header h3 {
+    margin: 0;
+    color: #17261d;
+    font-size: 1.15rem;
+    font-weight: 800;
+}
+
+.profile-photo-eyebrow {
+    margin: 0 0 0.2rem;
+    color: var(--cliniq-primary);
+    font-size: 0.66rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.profile-photo-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.35rem;
+    height: 2.35rem;
+    border: 1px solid var(--cliniq-outline);
+    border-radius: 0.7rem;
+    color: #64756a;
+    background: #fff;
+    cursor: pointer;
+}
+
+.profile-photo-preview-frame {
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    width: 11rem;
+    height: 11rem;
+    margin: 1.5rem auto 0.8rem;
+    border: 4px solid #fff;
+    border-radius: 50%;
+    color: #fff;
+    background: var(--cliniq-primary);
+    box-shadow: 0 0 0 1px var(--cliniq-outline), 0 14px 34px rgba(23, 38, 29, 0.18);
+    font-size: 2.2rem;
+    font-weight: 800;
+}
+
+.profile-photo-preview-frame img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.profile-photo-help {
+    margin: 0 0 1.25rem;
+    color: #64756a;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-align: center;
+}
+
+.profile-photo-dialog-actions {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+
+.profile-photo-choose {
+    cursor: pointer;
+}
+
+[data-profile-photo-save]:disabled {
+    cursor: not-allowed;
+    opacity: 0.48;
+}
+
+@media (max-width: 640px) {
+    .profile-photo-dialog-actions > * {
+        flex: 1 1 100%;
+        justify-content: center;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .profile-photo-modal,
+    .profile-photo-dialog,
+    .profile-photo-stage {
+        transition: none;
+    }
+}
+
 .app-user-menu {
     position: relative;
     isolation: isolate;
@@ -987,7 +1217,7 @@ h6,
 
     .app-brand-copy,
     .app-nav-label {
-        display: block;
+        display: flex;
     }
 
     .app-nav {
@@ -1429,6 +1659,7 @@ h6,
 .avatar {
     width: 2.5rem;
     height: 2.5rem;
+    overflow: hidden;
     border-radius: 9999px;
     display: flex;
     align-items: center;
@@ -1436,6 +1667,13 @@ h6,
     font-size: 0.875rem;
     font-weight: 800;
     flex-shrink: 0;
+}
+
+.avatar-photo {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
 
 .avatar-blue {
@@ -1860,6 +2098,35 @@ textarea:focus {
     border-radius: 0.9rem;
     background: #fbfdfb;
     padding: 1.25rem;
+}
+
+.ape-document-drag-handle {
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+}
+
+.ape-document-drag-handle:active,
+.ape-document-row.is-dragging .ape-document-drag-handle {
+    cursor: grabbing;
+}
+
+.ape-document-row {
+    border-radius: 0.75rem;
+    transition: opacity 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.ape-document-row.is-dragging {
+    opacity: 0.55;
+    box-shadow: 0 0 0 2px rgba(44, 107, 67, 0.3);
+}
+
+.ape-document-row.is-drop-before {
+    box-shadow: inset 0 3px 0 var(--cliniq-primary);
+}
+
+.ape-document-row.is-drop-after {
+    box-shadow: inset 0 -3px 0 var(--cliniq-primary);
 }
 
 .settings-field {
@@ -2384,6 +2651,7 @@ body.file-preview-open {
     justify-content: center;
     font-size: 0.9rem;
     font-weight: 900;
+    overflow: hidden;
 }
 
 .settings-profile-row {
@@ -3354,6 +3622,12 @@ textarea.record-sheet-field {
     font-size: 0.75rem;
     line-height: 1.5;
     overflow-wrap: anywhere;
+}
+
+.audit-detail-summary {
+    margin: 0;
+    color: var(--cliniq-foreground);
+    font-weight: 600;
 }
 
 .audit-nowrap {

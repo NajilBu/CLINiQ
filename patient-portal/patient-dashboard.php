@@ -420,8 +420,13 @@ render_student_header('Dashboard', 'dashboard');
 <div class="student-grid">
     <section class="student-card student-card-pad student-span-4 student-clickable-card" data-href="patient-passport.php" role="link" tabindex="0" aria-label="Open Health Passport profile">
         <div class="flex items-center gap-3 mb-5">
-            <span class="student-icon-box">
-                <span class="material-symbols-outlined">badge</span>
+            <?php $dashboardPhotoPath = profile_photo_normalize_path($profile['profile_photo_path'] ?? null); ?>
+            <span class="student-dashboard-profile-photo">
+                <?php if ($dashboardPhotoPath !== null): ?>
+                    <img src="<?= student_e('../public/' . $dashboardPhotoPath) ?>" alt="<?= student_e($profile['name']) ?> profile picture">
+                <?php else: ?>
+                    <span><?= student_e(student_initials($profile['name'])) ?></span>
+                <?php endif; ?>
             </span>
             <div>
                 <h2 class="student-card-title">Patient Profile</h2>
@@ -444,7 +449,7 @@ render_student_header('Dashboard', 'dashboard');
             </div>
             <div>
                 <span class="student-label">Email</span>
-                <a href="mailto:<?= student_e($profile['email']) ?>" class="text-sm font-black text-primary text-decoration-none"><?= student_e($profile['email']) ?></a>
+                <p class="text-sm font-black text-primary mb-0"><?= student_e($profile['email']) ?></p>
             </div>
         </div>
     </section>
