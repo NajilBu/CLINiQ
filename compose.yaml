@@ -18,6 +18,7 @@ services:
       - cliniq_documents:/var/www/html/storage/documents
       - cliniq_uploads:/var/www/html/public/uploads
       - cliniq_backups:/var/backups/cliniq
+      - ${BACKUP_EXTERNAL_HOST_PATH:-./external-backups}:/var/backups/external
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "http://localhost/public/api/health.php"]
       interval: 30s
@@ -42,6 +43,7 @@ services:
       - cliniq_documents:/var/www/html/storage/documents:ro
       - cliniq_uploads:/var/www/html/public/uploads:ro
       - cliniq_backups:/var/backups/cliniq
+      - ${BACKUP_EXTERNAL_HOST_PATH:-./external-backups}:/var/backups/external
     networks:
       - cliniq_internal
 
@@ -57,6 +59,7 @@ services:
         condition: service_healthy
     volumes:
       - cliniq_backups:/var/backups/cliniq
+      - ${BACKUP_EXTERNAL_HOST_PATH:-./external-backups}:/var/backups/external:ro
     networks:
       - cliniq_internal
 

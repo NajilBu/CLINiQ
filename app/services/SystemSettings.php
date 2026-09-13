@@ -345,6 +345,45 @@ function cliniq_setting_write(string $key, array $value, ?int $updatedBy = null)
     ]);
 }
 
+function cliniq_backup_external_settings(): array
+{
+    $saved = cliniq_setting_read('backup.external_destination', [
+        'enabled' => false,
+        'folder' => '',
+    ]);
+
+    return [
+        'enabled' => filter_var($saved['enabled'] ?? false, FILTER_VALIDATE_BOOLEAN),
+        'folder' => trim((string) ($saved['folder'] ?? '')),
+    ];
+}
+
+function save_cliniq_backup_external_settings(array $input, ?int $updatedBy = null): array
+{
+    $folder = trim((string) ($input['folder'] ?? ''));
+    $folder = str_replace('\\', '/', $folder);
+    $folder = trim($folder, " /");
+
+    if (strlen($folder) > 180) {
+        throw new InvalidArgumentException('The external backup folder name is too long.');
+    }
+    if ($folder !== '' && (str_starts_with($folder, '/') || preg_match('/^[A-Za-z]:/', $folder) === 1)) {
+        throw new InvalidArgumentException('Enter a folder relative to the connected backup drive, not a full drive path.');
+    }
+    foreach (explode('/', $folder) as $segment) {
+        if ($segment === '..' || preg_match('/[<>:"|?*\x00]/', $segment) === 1) {
+            throw new InvalidArgumentException('The external backup folder contains an invalid name.');
+        }
+    }
+
+    $settings = [
+        'enabled' => !empty($input['enabled']),
+        'folder' => $folder,
+    ];
+    cliniq_setting_write('backup.external_destination', $settings, $updatedBy);
+    return $settings;
+}
+
 function default_ape_required_documents(): array
 {
     return [

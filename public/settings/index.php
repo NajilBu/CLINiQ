@@ -209,6 +209,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    if ($action === 'save_backup_destination') {
+        if (!$canManageSettings) {
+            flash_message('error', 'Only authorized clinic administrators can manage system backups.');
+            header('Location: index.php?tab=backup');
+            exit;
+        }
+        try {
+            save_cliniq_backup_external_settings($_POST, $updatedBy);
+            audit_log_event('settings', 'backup_destination_updated', $updatedBy, 'staff', 'backup', null);
+            flash_message('success', 'External backup destination settings saved.');
+        } catch (Throwable $e) {
+            flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $e->getMessage());
+        }
+        header('Location: index.php?tab=backup');
+        exit;
+    }
+
+    if ($action === 'run_external_backup') {
+        if (!$canManageSettings) {
+            flash_message('error', 'Only authorized clinic administrators can manage system backups.');
+            header('Location: index.php?tab=backup');
+            exit;
+        }
+        try {
+            $externalSettings = cliniq_backup_external_settings();
+            if (!$externalSettings['enabled']) {
+                throw new InvalidArgumentException('Enable the external backup copy before running a manual external backup.');
+            }
+            if (!is_dir(cliniq_backup_external_mount())) {
+                throw new RuntimeException('The external drive is not currently available to Docker.');
+            }
+            $result = cliniq_backup_run('daily', true, false);
+            flash_message('success', $result['message'] . ' External copy saved.');
+            audit_log_event('settings', 'external_backup_completed', $updatedBy, 'staff', 'backup', null, ['path' => $result['external_backup']['path'] ?? null]);
+        } catch (Throwable $e) {
+            flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $e->getMessage());
+            audit_log_event('settings', 'external_backup_failed', $updatedBy, 'staff', 'backup', null, ['message' => $e->getMessage()], 'failed');
+        }
+        header('Location: index.php?tab=backup');
+        exit;
+    }
+
     if (in_array($action, ['run_backup', 'verify_backup', 'run_semester_backup'], true)) {
         if (!$canManageSettings) {
             flash_message('error', 'Only authorized clinic administrators can manage system backups.');
@@ -502,6 +544,32 @@ $backupStatus = cliniq_backup_status();
 $backupPagination = cliniq_backup_history_page((int) ($_GET['backup_page'] ?? 1), 5);
 $backupHistory = $backupPagination['items'];
 $backupRoot = cliniq_backup_root();
+$externalBackupSettings = cliniq_backup_external_settings();
+$externalBackupMount = cliniq_backup_external_mount();
+$externalBackupDestination = null;
+$externalBackupAvailable = is_dir($externalBackupMount);
+$externalBackupFolders = [];
+if ($externalBackupAvailable) {
+    try {
+        foreach (new DirectoryIterator($externalBackupMount) as $externalEntry) {
+            if ($externalEntry->isDot() || !$externalEntry->isDir() || str_starts_with($externalEntry->getFilename(), '.')) {
+                continue;
+            }
+            $externalBackupFolders[] = $externalEntry->getFilename();
+        }
+        natcasesort($externalBackupFolders);
+        $externalBackupFolders = array_values($externalBackupFolders);
+    } catch (Throwable $e) {
+        $externalBackupFolders = [];
+    }
+}
+if ($externalBackupSettings['enabled'] && $externalBackupAvailable) {
+    try {
+        $externalBackupDestination = cliniq_backup_external_destination();
+    } catch (Throwable $e) {
+        $externalBackupDestination = null;
+    }
+}
 $activeApePatientCount = 0;
 $excludedApePatientCount = 0;
 $apeCurrentCycle = null;
@@ -1584,42 +1652,55 @@ render_clinic_command_header(
             </div>
 
             <div id="settings-backup" class="settings-tab-panel <?= $currentTab === 'backup' ? 'active' : '' ?> space-y-6">
-                <section>
-                    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                        <div>
-                            <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">System Backup</h2>
-                            <p class="text-xs font-bold text-slate-500 mb-0">Internal database and document snapshots with automatic integrity verification.</p>
+                <section class="relative overflow-hidden rounded-2xl border border-[#cfe3d3] bg-[#eef8f0] px-5 py-5 sm:px-6 sm:py-6">
+                    <div class="absolute -right-10 -top-16 h-40 w-40 rounded-full bg-[#d7eedc] opacity-70"></div>
+                    <div class="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                        <div class="flex items-start gap-4">
+                            <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#3f7d52] text-white shadow-sm">
+                                <span class="material-symbols-outlined text-[26px]">cloud_done</span>
+                            </div>
+                            <div>
+                                <p class="clinic-label mb-1 text-[#3f7d52]">Data protection</p>
+                                <h2 class="font-headline text-2xl font-extrabold text-[#17261d] mb-1">System Backup</h2>
+                                <p class="max-w-2xl text-sm font-semibold leading-6 text-slate-600 mb-0">Internal database and document snapshots with automatic integrity verification.</p>
+                            </div>
                         </div>
                         <?php
                         $backupState = (string) ($backupStatus['state'] ?? 'not_run');
                         $backupBadgeClass = $backupState === 'success' ? 'badge-completed' : ($backupState === 'error' ? 'badge-cancelled' : 'badge-pending');
                         $backupBadgeLabel = $backupState === 'success' ? 'Healthy' : ($backupState === 'error' ? 'Attention needed' : 'Waiting for first backup');
                         ?>
-                        <span class="badge <?= e($backupBadgeClass) ?>"><span class="material-symbols-outlined text-[14px]"><?= $backupState === 'success' ? 'verified' : 'schedule' ?></span> <?= e($backupBadgeLabel) ?></span>
+                        <div class="flex shrink-0 items-center gap-3 rounded-xl border border-white/80 bg-white/75 px-4 py-3 shadow-sm">
+                            <span class="material-symbols-outlined text-[#3f7d52]">verified_user</span>
+                            <div>
+                                <p class="clinic-label mb-1">Protection status</p>
+                                <span class="badge <?= e($backupBadgeClass) ?>"><span class="material-symbols-outlined text-[14px]"><?= $backupState === 'success' ? 'verified' : 'schedule' ?></span> <?= e($backupBadgeLabel) ?></span>
+                            </div>
+                        </div>
                     </div>
                 </section>
 
-                <section class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4" aria-label="Backup configuration">
-                    <div class="settings-section">
-                        <span class="material-symbols-outlined text-primary mb-3">calendar_today</span>
+                <section class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Backup summary">
+                    <div class="settings-section border-l-4 border-l-[#3f7d52] py-4">
+                        <div class="mb-3 flex items-center justify-between"><span class="material-symbols-outlined text-primary">calendar_today</span><span class="text-xs font-extrabold text-slate-400">SCHEDULE</span></div>
                         <p class="clinic-label mb-1">Frequency</p>
                         <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Once daily</h3>
                         <p class="settings-help mb-0">Sunday snapshots are also retained weekly.</p>
                     </div>
-                    <div class="settings-section">
-                        <span class="material-symbols-outlined text-primary mb-3">schedule</span>
+                    <div class="settings-section border-l-4 border-l-[#79a986] py-4">
+                        <div class="mb-3 flex items-center justify-between"><span class="material-symbols-outlined text-primary">schedule</span><span class="text-xs font-extrabold text-slate-400">AUTOMATIC</span></div>
                         <p class="clinic-label mb-1">Daily Time</p>
                         <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">8:00 AM</h3>
                         <p class="settings-help mb-0">Runs at the next startup when 8:00 AM is missed.</p>
                     </div>
-                    <div class="settings-section">
-                        <span class="material-symbols-outlined text-primary mb-3">hard_drive</span>
-                        <p class="clinic-label mb-1">Destination</p>
-                        <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Internal drive</h3>
+                    <div class="settings-section border-l-4 border-l-[#d1a84b] py-4">
+                        <div class="mb-3 flex items-center justify-between"><span class="material-symbols-outlined text-[#b18422]">hard_drive</span><span class="text-xs font-extrabold text-slate-400">PRIMARY</span></div>
+                        <p class="clinic-label mb-1">Internal destination</p>
+                        <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Protected volume</h3>
                         <p class="settings-help mb-0 break-all"><?= e($backupRoot) ?></p>
                     </div>
-                    <div class="settings-section">
-                        <span class="material-symbols-outlined text-primary mb-3">history</span>
+                    <div class="settings-section border-l-4 border-l-[#8aa1b5] py-4">
+                        <div class="mb-3 flex items-center justify-between"><span class="material-symbols-outlined text-[#607d94]">history</span><span class="text-xs font-extrabold text-slate-400">LATEST</span></div>
                         <p class="clinic-label mb-1">Last Backup</p>
                         <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1"><?= !empty($backupStatus['last_success_at']) ? e(date('M j, Y g:i A', strtotime((string) $backupStatus['last_success_at']))) : 'No backup yet' ?></h3>
                         <p class="settings-help mb-0"><?= e((string) ($backupStatus['message'] ?? 'Waiting for the first run.')) ?></p>
@@ -1627,9 +1708,62 @@ render_clinic_command_header(
                 </section>
 
                 <section class="settings-section space-y-4">
-                    <div>
-                        <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Backup Coverage</h3>
-                        <p class="settings-help mb-0">The database and uploaded files are captured and verified together so restored records keep their documents.</p>
+                    <div class="flex items-start gap-3">
+                        <span class="material-symbols-outlined mt-0.5 rounded-lg bg-[#fff8e6] p-1.5 text-[20px] text-[#a57917]">usb</span>
+                        <div>
+                            <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">External Backup Destination</h3>
+                            <p class="settings-help mb-0">Add a second copy on the connected drive for protection against computer or internal-volume failure.</p>
+                        </div>
+                    </div>
+                    <div class="border-t border-outline-variant"></div>
+                    <form method="post" class="space-y-4">
+                        <input type="hidden" name="action" value="save_backup_destination">
+                        <label class="flex cursor-pointer items-center gap-3 pt-1 text-sm font-bold text-[#17261d]">
+                            <input type="checkbox" name="enabled" value="1" class="peer sr-only" <?= $externalBackupSettings['enabled'] ? 'checked' : '' ?> <?= !$canManageSettings ? 'disabled' : '' ?>>
+                            <span class="relative h-6 w-11 shrink-0 rounded-full bg-slate-300 transition-colors after:absolute after:left-1 after:top-1 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow-sm after:transition-transform peer-checked:bg-[#3f7d52] peer-checked:after:translate-x-5 peer-focus-visible:ring-2 peer-focus-visible:ring-[#3f7d52] peer-focus-visible:ring-offset-2"></span>
+                            <span>Enable external copy</span>
+                        </label>
+                        <div class="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+                            <label class="block">
+                                <span class="clinic-label">Folder inside connected drive</span>
+                                <div class="flex w-full">
+                                    <span class="flex min-h-[44px] items-center rounded-l-lg border border-r-0 border-outline-variant bg-[var(--cliniq-surface-low)] px-3 text-sm font-semibold text-slate-500"><?= e(rtrim($externalBackupMount, '/\\')) ?>/</span>
+                                    <select class="form-input w-full rounded-l-none" name="folder" <?= !$canManageSettings ? 'disabled' : '' ?>>
+                                        <option value="" <?= $externalBackupSettings['folder'] === '' ? 'selected' : '' ?>>Use connected drive root</option>
+                                        <?php if ($externalBackupSettings['folder'] !== '' && !in_array($externalBackupSettings['folder'], $externalBackupFolders, true)): ?>
+                                            <option value="<?= e($externalBackupSettings['folder']) ?>" selected><?= e($externalBackupSettings['folder']) ?> (saved)</option>
+                                        <?php endif; ?>
+                                        <?php foreach ($externalBackupFolders as $externalFolder): ?>
+                                            <option value="<?= e($externalFolder) ?>" <?= $externalBackupSettings['folder'] === $externalFolder ? 'selected' : '' ?>><?= e($externalFolder) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <span class="settings-help">Choose the folder where files will be written on every backup run.</span>
+                            </label>
+                            <button type="submit" class="btn btn-primary justify-center lg:self-end" <?= !$canManageSettings ? 'disabled' : '' ?>><span class="material-symbols-outlined text-[18px]">save</span> Save Destination</button>
+                        </div>
+                    </form>
+                    <div class="border-t border-outline-variant"></div>
+                    <div class="flex items-center gap-2 pt-1 text-sm font-semibold <?= !$externalBackupSettings['enabled'] ? 'text-slate-500' : ($externalBackupAvailable ? 'text-[#3f7d52]' : 'text-red-700') ?>">
+                        <span class="material-symbols-outlined text-[19px]"><?= !$externalBackupSettings['enabled'] ? 'pause_circle' : ($externalBackupAvailable ? 'check_circle' : 'error') ?></span>
+                        <p class="mb-0"><?php if (!$externalBackupSettings['enabled']): ?>External copy is disabled.<?php elseif (!$externalBackupAvailable): ?>External drive is not currently available to Docker.<?php else: ?>External copy is ready<?= $externalBackupDestination ? ': ' . e($externalBackupDestination) : '.' ?><?php endif; ?></p>
+                    </div>
+                    <form method="post" data-no-ajax="true">
+                        <input type="hidden" name="action" value="run_external_backup">
+                        <button type="submit" class="btn btn-secondary justify-center" <?= !$canManageSettings || !$externalBackupSettings['enabled'] || !$externalBackupAvailable ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Back up to the external drive?" data-confirm-message="This creates a fresh backup now and copies it to the selected external folder. The process may take a few minutes." data-confirm-toast="Preparing external backup..." data-loading-label="Backing up to external drive..." data-action-label>
+                            <span class="material-symbols-outlined text-[18px]">usb</span>
+                            <span data-action-label>Back Up to External Drive</span>
+                        </button>
+                    </form>
+                </section>
+
+                <section class="settings-section space-y-4">
+                    <div class="flex items-start gap-3">
+                        <span class="material-symbols-outlined rounded-xl bg-[#e8f2ea] p-2 text-primary">verified</span>
+                        <div>
+                            <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Backup Coverage</h3>
+                            <p class="settings-help mb-0">The database and uploaded files are captured and verified together.</p>
+                        </div>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div class="rounded-xl border border-outline-variant bg-[var(--cliniq-surface-low)] p-4 flex items-start gap-3">
@@ -1643,27 +1777,30 @@ render_clinic_command_header(
                     </div>
                 </section>
 
-                <section class="settings-section flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                    <div>
-                        <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Backup Controls</h3>
-                        <p class="settings-help mb-0">Daily backups are retained for 14 days and Sunday copies for 12 weeks. Semester archives are retained until manually removed.</p>
+                <section class="settings-section flex flex-col gap-5">
+                    <div class="flex items-start gap-3">
+                        <span class="material-symbols-outlined rounded-xl bg-[#e8f2ea] p-2 text-primary">tune</span>
+                        <div>
+                            <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Backup Controls</h3>
+                            <p class="settings-help mb-0">Daily backups are retained for 14 days and Sunday copies for 12 weeks. Semester archives are retained until manually removed.</p>
+                        </div>
                     </div>
-                    <div class="flex flex-col sm:flex-row gap-3">
+                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
                         <form method="post" data-no-ajax="true">
                             <input type="hidden" name="action" value="verify_backup">
-                            <button class="btn btn-secondary justify-center" <?= !$canManageSettings || !$backupHistory ? 'disabled' : '' ?>>
+                            <button class="btn btn-secondary w-full justify-center" <?= !$canManageSettings || !$backupHistory ? 'disabled' : '' ?>>
                                 <span class="material-symbols-outlined text-[18px]">verified</span> Verify Latest
                             </button>
                         </form>
                         <form method="post" data-no-ajax="true">
                             <input type="hidden" name="action" value="run_semester_backup">
-                            <button class="btn btn-secondary justify-center" <?= !$canManageSettings ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Create semester archive?" data-confirm-message="This creates a permanent full database and document snapshot." data-confirm-toast="Creating semester archive...">
+                            <button class="btn btn-secondary w-full justify-center" <?= !$canManageSettings ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Create semester archive?" data-confirm-message="This creates a permanent full database and document snapshot." data-confirm-toast="Creating semester archive...">
                                 <span class="material-symbols-outlined text-[18px]">archive</span> Semester Archive
                             </button>
                         </form>
                         <form method="post" data-no-ajax="true">
                             <input type="hidden" name="action" value="run_backup">
-                            <button class="btn btn-primary justify-center" <?= !$canManageSettings ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Run backup now?" data-confirm-message="This creates today's internal database and document backup if one has not already completed." data-confirm-toast="Running backup...">
+                            <button class="btn btn-primary w-full justify-center" <?= !$canManageSettings ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Run backup now?" data-confirm-message="This creates today's internal database and document backup if one has not already completed." data-confirm-toast="Running backup...">
                                 <span class="material-symbols-outlined text-[18px]">backup</span> Run Backup Now
                             </button>
                         </form>

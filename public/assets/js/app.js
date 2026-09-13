@@ -376,6 +376,21 @@ function submitConfirmableAction(button) {
             showToast(toast, 'info', 1200);
         }
 
+        const loadingLabel = button.dataset.loadingLabel || '';
+        if (loadingLabel) {
+            button.disabled = true;
+            button.setAttribute('aria-busy', 'true');
+            const actionLabel = button.querySelector('[data-action-label]');
+            if (actionLabel) {
+                actionLabel.textContent = loadingLabel;
+            }
+            const icon = button.querySelector('.material-symbols-outlined');
+            if (icon) {
+                icon.textContent = 'progress_activity';
+                icon.classList.add('animate-spin');
+            }
+        }
+
         form.dataset.confirmed = '1';
         try {
             if (typeof form.requestSubmit === 'function') {
