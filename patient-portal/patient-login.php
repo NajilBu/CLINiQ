@@ -104,6 +104,7 @@ render_student_auth_header('Patient Login');
             </div>
 
             <form method="POST" action="">
+                <input type="hidden" name="_csrf" value="<?= student_e(csrf_token()) ?>">
                 <div class="student-field">
                     <label class="student-label" for="id-number">ID Number</label>
                     <input type="text" id="id-number" name="student_id" class="student-input" placeholder="Enter ID number" autocomplete="username" data-id-number-format value="<?= student_e($studentIdValue) ?>" required>

@@ -81,7 +81,7 @@ try {
 }
 render_header('Clinic Feedback');
 ?>
-<link rel="stylesheet" href="<?= e(app_url('assets/css/feedback.css?v=design-3')) ?>">
+<link hidden rel="stylesheet" href="<?= e(app_url('assets/css/feedback.css?v=design-3')) ?>">
 <?php render_clinic_command_header('Service evaluation', 'Clinic Feedback', 'Student feedback for Active and Completed clinic visits.'); ?>
 <div class="feedback-page feedback-admin">
     <form method="get" class="clinic-card overflow-hidden mb-6" id="feedbackFilterForm">

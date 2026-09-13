@@ -54,7 +54,7 @@ $mainSystemReport = build_system_report($dateFrom, $dateTo, []);
 
 render_header('Reports');
 ?>
-<link rel="stylesheet" href="<?= e(app_url('assets/css/reports.css?v=3')) ?>">
+<link hidden rel="stylesheet" href="<?= e(app_url('assets/css/reports.css?v=3')) ?>">
 <!-- ═══ Title ═══ -->
 <?php render_clinic_command_header(
     'Reports',

@@ -32,6 +32,11 @@ function ensure_staff_profiles_schema(): void
     ensure_system_settings_schema();
 
     $db = auth_db();
+    $profilePhotoColumns = $db->query("SHOW COLUMNS FROM people LIKE 'profile_photo_path'")->fetchAll();
+    if (empty($profilePhotoColumns)) {
+        $db->exec("ALTER TABLE people ADD COLUMN profile_photo_path VARCHAR(255) NULL AFTER last_name");
+    }
+
     $columns = $db->query("SHOW COLUMNS FROM accounts LIKE 'email'")->fetchAll();
     if (empty($columns)) {
         $db->exec("ALTER TABLE accounts ADD COLUMN email VARCHAR(160) NULL");

@@ -287,6 +287,7 @@ render_header('Login');
             <?php endif; ?>
 
             <form method="post">
+                <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
                 <div class="staff-field">
                     <label for="id_number">ID Number</label>
                     <input class="staff-login-input" id="id_number" name="id_number" type="text" value="<?= e($_POST['id_number'] ?? 'STAFF-0001') ?>" placeholder="STAFF-0001" autocomplete="username" required>
