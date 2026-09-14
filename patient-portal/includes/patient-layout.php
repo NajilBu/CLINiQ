@@ -387,7 +387,7 @@ function render_student_header(string $title, string $active = ''): void
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title><?= student_e($title) ?> | <?= student_e($clinicProfile['system_name']) ?> Patient Portal</title>
         <meta name="csrf-token" content="<?= student_e(csrf_token()) ?>">
-        <script src="../public/assets/js/csrf.js?v=1" defer></script>
+        <script src="../public/assets/js/csrf.js?v=2" defer></script>
         <link rel="icon" href="<?= student_e($clinicLogoSrc) ?>">
         <link rel="apple-touch-icon" href="<?= student_e($clinicLogoSrc) ?>">
         <link href="../public/assets/vendor/fonts/inter-manrope.css?v=offline-1" rel="stylesheet">
@@ -957,7 +957,7 @@ function render_student_auth_header(string $title): void
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title><?= student_e($title) ?> | <?= student_e($clinicProfile['system_name']) ?> Patient Portal</title>
         <meta name="csrf-token" content="<?= student_e(csrf_token()) ?>">
-        <script src="../public/assets/js/csrf.js?v=1" defer></script>
+        <script src="../public/assets/js/csrf.js?v=2" defer></script>
         <link rel="icon" href="<?= student_e($clinicLogoSrc) ?>">
         <link rel="apple-touch-icon" href="<?= student_e($clinicLogoSrc) ?>">
         <link href="../public/assets/vendor/fonts/inter-manrope.css?v=offline-1" rel="stylesheet">

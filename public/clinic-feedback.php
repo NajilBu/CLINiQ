@@ -131,6 +131,8 @@ $theme = active_cliniq_theme();
 <!doctype html>
 <html lang="en" class="feedback-document"><head>
     <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
+    <script src="<?= app_url('assets/js/csrf.js?v=' . filemtime(__DIR__ . '/assets/js/csrf.js')) ?>" defer></script>
     <title>Give Clinic Feedback | CLINiQ</title>
     <link rel="stylesheet" href="<?= e(app_url('assets/vendor/fonts/inter-manrope.css?v=offline-1')) ?>">
     <link rel="stylesheet" href="<?= e(app_url('assets/vendor/fonts/material-symbols.css?v=offline-1')) ?>">
