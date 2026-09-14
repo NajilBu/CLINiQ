@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../app/config/database.php';
 require_once __DIR__ . '/../app/services/AppointmentWorkflow.php';
+require_once __DIR__ . '/../app/services/ClinicFeedback.php';
 require_once __DIR__ . '/includes/patient-layout.php';
 
 ensure_appointment_schema();
@@ -12,6 +13,9 @@ $db = appointment_db();
 $patientProfileStmt = $db->prepare('SELECT COUNT(*) FROM patients WHERE person_id = ?');
 $patientProfileStmt->execute([$patientId]);
 $hasAppointmentPatientProfile = (int) $patientProfileStmt->fetchColumn() === 1;
+$pendingFeedbackVisits = clinic_feedback_pending_active_visits($db, $patientId);
+$feedbackRequired = count($pendingFeedbackVisits) > 0;
+$feedbackPortalUrl = '../public/clinic-feedback.php?portal=1';
 
 $timeSlots = [
     ['value' => '08:00:00', 'label' => '8:00 AM'],
@@ -73,7 +77,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!$hasAppointmentPatientProfile || 
 
     $blocksForPostMonth = appointment_blocks_for_month($month);
 
-    if ($type === '') {
+    if ($feedbackRequired) {
+        $error = 'Required feedback for your active clinic visit is still pending. You cannot request another clinic appointment until this feedback is completed.';
+    } elseif ($type === '') {
         $error = 'Please choose an appointment purpose.';
     } elseif (!$selectedDate || $selectedDate->format('Y-m-d') !== $dateStr) {
         $error = 'Please choose a valid appointment date.';
@@ -200,6 +206,16 @@ render_student_header('Appointments', 'appointment');
             <span class="student-badge student-badge-warning">Pending First</span>
         </div>
         <div class="student-card-pad">
+            <?php if ($feedbackRequired): ?>
+                <div class="student-note student-note-danger">
+                    <span class="material-symbols-outlined">rate_review</span>
+                    <div>
+                        <strong>Feedback required before another appointment.</strong><br>
+                        <?= count($pendingFeedbackVisits) === 1 ? 'One active visit needs your feedback.' : count($pendingFeedbackVisits) . ' active visits need your feedback.' ?> You cannot request another clinic appointment until this required feedback is completed.
+                        <p class="mt-3 mb-0"><a href="<?= student_e($feedbackPortalUrl) ?>" class="student-button-danger text-decoration-none">Complete Required Feedback <span class="material-symbols-outlined">arrow_forward</span></a></p>
+                    </div>
+                </div>
+            <?php else: ?>
             <form id="booking-form" method="POST" action="?month=<?= student_e($month->format('Y-m')) ?>">
                 <input type="hidden" name="appt_date" id="appt-date-input" value="">
                 <input type="hidden" name="appt_time" id="appt-time-input" value="">
@@ -311,6 +327,7 @@ render_student_header('Appointments', 'appointment');
                     <span class="material-symbols-outlined">send</span>
                 </button>
             </form>
+            <?php endif; ?>
         </div>
     </section>
 
@@ -473,6 +490,7 @@ render_student_header('Appointments', 'appointment');
     </div>
 </section>
 
+<?php if (!$feedbackRequired): ?>
 <script>
     const availability = <?= json_encode($availabilityPayload, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
     const dateInput = document.getElementById('appt-date-input');
@@ -615,5 +633,6 @@ render_student_header('Appointments', 'appointment');
         }
     });
 </script>
+<?php endif; ?>
 
 <?php render_student_footer(); ?>

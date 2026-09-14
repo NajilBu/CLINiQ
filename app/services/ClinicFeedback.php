@@ -138,6 +138,23 @@ function clinic_feedback_visits(PDO $db, string $identifier): array
     return $query->fetchAll();
 }
 
+function clinic_feedback_pending_active_visits(PDO $db, int $personId): array
+{
+    if ($personId < 1 || !clinic_feedback_ready($db)) {
+        return [];
+    }
+
+    $query = $db->prepare("SELECT v.visit_id, v.visit_datetime, v.visit_purpose
+        FROM visits v
+        LEFT JOIN clinic_feedback f ON f.visit_id = v.visit_id
+        WHERE v.patient_person_id = ?
+          AND v.status = 'Active'
+          AND f.feedback_id IS NULL
+        ORDER BY v.visit_datetime ASC, v.visit_id ASC");
+    $query->execute([$personId]);
+    return $query->fetchAll();
+}
+
 function clinic_feedback_visit(PDO $db, string $identifier, int $visitId, bool $lock = false): ?array
 {
     $query = $db->prepare("SELECT v.visit_id, v.visit_datetime, v.visit_purpose, v.status,

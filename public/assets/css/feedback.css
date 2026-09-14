@@ -7,6 +7,14 @@ html.feedback-document body { height: auto; overflow: visible; }
 .feedback-public *, .feedback-public *::before, .feedback-public *::after { box-sizing: border-box; }
 .feedback-shell { width: min(100% - 2rem, 52rem); margin: 0 auto; padding: 5.5rem 0 3rem; }
 .feedback-section { padding: 1.5rem; margin: 0; }
+.feedback-progress { display: flex; align-items: center; gap: 0.75rem; padding: 1rem 1.25rem; margin: 0 0 1.25rem; }
+.feedback-progress-item { display: flex; align-items: center; gap: 0.6rem; min-width: 0; color: var(--cliniq-muted-foreground); }
+.feedback-progress-marker { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; flex: 0 0 2rem; border: 1px solid var(--cliniq-outline); border-radius: 999px; background: var(--cliniq-card); font-size: 0.8125rem; font-weight: 700; }
+.feedback-progress-copy { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; font-size: 0.6875rem; line-height: 1.25; }
+.feedback-progress-copy strong { color: var(--cliniq-foreground); font-size: 0.75rem; font-weight: 700; }
+.feedback-progress-item.is-current .feedback-progress-marker, .feedback-progress-item.is-complete .feedback-progress-marker { border-color: var(--cliniq-primary); background: var(--cliniq-primary-fixed); color: var(--cliniq-accent-foreground); }
+.feedback-progress-item.is-current .feedback-progress-copy strong, .feedback-progress-item.is-complete .feedback-progress-copy strong { color: var(--cliniq-primary); }
+.feedback-progress-line { height: 1px; flex: 1 1 auto; min-width: 1rem; background: var(--cliniq-outline); }
 .feedback-admin { display: flex; flex-direction: column; gap: 1.5rem; }
 .feedback-admin .feedback-section { width: 100%; }
 .feedback-public h1 { font-size: clamp(1.75rem, 3vw, 2.25rem); font-weight: 700; line-height: 1.2; margin: 0.75rem 0; }
@@ -37,6 +45,17 @@ html.feedback-document body { height: auto; overflow: visible; }
 .feedback-visit, .feedback-stat { padding: 1rem; background: var(--cliniq-surface-low); border: 1px solid var(--cliniq-outline); border-radius: 0.75rem; overflow-wrap: anywhere; }
 .feedback-visit { margin: 1.25rem 0; }
 .feedback-visit .badge { margin: 0.25rem 0; }
+.feedback-visit-submitted { border-color: color-mix(in srgb, var(--cliniq-primary) 35%, var(--cliniq-outline)); background: color-mix(in srgb, var(--cliniq-primary-fixed) 45%, var(--cliniq-surface-low)); }
+.feedback-visit-status { display: flex; align-items: center; gap: 0.4rem; margin: 0.75rem 0 0; color: var(--cliniq-primary); font-size: 0.8125rem; font-weight: 700; }
+.feedback-visit-status .material-symbols-outlined { font-size: 1.125rem; }
+.feedback-survey-progress { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; padding: 0.75rem; margin: 1.25rem 0; }
+.feedback-survey-progress > span { display: flex; align-items: center; justify-content: center; gap: 0.5rem; min-height: 2.5rem; border: 1px solid var(--cliniq-outline); border-radius: 0.625rem; color: var(--cliniq-muted-foreground); font-size: 0.75rem; font-weight: 700; }
+.feedback-survey-progress > span::first-letter { color: var(--cliniq-foreground); }
+.feedback-survey-progress > span > span { font-weight: 600; }
+.feedback-survey-progress > span.is-current { border-color: var(--cliniq-primary); background: var(--cliniq-primary-fixed); color: var(--cliniq-accent-foreground); }
+.feedback-survey-progress > span.is-complete { color: var(--cliniq-primary); }
+.feedback-survey-step[hidden] { display: none; }
+.feedback-wizard-actions { justify-content: flex-end; margin-bottom: 1.25rem; }
 
 .feedback-question { border: 0; border-bottom: 1px solid var(--cliniq-border); padding: 1.25rem 0; margin: 0; min-width: 0; }
 .feedback-question:last-child { border-bottom: 0; }
@@ -82,6 +101,12 @@ html.feedback-document body { height: auto; overflow: visible; }
 }
 @media (max-width: 540px) {
     .feedback-section { padding: 1.25rem; }
+    .feedback-progress { align-items: flex-start; gap: 0.35rem; padding: 0.85rem; }
+    .feedback-progress-item { flex: 1 1 0; flex-direction: column; gap: 0.35rem; text-align: center; }
+    .feedback-progress-copy span { display: none; }
+    .feedback-progress-line { margin-top: 1rem; min-width: 0.5rem; }
+    .feedback-survey-progress > span { gap: 0; font-size: 0.8125rem; }
+    .feedback-survey-progress > span > span { display: none; }
     .feedback-filter-grid { grid-template-columns: 1fr; gap: 0; }
     .feedback-scale { gap: 0.25rem; }
     .feedback-rating { padding: 0.75rem 0; }

@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../app/config/database.php';
 require_once __DIR__ . '/../app/services/AppointmentWorkflow.php';
 require_once __DIR__ . '/../app/services/ApeWorkflow.php';
+require_once __DIR__ . '/../app/services/ClinicFeedback.php';
 require_once __DIR__ . '/includes/patient-layout.php';
 
 ensure_appointment_schema();
@@ -151,6 +152,9 @@ if (re_enrollment_pending()) {
 
 $patientId = (int) $profile['patient_id'];
 $appointmentPatientId = (int) $profile['person_id'];
+$pendingFeedbackVisits = clinic_feedback_pending_active_visits(auth_db(), $appointmentPatientId);
+$feedbackRequired = count($pendingFeedbackVisits) > 0;
+$feedbackPortalUrl = '../public/clinic-feedback.php?portal=1';
 
 $appointmentStmt = appointment_db()->prepare("
     SELECT *
@@ -287,7 +291,7 @@ if (empty($profile['emergency_instructions'])) {
 }
 $passportComplete = empty($passportMissing);
 $apeNeedsAction = ($latestApe['clearance_status'] ?? 'Pending') !== 'Cleared';
-$requiredActionCount = ($passportComplete ? 0 : 1) + ($apeNeedsAction ? 1 : 0);
+$requiredActionCount = ($passportComplete ? 0 : 1) + ($apeNeedsAction ? 1 : 0) + ($feedbackRequired ? 1 : 0);
 $profileDetailLabel = match ($profile['account_type'] ?? 'patient') {
     'student' => 'Program',
     'faculty', 'school_personnel' => 'Department',
@@ -395,6 +399,26 @@ render_student_header('Dashboard', 'dashboard');
                 </div>
                 <a href="patient-ape-status.php" class="student-button text-decoration-none">
                     Continue APE
+                    <span class="material-symbols-outlined">arrow_forward</span>
+                </a>
+            </article>
+        <?php endif; ?>
+
+        <?php if ($feedbackRequired): ?>
+            <article class="student-action-card student-action-card-danger">
+                <div class="flex items-start gap-4">
+                    <span class="student-action-step student-action-step-danger"><?= (int) (($passportComplete ? 0 : 1) + ($apeNeedsAction ? 1 : 0) + 1) ?></span>
+                    <span class="student-icon-box student-icon-box-danger">
+                        <span class="material-symbols-outlined">rate_review</span>
+                    </span>
+                    <div>
+                        <p class="student-action-kicker">Required clinic feedback</p>
+                        <h2>Share feedback for your active clinic visit</h2>
+                        <p><?= count($pendingFeedbackVisits) === 1 ? 'One active visit needs feedback.' : count($pendingFeedbackVisits) . ' active visits need feedback.' ?> You cannot request another clinic appointment until this required feedback is completed.</p>
+                    </div>
+                </div>
+                <a href="<?= student_e($feedbackPortalUrl) ?>" class="student-button-danger text-decoration-none">
+                    Complete Required Feedback
                     <span class="material-symbols-outlined">arrow_forward</span>
                 </a>
             </article>

@@ -46,8 +46,8 @@ register_shutdown_function(function () use ($db, $case): void {
         check_feedback($count === (in_array($case, ['submit', 'submit_old', 'admin'], true) ? 3 : 2), 'Unexpected saved response count.');
         if ($case === 'submit_old') check_feedback(clinic_feedback_already_sent($db, 1), 'Older selected visit must accept feedback despite newer visits.');
         if ($case === 'picker') {
-            check_feedback(str_contains($html, 'Choose a clinic visit') && substr_count($html, 'name="action" value="select"') === 4, 'Picker should list four owned eligible visits.');
-            check_feedback(substr_count($html, 'disabled>Feedback submitted') === 2, 'Already-rated visits must be disabled.');
+            check_feedback(str_contains($html, 'Choose a clinic visit') && substr_count($html, 'name="action" value="select"') === 2, 'Picker should expose only unrated owned visits for selection.');
+            check_feedback(substr_count($html, 'Feedback submitted — responses cannot be edited.') === 2, 'Already-rated visits must be visibly non-editable.');
             check_feedback(!str_contains($html, 'id="feedback-survey"'), 'Do not select a visit automatically.');
         }
         if ($case === 'lookup') check_feedback($_SESSION['feedback_context']['visit_id'] === 0, 'Lookup should open picker, not auto-select.');
