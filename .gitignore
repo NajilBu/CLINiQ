@@ -1,7 +1,12 @@
 .env
 docker/.env
+docker/cloudflared/
 uploads/*
 !uploads/.gitkeep
+database/backups/*
+!database/backups/.gitkeep
+external-backups/*
+!external-backups/.gitkeep
 vendor/
 !public/assets/vendor/
 !public/assets/vendor/ag-grid/

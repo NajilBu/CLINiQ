@@ -389,6 +389,44 @@ function save_cliniq_backup_external_settings(array $input, ?int $updatedBy = nu
     return $settings;
 }
 
+function cliniq_clinic_server_settings(): array
+{
+    return cliniq_setting_read('clinic.server', [
+        'configured' => false,
+        'hostname' => '',
+        'local_ip' => '',
+    ]);
+}
+
+function save_cliniq_clinic_server_settings(array $input, ?int $updatedBy = null): array
+{
+    $hostname = trim((string) ($input['hostname'] ?? ''));
+    $localIp = trim((string) ($input['local_ip'] ?? ''));
+    if ($hostname === '' || strlen($hostname) > 63 || preg_match('/^[A-Za-z0-9][A-Za-z0-9-]{0,62}$/', $hostname) !== 1) {
+        throw new InvalidArgumentException('The clinic server computer name is invalid.');
+    }
+    if (filter_var($localIp, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false || $localIp === '127.0.0.1') {
+        throw new InvalidArgumentException('The clinic server must have a non-loopback IPv4 address.');
+    }
+
+    $settings = [
+        'configured' => true,
+        'hostname' => $hostname,
+        'local_ip' => $localIp,
+    ];
+    cliniq_setting_write('clinic.server', $settings, $updatedBy);
+    return $settings;
+}
+
+function clear_cliniq_clinic_server_settings(?int $updatedBy = null): void
+{
+    cliniq_setting_write('clinic.server', [
+        'configured' => false,
+        'hostname' => '',
+        'local_ip' => '',
+    ], $updatedBy);
+}
+
 function default_ape_required_documents(): array
 {
     return [

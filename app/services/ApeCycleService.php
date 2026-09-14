@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/PatientNotification.php';
+
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../helpers/mail.php';
 require_once __DIR__ . '/ApeWorkflow.php';
@@ -555,7 +557,7 @@ function create_ape_schedule_batch(array $input, ?int $actorPersonId): array
 
         $placeholders = implode(',', array_fill(0, count($selectedIds), '?'));
         $candidate = $db->prepare("
-            SELECT ar.ape_id,
+            SELECT ar.ape_id, ar.patient_id,
                    CASE
                        WHEN s.person_id IS NOT NULL THEN 'Student'
                        WHEN se.role_classification = 'Faculty' THEN 'Faculty'
@@ -606,6 +608,21 @@ function create_ape_schedule_batch(array $input, ?int $actorPersonId): array
             FROM ape_records WHERE schedule_batch_id = ?
         ");
         $log->execute([$actorPersonId, "{$batchName}: {$scheduleDate} {$startTime}-{$endTime}", $batchId]);
+        $scheduleLabel = date('F j, Y', strtotime($scheduleDate)) . ' from '
+            . date('g:i A', strtotime($startTime)) . ' to ' . date('g:i A', strtotime($endTime));
+        foreach ($candidateRows as $candidateRow) {
+            patient_notification_create(
+                $db,
+                (int) $candidateRow['patient_id'],
+                $actorPersonId,
+                'ape',
+                'APE schedule assigned',
+                "Your APE schedule is {$scheduleLabel}. Batch: {$batchName}.",
+                'patient-ape-status.php',
+                'ape_batch',
+                $batchId
+            );
+        }
         $db->commit();
         return ['batch_id' => $batchId, 'batch_name' => $batchName, 'assigned_count' => count($selectedIds)];
     } catch (Throwable $e) {
@@ -623,15 +640,19 @@ function cancel_ape_schedule_batch(int $batchId, int $cycleId, ?int $actorPerson
     $db->beginTransaction();
     try {
         $batch = $db->prepare("
-            SELECT batch_name FROM ape_schedule_batches
+            SELECT batch_name, schedule_date, start_time, end_time FROM ape_schedule_batches
             WHERE batch_id = ? AND ape_cycle_id = ? AND status = 'Scheduled'
             FOR UPDATE
         ");
         $batch->execute([$batchId, $cycleId]);
-        $batchName = $batch->fetchColumn();
-        if ($batchName === false) {
+        $batchRow = $batch->fetch();
+        if (!$batchRow) {
             throw new RuntimeException('Only a scheduled batch can be cancelled.');
         }
+        $batchName = (string) $batchRow['batch_name'];
+        $patients = $db->prepare('SELECT patient_id FROM ape_records WHERE schedule_batch_id = ? FOR UPDATE');
+        $patients->execute([$batchId]);
+        $patientIds = $patients->fetchAll(PDO::FETCH_COLUMN);
         $log = $db->prepare("
             INSERT INTO ape_activity_logs (ape_id, performed_by_person_id, action, notes)
             SELECT ape_id, ?, 'APE schedule batch cancelled', ?
@@ -645,6 +666,19 @@ function cancel_ape_schedule_batch(int $batchId, int $cycleId, ?int $actorPerson
             WHERE schedule_batch_id = ?
         ")->execute([$batchId]);
         $db->prepare("UPDATE ape_schedule_batches SET status = 'Cancelled' WHERE batch_id = ?")->execute([$batchId]);
+        foreach ($patientIds as $patientId) {
+            patient_notification_create(
+                $db,
+                (int) $patientId,
+                $actorPersonId,
+                'ape',
+                'APE schedule cancelled',
+                "Your APE schedule in batch {$batchName} was cancelled. The clinic will assign a new schedule.",
+                'patient-ape-status.php',
+                'ape_batch',
+                $batchId
+            );
+        }
         $db->commit();
     } catch (Throwable $e) {
         if ($db->inTransaction()) {

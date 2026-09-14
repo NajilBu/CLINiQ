@@ -10,6 +10,7 @@ const CLINIQ_BACKUP_WEEKLY_RETENTION = 12;
 const CLINIQ_BACKUP_START_HOUR = 8;
 const CLINIQ_BACKUP_ENCRYPTION_CIPHER = 'aes-256-gcm';
 const CLINIQ_BACKUP_ENCRYPTION_MAGIC = 'CLINIQENC1';
+const CLINIQ_BACKUP_EXTERNAL_MARKER = '.cliniq-external-backup-drive.json';
 
 function cliniq_backup_root(): string
 {
@@ -35,6 +36,17 @@ function cliniq_backup_external_mount(): string
     return rtrim($configured, DIRECTORY_SEPARATOR);
 }
 
+function cliniq_backup_external_mount_is_prepared(string $mount): bool
+{
+    $markerPath = $mount . DIRECTORY_SEPARATOR . CLINIQ_BACKUP_EXTERNAL_MARKER;
+    $contents = is_readable($markerPath) ? @file_get_contents($markerPath) : false;
+    $marker = $contents !== false ? json_decode($contents, true) : null;
+
+    return is_array($marker)
+        && (int) ($marker['format_version'] ?? 0) === 1
+        && ($marker['purpose'] ?? null) === 'CLINiQ external backup drive';
+}
+
 function cliniq_backup_external_destination(): ?string
 {
     $settings = cliniq_backup_external_settings();
@@ -45,6 +57,9 @@ function cliniq_backup_external_destination(): ?string
     $mount = cliniq_backup_external_mount();
     if (!is_dir($mount)) {
         throw new RuntimeException('The external backup folder is not available. Check that the connected drive is mounted in Docker.');
+    }
+    if (!cliniq_backup_external_mount_is_prepared($mount)) {
+        throw new RuntimeException('The mounted folder is not a prepared CLINiQ external backup drive. Run scripts/backup/prepare_external_backup_drive.ps1 after connecting an encrypted drive.');
     }
 
     $folder = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, trim((string) $settings['folder'], " /\\"));
@@ -604,18 +619,38 @@ function cliniq_backup_verify(?string $path = null, bool $updateStatus = true): 
         throw new RuntimeException('No completed backup is available to verify.');
     }
 
-    $rootPath = realpath(cliniq_backup_root());
     $candidatePath = realpath($path);
-    if ($rootPath === false || $candidatePath === false) {
+    if ($candidatePath === false) {
         throw new RuntimeException('The requested backup path could not be resolved.');
     }
-    $rootPrefix = rtrim($rootPath, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
     $candidatePrefix = rtrim($candidatePath, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
     if (PHP_OS_FAMILY === 'Windows') {
-        $rootPrefix = strtolower($rootPrefix);
         $candidatePrefix = strtolower($candidatePrefix);
     }
-    if (!str_starts_with($candidatePrefix, $rootPrefix)) {
+
+    $allowedRoots = [cliniq_backup_root()];
+    $externalSettings = cliniq_backup_external_settings();
+    $externalMount = cliniq_backup_external_mount();
+    if ($externalSettings['enabled'] && cliniq_backup_external_mount_is_prepared($externalMount)) {
+        $allowedRoots[] = $externalMount;
+    }
+
+    $isWithinAllowedRoot = false;
+    foreach ($allowedRoots as $allowedRoot) {
+        $rootPath = realpath($allowedRoot);
+        if ($rootPath === false) {
+            continue;
+        }
+        $rootPrefix = rtrim($rootPath, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        if (PHP_OS_FAMILY === 'Windows') {
+            $rootPrefix = strtolower($rootPrefix);
+        }
+        if (str_starts_with($candidatePrefix, $rootPrefix)) {
+            $isWithinAllowedRoot = true;
+            break;
+        }
+    }
+    if (!$isWithinAllowedRoot) {
         throw new RuntimeException('The requested backup is outside the configured backup folder.');
     }
 

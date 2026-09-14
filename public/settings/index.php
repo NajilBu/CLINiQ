@@ -13,6 +13,7 @@ ensure_dropdown_options_schema();
 
 $user = current_user() ?? [];
 $canManageSettings = in_array($user['role'] ?? '', ['admin', 'doctor', 'it_expert'], true);
+$canManageBackups = ($user['role'] ?? '') === 'admin';
 $canManageStaffProfiles = in_array($user['role'] ?? '', ['admin', 'doctor', 'it_expert'], true);
 $canManagePatientAccounts = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
 $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
@@ -210,7 +211,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'save_backup_destination') {
-        if (!$canManageSettings) {
+        if (!$canManageBackups) {
             flash_message('error', 'Only authorized clinic administrators can manage system backups.');
             header('Location: index.php?tab=backup');
             exit;
@@ -226,8 +227,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    if ($action === 'designate_clinic_server') {
+        if (($user['role'] ?? '') !== 'admin') {
+            flash_message('error', 'Only clinic administrators can designate the clinic server.');
+            header('Location: index.php?tab=maintenance');
+            exit;
+        }
+        try {
+            $server = save_cliniq_clinic_server_settings($_POST, $updatedBy);
+            audit_log_event('settings', 'clinic_server_designated', $updatedBy, 'staff', 'server', null, $server);
+            flash_message('success', "Clinic server designated: {$server['hostname']} ({$server['local_ip']}).");
+        } catch (Throwable $e) {
+            flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $e->getMessage());
+        }
+        header('Location: index.php?tab=maintenance');
+        exit;
+    }
+
+    if ($action === 'undesignate_clinic_server') {
+        if (($user['role'] ?? '') !== 'admin') {
+            flash_message('error', 'Only clinic administrators can undesignate the clinic server.');
+            header('Location: index.php?tab=maintenance');
+            exit;
+        }
+        try {
+            $previousServer = cliniq_clinic_server_settings();
+            clear_cliniq_clinic_server_settings($updatedBy);
+            audit_log_event('settings', 'clinic_server_undesignated', $updatedBy, 'staff', 'server', null, $previousServer);
+            flash_message('success', 'The clinic server designation was removed.');
+        } catch (Throwable $e) {
+            flash_message('error', 'Unable to remove the clinic server designation.');
+        }
+        header('Location: index.php?tab=maintenance');
+        exit;
+    }
+
     if ($action === 'run_external_backup') {
-        if (!$canManageSettings) {
+        if (!$canManageBackups) {
             flash_message('error', 'Only authorized clinic administrators can manage system backups.');
             header('Location: index.php?tab=backup');
             exit;
@@ -260,8 +296,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         try {
             if ($action === 'verify_backup') {
-                $result = cliniq_backup_restore_test();
-                flash_message('success', sprintf('Latest backup verified: %d file(s), %s, %d restored table(s).', (int) $result['file_count'], cliniq_backup_format_bytes((int) $result['total_bytes']), (int) $result['restored_tables']));
+                $result = cliniq_backup_verify();
+                flash_message('success', sprintf('Latest backup verified: %d file(s), %s, and all checksums are valid.', (int) $result['file_count'], cliniq_backup_format_bytes((int) $result['total_bytes'])));
                 audit_log_event('settings', 'backup_verified', $updatedBy, 'staff', 'backup', null, ['path' => $result['path']]);
             } else {
                 $type = $action === 'run_semester_backup' ? 'semester' : 'daily';
@@ -544,6 +580,7 @@ $backupStatus = cliniq_backup_status();
 $backupPagination = cliniq_backup_history_page((int) ($_GET['backup_page'] ?? 1), 5);
 $backupHistory = $backupPagination['items'];
 $backupRoot = cliniq_backup_root();
+$clinicServerSettings = cliniq_clinic_server_settings();
 $externalBackupSettings = cliniq_backup_external_settings();
 $externalBackupMount = cliniq_backup_external_mount();
 $externalBackupDestination = null;
@@ -1707,28 +1744,31 @@ render_clinic_command_header(
                     </div>
                 </section>
 
-                <section class="settings-section space-y-4">
+                <section class="settings-section space-y-5">
                     <div class="flex items-start gap-3">
-                        <span class="material-symbols-outlined mt-0.5 rounded-lg bg-[#fff8e6] p-1.5 text-[20px] text-[#a57917]">usb</span>
+                        <span class="material-symbols-outlined mt-0.5 rounded-xl bg-[#fff8e6] p-2 text-[22px] text-[#a57917]">usb</span>
                         <div>
                             <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">External Backup Destination</h3>
-                            <p class="settings-help mb-0">Add a second copy on the connected drive for protection against computer or internal-volume failure.</p>
+                            <p class="settings-help mb-0">Keep a second copy on a connected drive in case this computer or its internal volume fails.</p>
                         </div>
                     </div>
                     <div class="border-t border-outline-variant"></div>
-                    <form method="post" class="space-y-4">
+                    <form id="externalBackupDestinationForm" method="post" class="space-y-5">
                         <input type="hidden" name="action" value="save_backup_destination">
-                        <label class="flex cursor-pointer items-center gap-3 pt-1 text-sm font-bold text-[#17261d]">
-                            <input type="checkbox" name="enabled" value="1" class="peer sr-only" <?= $externalBackupSettings['enabled'] ? 'checked' : '' ?> <?= !$canManageSettings ? 'disabled' : '' ?>>
-                            <span class="relative h-6 w-11 shrink-0 rounded-full bg-slate-300 transition-colors after:absolute after:left-1 after:top-1 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow-sm after:transition-transform peer-checked:bg-[#3f7d52] peer-checked:after:translate-x-5 peer-focus-visible:ring-2 peer-focus-visible:ring-[#3f7d52] peer-focus-visible:ring-offset-2"></span>
-                            <span>Enable external copy</span>
-                        </label>
-                        <div class="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-                            <label class="block">
-                                <span class="clinic-label">Folder inside connected drive</span>
-                                <div class="flex w-full">
-                                    <span class="flex min-h-[44px] items-center rounded-l-lg border border-r-0 border-outline-variant bg-[var(--cliniq-surface-low)] px-3 text-sm font-semibold text-slate-500"><?= e(rtrim($externalBackupMount, '/\\')) ?>/</span>
-                                    <select class="form-input w-full rounded-l-none" name="folder" <?= !$canManageSettings ? 'disabled' : '' ?>>
+                        <input id="externalBackupEnabled" type="checkbox" name="enabled" value="1" class="sr-only" <?= $externalBackupSettings['enabled'] ? 'checked' : '' ?> <?= !$canManageBackups ? 'disabled' : '' ?>>
+                        <div class="flex items-start justify-between gap-4 rounded-lg border border-[#d8e7dc] bg-[#f5faf6] px-3 py-3">
+                            <div>
+                                <p class="mb-1 text-sm font-bold text-[#17261d]">Automatic external copy</p>
+                                <p class="mb-0 text-sm text-slate-600">Selecting a drive turns external copying on. Removing the selected drive turns it off.</p>
+                            </div>
+                            <span class="material-symbols-outlined text-[#3f7d52]">sync</span>
+                        </div>
+                        <label class="block">
+                            <span class="clinic-label">Folder on connected drive</span>
+                            <div class="flex flex-col gap-2 sm:flex-row">
+                                <div class="flex min-w-0 flex-1">
+                                    <span id="externalBackupDriveLabel" class="flex min-h-[44px] shrink-0 items-center rounded-l-lg border border-r-0 border-outline-variant bg-[var(--cliniq-surface-low)] px-3 text-sm font-semibold text-slate-500">Selected drive/</span>
+                                    <select class="form-input min-w-0 w-full rounded-l-none" name="folder" <?= !$canManageBackups ? 'disabled' : '' ?>>
                                         <option value="" <?= $externalBackupSettings['folder'] === '' ? 'selected' : '' ?>>Use connected drive root</option>
                                         <?php if ($externalBackupSettings['folder'] !== '' && !in_array($externalBackupSettings['folder'], $externalBackupFolders, true)): ?>
                                             <option value="<?= e($externalBackupSettings['folder']) ?>" selected><?= e($externalBackupSettings['folder']) ?> (saved)</option>
@@ -1738,23 +1778,27 @@ render_clinic_command_header(
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
-                                <span class="settings-help">Choose the folder where files will be written on every backup run.</span>
-                            </label>
-                            <button type="submit" class="btn btn-primary justify-center lg:self-end" <?= !$canManageSettings ? 'disabled' : '' ?>><span class="material-symbols-outlined text-[18px]">save</span> Save Destination</button>
+                                <button type="button" class="btn btn-secondary shrink-0 justify-center" data-select-external-backup-destination <?= !$canManageBackups ? 'disabled' : '' ?>><span class="material-symbols-outlined text-[18px]">folder_open</span> Browse Drive</button>
+                            </div>
+                            <span class="settings-help">Choose a drive in the desktop app, then choose where its backup files will be written.</span>
+                        </label>
+                        <div class="border-t border-outline-variant"></div>
+                        <div class="rounded-lg px-3 py-3 text-sm font-semibold <?= !$externalBackupSettings['enabled'] ? 'bg-slate-100 text-slate-600' : ($externalBackupAvailable ? 'bg-[#e8f2ea] text-[#2f6840]' : 'bg-red-50 text-red-700') ?>">
+                            <span class="material-symbols-outlined mr-1 align-text-bottom text-[19px]"><?= !$externalBackupSettings['enabled'] ? 'pause_circle' : ($externalBackupAvailable ? 'check_circle' : 'error') ?></span>
+                            <?php if (!$externalBackupSettings['enabled']): ?>Backup copy: off until a drive is selected.<?php elseif (!$externalBackupAvailable): ?>Backup copy: the selected drive is not currently available to Docker.<?php else: ?>Backup copy: ready on the selected drive.<?php endif; ?>
                         </div>
+                        <div id="externalBackupDesktopStatus" data-external-copy-enabled="<?= $externalBackupSettings['enabled'] ? 'true' : 'false' ?>" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-600" role="status">Checking selected external drive in the desktop app...</div>
                     </form>
-                    <div class="border-t border-outline-variant"></div>
-                    <div class="flex items-center gap-2 pt-1 text-sm font-semibold <?= !$externalBackupSettings['enabled'] ? 'text-slate-500' : ($externalBackupAvailable ? 'text-[#3f7d52]' : 'text-red-700') ?>">
-                        <span class="material-symbols-outlined text-[19px]"><?= !$externalBackupSettings['enabled'] ? 'pause_circle' : ($externalBackupAvailable ? 'check_circle' : 'error') ?></span>
-                        <p class="mb-0"><?php if (!$externalBackupSettings['enabled']): ?>External copy is disabled.<?php elseif (!$externalBackupAvailable): ?>External drive is not currently available to Docker.<?php else: ?>External copy is ready<?= $externalBackupDestination ? ': ' . e($externalBackupDestination) : '.' ?><?php endif; ?></p>
-                    </div>
-                    <form method="post" data-no-ajax="true">
+                    <form id="runExternalBackupForm" method="post" data-no-ajax="true">
                         <input type="hidden" name="action" value="run_external_backup">
-                        <button type="submit" class="btn btn-secondary justify-center" <?= !$canManageSettings || !$externalBackupSettings['enabled'] || !$externalBackupAvailable ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Back up to the external drive?" data-confirm-message="This creates a fresh backup now and copies it to the selected external folder. The process may take a few minutes." data-confirm-toast="Preparing external backup..." data-loading-label="Backing up to external drive..." data-action-label>
-                            <span class="material-symbols-outlined text-[18px]">usb</span>
-                            <span data-action-label>Back Up to External Drive</span>
-                        </button>
                     </form>
+                    <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                        <button type="submit" form="runExternalBackupForm" class="btn btn-secondary w-full justify-center sm:w-auto" <?= !$canManageBackups || !$externalBackupSettings['enabled'] || !$externalBackupAvailable ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Back up to the external drive?" data-confirm-message="This creates a fresh backup now and copies it to the selected external folder. The process may take a few minutes." data-confirm-toast="Preparing external backup..." data-loading-label="Backing up to external drive..." data-action-label>
+                            <span class="material-symbols-outlined text-[18px]">usb</span>
+                            <span data-action-label>Back Up Now</span>
+                        </button>
+                        <button type="submit" form="externalBackupDestinationForm" class="btn btn-primary w-full justify-center sm:w-auto" <?= !$canManageBackups ? 'disabled' : '' ?>><span class="material-symbols-outlined text-[18px]">save</span> Save Destination</button>
+                    </div>
                 </section>
 
                 <section class="settings-section space-y-4">
@@ -1867,6 +1911,45 @@ render_clinic_command_header(
                 <section>
                     <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Maintenance</h2>
                     <p class="text-xs font-bold text-slate-500 mb-5">Restore incident alert classification values to the default prototype values.</p>
+                </section>
+                <section class="settings-section space-y-4">
+                    <div class="flex items-start gap-3">
+                        <span class="material-symbols-outlined mt-0.5 rounded-xl bg-[#e8f2ea] p-2 text-[22px] text-primary">dns</span>
+                        <div>
+                            <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Clinic Server</h3>
+                            <p class="settings-help mb-0">Designate the Electron desktop computer that hosts CLINiQ and display its local network address for staff setup.</p>
+                        </div>
+                    </div>
+                    <form id="clinicServerForm" method="post" data-no-ajax="true">
+                        <input type="hidden" name="action" value="designate_clinic_server">
+                        <input id="clinicServerHostname" type="hidden" name="hostname">
+                        <input id="clinicServerIp" type="hidden" name="local_ip">
+                    </form>
+                    <div class="rounded-xl border <?= !empty($clinicServerSettings['configured']) ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-slate-50' ?> p-4">
+                        <?php if (!empty($clinicServerSettings['configured'])): ?>
+                            <p class="mb-1 text-sm font-bold text-[#17261d]"><?= e((string) $clinicServerSettings['hostname']) ?> · <?= e((string) $clinicServerSettings['local_ip']) ?></p>
+                            <p class="mb-0 text-sm text-slate-600">Staff address: <code>http://<?= e((string) $clinicServerSettings['local_ip']) ?>:8081/public/</code></p>
+                        <?php else: ?>
+                            <p class="mb-0 text-sm text-slate-600">No clinic server has been designated yet.</p>
+                        <?php endif; ?>
+                    </div>
+                    <div class="flex flex-wrap justify-end gap-2">
+                        <?php if (!empty($clinicServerSettings['configured'])): ?>
+                            <form method="post" data-no-ajax="true">
+                                <input type="hidden" name="action" value="undesignate_clinic_server">
+                                <button class="btn btn-danger justify-center" <?= ($user['role'] ?? '') !== 'admin' ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="danger" data-confirm-title="Undesignate clinic server?" data-confirm-message="This removes the saved server name and IP address. It does not stop CLINiQ or delete any data." data-confirm-toast="Removing server designation...">
+                                    <span class="material-symbols-outlined text-[18px]">desktop_access_disabled</span>
+                                    Undesignate Server
+                                </button>
+                            </form>
+                        <?php else: ?>
+                            <button type="button" class="btn btn-primary justify-center" data-designate-clinic-server <?= ($user['role'] ?? '') !== 'admin' ? 'disabled' : '' ?>>
+                                <span class="material-symbols-outlined text-[18px]">desktop_windows</span>
+                                Designate This Computer
+                            </button>
+                        <?php endif; ?>
+                    </div>
+                    <p class="settings-help mb-0">This must be done from the CLINiQ Electron desktop app on the intended server. The saved address is for the local clinic network; firewall and fixed-IP setup are completed in Step 3.</p>
                 </section>
                 <section class="settings-section flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>

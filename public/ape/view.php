@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/ApeWorkflow.php';
+require_once __DIR__ . '/../../app/services/PatientNotification.php';
 require_login();
 ensure_ape_workflow_schema();
 
@@ -538,6 +539,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($activityLabel) {
             ape_log_activity($id, $staffPersonId, $activityLabel, $activityNotes);
+            $updatedRecord = fetch_ape_record($id);
+            $patientNoteChanged = trim((string) ($updatedRecord['patient_visible_note'] ?? ''))
+                !== trim((string) ($record['patient_visible_note'] ?? ''));
+            if ($action !== 'save_notes' || $patientNoteChanged) {
+                patient_notification_for_ape_action($apeDb, $updatedRecord, $action, $staffPersonId);
+            }
             flash_message('success', $activityLabel . '.');
         }
         $apeDb->commit();

@@ -17,12 +17,16 @@ components, page-family conventions, and the checklist for correcting inconsiste
 
 ## Quick Setup
 
-1. Copy this folder to your XAMPP `htdocs` directory, or point Apache to this folder.
-2. Copy `.env.example` to `.env` and update the database credentials.
-3. Run `php scripts/database/migrate.php`.
-   This imports `database/production_schema.sql` for a fresh database and applies
-   only migrations that have not already been recorded.
-4. Open `http://localhost/cliniq/public/` in your browser.
+Docker is the supported team-development environment. After cloning, run:
+
+```powershell
+.\scripts\development\setup.ps1
+```
+
+Then open `http://localhost:8081/public/`. Each checkout receives an isolated
+MariaDB database and uploaded-file volumes, while source files are mounted for
+live editing. See [the developer environment guide](DEVELOPMENT.md) for setup,
+branching, database migration, and data-safety instructions.
 
 The production schema creates no default users or passwords. Create the initial
 clinic administrator through the controlled clinic setup process and use a
@@ -47,8 +51,8 @@ The emergency passport should expose only approved emergency information. Full h
 ## Electron desktop app after cloning
 
 The desktop source, icons, and dependency lockfile are included in this repository.
-Install Node.js with npm, complete the PHP/database setup above, and start Apache
-and MySQL. From the cloned repository root, run:
+Install Node.js with npm and start the Docker development environment described
+above. From the cloned repository root, run:
 
 ```powershell
 npm run desktop:install
@@ -57,17 +61,16 @@ npm run desktop
 
 The first command downloads the pinned Electron dependencies and needs internet
 access. Run it again after pulling changes to the Electron dependency lockfile.
-The desktop app connects to `http://localhost/CLINiQ/public/` by default.
-If your checkout is served at a different URL, set it before launching:
+Point the desktop app at the Docker development URL before launching:
 
 ```powershell
-$env:CLINIQ_CLINIC_URL = 'http://localhost/my-clinic/public/'
+$env:CLINIQ_CLINIC_URL = 'http://localhost:8081/public/'
 npm run desktop
 ```
 
 To create a Windows installer, run `npm run desktop:build`. Output appears in
 `electron/dist/`. Dependencies and generated installers are intentionally excluded
 from Git; cloning includes the source, not a prebuilt executable. The desktop shell
-requires the PHP/MySQL server; it does not bundle XAMPP or the database.
+requires the Docker application and database; it does not bundle them.
 
 See [the desktop guide](electron/README.md) for additional details.

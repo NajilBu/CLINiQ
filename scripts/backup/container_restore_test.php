@@ -16,7 +16,7 @@ putenv('DB_PASS=' . $rootPassword);
 require_once dirname(__DIR__, 2) . '/app/services/BackupService.php';
 
 try {
-    $result = cliniq_backup_restore_test();
+    $result = cliniq_backup_restore_test($argv[1] ?? null);
     echo json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), PHP_EOL;
     exit(0);
 } catch (Throwable $e) {

@@ -1,0 +1,36 @@
+services:
+  app:
+    environment:
+      APP_ENV: development
+      APP_URL: http://localhost:${CLINIQ_DEV_PORT:-8081}/public
+      PATIENT_PORTAL_URL: http://localhost:${CLINIQ_DEV_PORT:-8081}/patient-portal
+      SESSION_SECURE_COOKIE: "0"
+    ports: !override
+      - "127.0.0.1:${CLINIQ_DEV_PORT:-8081}:80"
+    volumes:
+      - .:/var/www/html
+      - cliniq_documents:/var/www/html/storage/documents
+      - cliniq_uploads:/var/www/html/public/uploads
+      - cliniq_backups:/var/backups/cliniq
+      - cliniq_sessions:/var/lib/php/sessions
+
+  # Backups are intentionally opt-in for isolated developer databases.
+  backup:
+    profiles: ["backup"]
+
+volumes:
+  cliniq_database:
+    name: ${COMPOSE_PROJECT_NAME:-cliniq-dev}_database
+    external: false
+  cliniq_documents:
+    name: ${COMPOSE_PROJECT_NAME:-cliniq-dev}_documents
+    external: false
+  cliniq_uploads:
+    name: ${COMPOSE_PROJECT_NAME:-cliniq-dev}_uploads
+    external: false
+  cliniq_backups:
+    name: ${COMPOSE_PROJECT_NAME:-cliniq-dev}_backups
+    external: false
+  cliniq_sessions:
+    name: ${COMPOSE_PROJECT_NAME:-cliniq-dev}_sessions
+    external: false

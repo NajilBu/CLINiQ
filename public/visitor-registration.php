@@ -236,6 +236,8 @@ $theme = active_cliniq_theme();
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
+    <script src="<?= app_url('assets/js/csrf.js?v=' . filemtime(__DIR__ . '/assets/js/csrf.js')) ?>" defer></script>
     <title>Visitor / Patient Registration | CLINiQ</title>
     <link href="<?= app_url('assets/vendor/fonts/inter-manrope.css?v=offline-1') ?>" rel="stylesheet">
     <link href="<?= app_url('assets/vendor/fonts/material-symbols.css?v=offline-1') ?>" rel="stylesheet">
@@ -562,6 +564,7 @@ $theme = active_cliniq_theme();
                 </div>
             <?php else: ?>
                 <form method="post" class="visit-card-form space-y-4">
+                    <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
                     <?php if ($errors): ?>
                         <div class="rounded-xl bg-red-50 border border-red-100 text-red-700 px-4 py-3 text-sm font-bold">
                             Please complete the required fields before registering your visit.

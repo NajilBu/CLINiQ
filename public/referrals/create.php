@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../../app/helpers/view.php';
+require_once __DIR__ . '/../../app/services/PatientNotification.php';
 require_login();
 
 $patients = auth_db()->query('
@@ -27,16 +28,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    $stmt = auth_db()->prepare(
-        'INSERT INTO referrals (patient_person_id, referral_date, referred_to, reason, status, referred_by_person_id) VALUES (?, ?, ?, ?, "Completed", ?)'
-    );
-    $stmt->execute([
-        $patientPersonId,
-        $_POST['referral_date'] ?: date('Y-m-d'),
-        $referredTo,
-        $reason,
-        $referrerPersonId ?: null,
-    ]);
+    $db = auth_db();
+    $db->beginTransaction();
+    try {
+        $stmt = $db->prepare(
+            'INSERT INTO referrals (patient_person_id, referral_date, referred_to, reason, status, referred_by_person_id) VALUES (?, ?, ?, ?, "Completed", ?)'
+        );
+        $stmt->execute([
+            $patientPersonId,
+            $_POST['referral_date'] ?: date('Y-m-d'),
+            $referredTo,
+            $reason,
+            $referrerPersonId ?: null,
+        ]);
+        $referralId = (int) $db->lastInsertId();
+        patient_notification_create(
+            $db,
+            $patientPersonId,
+            $referrerPersonId ?: null,
+            'referral',
+            'New clinic referral',
+            "The clinic referred you to {$referredTo}. Reason: {$reason}",
+            'patient-dashboard.php',
+            'referral',
+            $referralId
+        );
+        $db->commit();
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        throw $e;
+    }
 
     flash_message('success', 'Referral created successfully.');
     header('Location: index.php');

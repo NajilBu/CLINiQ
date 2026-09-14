@@ -41,6 +41,24 @@ function cliniqDesktopBridge() {
         : null;
 }
 
+function showExternalBackupRestartCountdown(details = {}) {
+    document.getElementById('externalBackupRestartNotice')?.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'externalBackupRestartNotice';
+    overlay.className = 'fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/45 p-4';
+    overlay.innerHTML = '<div class="w-full max-w-md rounded-2xl border border-[#cfe1d3] bg-white p-6 shadow-2xl" role="alertdialog" aria-modal="true"><div class="mb-4 flex items-center gap-3"><span class="material-symbols-outlined animate-spin rounded-xl bg-[#e8f2ea] p-2 text-[#3f7d52]">progress_activity</span><div><h2 class="font-headline text-lg font-extrabold text-[#17261d]">Connecting external backup drive</h2><p class="mt-1 text-sm text-slate-600">CLINiQ is updating its backup connection.</p></div></div><p class="text-sm leading-6 text-slate-700">Your current sign-in will be preserved. Please wait while the selected drive is connected.</p><div class="mt-5 rounded-lg bg-[#e8f2ea] px-4 py-3 text-center text-sm font-bold text-[#2f6840]">Connecting drive…</div></div>';
+    document.body.append(overlay);
+}
+
+function initExternalBackupRestartNotice() {
+    const bridge = cliniqDesktopBridge();
+    if (bridge && typeof bridge.onExternalBackupRestarting === 'function') {
+        bridge.onExternalBackupRestarting(showExternalBackupRestartCountdown);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', initExternalBackupRestartNotice, { once: true });
+
 document.addEventListener('click', (event) => {
     const bridge = cliniqDesktopBridge();
     if (!bridge || event.defaultPrevented || event.button !== 0) return;
@@ -78,6 +96,135 @@ document.addEventListener('click', (event) => {
     event.stopImmediatePropagation();
     bridge.openExternal(targetUrl.href);
 }, true);
+
+document.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-select-external-backup-destination]');
+    if (!button) return;
+
+    event.preventDefault();
+    const bridge = cliniqDesktopBridge();
+    if (!bridge || typeof bridge.selectExternalBackupDestination !== 'function') {
+        showToast('Select the external backup drive from the CLINiQ desktop app.', 'warning');
+        return;
+    }
+
+    button.disabled = true;
+    const previousLabel = button.innerHTML;
+    button.innerHTML = '<span class="material-symbols-outlined text-[18px]">progress_activity</span> Connecting drive...';
+    try {
+        const result = await bridge.selectExternalBackupDestination();
+        if (result?.canceled) {
+            showToast('External backup drive selection was cancelled.', 'info');
+            return;
+        }
+        const settingsForm = document.getElementById('externalBackupDestinationForm');
+        const enabledField = document.getElementById('externalBackupEnabled');
+        if (settingsForm && enabledField) {
+            enabledField.checked = true;
+            const loadingMessage = document.querySelector('#externalBackupRestartNotice .rounded-lg:last-child');
+            if (loadingMessage) loadingMessage.textContent = 'Drive connected. Refreshing Settings…';
+            window.setTimeout(() => HTMLFormElement.prototype.submit.call(settingsForm), 350);
+        } else {
+            showToast('External backup drive connected. Reloading Settings...', 'success', 1400);
+            window.setTimeout(() => window.location.reload(), 1450);
+        }
+    } catch (error) {
+        document.getElementById('externalBackupRestartNotice')?.remove();
+        showToast(error?.message || 'Unable to connect the selected external backup drive.', 'error');
+    } finally {
+        button.disabled = false;
+        button.innerHTML = previousLabel;
+    }
+});
+
+document.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-designate-clinic-server]');
+    if (!button) return;
+
+    event.preventDefault();
+    const bridge = cliniqDesktopBridge();
+    if (!bridge || typeof bridge.getClinicServerIdentity !== 'function') {
+        showToast('Open Maintenance in the CLINiQ desktop app on the computer that will host the clinic server.', 'warning');
+        return;
+    }
+    button.disabled = true;
+    const previousLabel = button.innerHTML;
+    button.innerHTML = '<span class="material-symbols-outlined animate-spin text-[18px]">progress_activity</span> Detecting network address...';
+    const overlay = document.createElement('div');
+    overlay.id = 'clinicServerDesignationNotice';
+    overlay.className = 'fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/45 p-4';
+    overlay.innerHTML = '<div class="w-full max-w-md rounded-2xl border border-[#cfe1d3] bg-white p-6 shadow-2xl" role="alertdialog" aria-modal="true"><div class="mb-4 flex items-center gap-3"><span class="material-symbols-outlined animate-spin rounded-xl bg-[#e8f2ea] p-2 text-[#3f7d52]">progress_activity</span><div><h2 class="font-headline text-lg font-extrabold text-[#17261d]">Designating clinic server</h2><p class="mt-1 text-sm text-slate-600">CLINiQ is reading this computer’s local network address.</p></div></div><p class="text-sm leading-6 text-slate-700">Please wait. The Maintenance page will refresh when the server address has been saved.</p></div>';
+    document.body.append(overlay);
+    try {
+        const identity = await bridge.getClinicServerIdentity();
+        const hostname = document.getElementById('clinicServerHostname');
+        const ip = document.getElementById('clinicServerIp');
+        const form = document.getElementById('clinicServerForm');
+        if (!hostname || !ip || !form || !identity?.hostname || !identity?.ip) {
+            throw new Error('The clinic server identity could not be prepared.');
+        }
+        hostname.value = identity.hostname;
+        ip.value = identity.ip;
+        button.innerHTML = '<span class="material-symbols-outlined animate-spin text-[18px]">progress_activity</span> Saving server...';
+        HTMLFormElement.prototype.submit.call(form);
+    } catch (error) {
+        overlay.remove();
+        showToast(error?.message || 'Unable to read this computer’s local network address.', 'error');
+        button.disabled = false;
+        button.innerHTML = previousLabel;
+    }
+});
+
+function initExternalBackupDestinationStatus() {
+    const statusElement = document.getElementById('externalBackupDesktopStatus');
+    if (!statusElement) return;
+
+    const bridge = cliniqDesktopBridge();
+    if (!bridge || typeof bridge.getExternalBackupDestinationStatus !== 'function') {
+        statusElement.textContent = 'Open this page in the CLINiQ desktop app to view the selected external drive status.';
+        return;
+    }
+
+    const refresh = async () => {
+        try {
+            const status = await bridge.getExternalBackupDestinationStatus();
+            statusElement.classList.remove('border-slate-200', 'bg-slate-50', 'text-slate-600', 'border-emerald-200', 'bg-emerald-50', 'text-emerald-800', 'border-red-200', 'bg-red-50', 'text-red-800');
+            if (status.available) {
+                statusElement.classList.add('border-emerald-200', 'bg-emerald-50', 'text-emerald-800');
+            } else if (status.configured) {
+                statusElement.classList.add('border-red-200', 'bg-red-50', 'text-red-800');
+            } else {
+                statusElement.classList.add('border-slate-200', 'bg-slate-50', 'text-slate-600');
+            }
+            const pathLabel = status.destination ? ` ${status.destination}` : '';
+            const driveLabel = document.getElementById('externalBackupDriveLabel');
+            if (driveLabel) {
+                const selectedDrive = String(status.destination || '').trim();
+                driveLabel.textContent = selectedDrive
+                    ? (/[\\/]$/.test(selectedDrive) ? selectedDrive : `${selectedDrive}\\`)
+                    : 'Selected drive/';
+            }
+            const copyingEnabled = statusElement.dataset.externalCopyEnabled === 'true';
+            const detail = status.available && !copyingEnabled
+                ? 'Drive selected. Enabling automatic backup copy…'
+                : status.message;
+            statusElement.textContent = `Selected drive:${pathLabel} — ${detail}`;
+            const enabledField = document.getElementById('externalBackupEnabled');
+            const settingsForm = document.getElementById('externalBackupDestinationForm');
+            const shouldEnable = Boolean(status.configured && status.available && status.prepared);
+            if (enabledField && settingsForm && enabledField.checked !== shouldEnable && !settingsForm.dataset.driveStateSyncing) {
+                settingsForm.dataset.driveStateSyncing = 'true';
+                enabledField.checked = shouldEnable;
+                window.setTimeout(() => settingsForm.requestSubmit(), 250);
+            }
+        } catch (error) {
+            statusElement.textContent = 'Unable to check the selected external drive.';
+        }
+    };
+
+    void refresh();
+    window.setInterval(() => void refresh(), 15000);
+}
 
 // ============================================================
 // MODAL SYSTEM
@@ -170,11 +317,12 @@ function showToast(message, type = 'success', duration = 3500) {
 
     const toast = document.createElement('div');
     toast.className = `toast-item toast-${type}`;
+    toast.setAttribute('role', type === 'error' || type === 'warning' ? 'alert' : 'status');
     toast.innerHTML = `
-        <span class="material-symbols-outlined" style="font-size:20px;">${TOAST_ICONS[type] || 'info'}</span>
-        <span style="flex:1;">${escapeHtml(message)}</span>
-        <button onclick="dismissToast(this.parentElement)" style="background:none;border:none;cursor:pointer;padding:4px;opacity:0.6;display:flex;">
-            <span class="material-symbols-outlined" style="font-size:16px;">close</span>
+        <span class="material-symbols-outlined toast-icon" aria-hidden="true">${TOAST_ICONS[type] || 'info'}</span>
+        <span class="toast-message">${escapeHtml(message)}</span>
+        <button class="toast-dismiss" type="button" aria-label="Dismiss notification" onclick="dismissToast(this.parentElement)">
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
     `;
 
@@ -1577,6 +1725,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // UI-only system logo preview in General Settings
     initLogoPlaceholders();
+    initExternalBackupDestinationStatus();
 
     // Initialize tabs from URL
     initTabsFromURL();
