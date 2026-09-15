@@ -38,16 +38,11 @@ function student_public_logo_src(?array $clinicProfile = null): string
 
 function student_nav_items(): array
 {
-    return [
+    $items = [
         'dashboard' => [
             'label' => 'Dashboard',
             'url' => 'patient-dashboard.php',
             'icon' => 'dashboard',
-        ],
-        'ape' => [
-            'label' => 'APE Status',
-            'url' => 'patient-ape-status.php',
-            'icon' => 'fact_check',
         ],
         'appointment' => [
             'label' => 'Appointments',
@@ -60,6 +55,13 @@ function student_nav_items(): array
             'icon' => 'id_card',
         ],
     ];
+    $profile = student_current_profile();
+    if (($profile['account_type'] ?? '') === 'student') {
+        $items = array_slice($items, 0, 1, true) + ['ape' => [
+            'label' => 'APE Status', 'url' => 'patient-ape-status.php', 'icon' => 'fact_check',
+        ]] + array_slice($items, 1, null, true);
+    }
+    return $items;
 }
 
 function student_profile_from_identity(array $identity): array
@@ -156,7 +158,7 @@ function student_current_profile(): ?array
             a.email,
             pr.program_code AS program,
             CASE WHEN se.role_classification = "Faculty" THEN ed.department_code END AS faculty_department,
-            CASE WHEN se.role_classification = "School Personnel" THEN ed.department_code END AS personnel_department,
+            CASE WHEN se.role_classification = "Non-Teaching Personnel" THEN ed.department_code END AS personnel_department,
             pt.blood_type,
             pt.allergies,
             pt.existing_conditions,
@@ -179,7 +181,7 @@ function student_current_profile(): ?array
             CASE
                 WHEN s.person_id IS NOT NULL THEN "student"
                 WHEN se.role_classification = "Faculty" THEN "faculty"
-                WHEN se.role_classification = "School Personnel" THEN "school_personnel"
+                WHEN se.role_classification = "Non-Teaching Personnel" THEN "school_personnel"
                 ELSE "patient"
             END AS account_type
         FROM people p
@@ -301,7 +303,7 @@ function student_find_patient_by_number(string $studentNumber): ?array
             CASE
                 WHEN s.person_id IS NOT NULL THEN "student"
                 WHEN se.role_classification = "Faculty" THEN "faculty"
-                WHEN se.role_classification = "School Personnel" THEN "school_personnel"
+                WHEN se.role_classification = "Non-Teaching Personnel" THEN "school_personnel"
                 ELSE "patient"
             END AS account_type
         FROM accounts a

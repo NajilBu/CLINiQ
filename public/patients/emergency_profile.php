@@ -21,7 +21,7 @@ $fullName = trim(implode(' ', array_filter([
 ])));
 $classificationDetail = match ($patient['patient_type']) {
     'Student' => trim(($patient['program_code'] ?? '') . ' ' . ($patient['year_level'] ?? '') . strtoupper((string) ($patient['section'] ?? ''))),
-    'Faculty', 'School Personnel' => trim(($patient['employee_department_code'] ?? '') . ' - ' . ($patient['employee_department_name'] ?? ''), ' -'),
+    'Faculty', 'Non-Teaching Personnel' => trim(($patient['employee_department_code'] ?? '') . ' - ' . ($patient['employee_department_name'] ?? ''), ' -'),
     'Clinic Staff' => trim(($patient['staff_department_code'] ?? '') . ' - ' . ($patient['staff_department_name'] ?? ''), ' -'),
     default => '',
 };

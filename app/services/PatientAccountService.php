@@ -27,8 +27,20 @@ function patient_account_type_label(string $value): string
     return match (patient_account_type($value)) {
         'student' => 'Student',
         'faculty' => 'Faculty',
-        default => 'School Personnel',
+        default => 'Non-Teaching Personnel (NTP)',
     };
+}
+
+function patient_account_default_email(string $firstName, string $lastName): string
+{
+    $normalize = static function (string $value): string {
+        $ascii = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', trim($value));
+        $value = strtolower($ascii === false ? trim($value) : $ascii);
+        $value = preg_replace('/[^a-z0-9]+/', '_', $value) ?? '';
+        return trim($value, '_');
+    };
+
+    return $normalize($lastName) . '_' . $normalize($firstName) . '@plpasig.edu.ph';
 }
 
 function normalize_faculty_employment_type(string $value): string
@@ -324,6 +336,7 @@ function create_inactive_patient_account(array $input): array
     }
 
     $initialPassword = patient_account_initial_password($idNumber);
+    $email = patient_account_default_email($firstName, $lastName);
     $db = auth_db();
 
     try {
@@ -370,7 +383,7 @@ function create_inactive_patient_account(array $input): array
             $profile->execute([
                 $personId,
                 $departmentId,
-                $type === 'faculty' ? 'Faculty' : 'School Personnel',
+                $type === 'faculty' ? 'Faculty' : 'Non-Teaching Personnel',
                 $yearEmployment !== '' ? $yearEmployment : null,
                 $sectionPosition !== '' ? $sectionPosition : null,
             ]);
@@ -386,6 +399,7 @@ function create_inactive_patient_account(array $input): array
             UPDATE accounts
             SET
                 password_hash = ?,
+                email = ?,
                 account_status = "inactive",
                 status_reason = "Awaiting initial account activation",
                 activated_at = NULL
@@ -393,6 +407,7 @@ function create_inactive_patient_account(array $input): array
         ');
         $account->execute([
             password_hash($initialPassword, PASSWORD_DEFAULT),
+            $email,
             $personId,
         ]);
 
@@ -406,7 +421,7 @@ function create_inactive_patient_account(array $input): array
                 ORDER BY started_at DESC
                 LIMIT 1
             ")->fetch();
-            if ($activeCycle) {
+            if ($activeCycle && $type === 'student') {
                 // Only create the record if one doesn't already exist for this patient + cycle.
                 $existsCheck = $db->prepare('
                     SELECT COUNT(*) FROM ape_records

@@ -9,7 +9,7 @@ const VISITOR_REASON_BORROW_EQUIPMENT = 'Borrow Equipment';
 $errors = [];
 $success = null;
 $reasonOptions = array_values(array_unique(array_merge(visit_purposes(), [VISITOR_REASON_BORROW_EQUIPMENT])));
-$categoryOptions = ['Student', 'Staff', 'Faculty', 'School Personnel'];
+$categoryOptions = ['Student', 'Staff', 'Faculty', 'Non-Teaching Personnel'];
 $equipmentItems = cliniq_inventory_db()->query("
     SELECT item_id AS id, item_name, quantity, unit
     FROM inventory_items

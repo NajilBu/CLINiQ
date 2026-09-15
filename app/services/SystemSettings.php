@@ -1320,7 +1320,7 @@ function cliniq_mail_recipients(): array
                 WHEN cs.person_id IS NOT NULL THEN 'Clinic Staff'
                 WHEN s.person_id IS NOT NULL THEN 'Student'
                 WHEN se.role_classification = 'Faculty' THEN 'Faculty'
-                WHEN se.person_id IS NOT NULL THEN 'School Personnel'
+                WHEN se.person_id IS NOT NULL THEN 'Non-Teaching Personnel'
                 ELSE 'Patient'
             END AS type,
             a.account_status AS status

@@ -22,7 +22,7 @@ $totalRows = cliniq_patient_profile_count();
 $patients = cliniq_patient_profile_list('', max(1, $totalRows), 0);
 $patients = array_values(array_filter($patients, static function (array $patient) use ($filterType, $filterStatus): bool {
     $type = (string) ($patient['patient_type'] ?? 'Patient');
-    if ($type === 'School Personnel') {
+    if ($type === 'Non-Teaching Personnel') {
         $type = 'Personnel';
     }
     $status = (string) ($patient['account_status'] ?? 'Inactive');
@@ -62,7 +62,7 @@ foreach ($patients as $patientIndex => $patient) {
         'idNumber' => $patient['id_number'],
         'nameSort' => trim($patient['last_name'] . ' ' . $patient['first_name'] . ' ' . ($patient['middle_name'] ?? '')),
         'nameHtml' => '<div class="flex items-center gap-3" data-tooltip-text="' . e($fullName) . '">' . $avatarHtml . '<strong class="text-sm text-slate-800">' . e($fullName) . '</strong></div>',
-        'patientType' => $patient['patient_type'] === 'School Personnel' ? 'Personnel' : $patient['patient_type'],
+        'patientType' => $patient['patient_type'] === 'Non-Teaching Personnel' ? 'NTP' : $patient['patient_type'],
         'courseSection' => $patient['course_section'] ?: 'Patient',
         'guardianContact' => $patient['guardian_contact'] ?: '-',
     ];

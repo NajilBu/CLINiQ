@@ -8,6 +8,13 @@ const CLINIQ_BASELINE_THROUGH = '20260908_passport_access_audit_reporting.sql';
 
 function migration_checksum_is_known_compatible(string $name, string $stored, string $current): bool
 {
+    if ($name === '20260913_create_patient_notifications.sql') {
+        // This migration's SQL was unchanged; an earlier Windows checkout recorded
+        // the CRLF variant. Accept only that exact historical checksum.
+        return strtolower($stored) === '54393ca51fa1a3aa5d4de114cef36d426f3d4cc7503e2f0fccb45b84585454b9'
+            && strtolower($current) === 'f76f217f30da37172d193d9c5c972eb0274c47e86a7d73c217aed808039c7be7';
+    }
+
     if ($name !== '20260910_add_passport_bmi_visibility.sql') {
         return false;
     }

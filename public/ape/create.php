@@ -8,17 +8,13 @@ ensure_ape_workflow_schema();
 $apeDb = auth_db();
 $patients = $apeDb->query("
     SELECT pt.person_id AS id, p.id_number, p.first_name, p.last_name,
-           COALESCE(
-               NULLIF(TRIM(CONCAT(pr.program_code, '-', s.year_level, UPPER(s.section))), ''),
-               ed.department_code,
-               'Patient'
-           ) AS course_section
+           se.role_classification AS patient_type,
+           COALESCE(ed.department_code, 'No department') AS course_section
     FROM patients pt
     JOIN people p ON p.id = pt.person_id
-    LEFT JOIN students s ON s.person_id = p.id
-    LEFT JOIN programs pr ON pr.id = s.program_id
-    LEFT JOIN school_employees se ON se.person_id = p.id
+    JOIN school_employees se ON se.person_id = p.id
     LEFT JOIN departments ed ON ed.id = se.department_id
+    WHERE se.role_classification IN ('Faculty', 'Non-Teaching Personnel')
     ORDER BY p.last_name, p.first_name
 ")->fetchAll();
 $appointmentOptions = $apeDb->query("
@@ -30,6 +26,7 @@ $appointmentOptions = $apeDb->query("
     LIMIT 200
 ")->fetchAll();
 $currentYear = (int) date('Y');
+$selectedManualPatientId = filter_input(INPUT_GET, 'patient_id', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: 0;
 $academicYear = (int) date('n') >= 6
     ? $currentYear . '-' . ($currentYear + 1)
     : ($currentYear - 1) . '-' . $currentYear;
@@ -41,12 +38,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $staffPersonId = (int) (current_user()['person_id'] ?? 0);
         $academicYear = trim((string) ($_POST['academic_year'] ?? ''));
         $appointmentId = (int) ($_POST['appointment_id'] ?? 0) ?: null;
-        $workflowStatus = (string) ($_POST['workflow_status'] ?? 'Registered');
-        $requirementStatus = (string) ($_POST['requirement_status'] ?? 'Not Checked');
-        $clearanceStatus = (string) ($_POST['clearance_status'] ?? 'Pending');
-        $verificationStatus = (string) ($_POST['verification_status'] ?? 'Pending');
+        $workflowStatus = 'Reviewed';
+        $requirementStatus = 'Checked';
+        $clearanceStatus = 'Pending';
+        $verificationStatus = 'Verified';
         $followUpRequired = isset($_POST['follow_up_required']) ? 1 : 0;
-        $clinicalRemarks = trim((string) ($_POST['clinical_remarks'] ?? '')) ?: null;
+        $clinicalRemarks = trim((string) ($_POST['clinical_remarks'] ?? ''));
 
         if ($patientId <= 0 || $staffPersonId <= 0 || $academicYear === '') {
             throw new InvalidArgumentException('Patient, academic year, and clinic staff identity are required.');
@@ -54,17 +51,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!preg_match('/^(\d{4})-(\d{4})$/', $academicYear, $yearParts) || (int) $yearParts[2] !== (int) $yearParts[1] + 1) {
             throw new InvalidArgumentException('Academic year must use consecutive years, such as 2026-2027.');
         }
-        if (!in_array($workflowStatus, ape_workflow_status_options(), true)) {
-            throw new InvalidArgumentException('Choose a valid APE workflow status.');
+        if (trim((string) ($_POST['exam_date'] ?? '')) === '') {
+            throw new InvalidArgumentException('Record the examination date for a manual APE.');
         }
-        if (!in_array($requirementStatus, ['Not Checked', 'Checked', 'Needs Correction'], true)) {
-            throw new InvalidArgumentException('Choose a valid requirement status.');
+        if ($clinicalRemarks === '') {
+            throw new InvalidArgumentException('Record the clinic findings before saving a manual APE.');
         }
-        if (!in_array($clearanceStatus, ['Pending', 'For Follow-up', 'Cleared'], true)) {
-            throw new InvalidArgumentException('Choose a valid clearance status.');
+        if (empty($_FILES['document']['name'])) {
+            throw new InvalidArgumentException('Attach the submitted APE document before saving.');
         }
-        if (!in_array($verificationStatus, ['Pending', 'Verified', 'Needs Correction'], true)) {
-            throw new InvalidArgumentException('Choose a valid document verification status.');
+        $employeeCheck = $apeDb->prepare("SELECT role_classification FROM school_employees WHERE person_id = ? AND role_classification IN ('Faculty', 'Non-Teaching Personnel')");
+        $employeeCheck->execute([$patientId]);
+        if ($employeeCheck->fetchColumn() === false) {
+            throw new InvalidArgumentException('Manual APE entries are available only for Faculty and Non-Teaching Personnel.');
         }
         if ($appointmentId !== null) {
             $appointmentCheck = $apeDb->prepare("SELECT COUNT(*) FROM appointments WHERE appointment_id = ? AND patient_id = ? AND status = 'Scheduled'");
@@ -74,9 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        if (!empty($_FILES['document']['name'])) {
-            $storedFile = ape_store_uploaded_file($_FILES['document'], 'ape');
-        }
+        $storedFile = ape_store_uploaded_file($_FILES['document'], 'ape');
         if ($followUpRequired) {
             $workflowStatus = 'Follow-up Required';
             $clearanceStatus = 'For Follow-up';
@@ -86,10 +83,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt = $apeDb->prepare("
             INSERT INTO ape_records (
                 patient_id, academic_year, exam_date, appointment_id,
-                requirement_status, workflow_status, clearance_status,
+                entry_mode, requirement_status, workflow_status, clearance_status,
                 follow_up_required, clinical_remarks, patient_visible_note,
                 reviewed_by_person_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, 'Clinic Manual', ?, ?, ?, ?, ?, ?, ?)
         ");
         $stmt->execute([
             $patientId,
@@ -132,8 +129,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
         }
 
-        if ($followUpRequired && $clinicalRemarks) {
-            $finding = $apeDb->prepare("
+        $finding = $apeDb->prepare("
                 INSERT INTO ape_findings (
                     ape_id, finding_type, description, result_status,
                     follow_up_required, recorded_by_person_id
@@ -146,8 +142,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     recorded_by_person_id = VALUES(recorded_by_person_id),
                     recorded_at = CURRENT_TIMESTAMP
             ");
-            $finding->execute([$apeId, $clinicalRemarks, $staffPersonId]);
-        }
+        $finding->execute([$apeId, $clinicalRemarks, $staffPersonId]);
 
         ape_log_activity($apeId, $staffPersonId, 'Created APE record', 'Academic year ' . $academicYear);
         $apeDb->commit();
@@ -173,21 +168,21 @@ render_header('Add APE Record');
 <?php render_clinic_command_header(
     'APE Workflow',
     'Add APE Record',
-    'Create a staff-managed APE workflow entry and attach digital documents.'
+    'Create a clinic-only manual APE for Faculty or Non-Teaching Personnel. Documents and findings are required at creation.'
 ); ?>
 
 <form class="clinic-card p-6 md:p-8" method="post" enctype="multipart/form-data">
     <div class="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-8">
         <section>
-            <h2 class="font-headline text-xl font-extrabold text-[#1c2a59] mb-4">Patient & Status</h2>
+            <h2 class="font-headline text-xl font-extrabold text-[#1c2a59] mb-4">Faculty / NTP Manual APE</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div class="md:col-span-2">
                     <label class="clinic-label">Patient</label>
                     <select class="clinic-select" name="patient_id" required>
-                        <option value="">Select student</option>
+                        <option value="">Select Faculty or NTP</option>
                         <?php foreach ($patients as $p): ?>
-                            <option value="<?= (int)$p['id'] ?>">
-                                <?= e($p['last_name'] . ', ' . $p['first_name'] . ' - ' . $p['id_number'] . ($p['course_section'] ? ' (' . $p['course_section'] . ')' : '')) ?>
+                            <option value="<?= (int)$p['id'] ?>" <?= $selectedManualPatientId === (int) $p['id'] ? 'selected' : '' ?>>
+                                <?= e($p['last_name'] . ', ' . $p['first_name'] . ' - ' . $p['id_number'] . ' (' . $p['patient_type'] . ' · ' . $p['course_section'] . ')') ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -196,30 +191,7 @@ render_header('Add APE Record');
                     <label class="clinic-label">Academic Year</label>
                     <input class="clinic-input" name="academic_year" value="<?= e($academicYear) ?>" placeholder="2026-2027" required>
                 </div>
-                <div>
-                    <label class="clinic-label">Workflow Status</label>
-                    <select class="clinic-select" name="workflow_status">
-                        <?php foreach (ape_workflow_status_options() as $step): ?>
-                            <option value="<?= e($step) ?>" <?= $step === 'Registered' ? 'selected' : '' ?>><?= e($step) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div>
-                    <label class="clinic-label">Requirement Status</label>
-                    <select class="clinic-select" name="requirement_status">
-                        <?php foreach (ape_requirement_status_options() as $status): ?>
-                            <option value="<?= e($status) ?>"><?= e($status) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div>
-                    <label class="clinic-label">Clinic Review Status</label>
-                    <select class="clinic-select" name="verification_status">
-                        <?php foreach (ape_verification_status_options() as $status): ?>
-                            <option value="<?= e($status) ?>"><?= e($status) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
+                <p class="md:col-span-2 text-xs font-bold text-slate-500 mb-0">This entry is clinic-managed: its submitted document is marked verified and no patient-side APE action is created.</p>
             </div>
         </section>
 
@@ -239,7 +211,7 @@ render_header('Add APE Record');
                 </div>
                 <div>
                     <label class="clinic-label">Exam Date</label>
-                    <input class="clinic-input" name="exam_date" type="date">
+                    <input class="clinic-input" name="exam_date" type="date" required>
                 </div>
                 <div>
                     <label class="clinic-label">Clearance Status</label>
@@ -277,7 +249,7 @@ render_header('Add APE Record');
                 </div>
                 <div>
                     <label class="clinic-label">Document File (PDF/Image)</label>
-                    <input class="clinic-input" name="document" type="file" accept=".pdf,.jpg,.jpeg,.png">
+                    <input class="clinic-input" name="document" type="file" accept=".pdf,.jpg,.jpeg,.png" required>
                 </div>
             </div>
         </section>
@@ -286,8 +258,8 @@ render_header('Add APE Record');
             <h2 class="font-headline text-xl font-extrabold text-[#1c2a59] mb-4">Clinic Remarks</h2>
             <div class="grid grid-cols-1 gap-5">
                 <div>
-                    <label class="clinic-label">Private Clinical Remarks</label>
-                    <textarea class="clinic-textarea" name="clinical_remarks" rows="5" placeholder="Visible to authorized clinic staff only. Use for findings, treatment monitoring, and internal follow-up notes."></textarea>
+                    <label class="clinic-label">Findings</label>
+                    <textarea class="clinic-textarea" name="clinical_remarks" rows="5" placeholder="Record the examination findings and clinic decision." required></textarea>
                 </div>
                 <div>
                     <label class="clinic-label">Patient-Visible Note</label>

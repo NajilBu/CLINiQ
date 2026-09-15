@@ -193,7 +193,7 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
                     <select class="clinic-input" id="patient_type" name="patient_type" required>
                         <option value="student" <?= $selectedPatientType === 'student' ? 'selected' : '' ?>>Student</option>
                         <option value="faculty" <?= $selectedPatientType === 'faculty' ? 'selected' : '' ?>>Faculty</option>
-                        <option value="school_personnel" <?= $selectedPatientType === 'school_personnel' ? 'selected' : '' ?>>School Personnel</option>
+                        <option value="school_personnel" <?= $selectedPatientType === 'school_personnel' ? 'selected' : '' ?>>Non-Teaching Personnel (NTP)</option>
                     </select>
                 </div>
                 <div>

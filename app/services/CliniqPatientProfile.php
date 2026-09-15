@@ -255,7 +255,7 @@ function cliniq_patient_profile_update(int $personId, array $data): array
                 SET program_id = ?, year_level = ?, section = ?, academic_year = ?
                 WHERE person_id = ?
             ')->execute([$programId, $yearLevel, $section, $academicYear !== '' ? $academicYear : null, $personId]);
-        } elseif (in_array($profile['patient_type'], ['Faculty', 'School Personnel'], true)) {
+        } elseif (in_array($profile['patient_type'], ['Faculty', 'Non-Teaching Personnel'], true)) {
             $departmentId = (int) ($data['department_id'] ?? 0);
             $employmentType = trim((string) ($data['employment_type'] ?? ''));
             $positionTitle = trim((string) ($data['position_title'] ?? ''));

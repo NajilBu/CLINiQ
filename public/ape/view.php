@@ -354,7 +354,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!empty($record['exam_date'])) {
                 throw new RuntimeException('This examination has already been saved and is locked. Use the separate document review to resolve outstanding requirements.');
             }
-            if (!ape_schedule_is_current($record)) {
+            if (!ape_examination_is_available($record)) {
                 throw new RuntimeException('The examination can only be recorded during the patient’s assigned APE schedule.');
             }
             if (!in_array(($record['workflow_status'] ?? ''), ['Registered', 'Batch Assigned', 'Requirements Checked', 'Scheduled', 'Exam Done', 'Submitted', 'Reviewed', 'Follow-up Required'], true) || (!empty($record['exam_date']) && ($record['requirement_status'] ?? '') === 'Checked')) {
@@ -634,7 +634,7 @@ foreach ($reviewDocuments as $document) {
 $reviewDocuments = array_values($latestReviewDocuments);
 $reviewGroupNeedsCorrection = (bool) array_filter($reviewDocuments, static fn(array $document): bool => $document['verification_status'] === 'Needs Correction');
 $pendingReviewDocuments = array_values(array_filter($reviewDocuments, static fn(array $document): bool => $document['verification_status'] === 'Pending'));
-$showExamForm = !$examSaved && !$apeIsCompleted && $canRecordApeExam && ape_schedule_is_current($record);
+$showExamForm = !$examSaved && !$apeIsCompleted && $canRecordApeExam && ape_examination_is_available($record);
 $savedExam = $findings[0] ?? [];
 $savedExamResult = (string) ($savedExam['result_status'] ?? '');
 $hardCopyReviewMode = match ($record['requirement_status'] ?? '') {
@@ -1163,7 +1163,7 @@ render_header('APE Record - ' . $fullName);
                             </div>
                         </div>
                     </div>
-                <?php elseif (!ape_schedule_is_current($record)): ?>
+                <?php elseif (!ape_examination_is_available($record)): ?>
                     <div class="ape-flow-action muted">
                         <div class="flex items-start gap-3">
                             <span class="material-symbols-outlined text-amber-700 mt-0.5">schedule</span>

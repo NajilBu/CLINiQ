@@ -140,7 +140,7 @@ if ($patient['patient_type'] === 'Student') {
         ($patient['section'] ?? '') !== '' ? 'Section ' . strtoupper((string) $patient['section']) : '',
         $patient['academic_year'] ?? '',
     ]))) ?: 'Not specified';
-} elseif (in_array($patient['patient_type'], ['Faculty', 'School Personnel'], true)) {
+} elseif (in_array($patient['patient_type'], ['Faculty', 'Non-Teaching Personnel'], true)) {
     $affiliationLabel = 'Department';
     $affiliationValue = trim(implode(' — ', array_filter([
         $patient['employee_department_code'] ?? '',

@@ -293,7 +293,7 @@ $apeActionTitle = match (true) {
     $apeQueue === 'follow_up' && !ape_document_follow_up($latestApe) && !ape_deferred_submission_complete($latestApe) => 'Submit follow-up documents for archive review',
     $apeRequirementsNeedCorrection => 'Return corrected hard-copy requirements',
     $apeStatus === 'Follow-up Required' => 'Complete the required follow-up',
-    $apeQueue === 'examination' => ape_schedule_is_current($latestApe ?? []) ? 'Attend examination' : 'Wait for your APE schedule',
+    $apeQueue === 'examination' => ape_examination_is_available($latestApe ?? []) ? 'Attend examination' : 'Wait for your APE schedule',
     $apeDocumentsAwaitingReview => 'Wait for clinic document review',
     $apeStatus === 'Reviewed' => 'Wait for the final clinical decision',
     default => 'Upload verified APE documents',
@@ -308,7 +308,7 @@ $apeActionCopy = match (true) {
     $apeQueue === 'follow_up' && !ape_document_follow_up($latestApe) && !ape_deferred_submission_complete($latestApe) => 'The initial group is archived. Upload the returned documents by their assigned due date and wait for clinic archive review.',
     $apeRequirementsNeedCorrection => $apeNote ?: 'Return the corrected hard-copy requirements requested by the clinic.',
     $apeStatus === 'Follow-up Required' => $apeNote ?: 'Complete the referral or other follow-up requested by the clinic.',
-    $apeQueue === 'examination' => ape_schedule_is_current($latestApe ?? [])
+    $apeQueue === 'examination' => ape_examination_is_available($latestApe ?? [])
         ? "Attend {$latestApe['batch_name']} now and bring any available hard-copy requirements."
         : 'Continue early digital uploads while waiting for the clinic to assign or open your examination schedule.',
     $apeDocumentsAwaitingReview => 'Your documents are waiting for clinic archive review.',

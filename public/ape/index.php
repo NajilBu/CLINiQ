@@ -8,9 +8,13 @@ ensure_ape_workflow_schema();
 
 $activeQueue = $_GET['queue'] ?? 'digital_submission';
 $search = trim($_GET['q'] ?? '');
+$populationScope = strtolower(trim((string) ($_GET['population'] ?? 'students'))) === 'faculty_ntp'
+    ? 'faculty_ntp'
+    : 'students';
 $queues = ape_work_queues();
 
 $activeApeCycle = ape_cycle_current();
+$apeUser = current_user() ?? [];
 $schoolYearBatches = [];
 $scheduledBatchesById = [];
 if (($activeApeCycle['status'] ?? '') === 'Active') {
@@ -33,7 +37,7 @@ $requestedBatchId = filter_input(INPUT_GET, 'batch', FILTER_VALIDATE_INT, [
     'options' => ['min_range' => 1],
 ]);
 $selectedBatchId = null;
-if (!$overallRequested) {
+if ($populationScope === 'students' && !$overallRequested) {
     if ($requestedBatchId && isset($scheduledBatchesById[(int) $requestedBatchId])) {
         $selectedBatchId = (int) $requestedBatchId;
     } elseif ($earliestUpcomingBatch !== null) {
@@ -45,6 +49,10 @@ $isOverallView = $selectedBatch === null;
 
 $overallRecords = ape_fetch_records();
 $scopeRecords = ape_fetch_records($search, null, null, $selectedBatchId);
+$scopeRecords = array_values(array_filter($scopeRecords, static function (array $record) use ($populationScope): bool {
+    $isClinicManual = ($record['entry_mode'] ?? '') === 'Clinic Manual';
+    return $populationScope === 'faculty_ntp' ? $isClinicManual : !$isClinicManual;
+}));
 $batchProgress = ape_batch_progress($schoolYearBatches === [] ? [] : $overallRecords);
 $allRecords = $scopeRecords;
 $batchIndicator = $selectedBatch !== null
@@ -58,9 +66,13 @@ $batchIndicator = $selectedBatch !== null
     : 'Overall';
 $scopeDescription = $selectedBatch !== null
     ? 'All queues and totals show only patients assigned to ' . (string) $selectedBatch['batch_name'] . '. Choose Overall to show every batch.'
-    : 'All queues and totals show records from every batch.';
-$scopeCountLabel = $selectedBatch !== null ? 'Selected batch' : 'Overall records';
-$batchQuerySuffix = $selectedBatchId !== null ? '&batch=' . $selectedBatchId : '&scope=overall';
+    : ($populationScope === 'faculty_ntp'
+        ? 'All queues and totals show clinic-manual Faculty and NTP records only.'
+        : 'All queues and totals show student records from every batch.');
+$scopeCountLabel = $populationScope === 'faculty_ntp' ? 'Faculty & NTP records' : ($selectedBatch !== null ? 'Selected batch' : 'Student records');
+$batchQuerySuffix = $populationScope === 'faculty_ntp'
+    ? '&scope=overall&population=faculty_ntp'
+    : ($selectedBatchId !== null ? '&batch=' . $selectedBatchId : '&scope=overall');
 
 $recordsByQueue = array_fill_keys(array_keys($queues), []);
 foreach ($allRecords as $record) {
@@ -110,7 +122,6 @@ $apeQueueColumns = [
 
 render_header('APE Work Queues');
 
-$apeUser = current_user() ?? [];
 $apeDisplayName = trim((string) ($apeUser['name'] ?? '')) ?: 'Nurse';
 $apeHeaderActions = ''
     . '<div class="bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-4 min-w-[140px]">'
@@ -135,11 +146,11 @@ render_clinic_command_header(
 ?>
 
 <?php if (count($overdueRecords) > 0): ?>
-<div class="bg-red-50 border border-red-200 rounded-2xl p-1 mb-8">
-    <div class="px-5 py-4 text-red-700 flex items-center gap-2 border-b border-red-100/50">
-        <span class="material-symbols-outlined text-[18px]">error</span>
-        <h2 class="font-headline font-extrabold text-sm m-0"><?= count($overdueRecords) ?> patient(s) need immediate attention</h2>
-    </div>
+<details class="bg-red-50 border border-red-200 rounded-2xl mb-8 group">
+    <summary class="px-5 py-4 text-red-700 flex items-center justify-between gap-3 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+        <span class="flex items-center gap-2"><span class="material-symbols-outlined text-[18px]">error</span><h2 class="font-headline font-extrabold text-sm m-0"><?= count($overdueRecords) ?> patient(s) need immediate attention</h2></span>
+        <span class="material-symbols-outlined text-[20px] transition-transform group-open:rotate-180">expand_more</span>
+    </summary>
     <div class="divide-y divide-red-100/50">
         <?php foreach (array_slice($overdueRecords, 0, 5) as $rec): 
             $fullName = trim($rec['first_name'] . ' ' . $rec['last_name']);
@@ -174,23 +185,27 @@ render_clinic_command_header(
             </div>
         <?php endforeach; ?>
     </div>
-</div>
+</details>
 <?php endif; ?>
 
 <section class="clinic-card p-6">
     <form method="get">
-    <div class="flex flex-col lg:flex-row justify-between gap-4 lg:items-center mb-5">
-        <div>
+    <div class="flex flex-col gap-4 mb-5">
+        <div class="min-w-0">
             <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Work Queue Map</h2>
             <p class="text-xs font-bold text-slate-500 mb-0"><?= e($scopeDescription) ?></p>
         </div>
-        <div class="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
+        <div class="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 w-full">
             <?php if (in_array($apeUser['role'] ?? '', ['admin', 'doctor'], true)): ?>
                 <a href="scheduling.php" class="btn btn-outline w-full sm:w-auto justify-center text-decoration-none">
                     <span class="material-symbols-outlined text-[18px]">calendar_month</span>
                     Manage Scheduling
                 </a>
             <?php endif; ?>
+            <div class="flex rounded-xl border border-outline-variant overflow-hidden w-full sm:w-auto" role="group" aria-label="APE population">
+                <a href="?<?= e(http_build_query(['queue' => $activeQueue, 'scope' => 'overall', 'population' => 'students'])) ?>" class="px-4 py-3 text-sm font-extrabold text-decoration-none whitespace-nowrap <?= $populationScope === 'students' ? 'bg-primary text-white' : 'bg-white text-slate-700 hover:bg-slate-50' ?>">Students</a>
+                <a href="?<?= e(http_build_query(['queue' => 'examination', 'scope' => 'overall', 'population' => 'faculty_ntp'])) ?>" class="px-4 py-3 text-sm font-extrabold text-decoration-none whitespace-nowrap border-l border-outline-variant <?= $populationScope === 'faculty_ntp' ? 'bg-primary text-white' : 'bg-white text-slate-700 hover:bg-slate-50' ?>">Faculty &amp; NTP</a>
+            </div>
             <button type="button" onclick="showModal('apeBatchPickerModal')" class="w-full sm:w-auto min-h-12 px-4 py-2 rounded-xl border border-outline-variant bg-primary-fixed flex items-center gap-3 text-left hover:border-primary transition-colors" title="<?= e($selectedBatch !== null ? 'All queues are filtered to this batch. Choose another batch or Overall.' : 'Overall view includes records from every batch.') ?>">
                 <span class="material-symbols-outlined text-primary text-[20px]">event_available</span>
                 <div class="min-w-0">
@@ -206,6 +221,7 @@ render_clinic_command_header(
             <?php if ($activeQueue !== 'all'): ?>
                 <input type="hidden" name="queue" value="<?= e($activeQueue) ?>">
             <?php endif; ?>
+            <input type="hidden" name="population" value="<?= e($populationScope) ?>">
             <?php if ($selectedBatchId !== null): ?>
                 <input type="hidden" name="batch" value="<?= (int) $selectedBatchId ?>">
             <?php else: ?>
@@ -323,7 +339,7 @@ render_clinic_command_header(
         </div>
 
         <?php
-        $defaultQuery = ['queue' => $activeQueue, 'scope' => 'overall'];
+        $defaultQuery = ['queue' => $activeQueue, 'scope' => 'overall', 'population' => $populationScope];
         if ($search !== '') {
             $defaultQuery['q'] = $search;
         }
@@ -407,6 +423,7 @@ render_clinic_command_header(
                     <option value="5">5</option>
                     <option value="10">10</option>
                     <option value="20">20</option>
+                    <option value="all">All batches</option>
                 </select>
             </label>
             <span id="apeBatchPickerRange" class="text-xs font-bold text-slate-500" role="status" aria-live="polite"></span>
@@ -429,17 +446,18 @@ render_clinic_command_header(
     const selectedIndex = cards.findIndex(card => card.dataset.selected === 'true');
     let page = Math.floor(Math.max(0, selectedIndex) / Number(limit.value));
     function render() {
-        const size = Number(limit.value);
+        const showAll = limit.value === 'all';
+        const size = showAll ? Math.max(cards.length, 1) : Number(limit.value);
         const pages = Math.max(1, Math.ceil(cards.length / size));
         page = Math.max(0, Math.min(page, pages - 1));
         const start = page * size;
         cards.forEach((card, index) => {
             card.style.display = index >= start && index < start + size ? '' : 'none';
         });
-        previous.disabled = page === 0;
-        next.disabled = page >= pages - 1;
+        previous.disabled = showAll || page === 0;
+        next.disabled = showAll || page >= pages - 1;
         limit.disabled = cards.length === 0;
-        document.getElementById('apeBatchPickerPage').textContent = `Page ${page + 1} of ${pages}`;
+        document.getElementById('apeBatchPickerPage').textContent = showAll ? 'All batches' : `Page ${page + 1} of ${pages}`;
         document.getElementById('apeBatchPickerRange').textContent = cards.length
             ? `${start + 1}–${Math.min(start + size, cards.length)} of ${cards.length} batches`
             : '0 batches';

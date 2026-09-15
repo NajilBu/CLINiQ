@@ -3,6 +3,10 @@ require_once __DIR__ . '/includes/patient-layout.php';
 require_once __DIR__ . '/../app/services/ApeWorkflow.php';
 
 $profile = student_require_login();
+if (($profile['account_type'] ?? '') !== 'student') {
+    http_response_code(403);
+    exit('APE self-service is available to students only. Faculty and Non-Teaching Personnel APEs are completed by clinic staff.');
+}
 $patientId = (int) $profile['person_id'];
 ensure_ape_workflow_schema();
 $apeRecord = ape_fetch_patient_record($patientId);
@@ -10,6 +14,7 @@ $uploadError = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'upload_ape_documents') {
     $storedFiles = [];
+    $filesCommitted = false;
     try {
         if (!$apeRecord) {
             throw new RuntimeException('The clinic must create your APE record before you can upload documents.');
@@ -132,16 +137,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
             implode(', ', array_keys($updatedRequirements))
         );
         $apeDb->commit();
+        $filesCommitted = true;
         header('Location: patient-ape-status.php?uploaded=' . count($storedFiles));
         exit;
     } catch (Throwable $e) {
         if (isset($apeDb) && $apeDb->inTransaction()) {
             $apeDb->rollBack();
         }
-        foreach ($storedFiles as $storedUpload) {
-            $storedFile = $storedUpload['file'] ?? [];
-            if (!empty($storedFile['absolute_path']) && is_file($storedFile['absolute_path'])) {
-                unlink($storedFile['absolute_path']);
+        if (!$filesCommitted) {
+            foreach ($storedFiles as $storedUpload) {
+                $storedFile = $storedUpload['file'] ?? [];
+                if (!empty($storedFile['absolute_path']) && is_file($storedFile['absolute_path'])) {
+                    unlink($storedFile['absolute_path']);
+                }
             }
         }
         $uploadError = $e->getMessage();
@@ -199,7 +207,7 @@ $nextActionTitle = match (true) {
     $apeQueue === 'follow_up' && !ape_document_follow_up($apeRecord) && !ape_deferred_submission_complete($apeRecord) => 'Submit follow-up documents for archive review',
     $requirementsNeedCorrection => 'Return corrected hard-copy requirements',
     $apeStatus === 'Follow-up Required' => 'Complete the required follow-up',
-    $apeQueue === 'examination' => ape_schedule_is_current($apeRecord) ? 'Attend examination' : 'Wait for your APE schedule',
+    $apeQueue === 'examination' => ape_examination_is_available($apeRecord) ? 'Attend examination' : 'Wait for your APE schedule',
     $documentsAwaitingReview => 'Wait for clinic document review',
     $apeStatus === 'Reviewed' => 'Wait for the final clinical decision',
     default => 'Upload verified APE documents',
@@ -214,7 +222,7 @@ $nextActionCopy = match (true) {
     $apeQueue === 'follow_up' && !ape_document_follow_up($apeRecord) && !ape_deferred_submission_complete($apeRecord) => 'Your initial documents are archived. Upload the returned documents by their assigned due date, then wait for clinic archive review.',
     $requirementsNeedCorrection => $studentNote ?: 'Return the corrected hard-copy requirements requested by the clinic.',
     $apeStatus === 'Follow-up Required' => $studentNote ?: 'Complete the referral or other follow-up requested by the clinic.',
-    $apeQueue === 'examination' => ape_schedule_is_current($apeRecord)
+    $apeQueue === 'examination' => ape_examination_is_available($apeRecord)
         ? "Attend {$apeRecord['batch_name']} now and bring any available hard-copy requirements."
         : 'Your digital files may be complete, but the clinic must still assign or open your examination schedule.',
     $documentsAwaitingReview => 'Your documents were submitted and are waiting for clinic archive review.',
@@ -232,7 +240,7 @@ $actionBadgeLabel = match (true) {
     $apeQueue === 'follow_up' => 'Follow-up Required',
     $requirementsNeedCorrection => 'Correction Needed',
     $apeStatus === 'Follow-up Required' => 'Follow-up Required',
-    $apeQueue === 'examination' => ape_schedule_is_current($apeRecord) ? 'Examination Now' : 'Waiting for Schedule',
+    $apeQueue === 'examination' => ape_examination_is_available($apeRecord) ? 'Examination Now' : 'Waiting for Schedule',
     $documentsAwaitingReview => 'Under Clinic Review',
     $apeStatus === 'Reviewed' => 'Final Decision Pending',
     default => 'Current Step',
@@ -249,7 +257,7 @@ $flowSteps = [
                 ? 'Complete regular uploads within seven days of examination.'
                 : 'Upload available documents now; incomplete files will not block examination.'),
         'done' => $digitalSubmissionComplete,
-        'current' => $apeQueue === 'digital_submission' && !ape_schedule_is_current($apeRecord ?? []),
+        'current' => $apeQueue === 'digital_submission' && !ape_examination_is_available($apeRecord ?? []),
     ],
     [
         'number' => 2,

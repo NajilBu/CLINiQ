@@ -88,7 +88,7 @@ function build_system_report(string $dateFrom, string $dateTo, array $modules): 
         $visitCount = system_report_scalar($newDb, 'SELECT COUNT(*) FROM visits WHERE DATE(visit_datetime) BETWEEN ? AND ?', $range);
         $sections['visits'] = [
             'title' => 'Visits',
-            'description' => 'Clinic visit activity in the current workflow: Unaddressed means the patient arrived but has not been attended, Active means treatment has started, and Completed means the visit was ended. The APE charts below summarize APE records separately and are not included in visit counts.',
+            'description' => 'Visit activity for the selected period. APE records are reported separately.',
             'metrics' => [
                 system_report_metric('Visits', $visitCount),
                 system_report_metric('Unaddressed', system_report_scalar($newDb, "SELECT COUNT(*) FROM visits WHERE status = 'Unaddressed' AND DATE(visit_datetime) BETWEEN ? AND ?", $range)),
@@ -133,12 +133,12 @@ function build_system_report(string $dateFrom, string $dateTo, array $modules): 
         $registeredPatientsSql = 'SELECT person_id AS patient_person_id FROM patients';
         $sections['demographics'] = [
             'title' => 'Patient Demographics',
-            'description' => 'All registered patient profiles are included, whether or not the patient visited the clinic during the selected period. Students, faculty, school personnel, clinic staff, and other patients are each counted once. Age is calculated at the period end from the recorded birthdate. Recorded sex comes from the patient profile and is not a gender-identity field.',
+            'description' => 'All registered patients, counted once. Age uses the recorded birthdate at period end; recorded sex comes from the patient profile.',
             'metrics' => [
                 system_report_metric('Registered Patients', system_report_scalar($newDb, "SELECT COUNT(*) FROM ({$registeredPatientsSql}) registered")),
                 system_report_metric('Students', system_report_scalar($newDb, "SELECT COUNT(*) FROM ({$registeredPatientsSql}) registered JOIN students s ON s.person_id = registered.patient_person_id")),
                 system_report_metric('Faculty', system_report_scalar($newDb, "SELECT COUNT(*) FROM ({$registeredPatientsSql}) registered JOIN school_employees se ON se.person_id = registered.patient_person_id WHERE se.role_classification = 'Faculty'")),
-                system_report_metric('Personnel', system_report_scalar($newDb, "SELECT COUNT(*) FROM ({$registeredPatientsSql}) registered JOIN school_employees se ON se.person_id = registered.patient_person_id WHERE se.role_classification = 'School Personnel'")),
+                system_report_metric('NTP', system_report_scalar($newDb, "SELECT COUNT(*) FROM ({$registeredPatientsSql}) registered JOIN school_employees se ON se.person_id = registered.patient_person_id WHERE se.role_classification = 'Non-Teaching Personnel'")),
                 system_report_metric('Birthdate Recorded', system_report_scalar($newDb, "SELECT COUNT(*) FROM ({$registeredPatientsSql}) registered JOIN people p ON p.id = registered.patient_person_id WHERE p.birthdate IS NOT NULL AND p.birthdate <= ?", [$dateTo])),
                 system_report_metric('Sex Recorded', system_report_scalar($newDb, "SELECT COUNT(*) FROM ({$registeredPatientsSql}) registered JOIN people p ON p.id = registered.patient_person_id WHERE NULLIF(p.sex, '') IS NOT NULL")),
             ],
@@ -171,7 +171,7 @@ function build_system_report(string $dateFrom, string $dateTo, array $modules): 
                 system_report_chart('Patients by Type', system_report_rows($newDb, "
                     SELECT CASE
                         WHEN s.person_id IS NOT NULL THEN 'Student'
-                        WHEN se.role_classification = 'School Personnel' THEN 'Personnel'
+                        WHEN se.role_classification = 'Non-Teaching Personnel' THEN 'NTP'
                         WHEN se.person_id IS NOT NULL THEN se.role_classification
                         WHEN cs.person_id IS NOT NULL THEN 'Clinic Staff'
                         ELSE 'Other Patient'
@@ -192,7 +192,7 @@ function build_system_report(string $dateFrom, string $dateTo, array $modules): 
                 ")),
                 system_report_chart('Faculty and Personnel by Department', system_report_rows($newDb, "
                     SELECT CONCAT(
-                        CASE WHEN se.role_classification = 'School Personnel' THEN 'Personnel' ELSE se.role_classification END,
+                        CASE WHEN se.role_classification = 'Non-Teaching Personnel' THEN 'NTP' ELSE se.role_classification END,
                         ' - ', COALESCE(NULLIF(d.department_name, ''), 'Not specified')
                     ) label, COUNT(*) value
                     FROM ({$registeredPatientsSql}) registered
@@ -230,7 +230,7 @@ function build_system_report(string $dateFrom, string $dateTo, array $modules): 
     if (in_array('inventory', $modules, true)) {
         $sections['inventory'] = [
             'title' => 'Inventory',
-            'description' => 'Combined medicine and equipment activity, including stock levels, low-stock monitoring, medicine dispensing, inventory movement, equipment borrowing, returns, and overdue loans.',
+            'description' => 'Medicine and equipment stock, dispensing, borrowing, returns, and overdue loans.',
             'metrics' => [
                 system_report_metric('Active Medicine', system_report_scalar($newDb, "SELECT COUNT(*) FROM inventory_items WHERE is_active = 1 AND item_type = 'Medicine'")),
                 system_report_metric('Active Equipment', system_report_scalar($newDb, "SELECT COUNT(*) FROM inventory_items WHERE is_active = 1 AND item_type = 'Equipment'")),
@@ -257,7 +257,7 @@ function build_system_report(string $dateFrom, string $dateTo, array $modules): 
     if (in_array('referrals', $modules, true)) {
         $sections['referrals'] = [
             'title' => 'Referrals',
-            'description' => 'Patient referrals created immediately during APE examination, consultation, emergency handling, or other clinic encounters.',
+            'description' => 'Referrals created during APE, consultations, emergencies, and clinic visits.',
             'metrics' => [
                 system_report_metric('Referrals', system_report_scalar($newDb, 'SELECT COUNT(*) FROM referrals WHERE DATE(referral_date) BETWEEN ? AND ?', $range)),
                 system_report_metric('Completed', system_report_scalar($newDb, "SELECT COUNT(*) FROM referrals WHERE status = 'Completed' AND DATE(referral_date) BETWEEN ? AND ?", $range)),
@@ -276,7 +276,7 @@ function build_system_report(string $dateFrom, string $dateTo, array $modules): 
     if (in_array('alerts', $modules, true)) {
         $sections['alerts'] = [
             'title' => 'Alerts and Incidents',
-            'description' => 'Nurse alerts, incident reports, emergency risk assessment, passport access, and resolution status in the selected period.',
+            'description' => 'Alerts, incidents, emergency risk, passport access, and resolution status.',
             'metrics' => [
                 system_report_metric('Alerts', system_report_scalar($newDb, 'SELECT COUNT(*) FROM nurse_alerts WHERE DATE(created_at) BETWEEN ? AND ?', $range)),
                 system_report_metric('Incident Reports', system_report_scalar($newDb, 'SELECT COUNT(*) FROM incident_reports WHERE DATE(reported_at) BETWEEN ? AND ?', $range)),
@@ -318,7 +318,7 @@ function build_system_report(string $dateFrom, string $dateTo, array $modules): 
 
         $sections['feedback'] = [
             'title' => 'Clinic Feedback',
-            'description' => 'Anonymous student service evaluations summarized using the five SERVPERF dimensions and the selected reporting period.',
+            'description' => 'Anonymous student evaluations across five SERVPERF dimensions.',
             'metrics' => [
                 system_report_metric('Responses', system_report_scalar($newDb, 'SELECT COUNT(*) FROM clinic_feedback WHERE DATE(submitted_at) BETWEEN ? AND ?', $range)),
                 system_report_metric('Average Overall Score', system_report_scalar($newDb, 'SELECT COALESCE(AVG(overall), 0) FROM clinic_feedback WHERE DATE(submitted_at) BETWEEN ? AND ?', $range), 'out of 7', 2),

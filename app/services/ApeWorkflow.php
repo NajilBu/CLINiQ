@@ -211,7 +211,7 @@ function ape_record_queue(array $record): string
     }
 
     // The assigned examination window takes priority and is never blocked by uploads.
-    if (empty($record['exam_date']) && ape_schedule_is_current($record)) {
+    if (empty($record['exam_date']) && ape_examination_is_available($record)) {
         return 'examination';
     }
 
@@ -262,7 +262,7 @@ function ape_batch_progress(array $records): array
 function ape_next_action(array $record): array
 {
     return match (ape_record_queue($record)) {
-        'examination' => ape_schedule_is_current($record)
+        'examination' => ape_examination_is_available($record)
             ? ['label' => 'Record Examination', 'icon' => 'stethoscope']
             : ['label' => 'Assign APE Schedule', 'icon' => 'calendar_add_on'],
         'digital_submission' => !ape_initial_uploads_present($record)
@@ -318,6 +318,12 @@ function ape_schedule_is_current(array $record, ?DateTimeImmutable $now = null):
     }
 
     return $current >= $startsAt && $current <= $endsAt;
+}
+
+function ape_examination_is_available(array $record, ?DateTimeImmutable $now = null): bool
+{
+    return ($record['entry_mode'] ?? '') === 'Clinic Manual'
+        || ape_schedule_is_current($record, $now);
 }
 
 function ape_earliest_upcoming_batch(array $batches, ?DateTimeImmutable $now = null): ?array
@@ -467,8 +473,8 @@ function ape_next_action_card(array $record): array
 {
     return match (ape_record_queue($record)) {
         'examination' => [
-            'title' => ape_schedule_is_current($record) ? 'Record the examination' : 'Assign this patient to an APE batch',
-            'body' => ape_schedule_is_current($record) ? 'Enter the examination result even if digital documents are incomplete, and check any hard copies the patient brings.' : 'Digital uploads may continue while the patient waits for an assigned examination schedule.',
+            'title' => ape_examination_is_available($record) ? 'Record the examination' : 'Assign this patient to an APE batch',
+            'body' => ape_examination_is_available($record) ? 'Enter the examination result even if digital documents are incomplete, and check any hard copies the patient brings.' : 'Digital uploads may continue while the patient waits for an assigned examination schedule.',
         ],
         'digital_submission' => !ape_initial_uploads_present($record)
             ? [
@@ -510,7 +516,7 @@ function ape_missing_item(array $record): string
             : (empty($record['exam_date']) ? 'Uploads ready for examination review' : 'Online documents waiting for archive review');
     }
     if ($queue === 'examination') {
-        return ape_schedule_is_current($record) ? 'Ready for examination' : 'Waiting for assigned APE schedule';
+        return ape_examination_is_available($record) ? 'Ready for examination' : 'Waiting for assigned APE schedule';
     }
     if (($record['requirement_status'] ?? '') === 'Not Checked') {
         return 'Waiting for follow-up hard-copy documents';

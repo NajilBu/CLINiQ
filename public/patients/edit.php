@@ -107,7 +107,7 @@ render_clinic_command_header(
                 <label class="clinic-label">Academic Year</label>
                 <input class="clinic-input" name="academic_year" value="<?= e($patient['academic_year']) ?>" placeholder="e.g. 2026-2027">
             </div>
-        <?php elseif (in_array($patient['patient_type'], ['Faculty', 'School Personnel'], true)): ?>
+        <?php elseif (in_array($patient['patient_type'], ['Faculty', 'Non-Teaching Personnel'], true)): ?>
             <div>
                 <label class="clinic-label">Department</label>
                 <select class="clinic-select" name="department_id" required>

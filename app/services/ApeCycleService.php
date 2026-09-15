@@ -154,6 +154,7 @@ function start_ape_cycle(string $academicYear, string $complianceStart, string $
             SELECT ?, pt.person_id, ?
             FROM patients pt
             INNER JOIN accounts a ON a.person_id = pt.person_id
+            INNER JOIN students s ON s.person_id = pt.person_id
             WHERE a.account_status = 'active'
         ");
         $insertRecords->execute([$cycleId, $academicYear]);
@@ -162,6 +163,7 @@ function start_ape_cycle(string $academicYear, string $complianceStart, string $
         $adoptRecords = $db->prepare("
             UPDATE ape_records ar
             INNER JOIN accounts a ON a.person_id = ar.patient_id AND a.account_status = 'active'
+            INNER JOIN students s ON s.person_id = ar.patient_id
             SET ar.ape_cycle_id = ?
             WHERE ar.academic_year = ? AND ar.ape_cycle_id IS NULL
         ");
@@ -347,7 +349,57 @@ function update_ape_cycle_schedule(int $cycleId, string $examScheduleDate): void
 
 function ape_schedule_batch_categories(): array
 {
-    return ['Student', 'Faculty', 'School Personnel'];
+    return ['Student'];
+}
+
+function populate_manual_ape_records_for_staff(int $cycleId, ?int $actorPersonId): int
+{
+    ensure_ape_cycle_schema();
+    $cycle = ape_cycle_fetch($cycleId);
+    if (($cycle['status'] ?? '') !== 'Active') {
+        throw new InvalidArgumentException('Faculty and NTP records can be populated only for an active APE cycle.');
+    }
+
+    $db = auth_db();
+    $db->beginTransaction();
+    try {
+        $candidates = $db->prepare("
+            SELECT pt.person_id
+            FROM patients pt
+            JOIN accounts a ON a.person_id = pt.person_id AND a.account_status = 'active'
+            JOIN school_employees se ON se.person_id = pt.person_id
+            LEFT JOIN ape_records ar ON ar.patient_id = pt.person_id AND ar.academic_year = ?
+            WHERE se.role_classification IN ('Faculty', 'Non-Teaching Personnel')
+              AND ar.ape_id IS NULL
+            FOR UPDATE
+        ");
+        $candidates->execute([(string) $cycle['academic_year']]);
+        $personIds = array_map(static fn(array $row): int => (int) $row['person_id'], $candidates->fetchAll());
+
+        $insert = $db->prepare("
+            INSERT INTO ape_records (ape_cycle_id, patient_id, academic_year, entry_mode, workflow_status, requirement_status)
+            VALUES (?, ?, ?, 'Clinic Manual', 'Registered', 'Not Checked')
+        ");
+        $seedRequirement = $db->prepare("INSERT IGNORE INTO ape_requirements (ape_id, requirement_name, status, upload_group) VALUES (?, ?, 'Missing', 'initial')");
+        $log = $db->prepare("INSERT INTO ape_activity_logs (ape_id, performed_by_person_id, action, notes) VALUES (?, ?, 'Faculty/NTP APE record populated', ?)");
+        $created = 0;
+        foreach ($personIds as $personId) {
+            $insert->execute([$cycleId, $personId, (string) $cycle['academic_year']]);
+            $apeId = (int) $db->lastInsertId();
+            foreach (ape_default_requirements() as $requirement) {
+                $seedRequirement->execute([$apeId, $requirement]);
+            }
+            $log->execute([$apeId, $actorPersonId, 'Clinic-manual record created for the active APE cycle.']);
+            $created++;
+        }
+        $db->commit();
+        return $created;
+    } catch (Throwable $exception) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        throw $exception;
+    }
 }
 
 function normalize_ape_batch_time(string $value, string $label): string
@@ -421,29 +473,19 @@ function ape_schedule_candidates(int $cycleId): array
         SELECT ar.ape_id,
                p.id_number,
                TRIM(CONCAT_WS(' ', p.first_name, p.middle_name, p.last_name)) AS patient_name,
-               CASE
-                   WHEN s.person_id IS NOT NULL THEN 'Student'
-                   WHEN se.role_classification = 'Faculty' THEN 'Faculty'
-                   ELSE 'School Personnel'
-               END AS patient_category,
+                'Student' AS patient_category,
                COALESCE(pr.program_code, '') AS program_code,
                COALESCE(s.year_level, '') AS year_level,
-               COALESCE(s.section, '') AS section,
-               COALESCE(d.department_code, staff_department.department_code, '') AS department_code,
-               COALESCE(d.department_name, staff_department.department_name, '') AS department_name
+               COALESCE(s.section, '') AS section
         FROM ape_records ar
         JOIN patients pt ON pt.person_id = ar.patient_id
         JOIN people p ON p.id = pt.person_id
         JOIN accounts a ON a.person_id = pt.person_id AND a.account_status = 'active'
-        LEFT JOIN students s ON s.person_id = pt.person_id
+         INNER JOIN students s ON s.person_id = pt.person_id
         LEFT JOIN programs pr ON pr.id = s.program_id
-        LEFT JOIN school_employees se ON se.person_id = pt.person_id
-        LEFT JOIN departments d ON d.id = se.department_id
-        LEFT JOIN clinic_staff cs ON cs.person_id = pt.person_id
-        LEFT JOIN departments staff_department ON staff_department.id = cs.department_id
         WHERE ar.ape_cycle_id = ?
           AND ar.schedule_batch_id IS NULL
-        ORDER BY patient_category, p.last_name, p.first_name, ar.ape_id
+         ORDER BY p.last_name, p.first_name, ar.ape_id
     ");
     $stmt->execute([$cycleId]);
     return $stmt->fetchAll();
@@ -454,23 +496,12 @@ function ape_schedule_candidate_groups(int $cycleId): array
     $groups = [];
     foreach (ape_schedule_candidates($cycleId) as $candidate) {
         $category = (string) $candidate['patient_category'];
-        if ($category === 'Student') {
-            $program = trim((string) $candidate['program_code']) ?: 'No Program';
-            $year = trim((string) $candidate['year_level']) ?: 'No Year';
-            $section = trim((string) $candidate['section']) ?: 'No Section';
-            $identity = [$category, $program, $year, $section];
-            $label = $program . ' • Year ' . $year . ' • Section ' . $section;
-            $detail = 'Complete student section';
-        } else {
-            $departmentCode = trim((string) $candidate['department_code']);
-            $departmentName = trim((string) $candidate['department_name']);
-            $office = $departmentCode ?: ($departmentName ?: 'Unassigned Office');
-            $identity = [$category, $office];
-            $label = $office;
-            $detail = $departmentName !== '' && $departmentName !== $departmentCode
-                ? $departmentName
-                : $category . ' department or office';
-        }
+        $program = trim((string) $candidate['program_code']) ?: 'No Program';
+        $year = trim((string) $candidate['year_level']) ?: 'No Year';
+        $section = trim((string) $candidate['section']) ?: 'No Section';
+        $identity = [$category, $program, $year, $section];
+        $label = $program . ' • Year ' . $year . ' • Section ' . $section;
+        $detail = 'Complete student section';
 
         $key = strtolower(str_replace(' ', '_', $category)) . ':' . hash('sha256', implode("\0", $identity));
         if (!isset($groups[$key])) {
@@ -503,7 +534,7 @@ function create_ape_schedule_batch(array $input, ?int $actorPersonId): array
     ensure_ape_cycle_schema();
     $cycleId = (int) ($input['ape_cycle_id'] ?? 0);
     $batchName = trim((string) ($input['batch_name'] ?? ''));
-    $category = trim((string) ($input['patient_category'] ?? ''));
+    $category = 'Student';
     $scheduleDate = normalize_ape_cycle_date((string) ($input['schedule_date'] ?? ''), 'batch schedule');
     $startTime = normalize_ape_batch_time((string) ($input['start_time'] ?? ''), 'start time');
     $endTime = normalize_ape_batch_time((string) ($input['end_time'] ?? ''), 'end time');
@@ -516,9 +547,6 @@ function create_ape_schedule_batch(array $input, ?int $actorPersonId): array
     if ($batchName === '' || mb_strlen($batchName) > 120) {
         throw new InvalidArgumentException('Enter a batch name up to 120 characters.');
     }
-    if (!in_array($category, ape_schedule_batch_categories(), true)) {
-        throw new InvalidArgumentException('Select Student, Faculty, or School Personnel for this batch.');
-    }
     if ($startTime >= $endTime) {
         throw new InvalidArgumentException('The batch end time must be later than its start time.');
     }
@@ -526,7 +554,7 @@ function create_ape_schedule_batch(array $input, ?int $actorPersonId): array
         throw new InvalidArgumentException('Enter a patient limit from 1 to 5000.');
     }
     if (!$selectedGroupKeys) {
-        throw new InvalidArgumentException('Select at least one section, department, or office for this batch.');
+        throw new InvalidArgumentException('Select at least one student section for this batch.');
     }
 
     $availableGroups = [];
@@ -537,10 +565,7 @@ function create_ape_schedule_batch(array $input, ?int $actorPersonId): array
     foreach ($selectedGroupKeys as $groupKey) {
         $group = $availableGroups[$groupKey] ?? null;
         if (!$group) {
-            throw new RuntimeException('A selected section, department, or office is no longer available.');
-        }
-        if (($group['patient_category'] ?? '') !== $category) {
-            throw new InvalidArgumentException('A batch cannot mix Students, Faculty, and School Personnel.');
+            throw new RuntimeException('A selected student section is no longer available.');
         }
         $selectedIds = array_merge($selectedIds, $group['ape_ids']);
     }
@@ -625,18 +650,13 @@ function create_ape_schedule_batch(array $input, ?int $actorPersonId): array
 
         $placeholders = implode(',', array_fill(0, count($selectedIds), '?'));
         $candidate = $db->prepare("
-            SELECT ar.ape_id, ar.patient_id,
-                   CASE
-                       WHEN s.person_id IS NOT NULL THEN 'Student'
-                       WHEN se.role_classification = 'Faculty' THEN 'Faculty'
-                       ELSE 'School Personnel'
-                   END AS patient_category
+            SELECT ar.ape_id, ar.patient_id
             FROM ape_records ar
             JOIN patients pt ON pt.person_id = ar.patient_id
             JOIN accounts a ON a.person_id = pt.person_id AND a.account_status = 'active'
-            LEFT JOIN students s ON s.person_id = pt.person_id
-            LEFT JOIN school_employees se ON se.person_id = pt.person_id
+            INNER JOIN students s ON s.person_id = pt.person_id
             WHERE ar.ape_cycle_id = ? AND ar.schedule_batch_id IS NULL
+              AND ar.entry_mode = 'Student Scheduled'
               AND ar.ape_id IN ({$placeholders})
             FOR UPDATE
         ");
@@ -645,12 +665,6 @@ function create_ape_schedule_batch(array $input, ?int $actorPersonId): array
         if (count($candidateRows) !== count($selectedIds)) {
             throw new RuntimeException('One or more selected patients are inactive, already assigned, or no longer available.');
         }
-        foreach ($candidateRows as $candidateRow) {
-            if (($candidateRow['patient_category'] ?? '') !== $category) {
-                throw new InvalidArgumentException('A batch cannot mix Students, Faculty, and School Personnel.');
-            }
-        }
-
         $insert = $db->prepare("
             INSERT INTO ape_schedule_batches
                 (ape_cycle_id, batch_name, patient_category, schedule_date, start_time, end_time, capacity, created_by_person_id)
@@ -663,7 +677,8 @@ function create_ape_schedule_batch(array $input, ?int $actorPersonId): array
             UPDATE ape_records
             SET schedule_batch_id = ?,
                 workflow_status = CASE WHEN workflow_status = 'Registered' THEN 'Batch Assigned' ELSE workflow_status END
-            WHERE ape_cycle_id = ? AND schedule_batch_id IS NULL AND ape_id IN ({$placeholders})
+            WHERE ape_cycle_id = ? AND schedule_batch_id IS NULL
+              AND entry_mode = 'Student Scheduled' AND ape_id IN ({$placeholders})
         ");
         $assign->execute(array_merge([$batchId, $cycleId], $selectedIds));
         if ($assign->rowCount() !== count($selectedIds)) {

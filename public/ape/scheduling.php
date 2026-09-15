@@ -82,6 +82,7 @@ if ($hasActiveApeCycle) {
         'end' => $row['end_time'] !== null ? substr((string) $row['end_time'], 0, 5) : null,
         'reason' => trim((string) ($row['reason'] ?? '')),
     ], $conflictBlocks->fetchAll());
+
 }
 
 set_page_back_link('index.php', 'APE');
@@ -122,7 +123,7 @@ render_clinic_command_header(
                     <h2 class="font-headline text-xl font-extrabold text-[#17261d]">Scheduled APE Batches</h2>
                     <span class="badge badge-in-progress"><?= count($apeScheduleBatches) ?> batch<?= count($apeScheduleBatches) === 1 ? '' : 'es' ?></span>
                 </div>
-                <p class="text-xs font-bold text-slate-500 mb-0">School Year <?= e($apeCurrentCycle['academic_year']) ?> &bull; Categories cannot overlap at the same date and time.</p>
+                <p class="text-xs font-bold text-slate-500 mb-0">School Year <?= e($apeCurrentCycle['academic_year']) ?> &bull; Student batches cannot overlap at the same date and time.</p>
                 <p class="text-xs font-bold text-slate-500 mt-2 mb-0">Click a batch to view its details.</p>
             </div>
         </div>
@@ -130,7 +131,6 @@ render_clinic_command_header(
         <?php
         $batchColumns = [
             ['headerName' => 'Batch', 'field' => 'batchHtml', 'cellRenderer' => 'html', 'sortField' => 'batchSort', 'minWidth' => 220],
-            ['headerName' => 'Patient Category', 'field' => 'categoryHtml', 'cellRenderer' => 'html', 'sortField' => 'categorySort', 'minWidth' => 180],
             ['headerName' => 'Date and Time', 'field' => 'scheduleHtml', 'cellRenderer' => 'html', 'sortField' => 'scheduleSort', 'minWidth' => 240],
             ['headerName' => 'Assigned', 'field' => 'assignedHtml', 'cellRenderer' => 'html', 'sortField' => 'assignedSort', 'width' => 130],
             ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'sortField' => 'statusSort', 'width' => 140],
@@ -154,8 +154,6 @@ render_clinic_command_header(
                 'rowModalId' => 'apeBatchDetails' . (int) $batch['batch_id'],
                 'batchSort' => $batch['batch_name'],
                 'batchHtml' => '<strong class="text-sm text-slate-800 block">' . e($batch['batch_name']) . '</strong><span class="text-xs font-bold text-slate-400">Created ' . e(date('M j, Y', strtotime($batch['created_at']))) . '</span>',
-                'categorySort' => $batch['patient_category'],
-                'categoryHtml' => '<span class="badge badge-in-progress">' . e($batch['patient_category']) . '</span>',
                 'scheduleSort' => (string) $batch['schedule_date'] . ' ' . (string) $batch['start_time'],
                 'scheduleHtml' => '<strong class="text-sm text-slate-800 block">' . e(date('F j, Y', strtotime($batch['schedule_date']))) . '</strong><span class="text-xs font-bold text-slate-500">' . e(date('g:i A', strtotime($batch['start_time']))) . '–' . e(date('g:i A', strtotime($batch['end_time']))) . '</span>',
                 'assignedSort' => (int) $batch['assigned_count'],
@@ -178,7 +176,6 @@ render_clinic_command_header(
                         <?php
                         $details = [
                             'School Year' => $apeCurrentCycle['academic_year'],
-                            'Patient Category' => $batch['patient_category'],
                             'Exam Date' => date('F j, Y', strtotime($batch['schedule_date'])),
                             'Time' => date('g:i A', strtotime($batch['start_time'])) . '–' . date('g:i A', strtotime($batch['end_time'])),
                             'Assigned Patients' => (int) $batch['assigned_count'] . ' / ' . (int) $batch['capacity'],
@@ -207,13 +204,13 @@ render_clinic_command_header(
             'paginationControls' => 'apeSchedulingPagination',
             'height' => 'compact',
             'emptyTitle' => 'No APE batches scheduled',
-            'emptyText' => 'Create a patient batch to set examination dates and times.',
+            'emptyText' => 'Create a student batch to set examination dates and times.',
         ]);
         ?>
         <nav id="apeSchedulingPagination" class="pagination" aria-label="Scheduled APE batch pages"></nav>
 
         <?php if ($apeScheduleGroups === []): ?>
-            <p class="px-6 pb-6 text-xs font-bold text-slate-500 mb-0">All eligible sections, departments, and offices are already assigned, or there are no eligible groups in this cycle.</p>
+            <p class="px-6 pb-6 text-xs font-bold text-slate-500 mb-0">All eligible student sections are already assigned, or there are no eligible student sections in this cycle.</p>
         <?php endif; ?>
     </section>
 
@@ -224,8 +221,8 @@ render_clinic_command_header(
                     <div class="w-12 h-12 rounded-xl bg-[var(--cliniq-surface-low)] text-[var(--cliniq-primary)] flex items-center justify-center mb-4">
                         <span class="material-symbols-outlined text-[26px]">groups</span>
                     </div>
-                    <h3 class="font-headline text-2xl font-extrabold text-[#17261d] mb-1" id="apeBatchModalTitle">Create APE Patient Batch</h3>
-                    <p class="text-sm font-bold text-slate-500 mb-0">Choose one patient category, then select complete sections, departments, or offices. The list shows 5 groups per page.</p>
+                    <h3 class="font-headline text-2xl font-extrabold text-[#17261d] mb-1" id="apeBatchModalTitle">Create Student APE Batch</h3>
+                    <p class="text-sm font-bold text-slate-500 mb-0">Select complete student sections for this examination batch. The list shows 5 sections per page.</p>
                 </div>
                 <button type="button" class="btn btn-secondary !p-3" id="closeApeBatchModalButton" aria-label="Close batch form">
                     <span class="material-symbols-outlined">close</span>
@@ -241,15 +238,6 @@ render_clinic_command_header(
                         <label class="clinic-label" for="apeBatchName">Batch Name</label>
                         <input class="clinic-input" id="apeBatchName" name="batch_name" maxlength="120" placeholder="Student Batch A" aria-describedby="apeBatchNameError" required>
                         <p class="hidden text-xs font-bold text-red-600 mt-2 mb-0" id="apeBatchNameError"></p>
-                    </div>
-                    <div>
-                        <label class="clinic-label" for="apeBatchCategory">Patient Category</label>
-                        <select class="clinic-select" id="apeBatchCategory" name="patient_category" aria-describedby="apeBatchCategoryError" required>
-                            <?php foreach (ape_schedule_batch_categories() as $category): ?>
-                                <option value="<?= e($category) ?>"><?= e($category) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                        <p class="hidden text-xs font-bold text-red-600 mt-2 mb-0" id="apeBatchCategoryError"></p>
                     </div>
                     <div>
                         <label class="clinic-label" for="apeBatchDate">Exam Date</label>
@@ -277,8 +265,8 @@ render_clinic_command_header(
 
                 <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-4">
                     <div>
-                        <label class="clinic-label" for="apeBatchSearch">Search Sections, Departments, or Offices</label>
-                        <input class="clinic-input" id="apeBatchSearch" type="search" placeholder="Search a section, department, or office">
+                        <label class="clinic-label" for="apeBatchSearch">Search Student Sections</label>
+                        <input class="clinic-input" id="apeBatchSearch" type="search" placeholder="Search a student section">
                     </div>
                     <div class="flex items-center justify-between gap-3">
                         <p class="text-xs font-black uppercase tracking-wider text-slate-500 mb-0"><span id="apeBatchSelectedCount">0</span> / <span id="apeBatchLimitCount">50</span> patients selected</p>
@@ -288,7 +276,6 @@ render_clinic_command_header(
                         <?php foreach ($apeScheduleGroups as $group): ?>
                             <label class="flex items-center gap-3 px-4 py-3 border-b border-slate-100 last:border-0 cursor-pointer hover:bg-slate-50"
                                    data-ape-group
-                                   data-category="<?= e($group['patient_category']) ?>"
                                    data-search="<?= e(strtolower($group['group_label'] . ' ' . $group['group_detail'])) ?>"
                                    data-patient-count="<?= (int) $group['patient_count'] ?>">
                                 <input type="checkbox" name="group_keys[]" value="<?= e($group['group_key']) ?>" class="w-5 h-5 accent-[var(--cliniq-primary)]" data-ape-group-checkbox>
@@ -297,12 +284,11 @@ render_clinic_command_header(
                                     <span class="text-xs font-bold text-slate-500"><?= e($group['group_detail']) ?></span>
                                 </span>
                                 <span class="text-right shrink-0">
-                                    <span class="badge badge-in-progress"><?= e($group['patient_category']) ?></span>
                                     <strong class="block text-xs text-slate-600 mt-1"><?= (int) $group['patient_count'] ?> patient<?= (int) $group['patient_count'] === 1 ? '' : 's' ?></strong>
                                 </span>
                             </label>
                         <?php endforeach; ?>
-                        <div class="hidden px-4 py-8 text-center text-sm font-bold text-slate-500" id="apeBatchEmptyState">No available groups match this category and search.</div>
+                        <div class="hidden px-4 py-8 text-center text-sm font-bold text-slate-500" id="apeBatchEmptyState">No available student sections match your search.</div>
                     </div>
                     <nav class="flex items-center justify-center gap-2" aria-label="Batch group pages" id="apeBatchPagination">
                         <button type="button" class="btn btn-secondary !p-3" id="apeBatchPreviousPage" aria-label="Previous page"><span class="material-symbols-outlined">chevron_left</span></button>
@@ -328,7 +314,6 @@ render_clinic_command_header(
             const cancelButton = document.getElementById('cancelApeBatchButton');
             const form = document.getElementById('apeBatchForm');
             const nameField = document.getElementById('apeBatchName');
-            const category = document.getElementById('apeBatchCategory');
             const dateField = document.getElementById('apeBatchDate');
             const search = document.getElementById('apeBatchSearch');
             const capacity = document.getElementById('apeBatchCapacity');
@@ -360,7 +345,6 @@ render_clinic_command_header(
             const today = <?= json_encode(date('Y-m-d')) ?>;
             const perPage = 5;
             let currentPage = 1;
-            let previousCategory = category.value || 'Student';
 
             const fieldError = (field, message) => {
                 const messageElement = document.getElementById(`${field.id}Error`);
@@ -384,8 +368,7 @@ render_clinic_command_header(
 
             const activeRows = () => {
                 const term = (search.value || '').trim().toLowerCase();
-                return rows.filter((row) => row.dataset.category === category.value
-                    && (!term || (row.dataset.search || '').includes(term)));
+                return rows.filter((row) => !term || (row.dataset.search || '').includes(term));
             };
             const selectedPatientTotal = () => checkboxes.reduce((total, box) => {
                 if (!box.checked) return total;
@@ -426,17 +409,6 @@ render_clinic_command_header(
             });
             [closeButton, cancelButton].forEach((button) => button?.addEventListener('click', () => closeModal('apeBatchModal')));
             search.addEventListener('input', () => { currentPage = 1; render(); });
-            category.addEventListener('change', () => {
-                checkboxes.forEach((box) => {
-                    if (box.closest('[data-ape-group]')?.dataset.category === previousCategory) box.checked = false;
-                });
-                previousCategory = category.value;
-                search.value = '';
-                currentPage = 1;
-                render();
-                validateCategory();
-                validateCapacity();
-            });
             capacity.addEventListener('input', () => {
                 updateSelectedCount();
                 validateCapacity();
@@ -501,8 +473,6 @@ render_clinic_command_header(
                 }
                 return fieldError(nameField, message);
             };
-            const validateCategory = () => fieldError(category,
-                ['Student', 'Faculty', 'School Personnel'].includes(category.value) ? '' : 'Choose a valid patient category.');
             const validateDate = () => {
                 const value = dateField.value;
                 let message = '';
@@ -588,11 +558,9 @@ render_clinic_command_header(
                     const minutes = parseBatchTime(field.value);
                     if (minutes !== null) field.value = formatBatchTime(minutes);
                 });
-                const messages = [validateName(), validateCategory(), validateDate(), validateCapacity(), validateBatchTimes()].filter(Boolean);
+                const messages = [validateName(), validateDate(), validateCapacity(), validateBatchTimes()].filter(Boolean);
                 const selected = checkboxes.filter((box) => box.checked);
-                if (selected.length < 1) messages.push('Select at least one section, department, or office for this batch.');
-                const mismatched = selected.some((box) => box.closest('[data-ape-group]')?.dataset.category !== category.value);
-                if (mismatched) messages.push('Selected groups must match the chosen patient category.');
+                if (selected.length < 1) messages.push('Select at least one student section for this batch.');
                 return { valid: messages.length === 0, message: messages[0] || '', selected };
             };
 
@@ -611,7 +579,7 @@ render_clinic_command_header(
                 const patientTotal = selectedPatientTotal();
                 const formattedDate = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
                     .format(new Date(`${dateField.value}T00:00:00`));
-                const message = `${nameField.value.trim()} will schedule ${patientTotal} ${category.value.toLowerCase()} patient${patientTotal === 1 ? '' : 's'} from ${validation.selected.length} selected group${validation.selected.length === 1 ? '' : 's'} on ${formattedDate}, ${startField.value}–${endField.value}.`;
+                const message = `${nameField.value.trim()} will schedule ${patientTotal} student${patientTotal === 1 ? '' : 's'} from ${validation.selected.length} selected section${validation.selected.length === 1 ? '' : 's'} on ${formattedDate}, ${startField.value}–${endField.value}.`;
                 confirmAction('Create this APE batch?', message, () => {
                     form.dataset.confirmed = '1';
                     form.requestSubmit();
