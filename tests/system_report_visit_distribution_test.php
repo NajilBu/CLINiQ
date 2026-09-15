@@ -35,7 +35,7 @@ if (array_key_exists('ape', system_report_module_labels())
 
 if (!str_contains($visitsSection, 'JOIN people p ON p.id = v.patient_person_id')
     || !str_contains($visitsSection, "COALESCE(NULLIF(p.sex, ''), 'Not specified') label")
-    || !str_contains($visitsSection, 'The APE charts below summarize APE records separately')) {
+    || !str_contains($visitsSection, 'APE records are reported separately.')) {
     throw new RuntimeException('Visit sex source or APE distinction is missing.');
 }
 

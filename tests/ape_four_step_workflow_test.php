@@ -90,7 +90,7 @@ expect_four_step((ape_earliest_upcoming_batch($batches, $batchNow)['batch_id'] ?
 expect_four_step(ape_earliest_upcoming_batch([$batches[0]], $batchNow) === null, 'No upcoming batch must allow the page to fall back to Overall.');
 
 $indexSource = file_get_contents(__DIR__ . '/../public/ape/index.php');
-expect_four_step(str_contains($indexSource, "['queue' => \$activeQueue, 'scope' => 'overall']"), 'Overall selection must remain explicit in its link.');
+expect_four_step(str_contains($indexSource, "['queue' => \$activeQueue, 'scope' => 'overall', 'population' => \$populationScope]"), 'Overall selection must remain explicit in its population-aware link.');
 expect_four_step(str_contains($indexSource, "name=\"scope\" value=\"overall\""), 'Search must preserve the explicit Overall scope.');
 
 echo "APE four-step workflow tests passed.\n";

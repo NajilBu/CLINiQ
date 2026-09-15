@@ -8,7 +8,7 @@ $welcome = strpos($source, 'Welcome back,', $welcomeCard);
 $welcomeCardEnd = strpos($source, '</section>', $welcome);
 $requiredActions = strpos($source, '<section class="student-required-actions mb-4"', $welcomeCardEnd);
 $readyCard = strpos($source, '<article class="student-action-card">', $requiredActions);
-$dashboardGrid = strpos($source, '<div class="student-grid">', $readyCard);
+$dashboardGrid = strpos($source, '<div class="student-grid', $readyCard);
 
 if ($welcomeCard === false || $welcome === false || $welcomeCardEnd === false || $requiredActions === false || $readyCard === false || $dashboardGrid === false) {
     throw new RuntimeException('The welcome and Ready areas must render as separate dashboard sections.');

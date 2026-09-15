@@ -25,11 +25,11 @@ $section = substr($source, $sectionStart, $nextSection - $sectionStart);
 
 foreach ([
     'SELECT person_id AS patient_person_id FROM patients',
-    'whether or not the patient visited the clinic during the selected period',
+    'All registered patients, counted once.',
     'Registered Patients',
     "system_report_metric('Students'",
     "system_report_metric('Faculty'",
-    "system_report_metric('Personnel'",
+    "system_report_metric('NTP'",
     'Birthdate Recorded',
     'Sex Recorded',
     'Patients by Age Group',
