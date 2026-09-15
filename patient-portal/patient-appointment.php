@@ -110,6 +110,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!$hasAppointmentPatientProfile || 
     }
 }
 
+if ($success) {
+    student_start_session();
+    $_SESSION['student_flash_success'] = 'Appointment updated. ' . $successMessage;
+    header('Location: patient-appointment.php?month=' . urlencode($month->format('Y-m')));
+    exit;
+}
+
 $blocksByDate = appointment_blocks_for_month($month);
 $studentAppointmentDates = appointment_patient_dates_for_month($patientId, $month);
 $reservedTimesByDate = appointment_reserved_times_for_month($month);
@@ -173,12 +180,13 @@ render_student_header('Appointments', 'appointment');
 </section>
 
 <?php if ($success): ?>
-    <div class="student-note student-note-success mb-4">
+    <div class="student-note student-note-success student-toast" data-student-toast role="status" aria-live="polite">
         <span class="material-symbols-outlined">check_circle</span>
         <div>
             <strong>Appointment updated.</strong>
             <?= student_e($successMessage) ?>
         </div>
+        <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
     </div>
 <?php elseif ($error !== ''): ?>
     <div class="student-note student-note-danger mb-4">
@@ -190,7 +198,7 @@ render_student_header('Appointments', 'appointment');
     </div>
 <?php endif; ?>
 
-<div class="student-grid">
+<div class="student-grid student-appointment-layout">
     <section class="student-card student-span-7">
         <div class="student-card-header">
             <div>
@@ -288,10 +296,16 @@ render_student_header('Appointments', 'appointment');
                     </div>
                     <p class="student-calendar-action-hint">
                         <span class="material-symbols-outlined" aria-hidden="true">touch_app</span>
-                        Double-click an available date to choose a time. On touchscreens, tap once.
+                        <span class="student-calendar-desktop-hint">Double-click an available date to choose a time. On touchscreens, tap once.</span>
+                        <span class="student-calendar-mobile-hint">Tap a date to select a time.</span>
                     </p>
                 </div>
 
+                <div class="student-appointment-booking-sheet" id="appointment-booking-sheet" aria-hidden="true">
+                    <div class="student-appointment-booking-sheet-head">
+                        <div><p>Appointment details</p><strong>Finish your request</strong></div>
+                        <button type="button" data-close-booking-sheet aria-label="Close appointment details"><span class="material-symbols-outlined">close</span></button>
+                    </div>
                 <div class="student-field">
                     <label class="student-label" for="appt-type">Appointment Purpose</label>
                     <select id="appt-type" name="appt_type" class="student-select" required>
@@ -321,11 +335,14 @@ render_student_header('Appointments', 'appointment');
                     Send Appointment Request
                     <span class="material-symbols-outlined">send</span>
                 </button>
+                </div>
             </form>
             <?php endif; ?>
         </div>
     </section>
 
+    <details class="student-mobile-more appointment-calendar-guide">
+        <summary>Calendar guide</summary>
     <section class="student-card student-span-5">
         <div class="student-card-header">
             <div>
@@ -376,6 +393,7 @@ render_student_header('Appointments', 'appointment');
             </div>
         </div>
     </section>
+    </details>
 </div>
 
 <div class="student-calendar-time-modal" id="appointment-time-modal" aria-hidden="true">
@@ -417,6 +435,8 @@ render_student_header('Appointments', 'appointment');
     </div>
 </div>
 
+<details class="student-mobile-more appointment-history">
+    <summary>Recent appointment requests</summary>
 <section class="student-card mt-4">
     <div class="student-card-header">
         <div>
@@ -484,6 +504,7 @@ render_student_header('Appointments', 'appointment');
         <?php endif; ?>
     </div>
 </section>
+</details>
 
 <?php if (!$feedbackRequired): ?>
 <script>
@@ -496,6 +517,8 @@ render_student_header('Appointments', 'appointment');
     const selectedDateLabel = document.getElementById('selected-date-label');
     const selectedScheduleSummary = document.getElementById('selected-schedule-summary');
     const selectedScheduleText = document.getElementById('selected-schedule-text');
+    const bookingSheet = document.getElementById('appointment-booking-sheet');
+    const mobileBookingSheet = window.matchMedia('(max-width: 640px)').matches;
     const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
 
     function formatSelectedDate(date) {
@@ -552,6 +575,16 @@ render_student_header('Appointments', 'appointment');
         document.body.classList.remove('student-time-modal-open');
     }
 
+    function closeBookingSheet() {
+        bookingSheet.classList.remove('active');
+        bookingSheet.setAttribute('aria-hidden', 'true');
+    }
+
+    function openBookingSheet() {
+        bookingSheet.classList.add('active');
+        bookingSheet.setAttribute('aria-hidden', 'false');
+    }
+
     function openTimeModal(focusFirstTime = false) {
         timeModal.classList.add('active');
         timeModal.setAttribute('aria-hidden', 'false');
@@ -577,6 +610,7 @@ render_student_header('Appointments', 'appointment');
         updateTimeSlots(button.dataset.date);
         selectedDateLabel.textContent = formatSelectedDate(button.dataset.date);
         closeTimeModal();
+        closeBookingSheet();
 
         if (!revealTimes) {
             return;
@@ -610,7 +644,12 @@ render_student_header('Appointments', 'appointment');
             selectedScheduleText.textContent = formatSelectedDate(dateInput.value) + ' at ' + chosenTime;
             selectedScheduleSummary.hidden = false;
             closeTimeModal();
+            if (mobileBookingSheet) openBookingSheet();
         });
+    });
+
+    document.querySelectorAll('[data-close-booking-sheet]').forEach((button) => {
+        button.addEventListener('click', closeBookingSheet);
     });
 
     document.querySelectorAll('[data-close-time-modal]').forEach((button) => {

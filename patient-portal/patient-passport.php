@@ -95,6 +95,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $saved = true;
         audit_log_event('passport', 'passport_profile_updated', $patientId, 'student', 'patient', $patientId, ['fields' => ['blood_type', 'allergies', 'conditions', 'medications', 'instructions', 'emergency_contacts', 'show_bmi_on_passport']]);
         $passport['last_updated'] = date('F j, Y');
+        student_start_session();
+        $_SESSION['student_flash_success'] = 'Passport settings saved. Your Emergency Health Passport has been updated.';
+        header('Location: patient-passport.php');
+        exit;
     } catch (InvalidArgumentException $e) {
         $saved = false;
         $passportError = $e->getMessage();
@@ -129,9 +133,12 @@ render_student_header('Emergency Health Passport', 'passport');
 <?php endif; ?>
 
 <?php if ($saved): ?>
-<div class="student-note student-note-success mb-4">
+<div class="student-note student-note-success student-toast" data-student-toast role="status" aria-live="polite">
     <span class="material-symbols-outlined">check_circle</span>
     <div><strong>Passport settings saved.</strong> Your Emergency Health Passport has been updated.</div>
+    <button type="button" class="student-toast-dismiss" aria-label="Dismiss saved confirmation">
+        <span class="material-symbols-outlined" aria-hidden="true">close</span>
+    </button>
 </div>
 <?php endif; ?>
 
@@ -145,12 +152,19 @@ render_student_header('Emergency Health Passport', 'passport');
 </div>
 
 <form method="POST" action="" id="passport-form" data-emergency-contact-form>
-<div class="student-grid">
+<nav class="passport-mobile-tabs" aria-label="Passport sections">
+    <button type="button" class="is-active" data-passport-tab="profile">Profile</button>
+    <button type="button" data-passport-tab="emergency">Emergency</button>
+    <button type="button" data-passport-tab="access">Access</button>
+</nav>
+<div class="student-grid passport-layout">
 
     <!-- ── Left column: Settings ── -->
-    <div class="student-span-7 grid gap-4">
+    <div class="student-span-7 grid gap-4 passport-settings-stack">
 
         <!-- Personal Information (read-only + editable blood type) -->
+        <details class="patient-mobile-panel" data-mobile-accordion data-passport-group="profile">
+        <summary>Personal information</summary>
         <section class="student-card">
             <div class="student-card-header">
                 <div>
@@ -194,8 +208,11 @@ render_student_header('Emergency Health Passport', 'passport');
                 </div>
             </div>
         </section>
+        </details>
 
         <!-- BMI -->
+        <details class="patient-mobile-panel" data-mobile-accordion data-passport-group="profile">
+        <summary>BMI</summary>
         <section class="student-card">
             <div class="student-card-header">
                 <div>
@@ -234,8 +251,11 @@ render_student_header('Emergency Health Passport', 'passport');
                 </div>
             </div>
         </section>
+        </details>
 
         <!-- Emergency Information -->
+        <details class="patient-mobile-panel" data-mobile-accordion data-passport-group="emergency">
+        <summary>Emergency information</summary>
         <section class="student-card">
             <div class="student-card-header">
                 <div>
@@ -306,8 +326,11 @@ render_student_header('Emergency Health Passport', 'passport');
                 </div>
             </div>
         </section>
+        </details>
 
         <!-- Emergency Contacts -->
+        <details class="patient-mobile-panel" data-mobile-accordion data-passport-group="emergency">
+        <summary>Emergency contact</summary>
         <section class="student-card">
             <div class="student-card-header">
                 <div>
@@ -383,16 +406,19 @@ render_student_header('Emergency Health Passport', 'passport');
                 </div>
             </div>
         </section>
+        </details>
 
         <!-- Save button -->
         <div class="passport-action-row">
             <button type="submit" class="student-button passport-save-button">
                 <span class="material-symbols-outlined">save</span>
-                Save Passport Settings
+                <span class="passport-action-label-long">Save Passport Settings</span>
+                <span class="passport-action-label-short">Save Settings</span>
             </button>
             <a href="<?= student_e($passportPreviewUrl) ?>" target="_blank" class="student-button-secondary passport-preview-button text-decoration-none">
                 <span class="material-symbols-outlined">open_in_new</span>
-                View Live Passport
+                <span class="passport-action-label-long">View Live Passport</span>
+                <span class="passport-action-label-short">View Passport</span>
             </a>
         </div>
 
@@ -401,6 +427,8 @@ render_student_header('Emergency Health Passport', 'passport');
     <!-- ── Right column: QR/NFC Preview ── -->
     <div class="student-span-5 grid gap-4">
 
+        <details class="passport-mobile-panel patient-mobile-panel" data-mobile-accordion data-passport-group="access" open>
+        <summary>QR / NFC access</summary>
         <!-- QR Code card -->
         <section class="student-card">
             <div class="student-card-header">
@@ -432,14 +460,17 @@ render_student_header('Emergency Health Passport', 'passport');
                     </button>
                 </div>
                 <p id="passport-nfc-status" class="student-card-copy mt-3" role="status" aria-live="polite" hidden></p>
-                <div class="passport-token-chip mt-3">
-                    <span class="material-symbols-outlined passport-icon-key">key</span>
-                    Token: <code><?= student_e($passport['token']) ?></code>
+                    <div class="passport-token-chip mt-3">
+                        <span class="material-symbols-outlined passport-icon-key">key</span>
+                        <span>Token:</span> <code><?= student_e($passport['token']) ?></code><button type="button" class="passport-token-copy" data-passport-token="<?= student_e($passport['token']) ?>" aria-label="Copy passport token"><span class="material-symbols-outlined">content_copy</span></button>
                 </div>
             </div>
         </section>
+        </details>
 
         <!-- Live Passport Preview -->
+        <details class="passport-mobile-panel patient-mobile-panel" data-mobile-accordion data-passport-group="access">
+        <summary>Passport preview</summary>
         <section class="student-card" id="passport-preview-card">
             <div class="student-card-header">
                 <div>
@@ -570,6 +601,7 @@ render_student_header('Emergency Health Passport', 'passport');
                 </div>
             </div>
         </section>
+        </details>
 
     </div><!-- /right column -->
 
@@ -582,6 +614,41 @@ render_student_header('Emergency Health Passport', 'passport');
 
 <script src="../public/assets/js/emergency-contact.js?v=1"></script>
 <script>
+(() => {
+    const form = document.getElementById('passport-form');
+    if (!form) return;
+    if (!window.matchMedia('(max-width: 640px)').matches) return;
+    const saveButton = form.querySelector('.passport-save-button');
+    const initialValues = new URLSearchParams(new FormData(form)).toString();
+    let isDirty = false;
+    const syncDirtyState = () => {
+        isDirty = new URLSearchParams(new FormData(form)).toString() !== initialValues;
+        form.dataset.passportDirty = isDirty ? 'true' : 'false';
+        if (saveButton) saveButton.disabled = !isDirty;
+    };
+    form.addEventListener('input', syncDirtyState);
+    form.addEventListener('change', syncDirtyState);
+    form.addEventListener('submit', (event) => {
+        if (!isDirty) event.preventDefault();
+    });
+    syncDirtyState();
+
+    form.classList.add('passport-tab-profile');
+    document.querySelectorAll('[data-passport-tab]').forEach((tab) => {
+        tab.addEventListener('click', () => {
+            const group = tab.dataset.passportTab;
+            form.classList.remove('passport-tab-profile', 'passport-tab-emergency', 'passport-tab-access');
+            form.classList.add(`passport-tab-${group}`);
+            document.querySelectorAll('[data-passport-tab]').forEach((item) => item.classList.toggle('is-active', item === tab));
+        });
+    });
+    document.querySelectorAll('[data-passport-token]').forEach((button) => {
+        button.addEventListener('click', async () => {
+            try { await navigator.clipboard.writeText(button.dataset.passportToken); button.title = 'Copied'; } catch (_) { button.title = 'Copy unavailable'; }
+        });
+    });
+})();
+
 // ── Live preview update ───────────────────────────────────────────
 (function () {
     const $ = id => document.getElementById(id);

@@ -418,7 +418,7 @@ function render_student_header(string $title, string $active = ''): void
             };
         </script>
         <link href="../public/assets/css/app.css?v=emergency-contact-1" rel="stylesheet">
-        <link href="assets/css/patient.css?v=notifications-1" rel="stylesheet">
+        <link href="assets/css/patient.css?v=<?= filemtime(__DIR__ . '/../assets/css/patient.css') ?>" rel="stylesheet">
         <style>
             :root {
                 --cliniq-primary: <?= student_e($theme['primary']) ?>;
@@ -514,15 +514,50 @@ function render_student_header(string $title, string $active = ''): void
                         </a>
                     </div>
                 </div>
+
+                <?php if (empty($profile['first_registration'])): ?>
+                    <details class="student-mobile-account">
+                        <summary class="student-mobile-account-toggle" aria-label="Open account menu">
+                            <span class="material-symbols-outlined" aria-hidden="true">account_circle</span>
+                            <span class="sr-only">Account menu</span>
+                        </summary>
+                        <div class="student-mobile-account-menu">
+                            <div class="student-mobile-account-identity">
+                                <?php if ($profilePhotoSrc !== null): ?>
+                                    <img src="<?= student_e($profilePhotoSrc) ?>" alt="<?= student_e($profile['name']) ?> profile picture">
+                                <?php else: ?>
+                                    <span><?= student_e(student_initials($profile['name'])) ?></span>
+                                <?php endif; ?>
+                                <div>
+                                    <strong><?= student_e($profile['name']) ?></strong>
+                                    <small><?= student_e($profile['student_id']) ?></small>
+                                </div>
+                            </div>
+                            <button type="button" class="student-mobile-account-action" data-profile-photo-open="patient-profile-photo-modal">
+                                <span class="material-symbols-outlined" aria-hidden="true">photo_camera</span>
+                                Change profile picture
+                            </button>
+                            <button type="button" class="student-mobile-account-action" onclick="document.getElementById('change-password-modal').classList.remove('hidden')">
+                                <span class="material-symbols-outlined" aria-hidden="true">key</span>
+                                Change password
+                            </button>
+                            <a href="patient-login.php?logout=1" onclick="localStorage.clear();" class="student-mobile-account-action is-danger text-decoration-none">
+                                <span class="material-symbols-outlined" aria-hidden="true">logout</span>
+                                Sign out
+                            </a>
+                        </div>
+                    </details>
+                <?php endif; ?>
             </header>
 
             <main class="student-main">
                 <?php if ($flashSuccess): ?>
-                    <div class="student-note student-note-success mb-4 flex items-center justify-between">
+                    <div class="student-note student-note-success student-toast flex items-center justify-between" data-student-toast role="status" aria-live="polite">
                         <div class="flex items-center gap-2">
                             <span class="material-symbols-outlined">check_circle</span>
                             <div><?= student_e($flashSuccess) ?></div>
                         </div>
+                        <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
                     </div>
                 <?php endif; ?>
 
@@ -553,8 +588,21 @@ function render_student_footer(): void
     $photoPath = profile_photo_normalize_path($profile['profile_photo_path'] ?? null);
     $photoSrc = $photoPath !== null ? '../public/' . $photoPath : null;
     $returnTo = basename((string) ($_SERVER['SCRIPT_NAME'] ?? 'patient-dashboard.php'));
+    $navItems = student_nav_items();
+    if (!empty($profile['first_registration'])) {
+        $navItems = array_intersect_key($navItems, ['dashboard' => true]);
+    }
     ?>
             </main>
+            <nav class="student-mobile-bottom-nav" aria-label="Patient navigation">
+                <?php foreach ($navItems as $item): ?>
+                    <?php $isActive = basename($item['url']) === $returnTo; ?>
+                    <a href="<?= student_e($item['url']) ?>" class="student-mobile-bottom-nav-link <?= $isActive ? 'active' : '' ?> text-decoration-none" <?= $isActive ? 'aria-current="page"' : '' ?>>
+                        <span class="material-symbols-outlined" aria-hidden="true"><?= student_e($item['icon']) ?></span>
+                        <span><?= student_e($item['label']) ?></span>
+                    </a>
+                <?php endforeach; ?>
+            </nav>
         </div>
 
         <div id="patient-profile-photo-modal" class="profile-photo-modal" role="dialog" aria-modal="true" aria-labelledby="patient-profile-photo-title" hidden>
@@ -929,6 +977,24 @@ function render_student_footer(): void
                 document.querySelectorAll('.profile-photo-modal.is-open').forEach(closeProfilePhotoModal);
             });
 
+            if (window.matchMedia('(max-width: 640px)').matches) {
+            document.querySelectorAll('details[data-mobile-accordion]').forEach((panel) => {
+                panel.addEventListener('toggle', () => {
+                    if (!panel.open) return;
+                    document.querySelectorAll('details[data-mobile-accordion][open]').forEach((other) => {
+                        if (other !== panel) other.open = false;
+                    });
+                });
+            });
+
+            document.querySelectorAll('[data-mobile-open-panel]').forEach((trigger) => {
+                trigger.addEventListener('click', () => {
+                    const panel = document.getElementById(trigger.dataset.mobileOpenPanel);
+                    if (panel instanceof HTMLDetailsElement) panel.open = true;
+                });
+            });
+        }
+
             function toggleModalPwVisibility(inputId, btn) {
                 const inp = document.getElementById(inputId);
                 if (inp) {
@@ -939,6 +1005,28 @@ function render_student_footer(): void
             }
         </script>
         <script src="../public/assets/js/file-preview.js?v=ape-popup-2"></script>
+        <script>
+            document.querySelectorAll('[data-student-toast]').forEach((toast) => {
+                const syncClearance = () => {
+                    document.body.classList.add('has-student-toast');
+                    document.documentElement.style.setProperty('--student-toast-clearance', `${Math.ceil(toast.getBoundingClientRect().height) + 24}px`);
+                };
+                const dismiss = () => {
+                    toast.remove();
+                    if (!document.querySelector('[data-student-toast]')) {
+                        document.body.classList.remove('has-student-toast');
+                        document.documentElement.style.removeProperty('--student-toast-clearance');
+                    }
+                };
+                toast.querySelector('.student-toast-dismiss')?.addEventListener('click', dismiss);
+                requestAnimationFrame(syncClearance);
+                new ResizeObserver(syncClearance).observe(toast);
+                const url = new URL(window.location.href);
+                ['uploaded', 'vitals_confirmed', 'activated', 'password_reset'].forEach((key) => url.searchParams.delete(key));
+                if (url.href !== window.location.href) history.replaceState({}, document.title, url);
+                window.setTimeout(dismiss, 5000);
+            });
+        </script>
     </body>
     </html>
     <?php
@@ -986,7 +1074,7 @@ function render_student_auth_header(string $title): void
             };
         </script>
         <link href="../public/assets/css/app.css?v=file-preview-2" rel="stylesheet">
-        <link href="assets/css/patient.css?v=notifications-1" rel="stylesheet">
+        <link href="assets/css/patient.css?v=<?= filemtime(__DIR__ . '/../assets/css/patient.css') ?>" rel="stylesheet">
         <style>
             :root {
                 --cliniq-primary: <?= student_e($theme['primary']) ?>;
@@ -1016,6 +1104,28 @@ function render_student_auth_header(string $title): void
 function render_student_auth_footer(): void
 {
     ?>
+    <script>
+        document.querySelectorAll('[data-student-toast]').forEach((toast) => {
+            const syncClearance = () => {
+                document.body.classList.add('has-student-toast');
+                document.documentElement.style.setProperty('--student-toast-clearance', `${Math.ceil(toast.getBoundingClientRect().height) + 24}px`);
+            };
+            const dismiss = () => {
+                toast.remove();
+                if (!document.querySelector('[data-student-toast]')) {
+                    document.body.classList.remove('has-student-toast');
+                    document.documentElement.style.removeProperty('--student-toast-clearance');
+                }
+            };
+            toast.querySelector('.student-toast-dismiss')?.addEventListener('click', dismiss);
+            requestAnimationFrame(syncClearance);
+            new ResizeObserver(syncClearance).observe(toast);
+            const url = new URL(window.location.href);
+            ['uploaded', 'vitals_confirmed', 'activated', 'password_reset'].forEach((key) => url.searchParams.delete(key));
+            if (url.href !== window.location.href) history.replaceState({}, document.title, url);
+            window.setTimeout(dismiss, 5000);
+        });
+    </script>
     </body>
     </html>
     <?php

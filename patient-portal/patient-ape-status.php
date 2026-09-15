@@ -36,6 +36,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
             $latestExistingByType[$existingDocument['document_type']] ??= $existingDocument;
         }
         $batchFiles = $_FILES['documents'] ?? [];
+        $requiredDocumentKeys = [];
+        foreach ($documentTypesByKey as $documentKey => $documentType) {
+            $existing = $latestExistingByType[$documentType] ?? null;
+            if (!$existing || ($existing['verification_status'] ?? '') === 'Needs Correction') {
+                $requiredDocumentKeys[] = $documentKey;
+            }
+        }
+        $missingDocuments = array_filter($requiredDocumentKeys, static function (string $documentKey) use ($batchFiles): bool {
+            $errors = $batchFiles['error'][$documentKey] ?? [UPLOAD_ERR_NO_FILE];
+            $errors = is_array($errors) ? $errors : [$errors];
+            return !array_filter($errors, static fn($error): bool => (int) $error !== UPLOAD_ERR_NO_FILE);
+        });
+        if ($missingDocuments) {
+            throw new InvalidArgumentException('Attach a file for every required APE document before submitting.');
+        }
         foreach ($documentTypesByKey as $documentKey => $documentType) {
             $errors = $batchFiles['error'][$documentKey] ?? UPLOAD_ERR_NO_FILE;
             if (!is_array($errors)) {
@@ -358,10 +373,20 @@ render_student_header('APE Status', 'ape');
 </section>
 
 <?php if (isset($_GET['uploaded'])): ?>
-    <div class="student-note student-note-success mb-4">
+    <div class="student-note student-note-success student-toast" data-student-toast role="status" aria-live="polite">
         <span class="material-symbols-outlined">check_circle</span>
         <div><?= (int) $_GET['uploaded'] ?> APE document(s) were uploaded together and are waiting for clinic verification.</div>
+        <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
     </div>
+<<<<<<< HEAD
+=======
+<?php elseif (isset($_GET['vitals_confirmed'])): ?>
+    <div class="student-note student-note-success student-toast" data-student-toast role="status" aria-live="polite">
+        <span class="material-symbols-outlined">check_circle</span>
+        <div>Your vitals and BMI were confirmed. You can now present your hard-copy APE requirements to the clinic.</div>
+        <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+    </div>
+>>>>>>> main
 <?php elseif ($uploadError !== ''): ?>
     <div class="student-note student-note-danger mb-4">
         <span class="material-symbols-outlined">error</span>
@@ -370,7 +395,7 @@ render_student_header('APE Status', 'ape');
 <?php endif; ?>
 
 <?php if ($hasScheduledBatch): ?>
-    <section class="student-action-card mb-4">
+    <section class="student-action-card student-ape-batch-card mb-4">
         <div class="flex items-start gap-4">
             <span class="student-icon-box">
                 <span class="material-symbols-outlined">event_available</span>
@@ -385,7 +410,7 @@ render_student_header('APE Status', 'ape');
     </section>
 <?php endif; ?>
 
-<section class="student-action-card mb-4">
+<section class="student-action-card student-ape-next-action mb-4">
     <div class="flex items-start gap-4">
         <span class="student-icon-box">
             <span class="material-symbols-outlined">cloud_upload</span>
@@ -402,7 +427,7 @@ render_student_header('APE Status', 'ape');
     <?php endif; ?>
 </section>
 
-<div class="student-grid">
+<div class="student-grid student-ape-layout">
     <section class="student-card student-span-5">
         <div class="student-card-header">
             <div>
@@ -411,6 +436,17 @@ render_student_header('APE Status', 'ape');
             </div>
             <span class="student-badge <?= student_e($headerBadge) ?>"><?= student_e($apeRecord ? ape_record_stage_label($apeRecord) : $apeStatus) ?></span>
         </div>
+        <?php if ($hasScheduledBatch): ?>
+            <div class="student-ape-mobile-batch">
+                <span class="material-symbols-outlined">event_available</span>
+                <div>
+                    <span class="student-eyebrow">APE batch</span>
+                    <strong><?= student_e($apeRecord['batch_name']) ?></strong>
+                    <span><?= student_e($batchScheduleLabel) ?></span>
+                </div>
+                <span class="student-badge student-badge-info"><?= student_e($apeRecord['batch_patient_category']) ?></span>
+            </div>
+        <?php endif; ?>
         <div class="student-card-pad">
             <div class="flex items-end justify-between mb-4">
                 <span class="text-xs font-black text-slate-500 uppercase tracking-wider">Completion</span>
@@ -436,13 +472,18 @@ render_student_header('APE Status', 'ape');
                         <span class="student-ape-step-index">
                             <span class="material-symbols-outlined"><?= student_e($isDone ? 'check' : ($isCurrent ? 'pending_actions' : $step['icon'])) ?></span>
                         </span>
-                        <div class="student-ape-step-body">
+                        <div class="student-ape-step-body" data-mobile-step-label="<?= student_e($step['title']) ?>">
                             <div class="student-ape-step-top">
                                 <span class="student-ape-step-count">Step <?= (int) $stepNumber ?> of 4</span>
                                 <span class="student-badge <?= student_e($badgeClass) ?>"><?= student_e($badgeLabel) ?></span>
                             </div>
                             <strong><?= student_e($stepTitle) ?></strong>
                             <span><?= student_e($stepCopy) ?></span>
+                            <?php if ($isCurrent && $canEnterPatientVitals): ?>
+                                <a class="student-ape-step-action" data-mobile-open-panel="ape-vitals-panel" href="#ape-vitals-panel">Enter vitals and BMI <span class="material-symbols-outlined">arrow_downward</span></a>
+                            <?php elseif ($isCurrent && $canUploadDocuments): ?>
+                                <a class="student-ape-step-action" data-mobile-open-panel="ape-documents-panel" href="#ape-documents-panel">Upload APE documents <span class="material-symbols-outlined">arrow_downward</span></a>
+                            <?php endif; ?>
                         </div>
                     </div>
                 <?php endforeach; ?>
@@ -450,8 +491,10 @@ render_student_header('APE Status', 'ape');
         </div>
     </section>
 
-    <div class="student-span-7 grid gap-4">
+    <div class="student-span-7 grid gap-4 student-ape-secondary-panels">
     <?php if ($showFindings): ?>
+    <details class="patient-mobile-panel" data-mobile-accordion>
+    <summary>Clinic findings and follow-up</summary>
     <section class="student-card">
         <div class="student-card-header">
             <div>
@@ -475,16 +518,93 @@ render_student_header('APE Status', 'ape');
             <?php endif; ?>
         </div>
     </section>
+    </details>
     <?php endif; ?>
 
+<<<<<<< HEAD
+=======
+    <?php if ($apeRecord): ?>
+    <details class="patient-mobile-panel" data-mobile-accordion id="ape-vitals-panel">
+    <summary>Vitals and BMI</summary>
+    <section class="student-card">
+        <div class="student-card-header">
+            <div>
+                <h2 class="student-card-title">Vitals and BMI</h2>
+                <p class="student-card-copy"><?= $hasScheduledBatch ? 'Enter these values before presenting your hard-copy APE requirements to the clinic.' : 'Vitals entry opens after the clinic assigns your APE schedule.' ?></p>
+            </div>
+            <span class="student-badge <?= $patientVitalsConfirmed ? 'student-badge-success' : ($hasScheduledBatch ? 'student-badge-warning' : 'student-badge-info') ?>">
+                <?= $patientVitalsConfirmed ? 'Confirmed' : ($hasScheduledBatch ? 'Not Started' : 'Waiting Schedule') ?>
+            </span>
+        </div>
+        <div class="student-card-pad">
+            <?php if ($patientVitalsConfirmed): ?>
+                <div class="student-note student-note-success mb-4"><span class="material-symbols-outlined">verified</span><div><strong>Patient-entered profile confirmed.</strong> Present your hard-copy requirements to the clinic. The clinic will record official examination findings separately.</div></div>
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    <div class="ape-flow-field"><p class="clinic-label mb-1">Height</p><strong><?= student_e(number_format((float) $apeRecord['patient_height_cm'], 2)) ?> cm</strong></div>
+                    <div class="ape-flow-field"><p class="clinic-label mb-1">Weight</p><strong><?= student_e(number_format((float) $apeRecord['patient_weight_kg'], 2)) ?> kg</strong></div>
+                    <div class="ape-flow-field"><p class="clinic-label mb-1">BMI</p><strong><?= student_e(number_format($currentBmi, 2)) ?></strong><span><?= student_e($currentBmiClassification) ?></span></div>
+                    <div class="ape-flow-field"><p class="clinic-label mb-1">Temperature</p><strong><?= student_e(number_format((float) $apeRecord['patient_temperature'], 1)) ?> °C</strong></div>
+                    <div class="ape-flow-field"><p class="clinic-label mb-1">Blood Pressure</p><strong><?= student_e($apeRecord['patient_blood_pressure']) ?></strong></div>
+                    <div class="ape-flow-field"><p class="clinic-label mb-1">Pulse Rate</p><strong><?= (int) $apeRecord['patient_pulse_rate'] ?> bpm</strong></div>
+                </div>
+            <?php elseif ($canEnterPatientVitals): ?>
+                <form method="post" class="grid grid-cols-1 md:grid-cols-3 gap-4" id="ape-vitals-form">
+                    <input type="hidden" name="action" value="confirm_ape_vitals">
+                    <div>
+                        <label class="student-label" for="patient_height_cm">Height (cm)</label>
+                        <input class="student-input" id="patient_height_cm" name="patient_height_cm" type="number" min="30" max="250" step="0.01" placeholder="e.g. 170" required>
+                    </div>
+                    <div>
+                        <label class="student-label" for="patient_weight_kg">Weight (kg)</label>
+                        <input class="student-input" id="patient_weight_kg" name="patient_weight_kg" type="number" min="1" max="500" step="0.01" placeholder="e.g. 60" required>
+                    </div>
+                    <div>
+                        <label class="student-label" for="patient_bmi">BMI (calculated)</label>
+                        <input class="student-input" id="patient_bmi" name="patient_bmi_display" type="text" placeholder="Enter height/weight" readonly>
+                    </div>
+                    <div>
+                        <label class="student-label" for="patient_temperature">Temperature (°C)</label>
+                        <input class="student-input" id="patient_temperature" name="patient_temperature" type="number" min="30" max="45" step="0.01" placeholder="e.g. 36.6" required>
+                    </div>
+                    <div>
+                        <label class="student-label" for="patient_blood_pressure">Blood Pressure</label>
+                        <input class="student-input" id="patient_blood_pressure" name="patient_blood_pressure" type="text" pattern="\d{2,3}\s*/\s*\d{2,3}" placeholder="e.g. 120/80" required>
+                    </div>
+                    <div>
+                        <label class="student-label" for="patient_pulse_rate">Pulse Rate (bpm)</label>
+                        <input class="student-input" id="patient_pulse_rate" name="patient_pulse_rate" type="number" min="20" max="250" placeholder="e.g. 72" required>
+                    </div>
+                    
+                    <div class="md:col-span-3 student-note student-note-warning">
+                        <span class="material-symbols-outlined">info</span>
+                        <div>Review your entries carefully. After confirmation, these values will be locked and shown to clinic staff.</div>
+                    </div>
+                    
+                    <button class="student-button md:col-span-3" type="submit" data-confirm-submit data-confirm-type="primary" data-confirm-title="Confirm vitals and BMI?" data-confirm-message="These values will be locked and shared with the clinic for review." data-confirm-toast="Confirming vitals and BMI...">
+                        <span class="material-symbols-outlined">verified</span>
+                        Confirm Vitals and BMI
+                    </button>
+                </form>
+            <?php elseif (!$hasScheduledBatch && !$patientVitalsConfirmed): ?>
+                <div class="student-note student-note-info"><span class="material-symbols-outlined">calendar_month</span><div><strong>Waiting for APE schedule.</strong> The clinic will assign your examination batch before you enter vitals and BMI.</div></div>
+            <?php else: ?>
+                <div class="student-note student-note-info"><span class="material-symbols-outlined">info</span><div>This completed APE record predates the patient vitals profile step. No new patient-entered values are required.</div></div>
+            <?php endif; ?>
+        </div>
+    </section>
+    </details>
+    <?php endif; ?>
+>>>>>>> main
     </div>
 
     <?php if ($showDocuments): ?>
-    <section class="student-card student-span-12">
+    <details class="patient-mobile-panel student-span-12" data-mobile-accordion id="ape-documents-panel">
+    <summary>Required documents</summary>
+    <section class="student-card">
         <div class="student-card-header">
             <div>
                 <h2 class="student-card-title">Required Documents</h2>
-                <p class="student-card-copy">Upload only documents already checked by the clinic. You can attach multiple files per document, up to 10 MB each.</p>
+                <p class="student-card-copy">Upload only documents already checked by the clinic. PDF, JPG/JPEG, and PNG files are allowed, up to 2 MB each.</p>
             </div>
             <span class="student-badge <?= student_e($headerBadge) ?>"><?= student_e($clearanceStatus) ?></span>
         </div>
@@ -497,6 +617,31 @@ render_student_header('APE Status', 'ape');
                     <div><strong>Clinic note:</strong> <?= student_e($missingItems) ?></div>
                 </div>
             <?php endif; ?>
+            <div class="student-document-mobile-list" aria-label="Required documents">
+                <?php foreach ($documents as $doc): ?>
+                    <details class="student-document-mobile-row">
+                        <summary>
+                            <span class="student-icon-box"><span class="material-symbols-outlined"><?= student_e($doc['icon']) ?></span></span>
+                            <span class="student-document-mobile-copy">
+                                <strong><?= student_e($doc['name']) ?></strong>
+                                <span id="ape-mobile-row-state-<?= student_e($doc['key']) ?>" data-default-label="<?= student_e($doc['upload_due_date'] ? 'Due ' . date('M j, Y', strtotime($doc['upload_due_date'])) : '') ?>"<?= $doc['upload_due_date'] ? '' : ' class="hidden"' ?>><?= $doc['upload_due_date'] ? 'Due ' . student_e(date('M j, Y', strtotime($doc['upload_due_date']))) : '' ?></span>
+                            </span>
+                            <span class="student-badge <?= student_e($doc['badge']) ?>" id="ape-mobile-status-<?= student_e($doc['key']) ?>" data-default-status="<?= student_e($doc['status']) ?>" data-default-badge="<?= student_e($doc['badge']) ?>"><?= student_e($doc['status']) ?></span>
+                            <span class="material-symbols-outlined student-document-mobile-chevron" aria-hidden="true">expand_more</span>
+                        </summary>
+                        <div class="student-document-mobile-detail">
+                            <p><?= student_e($doc['detail']) ?></p>
+                            <?php if (!$doc['disabled']): ?><p class="student-document-mobile-staged hidden" id="ape-mobile-file-name-<?= student_e($doc['key']) ?>"></p><?php endif; ?>
+                            <?php if ($doc['disabled']): ?>
+                                <?php if (!empty($doc['document_id'])): ?><a class="student-button-secondary text-decoration-none" href="<?= student_e($doc['preview_url']) ?>" data-file-preview data-preview-title="<?= student_e($doc['name']) ?>"><span class="material-symbols-outlined">visibility</span> View document</a><?php endif; ?>
+                             <?php else: ?>
+                                 <button class="<?= student_e($doc['button']) ?>" type="button" onclick="selectApeFile('<?= student_e($doc['key']) ?>')"><span class="material-symbols-outlined">upload</span> Choose file</button>
+                                 <button class="student-button-secondary ape-mobile-remove-file hidden" id="ape-mobile-remove-<?= student_e($doc['key']) ?>" type="button" onclick="removeApeFile('<?= student_e($doc['key']) ?>')"><span class="material-symbols-outlined">delete</span> Remove selected file(s)</button>
+                             <?php endif; ?>
+                        </div>
+                    </details>
+                <?php endforeach; ?>
+            </div>
             <div class="student-document-list">
                 <?php foreach ($documents as $doc): ?>
                     <div class="student-document-card">
@@ -508,14 +653,16 @@ render_student_header('APE Status', 'ape');
                                 <h3><?= student_e($doc['name']) ?></h3>
                                 <span class="student-badge <?= student_e($doc['badge']) ?>"><?= student_e($doc['status']) ?></span>
                             </div>
-                            <p><?= student_e($doc['detail']) ?></p>
+                            <p class="student-document-detail"><?= student_e($doc['detail']) ?></p>
                             <?php if ($doc['upload_due_date']): ?>
-                                <p class="font-bold"><?= $doc['upload_group'] === 'initial' ? 'Initial upload' : 'Follow-up / correction upload' ?> due <?= student_e(date('M j, Y', strtotime($doc['upload_due_date']))) ?></p>
+                                <p class="student-document-due font-bold"><?= $doc['upload_group'] === 'initial' ? 'Initial upload' : 'Follow-up / correction upload' ?> due <?= student_e(date('M j, Y', strtotime($doc['upload_due_date']))) ?></p>
                             <?php endif; ?>
                             <?php if (!$doc['disabled']): ?>
                                 <p class="ape-staged-file-name hidden" id="ape-file-name-<?= student_e($doc['key']) ?>"></p>
                             <?php endif; ?>
                         </div>
+                        <details class="patient-document-more">
+                            <summary>Actions</summary>
                         <?php if ($doc['disabled']): ?>
                             <div class="student-appointment-actions">
                                 <?php if (!empty($doc['document_id'])): ?>
@@ -541,6 +688,7 @@ render_student_header('APE Status', 'ape');
                                 </button>
                             </div>
                         <?php endif; ?>
+                        </details>
                     </div>
                 <?php endforeach; ?>
                 <?php if (!$documents): ?>
@@ -554,7 +702,7 @@ render_student_header('APE Status', 'ape');
                 <div class="ape-batch-submit-bar">
                     <div>
                         <strong id="ape-selected-summary">No files selected</strong>
-                        <span>Select files first. You can change or remove them before submitting. Each file must be 10 MB or smaller.</span>
+                        <span>Select files first. You can change or remove them before submitting. Each PDF, JPG/JPEG, or PNG file must be 2 MB or smaller.</span>
                     </div>
                     <button class="student-button" id="ape-submit-all" type="submit" disabled>
                         <span class="material-symbols-outlined">cloud_upload</span>
@@ -565,6 +713,7 @@ render_student_header('APE Status', 'ape');
             </form>
         </div>
     </section>
+    </details>
     <?php endif; ?>
 </div>
 
@@ -590,6 +739,8 @@ render_student_header('APE Status', 'ape');
 </div>
 
 <?php if ($showActivity): ?>
+<details class="patient-mobile-panel ape-activity-panel" data-mobile-accordion>
+    <summary>APE activity timeline</summary>
 <section class="student-card mt-4" id="ape-activity-timeline">
     <div class="student-card-header">
         <div>
@@ -649,6 +800,7 @@ render_student_header('APE Status', 'ape');
         <?php endif; ?>
     </div>
 </section>
+</details>
 <?php endif; ?>
 
 <script>
@@ -657,11 +809,27 @@ render_student_header('APE Status', 'ape');
     }
 
     function handleApeFileSelected(input) {
-        const maxFileSize = 10 * 1024 * 1024;
-        const oversizedFile = Array.from(input.files || []).find((file) => file.size > maxFileSize);
+        const maxFileSize = 2 * 1024 * 1024;
+        const allowedTypes = { pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png' };
+        const selectedFiles = Array.from(input.files || []);
+        const oversizedFile = selectedFiles.find((file) => file.size > maxFileSize);
         if (oversizedFile) {
-            window.alert(`${oversizedFile.name} is larger than 10 MB. Please choose files that are 10 MB or smaller.`);
+            window.alert(`${oversizedFile.name} is larger than 2 MB. Please choose files that are 2 MB or smaller.`);
             input.value = '';
+            updateApeFileRow(input);
+            refreshApeBatchSummary();
+            return;
+        }
+        const invalidFile = selectedFiles.find((file) => {
+            const extension = file.name.split('.').pop()?.toLowerCase() || '';
+            return !allowedTypes[extension] || (file.type && file.type !== allowedTypes[extension]);
+        });
+        if (invalidFile) {
+            window.alert(`${invalidFile.name} is not a valid file type. Choose a PDF, JPG/JPEG, or PNG file.`);
+            input.value = '';
+            updateApeFileRow(input);
+            refreshApeBatchSummary();
+            return;
         }
         updateApeFileRow(input);
         refreshApeBatchSummary();
@@ -678,6 +846,10 @@ render_student_header('APE Status', 'ape');
         const documentKey = input.id.replace('ape-file-', '');
         const actions = input.closest('.ape-document-actions');
         const filename = document.getElementById(`ape-file-name-${documentKey}`);
+        const mobileFilename = document.getElementById(`ape-mobile-file-name-${documentKey}`);
+        const mobileRowState = document.getElementById(`ape-mobile-row-state-${documentKey}`);
+        const mobileStatus = document.getElementById(`ape-mobile-status-${documentKey}`);
+        const mobileRemoveButton = document.getElementById(`ape-mobile-remove-${documentKey}`);
         const selectLabel = actions.querySelector('.ape-select-file span:last-child');
         const removeButton = actions.querySelector('.ape-remove-file');
         const selectedFiles = input.files ? Array.from(input.files) : [];
@@ -699,13 +871,21 @@ render_student_header('APE Status', 'ape');
                 filename.appendChild(previewButton);
             });
             filename.classList.remove('hidden');
+            if (mobileFilename) { mobileFilename.textContent = `${selectedFiles.length} file${selectedFiles.length === 1 ? '' : 's'} selected`; mobileFilename.classList.remove('hidden'); }
+            if (mobileRowState) { mobileRowState.textContent = mobileRowState.dataset.defaultLabel || ''; mobileRowState.classList.toggle('hidden', !mobileRowState.dataset.defaultLabel); mobileRowState.classList.remove('is-staged'); }
+            if (mobileStatus) { mobileStatus.textContent = `${selectedFiles.length} file${selectedFiles.length === 1 ? '' : 's'} attached`; mobileStatus.className = 'student-badge student-badge-success'; }
             selectLabel.textContent = 'Change Files';
             removeButton.classList.remove('hidden');
+            mobileRemoveButton?.classList.remove('hidden');
         } else {
             filename.replaceChildren();
             filename.classList.add('hidden');
+            if (mobileFilename) { mobileFilename.textContent = ''; mobileFilename.classList.add('hidden'); }
+            if (mobileRowState) { mobileRowState.textContent = mobileRowState.dataset.defaultLabel || ''; mobileRowState.classList.toggle('hidden', !mobileRowState.dataset.defaultLabel); mobileRowState.classList.remove('is-staged'); }
+            if (mobileStatus) { mobileStatus.textContent = mobileStatus.dataset.defaultStatus || ''; mobileStatus.className = `student-badge ${mobileStatus.dataset.defaultBadge || ''}`; }
             selectLabel.textContent = 'Select Files';
             removeButton.classList.add('hidden');
+            mobileRemoveButton?.classList.add('hidden');
         }
     }
 
@@ -717,11 +897,24 @@ render_student_header('APE Status', 'ape');
         const summary = document.getElementById('ape-selected-summary');
         const countLabel = document.getElementById('ape-selected-count');
         if (!submitButton || !summary || !countLabel) return;
+        const submitBar = submitButton.closest('.ape-batch-submit-bar');
 
-        submitButton.disabled = count === 0;
-        summary.textContent = count === 0 ? 'No files selected' : `${count} file${count === 1 ? '' : 's'} ready to submit`;
+        const requiredInputs = Array.from(document.querySelectorAll('.ape-document-input'));
+        const isComplete = requiredInputs.length > 0 && requiredInputs.every((input) => input.files && input.files.length > 0);
+        submitButton.disabled = !isComplete;
+        if (submitBar) submitBar.classList.toggle('is-staged', count > 0);
+        summary.textContent = count === 0 ? 'Select every required document' : `${count} file${count === 1 ? '' : 's'} selected across ${requiredInputs.filter((input) => input.files && input.files.length > 0).length} of ${requiredInputs.length} requirements`;
         countLabel.textContent = count === 0 ? '' : `(${count})`;
     }
+
+    document.querySelectorAll('.student-document-mobile-row').forEach((row) => {
+        row.addEventListener('toggle', () => {
+            if (!row.open) return;
+            document.querySelectorAll('.student-document-mobile-row[open]').forEach((other) => {
+                if (other !== row) other.open = false;
+            });
+        });
+    });
 
     const apeUploadForm = document.getElementById('ape-batch-upload-form');
     const apeUploadConfirmModal = document.getElementById('ape-upload-confirm-modal');

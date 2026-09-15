@@ -1096,6 +1096,40 @@ html:has(.student-body) body {
     border: 1px solid #bbf7d0;
 }
 
+/* Shared transactional confirmation toast. Status, warning, and error notes remain in flow. */
+.student-toast {
+    position: fixed;
+    z-index: 120;
+    top: max(16px, env(safe-area-inset-top));
+    right: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: min(28rem, calc(100vw - 32px));
+    margin: 0 !important;
+    box-shadow: 0 12px 28px rgba(23, 38, 29, .2);
+}
+
+.student-body:not(.student-auth-page) .student-toast { top: calc(72px + env(safe-area-inset-top)); }
+.student-body.has-student-toast .student-main { padding-top: calc(1.6rem + var(--student-toast-clearance, 0px)); }
+.student-auth-page.has-student-toast .student-auth-wrap { padding-top: var(--student-toast-clearance, 0px); }
+
+.student-toast > div { flex: 1 1 auto; min-width: 0; }
+
+.student-toast-dismiss {
+    display: grid;
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    place-items: center;
+    border: 0;
+    border-radius: 8px;
+    color: inherit;
+    background: transparent;
+}
+
+.student-toast-dismiss .material-symbols-outlined { font-size: 20px; }
+
 .student-field {
     display: grid;
     gap: 0.45rem;
@@ -3040,40 +3074,6 @@ body.student-time-modal-open {
     font-size: 0.85rem;
 }
 
-@media (max-width: 640px) {
-    .passport-modern-hero {
-        grid-template-columns: auto minmax(0, 1fr);
-        padding: 1rem;
-    }
-
-    .passport-modern-blood {
-        grid-column: 1 / -1;
-        width: 100%;
-    }
-
-    .passport-modern-name {
-        white-space: normal;
-    }
-
-    .passport-modern-info-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .passport-modern-info-instructions,
-    .passport-modern-info-bmi {
-        grid-column: auto;
-    }
-
-    .passport-modern-contact {
-        grid-template-columns: auto minmax(0, 1fr);
-    }
-
-    .passport-modern-call {
-        grid-column: 1 / -1;
-        width: 100%;
-    }
-}
-
 /* Danger note variant */
 .student-note-danger {
     color: #991b1b;
@@ -3143,186 +3143,6 @@ body.student-time-modal-open {
     background: #ecfdf5; border: 1px solid #6ee7b7;
     color: #065f46; padding: 4px 10px; border-radius: 100px;
     font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
-}
-
-@media (max-width: 640px) {
-    .student-body {
-        overflow-x: hidden;
-    }
-
-    .student-main {
-        width: 100%;
-        padding: 1.25rem 0.75rem 2.5rem;
-        overflow-x: hidden;
-    }
-
-    .student-page-header {
-        gap: 0.8rem;
-        margin-bottom: 1rem;
-    }
-
-    .student-page-header > div,
-    .student-card-header > div {
-        min-width: 0;
-        width: 100%;
-    }
-
-    .student-title {
-        font-size: clamp(1.8rem, 9vw, 2.25rem);
-        line-height: 1.1;
-    }
-
-    .student-subtitle {
-        max-width: 100%;
-        font-size: 0.88rem;
-        line-height: 1.55;
-    }
-
-    .student-card {
-        max-width: 100%;
-        overflow: hidden;
-    }
-
-    .student-card-header {
-        align-items: flex-start;
-        flex-direction: column;
-        gap: 0.75rem;
-        padding: 1rem;
-    }
-
-    .student-card-pad {
-        padding: 1rem;
-    }
-
-    .student-badge,
-    .passport-badge-emergency,
-    .passport-badge-emergency-soft {
-        max-width: 100%;
-        white-space: normal;
-        line-height: 1.25;
-    }
-
-    .passport-badge-emergency {
-        align-self: stretch;
-        justify-content: flex-start;
-    }
-
-    .student-note {
-        padding: 0.85rem;
-        line-height: 1.5;
-    }
-
-    .student-note > .material-symbols-outlined {
-        flex: 0 0 auto;
-    }
-
-    .student-note strong,
-    .student-note div,
-    .passport-readonly-field,
-    .passport-token-chip,
-    .passport-token-chip code,
-    .pv-val,
-    .pv-instr {
-        overflow-wrap: anywhere;
-    }
-
-    #passport-form .student-span-7 > .passport-action-row,
-    #passport-form .flex.gap-2 {
-        align-items: stretch;
-        flex-direction: column;
-    }
-
-    #passport-form .student-span-7 > .passport-action-row .student-button,
-    #passport-form .student-span-7 > .passport-action-row .student-button-secondary,
-    #passport-form .flex.gap-2 .student-button-secondary {
-        width: 100%;
-        white-space: normal !important;
-    }
-
-    .passport-qr-wrap {
-        padding: 0.9rem;
-    }
-
-    .passport-qr-svg,
-    .passport-qr-wrap canvas,
-    .passport-qr-wrap img {
-        width: min(140px, 100%);
-        height: auto;
-    }
-
-    .passport-token-chip {
-        width: 100%;
-        justify-content: center;
-        border-radius: 0.7rem;
-    }
-
-    .pv-head {
-        align-items: flex-start;
-        flex-wrap: wrap;
-        padding: 14px;
-    }
-
-    .pv-avatar {
-        width: 46px;
-        height: 46px;
-    }
-
-    .pv-head-info {
-        flex: 1 1 calc(100% - 58px);
-    }
-
-    .pv-name {
-        white-space: normal;
-    }
-
-    .pv-blood {
-        width: 100%;
-    }
-
-    .pv-body,
-    .pv-contact,
-    .pv-updated {
-        padding-left: 14px;
-        padding-right: 14px;
-    }
-
-    .pv-contact {
-        align-items: flex-start;
-        flex-wrap: wrap;
-    }
-
-    .pv-contact > div:nth-child(2) {
-        min-width: 0;
-        flex: 1 1 calc(100% - 46px);
-    }
-
-    .pv-call {
-        width: 100%;
-        justify-content: center;
-        margin-left: 0;
-    }
-
-    .pv-section-title {
-        margin-left: 14px;
-        margin-right: 14px;
-        line-height: 1.3;
-    }
-
-    .pv-guidance-card,
-    .pv-card {
-        margin-left: 14px;
-        margin-right: 14px;
-    }
-
-    .passport-accordion-body {
-        padding: 0 0.85rem 0.85rem;
-    }
-
-    .passport-accordion .pv-guidance-card,
-    .passport-accordion .pv-card {
-        margin-left: 0;
-        margin-right: 0;
-    }
 }
 
 .student-field-hint {
@@ -3586,12 +3406,133 @@ body.student-time-modal-open {
     text-align: center;
 }
 
-@media (max-width: 767px) {
-    .student-notification-panel {
-        position: fixed;
-        top: 78px;
-        right: 16px;
-        left: 16px;
-        width: auto;
-    }
+
+
+/* ── Patient portal mobile design system ─────────────────────
+   Ordered: shell → typography → component patterns → page layouts. */
+.student-mobile-account, .student-mobile-bottom-nav { display: none; }
+.student-dashboard-mobile-overview, .student-ape-mobile-batch, .student-ape-step-action, .student-calendar-mobile-hint, .student-appointment-booking-sheet-head, .student-document-mobile-list, .passport-mobile-tabs { display: none; }
+@media (max-width: 640px) {
+    :root { --student-mobile-gutter:16px; --student-mobile-nav-height:72px; --patient-radius:16px; --patient-shadow:0 6px 18px rgba(23,38,29,.08); }
+    html, body, .student-body { max-width:100%; overflow-x:clip; }
+    .student-main { width:100%; padding:16px var(--student-mobile-gutter) calc(var(--student-mobile-nav-height) + env(safe-area-inset-bottom) + 16px); }
+    .student-topbar { position:sticky; display:flex; grid-template-areas:none; min-height:64px; padding:8px var(--student-mobile-gutter); gap:8px; }
+    .student-brand { flex:1 1 auto; min-width:0; gap:10px; } .student-brand-mark { width:36px; height:36px; flex:0 0 36px; } .student-brand-copy { min-width:0; } .student-brand-title { font-size:15px; } .student-brand-subtitle { font-size:11px; }
+    .student-nav-toggle, .student-nav, .student-profile-chip { display:none !important; } .student-notifications { order:2; }
+    .student-mobile-account { position:relative; z-index:90; display:block; order:3; } .student-mobile-account summary { list-style:none; } .student-mobile-account summary::-webkit-details-marker { display:none; }
+    .student-notification-toggle, .student-mobile-account-toggle, .student-calendar-time-close { display:grid; width:44px; height:44px; min-width:44px; min-height:44px; place-items:center; padding:0; border:1px solid var(--student-border-soft); border-radius:12px; background:#fff; color:var(--student-primary-dark); box-shadow:none; }
+    .student-notification-toggle .material-symbols-outlined, .student-mobile-account-toggle .material-symbols-outlined { font-size:24px; }
+    .student-mobile-account[open] .student-mobile-account-menu { position:fixed; z-index:95; top:calc(64px + env(safe-area-inset-top) + 8px); right:16px; display:grid; width:min(19rem,calc(100vw - 32px)); gap:4px; padding:12px; border:1px solid var(--student-border-soft); border-radius:16px; background:#fff; box-shadow:0 14px 30px rgba(23,38,29,.18); } .student-mobile-account-identity { display:flex; align-items:center; gap:10px; min-width:0; padding:4px 4px 10px; border-bottom:1px solid var(--student-border-soft); } .student-mobile-account-identity > img, .student-mobile-account-identity > span { display:grid; width:36px; height:36px; flex:0 0 36px; place-items:center; overflow:hidden; border-radius:50%; background:var(--student-primary-soft); color:var(--student-primary-dark); font-size:13px; font-weight:700; object-fit:cover; } .student-mobile-account-identity > div { min-width:0; } .student-mobile-account-identity strong, .student-mobile-account-identity small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .student-mobile-account-identity strong { color:var(--student-fg); font-size:14px; line-height:1.3; } .student-mobile-account-identity small { margin-top:2px; color:var(--student-muted); font-size:12px; } .student-mobile-account-action { display:flex; align-items:center; min-height:44px; gap:10px; padding:8px; border:0; border-radius:10px; background:transparent; color:var(--student-fg); font-size:14px; font-weight:600; text-align:left; } .student-mobile-account-action:hover, .student-mobile-account-action:focus-visible { background:var(--student-primary-soft); color:var(--student-primary-dark); } .student-mobile-account-action .material-symbols-outlined { font-size:20px; } .student-mobile-account-action.is-danger { color:var(--student-danger); }
+    .student-notification-panel { position:fixed; top:72px; right:16px; left:16px; width:auto; max-height:calc(100dvh - 88px); border-radius:16px; }
+    .student-mobile-bottom-nav { position:fixed; z-index:70; right:0; bottom:0; left:0; display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); min-height:calc(var(--student-mobile-nav-height) + env(safe-area-inset-bottom)); padding:4px 8px calc(4px + env(safe-area-inset-bottom)); border-top:1px solid var(--student-border-soft); background:rgba(255, 255, 255, .96); box-shadow:0 -8px 24px rgba(23, 38, 29, .08); backdrop-filter:blur(14px); }
+    .student-mobile-bottom-nav-link { display:grid; place-items:center; gap:2px; min-width:0; min-height:44px; padding:4px; border-radius:12px; color:#65766b; font-size:10px; font-weight:700; line-height:1.15; text-align:center; }
+    .student-mobile-bottom-nav-link .material-symbols-outlined { font-size:20px; }
+    .student-mobile-bottom-nav-link.active { background:var(--student-primary-soft); color:var(--student-primary-dark); }
+    .student-mobile-bottom-nav-link.active .material-symbols-outlined { color:var(--student-primary); font-variation-settings:'FILL' 1; }
+
+    /* Type scale */
+    .student-page-header { gap:8px; margin-bottom:12px; } .student-page-header > div, .student-card-header > div { min-width:0; }
+    .student-title { font-size:20px; line-height:1.2; font-weight:700; letter-spacing:-.01em; }
+    .student-subtitle, .student-page-header p, .student-card-copy, .student-required-actions-copy { font-size:13px; line-height:1.4; }
+    .student-eyebrow, .student-label, .student-calendar-legend, .student-calendar-weekday { font-size:11px; }
+    .student-card-title, .student-required-actions h2, .student-action-card h2 { font-size:16px; line-height:1.25; font-weight:600; }
+    .student-note, .student-input, .student-select, .student-textarea, .student-button, .student-button-secondary, .student-button-danger { font-size:14px; line-height:1.45; }
+
+    /* Shared cards, rows, and controls */
+    .student-card, .student-action-card, .student-progress-step, .student-document-card { max-width:100%; border-radius:var(--patient-radius); box-shadow:var(--patient-shadow); }
+    .student-card-header, .student-card-pad { padding:14px; } .student-card-header { align-items:flex-start; flex-direction:column; gap:8px; } .student-card-copy { margin-top:4px; }
+    .student-note { padding:12px; } .student-note > .material-symbols-outlined { flex:0 0 auto; font-size:20px; }
+    .student-input, .student-select, .student-textarea, .student-button, .student-button-secondary, .student-button-danger, select, input:not([type="hidden"]) { min-height:44px; font-size:14px; }
+    input[type="checkbox"], input[type="radio"] { min-height:initial; } .student-textarea, textarea { min-height:88px; }
+    .student-button, .student-button-secondary, .student-button-danger { gap:8px; padding:10px 12px; font-size:14px; font-weight:600; } .student-button .material-symbols-outlined, .student-button-secondary .material-symbols-outlined, .student-button-danger .material-symbols-outlined { font-size:18px; }
+    .student-badge { padding:4px 10px; font-size:11px; line-height:1.2; }
+    .student-card .text-3xl, .student-card strong.text-3xl { font-size:28px !important; line-height:1; }
+    .student-grid, .student-document-list, .student-progress-list, .student-ape-stepper { gap:12px; }
+
+    /* Dashboard */
+    .student-required-actions { margin-inline:0; } .student-required-actions-head { gap:8px; padding-bottom:8px; } .student-required-action-list { gap:12px; }
+    .student-action-card { gap:10px; padding:14px; align-items:stretch; } .student-action-card .flex.items-start.gap-4 { gap:10px !important; } .student-action-card p { font-size:13px; line-height:1.4; }
+    .student-action-card .student-icon-box, .student-action-step, .student-document-card .student-icon-box { width:32px; height:32px; flex:0 0 32px; } .student-action-card .student-icon-box .material-symbols-outlined, .student-document-card .student-icon-box .material-symbols-outlined { font-size:18px; }
+    .student-action-card .student-button, .student-action-card .student-button-danger { width:100%; justify-content:center; }
+    .student-progress-step { gap:8px; padding:10px 12px; } .student-progress-step-icon { width:32px; height:32px; flex:0 0 32px; font-size:18px; }
+    .student-dashboard-mobile-overview { display:grid; gap:12px; margin:12px 0; }
+    .student-dashboard-summary-row { display:grid; grid-template-columns:32px minmax(0,1fr) auto 20px; align-items:center; gap:8px; min-height:64px; padding:12px; border:1px solid var(--student-border-soft); border-radius:var(--patient-radius); background:#fff; color:var(--student-fg); box-shadow:var(--patient-shadow); }
+    .student-dashboard-summary-row .student-icon-box { width:32px; height:32px; min-width:32px; min-height:32px; border-radius:10px; } .student-dashboard-summary-row .student-icon-box .material-symbols-outlined { font-size:18px; }
+    .student-dashboard-summary-copy { min-width:0; } .student-dashboard-summary-copy strong, .student-dashboard-summary-copy span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .student-dashboard-summary-copy strong { font-size:14px; line-height:1.25; } .student-dashboard-summary-copy span { margin-top:2px; color:var(--student-muted); font-size:12px; line-height:1.3; }
+    .student-dashboard-summary-arrow { color:var(--student-primary); font-size:20px; }
+    .student-dashboard-duplicate { display:none; }
+    .student-dashboard-detail-stack { gap:12px; } .student-dashboard-detail-stack .student-mobile-more { margin-top:0; }
+    .student-mobile-more { margin-top:12px; border:1px solid var(--student-border-soft); border-radius:var(--patient-radius); background:#fff; box-shadow:var(--patient-shadow); }
+    .student-mobile-more > summary, .passport-mobile-panel > summary, .patient-mobile-panel > summary { display:flex; align-items:center; justify-content:space-between; min-height:52px; padding:0 12px; color:var(--student-primary-dark); cursor:pointer; font-size:15px; font-weight:600; list-style:none; }
+    .student-mobile-more > summary::-webkit-details-marker, .passport-mobile-panel > summary::-webkit-details-marker, .patient-mobile-panel > summary::-webkit-details-marker { display:none; }
+    .student-mobile-more > summary::after, .passport-mobile-panel > summary::after, .patient-mobile-panel > summary::after { content:'expand_more'; font-family:'Material Symbols Outlined'; font-size:24px; }
+    .student-mobile-more[open] > summary::after, .passport-mobile-panel[open] > summary::after, .patient-mobile-panel[open] > summary::after { content:'expand_less'; }
+    .student-mobile-more > .student-card { border:0; border-radius:0; box-shadow:none; }
+    .patient-mobile-panel { margin:0; border:1px solid var(--student-border-soft); border-radius:var(--patient-radius); background:#fff; box-shadow:var(--patient-shadow); }
+    .patient-mobile-panel + .patient-mobile-panel { margin-top:8px; }
+    .patient-mobile-panel > .student-card { margin:0; border:0; border-radius:0; box-shadow:none; }
+    .student-ape-layout { gap:8px; }
+    .student-ape-secondary-panels { gap:8px !important; }
+    .student-ape-secondary-panels .patient-mobile-panel + .patient-mobile-panel { margin-top:0; }
+    .ape-activity-panel { margin-top:8px; }
+
+    /* APE: completed steps are checklist rows; current step retains detail. */
+    .student-ape-step { grid-template-columns:32px minmax(0,1fr); gap:8px; } .student-ape-step-rail { display:none; } .student-ape-step-index { width:32px; height:32px; flex:0 0 32px; } .student-ape-step-body { padding:12px; }
+    .student-ape-step.is-done .student-ape-step-body { display:flex; align-items:center; min-height:40px; padding:0; background:transparent; border:0; }
+    .student-ape-step.is-done .student-ape-step-top, .student-ape-step.is-done .student-ape-step-body > span { display:none; }
+    .student-ape-step.is-done .student-ape-step-body > strong { font-size:14px; font-weight:600; }
+    .student-ape-next-action, .student-ape-batch-card { display:none; }
+    .student-ape-mobile-batch { display:grid; grid-template-columns:32px minmax(0,1fr) auto; align-items:center; gap:8px; margin:0 14px; padding:10px 0; border-top:1px solid var(--student-border-soft); }
+    .student-ape-mobile-batch > .material-symbols-outlined { display:grid; width:32px; height:32px; place-items:center; border-radius:10px; color:var(--student-primary-dark); background:var(--student-primary-fixed); font-size:18px; }
+    .student-ape-mobile-batch > div { min-width:0; } .student-ape-mobile-batch strong, .student-ape-mobile-batch span:not(.student-badge) { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .student-ape-mobile-batch strong { color:var(--student-fg); font-size:14px; line-height:1.3; } .student-ape-mobile-batch div > span:last-child { margin-top:2px; color:var(--student-muted); font-size:12px; line-height:1.3; }
+    .student-ape-step.is-locked .student-ape-step-body { display:flex; align-items:center; min-height:40px; padding:0; background:transparent; border:0; box-shadow:none; }
+    .student-ape-step.is-locked .student-ape-step-top, .student-ape-step.is-locked .student-ape-step-body > strong, .student-ape-step.is-locked .student-ape-step-body > span { display:none; }
+    .student-ape-step.is-locked .student-ape-step-body::after { content:attr(data-mobile-step-label); color:var(--student-muted); font-size:14px; font-weight:600; line-height:1.3; }
+    .student-ape-step-action { display:inline-flex; align-items:center; justify-content:center; gap:6px; min-height:44px; margin-top:4px; padding:10px 12px; border-radius:10px; color:#fff; background:var(--student-primary); font-size:14px; font-weight:600; text-decoration:none; } .student-ape-step-action .material-symbols-outlined { font-size:18px; }
+    .student-document-list { display:none; } .student-document-mobile-list { display:grid; gap:8px; }
+    .student-document-mobile-row { border:1px solid var(--student-border-soft); border-radius:12px; background:#fff; overflow:hidden; }
+    .student-document-mobile-row > summary { display:grid; grid-template-columns:32px minmax(0,1fr) 20px; grid-template-rows:auto auto; align-items:center; column-gap:8px; row-gap:5px; min-height:64px; padding:10px 12px; cursor:pointer; list-style:none; }
+    .student-document-mobile-row > summary::-webkit-details-marker { display:none; } .student-document-mobile-row .student-icon-box { grid-row:1 / 3; align-self:center; width:32px; height:32px; min-width:32px; min-height:32px; border-radius:10px; } .student-document-mobile-row .student-icon-box .material-symbols-outlined { font-size:18px; }
+    .student-document-mobile-copy { display:contents; } .student-document-mobile-copy strong { grid-column:2; grid-row:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--student-fg); font-size:14px; line-height:1.3; } .student-document-mobile-copy > span { grid-column:2; grid-row:2; min-width:0; padding-right:116px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--student-muted); font-size:12px; line-height:1.3; }
+    .student-document-mobile-row .student-badge { grid-column:2; grid-row:2; justify-self:end; max-width:116px; padding:4px 7px; overflow:visible; white-space:nowrap; font-size:10px; } .student-document-mobile-chevron { grid-column:3; grid-row:1 / 3; color:var(--student-primary-dark); font-size:20px; } .student-document-mobile-row[open] .student-document-mobile-chevron { transform:rotate(180deg); }
+    .student-document-mobile-detail { display:grid; gap:10px; padding:12px; border-top:1px solid var(--student-border-soft); } .student-document-mobile-detail p { margin:0; color:var(--student-muted); font-size:13px; line-height:1.45; } .student-document-mobile-detail .student-document-mobile-staged { color:var(--student-primary-dark); font-size:12px; font-weight:700; } .student-document-mobile-detail .student-button, .student-document-mobile-detail .student-button-secondary { width:100%; min-height:44px; }
+    .student-document-card { grid-template-columns:40px minmax(0,1fr) auto; gap:8px; padding:12px; align-items:center; }
+    .student-document-card .student-button, .student-document-card .student-button-secondary { min-width:44px; padding-inline:8px; font-size:0; } .student-document-card .student-button .material-symbols-outlined, .student-document-card .student-button-secondary .material-symbols-outlined { font-size:20px; }
+    .student-document-meta { min-width:0; } .student-document-meta h3 { overflow-wrap:normal; word-break:normal; } .student-document-meta strong, .student-document-meta p, .student-note div, .passport-token-chip, .passport-token-chip code { overflow-wrap:anywhere; }
+    .student-document-card .student-document-detail { display:none; } .student-document-card .student-document-due { margin:2px 0 0; color:var(--student-muted); font-size:11px; line-height:1.3; }
+    .patient-document-more { min-width:44px; } .patient-document-more > summary { display:grid; place-items:center; width:44px; min-width:44px; min-height:44px; padding:0; border:1px solid var(--student-border-soft); border-radius:10px; color:var(--student-primary-dark); cursor:pointer; font-size:0; font-weight:700; list-style:none; } .patient-document-more > summary::after { content:'more_horiz'; font-family:'Material Symbols Outlined'; font-size:22px; }
+    .patient-document-more > summary::-webkit-details-marker { display:none; }
+    .patient-document-more[open] { grid-column:1 / -1; } .patient-document-more[open] > summary { margin-bottom:8px; }
+    .patient-document-more .student-appointment-actions { display:flex; flex-wrap:wrap; gap:8px; }
+    .ape-batch-submit-bar { display:none; position:static; margin-top:12px; padding:12px; border-radius:var(--patient-radius); background:#fff; box-shadow:var(--patient-shadow); } .ape-batch-submit-bar.is-staged { display:grid; }
+
+    /* Appointments: calendar first, time picker as bottom sheet. */
+    .student-appointment-layout { gap:12px; } .student-appointment-layout .student-mobile-more { margin-top:0; } .appointment-history > .student-card { margin:0; }
+    .student-month-row { align-items:stretch; flex-direction:column; gap:6px; } .student-month-nav { width:100%; justify-content:space-between; gap:8px; } .student-month-nav strong { min-width:0; overflow:visible; white-space:nowrap; }
+    .calendar-grid, .student-calendar-grid { width:100%; min-width:0; grid-template-columns:repeat(7,minmax(0,1fr)); gap:3px; } .calendar-grid button, .student-calendar-grid button, .student-date-btn { min-width:0; min-height:44px; padding:4px 1px; font-size:12px; border-radius:10px; }
+    .student-date-btn { position:relative; } .student-date-btn small { display:none; } .student-date-btn.partial::after, .student-date-btn.has-appointment::after, .student-date-btn.disabled::after { content:''; width:5px; height:5px; border-radius:50%; background:currentColor; }
+    .student-calendar-legend { display:none; } .student-calendar-action-hint { padding-top:8px; font-size:12px; line-height:1.45; } .student-calendar-desktop-hint { display:none; } .student-calendar-mobile-hint { display:inline; }
+    .student-calendar-time-modal, .student-modal, #change-password-modal { align-items:flex-end; padding:0; }
+    #change-password-modal { z-index:130 !important; }
+    .student-calendar-time-dialog, .student-modal-content, #change-password-modal > .student-card { width:100%; max-height:min(86dvh,46rem); overflow-y:auto; border-radius:20px 20px 0 0; }
+    .student-calendar-time-header { padding:16px; } .student-calendar-time-guide { gap:8px; padding:12px 16px; } .student-calendar-time-list { max-height:min(58dvh,30rem); padding:8px; }
+    .student-calendar-time-row { grid-template-columns:72px minmax(0,1fr) auto; min-height:56px; padding:12px; }
+    .student-appointment-booking-sheet { display:none; } .student-appointment-booking-sheet.active { position:fixed; z-index:80; right:0; bottom:0; left:0; display:grid; gap:12px; max-height:calc(100dvh - var(--student-mobile-nav-height)); overflow-y:auto; padding:16px 16px calc(var(--student-mobile-nav-height) + env(safe-area-inset-bottom) + 16px); border-radius:20px 20px 0 0; background:#fff; box-shadow:0 -12px 30px rgba(23,38,29,.18); }
+    .student-appointment-booking-sheet-head { display:flex; align-items:center; justify-content:space-between; gap:12px; } .student-appointment-booking-sheet-head p { margin:0; color:var(--student-muted); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; } .student-appointment-booking-sheet-head strong { color:var(--student-fg); font-size:16px; } .student-appointment-booking-sheet-head button { display:grid; width:44px; height:44px; place-items:center; border:1px solid var(--student-border-soft); border-radius:12px; background:#fff; color:var(--student-primary-dark); }
+
+    /* Health Passport: QR/NFC is open first; preview is an accordion panel. */
+    .passport-mobile-tabs { display:grid; grid-template-columns:repeat(3,1fr); gap:4px; margin:0 0 12px; padding:4px; border:1px solid var(--student-border-soft); border-radius:12px; background:#fff; } .passport-mobile-tabs button { min-height:40px; border:0; border-radius:9px; background:transparent; color:var(--student-muted); font-size:12px; font-weight:700; } .passport-mobile-tabs button.is-active { color:var(--student-primary-dark); background:var(--student-primary-soft); }
+    #passport-form.passport-tab-profile [data-passport-group]:not([data-passport-group="profile"]), #passport-form.passport-tab-emergency [data-passport-group]:not([data-passport-group="emergency"]), #passport-form.passport-tab-access [data-passport-group]:not([data-passport-group="access"]) { display:none !important; }
+    #passport-form .passport-layout { gap:12px; } #passport-form .passport-settings-stack { gap:8px !important; } #passport-form .passport-settings-stack .patient-mobile-panel + .patient-mobile-panel, #passport-form .passport-layout > .patient-mobile-panel + .patient-mobile-panel { margin-top:0; }
+    #passport-form .student-card-header, #passport-form .passport-grid-tight { gap:8px; } #passport-form .patient-mobile-panel .student-card-title { display:none; } #passport-form .patient-mobile-panel .student-card-header { padding-bottom:8px; } #passport-form .passport-readonly-field { min-height:0; padding:0; border:0; border-radius:0; background:transparent; color:var(--student-fg); font-size:14px; font-weight:600; } #passport-form .passport-field-compact:has(.passport-readonly-field) { display:grid; grid-template-columns:minmax(88px,.75fr) minmax(0,1.25fr); align-items:baseline; gap:8px; } #passport-form .passport-field-compact:has(.passport-readonly-field) .student-label { margin:0; color:var(--student-muted); font-size:11px; }
+    #passport-form .student-span-7 > .passport-action-row, #passport-form .flex.gap-2 { align-items:stretch; flex-direction:column; } #passport-form .flex.gap-2 .student-button-secondary { width:100%; white-space:normal !important; }
+    #passport-form { padding-bottom:64px; } #passport-form .passport-action-row { position:fixed; z-index:75; right:0; bottom:calc(var(--student-mobile-nav-height) + env(safe-area-inset-bottom)); left:0; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin:0; padding:8px 16px; border-top:1px solid var(--student-border-soft); background:#fff; box-shadow:0 -8px 20px rgba(23,38,29,.12); } #passport-form .passport-action-row .student-button, #passport-form .passport-action-row .student-button-secondary { width:100%; min-width:0; min-height:44px; padding:8px; font-size:12px; line-height:1.2; white-space:normal !important; } #passport-form[data-passport-dirty="false"] .passport-action-row { grid-template-columns:1fr; } #passport-form[data-passport-dirty="false"] .passport-save-button { display:none; } #passport-form .passport-save-button { flex:0 0 auto; } .passport-action-label-short { display:inline; } .passport-action-label-long { display:none; }
+    .student-body.has-student-toast .student-main { padding-top:calc(16px + var(--student-toast-clearance, 0px)); }
+    .passport-save-confirmation { position:fixed; z-index:100; top:calc(var(--student-mobile-header-height) + env(safe-area-inset-top) + 8px); right:16px; left:16px; margin:0 !important; box-shadow:0 10px 24px rgba(23,38,29,.18); } .passport-save-confirmation-dismiss { display:grid; width:32px; height:32px; min-width:32px; place-items:center; border:0; border-radius:8px; background:transparent; color:inherit; } .passport-save-confirmation-dismiss .material-symbols-outlined { font-size:20px; }
+    .passport-mobile-panel { margin:0; } .passport-mobile-panel > section { margin:8px; }
+    .passport-qr-card-body, .passport-visibility-toggle { padding:12px; } #passport-form .passport-qr-wrap { display:grid; max-width:100%; padding:12px; overflow:hidden; place-items:center; } #passport-form .passport-qr-svg, #passport-form .passport-qr-wrap canvas, #passport-form .passport-qr-wrap img { width:min(180px,100%) !important; max-width:100% !important; height:auto !important; }
+    #passport-form .passport-qr-label { max-width:100%; overflow:hidden; text-align:center; text-overflow:ellipsis; white-space:nowrap; } #passport-form .passport-qr-card-body .flex.gap-2 { display:grid; grid-template-columns:1fr; width:100%; } #passport-form .passport-qr-action { box-sizing:border-box; width:100%; min-width:0; white-space:normal !important; }
+    .passport-token-chip { display:grid; grid-template-columns:20px auto minmax(0,1fr) 32px; width:100%; align-items:center; gap:6px; border-radius:12px; } .passport-modern-hero { grid-template-columns:auto minmax(0,1fr); padding:12px; } .passport-modern-blood { grid-column:1 / -1; width:100%; } .passport-modern-info-grid { grid-template-columns:1fr; } .passport-modern-contact { grid-template-columns:auto minmax(0,1fr); } .passport-modern-call { grid-column:1 / -1; width:100%; }
+    .passport-token-chip code { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .passport-token-copy { display:grid; width:32px; height:32px; min-width:32px; place-items:center; border:0; border-radius:8px; background:var(--student-primary-soft); color:var(--student-primary-dark); } .passport-token-copy .material-symbols-outlined { font-size:18px; }
 }
+@media (min-width: 641px) { .student-mobile-more, .passport-mobile-panel, .patient-mobile-panel, .patient-document-more { display:contents; } .student-mobile-more > summary, .passport-mobile-panel > summary, .patient-mobile-panel > summary, .patient-document-more > summary { display:none; } .student-mobile-more:not([open]) > section, .passport-mobile-panel:not([open]) > section, .patient-mobile-panel:not([open]) > section { display:block; } }

@@ -979,13 +979,24 @@ function ape_store_uploaded_file(array $file, string $prefix): array
     if (empty($file['name']) || (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
         throw new InvalidArgumentException('Choose a valid PDF or image to upload.');
     }
-    if ((int) ($file['size'] ?? 0) > 10 * 1024 * 1024) {
-        throw new InvalidArgumentException('APE documents must not exceed 10 MB.');
+    if ((int) ($file['size'] ?? 0) > 2 * 1024 * 1024) {
+        throw new InvalidArgumentException('APE documents must not exceed 2 MB per file.');
     }
 
     $extension = strtolower(pathinfo((string) $file['name'], PATHINFO_EXTENSION));
-    if (!in_array($extension, ['pdf', 'jpg', 'jpeg', 'png'], true)) {
+    $allowedMimeTypes = [
+        'pdf' => 'application/pdf',
+        'jpg' => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'png' => 'image/png',
+    ];
+    if (!isset($allowedMimeTypes[$extension])) {
         throw new InvalidArgumentException('APE documents must be PDF, JPG, JPEG, or PNG files.');
+    }
+    $temporaryPath = (string) ($file['tmp_name'] ?? '');
+    $detectedMimeType = is_file($temporaryPath) ? (new finfo(FILEINFO_MIME_TYPE))->file($temporaryPath) : false;
+    if ($detectedMimeType !== $allowedMimeTypes[$extension]) {
+        throw new InvalidArgumentException('APE documents must be valid PDF, JPG, JPEG, or PNG files.');
     }
 
     $uploadDir = ape_document_storage_root() . DIRECTORY_SEPARATOR;
@@ -994,7 +1005,7 @@ function ape_store_uploaded_file(array $file, string $prefix): array
     }
 
     $filename = preg_replace('/[^a-z0-9_-]+/i', '-', $prefix) . '_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $extension;
-    if (!move_uploaded_file((string) $file['tmp_name'], $uploadDir . $filename)) {
+    if (!move_uploaded_file($temporaryPath, $uploadDir . $filename)) {
         throw new RuntimeException('The APE document could not be saved.');
     }
 
