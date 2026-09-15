@@ -41,12 +41,15 @@ function fixtureRecord(array $requirements, array $documents=[], array $override
 }
 $r=fixtureRecord($requirements);
 expect((int)$r['initial_requirement_count']===2 && (int)$r['deferred_requirement_count']===1,'Dynamic groups include custom requirements.');
-expect(ape_record_queue($r)==='digital_submission','Missing initial files stay in digital keeping.');
-expect(ape_deadline_status($r)['due_date']==='2026-09-10','Initial group has examination +7 days.');
+$regularRequirements=array_slice($requirements,0,2);
+$regularOpen=['workflow_status'=>'Requirements Checked','clearance_status'=>'Pending','follow_up_required'=>0,'requirement_status'=>'Checked','follow_up_due_date'=>null];
+$r=fixtureRecord($regularRequirements,[],$regularOpen);
+expect(ape_record_queue($r)==='final_decision','Missing regular files stay in final decision after examination.');
+expect(ape_deadline_status($r)['due_date']==='2026-09-10','Initial group has examination +7 days while in final decision.');
 $initial=[upload(101,'Custom Initial A','Verified'),upload(102,'Custom Initial B','Verified')];
-expect(ape_record_queue(fixtureRecord($requirements,[$initial[0]]))==='digital_submission','Partial initial upload cannot advance.');
+expect(ape_record_queue(fixtureRecord($regularRequirements,[$initial[0]],$regularOpen))==='final_decision','Partial regular upload remains visible in final decision.');
 $pending=$initial; $pending[1]['verification_status']='Pending';
-expect(ape_record_queue(fixtureRecord($requirements,$pending))==='digital_submission','Archive review required.');
+expect(ape_record_queue(fixtureRecord($regularRequirements,$pending,$regularOpen))==='final_decision','Archive review remains in final decision.');
 $r=fixtureRecord($requirements,$initial);
 expect(ape_record_queue($r)==='follow_up','Initial archive advances without deferred file.');
 expect(ape_deadline_status($r)['due_date']==='2026-09-15','Follow-up retains assigned deadline.');
@@ -68,7 +71,7 @@ expect(ape_deadline_status($earlyReturn, new DateTimeImmutable('2026-09-05'))['l
 expect(ape_deadline_status($r, new DateTimeImmutable('2026-09-14'))['label'] === 'On Track', 'No due-tomorrow urgent warning.');
 expect(ape_deadline_status($r, new DateTimeImmutable('2026-09-15'))['label'] === 'On Track', 'Allow the entire assigned due date.');
 expect(ape_deadline_status($r, new DateTimeImmutable('2026-09-16'))['label'] === 'Overdue', 'Warn after a later assigned due date passes.');
-$initialWaiting = fixtureRecord($requirements);
+$initialWaiting = fixtureRecord($regularRequirements, [], $regularOpen);
 expect(ape_deadline_status($initialWaiting, new DateTimeImmutable('2026-09-10'))['label'] === 'On Track', 'Initial upload deadline day is not overdue.');
 expect(ape_deadline_status($initialWaiting, new DateTimeImmutable('2026-09-11'))['label'] === 'Overdue', 'Initial uploads warn after their seven-day deadline.');
 $old=upload(99,'Custom Initial B','Needs Correction');
@@ -107,15 +110,17 @@ expect(str_contains($fake->calls[0][0],'ELSE COALESCE(upload_group, ?)'),'Return
 $source=file_get_contents(__DIR__.'/../public/ape/view.php');
 $start=strpos($source,'$archiveQueue = ape_record_queue($record);');
 $end=strpos($source,"} elseif (\$action === 'request_document_correction')",$start);
-$archive=str_replace(['ape_requirements_for_record($id)', 'ape_findings_for_record($id)'], ['$requirements', '$findingsFixture'], substr($source,$start,$end-$start));
+$archive=str_replace(['ape_requirements_for_record($id)', 'ape_findings_for_record($id)'], ['$requirementsFixture', '$findingsFixture'], substr($source,$start,$end-$start));
 $canRecordApeExam=true; $findingsFixture=[];
-$record=fixtureRecord($requirements,$pending); $id=$apeId; $staffPersonId=1;
+$requirementsFixture=$regularRequirements;
+$record=fixtureRecord($requirementsFixture,$pending,$regularOpen); $id=$apeId; $staffPersonId=1;
 $apeDb=new GroupTestPDO($pending); eval($archive);
 $writes=array_values(array_filter($apeDb->calls,static fn($call)=>str_starts_with($call[0],'UPDATE')));
 expect(count($writes)===2,'Archive changes files and workflow only, not saved checklist.');
 expect($writes[0][1]===[$staffPersonId,$id,101,102],'Initial archive targets only initial file IDs.');
-expect($writes[1][1][0]==='Follow-up Required','Follow-up flag retained after initial archive.');
-$record=fixtureRecord($requirements,[...$initial,upload(104,'Deferred TB Cert','Pending')],$returned);
+expect($writes[1][1][0]==='Reviewed','Regular initial archive keeps the patient in final decision.');
+$requirementsFixture=$requirements;
+$record=fixtureRecord($requirementsFixture,[...$initial,upload(104,'Deferred TB Cert','Pending')],$returned);
 $apeDb=new GroupTestPDO([...$initial,upload(104,'Deferred TB Cert','Pending')]); eval($archive);
 $writes=array_values(array_filter($apeDb->calls,static fn($call)=>str_starts_with($call[0],'UPDATE')));
 expect($writes[0][1]===[$staffPersonId,$id,104],'Deferred archive targets only returned group.');
@@ -174,6 +179,7 @@ expect(!str_contains($withoutPreviewHtml, 'Preview File'), 'A requirement withou
 $record=fixtureRecord($requirements,[...$initial,upload(104,'Deferred TB Cert','Pending')],['requirements_saved_at'=>null]);
 $queueKey=ape_record_queue($record);
 $examSaved=!empty($record['exam_date']);
+$digitalSubmissionComplete=ape_digital_submission_complete($record);
 $reviewDocuments=[upload(100,'Deferred TB Cert','Needs Correction'),upload(104,'Deferred TB Cert','Pending'),...$initial];
 foreach($reviewDocuments as &$doc)$doc['original_filename']='fixture.pdf'; unset($doc);
 $setupStart=strpos($source,"\$reviewUploadGroup = \$queueKey");

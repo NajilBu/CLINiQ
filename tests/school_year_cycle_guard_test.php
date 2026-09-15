@@ -13,6 +13,12 @@ foreach ([null, [], ['status' => 'Active'], ['status' => 'Archived']] as $cycle)
         throw new RuntimeException('The new-school-year action must be unavailable unless the current APE cycle is closed.');
     }
 }
+if (next_school_year_from_cycle(['academic_year' => '2026-2027']) !== '2027-2028'
+    || school_year_default_promotion('1') !== '2'
+    || school_year_default_promotion('3') !== '4'
+    || school_year_default_promotion('4') !== 'graduated') {
+    throw new RuntimeException('School-year progression defaults are incorrect.');
+}
 
 $settingsPage = file_get_contents(dirname(__DIR__) . '/public/settings/index.php');
 if (!str_contains($settingsPage, '<?php if ($canStartNewSchoolYear): ?>')) {
@@ -25,9 +31,11 @@ if (!str_contains($cycleService, 'if (!can_start_new_school_year($currentCycle))
 }
 
 foreach ([
-    'INNER JOIN students s ON s.person_id = a.person_id',
+    'INNER JOIN students s ON s.person_id = p.id',
     "cliniq_notification_email('student_re_enrollment'",
     'Faculty, school personnel, clinic staff, and other patients remain active.',
+    'student_school_year_enrollments',
+    'Student promotion for school year',
 ] as $expected) {
     if (!str_contains($cycleService, $expected)) {
         throw new RuntimeException("The student-only school-year reset is missing: {$expected}");
@@ -42,7 +50,9 @@ foreach ([
     'active student patient accounts only',
     'Faculty, personnel, clinic staff, and other patient accounts remain active.',
     'Students must submit their current enrollment status on their next login.',
-    'Reset active student accounts?',
+    'Review Student Promotion',
+    'data-promotion-year',
+    'Confirm New School Year',
 ] as $expected) {
     if (!str_contains($settingsPage, $expected)) {
         throw new RuntimeException("The school-year reset explanation is missing: {$expected}");
@@ -54,6 +64,7 @@ $patientDashboard = file_get_contents(dirname(__DIR__) . '/patient-portal/patien
 $authHelper = file_get_contents(dirname(__DIR__) . '/app/helpers/auth.php');
 $productionSchema = file_get_contents(dirname(__DIR__) . '/database/production_schema.sql');
 $declarationMigration = file_get_contents(dirname(__DIR__) . '/database/migrations/20260915_create_student_enrollment_declarations.sql');
+$schoolYearMigration = file_get_contents(dirname(__DIR__) . '/database/migrations/20260916_create_student_school_year_enrollments.sql');
 if (!str_contains((string) $patientLogin, "\$wasActivated && (\$patient['account_type'] ?? '') === 'student'")
     || str_contains((string) $patientDashboard, 'Confirm Employment')
     || str_contains((string) $patientDashboard, 'still employed')) {
@@ -91,6 +102,17 @@ foreach ([$productionSchema, $declarationMigration] as $schemaSource) {
         || !str_contains((string) $schemaSource, 'non_enrollment_reason')) {
         throw new RuntimeException('The enrollment declaration database schema is incomplete.');
     }
+}
+foreach ([$productionSchema, $schoolYearMigration] as $schemaSource) {
+    if (!str_contains((string) $schemaSource, 'student_school_year_enrollments')
+        || !str_contains((string) $schemaSource, 'promotion_source')
+        || !str_contains((string) $schemaSource, 'uq_student_school_year')) {
+        throw new RuntimeException('The student school-year history schema is incomplete.');
+    }
+}
+if (!str_contains((string) $authHelper, 'UPDATE student_school_year_enrollments')
+    || !str_contains((string) $authHelper, "INSERT IGNORE INTO ape_records")) {
+    throw new RuntimeException('Enrollment confirmation must update history and join an active APE cycle.');
 }
 
 echo "School year cycle guard test passed. No database writes.\n";

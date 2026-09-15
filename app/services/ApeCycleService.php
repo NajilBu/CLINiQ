@@ -24,6 +24,10 @@ function ensure_ape_cycle_schema(): void
     if ((int) $batchTable !== 1 || (int) $batchColumn !== 1) {
         throw new RuntimeException('APE batch scheduling is missing. Run database/migrations/20260902_create_ape_schedule_batches.sql.');
     }
+    $schoolYearTable = $db->query("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'student_school_year_enrollments'")->fetchColumn();
+    if ((int) $schoolYearTable !== 1) {
+        throw new RuntimeException('Student school-year history is missing. Run database/migrations/20260916_create_student_school_year_enrollments.sql.');
+    }
     $ready = true;
 }
 
@@ -116,6 +120,52 @@ function ape_cycle_current(): ?array
 function can_start_new_school_year(?array $currentCycle): bool
 {
     return ($currentCycle['status'] ?? '') === 'Closed';
+}
+
+function next_school_year_from_cycle(?array $cycle): string
+{
+    $fallbackStart = (int) date('Y') - ((int) date('n') < 6 ? 1 : 0);
+    $academicYear = normalize_ape_academic_year((string) ($cycle['academic_year'] ?? ($fallbackStart . '-' . ($fallbackStart + 1))));
+    [$startYear, $endYear] = array_map('intval', explode('-', $academicYear));
+    return $endYear . '-' . ($endYear + 1);
+}
+
+function school_year_default_promotion(string $yearLevel): string
+{
+    $year = (int) trim($yearLevel);
+    return $year >= 4 ? 'graduated' : (string) max(1, $year + 1);
+}
+
+function school_year_promotion_preview(?array $currentCycle = null): array
+{
+    ensure_ape_cycle_schema();
+    $currentCycle ??= ape_cycle_current();
+    if (!can_start_new_school_year($currentCycle)) {
+        return ['academic_year' => '', 'students' => [], 'already_processed' => false];
+    }
+    $academicYear = next_school_year_from_cycle($currentCycle);
+    $duplicate = auth_db()->prepare('SELECT COUNT(*) FROM student_school_year_enrollments WHERE academic_year = ?');
+    $duplicate->execute([$academicYear]);
+    $students = auth_db()->query("
+        SELECT s.person_id, s.program_id, s.year_level, s.section, s.academic_year,
+               p.id_number, TRIM(CONCAT_WS(' ', p.first_name, p.middle_name, p.last_name)) AS student_name,
+               pr.program_code
+        FROM students s
+        INNER JOIN people p ON p.id = s.person_id
+        INNER JOIN patients pt ON pt.person_id = s.person_id
+        INNER JOIN accounts a ON a.person_id = s.person_id AND a.account_status = 'active'
+        LEFT JOIN programs pr ON pr.id = s.program_id
+        ORDER BY pr.program_code, CAST(s.year_level AS UNSIGNED), s.section, p.last_name, p.first_name
+    ")->fetchAll();
+    foreach ($students as &$student) {
+        $student['default_promotion'] = school_year_default_promotion((string) ($student['year_level'] ?? ''));
+    }
+    unset($student);
+    return [
+        'academic_year' => $academicYear,
+        'students' => $students,
+        'already_processed' => (int) $duplicate->fetchColumn() > 0,
+    ];
 }
 
 function start_ape_cycle(string $academicYear, string $complianceStart, string $complianceEnd, ?int $actorPersonId, ?string $examScheduleDate = null): array
@@ -589,7 +639,7 @@ function create_ape_schedule_batch(array $input, ?int $actorPersonId): array
         if ($scheduleDate < date('Y-m-d')) {
             throw new InvalidArgumentException('The APE batch date cannot be in the past.');
         }
-        ape_validate_batch_working_hours($scheduleDate, $startTime, $endTime, appointment_weekly_schedule());
+        ape_validate_batch_working_hours($scheduleDate, $startTime, $endTime, appointment_schedule_for_date($scheduleDate));
 
         $duplicateName = $db->prepare("SELECT batch_id FROM ape_schedule_batches WHERE ape_cycle_id = ? AND LOWER(batch_name) = LOWER(?) LIMIT 1");
         $duplicateName->execute([$cycleId, $batchName]);
@@ -772,13 +822,13 @@ function cancel_ape_schedule_batch(int $batchId, int $cycleId, ?int $actorPerson
 }
 
 /**
- * Reset active student patient accounts to inactive at the start of a new school year.
+ * Promote and reset active student patient accounts at the start of a new school year.
  * Faculty, school personnel, clinic staff, and other patients remain active.
  * Sends a re-enrollment email to each affected student with an email address.
  *
- * Returns an array: ['reset' => int, 'emailed' => int, 'failed' => int]
+ * Returns promotion and notification totals.
  */
-function reset_school_year_accounts(): array
+function reset_school_year_accounts(string $academicYear = '', array $submittedPromotions = [], ?int $actorPersonId = null): array
 {
     ensure_ape_cycle_schema();
     $currentCycle = ape_cycle_current();
@@ -786,36 +836,100 @@ function reset_school_year_accounts(): array
         throw new RuntimeException('Close the current APE cycle before starting a new school year.');
     }
 
-    $db = auth_db();
+    $academicYear = $academicYear !== '' ? normalize_ape_academic_year($academicYear) : next_school_year_from_cycle($currentCycle);
+    if ($academicYear !== next_school_year_from_cycle($currentCycle)) {
+        throw new InvalidArgumentException('The new school year must immediately follow the closed school year.');
+    }
 
-    // Fetch affected students before the reset so their notification details remain available.
-    $fetch = $db->query("
+    $db = auth_db();
+    $db->beginTransaction();
+    try {
+        $alreadyProcessed = $db->prepare('SELECT enrollment_id FROM student_school_year_enrollments WHERE academic_year = ? LIMIT 1 FOR UPDATE');
+        $alreadyProcessed->execute([$academicYear]);
+        if ($alreadyProcessed->fetchColumn()) {
+            throw new RuntimeException("Student promotion for school year {$academicYear} has already been completed.");
+        }
+
+        $fetch = $db->query("
         SELECT
             a.id AS account_id,
             a.email,
             p.first_name,
-            p.last_name
+            p.last_name,
+            s.person_id,
+            s.program_id,
+            s.year_level,
+            s.section,
+            s.academic_year
         FROM accounts a
         INNER JOIN patients pt ON pt.person_id = a.person_id
         INNER JOIN people p ON p.id = a.person_id
         INNER JOIN students s ON s.person_id = p.id
         WHERE a.account_status = 'active'
-          AND a.email IS NOT NULL
-          AND a.email <> ''
-    ");
-    $patients = $fetch->fetchAll();
+        FOR UPDATE
+        ");
+        $students = $fetch->fetchAll();
 
-    // Now perform the reset.
-    $reset = $db->prepare("
-        UPDATE accounts a
-        INNER JOIN patients pt ON pt.person_id = a.person_id
-        INNER JOIN students s ON s.person_id = a.person_id
-        SET a.account_status = 'inactive',
-            a.status_reason = 'New school year enrollment status required'
-        WHERE a.account_status = 'active'
-    ");
-    $reset->execute();
-    $resetCount = $reset->rowCount();
+        $saveYear = $db->prepare("
+            INSERT INTO student_school_year_enrollments
+                (student_person_id, academic_year, program_id, year_level, section, enrollment_status, non_enrollment_reason, promotion_source, promoted_by_person_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                program_id = VALUES(program_id), year_level = VALUES(year_level), section = VALUES(section),
+                enrollment_status = VALUES(enrollment_status), non_enrollment_reason = VALUES(non_enrollment_reason),
+                promotion_source = VALUES(promotion_source), promoted_by_person_id = VALUES(promoted_by_person_id)
+        ");
+        $updateStudent = $db->prepare('UPDATE students SET year_level = ?, section = ?, academic_year = ? WHERE person_id = ?');
+        $updateGraduatedStudent = $db->prepare('UPDATE students SET academic_year = ? WHERE person_id = ?');
+        $deactivate = $db->prepare("UPDATE accounts SET account_status = 'inactive', status_reason = ? WHERE id = ? AND account_status = 'active'");
+        $promoted = 0;
+        $kept = 0;
+        $graduated = 0;
+        $notificationPatients = [];
+
+        foreach ($students as $student) {
+            $personId = (int) $student['person_id'];
+            $currentYearLevel = (string) ($student['year_level'] ?? '');
+            $choice = (array) ($submittedPromotions[$personId] ?? []);
+            $target = trim((string) ($choice['year_level'] ?? school_year_default_promotion($currentYearLevel)));
+            $targetSection = strtoupper(trim((string) ($choice['section'] ?? $student['section'] ?? '')));
+            if (!in_array($target, ['1', '2', '3', '4', 'graduated'], true)) {
+                throw new InvalidArgumentException('Choose a valid promoted year level for every student.');
+            }
+            if ($target !== 'graduated' && ($targetSection === '' || mb_strlen($targetSection) > 80)) {
+                throw new InvalidArgumentException('Enter a valid section for every continuing student.');
+            }
+
+            $previousAcademicYear = trim((string) ($student['academic_year'] ?? '')) ?: (string) $currentCycle['academic_year'];
+            $saveYear->execute([$personId, $previousAcademicYear, $student['program_id'], $currentYearLevel, $student['section'], 'Enrolled', null, 'Snapshot', $actorPersonId]);
+            $source = $target === school_year_default_promotion($currentYearLevel)
+                && $targetSection === strtoupper(trim((string) ($student['section'] ?? '')))
+                ? 'Automatic' : 'Manual';
+
+            if ($target === 'graduated') {
+                $updateGraduatedStudent->execute([$academicYear, $personId]);
+                $deactivate->execute(['Graduated', (int) $student['account_id']]);
+                $saveYear->execute([$personId, $academicYear, $student['program_id'], $currentYearLevel, $student['section'], 'Graduated', 'Graduated', $source, $actorPersonId]);
+                $graduated++;
+                continue;
+            }
+
+            $updateStudent->execute([$target, $targetSection, $academicYear, $personId]);
+            $deactivate->execute(['New school year enrollment status required', (int) $student['account_id']]);
+            $saveYear->execute([$personId, $academicYear, $student['program_id'], $target, $targetSection, 'Pending Confirmation', null, $source, $actorPersonId]);
+            (int) $target > (int) $currentYearLevel ? $promoted++ : $kept++;
+            if (trim((string) ($student['email'] ?? '')) !== '') {
+                $notificationPatients[] = $student;
+            }
+        }
+
+        $db->commit();
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        throw $e;
+    }
 
     // Send re-enrollment emails.
     require_once __DIR__ . '/../services/SystemSettings.php';
@@ -825,7 +939,7 @@ function reset_school_year_accounts(): array
 
     $emailed = 0;
     $failed  = 0;
-    foreach ($patients as $patient) {
+    foreach ($notificationPatients as $patient) {
         $firstName = (string) ($patient['first_name'] ?? '');
         $notification = cliniq_notification_email('student_re_enrollment', [
             'patient_name' => $firstName,
@@ -843,5 +957,13 @@ function reset_school_year_accounts(): array
         $sent ? $emailed++ : $failed++;
     }
 
-    return ['reset' => $resetCount, 'emailed' => $emailed, 'failed' => $failed];
+    return [
+        'reset' => $promoted + $kept + $graduated,
+        'promoted' => $promoted,
+        'kept' => $kept,
+        'graduated' => $graduated,
+        'emailed' => $emailed,
+        'failed' => $failed,
+        'academic_year' => $academicYear,
+    ];
 }

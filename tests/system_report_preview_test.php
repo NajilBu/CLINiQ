@@ -17,6 +17,7 @@ $checks = [
     'multiple-page label exists' => str_contains($source, 'Multiple Pages View'),
     'preview reports its page count' => str_contains($source, 'pages shown in the printable page layout'),
     'print mode restores full scale' => str_contains($source, 'zoom: 1'),
+    'PDF download form includes CSRF protection' => str_contains($source, 'name="_csrf"') && str_contains($source, 'csrf_token()'),
 ];
 
 foreach ($checks as $label => $passed) {

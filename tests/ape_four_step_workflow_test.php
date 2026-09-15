@@ -43,7 +43,15 @@ expect_four_step(
 );
 expect_four_step(
     !ape_schedule_is_current($fixedSchedule, new DateTimeImmutable('2026-09-15 12:00:01')),
-    'Examination must become unavailable after the assigned batch.'
+    'The original batch window must be reported as ended after its end time.'
+);
+expect_four_step(
+    !ape_examination_is_available($fixedSchedule, new DateTimeImmutable('2026-09-15 07:59:59')),
+    'Examination must remain unavailable before the assigned batch starts.'
+);
+expect_four_step(
+    ape_examination_is_available($fixedSchedule, new DateTimeImmutable('2026-09-15 12:00:01')),
+    'A missed patient must remain examinable after the assigned batch ends.'
 );
 $now = new DateTimeImmutable('now');
 $scheduledNow = array_replace($waiting, [
@@ -54,12 +62,19 @@ expect_four_step(ape_record_queue($waiting) === 'digital_submission', 'Digital K
 expect_four_step(ape_record_step_index($waiting) === 0, 'Digital Keeping must be step one.');
 expect_four_step(ape_record_queue($scheduledNow) === 'examination', 'The active schedule must allow examination despite incomplete files.');
 expect_four_step(ape_record_step_index($scheduledNow) === 1, 'Examination must be step two.');
+$missedSchedule = array_replace($fixedSchedule, [
+    'batch_start_at' => $now->modify('-2 hours')->format('Y-m-d H:i:s'),
+    'batch_end_at' => $now->modify('-1 hour')->format('Y-m-d H:i:s'),
+]);
+expect_four_step(ape_record_queue($missedSchedule) === 'examination', 'A missed patient must remain in the examination queue.');
+expect_four_step(ape_next_action($missedSchedule)['label'] === 'Record Examination', 'A missed patient must show the Record Examination action.');
 
 $digital = array_replace($waiting, ['exam_date' => '2026-09-15']);
-expect_four_step(ape_record_queue($digital) === 'digital_submission', 'Incomplete regular files must return to Digital Keeping after examination.');
-expect_four_step(ape_record_step_index($digital) === 0, 'Digital Keeping remains step one while regular files are incomplete.');
+expect_four_step(ape_record_queue($digital) === 'final_decision', 'Incomplete regular files must remain in Final Decision after examination.');
+expect_four_step(ape_record_step_index($digital) === 2, 'A saved examination must not move backward to Digital Keeping.');
 $deadline = ape_deadline_status($digital, new DateTimeImmutable('2026-09-22'));
 expect_four_step(($deadline['label'] ?? '') === 'On Track' && ($deadline['due_date'] ?? '') === '2026-09-22', 'Regular uploads must allow the full seven days after examination.');
+expect_four_step(ape_deadline_status($digital, new DateTimeImmutable('2026-09-23'))['label'] === 'Overdue', 'Final Decision must show overdue regular uploads after the seven-day deadline.');
 
 $final = array_replace($digital, [
     'initial_requirement_count' => 1,
@@ -92,5 +107,11 @@ expect_four_step(ape_earliest_upcoming_batch([$batches[0]], $batchNow) === null,
 $indexSource = file_get_contents(__DIR__ . '/../public/ape/index.php');
 expect_four_step(str_contains($indexSource, "['queue' => \$activeQueue, 'scope' => 'overall', 'population' => \$populationScope]"), 'Overall selection must remain explicit in its population-aware link.');
 expect_four_step(str_contains($indexSource, "name=\"scope\" value=\"overall\""), 'Search must preserve the explicit Overall scope.');
+expect_four_step(str_contains($indexSource, "'Examine Patient'"), 'Missed-patient alerts must provide an examination action.');
+
+$viewSource = file_get_contents(__DIR__ . '/../public/ape/view.php');
+expect_four_step(str_contains($viewSource, 'data-final-decision-documents'), 'Final Decision must display outstanding regular documents.');
+expect_four_step(str_contains($viewSource, "in_array(\$archiveQueue, ['final_decision', 'follow_up'], true)"), 'Final Decision and Follow-up must allow pending regular uploads to be archived without returning to Digital Keeping.');
+expect_four_step(str_contains($viewSource, 'Complete and archive every regular digital document before clearing the patient.'), 'Clearance must remain protected until regular digital documents are archived.');
 
 echo "APE four-step workflow tests passed.\n";

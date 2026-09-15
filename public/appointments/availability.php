@@ -16,19 +16,72 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 $action = $_POST['action'] ?? 'add';
 
+$assertScheduleHasNoConflicts = static function (array $candidate, ?string $month = null): void {
+    $params = [];
+    $configuredMonths = appointment_monthly_schedules();
+    $appointmentWhere = "appointment_datetime >= NOW() AND status IN ('Pending', 'Scheduled')";
+    $batchWhere = "schedule_date >= CURDATE() AND status = 'Scheduled'";
+    if ($month !== null) {
+        $monthDate = DateTimeImmutable::createFromFormat('!Y-m-d', $month . '-01');
+        $monthStart = $monthDate->format('Y-m-01');
+        $monthEnd = $monthDate->modify('last day of this month')->format('Y-m-d');
+        $appointmentWhere .= ' AND DATE(appointment_datetime) BETWEEN ? AND ?';
+        $batchWhere .= ' AND schedule_date BETWEEN ? AND ?';
+        $params = [$monthStart, $monthEnd];
+    }
+
+    $appointments = appointment_db()->prepare("SELECT appointment_datetime FROM appointments WHERE {$appointmentWhere}");
+    $appointments->execute($params);
+    foreach ($appointments->fetchAll(PDO::FETCH_COLUMN) as $datetime) {
+        $date = substr((string) $datetime, 0, 10);
+        $time = substr((string) $datetime, 11, 8);
+        $effectiveCandidate = $month === null && isset($configuredMonths[substr($date, 0, 7)])
+            ? $configuredMonths[substr($date, 0, 7)]['days']
+            : $candidate;
+        if (!appointment_slot_is_open_for_schedule($effectiveCandidate, $date, $time)) {
+            throw new InvalidArgumentException('An upcoming appointment falls outside those hours. Resolve or reschedule it before changing this schedule.');
+        }
+    }
+
+    $batches = appointment_db()->prepare("SELECT schedule_date, start_time, end_time FROM ape_schedule_batches WHERE {$batchWhere}");
+    $batches->execute($params);
+    foreach ($batches->fetchAll() as $batch) {
+        $date = (string) $batch['schedule_date'];
+        $effectiveCandidate = $month === null && isset($configuredMonths[substr($date, 0, 7)])
+            ? $configuredMonths[substr($date, 0, 7)]['days']
+            : $candidate;
+        if (!appointment_range_is_open_for_schedule($effectiveCandidate, $date, (string) $batch['start_time'], (string) $batch['end_time'])) {
+            throw new InvalidArgumentException('A scheduled APE batch falls outside those hours. Reschedule or cancel it before changing this schedule.');
+        }
+    }
+};
+
 if ($action === 'save_schedule') {
     try {
         $candidate = appointment_schedule_from_form($_POST);
-        $future = appointment_db()->query("SELECT appointment_datetime FROM appointments WHERE appointment_datetime >= NOW() AND status IN ('Pending', 'Scheduled')")->fetchAll(PDO::FETCH_COLUMN);
-        foreach ($future as $datetime) {
-            $date = substr((string) $datetime, 0, 10);
-            $time = substr((string) $datetime, 11, 8);
-            if (!appointment_slot_is_open_for_schedule($candidate, $date, $time)) {
-                throw new InvalidArgumentException('An upcoming appointment falls outside those hours. Resolve or reschedule it before changing the clinic schedule.');
-            }
-        }
+        $assertScheduleHasNoConflicts($candidate);
         appointment_save_weekly_schedule($candidate, (int) ($user['person_id'] ?? 0) ?: null);
         flash_message('success', 'Working days and hours saved. New appointment requests will follow this schedule.');
+    } catch (InvalidArgumentException $exception) {
+        flash_message('error', $exception->getMessage());
+    }
+} elseif ($action === 'save_month_schedule') {
+    try {
+        $month = appointment_normalize_month_key((string) ($_POST['schedule_month'] ?? ''), true);
+        $candidate = appointment_schedule_from_form($_POST);
+        $assertScheduleHasNoConflicts($candidate, $month);
+        appointment_save_monthly_schedule($month, $candidate, (int) ($user['person_id'] ?? 0) ?: null);
+        flash_message('success', date('F Y', strtotime($month . '-01')) . ' working days and hours saved.');
+    } catch (InvalidArgumentException $exception) {
+        flash_message('error', $exception->getMessage());
+    }
+} elseif ($action === 'delete_month_schedule') {
+    try {
+        $month = appointment_normalize_month_key((string) ($_POST['schedule_month'] ?? ''), true);
+        $regularSchedule = appointment_weekly_schedule();
+        $assertScheduleHasNoConflicts($regularSchedule, $month);
+        appointment_delete_monthly_schedule($month, (int) ($user['person_id'] ?? 0) ?: null);
+        flash_message('success', date('F Y', strtotime($month . '-01')) . ' will use the regular weekly schedule.');
     } catch (InvalidArgumentException $exception) {
         flash_message('error', $exception->getMessage());
     }
@@ -61,7 +114,7 @@ if ($action === 'save_schedule') {
     })();
     $originalStart = trim((string) ($_POST['original_start'] ?? ''));
     $originalEnd = trim((string) ($_POST['original_end'] ?? ''));
-    $hours = appointment_weekly_schedule()[(int) (DateTimeImmutable::createFromFormat('!Y-m-d', $date) ?: new DateTimeImmutable('today'))->format('N')];
+    $hours = appointment_schedule_for_date($date)[(int) (DateTimeImmutable::createFromFormat('!Y-m-d', $date) ?: new DateTimeImmutable('today'))->format('N')];
     $rangeError = !preg_match('/^\d{2}:\d{2}$/', $start) || !preg_match('/^\d{2}:\d{2}$/', $end) || $start >= $end || $start < $hours['start'] || $end > $hours['end'] || ($originalStart !== '' && $start < $originalStart) || ($originalEnd !== '' && $end > $originalEnd);
     if (!$ids || $dateError || $rangeError || $reason === '') {
         flash_message('error', $dateError ?: ($reason === '' ? 'Enter a reason for the unavailable time.' : 'Choose a time within the clinic working hours for that day.'));
@@ -127,7 +180,7 @@ if ($action === 'save_schedule') {
                 flash_message('error', $dateError);
                 break;
             }
-            $hours = appointment_weekly_schedule()[(int) (new DateTimeImmutable($slotDate))->format('N')];
+            $hours = appointment_schedule_for_date($slotDate)[(int) (new DateTimeImmutable($slotDate))->format('N')];
             if (!preg_match('/^\d{2}:\d{2}$/', $slotStart) || !preg_match('/^\d{2}:\d{2}$/', $slotEnd) || $slotStart >= $slotEnd || $slotStart < $hours['start'] || $slotEnd > $hours['end']) {
                 $validSlots = [];
                 flash_message('error', 'Choose time slots within clinic working hours.');
@@ -169,7 +222,7 @@ if ($action === 'save_schedule') {
     } elseif (!$validDates) {
         flash_message('error', 'Choose at least one date to block.');
     } elseif (!$allDay && ($start === '' || $end === '' || $start >= $end || count(array_filter($validDates, static function (string $date) use ($start, $end): bool {
-        $hours = appointment_weekly_schedule()[(int) (new DateTimeImmutable($date))->format('N')];
+        $hours = appointment_schedule_for_date($date)[(int) (new DateTimeImmutable($date))->format('N')];
         return $start < $hours['start'] || $end > $hours['end'];
     })) > 0)) {
         flash_message('error', 'Choose start and end times within clinic working hours.');

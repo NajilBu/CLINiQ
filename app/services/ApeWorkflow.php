@@ -117,13 +117,13 @@ function ape_work_queues(): array
         'examination' => [
             'title' => 'Examination',
             'short_title' => 'Examination',
-            'description' => 'During the assigned schedule, authorized clinic staff can examine the patient even when digital documents are incomplete.',
+            'description' => 'After the assigned schedule starts, authorized clinic staff can examine the patient even when the schedule was missed or digital documents are incomplete.',
             'icon' => 'stethoscope',
         ],
         'final_decision' => [
             'title' => 'Final Decision',
             'short_title' => 'Final Decision',
-            'description' => 'Clinic staff reviews the completed examination and archived documents, then clears the patient or records follow-up.',
+            'description' => 'Clinic staff reviews the completed examination here while any remaining regular documents are submitted and archived.',
             'icon' => 'clinical_notes',
         ],
         'follow_up' => [
@@ -171,6 +171,7 @@ function ape_can_review_returned_documents(array $record): bool
 {
     // The return date is an alert deadline, not a restriction on clinic access.
     return ape_record_queue($record) === 'follow_up'
+        && ape_digital_submission_complete($record)
         && (int) ($record['deferred_requirement_count'] ?? 0) > 0
         && !ape_deferred_submission_complete($record)
         && !empty($record['exam_date'])
@@ -210,24 +211,23 @@ function ape_record_queue(array $record): string
         return 'completed';
     }
 
-    // The assigned examination window takes priority and is never blocked by uploads.
-    if (empty($record['exam_date']) && ape_examination_is_available($record)) {
+    if (!empty($record['exam_date'])) {
+        if (!ape_deferred_submission_complete($record) || (int)($record['follow_up_required'] ?? 0) === 1 || in_array(($record['clearance_status'] ?? ''), ['For Follow-up', 'Submitted'], true)) {
+            return 'follow_up';
+        }
+
+        // A saved clinical examination stays in the decision phase while regular
+        // files are completed and archived. It must never move backward to step one.
+        return 'final_decision';
+    }
+
+    // Once the assigned schedule starts, the patient remains examinable even if
+    // the original window was missed and digital documents are still incomplete.
+    if (ape_examination_is_available($record)) {
         return 'examination';
     }
 
-    if (!ape_digital_submission_complete($record)) {
-        return 'digital_submission';
-    }
-
-    if (empty($record['exam_date'])) {
-        return 'examination';
-    }
-
-    if (!ape_deferred_submission_complete($record) || (int)($record['follow_up_required'] ?? 0) === 1 || in_array(($record['clearance_status'] ?? ''), ['For Follow-up', 'Submitted'], true)) {
-        return 'follow_up';
-    }
-
-    return 'final_decision';
+    return ape_digital_submission_complete($record) ? 'examination' : 'digital_submission';
 }
 
 /** Count patients, not documents; requirement alerts can overlap work queues. */
@@ -264,7 +264,9 @@ function ape_next_action(array $record): array
     return match (ape_record_queue($record)) {
         'examination' => ape_examination_is_available($record)
             ? ['label' => 'Record Examination', 'icon' => 'stethoscope']
-            : ['label' => 'Assign APE Schedule', 'icon' => 'calendar_add_on'],
+            : (!empty($record['schedule_batch_id'])
+                ? ['label' => 'Wait for Assigned Schedule', 'icon' => 'schedule']
+                : ['label' => 'Assign APE Schedule', 'icon' => 'calendar_add_on']),
         'digital_submission' => !ape_initial_uploads_present($record)
             ? ['label' => 'Wait for Patient Upload', 'icon' => 'upload_file']
             : (empty($record['exam_date'])
@@ -322,8 +324,26 @@ function ape_schedule_is_current(array $record, ?DateTimeImmutable $now = null):
 
 function ape_examination_is_available(array $record, ?DateTimeImmutable $now = null): bool
 {
-    return ($record['entry_mode'] ?? '') === 'Clinic Manual'
-        || ape_schedule_is_current($record, $now);
+    if (($record['entry_mode'] ?? '') === 'Clinic Manual') {
+        return true;
+    }
+    if (empty($record['schedule_batch_id']) || ($record['batch_status'] ?? '') === 'Cancelled') {
+        return false;
+    }
+
+    $start = $record['batch_start_at'] ?? null;
+    if (!$start) {
+        return false;
+    }
+
+    try {
+        $current = $now ?? new DateTimeImmutable('now');
+        $startsAt = new DateTimeImmutable((string) $start);
+    } catch (Exception $exception) {
+        return false;
+    }
+
+    return $current >= $startsAt;
 }
 
 function ape_earliest_upcoming_batch(array $batches, ?DateTimeImmutable $now = null): ?array
@@ -380,7 +400,7 @@ function ape_deadline_status(array $record, ?DateTimeImmutable $today = null): ?
     $queueKey = ape_record_queue($record);
     $dueDate = null;
 
-    if ($queueKey === 'digital_submission') {
+    if (!empty($record['exam_date']) && !ape_digital_submission_complete($record)) {
         $examDate = $record['exam_date'] ?? null;
         $examTimestamp = $examDate ? strtotime((string) $examDate) : false;
         if (!$examTimestamp) {
@@ -487,7 +507,9 @@ function ape_next_action_card(array $record): array
             ],
         'final_decision' => [
             'title' => 'Record the final clinical decision',
-            'body' => 'Review the examination and archived documents, then explicitly clear the patient, require follow-up, or create a referral.',
+            'body' => ape_digital_submission_complete($record)
+                ? 'Review the examination and archived documents, then explicitly clear the patient or require follow-up.'
+                : 'Review the completed examination here while the patient finishes the remaining regular documents. The record stays in Final Decision.',
         ],
         'follow_up' => [
             'title' => 'Track the required follow-up',
@@ -517,6 +539,9 @@ function ape_missing_item(array $record): string
     }
     if ($queue === 'examination') {
         return ape_examination_is_available($record) ? 'Ready for examination' : 'Waiting for assigned APE schedule';
+    }
+    if ($queue === 'final_decision' && !ape_digital_submission_complete($record)) {
+        return 'Regular digital documents still pending';
     }
     if (($record['requirement_status'] ?? '') === 'Not Checked') {
         return 'Waiting for follow-up hard-copy documents';
@@ -638,8 +663,36 @@ function ensure_ape_workflow_schema(): void
     $ready = true;
 }
 
+function ape_school_year_history_available(): bool
+{
+    static $available = null;
+    if ($available !== null) {
+        return $available;
+    }
+
+    try {
+        $check = auth_db()->query("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'student_school_year_enrollments'");
+        $available = (int) $check->fetchColumn() === 1;
+    } catch (Throwable) {
+        $available = false;
+    }
+
+    return $available;
+}
+
 function ape_record_select_sql(): string
 {
+    $historyCourseSection = '';
+    $historyJoins = '';
+    if (ape_school_year_history_available()) {
+        $historyCourseSection = "NULLIF(TRIM(CONCAT(history_program.program_code, '-', school_year_history.year_level, UPPER(school_year_history.section))), ''),";
+        $historyJoins = "
+        LEFT JOIN student_school_year_enrollments school_year_history
+            ON school_year_history.student_person_id = p.id
+           AND school_year_history.academic_year = ar.academic_year
+        LEFT JOIN programs history_program ON history_program.id = school_year_history.program_id";
+    }
+
     return "
         SELECT
             ar.*,
@@ -665,6 +718,7 @@ function ape_record_select_sql(): string
             p.sex,
             p.birthdate,
             COALESCE(
+                {$historyCourseSection}
                 NULLIF(TRIM(CONCAT(pr.program_code, '-', s.year_level, UPPER(s.section))), ''),
                 ed.department_code,
                 'Patient'
@@ -767,6 +821,7 @@ function ape_record_select_sql(): string
         JOIN people p ON p.id = patient_profile.person_id
         LEFT JOIN students s ON s.person_id = p.id
         LEFT JOIN programs pr ON pr.id = s.program_id
+        {$historyJoins}
         LEFT JOIN school_employees se ON se.person_id = p.id
         LEFT JOIN departments ed ON ed.id = se.department_id
         LEFT JOIN clinic_staff reviewer_staff ON reviewer_staff.person_id = ar.reviewed_by_person_id
@@ -792,11 +847,15 @@ function ape_fetch_records(string $search = '', ?int $limit = null, ?string $sch
     }
 
     if ($search !== '') {
+        $historyProgramSearch = ape_school_year_history_available()
+            ? 'OR history_program.program_code LIKE ?'
+            : '';
         $conditions[] = "(
                p.first_name LIKE ?
                OR p.last_name LIKE ?
                OR p.id_number LIKE ?
                OR pr.program_code LIKE ?
+               {$historyProgramSearch}
                OR ed.department_code LIKE ?
                OR EXISTS (
                     SELECT 1 FROM ape_documents search_document
@@ -805,7 +864,7 @@ function ape_fetch_records(string $search = '', ?int $limit = null, ?string $sch
                )
             )";
         $term = '%' . $search . '%';
-        $params = array_merge($params, array_fill(0, 6, $term));
+        $params = array_merge($params, array_fill(0, ape_school_year_history_available() ? 7 : 6, $term));
     }
     if ($conditions) {
         $sql .= ' WHERE ' . implode(' AND ', $conditions);
@@ -1023,7 +1082,10 @@ function ape_store_uploaded_file(array $file, string $prefix): array
 function ape_workflow_summary(array $record): string
 {
     if (ape_record_queue($record) === 'digital_submission') {
-        return 'Digital submission and clinic archive review must be completed before final decision or follow-up.';
+        return 'The patient may submit digital documents before the assigned examination schedule starts.';
+    }
+    if (ape_record_queue($record) === 'final_decision' && !ape_digital_submission_complete($record)) {
+        return 'The examination is complete. Remaining regular documents stay pending in Final Decision until they are uploaded and archived.';
     }
     if (($record['workflow_status'] ?? '') === 'Follow-up Required') {
         return 'Patient needs treatment follow-up and clearance before APE completion.';

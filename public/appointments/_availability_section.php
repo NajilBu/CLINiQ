@@ -5,10 +5,17 @@ $availabilityBlocksByDate = appointment_blocks_for_week($availabilityWeek);
 [$availabilityRangeStart, $availabilityRangeEnd] = appointment_week_bounds($availabilityWeek);
 $availabilityApeBatchesByDate = appointment_ape_batches_for_range($availabilityRangeStart, $availabilityRangeEnd);
 $weeklySchedule = appointment_weekly_schedule();
+$monthlySchedules = appointment_monthly_schedules();
+$minimumFutureMonth = (new DateTimeImmutable('first day of next month'))->format('Y-m');
 $availabilityWeekDays = [];
+$availabilityWeekSchedule = [];
 for ($offset = 0; $offset < 7; $offset++) {
     $day = $availabilityWeek->modify('+' . $offset . ' days');
-    if ($weeklySchedule[(int) $day->format('N')]['enabled']) {
+    $date = $day->format('Y-m-d');
+    $effectiveSchedule = appointment_schedule_for_date($date);
+    $dayNumber = (int) $day->format('N');
+    $availabilityWeekSchedule[$dayNumber] = $effectiveSchedule[$dayNumber];
+    if ($effectiveSchedule[$dayNumber]['enabled']) {
         $availabilityWeekDays[] = $day;
     }
 }
@@ -16,13 +23,13 @@ for ($offset = 0; $offset < 7; $offset++) {
 $calendarBlocksByDate = $availabilityBlocksByDate;
 // Combine adjoining unavailable periods for display; retain the original saved records.
 foreach ($calendarBlocksByDate as $date => $dayBlocks) {
-    usort($dayBlocks, static fn(array $a, array $b): int => strcmp($a['start_time'] ?? '06:00:00', $b['start_time'] ?? '06:00:00'));
+    usort($dayBlocks, static fn(array $a, array $b): int => strcmp($a['start_time'] ?? '07:00:00', $b['start_time'] ?? '07:00:00'));
     $merged = [];
     foreach ($dayBlocks as $block) {
         $last = count($merged) - 1;
-        $start = $block['start_time'] ?: '06:00:00';
-        $end = $block['end_time'] ?: '20:00:00';
-        if ($last >= 0 && $start <= ($merged[$last]['end_time'] ?: '20:00:00')) {
+        $start = $block['start_time'] ?: '07:00:00';
+        $end = $block['end_time'] ?: '21:00:00';
+        if ($last >= 0 && $start <= ($merged[$last]['end_time'] ?: '21:00:00')) {
             if (empty($merged[$last]['start_time']) || empty($block['start_time'])) {
                 $merged[$last]['start_time'] = null;
                 $merged[$last]['end_time'] = null;
@@ -40,11 +47,11 @@ $availabilityDisplayBlocks = [];
 foreach ($availabilityBlocksByDate as $date => $dayBlocks) {
     usort($dayBlocks, static fn(array $a, array $b): int => strcmp($a['start_time'] ?? '00:00:00', $b['start_time'] ?? '00:00:00'));
     foreach ($dayBlocks as $block) {
-        $start = $block['start_time'] ?: '06:00:00';
-        $end = $block['end_time'] ?: '20:00:00';
+        $start = $block['start_time'] ?: '07:00:00';
+        $end = $block['end_time'] ?: '21:00:00';
         $last = count($availabilityDisplayBlocks) - 1;
         $sameDate = $last >= 0 && $availabilityDisplayBlocks[$last]['date'] === $date;
-        if ($sameDate && $start <= ($availabilityDisplayBlocks[$last]['end_time'] ?: '20:00:00')) {
+        if ($sameDate && $start <= ($availabilityDisplayBlocks[$last]['end_time'] ?: '21:00:00')) {
             $availabilityDisplayBlocks[$last]['end_time'] = empty($availabilityDisplayBlocks[$last]['start_time']) || empty($block['start_time']) ? null : max($availabilityDisplayBlocks[$last]['end_time'], $end);
             $availabilityDisplayBlocks[$last]['start_time'] = empty($availabilityDisplayBlocks[$last]['start_time']) || empty($block['start_time']) ? null : $availabilityDisplayBlocks[$last]['start_time'];
             $availabilityDisplayBlocks[$last]['reason'] = implode(' / ', array_unique(array_filter([$availabilityDisplayBlocks[$last]['reason'], $block['reason'] ?? ''])));
@@ -88,12 +95,12 @@ if ($availabilityRequestedDate !== '') {
 } elseif ($availabilityWeekEnd < $availabilityMinimumDate) {
     $availabilityDefaultDate = $availabilityMinimumDate->format('Y-m-d');
 } else {
-    $availabilityDefaultDate = $availabilityWeekDays[0]->format('Y-m-d');
+    $availabilityDefaultDate = ($availabilityWeekDays[0] ?? $availabilityWeek)->format('Y-m-d');
 }
 $availabilityWeekLabel = $availabilityWeek->format('Y-m-d') === $availabilityCurrentWeek
     ? 'This Week'
     : $availabilityWeek->format('M j') . '–' . $availabilityWeekEnd->format('M j');
-[$availabilityStartHour, $availabilityEndHour] = appointment_weekly_hour_bounds($weeklySchedule);
+[$availabilityStartHour, $availabilityEndHour] = appointment_weekly_hour_bounds($availabilityWeekSchedule);
 $availabilityStartMinutes = $availabilityStartHour * 60;
 $availabilityEndMinutes = $availabilityEndHour * 60;
 $availabilityDurationMinutes = $availabilityEndMinutes - $availabilityStartMinutes;
@@ -210,7 +217,8 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
                         $blocks = $calendarBlocksByDate[$date] ?? [];
                         $isToday = $date === $availabilityToday->format('Y-m-d');
                         $isPast = $day < $availabilityMinimumDate || !appointment_date_is_clinic_day($date);
-                        $dayHours = $weeklySchedule[(int) $day->format('N')];
+                        $daySchedule = appointment_schedule_for_date($date);
+                        $dayHours = $daySchedule[(int) $day->format('N')];
                         $dayStartMinutes = (int) substr($dayHours['start'], 0, 2) * 60;
                         $dayEndMinutes = (int) substr($dayHours['end'], 0, 2) * 60;
                         ?>
@@ -326,7 +334,7 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
 
     <div id="workingHoursModal" class="modal-backdrop working-hours-modal" role="dialog" aria-modal="true" aria-labelledby="workingHoursModalTitle" aria-describedby="workingHoursModalDescription">
         <form method="POST" action="availability.php" class="modal-content working-hours-modal-card" id="clinicWorkingHoursForm" data-no-ajax="true">
-            <input type="hidden" name="action" value="save_schedule">
+            <input type="hidden" name="action" value="save_schedule" id="workingHoursAction">
             <input type="hidden" name="week" value="<?= e($availabilityWeek->format('Y-m-d')) ?>">
             <header class="working-hours-modal-header">
                 <div class="working-hours-modal-title-row">
@@ -343,6 +351,34 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
             </header>
 
             <div class="working-hours-modal-body">
+                <div class="working-hours-mode-switch" role="tablist" aria-label="Schedule type">
+                    <button type="button" class="is-active" role="tab" aria-selected="true" data-working-hours-mode="regular">
+                        <span class="material-symbols-outlined" aria-hidden="true">event_repeat</span>
+                        <span><strong>Regular schedule</strong><small>Default every week</small></span>
+                    </button>
+                    <button type="button" role="tab" aria-selected="false" data-working-hours-mode="future">
+                        <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>
+                        <span><strong>Future month</strong><small>Override one month</small></span>
+                    </button>
+                </div>
+
+                <section class="working-hours-future-panel" id="workingHoursFuturePanel" hidden>
+                    <div class="working-hours-future-picker">
+                        <label for="workingHoursMonth"><span>Month to arrange</span><input type="month" class="form-input" id="workingHoursMonth" name="schedule_month" min="<?= e($minimumFutureMonth) ?>" value="<?= e($minimumFutureMonth) ?>"></label>
+                        <div><strong id="workingHoursMonthState">New arrangement</strong><p>A saved arrangement replaces the regular schedule only for this month.</p></div>
+                    </div>
+                    <?php if ($monthlySchedules): ?>
+                        <div class="working-hours-saved-months" aria-label="Saved future arrangements">
+                            <span>Saved:</span>
+                            <?php foreach ($monthlySchedules as $savedMonth => $savedEntry): ?>
+                                <?php if ($savedMonth >= $minimumFutureMonth): ?>
+                                    <button type="button" data-load-working-month="<?= e($savedMonth) ?>"><?= e(date('M Y', strtotime($savedMonth . '-01'))) ?></button>
+                                <?php endif; ?>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </section>
+
                 <section class="working-hours-quick-set" aria-labelledby="workingHoursQuickTitle">
                     <div>
                         <h4 id="workingHoursQuickTitle">Standard hours</h4>
@@ -350,10 +386,10 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
                     </div>
                     <div class="working-hours-quick-controls">
                         <label><span>Open</span><select id="allDaysStart" name="base_start" class="form-select working-hours-select" aria-label="Standard opening time">
-                            <?php for ($hour = 6; $hour < 20; $hour++): $value = sprintf('%02d:00', $hour); ?><option value="<?= $value ?>" <?= $workingHoursBase['start'] === $value ? 'selected' : '' ?>><?= e(date('g:i A', mktime($hour, 0))) ?></option><?php endfor; ?>
+                            <?php for ($hour = 7; $hour < 21; $hour++): $value = sprintf('%02d:00', $hour); ?><option value="<?= $value ?>" <?= $workingHoursBase['start'] === $value ? 'selected' : '' ?>><?= e(date('g:i A', mktime($hour, 0))) ?></option><?php endfor; ?>
                         </select></label>
                         <label><span>Close</span><select id="allDaysEnd" name="base_end" class="form-select working-hours-select" aria-label="Standard closing time">
-                            <?php for ($hour = 7; $hour <= 20; $hour++): $value = sprintf('%02d:00', $hour); ?><option value="<?= $value ?>" <?= $workingHoursBase['end'] === $value ? 'selected' : '' ?>><?= e(date('g:i A', mktime($hour, 0))) ?></option><?php endfor; ?>
+                            <?php for ($hour = 8; $hour <= 21; $hour++): $value = sprintf('%02d:00', $hour); ?><option value="<?= $value ?>" <?= $workingHoursBase['end'] === $value ? 'selected' : '' ?>><?= e(date('g:i A', mktime($hour, 0))) ?></option><?php endfor; ?>
                         </select></label>
                     </div>
                 </section>
@@ -379,6 +415,14 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
                 <div id="workingHoursOverrides" class="working-hours-override-list" data-initial-overrides="<?= e(json_encode($workingHoursOverrides)) ?>"></div>
                 <p class="working-hours-override-empty" id="workingHoursOverrideEmpty">No day-specific hours added.</p>
 
+                <section class="working-hours-month-preview" id="workingHoursMonthPreview" hidden aria-live="polite">
+                    <div><h4 id="workingHoursPreviewTitle">Month preview</h4><p>Open dates use the hours selected above. Closed dates are muted.</p></div>
+                    <div class="working-hours-preview-weekdays" aria-hidden="true">
+                        <?php foreach (['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as $dayName): ?><span><?= e($dayName) ?></span><?php endforeach; ?>
+                    </div>
+                    <div class="working-hours-preview-grid" id="workingHoursPreviewGrid"></div>
+                </section>
+
                 <template id="workingHoursOverrideTemplate">
                     <div class="working-hours-override" data-working-override>
                         <label><span>Day</span><select name="overrides[__INDEX__][day]" class="form-select working-hours-select" data-override-day required>
@@ -386,10 +430,10 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
                             <?php foreach (['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as $index => $dayName): ?><option value="<?= $index + 1 ?>"><?= e($dayName) ?></option><?php endforeach; ?>
                         </select></label>
                         <label><span>Open</span><select name="overrides[__INDEX__][start]" class="form-select working-hours-select" data-override-start>
-                            <?php for ($hour = 6; $hour < 20; $hour++): $value = sprintf('%02d:00', $hour); ?><option value="<?= $value ?>"><?= e(date('g:i A', mktime($hour, 0))) ?></option><?php endfor; ?>
+                            <?php for ($hour = 7; $hour < 21; $hour++): $value = sprintf('%02d:00', $hour); ?><option value="<?= $value ?>"><?= e(date('g:i A', mktime($hour, 0))) ?></option><?php endfor; ?>
                         </select></label>
                         <label><span>Close</span><select name="overrides[__INDEX__][end]" class="form-select working-hours-select" data-override-end>
-                            <?php for ($hour = 7; $hour <= 20; $hour++): $value = sprintf('%02d:00', $hour); ?><option value="<?= $value ?>"><?= e(date('g:i A', mktime($hour, 0))) ?></option><?php endfor; ?>
+                            <?php for ($hour = 8; $hour <= 21; $hour++): $value = sprintf('%02d:00', $hour); ?><option value="<?= $value ?>"><?= e(date('g:i A', mktime($hour, 0))) ?></option><?php endfor; ?>
                         </select></label>
                         <button type="button" class="working-hours-remove-override" data-remove-working-override aria-label="Remove day-specific hours"><span class="material-symbols-outlined" aria-hidden="true">delete</span></button>
                     </div>
@@ -398,6 +442,9 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
             </div>
 
             <footer class="working-hours-modal-footer">
+                <button type="submit" class="btn btn-outline working-hours-delete-month" id="deleteWorkingHoursMonth" name="action" value="delete_month_schedule" hidden data-confirm-submit data-confirm-type="danger" data-confirm-title="Remove this future arrangement?" data-confirm-message="This month will return to the regular weekly schedule.">
+                    <span class="material-symbols-outlined" aria-hidden="true">delete</span> Remove arrangement
+                </button>
                 <button type="button" class="btn btn-ghost" data-close-working-hours-modal>Cancel</button>
                 <button type="submit" class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save clinic working hours?" data-confirm-message="Patient booking times will immediately follow these hours.">
                     <span class="material-symbols-outlined" aria-hidden="true">save</span> Save changes
@@ -518,6 +565,8 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
     }
     window.cliniqAvailabilityListenersReady = true;
     const weeklySchedule = <?= json_encode($weeklySchedule, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+    const monthlySchedules = <?= json_encode($monthlySchedules, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+    const minimumFutureMonth = <?= json_encode($minimumFutureMonth) ?>;
     const availabilityStartHour = <?= $availabilityStartHour ?>;
     const availabilityEndHour = <?= $availabilityEndHour ?>;
     const availabilityHourSpan = availabilityEndHour - availabilityStartHour;
@@ -559,17 +608,104 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
         syncWorkingOverrideControls();
         return row;
     };
-    const resetWorkingHoursEditor = () => {
-        document.getElementById('clinicWorkingHoursForm')?.reset();
+    const scheduleToEditor = schedule => {
+        const rows = Object.entries(schedule || {}).filter(([, hours]) => hours?.enabled);
+        const groups = new Map();
+        rows.forEach(([day, hours]) => {
+            const key = `${hours.start}|${hours.end}`;
+            const group = groups.get(key) || { start: hours.start, end: hours.end, days: [] };
+            group.days.push(day);
+            groups.set(key, group);
+        });
+        const base = Array.from(groups.values()).sort((left, right) => right.days.length - left.days.length)[0]
+            || { start: '08:00', end: '17:00', days: [] };
+        document.getElementById('allDaysStart').value = base.start;
+        document.getElementById('allDaysEnd').value = base.end;
+        document.querySelectorAll('#clinicWorkingHoursForm [data-open-day]').forEach(input => {
+            input.checked = Boolean(schedule?.[input.value]?.enabled);
+        });
         const list = document.getElementById('workingHoursOverrides');
         list.replaceChildren();
         nextWorkingOverrideIndex = 0;
-        let saved = [];
-        try { saved = JSON.parse(list.dataset.initialOverrides || '[]'); } catch (_) { /* Keep the standard range. */ }
-        saved.forEach(override => addWorkingOverride(override));
+        rows.filter(([, hours]) => hours.start !== base.start || hours.end !== base.end)
+            .forEach(([day, hours]) => addWorkingOverride({ day, start: hours.start, end: hours.end }));
         syncWorkingOverrideControls();
     };
+    const editorSchedule = () => {
+        const start = document.getElementById('allDaysStart').value;
+        const end = document.getElementById('allDaysEnd').value;
+        const schedule = {};
+        for (let day = 1; day <= 7; day += 1) schedule[day] = { enabled: openWorkingDays().includes(String(day)), start, end };
+        workingOverrideRows().forEach(row => {
+            const day = row.querySelector('[data-override-day]').value;
+            if (day && schedule[day]) {
+                schedule[day].start = row.querySelector('[data-override-start]').value;
+                schedule[day].end = row.querySelector('[data-override-end]').value;
+            }
+        });
+        return schedule;
+    };
+    const renderWorkingMonthPreview = () => {
+        const panel = document.getElementById('workingHoursMonthPreview');
+        const monthValue = document.getElementById('workingHoursMonth').value;
+        if (panel.hidden || !/^\d{4}-\d{2}$/.test(monthValue)) return;
+        const [year, month] = monthValue.split('-').map(Number);
+        const first = new Date(Date.UTC(year, month - 1, 1));
+        const days = new Date(Date.UTC(year, month, 0)).getUTCDate();
+        const schedule = editorSchedule();
+        const grid = document.getElementById('workingHoursPreviewGrid');
+        grid.replaceChildren();
+        for (let blank = 0; blank < first.getUTCDay(); blank += 1) grid.appendChild(document.createElement('span'));
+        for (let date = 1; date <= days; date += 1) {
+            const weekday = new Date(Date.UTC(year, month - 1, date)).getUTCDay() || 7;
+            const hours = schedule[weekday];
+            const cell = document.createElement('span');
+            cell.className = hours?.enabled ? 'is-open' : 'is-closed';
+            cell.innerHTML = `<strong>${date}</strong>${hours?.enabled ? `<small>${hours.start}<br>${hours.end}</small>` : '<small>Closed</small>'}`;
+            grid.appendChild(cell);
+        }
+        document.getElementById('workingHoursPreviewTitle').textContent = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(first);
+    };
+    const loadWorkingMonth = month => {
+        const input = document.getElementById('workingHoursMonth');
+        input.value = month >= minimumFutureMonth ? month : minimumFutureMonth;
+        const saved = monthlySchedules[input.value]?.days;
+        scheduleToEditor(saved || weeklySchedule);
+        document.getElementById('workingHoursMonthState').textContent = saved ? 'Saved arrangement' : 'New arrangement';
+        document.getElementById('deleteWorkingHoursMonth').hidden = !saved;
+        renderWorkingMonthPreview();
+    };
+    const setWorkingHoursMode = mode => {
+        const future = mode === 'future';
+        document.getElementById('workingHoursAction').value = future ? 'save_month_schedule' : 'save_schedule';
+        document.getElementById('workingHoursFuturePanel').hidden = !future;
+        document.getElementById('workingHoursMonthPreview').hidden = !future;
+        document.getElementById('workingHoursMonth').required = future;
+        document.getElementById('deleteWorkingHoursMonth').hidden = !future || !monthlySchedules[document.getElementById('workingHoursMonth').value];
+        document.querySelectorAll('[data-working-hours-mode]').forEach(button => {
+            const active = button.dataset.workingHoursMode === mode;
+            button.classList.toggle('is-active', active);
+            button.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+        if (future) loadWorkingMonth(document.getElementById('workingHoursMonth').value || minimumFutureMonth);
+        else scheduleToEditor(weeklySchedule);
+        renderWorkingMonthPreview();
+    };
+    const resetWorkingHoursEditor = () => {
+        setWorkingHoursMode('regular');
+    };
     document.addEventListener('click', event => {
+        const modeButton = event.target.closest('[data-working-hours-mode]');
+        if (modeButton) {
+            setWorkingHoursMode(modeButton.dataset.workingHoursMode);
+            return;
+        }
+        const savedMonthButton = event.target.closest('[data-load-working-month]');
+        if (savedMonthButton) {
+            setWorkingHoursMode('future');
+            loadWorkingMonth(savedMonthButton.dataset.loadWorkingMonth);
+            return;
+        }
         if (event.target.closest('#openWorkingHoursModal')) {
             resetWorkingHoursEditor();
             showModal('workingHoursModal');
@@ -589,15 +725,29 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
         if (remove) {
             remove.closest('[data-working-override]').remove();
             syncWorkingOverrideControls();
+            renderWorkingMonthPreview();
         }
     });
     document.addEventListener('change', event => {
         if (event.target.matches('#clinicWorkingHoursForm [data-open-day], #clinicWorkingHoursForm [data-override-day]')) syncWorkingOverrideControls();
+        if (event.target.matches('#workingHoursMonth')) loadWorkingMonth(event.target.value);
+        if (event.target.matches('#clinicWorkingHoursForm select, #clinicWorkingHoursForm [data-open-day]')) renderWorkingMonthPreview();
     });
     document.addEventListener('click', event => {
-        if (!event.target.closest('#clinicWorkingHoursForm [data-confirm-submit]')) return;
+        const submitButton = event.target.closest('#clinicWorkingHoursForm [data-confirm-submit]');
+        if (!submitButton) return;
+        if (submitButton.value === 'delete_month_schedule') return;
         const start = document.getElementById('allDaysStart');
         const end = document.getElementById('allDaysEnd');
+        const futureMode = document.getElementById('workingHoursAction').value === 'save_month_schedule';
+        const selectedMonth = document.getElementById('workingHoursMonth');
+        if (futureMode && (!/^\d{4}-\d{2}$/.test(selectedMonth.value) || selectedMonth.value < minimumFutureMonth)) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            showToast('Choose a future month.', 'error');
+            selectedMonth.focus();
+            return;
+        }
         if (start.value >= end.value || openWorkingDays().length === 0) {
             event.preventDefault();
             event.stopImmediatePropagation();
@@ -814,7 +964,9 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
         if (!date) return false;
         const [year, month, day] = date.split('-').map(Number);
         const weekday = new Date(year, month - 1, day).getDay() || 7;
-        return !weeklySchedule[weekday]?.enabled;
+        const monthKey = date.slice(0, 7);
+        const schedule = monthlySchedules[monthKey]?.days || weeklySchedule;
+        return !schedule[weekday]?.enabled;
     };
 
     const formatDisplayDate = (dateString) => {

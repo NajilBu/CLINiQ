@@ -175,6 +175,17 @@ function begin_re_enrollment(array $account): void
         session_start();
     }
     session_regenerate_id(true);
+    $academicYear = student_current_academic_year();
+    try {
+        $yearQuery = auth_db()->prepare('SELECT academic_year FROM students WHERE person_id = ? LIMIT 1');
+        $yearQuery->execute([(int) ($account['person_id'] ?? 0)]);
+        $storedAcademicYear = trim((string) $yearQuery->fetchColumn());
+        if ($storedAcademicYear !== '') {
+            $academicYear = $storedAcademicYear;
+        }
+    } catch (Throwable $e) {
+        // Fall back to the calendar-derived school year on legacy schemas.
+    }
     $_SESSION['patient_legacy_id'] = (int) ($account['person_id'] ?? 0);
     $_SESSION['patient_account_id'] = (int) ($account['account_id'] ?? 0);
     $_SESSION['patient_person_id'] = (int) ($account['person_id'] ?? 0);
@@ -182,7 +193,7 @@ function begin_re_enrollment(array $account): void
         'account_id' => (int) ($account['account_id'] ?? 0),
         'person_id'  => (int) ($account['person_id'] ?? 0),
         'type'       => (string) ($account['account_type'] ?? 'patient'),
-        'academic_year' => student_current_academic_year(),
+        'academic_year' => $academicYear,
     ];
 }
 
@@ -261,6 +272,18 @@ function complete_re_enrollment(string $enrollmentStatus, string $nonEnrollmentR
             $nonEnrollmentReason !== '' ? $nonEnrollmentReason : null,
         ]);
 
+        $history = $db->prepare("
+            UPDATE student_school_year_enrollments
+            SET enrollment_status = ?, non_enrollment_reason = ?
+            WHERE student_person_id = ? AND academic_year = ?
+        ");
+        $history->execute([
+            $enrollmentStatus === 'Still Enrolled' ? 'Enrolled' : 'Not Enrolled',
+            $nonEnrollmentReason !== '' ? $nonEnrollmentReason : null,
+            $personId,
+            $academicYear,
+        ]);
+
         $stmt = $db->prepare("
             UPDATE accounts a
             INNER JOIN students s ON s.person_id = a.person_id
@@ -272,6 +295,23 @@ function complete_re_enrollment(string $enrollmentStatus, string $nonEnrollmentR
         $stmt->execute([$accountId, $personId]);
         if ($stmt->rowCount() !== 1) {
             throw new RuntimeException('Your account could not be reactivated. Please contact the clinic.');
+        }
+
+        if ($enrollmentStatus === 'Still Enrolled') {
+            $activeCycle = $db->prepare("SELECT ape_cycle_id FROM ape_cycles WHERE academic_year = ? AND status = 'Active' LIMIT 1");
+            $activeCycle->execute([$academicYear]);
+            $activeCycleId = (int) ($activeCycle->fetchColumn() ?: 0);
+            if ($activeCycleId > 0) {
+                $db->prepare('INSERT IGNORE INTO ape_records (ape_cycle_id, patient_id, academic_year) VALUES (?, ?, ?)')
+                    ->execute([$activeCycleId, $personId, $academicYear]);
+                $apeIdQuery = $db->prepare('SELECT ape_id FROM ape_records WHERE patient_id = ? AND academic_year = ? LIMIT 1');
+                $apeIdQuery->execute([$personId, $academicYear]);
+                $apeId = (int) ($apeIdQuery->fetchColumn() ?: 0);
+                if ($apeId > 0) {
+                    require_once __DIR__ . '/../services/ApeWorkflow.php';
+                    ape_seed_default_requirements($apeId);
+                }
+            }
         }
         $db->commit();
     } catch (Throwable $e) {

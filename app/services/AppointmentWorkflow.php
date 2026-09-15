@@ -165,7 +165,7 @@ function appointment_date_is_clinic_day(string $date): bool
     $parsedDate = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
     return $parsedDate !== false
         && $parsedDate->format('Y-m-d') === $date
-        && appointment_weekly_schedule()[(int) $parsedDate->format('N')]['enabled'];
+        && appointment_schedule_for_date($date)[(int) $parsedDate->format('N')]['enabled'];
 }
 
 function appointment_weekly_schedule(): array
@@ -200,10 +200,10 @@ function appointment_normalize_weekly_schedule(array $submitted): array
         $row = $submitted[$day] ?? [];
         $start = trim((string) ($row['start'] ?? ''));
         $end = trim((string) ($row['end'] ?? ''));
-        if (!preg_match('/^(0[6-9]|1[0-9]):00$/', $start)
-            || !preg_match('/^(0[7-9]|1[0-9]|20):00$/', $end)
+        if (!preg_match('/^(0[7-9]|1[0-9]|20):00$/', $start)
+            || !preg_match('/^(0[8-9]|1[0-9]|2[01]):00$/', $end)
             || $start >= $end) {
-            throw new InvalidArgumentException('Choose whole-hour opening and closing times between 6:00 AM and 8:00 PM.');
+            throw new InvalidArgumentException('Choose whole-hour opening and closing times between 7:00 AM and 9:00 PM.');
         }
         $days[$day] = ['enabled' => !empty($row['enabled']), 'start' => $start, 'end' => $end];
     }
@@ -248,16 +248,87 @@ function appointment_save_weekly_schedule(array $submitted, ?int $updatedBy): vo
     cliniq_setting_write('appointment_weekly_schedule', ['days' => $days], $updatedBy);
 }
 
+function appointment_normalize_month_key(string $month, bool $futureOnly = false): string
+{
+    $month = trim($month);
+    $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $month . '-01');
+    if (!preg_match('/^\d{4}-\d{2}$/', $month) || !$parsed || $parsed->format('Y-m') !== $month) {
+        throw new InvalidArgumentException('Choose a valid month.');
+    }
+    if ($futureOnly && $month <= date('Y-m')) {
+        throw new InvalidArgumentException('Choose a future month.');
+    }
+    return $month;
+}
+
+/** @return array<string,array{days:array<int,array{enabled:bool,start:string,end:string}>}> */
+function appointment_monthly_schedules(): array
+{
+    static $months = null;
+    if ($months !== null) {
+        return $months;
+    }
+    $stored = cliniq_setting_read('appointment_monthly_schedules', ['months' => []]);
+    $months = [];
+    foreach ((array) ($stored['months'] ?? []) as $month => $entry) {
+        try {
+            $key = appointment_normalize_month_key((string) $month);
+            $days = appointment_normalize_weekly_schedule((array) ($entry['days'] ?? []));
+            $months[$key] = ['days' => $days];
+        } catch (InvalidArgumentException $exception) {
+            // Ignore malformed legacy settings instead of breaking appointment pages.
+        }
+    }
+    ksort($months);
+    return $months;
+}
+
+function appointment_schedule_for_month(string $month): array
+{
+    try {
+        $month = appointment_normalize_month_key($month);
+    } catch (InvalidArgumentException $exception) {
+        return appointment_weekly_schedule();
+    }
+    return appointment_monthly_schedules()[$month]['days'] ?? appointment_weekly_schedule();
+}
+
+function appointment_schedule_for_date(string $date): array
+{
+    $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+    if (!$parsed || $parsed->format('Y-m-d') !== $date) {
+        return appointment_weekly_schedule();
+    }
+    return appointment_schedule_for_month($parsed->format('Y-m'));
+}
+
+function appointment_save_monthly_schedule(string $month, array $submitted, ?int $updatedBy): void
+{
+    $month = appointment_normalize_month_key($month, true);
+    $months = appointment_monthly_schedules();
+    $months[$month] = ['days' => appointment_normalize_weekly_schedule($submitted)];
+    ksort($months);
+    cliniq_setting_write('appointment_monthly_schedules', ['months' => $months], $updatedBy);
+}
+
+function appointment_delete_monthly_schedule(string $month, ?int $updatedBy): void
+{
+    $month = appointment_normalize_month_key($month, true);
+    $months = appointment_monthly_schedules();
+    unset($months[$month]);
+    cliniq_setting_write('appointment_monthly_schedules', ['months' => $months], $updatedBy);
+}
+
 function appointment_slot_is_open(string $date, string $time): bool
 {
-    return appointment_slot_is_open_for_schedule(appointment_weekly_schedule(), $date, $time);
+    return appointment_slot_is_open_for_schedule(appointment_schedule_for_date($date), $date, $time);
 }
 
 function appointment_slot_is_open_for_schedule(array $schedule, string $date, string $time): bool
 {
     $parsedDate = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
     if (!$parsedDate || $parsedDate->format('Y-m-d') !== $date
-        || !preg_match('/^([01][0-9]):00(?::00)?$/', $time, $matches)) {
+        || !preg_match('/^((?:[01][0-9]|20)):00(?::00)?$/', $time, $matches)) {
         return false;
     }
     $hours = $schedule[(int) $parsedDate->format('N')] ?? null;
@@ -267,6 +338,21 @@ function appointment_slot_is_open_for_schedule(array $schedule, string $date, st
     $start = sprintf('%02d:00', (int) $matches[1]);
     $end = sprintf('%02d:00', (int) $matches[1] + 1);
     return $start >= $hours['start'] && $end <= $hours['end'];
+}
+
+function appointment_range_is_open_for_schedule(array $schedule, string $date, string $startTime, string $endTime): bool
+{
+    $parsedDate = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+    $start = substr($startTime, 0, 5);
+    $end = substr($endTime, 0, 5);
+    if (!$parsedDate || $parsedDate->format('Y-m-d') !== $date
+        || !preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $start)
+        || !preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $end)
+        || $start >= $end) {
+        return false;
+    }
+    $hours = $schedule[(int) $parsedDate->format('N')] ?? null;
+    return !empty($hours['enabled']) && $start >= $hours['start'] && $end <= $hours['end'];
 }
 
 function appointment_weekly_hour_bounds(array $schedule): array

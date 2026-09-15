@@ -173,6 +173,7 @@ render_clinic_command_header(
                 'Overdue' => $priority['label'] . ' - ' . $days . 'd',
                 default => 'Review required',
             };
+            $canExamineNow = empty($rec['exam_date']) && ape_examination_is_available($rec);
         ?>
             <div class="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-red-100/30 transition-colors">
                 <div>
@@ -187,7 +188,7 @@ render_clinic_command_header(
                         <?= e($deadlineText) ?>
                     </span>
                     <a href="view.php?id=<?= (int)$rec['id'] ?>" class="text-xs font-bold text-red-700 hover:text-red-800 text-decoration-none flex items-center gap-1">
-                        Resolve <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+                        <?= $canExamineNow ? 'Examine Patient' : 'Resolve' ?> <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
                     </a>
                 </div>
             </div>

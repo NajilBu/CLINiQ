@@ -26,16 +26,45 @@ if (!$standard[1]['enabled'] || $standard[6]['enabled']
 if (appointment_normalize_weekly_schedule($standard)[6]['enabled']) {
     throw new RuntimeException('A closed day was reopened while saving the normalized schedule.');
 }
+$extendedHours = appointment_schedule_from_form([
+    'base_start' => '07:00', 'base_end' => '21:00', 'open_days' => ['1'], 'overrides' => [],
+]);
+if (!appointment_slot_is_open_for_schedule($extendedHours, '2026-09-14', '07:00:00')
+    || !appointment_slot_is_open_for_schedule($extendedHours, '2026-09-14', '20:00:00')) {
+    throw new RuntimeException('The 7:00 AM to 9:00 PM working-hours range was not accepted.');
+}
+foreach ([['06:00', '17:00'], ['07:00', '22:00']] as [$invalidStart, $invalidEnd]) {
+    try {
+        appointment_schedule_from_form(['base_start' => $invalidStart, 'base_end' => $invalidEnd, 'open_days' => ['1']]);
+        throw new RuntimeException('Working hours outside 7:00 AM to 9:00 PM were accepted.');
+    } catch (InvalidArgumentException $expected) {
+        // Expected.
+    }
+}
 if (appointment_weekly_hour_bounds($standard) !== [8, 17]) {
     throw new RuntimeException('Calendar hour bounds should follow open-day hours.');
 }
 $varied = $standard;
 $varied[2]['start'] = '07:00';
 $varied[2]['end'] = '18:00';
-$varied[6]['start'] = '06:00';
-$varied[6]['end'] = '20:00';
+$varied[6]['start'] = '07:00';
+$varied[6]['end'] = '21:00';
 if (appointment_weekly_hour_bounds($varied) !== [7, 18]) {
     throw new RuntimeException('Calendar bounds should span open days only.');
+}
+if (!appointment_range_is_open_for_schedule($standard, '2026-09-16', '10:00:00', '16:00:00')
+    || appointment_range_is_open_for_schedule($standard, '2026-09-16', '09:00:00', '16:00:00')
+    || appointment_range_is_open_for_schedule($standard, '2026-09-20', '10:00:00', '11:00:00')) {
+    throw new RuntimeException('Range validation did not respect monthly-style working hours.');
+}
+if (appointment_normalize_month_key('2027-02') !== '2027-02') {
+    throw new RuntimeException('A valid future schedule month was not normalized.');
+}
+try {
+    appointment_normalize_month_key('2027-13');
+    throw new RuntimeException('An invalid schedule month was accepted.');
+} catch (InvalidArgumentException $expected) {
+    // Expected.
 }
 
 $mergedUnavailable = appointment_merge_continuous_unavailable_blocks([
@@ -74,8 +103,23 @@ if (!appointment_slot_is_open_for_schedule($schedule, '2026-09-15', '09:00:00')
 $patientAppointmentSource = file_get_contents(dirname(__DIR__) . '/patient-portal/patient-appointment.php');
 if (!str_contains($patientAppointmentSource, 'slot.hidden = !isWithinHours;')
     || !str_contains($patientAppointmentSource, 'start >= hours.start && end <= hours.end')
+    || !str_contains($patientAppointmentSource, 'appointment_schedule_for_month')
+    || !str_contains($patientAppointmentSource, 'data-appointment-month-link')
+    || !str_contains($patientAppointmentSource, "fetch(link.href")
+    || !str_contains($patientAppointmentSource, "currentPanel.replaceWith(replacement)")
+    || !str_contains($patientAppointmentSource, "history.pushState")
     || str_contains($patientAppointmentSource, "isClosed ? 'Closed'")) {
-    throw new RuntimeException('Patient time picker must hide slots outside the selected clinic hours.');
+    throw new RuntimeException('Patient calendar must change months without refreshing and hide slots outside clinic hours.');
+}
+
+$availabilitySource = file_get_contents(dirname(__DIR__) . '/public/appointments/_availability_section.php');
+$availabilityActionSource = file_get_contents(dirname(__DIR__) . '/public/appointments/availability.php');
+if (!str_contains($availabilitySource, 'data-working-hours-mode="future"')
+    || !str_contains($availabilitySource, 'workingHoursMonthPreview')
+    || !str_contains($availabilitySource, 'monthlySchedules')
+    || !str_contains($availabilityActionSource, "save_month_schedule")
+    || !str_contains($availabilityActionSource, 'appointment_save_monthly_schedule')) {
+    throw new RuntimeException('Future-month working-hours controls are not connected to appointment scheduling.');
 }
 
 [$start, $end] = appointment_week_bounds(new DateTimeImmutable('2026-09-16'));

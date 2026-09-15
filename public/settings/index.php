@@ -343,8 +343,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $cycle = archive_ape_cycle((int) ($_POST['ape_cycle_id'] ?? 0), $actorPersonId);
                 flash_message('success', "APE cycle {$cycle['academic_year']} archived.");
             } elseif ($action === 'reset_school_year') {
-                $result = reset_school_year_accounts();
-                $msg = "{$result['reset']} student account(s) reset to inactive.";
+                $result = reset_school_year_accounts(
+                    (string) ($_POST['academic_year'] ?? ''),
+                    (array) ($_POST['promotions'] ?? []),
+                    $actorPersonId
+                );
+                $msg = "School year {$result['academic_year']} prepared: {$result['promoted']} promoted, {$result['kept']} retained, and {$result['graduated']} marked graduated. {$result['reset']} student account(s) set to inactive.";
                 if ($result['emailed'] > 0) {
                     $msg .= " {$result['emailed']} notification email(s) sent.";
                 }
@@ -610,6 +614,7 @@ if ($externalBackupSettings['enabled'] && $externalBackupAvailable) {
 $activeApePatientCount = 0;
 $excludedApePatientCount = 0;
 $apeCurrentCycle = null;
+$schoolYearPromotionPreview = ['academic_year' => '', 'students' => [], 'already_processed' => false];
 if ($canManageApeCycles) {
     try {
         ensure_ape_cycle_schema();
@@ -623,6 +628,9 @@ if ($canManageApeCycles) {
         $activeApePatientCount = (int) ($apePatientCounts['active_count'] ?? 0);
         $excludedApePatientCount = (int) ($apePatientCounts['excluded_count'] ?? 0);
         $apeCurrentCycle = ape_cycle_current();
+        if (can_start_new_school_year($apeCurrentCycle)) {
+            $schoolYearPromotionPreview = school_year_promotion_preview($apeCurrentCycle);
+        }
     } catch (Throwable $e) {
         flash_message('error', $e->getMessage());
     }
@@ -642,6 +650,10 @@ $canStartNewSchoolYear = can_start_new_school_year($apeCurrentCycle);
 $apeYearStart = (int) date('Y');
 if ((int) date('n') < 6) {
     $apeYearStart--;
+}
+$promotionAcademicYear = (string) ($schoolYearPromotionPreview['academic_year'] ?? '');
+if ($canStartNewSchoolYear && preg_match('/^(\d{4})-\d{4}$/', $promotionAcademicYear, $promotionYearMatch)) {
+    $apeYearStart = (int) $promotionYearMatch[1];
 }
 $defaultApeSchoolYear = $apeYearStart . '-' . ($apeYearStart + 1);
 $defaultApeStartDate = $apeYearStart . '-06-01';
@@ -1573,15 +1585,16 @@ render_clinic_command_header(
                     <section class="settings-section border-2 border-red-200 bg-red-50 space-y-4">
                         <div>
                             <h3 class="font-headline text-lg font-extrabold text-red-800 mb-1">Start New School Year</h3>
-                            <p class="settings-help mb-0 text-red-700">This resets <strong>active student patient accounts only</strong> to inactive. Faculty, personnel, clinic staff, and other patient accounts remain active. Students must submit their current enrollment status on their next login.</p>
+                            <p class="settings-help mb-0 text-red-700">Preview and confirm section promotion for <strong>active student patient accounts only</strong>. Faculty, personnel, clinic staff, and other patient accounts remain active. Students must submit their current enrollment status on their next login.</p>
                         </div>
-                        <form method="post" data-no-ajax="true">
-                            <input type="hidden" name="action" value="reset_school_year">
-                            <button class="btn btn-danger justify-center" data-confirm-submit data-confirm-type="danger" data-confirm-title="Reset active student accounts?" data-confirm-message="Only active student patient accounts will be set to inactive. Faculty, personnel, clinic staff, and other patient accounts will not be changed. Students must confirm enrollment on their next login. This cannot be undone." data-confirm-toast="Resetting student accounts...">
-                                <span class="material-symbols-outlined text-[18px]">restart_alt</span>
-                                Start New School Year
+                        <div class="flex flex-wrap items-center gap-3">
+                            <button type="button" class="btn btn-danger justify-center" id="openSchoolYearPromotion" <?= empty($schoolYearPromotionPreview['students']) || !empty($schoolYearPromotionPreview['already_processed']) ? 'disabled' : '' ?>>
+                                <span class="material-symbols-outlined text-[18px]">upgrade</span>
+                                Review Student Promotion
                             </button>
-                        </form>
+                            <span class="text-xs font-bold text-red-700"><?= count($schoolYearPromotionPreview['students']) ?> student(s) &bull; Target <?= e($schoolYearPromotionPreview['academic_year'] ?: 'unavailable') ?></span>
+                        </div>
+                        <?php if (!empty($schoolYearPromotionPreview['already_processed'])): ?><p class="settings-help mb-0 text-red-700">This school year has already been processed and cannot be promoted again.</p><?php endif; ?>
                     </section>
                     <?php endif; ?>
 
@@ -2698,6 +2711,58 @@ render_clinic_command_header(
         </div>
     </div>
 
+    <?php if ($canStartNewSchoolYear): ?>
+    <div id="schoolYearPromotionModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="schoolYearPromotionTitle">
+        <form method="post" data-no-ajax="true" class="modal-content bg-white rounded-[1.5rem] w-full max-w-6xl shadow-2xl border border-outline-variant/10 overflow-hidden" style="max-height:92vh;display:flex;flex-direction:column;">
+            <input type="hidden" name="action" value="reset_school_year">
+            <input type="hidden" name="academic_year" value="<?= e((string) $schoolYearPromotionPreview['academic_year']) ?>">
+            <header class="p-6 border-b border-slate-200 bg-[var(--cliniq-surface-low)] flex items-start justify-between gap-4">
+                <div>
+                    <p class="clinic-label mb-1">School Year Promotion</p>
+                    <h3 class="font-headline text-2xl font-extrabold text-[#17261d] mb-1" id="schoolYearPromotionTitle">Prepare <?= e((string) $schoolYearPromotionPreview['academic_year']) ?></h3>
+                    <p class="text-sm font-bold text-slate-500 mb-0">Review each proposed year and section. Keep the same year for irregular students or choose Graduated when appropriate.</p>
+                </div>
+                <button type="button" class="btn btn-ghost" data-close-school-year-promotion aria-label="Close promotion preview"><span class="material-symbols-outlined">close</span></button>
+            </header>
+            <div class="overflow-auto flex-1 min-h-0">
+                <table class="clinic-table min-w-[900px]">
+                    <thead><tr><th>Student</th><th>Current Assignment</th><th>New Year Level</th><th>New Section</th><th>Result</th></tr></thead>
+                    <tbody>
+                    <?php foreach ($schoolYearPromotionPreview['students'] as $promotionStudent):
+                        $personId = (int) $promotionStudent['person_id'];
+                        $currentYearLevel = (string) ($promotionStudent['year_level'] ?? '');
+                        $defaultPromotion = (string) $promotionStudent['default_promotion'];
+                        $programCode = (string) ($promotionStudent['program_code'] ?? 'Program');
+                    ?>
+                        <tr data-promotion-row data-current-year="<?= e($currentYearLevel) ?>">
+                            <td><strong><?= e((string) $promotionStudent['student_name']) ?></strong><small class="block text-slate-500 font-bold mt-1"><?= e((string) $promotionStudent['id_number']) ?></small></td>
+                            <td><strong><?= e($programCode . '-' . $currentYearLevel . strtoupper((string) ($promotionStudent['section'] ?? ''))) ?></strong></td>
+                            <td>
+                                <select class="settings-input" name="promotions[<?= $personId ?>][year_level]" data-promotion-year required>
+                                    <?php foreach (['1', '2', '3', '4'] as $year): ?><option value="<?= $year ?>" <?= $defaultPromotion === $year ? 'selected' : '' ?>>Year <?= $year ?><?= $year === $currentYearLevel ? ' (keep current)' : '' ?></option><?php endforeach; ?>
+                                    <option value="graduated" <?= $defaultPromotion === 'graduated' ? 'selected' : '' ?>>Graduated</option>
+                                </select>
+                            </td>
+                            <td><input class="settings-input" name="promotions[<?= $personId ?>][section]" value="<?= e(strtoupper((string) ($promotionStudent['section'] ?? ''))) ?>" maxlength="80" data-promotion-section <?= $defaultPromotion === 'graduated' ? 'disabled' : 'required' ?>></td>
+                            <td><span class="badge <?= $defaultPromotion === 'graduated' ? 'badge-completed' : 'badge-in-progress' ?>" data-promotion-result><?= $defaultPromotion === 'graduated' ? 'Graduating' : ($defaultPromotion === $currentYearLevel ? 'Retained' : 'Promoted') ?></span></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <footer class="p-5 border-t border-slate-200 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <p class="text-xs font-bold text-slate-500 mb-0"><span data-promotion-count><?= count($schoolYearPromotionPreview['students']) ?></span> student(s) will be processed. Student accounts become inactive until enrollment confirmation.</p>
+                <div class="flex gap-3 justify-end">
+                    <button type="button" class="btn btn-secondary" data-close-school-year-promotion>Cancel</button>
+                    <button type="submit" class="btn btn-danger" data-confirm-submit data-confirm-type="danger" data-confirm-title="Start the new school year?" data-confirm-message="The reviewed student assignments will be saved, graduating students will be marked, and continuing student accounts will require enrollment confirmation. This school year cannot be processed twice." data-confirm-toast="Promoting student sections...">
+                        <span class="material-symbols-outlined text-[18px]">school</span> Confirm New School Year
+                    </button>
+                </div>
+            </footer>
+        </form>
+    </div>
+    <?php endif; ?>
+
     <script>
         (() => {
             const generateEmailInput = (fullName) => {
@@ -2734,6 +2799,21 @@ render_clinic_command_header(
                 input.addEventListener('input', () => {
                     emailInput.value = generateEmailInput(input.value);
                 });
+            });
+
+            const promotionModal = document.getElementById('schoolYearPromotionModal');
+            document.getElementById('openSchoolYearPromotion')?.addEventListener('click', () => showModal('schoolYearPromotionModal'));
+            document.querySelectorAll('[data-close-school-year-promotion]').forEach(button => button.addEventListener('click', () => closeModal('schoolYearPromotionModal')));
+            promotionModal?.addEventListener('change', (event) => {
+                if (!event.target.matches('[data-promotion-year]')) return;
+                const row = event.target.closest('[data-promotion-row]');
+                const section = row.querySelector('[data-promotion-section]');
+                const result = row.querySelector('[data-promotion-result]');
+                const graduated = event.target.value === 'graduated';
+                section.disabled = graduated;
+                section.required = !graduated;
+                result.textContent = graduated ? 'Graduating' : (event.target.value === row.dataset.currentYear ? 'Retained' : 'Promoted');
+                result.className = `badge ${graduated ? 'badge-completed' : 'badge-in-progress'}`;
             });
 
             const schoolYear = document.getElementById('apeSchoolYear');

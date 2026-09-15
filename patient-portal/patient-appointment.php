@@ -18,13 +18,13 @@ $feedbackRequired = count($pendingFeedbackVisits) > 0;
 $feedbackPortalUrl = '../public/clinic-feedback.php?portal=1';
 
 $timeSlots = [];
-for ($hour = 6; $hour < 20; $hour++) {
+for ($hour = 7; $hour < 21; $hour++) {
     $timeSlots[] = ['value' => sprintf('%02d:00:00', $hour), 'label' => date('g:i A', mktime($hour, 0))];
 }
 $allowedTimes = array_column($timeSlots, 'value');
-$weeklySchedule = appointment_weekly_schedule();
 
 $month = appointment_month_from_request($_GET['month'] ?? null);
+$weeklySchedule = appointment_schedule_for_month($month->format('Y-m'));
 $success = false;
 $successMessage = '';
 $error = '';
@@ -222,15 +222,18 @@ render_student_header('Appointments', 'appointment');
                 <input type="hidden" name="appt_date" id="appt-date-input" value="">
                 <input type="hidden" name="appt_time" id="appt-time-input" value="">
 
-                <div class="student-field">
+                <div class="student-field" id="appointment-calendar-panel"
+                     data-availability="<?= student_e(json_encode($availabilityPayload, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)) ?>"
+                     data-weekly-schedule="<?= student_e(json_encode($weeklySchedule, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)) ?>"
+                     data-current-month="<?= student_e($month->format('Y-m')) ?>">
                     <div class="student-month-row">
                         <label class="student-label mb-0">Preferred Date</label>
                         <div class="student-month-nav">
-                            <a href="?month=<?= student_e($prevMonth) ?>" aria-label="Previous month">
+                            <a href="?month=<?= student_e($prevMonth) ?>" aria-label="Previous month" data-appointment-month-link>
                                 <span class="material-symbols-outlined">chevron_left</span>
                             </a>
                             <strong><?= student_e($month->format('F Y')) ?></strong>
-                            <a href="?month=<?= student_e($nextMonth) ?>" aria-label="Next month">
+                            <a href="?month=<?= student_e($nextMonth) ?>" aria-label="Next month" data-appointment-month-link>
                                 <span class="material-symbols-outlined">chevron_right</span>
                             </a>
                         </div>
@@ -299,6 +302,7 @@ render_student_header('Appointments', 'appointment');
                         <span class="student-calendar-desktop-hint">Double-click an available date to choose a time. On touchscreens, tap once.</span>
                         <span class="student-calendar-mobile-hint">Tap a date to select a time.</span>
                     </p>
+                    <p class="student-card-copy mt-2" data-appointment-calendar-status role="status" aria-live="polite"></p>
                 </div>
 
                 <div class="student-appointment-booking-sheet" id="appointment-booking-sheet" aria-hidden="true">
@@ -416,7 +420,7 @@ render_student_header('Appointments', 'appointment');
         </div>
 
         <div class="student-calendar-time-list" id="time-slots">
-            <?php for ($hour = 6; $hour < 20; $hour++): ?>
+            <?php for ($hour = 7; $hour < 21; $hour++): ?>
                 <?php
                 $value = str_pad((string) $hour, 2, '0', STR_PAD_LEFT) . ':00:00';
                 $isOffered = in_array($value, $allowedTimes, true);
@@ -508,8 +512,8 @@ render_student_header('Appointments', 'appointment');
 
 <?php if (!$feedbackRequired): ?>
 <script>
-    const availability = <?= json_encode($availabilityPayload, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
-    const weeklySchedule = <?= json_encode($weeklySchedule, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+    let availability = <?= json_encode($availabilityPayload, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+    let weeklySchedule = <?= json_encode($weeklySchedule, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
     const dateInput = document.getElementById('appt-date-input');
     const timeInput = document.getElementById('appt-time-input');
     const timeSlots = Array.from(document.querySelectorAll('.student-time-slot[data-time]'));
@@ -619,16 +623,70 @@ render_student_header('Appointments', 'appointment');
         openTimeModal(focusFirstTime);
     }
 
-    document.querySelectorAll('.student-date-btn:not(.disabled)').forEach((button) => {
-        button.addEventListener('click', (event) => {
-            const shouldReveal = coarsePointer || event.detail === 0;
-            selectAppointmentDate(button, shouldReveal, event.detail === 0);
-        });
+    function bindCalendarButtons() {
+        document.querySelectorAll('.student-date-btn:not(.disabled)').forEach((button) => {
+            button.addEventListener('click', (event) => {
+                const shouldReveal = coarsePointer || event.detail === 0;
+                selectAppointmentDate(button, shouldReveal, event.detail === 0);
+            });
 
-        button.addEventListener('dblclick', (event) => {
-            event.preventDefault();
-            selectAppointmentDate(button, true);
+            button.addEventListener('dblclick', (event) => {
+                event.preventDefault();
+                selectAppointmentDate(button, true);
+            });
         });
+    }
+    bindCalendarButtons();
+
+    let monthLoadController = null;
+    document.addEventListener('click', async (event) => {
+        const link = event.target.closest('[data-appointment-month-link]');
+        if (!link) return;
+        event.preventDefault();
+
+        monthLoadController?.abort();
+        const controller = new AbortController();
+        monthLoadController = controller;
+        const currentPanel = document.getElementById('appointment-calendar-panel');
+        const status = currentPanel?.querySelector('[data-appointment-calendar-status]');
+        currentPanel?.setAttribute('aria-busy', 'true');
+        if (status) status.textContent = 'Loading calendar…';
+
+        try {
+            const response = await fetch(link.href, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin',
+                signal: controller.signal,
+            });
+            if (!response.ok) throw new Error('The calendar could not be loaded.');
+            const parsed = new DOMParser().parseFromString(await response.text(), 'text/html');
+            const replacement = parsed.getElementById('appointment-calendar-panel');
+            if (!replacement) throw new Error('The calendar response was incomplete.');
+
+            availability = JSON.parse(replacement.dataset.availability || '{}');
+            weeklySchedule = JSON.parse(replacement.dataset.weeklySchedule || '{}');
+            currentPanel.replaceWith(replacement);
+            document.getElementById('booking-form').action = `?month=${encodeURIComponent(replacement.dataset.currentMonth || '')}`;
+            dateInput.value = '';
+            timeInput.value = '';
+            selectedScheduleSummary.hidden = true;
+            timeSlots.forEach(slot => slot.classList.remove('selected'));
+            closeTimeModal();
+            closeBookingSheet();
+            bindCalendarButtons();
+            history.pushState({ appointmentMonth: replacement.dataset.currentMonth }, '', link.href);
+            replacement.querySelector('[data-appointment-calendar-status]').textContent = '';
+        } catch (error) {
+            if (error.name !== 'AbortError') {
+                currentPanel?.removeAttribute('aria-busy');
+                if (status) status.textContent = error.message || 'Unable to load this month. Use the month button again.';
+            }
+        } finally {
+            if (monthLoadController === controller) {
+                monthLoadController = null;
+                document.getElementById('appointment-calendar-panel')?.removeAttribute('aria-busy');
+            }
+        }
     });
 
     timeSlots.forEach((button) => {

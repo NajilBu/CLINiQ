@@ -49,6 +49,7 @@ $hasActiveApeCycle = ($apeCurrentCycle['status'] ?? '') === 'Active';
 $apeScheduleBatches = [];
 $apeScheduleGroups = [];
 $apeWeeklySchedule = appointment_weekly_schedule();
+$apeMonthlySchedules = appointment_monthly_schedules();
 $apeAppointmentConflicts = [];
 $apeUnavailableBlocks = [];
 if ($hasActiveApeCycle) {
@@ -331,6 +332,7 @@ render_clinic_command_header(
             const emptyState = document.getElementById('apeBatchEmptyState');
             const error = document.getElementById('apeBatchFormError');
             const weeklySchedule = <?= json_encode($apeWeeklySchedule, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+            const monthlySchedules = <?= json_encode($apeMonthlySchedules, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
             const existingBatches = <?= json_encode(array_map(static fn(array $batch): array => [
                 'name' => (string) $batch['batch_name'],
                 'date' => (string) $batch['schedule_date'],
@@ -461,7 +463,8 @@ render_clinic_command_header(
                 if (!dateField.value) return null;
                 const parsed = new Date(`${dateField.value}T00:00:00`);
                 const day = parsed.getDay() || 7;
-                return weeklySchedule[String(day)] || weeklySchedule[day] || null;
+                const schedule = monthlySchedules[dateField.value.slice(0, 7)]?.days || weeklySchedule;
+                return schedule[String(day)] || schedule[day] || null;
             };
             const validateName = () => {
                 const name = nameField.value.trim();

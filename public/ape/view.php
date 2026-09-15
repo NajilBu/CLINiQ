@@ -161,6 +161,100 @@ function render_ape_hard_copy_review_fields(array $requirements, string $mode = 
     <?php
 }
 
+function render_ape_final_decision_actions(array $record, bool $canRecordApeExam, bool $digitalSubmissionComplete, array $pendingDigitalRequirements): void
+{
+    $deadline = ape_deadline_status($record);
+    ?>
+    <?php if (!$digitalSubmissionComplete): ?>
+        <div class="ape-flow-action muted mb-4" data-final-decision-documents>
+            <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-4">
+                <div>
+                    <p class="clinic-label mb-1">Outstanding Regular Documents</p>
+                    <h3 class="font-headline text-lg font-extrabold text-amber-900 mb-1"><?= count($pendingDigitalRequirements) ?> document<?= count($pendingDigitalRequirements) === 1 ? '' : 's' ?> still pending</h3>
+                    <p class="text-xs font-bold text-amber-800 mb-0">The examination is complete. These documents stay visible in Final Decision and do not send the patient back to Digital Keeping.</p>
+                </div>
+                <?php if ($deadline): ?>
+                    <span class="badge <?= e($deadline['class']) ?> shrink-0"><?= e($deadline['label']) ?> · Due <?= e(date('M j, Y', strtotime($deadline['due_date']))) ?></span>
+                <?php endif; ?>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <?php foreach ($pendingDigitalRequirements as $requirement):
+                    $latestDocument = $requirement['_latest_document'] ?? null;
+                    $documentStatus = $latestDocument['verification_status'] ?? 'Missing';
+                ?>
+                    <div class="rounded-xl bg-white border border-amber-200 p-3 flex items-center justify-between gap-3">
+                        <div class="min-w-0">
+                            <strong class="text-sm block truncate"><?= e($requirement['requirement_name']) ?></strong>
+                            <span class="badge <?= e(ape_status_badge_class($documentStatus)) ?> mt-2"><?= e($documentStatus) ?></span>
+                        </div>
+                        <?php if (!empty($latestDocument['document_id'])): ?>
+                            <a href="<?= e(app_url('ape/document.php?id=' . (int) $latestDocument['document_id'])) ?>"
+                                class="btn btn-sm btn-outline text-decoration-none shrink-0"
+                                data-file-preview
+                                data-preview-title="<?= e($latestDocument['original_filename'] ?: $requirement['requirement_name']) ?>">
+                                <span class="material-symbols-outlined text-[14px]">preview</span> Preview
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    <?php endif; ?>
+
+    <?php if (!$canRecordApeExam): ?>
+        <div class="ape-flow-action muted">
+            <div class="flex items-start gap-3">
+                <span class="material-symbols-outlined text-amber-700 mt-0.5">lock</span>
+                <div>
+                    <h3 class="font-headline text-base font-extrabold text-amber-900 mb-1">Clinical permission required</h3>
+                    <p class="text-sm font-bold text-amber-800 mb-0">Only administrators, doctors, and nurses can record the final APE decision.</p>
+                </div>
+            </div>
+        </div>
+    <?php else: ?>
+        <div class="ape-flow-action mb-4">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div>
+                    <p class="clinic-label mb-1">Examination Recorded</p>
+                    <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1"><?= e(date('M d, Y', strtotime($record['exam_date']))) ?></h3>
+                    <p class="text-xs font-bold text-slate-500 mb-0"><?= $digitalSubmissionComplete ? 'Review the findings below and choose the final clinical decision.' : 'You may record a follow-up now. Clearance becomes available after every regular document is uploaded and archived.' ?></p>
+                </div>
+                <span class="badge badge-pending">Final Decision Required</span>
+            </div>
+        </div>
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <form method="post" class="ape-flow-action space-y-3">
+                <input type="hidden" name="action" value="finalize_exam_clear">
+                <div>
+                    <span class="material-symbols-outlined text-emerald-600 mb-2">verified</span>
+                    <h3 class="font-headline text-base font-extrabold text-[#17261d] mb-1">Clear Patient</h3>
+                    <p class="text-xs font-bold text-slate-500 mb-3"><?= $digitalSubmissionComplete ? 'Use only when the examination is complete and no follow-up is required.' : 'Complete and archive every regular digital document before clearing this patient.' ?></p>
+                    <label class="clinic-label">Patient-Visible Note</label>
+                    <textarea class="clinic-textarea" name="patient_visible_note" rows="3" placeholder="Final clearance message..."><?= e($record['patient_visible_note']) ?></textarea>
+                </div>
+                <button class="btn btn-primary w-full" <?= $digitalSubmissionComplete ? '' : 'disabled' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Clear this patient?" data-confirm-message="This will complete the annual APE record." data-confirm-toast="Clearing APE record..."><span class="material-symbols-outlined text-[18px]">check_circle</span> Clear Patient</button>
+            </form>
+            <form method="post" class="ape-flow-action muted space-y-3">
+                <input type="hidden" name="action" value="finalize_exam_follow_up">
+                <div>
+                    <span class="material-symbols-outlined text-amber-700 mb-2">medical_information</span>
+                    <h3 class="font-headline text-base font-extrabold text-amber-900 mb-1">Require Follow-up</h3>
+                    <label class="clinic-label">Required Follow-up</label>
+                    <textarea class="clinic-textarea" name="follow_up_notes" rows="3" placeholder="Treatment, repeat test, clearance, or other follow-up..." required></textarea>
+                    <div class="mt-3">
+                        <label class="clinic-label">Due Date</label>
+                        <input class="clinic-input" type="date" name="follow_up_due_date">
+                    </div>
+                    <label class="clinic-label mt-3">Patient Instructions</label>
+                    <textarea class="clinic-textarea" name="patient_visible_note" rows="2" placeholder="Instructions visible to the patient..."></textarea>
+                </div>
+                <button class="btn btn-outline w-full" style="color:#b45309;border-color:rgba(180,83,9,0.2);" data-confirm-submit data-confirm-type="danger" data-confirm-title="Require patient follow-up?" data-confirm-message="The APE record will remain open until follow-up is cleared." data-confirm-toast="Opening follow-up..."><span class="material-symbols-outlined text-[18px]">schedule</span> Require Follow-up</button>
+            </form>
+        </div>
+    <?php endif; ?>
+    <?php
+}
+
 $record = fetch_ape_record($id);
 $apeUser = current_user() ?? [];
 $canRecordApeExam = in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor', 'nurse'], true);
@@ -242,8 +336,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $activityNotes = $reviewPlan['notes'] . ($returnSchedule ? ' Return date: ' . $returnSchedule['date'] : '');
         } elseif ($action === 'approve_documents') {
             $archiveQueue = ape_record_queue($record);
-            $archiveGroup = $archiveQueue === 'digital_submission' ? 'initial' : 'follow_up';
-            if (!in_array($archiveQueue, ['digital_submission', 'follow_up'], true) || ($archiveGroup === 'follow_up' && !ape_can_review_returned_documents($record))) {
+            $initialDocumentsPending = !ape_digital_submission_complete($record);
+            $archiveGroup = $archiveQueue === 'follow_up' && !$initialDocumentsPending ? 'follow_up' : 'initial';
+            $initialDecisionReview = in_array($archiveQueue, ['final_decision', 'follow_up'], true) && $initialDocumentsPending;
+            if ((!in_array($archiveQueue, ['digital_submission', 'follow_up'], true) && !$initialDecisionReview) || ($archiveGroup === 'follow_up' && !ape_can_review_returned_documents($record))) {
                 throw new RuntimeException('This record is not awaiting digital submission or archive review.');
             }
             if ($archiveGroup === 'follow_up' && !$canRecordApeExam) {
@@ -355,7 +451,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('This examination has already been saved and is locked. Use the separate document review to resolve outstanding requirements.');
             }
             if (!ape_examination_is_available($record)) {
-                throw new RuntimeException('The examination can only be recorded during the patient’s assigned APE schedule.');
+                throw new RuntimeException('The examination becomes available when the patient’s assigned APE schedule starts.');
             }
             if (!in_array(($record['workflow_status'] ?? ''), ['Registered', 'Batch Assigned', 'Requirements Checked', 'Scheduled', 'Exam Done', 'Submitted', 'Reviewed', 'Follow-up Required'], true) || (!empty($record['exam_date']) && ($record['requirement_status'] ?? '') === 'Checked')) {
                 throw new RuntimeException('This APE record is not ready for examination.');
@@ -417,7 +513,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $activityNotes .= ' ' . $reviewPlan['notes'] . ($returnSchedule ? ' Return date: ' . $returnSchedule['date'] : '');
         } elseif ($action === 'finalize_exam_clear') {
             if (ape_record_queue($record) !== 'final_decision' || empty($record['exam_date'])) {
-                throw new RuntimeException('The examination and document archive must be complete before clearing the patient.');
+                throw new RuntimeException('The examination must be complete before clearing the patient.');
+            }
+            if (!ape_digital_submission_complete($record)) {
+                throw new RuntimeException('Complete and archive every regular digital document before clearing the patient.');
             }
             $documents = $apeDb->prepare("UPDATE ape_documents SET verification_status = 'Verified', verified_by_person_id = ?, verified_at = NOW() WHERE ape_id = ? AND document_type <> 'Clearance' AND verification_status = 'Pending'");
             $documents->execute([$staffPersonId, $id]);
@@ -603,6 +702,20 @@ foreach ($requirements as &$requirement) {
     $requirement['_latest_document'] = $latestDocumentByRequirement[$requirementKey] ?? null;
 }
 unset($requirement);
+$digitalPendingRequirements = array_values(array_filter(
+    $requirements,
+    static function (array $requirement): bool {
+        if (($requirement['requirement_name'] ?? '') === 'Follow-up clearance'
+            || ($requirement['upload_group'] ?? 'initial') === 'follow_up') {
+            return false;
+        }
+        $latestDocument = $requirement['_latest_document'] ?? null;
+        return !$latestDocument || ($latestDocument['verification_status'] ?? '') !== 'Verified';
+    }
+));
+$displayPendingRequirements = $queueKey === 'final_decision' && !$digitalSubmissionComplete
+    ? $digitalPendingRequirements
+    : $pendingRequirements;
 $apeIsCompleted = ($record['workflow_status'] ?? '') === 'Cleared'
     || ($record['clearance_status'] ?? '') === 'Cleared';
 $visibleArchivedDocuments = $apeIsCompleted ? $documents : [];
@@ -619,7 +732,7 @@ $examSaved = !empty($record['exam_date']);
 $requirementsLocked = $examSaved;
 $requirementsFormId = $examSaved ? 'apeRequirementsForm' : 'apeExaminationForm';
 $documentFollowUp = ape_document_follow_up($record);
-$reviewUploadGroup = $queueKey === 'follow_up' ? 'follow_up' : 'initial';
+$reviewUploadGroup = $queueKey === 'follow_up' && $digitalSubmissionComplete ? 'follow_up' : 'initial';
 $reviewUploadNames = ape_upload_requirement_names($requirements, $reviewUploadGroup);
 $reviewGroupUploaded = $reviewUploadGroup === 'initial' ? ape_initial_uploads_present($record)
     : (int) ($record['deferred_document_count'] ?? 0) >= count($reviewUploadNames);
@@ -1004,19 +1117,19 @@ render_header('APE Record - ' . $fullName);
                     <p class="text-sm font-bold text-slate-500 mb-0 max-w-3xl"><?= e($actionCard['body']) ?></p>
                 </div>
                 <span class="badge <?= ape_priority_badge($record)['class'] ?> shrink-0">
-                    <?php if ($pendingRequirements): ?>
-                        <?= count($pendingRequirements) ?> Requirement<?= count($pendingRequirements) === 1 ? '' : 's' ?> Missing
+                    <?php if ($displayPendingRequirements): ?>
+                        <?= count($displayPendingRequirements) ?> Requirement<?= count($displayPendingRequirements) === 1 ? '' : 's' ?> Missing
                     <?php else: ?>
                         <?= e(ape_missing_item($record)) ?>
                     <?php endif; ?>
                 </span>
             </div>
 
-            <?php if ($pendingRequirements): ?>
+            <?php if ($displayPendingRequirements): ?>
                 <div class="flex flex-wrap gap-2 mb-5" aria-label="Requirements needing attention">
-                    <?php foreach ($pendingRequirements as $requirement): ?>
+                    <?php foreach ($displayPendingRequirements as $requirement): ?>
                         <span class="ape-requirement-chip">
-                            <?= e($requirement['requirement_name']) ?> (<?= e($requirement['status']) ?>)
+                            <?= e($requirement['requirement_name']) ?> (<?= e(($requirement['_latest_document']['verification_status'] ?? null) ?: ($requirement['status'] ?? 'Missing')) ?>)
                         </span>
                     <?php endforeach; ?>
                 </div>
@@ -1055,7 +1168,7 @@ render_header('APE Record - ' . $fullName);
                         </button>
                     </form>
                 </div>
-            <?php elseif ($queueKey === 'digital_submission' || ape_can_review_returned_documents($record)): ?>
+            <?php elseif ($queueKey === 'digital_submission' || ape_can_review_returned_documents($record) || (in_array($queueKey, ['final_decision', 'follow_up'], true) && !$digitalSubmissionComplete)): ?>
                 <?php if ((int) ($record['follow_up_required'] ?? 0) === 1): ?>
                     <div class="ape-flow-action muted mb-4">
                         <p class="text-sm font-bold mb-0">The initial clinic-verified group is due one week after examination. Deferred correction or follow-up documents use the assigned return date and do not block the initial archive review.</p>
@@ -1129,6 +1242,9 @@ render_header('APE Record - ' . $fullName);
                         </div>
                     </div>
                 <?php endif; ?>
+                <?php if ($queueKey === 'final_decision'): ?>
+                    <?php render_ape_final_decision_actions($record, $canRecordApeExam, $digitalSubmissionComplete, $digitalPendingRequirements); ?>
+                <?php endif; ?>
             <?php elseif ($queueKey === 'examination' || (!$examSaved && !$apeIsCompleted)): ?>
                 <?php if (!$canRecordApeExam): ?>
                     <div class="ape-flow-action muted">
@@ -1146,7 +1262,7 @@ render_header('APE Record - ' . $fullName);
                             <span class="material-symbols-outlined text-amber-700 mt-0.5">schedule</span>
                             <div>
                                 <h3 class="font-headline text-base font-extrabold text-amber-900 mb-1">Waiting for the assigned schedule</h3>
-                                <p class="text-sm font-bold text-amber-800 mb-0">The examination form becomes available during this patient’s assigned batch date and time.</p>
+                                <p class="text-sm font-bold text-amber-800 mb-0">The examination form becomes available when this patient’s assigned batch starts and remains available if the schedule is missed.</p>
                             </div>
                         </div>
                     </div>
@@ -1211,57 +1327,7 @@ render_header('APE Record - ' . $fullName);
                     </form>
                 <?php endif; ?>
             <?php elseif ($queueKey === 'final_decision'): ?>
-                <?php if (!$canRecordApeExam): ?>
-                    <div class="ape-flow-action muted">
-                        <div class="flex items-start gap-3">
-                            <span class="material-symbols-outlined text-amber-700 mt-0.5">lock</span>
-                            <div>
-                                <h3 class="font-headline text-base font-extrabold text-amber-900 mb-1">Clinical permission required</h3>
-                                <p class="text-sm font-bold text-amber-800 mb-0">Only administrators, doctors, and nurses can record the final APE decision.</p>
-                            </div>
-                        </div>
-                    </div>
-                <?php else: ?>
-                    <div class="ape-flow-action mb-4">
-                        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                            <div>
-                                <p class="clinic-label mb-1">Examination Recorded</p>
-                                <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1"><?= e(date('M d, Y', strtotime($record['exam_date']))) ?></h3>
-                                <p class="text-xs font-bold text-slate-500 mb-0">Review the findings below and choose the final clinical decision.</p>
-                            </div>
-                            <span class="badge badge-pending">Final Decision Required</span>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                        <form method="post" class="ape-flow-action space-y-3">
-                            <input type="hidden" name="action" value="finalize_exam_clear">
-                            <div>
-                                <span class="material-symbols-outlined text-emerald-600 mb-2">verified</span>
-                                <h3 class="font-headline text-base font-extrabold text-[#17261d] mb-1">Clear Patient</h3>
-                                <p class="text-xs font-bold text-slate-500 mb-3">Use only when the examination is complete and no follow-up is required.</p>
-                                <label class="clinic-label">Patient-Visible Note</label>
-                                <textarea class="clinic-textarea" name="patient_visible_note" rows="3" placeholder="Final clearance message..."><?= e($record['patient_visible_note']) ?></textarea>
-                            </div>
-                            <button class="btn btn-primary w-full" data-confirm-submit data-confirm-type="primary" data-confirm-title="Clear this patient?" data-confirm-message="This will complete the annual APE record." data-confirm-toast="Clearing APE record..."><span class="material-symbols-outlined text-[18px]">check_circle</span> Clear Patient</button>
-                        </form>
-                        <form method="post" class="ape-flow-action muted space-y-3">
-                            <input type="hidden" name="action" value="finalize_exam_follow_up">
-                            <div>
-                                <span class="material-symbols-outlined text-amber-700 mb-2">medical_information</span>
-                                <h3 class="font-headline text-base font-extrabold text-amber-900 mb-1">Require Follow-up</h3>
-                                <label class="clinic-label">Required Follow-up</label>
-                                <textarea class="clinic-textarea" name="follow_up_notes" rows="3" placeholder="Treatment, repeat test, clearance, or other follow-up..." required></textarea>
-                                <div class="mt-3">
-                                    <label class="clinic-label">Due Date</label>
-                                    <input class="clinic-input" type="date" name="follow_up_due_date">
-                                </div>
-                                <label class="clinic-label mt-3">Patient Instructions</label>
-                                <textarea class="clinic-textarea" name="patient_visible_note" rows="2" placeholder="Instructions visible to the patient..."></textarea>
-                            </div>
-                            <button class="btn btn-outline w-full" style="color:#b45309;border-color:rgba(180,83,9,0.2);" data-confirm-submit data-confirm-type="danger" data-confirm-title="Require patient follow-up?" data-confirm-message="The APE record will remain open until follow-up is cleared." data-confirm-toast="Opening follow-up..."><span class="material-symbols-outlined text-[18px]">schedule</span> Require Follow-up</button>
-                        </form>
-                    </div>
-                <?php endif; ?>
+                <?php render_ape_final_decision_actions($record, $canRecordApeExam, $digitalSubmissionComplete, $digitalPendingRequirements); ?>
             <?php elseif ($queueKey === 'follow_up'): ?>
                 <?php if ($documentFollowUp): ?>
                     <div class="ape-flow-action muted">
@@ -1548,8 +1614,8 @@ render_header('APE Record - ' . $fullName);
         </div>
         <?php if ($showExamForm): ?>
             <section class="ape-flow-panel">
-                <p class="text-sm font-bold text-slate-500 mb-3">Save the examination and document review together. Document statuses, the return date, and queue movement are applied only when this save succeeds.</p>
-                <button type="submit" form="apeExaminationForm" class="btn btn-primary w-full" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save and lock examination and document review?" data-confirm-message="This saves and locks the clinical result and document review together. Digital submission and archive review must be completed before final decision or follow-up." data-confirm-toast="Saving examination and document review...">
+                <p class="text-sm font-bold text-slate-500 mb-3">Save the examination and document review together. The patient moves to Final Decision unless a follow-up is required; unfinished regular uploads remain visible there.</p>
+                <button type="submit" form="apeExaminationForm" class="btn btn-primary w-full" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save and lock examination and document review?" data-confirm-message="This saves and locks the clinical result, then moves the patient to Final Decision unless follow-up is required. Remaining regular uploads keep their seven-day deadline." data-confirm-toast="Saving examination and document review...">
                     <span class="material-symbols-outlined text-[18px]">clinical_notes</span> Save Examination
                 </button>
             </section>

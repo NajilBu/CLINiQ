@@ -19,7 +19,8 @@ $backQuery = http_build_query([
     'modules' => $modules,
 ]);
 
-$downloadFields = '<input type="hidden" name="from" value="' . system_report_escape($report['date_from']) . '">'
+$downloadFields = '<input type="hidden" name="_csrf" value="' . system_report_escape(csrf_token()) . '">'
+    . '<input type="hidden" name="from" value="' . system_report_escape($report['date_from']) . '">'
     . '<input type="hidden" name="to" value="' . system_report_escape($report['date_to']) . '">';
 foreach ($modules as $module) {
     $downloadFields .= '<input type="hidden" name="modules[]" value="' . system_report_escape((string) $module) . '">';

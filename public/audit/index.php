@@ -94,9 +94,25 @@ $stmt->execute();
 $logs = $stmt->fetchAll();
 $modules = auth_db()->query('SELECT DISTINCT module FROM audit_logs ORDER BY module')->fetchAll(PDO::FETCH_COLUMN);
 $actions = auth_db()->query('SELECT DISTINCT action FROM audit_logs ORDER BY action')->fetchAll(PDO::FETCH_COLUMN);
+$printQuery = http_build_query(array_filter([
+    'search' => $search,
+    'module' => $module,
+    'action' => $action,
+    'actor' => $actor,
+    'outcome' => $outcome,
+    'date_from' => $dateFrom,
+    'date_to' => $dateTo,
+], static fn ($value): bool => $value !== ''));
 
 render_header('Audit Log');
-render_clinic_command_header('Governance', 'System Audit Log', 'Review sensitive actions across CLINiQ.');
+render_clinic_command_header(
+    'Governance',
+    'System Audit Log',
+    'Review sensitive actions across CLINiQ.',
+    '<a class="btn btn-primary text-decoration-none" data-no-ajax="true" href="print.php'
+        . ($printQuery !== '' ? '?' . e($printQuery) : '')
+        . '"><span class="material-symbols-outlined text-[18px]">print</span>Print Audit Log</a>'
+);
 ?>
 <div class="audit-page">
 <section class="clinic-card overflow-hidden mb-6">
