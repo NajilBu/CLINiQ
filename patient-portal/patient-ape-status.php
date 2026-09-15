@@ -378,15 +378,12 @@ render_student_header('APE Status', 'ape');
         <div><?= (int) $_GET['uploaded'] ?> APE document(s) were uploaded together and are waiting for clinic verification.</div>
         <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
     </div>
-<<<<<<< HEAD
-=======
 <?php elseif (isset($_GET['vitals_confirmed'])): ?>
     <div class="student-note student-note-success student-toast" data-student-toast role="status" aria-live="polite">
         <span class="material-symbols-outlined">check_circle</span>
         <div>Your vitals and BMI were confirmed. You can now present your hard-copy APE requirements to the clinic.</div>
         <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
     </div>
->>>>>>> main
 <?php elseif ($uploadError !== ''): ?>
     <div class="student-note student-note-danger mb-4">
         <span class="material-symbols-outlined">error</span>
@@ -521,80 +518,6 @@ render_student_header('APE Status', 'ape');
     </details>
     <?php endif; ?>
 
-<<<<<<< HEAD
-=======
-    <?php if ($apeRecord): ?>
-    <details class="patient-mobile-panel" data-mobile-accordion id="ape-vitals-panel">
-    <summary>Vitals and BMI</summary>
-    <section class="student-card">
-        <div class="student-card-header">
-            <div>
-                <h2 class="student-card-title">Vitals and BMI</h2>
-                <p class="student-card-copy"><?= $hasScheduledBatch ? 'Enter these values before presenting your hard-copy APE requirements to the clinic.' : 'Vitals entry opens after the clinic assigns your APE schedule.' ?></p>
-            </div>
-            <span class="student-badge <?= $patientVitalsConfirmed ? 'student-badge-success' : ($hasScheduledBatch ? 'student-badge-warning' : 'student-badge-info') ?>">
-                <?= $patientVitalsConfirmed ? 'Confirmed' : ($hasScheduledBatch ? 'Not Started' : 'Waiting Schedule') ?>
-            </span>
-        </div>
-        <div class="student-card-pad">
-            <?php if ($patientVitalsConfirmed): ?>
-                <div class="student-note student-note-success mb-4"><span class="material-symbols-outlined">verified</span><div><strong>Patient-entered profile confirmed.</strong> Present your hard-copy requirements to the clinic. The clinic will record official examination findings separately.</div></div>
-                <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    <div class="ape-flow-field"><p class="clinic-label mb-1">Height</p><strong><?= student_e(number_format((float) $apeRecord['patient_height_cm'], 2)) ?> cm</strong></div>
-                    <div class="ape-flow-field"><p class="clinic-label mb-1">Weight</p><strong><?= student_e(number_format((float) $apeRecord['patient_weight_kg'], 2)) ?> kg</strong></div>
-                    <div class="ape-flow-field"><p class="clinic-label mb-1">BMI</p><strong><?= student_e(number_format($currentBmi, 2)) ?></strong><span><?= student_e($currentBmiClassification) ?></span></div>
-                    <div class="ape-flow-field"><p class="clinic-label mb-1">Temperature</p><strong><?= student_e(number_format((float) $apeRecord['patient_temperature'], 1)) ?> °C</strong></div>
-                    <div class="ape-flow-field"><p class="clinic-label mb-1">Blood Pressure</p><strong><?= student_e($apeRecord['patient_blood_pressure']) ?></strong></div>
-                    <div class="ape-flow-field"><p class="clinic-label mb-1">Pulse Rate</p><strong><?= (int) $apeRecord['patient_pulse_rate'] ?> bpm</strong></div>
-                </div>
-            <?php elseif ($canEnterPatientVitals): ?>
-                <form method="post" class="grid grid-cols-1 md:grid-cols-3 gap-4" id="ape-vitals-form">
-                    <input type="hidden" name="action" value="confirm_ape_vitals">
-                    <div>
-                        <label class="student-label" for="patient_height_cm">Height (cm)</label>
-                        <input class="student-input" id="patient_height_cm" name="patient_height_cm" type="number" min="30" max="250" step="0.01" placeholder="e.g. 170" required>
-                    </div>
-                    <div>
-                        <label class="student-label" for="patient_weight_kg">Weight (kg)</label>
-                        <input class="student-input" id="patient_weight_kg" name="patient_weight_kg" type="number" min="1" max="500" step="0.01" placeholder="e.g. 60" required>
-                    </div>
-                    <div>
-                        <label class="student-label" for="patient_bmi">BMI (calculated)</label>
-                        <input class="student-input" id="patient_bmi" name="patient_bmi_display" type="text" placeholder="Enter height/weight" readonly>
-                    </div>
-                    <div>
-                        <label class="student-label" for="patient_temperature">Temperature (°C)</label>
-                        <input class="student-input" id="patient_temperature" name="patient_temperature" type="number" min="30" max="45" step="0.01" placeholder="e.g. 36.6" required>
-                    </div>
-                    <div>
-                        <label class="student-label" for="patient_blood_pressure">Blood Pressure</label>
-                        <input class="student-input" id="patient_blood_pressure" name="patient_blood_pressure" type="text" pattern="\d{2,3}\s*/\s*\d{2,3}" placeholder="e.g. 120/80" required>
-                    </div>
-                    <div>
-                        <label class="student-label" for="patient_pulse_rate">Pulse Rate (bpm)</label>
-                        <input class="student-input" id="patient_pulse_rate" name="patient_pulse_rate" type="number" min="20" max="250" placeholder="e.g. 72" required>
-                    </div>
-                    
-                    <div class="md:col-span-3 student-note student-note-warning">
-                        <span class="material-symbols-outlined">info</span>
-                        <div>Review your entries carefully. After confirmation, these values will be locked and shown to clinic staff.</div>
-                    </div>
-                    
-                    <button class="student-button md:col-span-3" type="submit" data-confirm-submit data-confirm-type="primary" data-confirm-title="Confirm vitals and BMI?" data-confirm-message="These values will be locked and shared with the clinic for review." data-confirm-toast="Confirming vitals and BMI...">
-                        <span class="material-symbols-outlined">verified</span>
-                        Confirm Vitals and BMI
-                    </button>
-                </form>
-            <?php elseif (!$hasScheduledBatch && !$patientVitalsConfirmed): ?>
-                <div class="student-note student-note-info"><span class="material-symbols-outlined">calendar_month</span><div><strong>Waiting for APE schedule.</strong> The clinic will assign your examination batch before you enter vitals and BMI.</div></div>
-            <?php else: ?>
-                <div class="student-note student-note-info"><span class="material-symbols-outlined">info</span><div>This completed APE record predates the patient vitals profile step. No new patient-entered values are required.</div></div>
-            <?php endif; ?>
-        </div>
-    </section>
-    </details>
-    <?php endif; ?>
->>>>>>> main
     </div>
 
     <?php if ($showDocuments): ?>
