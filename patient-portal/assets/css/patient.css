@@ -390,6 +390,10 @@ html:has(.student-body) body {
     opacity: 0.48;
 }
 
+[data-profile-photo-save][hidden] {
+    display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
     .profile-photo-modal,
     .profile-photo-dialog,
@@ -799,6 +803,9 @@ html:has(.student-body) body {
     white-space: nowrap;
 }
 
+.passport-action-label-short { display: none; }
+.passport-action-label-long { display: inline; }
+
 .student-button-disabled,
 .student-button:disabled,
 .student-button-secondary:disabled,
@@ -1023,6 +1030,32 @@ html:has(.student-body) body {
 .student-document-list {
     display: grid;
     gap: 0.75rem;
+}
+
+.ape-timeline-clinical-entry {
+    position: relative;
+    border-left-width: 4px;
+}
+
+.ape-timeline-clinical-entry.is-normal {
+    border-color: #a7dec0;
+    background: #f6fdf8;
+}
+
+.ape-timeline-clinical-entry.is-follow-up {
+    border-color: #f2c66e;
+    background: #fffaf0;
+}
+
+.ape-timeline-entry-heading {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.ape-timeline-entry-heading .student-badge {
+    margin-left: auto;
 }
 
 .student-document-card {
@@ -1633,6 +1666,29 @@ html:has(.student-body) body {
 .ape-staged-file-preview:hover {
     border-color: color-mix(in srgb, var(--student-primary) 42%, transparent);
     background: color-mix(in srgb, var(--student-primary) 14%, #ffffff);
+}
+
+.ape-staged-file-remove {
+    display: inline-grid;
+    width: 1.55rem;
+    height: 1.55rem;
+    flex: 0 0 1.55rem;
+    place-items: center;
+    padding: 0;
+    border: 1px solid var(--student-border-soft);
+    border-radius: 999px;
+    background: #fff;
+    color: var(--student-muted);
+    font-size: 1.15rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.ape-staged-file-remove:hover,
+.ape-staged-file-remove:focus-visible {
+    border-color: #fecaca;
+    background: #fff5f5;
+    color: var(--student-danger);
 }
 
 .ape-batch-submit-bar {
@@ -3074,6 +3130,61 @@ body.student-time-modal-open {
     font-size: 0.85rem;
 }
 
+/* Compact responder view: identity first, then readable single-column essentials. */
+.passport-preview-modern .passport-modern-hero {
+    grid-template-columns: auto minmax(0, 1fr);
+}
+
+.passport-preview-modern .passport-modern-status {
+    grid-column: 1 / -1;
+    justify-self: start;
+}
+
+.passport-preview-modern .passport-modern-blood {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0.75rem 0.9rem;
+    text-align: left;
+}
+
+.passport-preview-modern .passport-modern-blood strong { margin: 0; }
+.passport-preview-modern .passport-modern-content { gap: 0.8rem; }
+.passport-modern-section {
+    padding: 0.9rem;
+    border: 1px solid var(--student-border-soft);
+    border-radius: 0.9rem;
+    background: #fff;
+}
+
+.passport-modern-section-title {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.75rem;
+    color: var(--student-primary-dark);
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+}
+
+.passport-modern-section-title .material-symbols-outlined { font-size: 1rem; }
+.passport-modern-personal-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.45rem; }
+.passport-modern-personal-item { display: grid; gap: 0.22rem; padding: 0.65rem; border-radius: 0.65rem; background: var(--student-primary-soft); }
+.passport-modern-personal-item-wide { grid-column: 1 / -1; }
+.passport-modern-personal-item span,
+.passport-modern-medical-item > span { color: var(--student-muted); font-size: 0.6rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+.passport-modern-personal-item strong,
+.passport-modern-medical-item strong { color: var(--student-fg); font-size: 0.78rem; line-height: 1.35; overflow-wrap: anywhere; }
+.passport-modern-medical-list { display: grid; }
+.passport-modern-medical-item { display: grid; gap: 0.25rem; padding: 0.65rem 0; border-top: 1px solid var(--student-border-soft); }
+.passport-modern-medical-item:first-child { padding-top: 0; border-top: 0; }
+.passport-modern-medical-item:last-child { padding-bottom: 0; }
+.passport-modern-medical-item .passport-modern-instructions { padding: 0.65rem 0.75rem; }
+
 /* Danger note variant */
 .student-note-danger {
     color: #991b1b;
@@ -3412,10 +3523,14 @@ body.student-time-modal-open {
    Ordered: shell → typography → component patterns → page layouts. */
 .student-mobile-account, .student-mobile-bottom-nav { display: none; }
 .student-dashboard-mobile-overview, .student-ape-mobile-batch, .student-ape-step-action, .student-calendar-mobile-hint, .student-appointment-booking-sheet-head, .student-document-mobile-list, .passport-mobile-tabs { display: none; }
+.student-dashboard-action-scope { display: none; }
+.student-dashboard-batch-summary { display: none; }
+.student-dashboard-profile-slot { display: contents; }
+.student-ape-desktop-summary { display: none; }
 @media (max-width: 640px) {
     :root { --student-mobile-gutter:16px; --student-mobile-nav-height:72px; --patient-radius:16px; --patient-shadow:0 6px 18px rgba(23,38,29,.08); }
     html, body, .student-body { max-width:100%; overflow-x:clip; }
-    .student-main { width:100%; padding:16px var(--student-mobile-gutter) calc(var(--student-mobile-nav-height) + env(safe-area-inset-bottom) + 16px); }
+    .student-main { width:100%; padding:16px var(--student-mobile-gutter) calc(var(--student-mobile-nav-height) + env(safe-area-inset-bottom) + 12px); }
     .student-topbar { position:sticky; display:flex; grid-template-areas:none; min-height:64px; padding:8px var(--student-mobile-gutter); gap:8px; }
     .student-brand { flex:1 1 auto; min-width:0; gap:10px; } .student-brand-mark { width:36px; height:36px; flex:0 0 36px; } .student-brand-copy { min-width:0; } .student-brand-title { font-size:15px; } .student-brand-subtitle { font-size:11px; }
     .student-nav-toggle, .student-nav, .student-profile-chip { display:none !important; } .student-notifications { order:2; }
@@ -3448,6 +3563,7 @@ body.student-time-modal-open {
     .student-badge { padding:4px 10px; font-size:11px; line-height:1.2; }
     .student-card .text-3xl, .student-card strong.text-3xl { font-size:28px !important; line-height:1; }
     .student-grid, .student-document-list, .student-progress-list, .student-ape-stepper { gap:12px; }
+    .student-main > .student-card.mb-4, .student-main > .student-required-actions.mb-4, .student-main > .student-action-card.mb-4 { margin-bottom:12px !important; }
 
     /* Dashboard */
     .student-required-actions { margin-inline:0; } .student-required-actions-head { gap:8px; padding-bottom:8px; } .student-required-action-list { gap:12px; }
@@ -3469,12 +3585,13 @@ body.student-time-modal-open {
     .student-mobile-more[open] > summary::after, .passport-mobile-panel[open] > summary::after, .patient-mobile-panel[open] > summary::after { content:'expand_less'; }
     .student-mobile-more > .student-card { border:0; border-radius:0; box-shadow:none; }
     .patient-mobile-panel { margin:0; border:1px solid var(--student-border-soft); border-radius:var(--patient-radius); background:#fff; box-shadow:var(--patient-shadow); }
-    .patient-mobile-panel + .patient-mobile-panel { margin-top:8px; }
+    .patient-mobile-panel + .patient-mobile-panel { margin-top:12px; }
+    .student-mobile-more > .student-card.mt-4, .patient-mobile-panel > .student-card.mt-4 { margin-top:0 !important; }
     .patient-mobile-panel > .student-card { margin:0; border:0; border-radius:0; box-shadow:none; }
-    .student-ape-layout { gap:8px; }
-    .student-ape-secondary-panels { gap:8px !important; }
+    .student-ape-layout { gap:12px; }
+    .student-ape-secondary-panels { gap:12px !important; }
     .student-ape-secondary-panels .patient-mobile-panel + .patient-mobile-panel { margin-top:0; }
-    .ape-activity-panel { margin-top:8px; }
+    .ape-activity-panel { margin-top:12px; }
 
     /* APE: completed steps are checklist rows; current step retains detail. */
     .student-ape-step { grid-template-columns:32px minmax(0,1fr); gap:8px; } .student-ape-step-rail { display:none; } .student-ape-step-index { width:32px; height:32px; flex:0 0 32px; } .student-ape-step-body { padding:12px; }
@@ -3523,7 +3640,7 @@ body.student-time-modal-open {
     /* Health Passport: QR/NFC is open first; preview is an accordion panel. */
     .passport-mobile-tabs { display:grid; grid-template-columns:repeat(3,1fr); gap:4px; margin:0 0 12px; padding:4px; border:1px solid var(--student-border-soft); border-radius:12px; background:#fff; } .passport-mobile-tabs button { min-height:40px; border:0; border-radius:9px; background:transparent; color:var(--student-muted); font-size:12px; font-weight:700; } .passport-mobile-tabs button.is-active { color:var(--student-primary-dark); background:var(--student-primary-soft); }
     #passport-form.passport-tab-profile [data-passport-group]:not([data-passport-group="profile"]), #passport-form.passport-tab-emergency [data-passport-group]:not([data-passport-group="emergency"]), #passport-form.passport-tab-access [data-passport-group]:not([data-passport-group="access"]) { display:none !important; }
-    #passport-form .passport-layout { gap:12px; } #passport-form .passport-settings-stack { gap:8px !important; } #passport-form .passport-settings-stack .patient-mobile-panel + .patient-mobile-panel, #passport-form .passport-layout > .patient-mobile-panel + .patient-mobile-panel { margin-top:0; }
+    #passport-form .passport-layout { gap:12px; } #passport-form .passport-settings-stack { gap:12px !important; } #passport-form .passport-settings-stack .patient-mobile-panel + .patient-mobile-panel, #passport-form .passport-layout > .patient-mobile-panel + .patient-mobile-panel { margin-top:0; }
     #passport-form .student-card-header, #passport-form .passport-grid-tight { gap:8px; } #passport-form .patient-mobile-panel .student-card-title { display:none; } #passport-form .patient-mobile-panel .student-card-header { padding-bottom:8px; } #passport-form .passport-readonly-field { min-height:0; padding:0; border:0; border-radius:0; background:transparent; color:var(--student-fg); font-size:14px; font-weight:600; } #passport-form .passport-field-compact:has(.passport-readonly-field) { display:grid; grid-template-columns:minmax(88px,.75fr) minmax(0,1.25fr); align-items:baseline; gap:8px; } #passport-form .passport-field-compact:has(.passport-readonly-field) .student-label { margin:0; color:var(--student-muted); font-size:11px; }
     #passport-form .student-span-7 > .passport-action-row, #passport-form .flex.gap-2 { align-items:stretch; flex-direction:column; } #passport-form .flex.gap-2 .student-button-secondary { width:100%; white-space:normal !important; }
     #passport-form { padding-bottom:64px; } #passport-form .passport-action-row { position:fixed; z-index:75; right:0; bottom:calc(var(--student-mobile-nav-height) + env(safe-area-inset-bottom)); left:0; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin:0; padding:8px 16px; border-top:1px solid var(--student-border-soft); background:#fff; box-shadow:0 -8px 20px rgba(23,38,29,.12); } #passport-form .passport-action-row .student-button, #passport-form .passport-action-row .student-button-secondary { width:100%; min-width:0; min-height:44px; padding:8px; font-size:12px; line-height:1.2; white-space:normal !important; } #passport-form[data-passport-dirty="false"] .passport-action-row { grid-template-columns:1fr; } #passport-form[data-passport-dirty="false"] .passport-save-button { display:none; } #passport-form .passport-save-button { flex:0 0 auto; } .passport-action-label-short { display:inline; } .passport-action-label-long { display:none; }
@@ -3535,4 +3652,136 @@ body.student-time-modal-open {
     .passport-token-chip { display:grid; grid-template-columns:20px auto minmax(0,1fr) 32px; width:100%; align-items:center; gap:6px; border-radius:12px; } .passport-modern-hero { grid-template-columns:auto minmax(0,1fr); padding:12px; } .passport-modern-blood { grid-column:1 / -1; width:100%; } .passport-modern-info-grid { grid-template-columns:1fr; } .passport-modern-contact { grid-template-columns:auto minmax(0,1fr); } .passport-modern-call { grid-column:1 / -1; width:100%; }
     .passport-token-chip code { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .passport-token-copy { display:grid; width:32px; height:32px; min-width:32px; place-items:center; border:0; border-radius:8px; background:var(--student-primary-soft); color:var(--student-primary-dark); } .passport-token-copy .material-symbols-outlined { font-size:18px; }
 }
-@media (min-width: 641px) { .student-mobile-more, .passport-mobile-panel, .patient-mobile-panel, .patient-document-more { display:contents; } .student-mobile-more > summary, .passport-mobile-panel > summary, .patient-mobile-panel > summary, .patient-document-more > summary { display:none; } .student-mobile-more:not([open]) > section, .passport-mobile-panel:not([open]) > section, .patient-mobile-panel:not([open]) > section { display:block; } }
+/* Desktop restoration for additive mobile accordions: preserve the original card/grid flow. */
+@media (min-width: 641px) {
+    .student-mobile-more,
+    .passport-mobile-panel,
+    .patient-mobile-panel { display: block; }
+
+    /* This wrapper contains the actions of a document-row grid and must stay flat. */
+    .patient-document-more { display: contents; }
+
+    /* Match the compact mobile account control in the desktop header. */
+    .student-notifications { order: 1; }
+    .student-mobile-account { position: relative; z-index: 90; display: block; order: 2; }
+    .student-profile-chip { display: flex; order: 3; min-width: 0; gap: 0; }
+    .student-profile-chip > .student-profile-photo,
+    .student-profile-chip > .student-profile-text,
+    .student-profile-actions > button { display: none; }
+    .student-profile-actions { display: flex; }
+    .student-profile-actions .student-logout { width: 44px; height: 44px; border-radius: 12px; }
+    .student-mobile-account summary { list-style: none; }
+    .student-mobile-account summary::-webkit-details-marker { display: none; }
+    .student-mobile-account-toggle { display: grid; width: 44px; height: 44px; min-width: 44px; min-height: 44px; place-items: center; padding: 0; border: 1px solid var(--student-border-soft); border-radius: 12px; background: #fff; color: var(--student-primary-dark); box-shadow: none; cursor: pointer; }
+    .student-mobile-account-toggle .material-symbols-outlined { font-size: 24px; }
+    .student-mobile-account[open] .student-mobile-account-menu { position: absolute; z-index: 95; top: calc(100% + 12px); right: 0; display: grid; width: 19rem; gap: 4px; padding: 12px; border: 1px solid var(--student-border-soft); border-radius: 16px; background: #fff; box-shadow: 0 14px 30px rgba(23, 38, 29, .18); }
+    .student-mobile-account-identity { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 4px 4px 10px; border-bottom: 1px solid var(--student-border-soft); }
+    .student-mobile-account-identity > img, .student-mobile-account-identity > span { display: grid; width: 36px; height: 36px; flex: 0 0 36px; place-items: center; overflow: hidden; border-radius: 50%; background: var(--student-primary-soft); color: var(--student-primary-dark); font-size: 13px; font-weight: 700; object-fit: cover; }
+    .student-mobile-account-identity > div { min-width: 0; }
+    .student-mobile-account-identity strong, .student-mobile-account-identity small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .student-mobile-account-identity strong { color: var(--student-fg); font-size: 14px; line-height: 1.3; }
+    .student-mobile-account-identity small { margin-top: 2px; color: var(--student-muted); font-size: 12px; }
+    .student-mobile-account-action { display: flex; align-items: center; min-height: 44px; gap: 10px; padding: 8px; border: 0; border-radius: 10px; background: transparent; color: var(--student-fg); font-size: 14px; font-weight: 600; text-align: left; }
+    .student-mobile-account-action:hover, .student-mobile-account-action:focus-visible { background: var(--student-primary-soft); color: var(--student-primary-dark); }
+    .student-mobile-account-action .material-symbols-outlined { font-size: 20px; }
+    .student-mobile-account-action.is-danger { color: var(--student-danger); }
+
+    .student-dashboard-detail-stack > .student-dashboard-profile-slot { display: flex; grid-column: span 4; align-self: stretch; }
+
+    /* The desktop guide is wrapped for mobile accordion behavior; the wrapper owns its grid span. */
+    .student-appointment-layout > .appointment-calendar-guide { display: block; grid-column: span 5; min-width: 0; }
+    .student-appointment-layout > .appointment-calendar-guide > .student-card { width: 100%; }
+
+    /* Desktop Health Passport: compact 60/40 settings and access layout. */
+    #passport-form .passport-layout { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: start; gap: 16px; }
+    #passport-form .passport-layout > .student-span-7,
+    #passport-form .passport-layout > .student-span-5 { grid-column: auto; min-width: 0; }
+    #passport-form .passport-settings-stack { gap: 16px !important; }
+    #passport-form .passport-settings-stack > .patient-mobile-panel > .student-card,
+    #passport-form .passport-layout > .student-span-5 > .passport-mobile-panel > .student-card { margin: 0; }
+    #passport-form .passport-settings-stack .student-card-header,
+    #passport-form .passport-settings-stack .student-card-pad { padding: 16px; }
+    #passport-form .passport-settings-stack .passport-grid-tight { gap: 12px; }
+
+    #passport-form .passport-personal-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    #passport-form .passport-personal-grid > .student-span-6 { grid-column: auto; }
+    #passport-form .passport-personal-grid > .student-span-12 { grid-column: 1 / -1; }
+    #passport-form .passport-bmi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    #passport-form .passport-bmi-grid > .student-span-4 { grid-column: auto; }
+    #passport-form .passport-bmi-grid > .student-span-12 { grid-column: 1 / -1; }
+
+    #passport-form .passport-emergency-fields { gap: 12px; }
+    #passport-form .passport-emergency-fields > .student-field { margin: 0; }
+    #passport-form .passport-emergency-fields .student-label { margin-bottom: 4px; }
+    #passport-form .passport-emergency-fields .passport-hint { margin-top: 4px; }
+
+    #passport-form .passport-layout > .student-span-5 { position: sticky; top: 16px; align-self: start; gap: 16px !important; }
+    /* Prevent the long NFC token from widening the QR column beyond the form grid. */
+    #passport-form .passport-layout > .student-span-5,
+    #passport-form .passport-layout > .student-span-5 .student-card { min-width: 0; }
+    #passport-form .passport-qr-card-body .flex.gap-2 { display: flex; min-width: 0; }
+    #passport-form .passport-qr-card-body .passport-qr-action { min-width: 0; }
+    #passport-form .passport-token-chip { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; width: 100%; max-width: 100%; box-sizing: border-box; }
+    #passport-form .passport-token-chip code { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* Keep the white card grid on the same full-width content boundary as the emergency notice above it. */
+    #passport-form { width: 100%; padding-bottom: 0; }
+    #passport-form .passport-action-row { position: static; justify-content: flex-end; gap: 12px; margin: 0; padding: 0; }
+    #passport-form[data-passport-dirty="false"] .passport-save-button { display: none; }
+
+    .student-mobile-more > summary,
+    .passport-mobile-panel > summary,
+    .patient-mobile-panel > summary,
+    .patient-document-more > summary { display: none !important; }
+
+    .student-mobile-more > :not(summary),
+    .passport-mobile-panel > :not(summary),
+    .patient-mobile-panel > :not(summary),
+    .patient-document-more > :not(summary) { display: block !important; }
+
+    /* Desktop Dashboard: action-first hierarchy without stretched empty cards. */
+    .student-dashboard-detail-stack { align-items: start; }
+    .student-dashboard-profile-slot > .student-mobile-more { display: flex; flex: 1 1 auto; flex-direction: column; }
+    .student-dashboard-profile-slot > .student-mobile-more > .student-card { flex: 1 1 auto; }
+    .student-dashboard-detail-stack > .student-dashboard-duplicate { align-self: start; }
+    .student-dashboard-profile-slot > .student-mobile-more > .student-card { min-height: 21.7rem; }
+    .student-dashboard-appointment-card { min-height: 21.7rem; }
+    .student-dashboard-appointment-card { display: flex; flex-direction: column; }
+    .student-dashboard-appointment-card > .student-card-pad { display: flex; flex: 1; flex-direction: column; }
+    .student-dashboard-appointment-card > .student-card-pad > .student-button-secondary,
+    .student-dashboard-appointment-card > .student-card-pad > .student-button-danger { margin-top: auto; }
+    .student-dashboard-actionable { border-color: #b9dcca; box-shadow: 0 10px 24px rgba(30, 105, 65, .10); }
+    .student-dashboard-actionable-danger { border-color: #fecaca; box-shadow: 0 10px 24px rgba(185, 28, 28, .08); }
+    .student-dashboard-reference { box-shadow: none; }
+    .student-dashboard-action-scope { display: block; margin: .6rem 0 0 !important; color: var(--student-primary-dark) !important; font-size: .76rem !important; font-weight: 600 !important; }
+    .student-dashboard-welcome .student-page-header { margin-bottom: 0; }
+    .student-dashboard-batch-summary { display: grid; grid-template-columns: 2.25rem minmax(0, 1fr) auto; align-items: center; gap: .8rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--student-border-soft); color: var(--student-fg); font-size: .84rem; }
+    .student-dashboard-batch-summary:hover { color: var(--student-primary-dark); }
+    .student-dashboard-batch-summary > .student-icon-box { width: 2.25rem; height: 2.25rem; min-width: 2.25rem; min-height: 2.25rem; }
+    .student-dashboard-batch-summary > .student-icon-box .material-symbols-outlined { font-size: 1.05rem; }
+    .student-dashboard-batch-summary strong { font-weight: 700; }
+    .student-dashboard-batch-time { color: var(--student-muted); font-weight: 500; white-space: nowrap; }
+
+    /* Desktop Dashboard next-step panel: one focused action in a contained flow. */
+    .student-dashboard-next-steps { gap: 1.15rem; padding: 1.45rem; border: 1px solid var(--student-border-soft); border-radius: var(--student-radius); background: #fff; box-shadow: var(--student-shadow); }
+    .student-dashboard-next-steps .student-required-actions-head { align-items: flex-start; }
+    .student-dashboard-next-steps .student-required-action-list { gap: .75rem; }
+    .student-dashboard-next-steps .student-dashboard-ape-action { min-height: 6.75rem; padding: 1rem 1.25rem; border-color: color-mix(in srgb, var(--student-primary) 48%, #ffffff); background: var(--student-primary-soft); box-shadow: none; }
+    .student-dashboard-next-steps .student-dashboard-ape-action .student-action-step { width: 2.2rem; height: 2.2rem; margin-top: 0; background: #fff; border-color: transparent; font-size: .88rem; }
+    .student-dashboard-next-steps .student-dashboard-ape-action .student-icon-box { width: 2.25rem; height: 2.25rem; min-width: 2.25rem; min-height: 2.25rem; }
+    .student-dashboard-next-steps .student-dashboard-ape-action .student-button { min-width: 10.5rem; }
+
+    /* Desktop APE top-level status summary. */
+    .student-ape-batch-card { display: none; }
+    .student-ape-next-action { margin-bottom: 1.25rem; }
+    .student-ape-flow-completion { display: block; }
+    .student-ape-desktop-summary { display: none; }
+    .ape-document-actions .ape-remove-file { display: none !important; }
+    .student-ape-summary-card { display: grid; align-content: start; gap: .5rem; min-height: 8.75rem; padding: 1.2rem; }
+    .student-ape-summary-card .student-label { margin: 0; }
+    .student-ape-summary-value { color: var(--student-fg); font-size: 1.7rem; font-weight: 800; line-height: 1; }
+    .student-ape-summary-value-text { font-size: 1rem; line-height: 1.3; }
+    .student-ape-summary-copy { color: var(--student-muted); font-size: .78rem; line-height: 1.4; }
+    .student-ape-summary-progress { width: 100%; height: .45rem; overflow: hidden; border-radius: 999px; background: var(--student-primary-fixed); }
+    .student-ape-summary-progress > span { display: block; height: 100%; border-radius: inherit; background: var(--student-primary); }
+
+}
