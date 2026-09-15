@@ -4,21 +4,25 @@ $availabilityWeek = appointment_week_from_request($_GET['week'] ?? null);
 $availabilityBlocksByDate = appointment_blocks_for_week($availabilityWeek);
 [$availabilityRangeStart, $availabilityRangeEnd] = appointment_week_bounds($availabilityWeek);
 $availabilityApeBatchesByDate = appointment_ape_batches_for_range($availabilityRangeStart, $availabilityRangeEnd);
+$weeklySchedule = appointment_weekly_schedule();
 $availabilityWeekDays = [];
-for ($offset = 0; $offset < 5; $offset++) {
-    $availabilityWeekDays[] = $availabilityWeek->modify('+' . $offset . ' days');
+for ($offset = 0; $offset < 7; $offset++) {
+    $day = $availabilityWeek->modify('+' . $offset . ' days');
+    if ($weeklySchedule[(int) $day->format('N')]['enabled']) {
+        $availabilityWeekDays[] = $day;
+    }
 }
 
 $calendarBlocksByDate = $availabilityBlocksByDate;
 // Combine adjoining unavailable periods for display; retain the original saved records.
 foreach ($calendarBlocksByDate as $date => $dayBlocks) {
-    usort($dayBlocks, static fn(array $a, array $b): int => strcmp($a['start_time'] ?? '08:00:00', $b['start_time'] ?? '08:00:00'));
+    usort($dayBlocks, static fn(array $a, array $b): int => strcmp($a['start_time'] ?? '06:00:00', $b['start_time'] ?? '06:00:00'));
     $merged = [];
     foreach ($dayBlocks as $block) {
         $last = count($merged) - 1;
-        $start = $block['start_time'] ?: '08:00:00';
-        $end = $block['end_time'] ?: '17:00:00';
-        if ($last >= 0 && $start <= ($merged[$last]['end_time'] ?: '17:00:00')) {
+        $start = $block['start_time'] ?: '06:00:00';
+        $end = $block['end_time'] ?: '20:00:00';
+        if ($last >= 0 && $start <= ($merged[$last]['end_time'] ?: '20:00:00')) {
             if (empty($merged[$last]['start_time']) || empty($block['start_time'])) {
                 $merged[$last]['start_time'] = null;
                 $merged[$last]['end_time'] = null;
@@ -36,11 +40,11 @@ $availabilityDisplayBlocks = [];
 foreach ($availabilityBlocksByDate as $date => $dayBlocks) {
     usort($dayBlocks, static fn(array $a, array $b): int => strcmp($a['start_time'] ?? '00:00:00', $b['start_time'] ?? '00:00:00'));
     foreach ($dayBlocks as $block) {
-        $start = $block['start_time'] ?: '08:00:00';
-        $end = $block['end_time'] ?: '17:00:00';
+        $start = $block['start_time'] ?: '06:00:00';
+        $end = $block['end_time'] ?: '20:00:00';
         $last = count($availabilityDisplayBlocks) - 1;
         $sameDate = $last >= 0 && $availabilityDisplayBlocks[$last]['date'] === $date;
-        if ($sameDate && $start <= ($availabilityDisplayBlocks[$last]['end_time'] ?: '17:00:00')) {
+        if ($sameDate && $start <= ($availabilityDisplayBlocks[$last]['end_time'] ?: '20:00:00')) {
             $availabilityDisplayBlocks[$last]['end_time'] = empty($availabilityDisplayBlocks[$last]['start_time']) || empty($block['start_time']) ? null : max($availabilityDisplayBlocks[$last]['end_time'], $end);
             $availabilityDisplayBlocks[$last]['start_time'] = empty($availabilityDisplayBlocks[$last]['start_time']) || empty($block['start_time']) ? null : $availabilityDisplayBlocks[$last]['start_time'];
             $availabilityDisplayBlocks[$last]['reason'] = implode(' / ', array_unique(array_filter([$availabilityDisplayBlocks[$last]['reason'], $block['reason'] ?? ''])));
@@ -64,15 +68,16 @@ foreach ($availabilityApeBatchesByDate as $date => $batches) {
 $availabilityPrevWeek = $availabilityWeek->modify('-1 week')->format('Y-m-d');
 $availabilityNextWeek = $availabilityWeek->modify('+1 week')->format('Y-m-d');
 $availabilityToday = new DateTimeImmutable('today');
-$availabilityMinimumDate = (int) $availabilityToday->format('N') >= 6
-    ? $availabilityToday->modify('next monday')
-    : $availabilityToday;
+$availabilityMinimumDate = $availabilityToday;
+for ($offset = 0; $offset < 7 && !appointment_date_is_clinic_day($availabilityMinimumDate->format('Y-m-d')); $offset++) {
+    $availabilityMinimumDate = $availabilityMinimumDate->modify('+1 day');
+}
 $availabilityCurrentWeek = $availabilityToday->modify('monday this week')->format('Y-m-d');
-$availabilityWeekEnd = $availabilityWeek->modify('+4 days');
+$availabilityWeekEnd = $availabilityWeek->modify('+6 days');
 $availabilityRequestedDate = '';
 if (isset($_GET['block_date']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $_GET['block_date'])) {
     $requestedDate = DateTimeImmutable::createFromFormat('!Y-m-d', (string) $_GET['block_date']);
-    if ($requestedDate && $requestedDate->format('Y-m-d') === (string) $_GET['block_date'] && $requestedDate >= $availabilityMinimumDate) {
+    if ($requestedDate && $requestedDate->format('Y-m-d') === (string) $_GET['block_date'] && $requestedDate >= $availabilityMinimumDate && appointment_date_is_clinic_day($requestedDate->format('Y-m-d'))) {
         $availabilityRequestedDate = $requestedDate->format('Y-m-d');
     }
 }
@@ -83,14 +88,42 @@ if ($availabilityRequestedDate !== '') {
 } elseif ($availabilityWeekEnd < $availabilityMinimumDate) {
     $availabilityDefaultDate = $availabilityMinimumDate->format('Y-m-d');
 } else {
-    $availabilityDefaultDate = $availabilityWeek->format('Y-m-d');
+    $availabilityDefaultDate = $availabilityWeekDays[0]->format('Y-m-d');
 }
 $availabilityWeekLabel = $availabilityWeek->format('Y-m-d') === $availabilityCurrentWeek
     ? 'This Week'
     : $availabilityWeek->format('M j') . '–' . $availabilityWeekEnd->format('M j');
-$availabilityStartMinutes = 8 * 60;
-$availabilityEndMinutes = 17 * 60;
+[$availabilityStartHour, $availabilityEndHour] = appointment_weekly_hour_bounds($weeklySchedule);
+$availabilityStartMinutes = $availabilityStartHour * 60;
+$availabilityEndMinutes = $availabilityEndHour * 60;
 $availabilityDurationMinutes = $availabilityEndMinutes - $availabilityStartMinutes;
+$availabilityHourSpan = $availabilityEndHour - $availabilityStartHour;
+$availabilityCalendarHeightRem = max(16, $availabilityHourSpan * 3.5);
+$workingHoursGroups = [];
+foreach (['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as $index => $shortDay) {
+    $hours = $weeklySchedule[$index + 1];
+    if (!$hours['enabled']) {
+        continue;
+    }
+    $key = $hours['start'] . '|' . $hours['end'];
+    $workingHoursGroups[$key]['days'][] = $shortDay;
+    $workingHoursGroups[$key]['start'] = $hours['start'];
+    $workingHoursGroups[$key]['end'] = $hours['end'];
+}
+$openWorkingDayCount = array_sum(array_map(static fn(array $group): int => count($group['days']), $workingHoursGroups));
+$workingHoursBase = ['start' => '08:00', 'end' => '17:00', 'days' => []];
+foreach ($workingHoursGroups as $group) {
+    if (count($group['days']) > count($workingHoursBase['days'])) {
+        $workingHoursBase = $group;
+    }
+}
+$workingHoursOverrides = [];
+foreach ($weeklySchedule as $dayNumber => $hours) {
+    if ($hours['enabled'] && ($hours['start'] !== $workingHoursBase['start'] || $hours['end'] !== $workingHoursBase['end'])) {
+        $workingHoursOverrides[] = ['day' => $dayNumber, 'start' => $hours['start'], 'end' => $hours['end']];
+    }
+}
+$availabilityCalendarDayCount = count($availabilityWeekDays);
 $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $dateFrom, $dateTo): string {
     $query = ['status' => $filterStatus, 'week' => $week];
     if ($dateFrom !== '') {
@@ -108,7 +141,7 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
         <div>
             <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Scheduling</p>
             <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Clinic Availability</h2>
-            <p class="text-xs font-bold text-slate-500 mb-0">Monday to Friday, 8:00 AM–5:00 PM. Click or hold and drag across open hours to select a range.</p>
+            <p class="text-xs font-bold text-slate-500 mb-0">Click or drag across an open hour to mark one-time unavailability.</p>
         </div>
         <div class="flex items-center gap-2">
             <a href="<?= e($availabilityUrlForWeek($availabilityPrevWeek)) ?>" class="btn btn-sm btn-ghost text-decoration-none" title="Previous week" data-no-ajax="true" data-availability-week-nav>
@@ -121,6 +154,28 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
         </div>
     </div>
 
+    <div class="working-hours-summary">
+        <span class="working-hours-summary-icon material-symbols-outlined" aria-hidden="true">schedule</span>
+        <div class="working-hours-summary-main">
+            <div class="working-hours-summary-heading">
+                <h3>Regular working hours</h3>
+                <span class="working-hours-count"><?= $openWorkingDayCount ?> day<?= $openWorkingDayCount === 1 ? '' : 's' ?> open</span>
+            </div>
+            <div class="working-hours-summary-groups" aria-label="Current weekly working hours">
+                <?php foreach ($workingHoursGroups as $group): ?>
+                    <span class="working-hours-summary-chip">
+                        <strong><?= e(implode(', ', $group['days'])) ?></strong>
+                        <span><?= e(date('g:i A', strtotime($group['start']))) ?>–<?= e(date('g:i A', strtotime($group['end']))) ?></span>
+                    </span>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <button type="button" class="btn btn-outline working-hours-edit-button" id="openWorkingHoursModal" aria-haspopup="dialog" aria-controls="workingHoursModal">
+            <span class="material-symbols-outlined" aria-hidden="true">edit_calendar</span>
+            Edit hours
+        </button>
+    </div>
+
     <div class="appointment-availability-layout">
         <div class="appointment-availability-calendar-panel">
             <div class="appointment-week-range">
@@ -129,12 +184,12 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
             </div>
 
             <div class="appointment-week-scroll">
-                <div class="appointment-week-calendar" style="grid-template-columns: 4.75rem repeat(5, minmax(8.5rem, 1fr)); min-width: 50rem;">
+                <div class="appointment-week-calendar" style="grid-template-columns: 4.75rem repeat(<?= $availabilityCalendarDayCount ?>, minmax(8.5rem, 1fr)); min-width: <?= number_format(4.75 + $availabilityCalendarDayCount * 8.5, 2, '.', '') ?>rem; --availability-calendar-height: <?= number_format($availabilityCalendarHeightRem, 2, '.', '') ?>rem;">
                     <div class="appointment-week-header appointment-week-time-heading">Time</div>
                     <?php foreach ($availabilityWeekDays as $day):
                         $date = $day->format('Y-m-d');
                         $isToday = $date === $availabilityToday->format('Y-m-d');
-                        $isPast = $day < $availabilityMinimumDate;
+                        $isPast = $day < $availabilityMinimumDate || !appointment_date_is_clinic_day($date);
                         ?>
                         <button type="button" class="appointment-week-header <?= $isToday ? 'is-today' : '' ?> <?= $isPast ? 'is-past' : '' ?>" data-week-day-toggle="<?= e($date) ?>" aria-pressed="false" aria-label="Select whole day <?= e($day->format('l, F j')) ?>" <?= $isPast ? 'disabled' : '' ?> style="cursor:<?= $isPast ? 'not-allowed' : 'pointer' ?>;">
                             <span><?= e($day->format('D')) ?></span>
@@ -143,7 +198,7 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
                     <?php endforeach; ?>
 
                     <div class="appointment-week-time-column" aria-hidden="true">
-                        <?php for ($hour = 8; $hour <= 17; $hour++):
+                        <?php for ($hour = $availabilityStartHour; $hour <= $availabilityEndHour; $hour++):
                             $top = ((($hour * 60) - $availabilityStartMinutes) / $availabilityDurationMinutes) * 100;
                             ?>
                             <time style="top: <?= number_format($top, 4, '.', '') ?>%;"><?= e(date('g A', mktime($hour, 0))) ?></time>
@@ -154,10 +209,16 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
                         $date = $day->format('Y-m-d');
                         $blocks = $calendarBlocksByDate[$date] ?? [];
                         $isToday = $date === $availabilityToday->format('Y-m-d');
-                        $isPast = $day < $availabilityMinimumDate;
+                        $isPast = $day < $availabilityMinimumDate || !appointment_date_is_clinic_day($date);
+                        $dayHours = $weeklySchedule[(int) $day->format('N')];
+                        $dayStartMinutes = (int) substr($dayHours['start'], 0, 2) * 60;
+                        $dayEndMinutes = (int) substr($dayHours['end'], 0, 2) * 60;
                         ?>
                         <div class="appointment-week-day-column <?= $isToday ? 'is-today' : '' ?> <?= $isPast ? 'is-past' : '' ?>" data-week-date="<?= e($date) ?>" data-is-past="<?= $isPast ? 'true' : 'false' ?>" role="button" tabindex="<?= $isPast ? '-1' : '0' ?>" aria-disabled="<?= $isPast ? 'true' : 'false' ?>" aria-label="<?= $isPast ? 'Past date unavailable on ' : 'Choose an available hour on ' ?><?= e($day->format('l, F j')) ?>">
-                            <?php for ($hour = 8; $hour < 17; $hour++):
+                            <?php for ($hour = $availabilityStartHour; $hour < $availabilityEndHour; $hour++):
+                                if ($hour * 60 < $dayStartMinutes || ($hour + 1) * 60 > $dayEndMinutes) {
+                                    continue;
+                                }
                                 $top = ((($hour * 60) - $availabilityStartMinutes) / $availabilityDurationMinutes) * 100;
                                 $height = (60 / $availabilityDurationMinutes) * 100;
                                 ?>
@@ -171,13 +232,13 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
                             <?php foreach ($blocks as $block):
                                 $isApeBatch = !empty($block['_ape_batch']);
                                 $isWholeDay = empty($block['start_time']) || empty($block['end_time']);
-                                $blockStart = $isWholeDay ? $availabilityStartMinutes : (((int) substr($block['start_time'], 0, 2) * 60) + (int) substr($block['start_time'], 3, 2));
-                                $blockEnd = $isWholeDay ? $availabilityEndMinutes : (((int) substr($block['end_time'], 0, 2) * 60) + (int) substr($block['end_time'], 3, 2));
-                                if ($blockEnd <= $availabilityStartMinutes || $blockStart >= $availabilityEndMinutes) {
+                                $blockStart = $isWholeDay ? $dayStartMinutes : (((int) substr($block['start_time'], 0, 2) * 60) + (int) substr($block['start_time'], 3, 2));
+                                $blockEnd = $isWholeDay ? $dayEndMinutes : (((int) substr($block['end_time'], 0, 2) * 60) + (int) substr($block['end_time'], 3, 2));
+                                if ($blockEnd <= $dayStartMinutes || $blockStart >= $dayEndMinutes) {
                                     continue;
                                 }
-                                $visibleStart = max($blockStart, $availabilityStartMinutes);
-                                $visibleEnd = min($blockEnd, $availabilityEndMinutes);
+                                $visibleStart = max($blockStart, $dayStartMinutes);
+                                $visibleEnd = min($blockEnd, $dayEndMinutes);
                                 $top = (($visibleStart - $availabilityStartMinutes) / $availabilityDurationMinutes) * 100;
                                 $height = (($visibleEnd - $visibleStart) / $availabilityDurationMinutes) * 100;
                                 ?>
@@ -261,6 +322,88 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
                 </div>
             </section>
         </aside>
+    </div>
+
+    <div id="workingHoursModal" class="modal-backdrop working-hours-modal" role="dialog" aria-modal="true" aria-labelledby="workingHoursModalTitle" aria-describedby="workingHoursModalDescription">
+        <form method="POST" action="availability.php" class="modal-content working-hours-modal-card" id="clinicWorkingHoursForm" data-no-ajax="true">
+            <input type="hidden" name="action" value="save_schedule">
+            <input type="hidden" name="week" value="<?= e($availabilityWeek->format('Y-m-d')) ?>">
+            <header class="working-hours-modal-header">
+                <div class="working-hours-modal-title-row">
+                    <span class="working-hours-modal-icon material-symbols-outlined" aria-hidden="true">calendar_clock</span>
+                    <div>
+                        <p class="working-hours-eyebrow">Clinic scheduling</p>
+                        <h3 id="workingHoursModalTitle">Working days &amp; hours</h3>
+                    </div>
+                    <button type="button" class="working-hours-close" data-close-working-hours-modal aria-label="Close working hours editor">
+                        <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                    </button>
+                </div>
+                <p id="workingHoursModalDescription">Choose open days and one standard time range. Add a different range only when a day needs it.</p>
+            </header>
+
+            <div class="working-hours-modal-body">
+                <section class="working-hours-quick-set" aria-labelledby="workingHoursQuickTitle">
+                    <div>
+                        <h4 id="workingHoursQuickTitle">Standard hours</h4>
+                        <p>These hours apply to every selected day unless you add a day-specific range.</p>
+                    </div>
+                    <div class="working-hours-quick-controls">
+                        <label><span>Open</span><select id="allDaysStart" name="base_start" class="form-select working-hours-select" aria-label="Standard opening time">
+                            <?php for ($hour = 6; $hour < 20; $hour++): $value = sprintf('%02d:00', $hour); ?><option value="<?= $value ?>" <?= $workingHoursBase['start'] === $value ? 'selected' : '' ?>><?= e(date('g:i A', mktime($hour, 0))) ?></option><?php endfor; ?>
+                        </select></label>
+                        <label><span>Close</span><select id="allDaysEnd" name="base_end" class="form-select working-hours-select" aria-label="Standard closing time">
+                            <?php for ($hour = 7; $hour <= 20; $hour++): $value = sprintf('%02d:00', $hour); ?><option value="<?= $value ?>" <?= $workingHoursBase['end'] === $value ? 'selected' : '' ?>><?= e(date('g:i A', mktime($hour, 0))) ?></option><?php endfor; ?>
+                        </select></label>
+                    </div>
+                </section>
+
+                <div class="working-hours-days-heading">
+                    <div><h4>Open days</h4><p>Unselected days are hidden from the weekly calendar and cannot be booked.</p></div>
+                </div>
+                <div class="working-hours-open-days" role="group" aria-label="Days open for appointments">
+                    <?php foreach (['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as $index => $dayName):
+                        $dayNumber = $index + 1;
+                        $hours = $weeklySchedule[$dayNumber]; ?>
+                        <label class="working-hours-open-day">
+                            <input type="checkbox" name="open_days[]" value="<?= $dayNumber ?>" data-open-day <?= $hours['enabled'] ? 'checked' : '' ?>>
+                            <span><?= e($dayName) ?></span>
+                        </label>
+                    <?php endforeach; ?>
+                </div>
+
+                <div class="working-hours-override-heading">
+                    <div><h4>Day-specific hours</h4><p>Only add a row if one open day differs from the standard hours.</p></div>
+                    <button type="button" class="btn btn-outline" id="addWorkingHoursOverride"><span class="material-symbols-outlined" aria-hidden="true">add</span> Add specific day</button>
+                </div>
+                <div id="workingHoursOverrides" class="working-hours-override-list" data-initial-overrides="<?= e(json_encode($workingHoursOverrides)) ?>"></div>
+                <p class="working-hours-override-empty" id="workingHoursOverrideEmpty">No day-specific hours added.</p>
+
+                <template id="workingHoursOverrideTemplate">
+                    <div class="working-hours-override" data-working-override>
+                        <label><span>Day</span><select name="overrides[__INDEX__][day]" class="form-select working-hours-select" data-override-day required>
+                            <option value="">Choose day</option>
+                            <?php foreach (['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as $index => $dayName): ?><option value="<?= $index + 1 ?>"><?= e($dayName) ?></option><?php endforeach; ?>
+                        </select></label>
+                        <label><span>Open</span><select name="overrides[__INDEX__][start]" class="form-select working-hours-select" data-override-start>
+                            <?php for ($hour = 6; $hour < 20; $hour++): $value = sprintf('%02d:00', $hour); ?><option value="<?= $value ?>"><?= e(date('g:i A', mktime($hour, 0))) ?></option><?php endfor; ?>
+                        </select></label>
+                        <label><span>Close</span><select name="overrides[__INDEX__][end]" class="form-select working-hours-select" data-override-end>
+                            <?php for ($hour = 7; $hour <= 20; $hour++): $value = sprintf('%02d:00', $hour); ?><option value="<?= $value ?>"><?= e(date('g:i A', mktime($hour, 0))) ?></option><?php endfor; ?>
+                        </select></label>
+                        <button type="button" class="working-hours-remove-override" data-remove-working-override aria-label="Remove day-specific hours"><span class="material-symbols-outlined" aria-hidden="true">delete</span></button>
+                    </div>
+                </template>
+                <p class="working-hours-safety-note"><span class="material-symbols-outlined" aria-hidden="true">info</span>Upcoming appointments must be resolved before you close their day or time.</p>
+            </div>
+
+            <footer class="working-hours-modal-footer">
+                <button type="button" class="btn btn-ghost" data-close-working-hours-modal>Cancel</button>
+                <button type="submit" class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save clinic working hours?" data-confirm-message="Patient booking times will immediately follow these hours.">
+                    <span class="material-symbols-outlined" aria-hidden="true">save</span> Save changes
+                </button>
+            </footer>
+        </form>
     </div>
 </section>
 
@@ -374,6 +517,105 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
         return;
     }
     window.cliniqAvailabilityListenersReady = true;
+    const weeklySchedule = <?= json_encode($weeklySchedule, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+    const availabilityStartHour = <?= $availabilityStartHour ?>;
+    const availabilityEndHour = <?= $availabilityEndHour ?>;
+    const availabilityHourSpan = availabilityEndHour - availabilityStartHour;
+    let nextWorkingOverrideIndex = 0;
+    const openWorkingDays = () => Array.from(document.querySelectorAll('#clinicWorkingHoursForm [data-open-day]:checked'), input => input.value);
+    const workingOverrideRows = () => Array.from(document.querySelectorAll('#workingHoursOverrides [data-working-override]'));
+    const syncWorkingOverrideControls = () => {
+        const openDays = openWorkingDays();
+        workingOverrideRows().forEach(row => {
+            const select = row.querySelector('[data-override-day]');
+            if (!openDays.includes(select.value)) row.remove();
+        });
+        const rows = workingOverrideRows();
+        rows.forEach(row => {
+            const select = row.querySelector('[data-override-day]');
+            const usedElsewhere = rows.filter(other => other !== row).map(other => other.querySelector('[data-override-day]').value);
+            Array.from(select.options).forEach(option => {
+                if (!option.value) return;
+                option.disabled = !openDays.includes(option.value) || usedElsewhere.includes(option.value);
+            });
+        });
+        document.getElementById('workingHoursOverrideEmpty').hidden = rows.length > 0;
+        document.getElementById('addWorkingHoursOverride').disabled = rows.length >= openDays.length;
+    };
+    const addWorkingOverride = (saved = null) => {
+        const used = workingOverrideRows().map(row => row.querySelector('[data-override-day]').value);
+        const day = String(saved?.day || openWorkingDays().find(value => !used.includes(value)) || '');
+        if (!day) return null;
+        const template = document.getElementById('workingHoursOverrideTemplate');
+        const row = template.content.firstElementChild.cloneNode(true);
+        const index = nextWorkingOverrideIndex++;
+        row.querySelectorAll('[name]').forEach(input => {
+            input.name = input.name.replace('__INDEX__', String(index));
+        });
+        row.querySelector('[data-override-day]').value = day;
+        row.querySelector('[data-override-start]').value = saved?.start || document.getElementById('allDaysStart').value;
+        row.querySelector('[data-override-end]').value = saved?.end || document.getElementById('allDaysEnd').value;
+        document.getElementById('workingHoursOverrides').appendChild(row);
+        syncWorkingOverrideControls();
+        return row;
+    };
+    const resetWorkingHoursEditor = () => {
+        document.getElementById('clinicWorkingHoursForm')?.reset();
+        const list = document.getElementById('workingHoursOverrides');
+        list.replaceChildren();
+        nextWorkingOverrideIndex = 0;
+        let saved = [];
+        try { saved = JSON.parse(list.dataset.initialOverrides || '[]'); } catch (_) { /* Keep the standard range. */ }
+        saved.forEach(override => addWorkingOverride(override));
+        syncWorkingOverrideControls();
+    };
+    document.addEventListener('click', event => {
+        if (event.target.closest('#openWorkingHoursModal')) {
+            resetWorkingHoursEditor();
+            showModal('workingHoursModal');
+            requestAnimationFrame(() => document.querySelector('#workingHoursModal .working-hours-close')?.focus({ preventScroll: true }));
+            return;
+        }
+        if (event.target.closest('[data-close-working-hours-modal]')) {
+            closeModal('workingHoursModal');
+            document.getElementById('openWorkingHoursModal')?.focus({ preventScroll: true });
+            return;
+        }
+        if (event.target.closest('#addWorkingHoursOverride')) {
+            addWorkingOverride()?.querySelector('[data-override-day]')?.focus({ preventScroll: true });
+            return;
+        }
+        const remove = event.target.closest('[data-remove-working-override]');
+        if (remove) {
+            remove.closest('[data-working-override]').remove();
+            syncWorkingOverrideControls();
+        }
+    });
+    document.addEventListener('change', event => {
+        if (event.target.matches('#clinicWorkingHoursForm [data-open-day], #clinicWorkingHoursForm [data-override-day]')) syncWorkingOverrideControls();
+    });
+    document.addEventListener('click', event => {
+        if (!event.target.closest('#clinicWorkingHoursForm [data-confirm-submit]')) return;
+        const start = document.getElementById('allDaysStart');
+        const end = document.getElementById('allDaysEnd');
+        if (start.value >= end.value || openWorkingDays().length === 0) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            showToast(start.value >= end.value ? 'Standard closing time must be after opening time.' : 'Select at least one open day.', 'error');
+            end.focus();
+            return;
+        }
+        for (const row of workingOverrideRows()) {
+            const customStart = row.querySelector('[data-override-start]');
+            const customEnd = row.querySelector('[data-override-end]');
+            if (customStart.value < customEnd.value) continue;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            showToast('The day-specific closing time must be after opening time.', 'error');
+            customEnd.focus();
+            return;
+        }
+    }, true);
 
     let weekPickerMonth = null;
     const mondayForDate = date => {
@@ -401,23 +643,20 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
             heading.className = 'text-xs font-bold text-slate-500 text-center py-2';
             heading.textContent = day;
             heading.style.cssText = 'display:flex;align-items:center;justify-content:center;text-align:center;';
-            if (day === 'Sat' || day === 'Sun') { heading.style.opacity = '0.4'; heading.style.filter = 'blur(0.4px)'; }
             list.appendChild(heading);
         });
         weekCalendarDays(weekPickerMonth).forEach(({ date, week, inMonth }) => {
-            const weekend = date.getUTCDay() === 0 || date.getUTCDay() === 6;
-            const link = document.createElement(weekend ? 'span' : 'a');
+            const link = document.createElement('a');
             const url = new URL(modal.dataset.weekUrl, window.location.href);
             url.searchParams.set('week', week);
-            if (!weekend) { link.href = url.href; link.dataset.availabilityWeekNav = ''; link.dataset.noAjax = 'true'; }
+            link.href = url.href; link.dataset.availabilityWeekNav = ''; link.dataset.noAjax = 'true';
             link.className = 'btn btn-ghost text-decoration-none';
             link.style.cssText = 'padding:0;min-width:0;min-height:42px;display:flex;align-items:center;justify-content:center;text-align:center;';
             link.textContent = date.getUTCDate();
             const label = date.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
             link.setAttribute('aria-label', `Select week containing ${label}`);
             if (!inMonth) link.style.color = '#94a3b8';
-            if (weekend) { link.style.opacity = '0.35'; link.style.filter = 'blur(0.5px)'; link.style.cursor = 'not-allowed'; link.setAttribute('aria-disabled', 'true'); link.setAttribute('aria-label', label + ', weekend unavailable'); }
-            if (week === modal.dataset.selectedWeek && (date.getUTCDay() + 6) % 7 < 5) {
+            if (week === modal.dataset.selectedWeek) {
                 link.setAttribute('aria-current', 'date');
                 link.style.background = '#e7f4eb';
                 link.style.color = '#245c36';
@@ -490,7 +729,7 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
         modalDateDrag.original.forEach(date => selectedCalendarDates.add(date));
         grid.querySelectorAll('[data-modal-date]').forEach(day => {
             const date = day.dataset.modalDate;
-            if (!day.disabled && !isPastDate(date) && !isWeekend(date) && date >= first && date <= last) {
+            if (!day.disabled && !isPastDate(date) && !isClosedDay(date) && date >= first && date <= last) {
                 if (modalDateDrag.remove) selectedCalendarDates.delete(date);
                 else selectedCalendarDates.add(date);
             }
@@ -545,6 +784,7 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
     }
 
     const minimumAvailabilityDate = '<?= e($availabilityMinimumDate->format('Y-m-d')) ?>';
+    const actualTodayDate = '<?= e($availabilityToday->format('Y-m-d')) ?>';
 
     const normalizedDate = (dateString) => {
         const parts = String(dateString || '').split('-').map(Number);
@@ -569,12 +809,12 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
         return date !== '' && date < minimumAvailabilityDate;
     };
 
-    const isWeekend = (dateString) => {
+    const isClosedDay = (dateString) => {
         const date = normalizedDate(dateString);
         if (!date) return false;
         const [year, month, day] = date.split('-').map(Number);
-        const weekday = new Date(year, month - 1, day).getDay();
-        return weekday === 0 || weekday === 6;
+        const weekday = new Date(year, month - 1, day).getDay() || 7;
+        return !weeklySchedule[weekday]?.enabled;
     };
 
     const formatDisplayDate = (dateString) => {
@@ -751,11 +991,11 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
             const dateString = normalizedDate(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(dayNumber).padStart(2, '0')}`);
             const dayColumn = document.querySelector(`[data-week-date="${dateString}"]`);
             const alreadyUnavailable = Boolean(dayColumn?.querySelector('[data-availability-block]'));
-            const disabled = isPastDate(dateString) || isWeekend(dateString) || alreadyUnavailable;
+            const disabled = isPastDate(dateString) || isClosedDay(dateString) || alreadyUnavailable;
             cell.textContent = String(dayNumber);
             cell.dataset.modalDate = dateString;
             cell.classList.toggle('is-selected', selectedCalendarDates.has(dateString));
-            cell.classList.toggle('is-today', dateString === minimumAvailabilityDate);
+            cell.classList.toggle('is-today', dateString === actualTodayDate);
             cell.classList.toggle('is-disabled', disabled);
             cell.disabled = disabled;
             elements.modalGrid.appendChild(cell);
@@ -909,8 +1149,8 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
         if (!cell || cell.disabled) return false;
         const hour = Number(cell.dataset.startHour) * 60;
         return !Array.from(cell.closest('[data-week-date]').querySelectorAll('[data-availability-block]')).some(block => {
-            const start = block.dataset.start ? timeToMinutes(block.dataset.start.slice(0, 5)) : 480;
-            const end = block.dataset.end ? timeToMinutes(block.dataset.end.slice(0, 5)) : 1020;
+            const start = block.dataset.start ? timeToMinutes(block.dataset.start.slice(0, 5)) : availabilityStartHour * 60;
+            const end = block.dataset.end ? timeToMinutes(block.dataset.end.slice(0, 5)) : availabilityEndHour * 60;
             return hour < end && hour + 60 > start;
         });
     };
@@ -957,7 +1197,7 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
         const day = target?.closest('[data-week-date]');
         if (!day) return;
         const rect = day.getBoundingClientRect();
-        const hour = 8 + Math.max(0, Math.min(8, Math.floor((event.clientY - rect.top) / rect.height * 9)));
+        const hour = availabilityStartHour + Math.max(0, Math.min(availabilityHourSpan - 1, Math.floor((event.clientY - rect.top) / rect.height * availabilityHourSpan)));
         paintHourRange(day.querySelector(`[data-start-hour="${hour}"]`));
     });
     ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(type => document.addEventListener(type, event => {
@@ -1118,7 +1358,7 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
         const modalDay = event.target.closest('[data-modal-date]');
         if (modalDay) {
             const date = modalDay.dataset.modalDate || '';
-            if (modalDay.disabled || !date || isPastDate(date) || isWeekend(date)) {
+            if (modalDay.disabled || !date || isPastDate(date) || isClosedDay(date)) {
                 return;
             }
             if (selectedCalendarDates.has(date)) {
@@ -1167,7 +1407,7 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
         }
         const rect = day.getBoundingClientRect();
         const relativeY = Math.max(0, Math.min(rect.height - 1, event.clientY - rect.top));
-        applyWeekHour(day, 8 + Math.min(8, Math.floor((relativeY / rect.height) * 9)), true);
+        applyWeekHour(day, availabilityStartHour + Math.min(availabilityHourSpan - 1, Math.floor((relativeY / rect.height) * availabilityHourSpan)), true);
     });
 
     document.addEventListener('keydown', (event) => {
@@ -1183,7 +1423,8 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
             return;
         }
         event.preventDefault();
-        applyWeekHour(day, 8, true);
+        const firstOpen = day.querySelector('[data-hour-slot]:not(:disabled)');
+        if (firstOpen) applyWeekHour(day, Number(firstOpen.dataset.startHour), true);
     });
 
     document.addEventListener('click', (event) => {

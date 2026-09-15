@@ -32,8 +32,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($status === 'Scheduled') {
                 $appointmentDatetime = (string) $appointment['appointment_datetime'];
-                if (!appointment_date_is_clinic_day(substr($appointmentDatetime, 0, 10))) {
-                    throw new InvalidArgumentException('Clinic appointments are available Monday through Friday only. Choose a weekday before approving this request.');
+                if (!appointment_slot_is_open(substr($appointmentDatetime, 0, 10), substr($appointmentDatetime, 11, 8))) {
+                    throw new InvalidArgumentException('This request is outside the clinic working days or hours. Choose a valid time before approving it.');
                 }
                 $apeConflict = appointment_ape_batch_conflict($appointmentDatetime);
                 if ($apeConflict !== null) {

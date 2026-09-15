@@ -25,7 +25,7 @@ The desktop app checks `api/health.php` before opening `login.php`. If Apache or
 Set `CLINIQ_CLINIC_URL` before starting Electron:
 
 ```powershell
-$env:CLINIQ_CLINIC_URL = 'http://127.0.0.1:8081/'
+$env:CLINIQ_CLINIC_URL = 'http://127.0.0.1:8081/public/'
 npm start
 ```
 

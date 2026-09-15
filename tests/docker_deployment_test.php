@@ -39,9 +39,29 @@ foreach (['cliniq_database', 'cliniq_documents', 'cliniq_uploads', 'cliniq_backu
         throw new RuntimeException("Compose configuration is missing {$expected}.");
     }
 }
-foreach (['profiles: ["quick-tunnel"]', 'cloudflare/cloudflared', 'http://gateway:8081', 'public-gateway.conf'] as $expected) {
+foreach (['profiles: ["public-portal"]', 'cloudflare/cloudflared', '--token-file /etc/cloudflared/tunnel-token', 'public-gateway.conf'] as $expected) {
     if (!str_contains($compose, $expected)) {
-        throw new RuntimeException("Compose quick tunnel configuration is missing {$expected}.");
+        throw new RuntimeException("Compose permanent tunnel configuration is missing {$expected}.");
+    }
+}
+foreach (['cloudflared-quick:', 'profiles: ["quick-tunnel"]', '--url http://gateway:8081'] as $expected) {
+    if (!str_contains($compose, $expected)) {
+        throw new RuntimeException("Compose temporary tunnel configuration is missing {$expected}.");
+    }
+}
+$quickTunnelSection = explode('  database:', explode('  cloudflared-quick:', $compose, 2)[1] ?? '', 2)[0];
+if (str_contains($quickTunnelSection, 'tunnel-token') || str_contains($quickTunnelSection, './docker/cloudflared')) {
+    throw new RuntimeException('The temporary tunnel must not mount or use the production tunnel token.');
+}
+if (!str_contains($quickTunnelSection, 'restart: "no"')) {
+    throw new RuntimeException('The temporary tunnel must not restart automatically.');
+}
+if (!str_contains($compose, '127.0.0.1:8081:80') || !str_contains($gateway, 'listen 8081;')) {
+    throw new RuntimeException('The team branch must use app port 8081 and gateway port 8081.');
+}
+foreach (['cliniq-dev*.sql', 'docker/cloudflared/', 'external-backups/', 'uploads/'] as $sensitivePath) {
+    if (!str_contains($dockerignore, $sensitivePath)) {
+        throw new RuntimeException("Docker build context must exclude {$sensitivePath}.");
     }
 }
 foreach (['absolute_redirect off', '/patient-portal/', '/public/emergency.php', '/public/assets/', '/public/uploads/settings/', 'return 404'] as $expected) {

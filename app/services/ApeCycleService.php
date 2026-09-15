@@ -689,9 +689,9 @@ function cancel_ape_schedule_batch(int $batchId, int $cycleId, ?int $actorPerson
 }
 
 /**
- * Reset all patient accounts to inactive at the start of a new school year.
- * Students must confirm re-enrollment; faculty/personnel must confirm re-employment.
- * Sends an email to each affected patient.
+ * Reset active student patient accounts to inactive at the start of a new school year.
+ * Faculty, school personnel, clinic staff, and other patients remain active.
+ * Sends a re-enrollment email to each affected student with an email address.
  *
  * Returns an array: ['reset' => int, 'emailed' => int, 'failed' => int]
  */
@@ -705,23 +705,17 @@ function reset_school_year_accounts(): array
 
     $db = auth_db();
 
-    // Fetch all patients that will be deactivated BEFORE the reset, so we have their info.
+    // Fetch affected students before the reset so their notification details remain available.
     $fetch = $db->query("
         SELECT
             a.id AS account_id,
             a.email,
             p.first_name,
-            p.last_name,
-            CASE
-                WHEN s.person_id IS NOT NULL THEN 'student'
-                WHEN se.role_classification = 'Faculty' THEN 'faculty'
-                ELSE 'school_personnel'
-            END AS account_type
+            p.last_name
         FROM accounts a
         INNER JOIN patients pt ON pt.person_id = a.person_id
         INNER JOIN people p ON p.id = a.person_id
-        LEFT JOIN students s ON s.person_id = p.id
-        LEFT JOIN school_employees se ON se.person_id = p.id
+        INNER JOIN students s ON s.person_id = p.id
         WHERE a.account_status = 'active'
           AND a.email IS NOT NULL
           AND a.email <> ''
@@ -732,8 +726,8 @@ function reset_school_year_accounts(): array
     $reset = $db->prepare("
         UPDATE accounts a
         INNER JOIN patients pt ON pt.person_id = a.person_id
-        SET a.account_status = 'inactive',
-            a.activated_at = NULL
+        INNER JOIN students s ON s.person_id = a.person_id
+        SET a.account_status = 'inactive'
         WHERE a.account_status = 'active'
     ");
     $reset->execute();
@@ -748,10 +742,8 @@ function reset_school_year_accounts(): array
     $emailed = 0;
     $failed  = 0;
     foreach ($patients as $patient) {
-        $firstName   = (string) ($patient['first_name'] ?? '');
-        $accountType = (string) ($patient['account_type'] ?? 'student');
-        $templateKey = $accountType === 'student' ? 'student_re_enrollment' : 'employee_re_employment';
-        $notification = cliniq_notification_email($templateKey, [
+        $firstName = (string) ($patient['first_name'] ?? '');
+        $notification = cliniq_notification_email('student_re_enrollment', [
             'patient_name' => $firstName,
             'clinic_name' => $clinicName,
         ], $loginUrl);

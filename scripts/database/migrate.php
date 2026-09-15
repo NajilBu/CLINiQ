@@ -6,6 +6,28 @@ require_once dirname(__DIR__, 2) . '/app/config/env.php';
 
 const CLINIQ_BASELINE_THROUGH = '20260908_passport_access_audit_reporting.sql';
 
+function migration_checksum_is_known_compatible(string $name, string $stored, string $current): bool
+{
+    if ($name !== '20260910_add_passport_bmi_visibility.sql') {
+        return false;
+    }
+
+    // This migration was changed only to make ADD COLUMN idempotent after some
+    // installations had already recorded its original checksum. Include both
+    // checkout line endings without relaxing checks for any other migration.
+    $originalChecksums = [
+        '51eda6fc1e720c4e39aceaad07d18c139bdf609c595203c62de3cd4f0b361249',
+        '77b562a55b3f58b18f1d80979f4f4d5869f31e70aae143d28dc5de9586ae1310',
+    ];
+    $idempotentChecksums = [
+        '304f1f155f1ab59c240ec6179c7d6a594083b3f864e650b1f3b183af2354b726',
+        'cb7b8a43ba0c48d9ee48b257c76ed0cd9a3fa9475fd2a04acbfc0c759ff048d9',
+    ];
+
+    return in_array(strtolower($stored), array_merge($originalChecksums, $idempotentChecksums), true)
+        && in_array(strtolower($current), $idempotentChecksums, true);
+}
+
 function migration_fail(string $message): never
 {
     fwrite(STDERR, '[CLINiQ Database] ' . $message . PHP_EOL);
@@ -207,7 +229,8 @@ try {
         }
 
         if (isset($known[$name])) {
-            if (!hash_equals((string) $known[$name], $checksum)) {
+            if (!hash_equals((string) $known[$name], $checksum)
+                && !migration_checksum_is_known_compatible($name, (string) $known[$name], $checksum)) {
                 throw new RuntimeException('Applied migration was modified: ' . $name);
             }
             continue;

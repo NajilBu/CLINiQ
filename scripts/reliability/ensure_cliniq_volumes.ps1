@@ -10,9 +10,13 @@ $volumeNames = @(
     'cliniq_cliniq_sessions'
 )
 
+$existingVolumes = @(& docker volume ls --format '{{.Name}}')
+if ($LASTEXITCODE -ne 0) {
+    throw 'Unable to list Docker volumes.'
+}
+
 foreach ($volumeName in $volumeNames) {
-    & docker volume inspect $volumeName *> $null
-    if ($LASTEXITCODE -eq 0) {
+    if ($existingVolumes -contains $volumeName) {
         Write-Output "Verified Docker volume: $volumeName"
         continue
     }

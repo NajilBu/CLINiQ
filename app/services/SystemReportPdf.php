@@ -174,7 +174,7 @@ function render_system_report_pdf(array $report, array $options = []): string
     $pdf->text(168, 628, $systemName, 17, [255, 255, 255], 'F2');
     $pdf->text(168, 615, mb_strtoupper($departmentName), 8, [217, 241, 226], 'F2');
     $pdf->text(122, 570, (string) $report['title'], 24, [255, 255, 255], 'F2');
-    $pdf->textBlock(122, 545, 350, 'Consolidated operational analytics from the CLINiQ patient, clinical, appointment, inventory, APE, referral, and incident modules.', 10, [224, 242, 231], 13, 'F2');
+    $pdf->textBlock(122, 545, 350, 'Consolidated clinic activity and patient demographics for the selected reporting period.', 10, [224, 242, 231], 13, 'F2');
     $pdf->rect(122, 484, 105, 36, [62, 132, 86]);
     $pdf->rect(238, 484, 120, 36, [62, 132, 86]);
     $pdf->rect(369, 484, 105, 36, [62, 132, 86]);

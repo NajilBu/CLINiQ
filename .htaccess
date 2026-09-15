@@ -1,6 +1,10 @@
+Options -Indexes
 RewriteEngine On
 
-# Keep legacy local CLINiQ links on the canonical Docker application.
-RewriteCond %{HTTP_HOST} ^(localhost|127\.0\.0\.1)(:[0-9]+)?$ [NC]
-RewriteCond %{REQUEST_URI} ^/CLINiQ(?:/|$) [NC]
-RewriteRule ^(.*)$ http://localhost:8081/$1 [R=307,L,NE]
+# XAMPP can serve this checkout directly; keep application-only files private.
+RewriteRule ^(app|database|docker|electron|external-backups|scripts|storage|student|tests|tools|tmp|outputs|uploads)(/|$) - [F,L,NC]
+RewriteRule (^|/)\. - [F,L]
+
+<FilesMatch "(^\.|\.(sql|ini|log|yml|yaml|toml|lock|md)$)">
+    Require all denied
+</FilesMatch>

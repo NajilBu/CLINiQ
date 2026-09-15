@@ -115,7 +115,7 @@ function appointment_week_from_request(?string $value = null): DateTimeImmutable
 function appointment_week_bounds(DateTimeImmutable $week): array
 {
     $start = $week->modify('monday this week')->setTime(0, 0);
-    $end = $start->modify('+4 days')->setTime(23, 59, 59);
+    $end = $start->modify('+6 days')->setTime(23, 59, 59);
 
     return [$start->format('Y-m-d'), $end->format('Y-m-d')];
 }
@@ -125,7 +125,122 @@ function appointment_date_is_clinic_day(string $date): bool
     $parsedDate = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
     return $parsedDate !== false
         && $parsedDate->format('Y-m-d') === $date
-        && (int) $parsedDate->format('N') <= 5;
+        && appointment_weekly_schedule()[(int) $parsedDate->format('N')]['enabled'];
+}
+
+function appointment_weekly_schedule(): array
+{
+    static $schedule = null;
+    if ($schedule !== null) {
+        return $schedule;
+    }
+    $defaults = [];
+    for ($day = 1; $day <= 7; $day++) {
+        $defaults[$day] = ['enabled' => $day <= 5, 'start' => '08:00', 'end' => '17:00'];
+    }
+    $stored = cliniq_setting_read('appointment_weekly_schedule', []);
+    foreach ($defaults as $day => $default) {
+        $saved = $stored['days'][$day] ?? [];
+        if (!is_array($saved)) {
+            continue;
+        }
+        $defaults[$day] = [
+            'enabled' => (bool) ($saved['enabled'] ?? $default['enabled']),
+            'start' => (string) ($saved['start'] ?? $default['start']),
+            'end' => (string) ($saved['end'] ?? $default['end']),
+        ];
+    }
+    return $schedule = $defaults;
+}
+
+function appointment_normalize_weekly_schedule(array $submitted): array
+{
+    $days = [];
+    for ($day = 1; $day <= 7; $day++) {
+        $row = $submitted[$day] ?? [];
+        $start = trim((string) ($row['start'] ?? ''));
+        $end = trim((string) ($row['end'] ?? ''));
+        if (!preg_match('/^(0[6-9]|1[0-9]):00$/', $start)
+            || !preg_match('/^(0[7-9]|1[0-9]|20):00$/', $end)
+            || $start >= $end) {
+            throw new InvalidArgumentException('Choose whole-hour opening and closing times between 6:00 AM and 8:00 PM.');
+        }
+        $days[$day] = ['enabled' => !empty($row['enabled']), 'start' => $start, 'end' => $end];
+    }
+    if (!array_filter($days, static fn(array $row): bool => $row['enabled'])) {
+        throw new InvalidArgumentException('Keep at least one working day open.');
+    }
+    return $days;
+}
+
+function appointment_schedule_from_form(array $form): array
+{
+    $baseStart = trim((string) ($form['base_start'] ?? ''));
+    $baseEnd = trim((string) ($form['base_end'] ?? ''));
+    $openDays = array_map('strval', (array) ($form['open_days'] ?? []));
+    $days = [];
+    for ($day = 1; $day <= 7; $day++) {
+        $days[$day] = [
+            'enabled' => in_array((string) $day, $openDays, true),
+            'start' => $baseStart,
+            'end' => $baseEnd,
+        ];
+    }
+    $usedOverrides = [];
+    foreach ((array) ($form['overrides'] ?? []) as $override) {
+        if (!is_array($override)) {
+            throw new InvalidArgumentException('Choose a valid day for each custom time range.');
+        }
+        $day = (int) ($override['day'] ?? 0);
+        if ($day < 1 || $day > 7 || !$days[$day]['enabled'] || isset($usedOverrides[$day])) {
+            throw new InvalidArgumentException('Each custom time range needs a different open day.');
+        }
+        $usedOverrides[$day] = true;
+        $days[$day]['start'] = trim((string) ($override['start'] ?? ''));
+        $days[$day]['end'] = trim((string) ($override['end'] ?? ''));
+    }
+    return appointment_normalize_weekly_schedule($days);
+}
+
+function appointment_save_weekly_schedule(array $submitted, ?int $updatedBy): void
+{
+    $days = appointment_normalize_weekly_schedule($submitted);
+    cliniq_setting_write('appointment_weekly_schedule', ['days' => $days], $updatedBy);
+}
+
+function appointment_slot_is_open(string $date, string $time): bool
+{
+    return appointment_slot_is_open_for_schedule(appointment_weekly_schedule(), $date, $time);
+}
+
+function appointment_slot_is_open_for_schedule(array $schedule, string $date, string $time): bool
+{
+    $parsedDate = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+    if (!$parsedDate || $parsedDate->format('Y-m-d') !== $date
+        || !preg_match('/^([01][0-9]):00(?::00)?$/', $time, $matches)) {
+        return false;
+    }
+    $hours = $schedule[(int) $parsedDate->format('N')] ?? null;
+    if (!$hours || !$hours['enabled']) {
+        return false;
+    }
+    $start = sprintf('%02d:00', (int) $matches[1]);
+    $end = sprintf('%02d:00', (int) $matches[1] + 1);
+    return $start >= $hours['start'] && $end <= $hours['end'];
+}
+
+function appointment_weekly_hour_bounds(array $schedule): array
+{
+    $starts = [];
+    $ends = [];
+    foreach ($schedule as $hours) {
+        if (empty($hours['enabled'])) {
+            continue;
+        }
+        $starts[] = (int) substr((string) $hours['start'], 0, 2);
+        $ends[] = (int) substr((string) $hours['end'], 0, 2);
+    }
+    return $starts ? [min($starts), max($ends)] : [8, 17];
 }
 
 function appointment_blocks_for_week(DateTimeImmutable $week): array

@@ -16,7 +16,23 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 $action = $_POST['action'] ?? 'add';
 
-if ($action === 'delete') {
+if ($action === 'save_schedule') {
+    try {
+        $candidate = appointment_schedule_from_form($_POST);
+        $future = appointment_db()->query("SELECT appointment_datetime FROM appointments WHERE appointment_datetime >= NOW() AND status IN ('Pending', 'Scheduled')")->fetchAll(PDO::FETCH_COLUMN);
+        foreach ($future as $datetime) {
+            $date = substr((string) $datetime, 0, 10);
+            $time = substr((string) $datetime, 11, 8);
+            if (!appointment_slot_is_open_for_schedule($candidate, $date, $time)) {
+                throw new InvalidArgumentException('An upcoming appointment falls outside those hours. Resolve or reschedule it before changing the clinic schedule.');
+            }
+        }
+        appointment_save_weekly_schedule($candidate, (int) ($user['person_id'] ?? 0) ?: null);
+        flash_message('success', 'Working days and hours saved. New appointment requests will follow this schedule.');
+    } catch (InvalidArgumentException $exception) {
+        flash_message('error', $exception->getMessage());
+    }
+} elseif ($action === 'delete') {
     $id = (int) ($_POST['id'] ?? 0);
     if ($id > 0) {
         $stmt = appointment_db()->prepare('DELETE FROM appointment_availability_blocks WHERE availability_block_id = ?');
@@ -40,14 +56,15 @@ if ($action === 'delete') {
     $dateError = (function () use ($date) {
         $selected = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || !$selected || $selected->format('Y-m-d') !== $date) return 'Choose a valid date.';
-        if (!appointment_date_is_clinic_day($date)) return 'Unavailable time can only be set Monday through Friday.';
+        if (!appointment_date_is_clinic_day($date)) return 'Choose a day when the clinic is open.';
         return null;
     })();
     $originalStart = trim((string) ($_POST['original_start'] ?? ''));
     $originalEnd = trim((string) ($_POST['original_end'] ?? ''));
-    $rangeError = !preg_match('/^\d{2}:\d{2}$/', $start) || !preg_match('/^\d{2}:\d{2}$/', $end) || $start >= $end || $start < '08:00' || $end > '17:00' || ($originalStart !== '' && $start < $originalStart) || ($originalEnd !== '' && $end > $originalEnd);
+    $hours = appointment_weekly_schedule()[(int) (DateTimeImmutable::createFromFormat('!Y-m-d', $date) ?: new DateTimeImmutable('today'))->format('N')];
+    $rangeError = !preg_match('/^\d{2}:\d{2}$/', $start) || !preg_match('/^\d{2}:\d{2}$/', $end) || $start >= $end || $start < $hours['start'] || $end > $hours['end'] || ($originalStart !== '' && $start < $originalStart) || ($originalEnd !== '' && $end > $originalEnd);
     if (!$ids || $dateError || $rangeError || $reason === '') {
-        flash_message('error', $dateError ?: ($reason === '' ? 'Enter a reason for the unavailable time.' : 'Choose a valid time between 8:00 AM and 5:00 PM.'));
+        flash_message('error', $dateError ?: ($reason === '' ? 'Enter a reason for the unavailable time.' : 'Choose a time within the clinic working hours for that day.'));
     } else {
         $db = appointment_db();
         $db->beginTransaction();
@@ -79,9 +96,7 @@ if ($action === 'delete') {
     $validDates = [];
     $validSlots = [];
     $today = new DateTimeImmutable('today');
-    $minimumDate = (int) $today->format('N') >= 6
-        ? $today->modify('next monday')
-        : $today;
+    $minimumDate = $today;
 
     $validateDate = static function (string $date) use ($minimumDate): ?string {
         $selectedDate = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
@@ -92,7 +107,7 @@ if ($action === 'delete') {
             return 'Past dates can no longer be marked unavailable.';
         }
         if (!appointment_date_is_clinic_day($date)) {
-            return 'Clinic availability can only be managed from Monday through Friday.';
+            return 'Choose a day when the clinic is open.';
         }
         return null;
     };
@@ -112,9 +127,10 @@ if ($action === 'delete') {
                 flash_message('error', $dateError);
                 break;
             }
-            if (!preg_match('/^\d{2}:\d{2}$/', $slotStart) || !preg_match('/^\d{2}:\d{2}$/', $slotEnd) || $slotStart >= $slotEnd || $slotStart < '08:00' || $slotEnd > '17:00') {
+            $hours = appointment_weekly_schedule()[(int) (new DateTimeImmutable($slotDate))->format('N')];
+            if (!preg_match('/^\d{2}:\d{2}$/', $slotStart) || !preg_match('/^\d{2}:\d{2}$/', $slotEnd) || $slotStart >= $slotEnd || $slotStart < $hours['start'] || $slotEnd > $hours['end']) {
                 $validSlots = [];
-                flash_message('error', 'Choose valid time slots between 8:00 AM and 5:00 PM.');
+                flash_message('error', 'Choose time slots within clinic working hours.');
                 break;
             }
             $validSlots[] = [$slotDate, $slotStart, $slotEnd];
@@ -152,8 +168,11 @@ if ($action === 'delete') {
         flash_message('success', 'Hourly unavailable block added for ' . count($validSlots) . ' time slot(s).');
     } elseif (!$validDates) {
         flash_message('error', 'Choose at least one date to block.');
-    } elseif (!$allDay && ($start === '' || $end === '' || $start >= $end || $start < '08:00' || $end > '17:00')) {
-        flash_message('error', 'Choose a valid start and end time between 8:00 AM and 5:00 PM.');
+    } elseif (!$allDay && ($start === '' || $end === '' || $start >= $end || count(array_filter($validDates, static function (string $date) use ($start, $end): bool {
+        $hours = appointment_weekly_schedule()[(int) (new DateTimeImmutable($date))->format('N')];
+        return $start < $hours['start'] || $end > $hours['end'];
+    })) > 0)) {
+        flash_message('error', 'Choose start and end times within clinic working hours.');
     } elseif ($reason === '') {
         flash_message('error', 'Enter a reason for the unavailable time.');
     } else {

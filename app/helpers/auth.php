@@ -161,12 +161,15 @@ function complete_first_registration(string $password, string $confirmPassword):
 }
 
 /**
- * Begin the re-enrollment/re-employment confirmation flow for a returning patient
- * whose account was reset at the start of a new school year.
+ * Begin the re-enrollment confirmation flow for a returning student whose
+ * account was reset at the start of a new school year.
  * Unlike first_registration, no password change is required.
  */
 function begin_re_enrollment(array $account): void
 {
+    if ((string) ($account['account_type'] ?? '') !== 'student') {
+        throw new RuntimeException('Only student accounts can complete school-year enrollment confirmation.');
+    }
     if (session_status() !== PHP_SESSION_ACTIVE) {
         session_start();
     }
@@ -193,7 +196,7 @@ function re_enrollment_context(): ?array
 }
 
 /**
- * Confirm re-enrollment/re-employment: reactivates the account.
+ * Confirm student re-enrollment and reactivate the student account.
  */
 function complete_re_enrollment(): void
 {
@@ -201,10 +204,16 @@ function complete_re_enrollment(): void
     if ($ctx === null) {
         throw new RuntimeException('Re-enrollment session has expired. Please log in again.');
     }
+    if ((string) ($ctx['type'] ?? '') !== 'student') {
+        unset($_SESSION['re_enrollment']);
+        throw new RuntimeException('Only student accounts can complete school-year enrollment confirmation.');
+    }
     $db = auth_db();
     $stmt = $db->prepare("
-        UPDATE accounts SET account_status = 'active', activated_at = NOW()
-        WHERE id = ? AND person_id = ? AND account_status = 'inactive'
+        UPDATE accounts a
+        INNER JOIN students s ON s.person_id = a.person_id
+        SET a.account_status = 'active', a.activated_at = NOW()
+        WHERE a.id = ? AND a.person_id = ? AND a.account_status = 'inactive'
     ");
     $stmt->execute([(int) $ctx['account_id'], (int) $ctx['person_id']]);
     if ($stmt->rowCount() !== 1) {

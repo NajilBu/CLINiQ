@@ -102,6 +102,19 @@ services:
     networks:
       - cliniq_internal
 
+  cloudflared-quick:
+    image: cloudflare/cloudflared:latest
+    profiles: ["quick-tunnel"]
+    restart: "no"
+    command: tunnel --no-autoupdate --url http://gateway:8081
+    depends_on:
+      - gateway
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - cliniq_internal
+
   database:
     image: mariadb:11.4
     restart: unless-stopped

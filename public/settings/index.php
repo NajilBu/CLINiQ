@@ -344,7 +344,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 flash_message('success', "APE cycle {$cycle['academic_year']} archived.");
             } elseif ($action === 'reset_school_year') {
                 $result = reset_school_year_accounts();
-                $msg = "{$result['reset']} account(s) reset to inactive.";
+                $msg = "{$result['reset']} student account(s) reset to inactive.";
                 if ($result['emailed'] > 0) {
                     $msg .= " {$result['emailed']} notification email(s) sent.";
                 }
@@ -1573,11 +1573,11 @@ render_clinic_command_header(
                     <section class="settings-section border-2 border-red-200 bg-red-50 space-y-4">
                         <div>
                             <h3 class="font-headline text-lg font-extrabold text-red-800 mb-1">Start New School Year</h3>
-                            <p class="settings-help mb-0 text-red-700">This resets <strong>all active patient accounts</strong> (students, faculty, and personnel) to inactive. On their next login, each person will be asked to confirm they are still enrolled or employed before regaining access.</p>
+                            <p class="settings-help mb-0 text-red-700">This resets <strong>active student patient accounts only</strong> to inactive. Faculty, personnel, clinic staff, and other patient accounts remain active. Students must confirm they are still enrolled on their next login.</p>
                         </div>
                         <form method="post" data-no-ajax="true">
                             <input type="hidden" name="action" value="reset_school_year">
-                            <button class="btn btn-danger justify-center" data-confirm-submit data-confirm-type="danger" data-confirm-title="Reset all patient accounts?" data-confirm-message="All active student, faculty, and personnel accounts will be set to inactive. Each person must confirm re-enrollment or re-employment on their next login. This cannot be undone." data-confirm-toast="Resetting accounts...">
+                            <button class="btn btn-danger justify-center" data-confirm-submit data-confirm-type="danger" data-confirm-title="Reset active student accounts?" data-confirm-message="Only active student patient accounts will be set to inactive. Faculty, personnel, clinic staff, and other patient accounts will not be changed. Students must confirm enrollment on their next login. This cannot be undone." data-confirm-toast="Resetting student accounts...">
                                 <span class="material-symbols-outlined text-[18px]">restart_alt</span>
                                 Start New School Year
                             </button>

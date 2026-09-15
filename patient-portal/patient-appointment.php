@@ -17,18 +17,12 @@ $pendingFeedbackVisits = clinic_feedback_pending_active_visits($db, $patientId);
 $feedbackRequired = count($pendingFeedbackVisits) > 0;
 $feedbackPortalUrl = '../public/clinic-feedback.php?portal=1';
 
-$timeSlots = [
-    ['value' => '08:00:00', 'label' => '8:00 AM'],
-    ['value' => '09:00:00', 'label' => '9:00 AM'],
-    ['value' => '10:00:00', 'label' => '10:00 AM'],
-    ['value' => '11:00:00', 'label' => '11:00 AM'],
-    ['value' => '12:00:00', 'label' => '12:00 PM'],
-    ['value' => '13:00:00', 'label' => '1:00 PM'],
-    ['value' => '14:00:00', 'label' => '2:00 PM'],
-    ['value' => '15:00:00', 'label' => '3:00 PM'],
-    ['value' => '16:00:00', 'label' => '4:00 PM'],
-];
+$timeSlots = [];
+for ($hour = 6; $hour < 20; $hour++) {
+    $timeSlots[] = ['value' => sprintf('%02d:00:00', $hour), 'label' => date('g:i A', mktime($hour, 0))];
+}
 $allowedTimes = array_column($timeSlots, 'value');
+$weeklySchedule = appointment_weekly_schedule();
 
 $month = appointment_month_from_request($_GET['month'] ?? null);
 $success = false;
@@ -86,8 +80,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!$hasAppointmentPatientProfile || 
     } elseif ($dateStr < date('Y-m-d')) {
         $error = 'Please choose a future clinic date.';
     } elseif (!appointment_date_is_clinic_day($dateStr)) {
-        $error = 'Clinic appointments are available Monday through Friday only.';
-    } elseif (!in_array($timeStr, $allowedTimes, true)) {
+        $error = 'The clinic is closed on the selected day.';
+    } elseif (!in_array($timeStr, $allowedTimes, true) || !appointment_slot_is_open($dateStr, $timeStr)) {
         $error = 'Please choose one of the available appointment times.';
     } elseif (appointment_time_is_blocked($dateStr, $timeStr, $blocksForPostMonth)) {
         $error = 'That date or time is unavailable. Please choose another schedule.';
@@ -260,11 +254,12 @@ render_student_header('Appointments', 'appointment');
                                 $availabilityPayload[$date]['reservedTimes'] ?? [],
                                 $availabilityPayload[$date]['apeTimes'] ?? []
                             )));
-                            $allTimesUnavailable = count(array_intersect($allowedTimes, $unavailableTimes)) >= count($allowedTimes);
+                            $openTimes = array_values(array_filter($allowedTimes, static fn(string $time): bool => appointment_slot_is_open($date, $time)));
+                            $allTimesUnavailable = !$openTimes || count(array_intersect($openTimes, $unavailableTimes)) >= count($openTimes);
                             $hasAppointment = !empty($studentAppointmentDates[$date]);
                             $isPast = $date < $today;
-                            $isWeekend = !appointment_date_is_clinic_day($date);
-                            $disabled = $fullDay || $allTimesUnavailable || $isPast || $isWeekend;
+                            $isClosed = !appointment_date_is_clinic_day($date);
+                            $disabled = $fullDay || $allTimesUnavailable || $isPast || $isClosed;
                             $classes = ['student-date-btn'];
                             $classes[] = $disabled ? 'disabled' : 'available';
                             if (!$disabled && !empty($unavailableTimes)) {
@@ -283,7 +278,7 @@ render_student_header('Appointments', 'appointment');
                                 <span><?= (int) $day ?></span>
                                 <?php if ($hasAppointment): ?>
                                     <small>Booked</small>
-                                <?php elseif ($fullDay || $allTimesUnavailable || $isWeekend): ?>
+                                <?php elseif ($fullDay || $allTimesUnavailable || $isClosed): ?>
                                     <small>Closed</small>
                                 <?php elseif (!$isPast && !empty($unavailableTimes)): ?>
                                     <small>Limited</small>
@@ -403,7 +398,7 @@ render_student_header('Appointments', 'appointment');
         </div>
 
         <div class="student-calendar-time-list" id="time-slots">
-            <?php for ($hour = 8; $hour < 17; $hour++): ?>
+            <?php for ($hour = 6; $hour < 20; $hour++): ?>
                 <?php
                 $value = str_pad((string) $hour, 2, '0', STR_PAD_LEFT) . ':00:00';
                 $isOffered = in_array($value, $allowedTimes, true);
@@ -493,6 +488,7 @@ render_student_header('Appointments', 'appointment');
 <?php if (!$feedbackRequired): ?>
 <script>
     const availability = <?= json_encode($availabilityPayload, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+    const weeklySchedule = <?= json_encode($weeklySchedule, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
     const dateInput = document.getElementById('appt-date-input');
     const timeInput = document.getElementById('appt-time-input');
     const timeSlots = Array.from(document.querySelectorAll('.student-time-slot[data-time]'));
@@ -515,26 +511,32 @@ render_student_header('Appointments', 'appointment');
         const blockedTimes = availability[date]?.blockedTimes || [];
         const reservedTimes = availability[date]?.reservedTimes || [];
         const apeTimes = availability[date]?.apeTimes || [];
+        const [year, month, day] = date.split('-').map(Number);
+        const weekday = new Date(year, month - 1, day).getDay() || 7;
+        const hours = weeklySchedule[weekday];
 
         timeSlots.forEach((slot) => {
+            const start = slot.dataset.time.slice(0, 5);
+            const end = String(Number(start.slice(0, 2)) + 1).padStart(2, '0') + ':00';
+            const isClosed = !hours?.enabled || start < hours.start || end > hours.end;
             const isClinicBlocked = blockedTimes.includes(slot.dataset.time);
             const isReserved = reservedTimes.includes(slot.dataset.time);
             const isApeBlocked = apeTimes.includes(slot.dataset.time);
-            const isUnavailable = isClinicBlocked || isReserved || isApeBlocked;
+            const isUnavailable = isClosed || isClinicBlocked || isReserved || isApeBlocked;
             slot.classList.toggle('disabled', isUnavailable);
             slot.classList.toggle('is-blocked', isClinicBlocked || isApeBlocked);
             slot.classList.toggle('is-reserved', isReserved);
             slot.disabled = isUnavailable;
-            slot.title = isApeBlocked
+            slot.title = isClosed ? 'Outside clinic working hours' : (isApeBlocked
                 ? 'Reserved for APE examinations'
                 : (isReserved
                     ? 'Another patient has already requested this time'
-                    : (isClinicBlocked ? 'This time is unavailable' : ''));
-            slot.querySelector('.student-calendar-time-status').textContent = isApeBlocked
+                    : (isClinicBlocked ? 'This time is unavailable' : '')));
+            slot.querySelector('.student-calendar-time-status').textContent = isClosed ? 'Closed' : (isApeBlocked
                 ? 'APE Examination'
                 : (isReserved
                     ? 'Reserved'
-                    : (isClinicBlocked ? 'Unavailable' : 'Available'));
+                    : (isClinicBlocked ? 'Unavailable' : 'Available')));
 
             if (isUnavailable && slot.classList.contains('selected')) {
                 slot.classList.remove('selected');

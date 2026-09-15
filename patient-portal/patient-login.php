@@ -34,14 +34,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } elseif ($patient['account_status'] === 'inactive') {
                 auth_throttle_clear($db, 'patient', $studentIdValue);
                 $wasActivated = !empty($patient['activated_at']);
-                if ($wasActivated) {
+                if ($wasActivated && ($patient['account_type'] ?? '') === 'student') {
                     begin_re_enrollment($patient);
-                } else {
+                } elseif (!$wasActivated) {
                     begin_first_registration($patient);
+                } else {
+                    $error = 'This account is inactive. Please contact the clinic for assistance.';
                 }
-                csrf_rotate_token();
-                header('Location: patient-dashboard.php');
-                exit;
+                if ($error === '') {
+                    csrf_rotate_token();
+                    header('Location: patient-dashboard.php');
+                    exit;
+                }
             } else {
                 auth_throttle_clear($db, 'patient', $studentIdValue);
                 student_start_session();
