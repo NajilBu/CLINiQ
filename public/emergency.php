@@ -192,9 +192,8 @@ if ($patient) {
         SELECT patient_height_cm, patient_weight_kg, patient_bmi
         FROM ape_records
         WHERE patient_id = ?
-          AND patient_vitals_status = 'Confirmed'
           AND (patient_height_cm IS NOT NULL OR patient_weight_kg IS NOT NULL OR patient_bmi IS NOT NULL)
-        ORDER BY COALESCE(patient_vitals_confirmed_at, exam_date, created_at) DESC, ape_id DESC
+        ORDER BY COALESCE(exam_date, created_at) DESC, ape_id DESC
         LIMIT 1
     ");
     $vitalsStmt->execute([(int) $patient['id']]);

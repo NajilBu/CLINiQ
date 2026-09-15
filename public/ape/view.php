@@ -961,29 +961,6 @@ render_header('APE Record - ' . $fullName);
             <?php endforeach; ?>
         </div>
 
-        <?php if (($record['patient_vitals_status'] ?? 'Not Started') === 'Confirmed'): ?>
-        <section class="ape-flow-panel">
-            <div class="flex items-center justify-between gap-3 mb-4">
-                <div>
-                    <h2 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Patient-Reported Vitals and BMI</h2>
-                    <p class="text-xs font-bold text-slate-500 mb-0">Previously recorded measurements retained for reference. They are not required for this APE.</p>
-                </div>
-                <span class="badge <?= ($record['patient_vitals_status'] ?? 'Not Started') === 'Confirmed' ? 'badge-completed' : 'badge-pending' ?>">
-                    <?= e($record['patient_vitals_status'] ?? 'Not Started') ?>
-                </span>
-            </div>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div class="ape-flow-field"><p class="clinic-label mb-1">Height</p><strong class="text-sm text-slate-800"><?= e($record['patient_height_cm'] !== null ? number_format((float) $record['patient_height_cm'], 2) . ' cm' : 'Not recorded') ?></strong></div>
-                    <div class="ape-flow-field"><p class="clinic-label mb-1">Weight</p><strong class="text-sm text-slate-800"><?= e($record['patient_weight_kg'] !== null ? number_format((float) $record['patient_weight_kg'], 2) . ' kg' : 'Not recorded') ?></strong></div>
-                    <div class="ape-flow-field"><p class="clinic-label mb-1">BMI</p><strong class="text-sm text-slate-800"><?= e($record['patient_bmi'] !== null ? number_format((float) $record['patient_bmi'], 2) : 'Not recorded') ?></strong></div>
-                    <div class="ape-flow-field"><p class="clinic-label mb-1">Temperature</p><strong class="text-sm text-slate-800"><?= e($record['patient_temperature'] !== null ? number_format((float) $record['patient_temperature'], 1) . ' °C' : 'Not recorded') ?></strong></div>
-                    <div class="ape-flow-field"><p class="clinic-label mb-1">Blood Pressure</p><strong class="text-sm text-slate-800"><?= e($record['patient_blood_pressure'] ?: 'Not recorded') ?></strong></div>
-                    <div class="ape-flow-field"><p class="clinic-label mb-1">Pulse Rate</p><strong class="text-sm text-slate-800"><?= e($record['patient_pulse_rate'] !== null ? (int) $record['patient_pulse_rate'] . ' bpm' : 'Not recorded') ?></strong></div>
-                    <div class="ape-flow-field col-span-2"><p class="clinic-label mb-1">Confirmed</p><strong class="text-sm text-slate-800"><?= e($record['patient_vitals_confirmed_at'] ? date('M d, Y g:i A', strtotime($record['patient_vitals_confirmed_at'])) : 'Not recorded') ?></strong></div>
-                </div>
-        </section>
-        <?php endif; ?>
-
         <?php if ($examSaved): ?>
         <section class="ape-flow-panel" aria-labelledby="savedApeExamTitle">
             <div class="flex items-center justify-between gap-3 mb-4">

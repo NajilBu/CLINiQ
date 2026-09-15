@@ -629,8 +629,6 @@ CREATE TABLE ape_records (
   patient_temperature DECIMAL(4,1) NULL,
   patient_blood_pressure VARCHAR(20) NULL,
   patient_pulse_rate SMALLINT UNSIGNED NULL,
-  patient_vitals_status ENUM('Not Started', 'Confirmed') NOT NULL DEFAULT 'Not Started',
-  patient_vitals_confirmed_at DATETIME NULL,
   reviewed_by_person_id BIGINT UNSIGNED NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

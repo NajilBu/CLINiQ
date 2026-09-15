@@ -56,6 +56,29 @@ function normalize_faculty_employment_type(string $value): string
     };
 }
 
+function patient_account_normalize_id_number(string $idNumber, string $type): string
+{
+    if ($type === 'student') {
+        return normalize_id_number($idNumber);
+    }
+
+    return preg_replace('/\D+/', '', trim($idNumber)) ?? '';
+}
+
+function patient_account_id_number_is_valid(string $idNumber, string $type): bool
+{
+    return $type === 'student'
+        ? is_valid_id_number($idNumber)
+        : preg_match('/^\d{7}$/', $idNumber) === 1;
+}
+
+function patient_account_id_number_validation_message(string $type): string
+{
+    return $type === 'student'
+        ? id_number_validation_message()
+        : 'ID number is required and must contain exactly seven digits.';
+}
+
 function normalize_student_program_code(string $value): string
 {
     $code = strtoupper(trim($value));
@@ -263,13 +286,13 @@ function normalize_person_sex(string $value): string
  */
 function create_inactive_patient_account(array $input): array
 {
-    $idNumber = normalize_id_number((string) ($input['id_number'] ?? ''));
     $rawType = trim((string) ($input['patient_type'] ?? $input['category'] ?? ''));
     $normalizedType = preg_replace('/[^a-z0-9]+/', '_', strtolower($rawType)) ?? '';
     if (!in_array($normalizedType, ['student', 'faculty', 'school_personnel'], true)) {
         throw new InvalidArgumentException('Select a patient type.');
     }
     $type = $normalizedType;
+    $idNumber = patient_account_normalize_id_number((string) ($input['id_number'] ?? ''), $type);
     $firstName = trim((string) ($input['first_name'] ?? ''));
     $middleName = trim((string) ($input['middle_name'] ?? ''));
     $lastName = trim((string) ($input['last_name'] ?? ''));
@@ -319,8 +342,8 @@ function create_inactive_patient_account(array $input): array
         $departmentId = patient_account_active_department_id($programDepartment);
     }
 
-    if (!is_valid_id_number($idNumber)) {
-        throw new InvalidArgumentException(id_number_validation_message());
+    if (!patient_account_id_number_is_valid($idNumber, $type)) {
+        throw new InvalidArgumentException(patient_account_id_number_validation_message($type));
     }
     if (!patient_account_valid_name($firstName) || !patient_account_valid_name($lastName)) {
         throw new InvalidArgumentException("First name and last name may contain only letters, spaces, apostrophes, periods, and hyphens.");

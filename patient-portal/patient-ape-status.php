@@ -386,12 +386,6 @@ render_student_header('APE Status', 'ape');
         <div><?= (int) $_GET['uploaded'] ?> APE document(s) were uploaded together and are waiting for clinic verification.</div>
         <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
     </div>
-<?php elseif (isset($_GET['vitals_confirmed'])): ?>
-    <div class="student-note student-note-success student-toast" data-student-toast role="status" aria-live="polite">
-        <span class="material-symbols-outlined">check_circle</span>
-        <div>Your vitals and BMI were confirmed. You can now present your hard-copy APE requirements to the clinic.</div>
-        <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
-    </div>
 <?php elseif ($uploadError !== ''): ?>
     <div class="student-note student-note-danger mb-4">
         <span class="material-symbols-outlined">error</span>
@@ -484,9 +478,7 @@ render_student_header('APE Status', 'ape');
                             </div>
                             <strong><?= student_e($stepTitle) ?></strong>
                             <span><?= student_e($stepCopy) ?></span>
-                            <?php if ($isCurrent && $canEnterPatientVitals): ?>
-                                <a class="student-ape-step-action" data-mobile-open-panel="ape-vitals-panel" href="#ape-vitals-panel">Enter vitals and BMI <span class="material-symbols-outlined">arrow_downward</span></a>
-                            <?php elseif ($isCurrent && $canUploadDocuments): ?>
+                            <?php if ($isCurrent && $canUploadDocuments): ?>
                                 <a class="student-ape-step-action" data-mobile-open-panel="ape-documents-panel" href="#ape-documents-panel">Upload APE documents <span class="material-symbols-outlined">arrow_downward</span></a>
                             <?php endif; ?>
                         </div>

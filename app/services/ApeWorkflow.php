@@ -614,8 +614,6 @@ function ensure_ape_workflow_schema(): void
         'patient_temperature' => "DECIMAL(4,1) NULL AFTER patient_bmi",
         'patient_blood_pressure' => "VARCHAR(20) NULL AFTER patient_temperature",
         'patient_pulse_rate' => "SMALLINT UNSIGNED NULL AFTER patient_blood_pressure",
-        'patient_vitals_status' => "ENUM('Not Started', 'Confirmed') NOT NULL DEFAULT 'Not Started' AFTER patient_pulse_rate",
-        'patient_vitals_confirmed_at' => "DATETIME NULL AFTER patient_vitals_status",
     ];
     $workflowColumns = [
         'follow_up_due_date' => "DATE NULL AFTER follow_up_required",

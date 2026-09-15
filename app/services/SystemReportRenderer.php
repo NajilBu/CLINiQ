@@ -14,7 +14,7 @@ function system_report_format_number(float|int $value, int $decimals = 0): strin
 
 function system_report_chart_type(string $title): string
 {
-    if (preg_match('/by Day|Trend/i', $title)) {
+    if (preg_match('/by Day|by Month|Trend/i', $title)) {
         return 'line';
     }
     if (preg_match('/Workflow|Requirement Status|Stock Condition/i', $title)) {
@@ -34,11 +34,12 @@ function system_report_chart_colors(): array
     return ['#2f8553', '#58a978', '#89c79f', '#d4a72c', '#5377b8', '#8b69c7', '#d26b6b', '#64748b', '#38a3a5', '#b7791f'];
 }
 
-function render_system_report_bar_chart(array $rows, int $decimals = 0): string
+function render_system_report_bar_chart(array $rows, int $decimals = 0, ?int $limit = 6): string
 {
-    $maxValue = max(array_column($rows, 'value')) ?: 1;
+    $visibleRows = $limit === null ? $rows : array_slice($rows, 0, $limit);
+    $maxValue = max(array_column($visibleRows, 'value')) ?: 1;
     ob_start();
-    foreach ($rows as $row):
+    foreach ($visibleRows as $row):
         $width = max(2, round(((float) $row['value'] / $maxValue) * 100, 1)); ?>
         <div class="report-chart-row" title="<?= system_report_escape($row['label']) ?>: <?= system_report_format_number($row['value'], $decimals) ?>">
             <span class="report-chart-label"><?= system_report_escape($row['label']) ?></span>
@@ -153,7 +154,11 @@ function render_system_report_chart(array $chart): string
         'line' => render_system_report_line_chart($chart['rows']),
         'column' => render_system_report_column_chart($chart['rows']),
         'progress' => render_system_report_progress_chart($chart['rows']),
-        default => render_system_report_bar_chart($chart['rows'], (int) ($chart['decimals'] ?? 0)),
+        default => render_system_report_bar_chart(
+            $chart['rows'],
+            (int) ($chart['decimals'] ?? 0),
+            ($chart['title'] ?? '') === 'Average SERVPERF Scores' ? null : 6
+        ),
     };
 }
 
@@ -186,20 +191,31 @@ function system_report_styles(): string
 .report-section-number { display: grid; place-items: center; flex: 0 0 34px; height: 34px; border-radius: 10px; background: #e6f4eb; color: #287548; font-size: 13px; font-weight: 900; }
 .report-section h2 { margin: 0 0 4px; color: #17261d; font-size: 20px; letter-spacing: -.3px; }
 .report-section-description { margin: 0; color: #64748b; font-size: 11px; font-weight: 600; line-height: 1.5; }
-.report-document-dashboard .report-section-heading { gap: .75rem; margin-bottom: 1rem; }
-.report-document-dashboard .report-section-number { flex-basis: 2rem; height: 2rem; border-radius: .625rem; background: var(--cliniq-primary-fixed, #e6f4eb); color: var(--cliniq-primary, #287548); font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: .75rem; font-weight: 700; }
-.report-document-dashboard .report-section h2 { color: var(--cliniq-foreground, #17261d); font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 1.125rem; font-weight: 700; letter-spacing: 0; line-height: 1.3; }
-.report-document-dashboard .report-section-description { color: #64748b; font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: .8125rem; font-weight: 600; line-height: 1.5; }
+.report-document-dashboard .report-section-heading { gap: 1rem; margin-bottom: 1.5rem; }
+.report-document-dashboard .report-section-number { flex-basis: 2.5rem; height: 2.5rem; border-radius: .75rem; background: var(--cliniq-primary-fixed, #e6f4eb); color: var(--cliniq-primary, #287548); font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: .875rem; font-weight: 800; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cliniq-primary, #287548) 10%, transparent); }
+.report-document-dashboard .report-section h2 { color: var(--cliniq-foreground, #17261d); font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 1.5rem; font-weight: 800; letter-spacing: -.025em; line-height: 1.2; }
+.report-document-dashboard .report-section-description { color: #64748b; font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: .9375rem; font-weight: 600; line-height: 1.55; }
 .report-document-dashboard .report-body { padding: 0; }
-.report-document-dashboard .report-section { margin: 0 0 1.5rem; padding: 1.25rem; border: 1px solid oklch(92% .01 230 / .72); border-radius: .75rem; background: #fff; box-shadow: 0 1px 2px rgba(23,38,29,.035), 0 8px 22px rgba(23,38,29,.035); }
-.report-document-dashboard .report-section:last-child { margin-bottom: 0; padding-bottom: 1.25rem; border-bottom: 1px solid oklch(92% .01 230 / .72); }
-.report-document-dashboard .report-metrics { gap: .75rem; margin-bottom: 1rem; }
-.report-document-dashboard .report-metric { min-height: 4.5rem; padding: .75rem; border-color: oklch(92% .01 230 / .72); border-radius: .75rem; background: #fff; }
-.report-document-dashboard .report-metric-label { min-height: 1.125rem; margin-bottom: .375rem; font-size: .6875rem; font-weight: 700; }
-.report-document-dashboard .report-metric-value { font-size: 1.375rem; font-weight: 700; }
-.report-document-dashboard .report-metric-note { margin-top: .25rem; font-size: .6875rem; font-weight: 600; }
-.report-document-dashboard .report-charts { gap: .75rem; }
-.report-document-dashboard .report-chart { min-height: 10rem; padding: .875rem; border-color: oklch(92% .01 230 / .72); border-radius: .75rem; box-shadow: none; }
+.report-document-dashboard .report-section { margin: 0 0 2rem; padding: 1.75rem; border: 1px solid oklch(92% .01 230 / .8); border-radius: 1rem; background: #fff; box-shadow: 0 1px 2px rgba(23,38,29,.04), 0 12px 28px rgba(23,38,29,.055); }
+.report-document-dashboard .report-section:last-child { margin-bottom: 0; padding-bottom: 1.75rem; border-bottom: 1px solid oklch(92% .01 230 / .8); }
+.report-document-dashboard .report-metrics { grid-template-columns: repeat(auto-fit, minmax(min(100%, 12.5rem), 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+.report-document-dashboard .report-metric { min-height: 6rem; padding: .875rem 1rem; border-color: oklch(92% .01 230 / .8); border-radius: .875rem; background: linear-gradient(145deg, #fff, var(--cliniq-surface-low, #fbfdfb)); box-shadow: 0 1px 2px rgba(23,38,29,.025); }
+.report-document-dashboard .report-metric-label { min-height: 1.125rem; margin-bottom: .375rem; font-size: .6875rem; font-weight: 800; letter-spacing: .06em; }
+.report-document-dashboard .report-metric-value { color: var(--cliniq-primary, #205f3d); font-size: clamp(1.75rem, 2.25vw, 2.125rem); font-weight: 800; letter-spacing: -.04em; line-height: 1; }
+.report-document-dashboard .report-metric-note { margin-top: .375rem; font-size: .6875rem; font-weight: 650; }
+.report-document-dashboard .inventory-metric-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+.report-document-dashboard .inventory-metric-group { padding: 1rem; border: 1px solid oklch(92% .01 230 / .8); border-radius: .875rem; background: var(--cliniq-surface-low, #fbfdfb); }
+.report-document-dashboard .inventory-metric-group-title { margin: 0 0 .75rem; color: var(--cliniq-foreground, #17261d); font-size: .8125rem; font-weight: 800; letter-spacing: -.01em; }
+.report-document-dashboard .inventory-metric-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .625rem; }
+.report-document-dashboard .inventory-metric-grid .report-metric { min-height: 5.5rem; padding: .75rem; border-radius: .75rem; background: #fff; }
+.report-document-dashboard .inventory-metric-grid .report-metric-label { font-size: .625rem; line-height: 1.35; }
+.report-document-dashboard .inventory-metric-grid .report-metric-value { font-size: 1.625rem; }
+.report-document-dashboard .report-charts { grid-template-columns: repeat(auto-fit, minmax(min(100%, 25rem), 1fr)); gap: 1rem; }
+.report-document-dashboard .report-chart { min-height: 15rem; padding: 1.25rem; border-color: oklch(92% .01 230 / .8); border-radius: .875rem; background: #fff; box-shadow: 0 1px 2px rgba(23,38,29,.025); }
+ .report-document-dashboard .report-chart h3 { margin-bottom: 1.125rem; color: var(--cliniq-foreground, #334155); font-size: 1rem; font-weight: 800; line-height: 1.35; }
+.report-document-dashboard .report-chart-kind { font-size: .625rem; }
+.report-document-dashboard .report-chart-visual { min-height: 12.5rem; }
+.report-document-dashboard .report-echarts-canvas { width: 100%; height: 13.5rem; }
 .report-metrics { display: grid; grid-template-columns: repeat(var(--report-metric-columns, 4), minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
 .report-metric { min-height: 88px; padding: 14px; border: 1px solid var(--cliniq-outline, #dfe9e2); border-radius: 12px; background: var(--cliniq-surface-low, #fbfdfb); }
 .report-metric-label { min-height: 24px; margin: 0 0 8px; color: #64748b; font-size: 9px; font-weight: 900; letter-spacing: .07em; text-transform: uppercase; }
@@ -247,14 +263,24 @@ function system_report_styles(): string
 .report-document-dashboard .report-column-track div { background: var(--cliniq-primary, #3b8b5d); }
 .report-document-dashboard .report-chart-track,
 .report-document-dashboard .report-progress-track { background: var(--cliniq-surface-low, #edf3ef); }
-.report-document-dashboard .report-donut-total,
-.report-document-dashboard .report-point-value,
-.report-document-dashboard .report-column-item strong { fill: var(--cliniq-primary, #205f3d); color: var(--cliniq-primary, #205f3d); }
 .report-document-dashboard .report-remarks textarea { border-color: var(--cliniq-outline, #cfded3); background: var(--cliniq-surface-low, #fbfdfb); color: var(--cliniq-foreground, #334155); font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
 @media (max-width: 760px) {
   .report-document { width: 100%; margin: 0; }
   .report-cover, .report-body { padding: 28px 22px; }
   .report-meta, .report-charts { grid-template-columns: 1fr; }
+  .report-document-dashboard .report-section { margin-bottom: 1.25rem; padding: 1.25rem; border-radius: .875rem; }
+  .report-document-dashboard .report-section:last-child { padding-bottom: 1.25rem; }
+  .report-document-dashboard .report-section h2 { font-size: 1.25rem; }
+  .report-document-dashboard .report-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+  .report-document-dashboard .report-metric { min-height: 5.75rem; padding: .875rem; }
+  .report-document-dashboard .report-metric-value { font-size: 1.875rem; }
+  .report-document-dashboard .inventory-metric-groups { grid-template-columns: 1fr; gap: .75rem; }
+  .report-document-dashboard .inventory-metric-group { padding: .875rem; }
+  .report-document-dashboard .inventory-metric-grid .report-metric-value { font-size: 1.625rem; }
+  .report-document-dashboard .report-charts { grid-template-columns: 1fr; }
+  .report-document-dashboard .report-chart { min-height: 0; padding: 1rem; }
+  .report-document-dashboard .report-chart-visual { min-height: 11.5rem; }
+  .report-document-dashboard .report-echarts-canvas { height: 12.5rem; }
 }
 @page { size: A4 portrait; margin: 11mm 10mm 13mm; }
 @media print {
@@ -319,6 +345,7 @@ function render_system_report_document(array $report, bool $standalone = false, 
     $institutionName = trim((string) ($clinicProfile['institution_name'] ?? 'Pamantasan ng Lungsod ng Pasig')) ?: 'Pamantasan ng Lungsod ng Pasig';
     $departmentName = trim((string) ($clinicProfile['department'] ?? 'University Health Services')) ?: 'University Health Services';
     $includeCover = (bool) ($options['include_cover'] ?? true);
+    $isDashboard = !$includeCover;
     $remarksMode = (string) ($options['remarks_mode'] ?? 'none');
     $remarks = is_array($options['remarks'] ?? null) ? $options['remarks'] : [];
     $preparedBy = is_array($options['prepared_by'] ?? null) ? $options['prepared_by'] : [];
@@ -380,15 +407,38 @@ function render_system_report_document(array $report, bool $standalone = false, 
             <?php $sectionNumber = 0; foreach ($report['sections'] as $sectionKey => $section): $sectionNumber++; ?>
                 <section class="report-section" id="report-section-<?= system_report_escape((string) $sectionKey) ?>" data-report-section="<?= system_report_escape((string) $sectionKey) ?>">
                     <div class="report-section-heading"><div class="report-section-number"><?= $sectionNumber ?></div><div><h2><?= system_report_escape($section['title']) ?></h2><p class="report-section-description"><?= system_report_escape($section['description']) ?></p></div></div>
-                    <?php $metricCount = max(1, min(8, count($section['metrics']))); ?>
-                    <div class="report-metrics" style="--report-metric-columns: <?= $metricCount ?>">
-                        <?php foreach ($section['metrics'] as $metric): ?>
-                            <div class="report-metric"><p class="report-metric-label"><?= system_report_escape($metric['label']) ?></p><p class="report-metric-value"><?= system_report_format_number($metric['value'], (int) ($metric['decimals'] ?? 0)) ?></p><?php if (($metric['note'] ?? '') !== ''): ?><p class="report-metric-note"><?= system_report_escape($metric['note']) ?></p><?php endif; ?></div>
-                        <?php endforeach; ?>
-                    </div>
+                    <?php if ($isDashboard && $sectionKey === 'inventory'): ?>
+                        <?php $inventoryMetricGroups = [
+                            'Stock overview' => ['Active Medicine', 'Active Equipment', 'Units in Stock', 'Low Stock Items'],
+                            'Dispensing activity' => ['Medicine Dispensed', 'People Given Medicine'],
+                            'Loan activity' => ['Equipment Loans', 'Equipment Items Borrowed', 'Currently Borrowed', 'Overdue Loans'],
+                        ]; ?>
+                        <div class="inventory-metric-groups">
+                            <?php foreach ($inventoryMetricGroups as $groupTitle => $metricLabels): ?>
+                                <section class="inventory-metric-group" aria-label="<?= system_report_escape($groupTitle) ?>">
+                                    <h3 class="inventory-metric-group-title"><?= system_report_escape($groupTitle) ?></h3>
+                                    <div class="inventory-metric-grid">
+                                        <?php foreach ($section['metrics'] as $metric): ?>
+                                            <?php if (in_array($metric['label'], $metricLabels, true)): ?>
+                                                <div class="report-metric"><p class="report-metric-label"><?= system_report_escape($metric['label']) ?></p><p class="report-metric-value"><?= system_report_format_number($metric['value'], (int) ($metric['decimals'] ?? 0)) ?></p><?php if (($metric['note'] ?? '') !== ''): ?><p class="report-metric-note"><?= system_report_escape($metric['note']) ?></p><?php endif; ?></div>
+                                            <?php endif; ?>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </section>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php else: ?>
+                        <?php $metricCount = max(1, min(8, count($section['metrics']))); ?>
+                        <div class="report-metrics" style="--report-metric-columns: <?= $metricCount ?>">
+                            <?php foreach ($section['metrics'] as $metric): ?>
+                                <div class="report-metric"><p class="report-metric-label"><?= system_report_escape($metric['label']) ?></p><p class="report-metric-value"><?= system_report_format_number($metric['value'], (int) ($metric['decimals'] ?? 0)) ?></p><?php if (($metric['note'] ?? '') !== ''): ?><p class="report-metric-note"><?= system_report_escape($metric['note']) ?></p><?php endif; ?></div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
                     <div class="report-charts">
                         <?php foreach ($section['charts'] as $chart): $chartType = system_report_chart_type($chart['title']); ?>
-                            <div class="report-chart"><h3><?= system_report_escape($chart['title']) ?><span class="report-chart-kind"><?= system_report_escape($chartType) ?></span></h3><?= render_system_report_chart($chart) ?></div>
+                            <?php $chartPayload = json_encode(['type' => $chartType, 'title' => $chart['title'], 'rows' => $chart['rows']], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '{}'; ?>
+                            <div class="report-chart" data-report-chart="<?= system_report_escape($chartPayload) ?>"><h3><?= system_report_escape($chart['title']) ?><span class="report-chart-kind"><?= system_report_escape($chartType) ?></span></h3><div class="report-chart-visual"><?php if (!$isDashboard): ?><?= render_system_report_chart($chart) ?><?php endif; ?></div></div>
                         <?php endforeach; ?>
                     </div>
                     <?php if ($remarksMode === 'input'): ?>

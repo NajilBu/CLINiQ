@@ -13,12 +13,11 @@ $patientId = (int) $profile['patient_id'];
 $latestBmiRecord = null;
 if ($patientId > 0) {
     $latestBmiStmt = auth_db()->prepare("
-        SELECT patient_height_cm, patient_weight_kg, patient_bmi, patient_vitals_confirmed_at
+        SELECT patient_height_cm, patient_weight_kg, patient_bmi, COALESCE(exam_date, created_at) AS bmi_recorded_at
         FROM ape_records
         WHERE patient_id = ?
-          AND patient_vitals_status = 'Confirmed'
           AND (patient_height_cm IS NOT NULL OR patient_weight_kg IS NOT NULL OR patient_bmi IS NOT NULL)
-        ORDER BY COALESCE(patient_vitals_confirmed_at, exam_date, created_at) DESC, ape_id DESC
+        ORDER BY COALESCE(exam_date, created_at) DESC, ape_id DESC
         LIMIT 1
     ");
     $latestBmiStmt->execute([$patientId]);
@@ -45,7 +44,7 @@ $passport = [
     'weight_kg'       => $latestBmiRecord['patient_weight_kg'] ?? null,
     'bmi'             => $latestBmiRecord['patient_bmi'] ?? null,
     'show_bmi'        => (int) ($profile['show_bmi_on_passport'] ?? 1) === 1,
-    'bmi_recorded_at' => $latestBmiRecord['patient_vitals_confirmed_at'] ?? null,
+    'bmi_recorded_at' => $latestBmiRecord['bmi_recorded_at'] ?? null,
 ];
 $passportUrl = '../public/emergency.php?token=' . urlencode($passport['token']);
 $passportPreviewUrl = 'passport-demo.php?token=' . urlencode($passport['token']);

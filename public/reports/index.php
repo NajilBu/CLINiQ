@@ -119,8 +119,97 @@ render_header('Reports');
     </aside>
 </div>
 
+<script src="<?= e(app_url('assets/vendor/echarts/echarts.min.js')) ?>"></script>
 <script>
 (() => {
+    const chartPalette = ['#2f8553', '#58a978', '#89c79f', '#d4a72c', '#5377b8', '#8b69c7', '#d26b6b', '#64748b'];
+    const chartText = '#475569';
+    const chartValue = '#205f3d';
+
+    const enhanceReportCharts = () => {
+        if (!window.echarts) return;
+
+        document.querySelectorAll('[data-report-chart]').forEach((card) => {
+            let chartData;
+            try {
+                chartData = JSON.parse(card.dataset.reportChart || '{}');
+            } catch (_) {
+                return;
+            }
+            const rows = Array.isArray(chartData.rows) ? chartData.rows : [];
+            if (!rows.length) return;
+
+            const visual = card.querySelector('.report-chart-visual');
+            if (!visual) return;
+            const canvas = document.createElement('div');
+            canvas.className = 'report-echarts-canvas';
+            visual.append(canvas);
+
+            const labels = rows.map((row) => String(row.label ?? ''));
+            const values = rows.map((row) => Number(row.value) || 0);
+            const chart = echarts.init(canvas, null, { renderer: 'svg' });
+            const shared = {
+                animationDuration: 420,
+                color: chartPalette,
+                textStyle: { fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif' },
+                tooltip: { trigger: chartData.type === 'donut' ? 'item' : 'axis', confine: true },
+            };
+            let option;
+
+            if (chartData.type === 'donut') {
+                option = {
+                    ...shared,
+                    tooltip: { trigger: 'item', formatter: '{b}: <b>{c}</b> ({d}%)' },
+                    series: [{
+                        type: 'pie', radius: ['48%', '72%'], center: ['50%', '50%'], avoidLabelOverlap: true,
+                        itemStyle: { borderColor: '#fff', borderWidth: 3, borderRadius: 5 },
+                        label: { color: chartText, fontSize: 12, fontWeight: 700, formatter: '{b}' },
+                        labelLine: { length: 8, length2: 8 },
+                        data: rows.map((row) => ({ name: String(row.label ?? ''), value: Number(row.value) || 0 })),
+                    }],
+                    graphic: [{ type: 'text', left: 'center', top: '42%', style: { text: String(values.reduce((total, value) => total + value, 0)), fill: chartValue, font: '800 18px Inter, sans-serif', textAlign: 'center' } }, { type: 'text', left: 'center', top: '55%', style: { text: 'TOTAL', fill: '#64748b', font: '700 9px Inter, sans-serif', textAlign: 'center' } }],
+                };
+            } else if (chartData.type === 'line') {
+                option = {
+                    ...shared,
+                    grid: { left: 36, right: 18, top: 22, bottom: 38 },
+                    xAxis: { type: 'category', data: labels, axisLabel: { color: chartText, fontSize: 11, fontWeight: 600, interval: 'auto' }, axisLine: { lineStyle: { color: '#dfe9e2' } } },
+                    yAxis: { type: 'value', axisLabel: { color: chartText, fontSize: 11, fontWeight: 600 }, splitLine: { lineStyle: { color: '#edf3ef' } } },
+                    series: [{ type: 'line', data: values, smooth: true, symbolSize: 8, lineStyle: { width: 3 }, areaStyle: { color: 'rgba(47,133,83,.12)' }, label: { show: true, position: 'top', color: chartValue, fontWeight: 800, fontSize: 11 } }],
+                };
+            } else if (chartData.type === 'progress') {
+                option = {
+                    ...shared,
+                    tooltip: { trigger: 'item', formatter: '{b}: <b>{c}</b>' },
+                    grid: { left: 4, right: 4, top: 48, bottom: 10 },
+                    xAxis: { type: 'value', max: values.reduce((total, value) => total + value, 0) || 1, show: false },
+                    yAxis: { type: 'category', data: [''], show: false },
+                    legend: { top: 0, type: 'scroll', textStyle: { color: chartText, fontSize: 11, fontWeight: 600 } },
+                    series: rows.map((row, index) => ({ name: String(row.label ?? ''), type: 'bar', stack: 'total', barWidth: 26, data: [values[index]], label: { show: values[index] > 0, formatter: '{c}', color: '#fff', fontWeight: 800, fontSize: 11 } })),
+                };
+            } else {
+                const isColumn = chartData.type === 'column';
+                option = {
+                    ...shared,
+                    grid: isColumn ? { left: 36, right: 16, top: 20, bottom: 52 } : { left: 116, right: 36, top: 16, bottom: 12 },
+                    xAxis: isColumn ? { type: 'category', data: labels, axisLabel: { color: chartText, fontSize: 10, fontWeight: 600, rotate: labels.length > 5 ? 24 : 0, interval: 0 }, axisLine: { lineStyle: { color: '#dfe9e2' } } } : { type: 'value', axisLabel: { color: chartText, fontSize: 11, fontWeight: 600 }, splitLine: { lineStyle: { color: '#edf3ef' } } },
+                    yAxis: isColumn ? { type: 'value', axisLabel: { color: chartText, fontSize: 11, fontWeight: 600 }, splitLine: { lineStyle: { color: '#edf3ef' } } } : { type: 'category', data: labels, axisLabel: { color: chartText, fontSize: 11, fontWeight: 600, width: 102, overflow: 'truncate' }, axisLine: { show: false }, axisTick: { show: false } },
+                    series: [{ type: 'bar', data: values, barMaxWidth: 34, itemStyle: { borderRadius: isColumn ? [6, 6, 0, 0] : [0, 6, 6, 0] }, label: { show: true, position: isColumn ? 'top' : 'right', color: chartValue, fontWeight: 800, fontSize: 11 } }],
+                };
+            }
+
+            try {
+                chart.setOption(option);
+                new ResizeObserver(() => chart.resize()).observe(canvas);
+            } catch (_) {
+                chart.dispose();
+                canvas.remove();
+            }
+        });
+    };
+
+    enhanceReportCharts();
+
     const form = document.getElementById('reportDateForm');
     const fromInput = document.getElementById('reportFrom');
     const toInput = document.getElementById('reportTo');

@@ -910,6 +910,7 @@ exit;
         </section>
     </div>
 
+    <?php if ($canTreatFromLogbook): ?>
     <section class="clinic-card p-6">
         <h2 class="font-headline text-lg font-extrabold text-[#1c2a59] flex items-center gap-2 mb-5">
             <span class="material-symbols-outlined text-primary text-[19px]">medical_information</span>
@@ -1073,8 +1074,8 @@ Tracking.</p>
         <?php endif;
 ?>
     </div></details>
+    <?php endif; ?>
 
-    
 <?php if ($canTreatFromLogbook): ?>
             <div class="mt-6 pt-5 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3">
                 <div class="flex flex-col sm:flex-row gap-3">

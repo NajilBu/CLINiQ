@@ -8,7 +8,11 @@ ensure_ape_workflow_schema();
 
 $activeQueue = $_GET['queue'] ?? 'digital_submission';
 $search = trim($_GET['q'] ?? '');
-$populationScope = strtolower(trim((string) ($_GET['population'] ?? 'students'))) === 'faculty_ntp'
+$requestedPopulationScope = strtolower(trim((string) ($_GET['population'] ?? '')));
+if ($requestedPopulationScope !== '') {
+    $_SESSION['ape_population_scope'] = $requestedPopulationScope === 'faculty_ntp' ? 'faculty_ntp' : 'students';
+}
+$populationScope = ($_SESSION['ape_population_scope'] ?? 'students') === 'faculty_ntp'
     ? 'faculty_ntp'
     : 'students';
 $queues = ape_work_queues();
@@ -114,11 +118,15 @@ $apeQueueColumns = [
     ['headerName' => 'Priority', 'field' => 'priorityHtml', 'cellRenderer' => 'html', 'sortField' => 'prioritySort', 'sortType' => 'number', 'width' => 140],
     ['headerName' => 'Patient', 'field' => 'studentHtml', 'cellRenderer' => 'html', 'sortField' => 'studentSort', 'minWidth' => 250],
     ['headerName' => 'Program', 'field' => 'programHtml', 'cellRenderer' => 'html', 'sortField' => 'programSort', 'minWidth' => 220],
-    ['headerName' => 'APE Schedule', 'field' => 'scheduleHtml', 'cellRenderer' => 'html', 'sortField' => 'scheduleSort', 'minWidth' => 250],
     ['headerName' => 'Waiting', 'field' => 'waiting', 'sortField' => 'waitingSort', 'sortType' => 'number', 'width' => 140],
     ['headerName' => 'Next Action', 'field' => 'nextActionHtml', 'cellRenderer' => 'html', 'sortField' => 'nextActionSort', 'minWidth' => 260],
-    ['headerName' => 'Actions', 'field' => 'actionHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'width' => 100, 'minWidth' => 90],
 ];
+if ($populationScope === 'students') {
+    array_splice($apeQueueColumns, 3, 0, [[
+        'headerName' => 'APE Schedule', 'field' => 'scheduleHtml', 'cellRenderer' => 'html',
+        'sortField' => 'scheduleSort', 'minWidth' => 250,
+    ]]);
+}
 
 render_header('APE Work Queues');
 
@@ -296,14 +304,15 @@ render_clinic_command_header(
                     'studentHtml' => '<div class="flex items-center gap-3"><div class="avatar ' . e(avatar_color($fullName)) . '">' . e(initials($fullName)) . '</div><div><strong class="text-sm text-slate-800">' . e($fullName) . '</strong><div class="text-xs font-bold text-slate-400">' . e($rec['id_number']) . '</div></div></div>',
                     'programSort' => $rec['course_section'] ?: '',
                     'programHtml' => '<p class="text-sm font-bold text-slate-700 mb-1">' . e($rec['course_section'] ?: 'No course set') . '</p><p class="text-xs font-bold text-slate-400 mb-0">' . e($rec['document_type'] ?: 'APE documents') . '</p>',
-                    'scheduleSort' => $scheduleSort,
-                    'scheduleHtml' => $scheduleHtml,
                     'waiting' => ape_waiting_label($rec),
                     'waitingSort' => ape_waiting_days($rec),
                     'nextActionSort' => $next['label'],
                     'nextActionHtml' => '<div class="flex items-center gap-2"><span class="material-symbols-outlined text-primary text-[18px]">' . e($next['icon']) . '</span><div><strong class="block text-sm text-slate-800">' . e($next['label']) . '</strong><span class="block text-xs font-bold text-slate-400">' . e(ape_missing_item($rec)) . '</span></div></div>',
-                    'actionHtml' => row_actions_button('APE actions', $queueKey === 'completed' ? '' : '<a href="view.php?id=' . (int)$rec['id'] . '" class="btn btn-primary btn-sm text-decoration-none"><span class="material-symbols-outlined text-[14px]">' . e($next['icon']) . '</span>' . e($next['label']) . '</a>'),
                 ];
+                if ($populationScope === 'students') {
+                    $apeRows[array_key_last($apeRows)]['scheduleSort'] = $scheduleSort;
+                    $apeRows[array_key_last($apeRows)]['scheduleHtml'] = $scheduleHtml;
+                }
             }
             render_ag_grid('apeGrid' . $gridSuffix, $apeQueueColumns, $apeRows, [
                 'pageSize' => 10,

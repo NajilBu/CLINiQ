@@ -720,6 +720,9 @@ const accountFieldHints = {
     student: {
         idPlaceholder: '23-00262',
         idHint: 'Student example: 23-00262',
+        idPattern: '<?= e(ID_NUMBER_HTML_PATTERN) ?>',
+        idMaxLength: 15,
+        idInputMode: 'text',
         programLabel: 'Program Code',
         programPlaceholder: 'Select program',
         programHint: 'Select an active program from the database.',
@@ -731,8 +734,11 @@ const accountFieldHints = {
         sectionHint: 'Choose A to E. Program, year level, and section are stored separately.',
     },
     faculty: {
-        idPlaceholder: 'FAC-0001',
-        idHint: 'Faculty example: FAC-0001',
+        idPlaceholder: '0000001',
+        idHint: 'Faculty ID: exactly seven digits, for example 0000001.',
+        idPattern: '[0-9]{7}',
+        idMaxLength: 7,
+        idInputMode: 'numeric',
         programLabel: 'Department',
         programPlaceholder: 'Select department',
         programHint: 'Select an active department from the database.',
@@ -744,8 +750,11 @@ const accountFieldHints = {
         sectionHint: 'Example: DIT or MIT',
     },
     school_personnel: {
-        idPlaceholder: 'SP-0001',
-        idHint: 'School personnel example: SP-0001',
+        idPlaceholder: '0000001',
+        idHint: 'NTP ID: exactly seven digits, for example 0000001.',
+        idPattern: '[0-9]{7}',
+        idMaxLength: 7,
+        idInputMode: 'numeric',
         programLabel: 'Department',
         programPlaceholder: 'Select department',
         programHint: 'Select an active department from the database.',
@@ -805,6 +814,13 @@ function updateIndividualAccountHints() {
         if (hintElement) hintElement.textContent = hint;
     });
 
+    const idNumberInput = document.getElementById('id_number');
+    if (idNumberInput) {
+        idNumberInput.pattern = hints.idPattern;
+        idNumberInput.maxLength = hints.idMaxLength;
+        idNumberInput.inputMode = hints.idInputMode;
+    }
+
     if (programInput) {
         updateProgramDepartmentOptions(
             programInput,
@@ -858,7 +874,9 @@ updateIndividualAccountHints();
 
 const idNumberInput = document.getElementById('id_number');
 idNumberInput?.addEventListener('input', () => {
-    idNumberInput.value = idNumberInput.value.toUpperCase();
+    idNumberInput.value = patientType?.value === 'student'
+        ? idNumberInput.value.toUpperCase()
+        : idNumberInput.value.replace(/\D/g, '').slice(0, 7);
 });
 
 const programOrDepartmentInput = document.getElementById('program_or_department');

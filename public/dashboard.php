@@ -272,7 +272,7 @@ $visitorLogs = cliniq_visit_db()->query("
     ORDER BY v.visit_datetime DESC
 ")->fetchAll();
 
-// --- 5. APE Action Queue (Condensed) ---
+// --- 5. APE Work Queue (Condensed) ---
 $dashboardToday = date('Y-m-d');
 $allApeRecords = array_values(array_filter(
     ape_fetch_records(),
@@ -347,9 +347,7 @@ foreach ($apeQueue as $rec) {
     $isScheduledToday = ($rec['batch_schedule_date'] ?? '') === $dashboardToday;
     $queueLabel = !$isScheduledToday
         ? 'Scheduled'
-        : (($rec['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed'
-            ? 'Vitals'
-            : ($queue['short_title'] ?? $queue['title']));
+        : ($queue['short_title'] ?? $queue['title']);
     $recordUrl = app_url('ape/view.php?id=' . (int) $rec['id']);
     $dashboardApeRows[] = [
         'rowUrl' => $isScheduledToday ? $recordUrl : '',
@@ -792,11 +790,11 @@ render_header('Main Dashboard');
         </section>
     </div>
 
-    <!-- 5. Condensed APE Action Queue -->
+    <!-- 5. Condensed APE Work Queue -->
     <section class="clinic-card overflow-hidden mb-6">
         <div class="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-                <h2 class="font-headline text-xl font-extrabold text-[#17261d] m-0">APE Action Queue</h2>
+                <h2 class="font-headline text-xl font-extrabold text-[#17261d] m-0">APE Work Queue</h2>
                 <p class="text-xs font-bold text-slate-500 m-0">Today&rsquo;s and upcoming scheduled patients. Only today&rsquo;s records can be opened.</p>
             </div>
             <a href="<?= app_url('ape/index.php') ?>" class="btn btn-sm btn-ghost text-slate-500 hover:text-primary shrink-0" aria-label="Open APE Center" title="Open APE Center">
@@ -812,7 +810,7 @@ render_header('Main Dashboard');
             'emptyTitle' => 'No scheduled APE patients.',
             'emptyText' => "Patients assigned to today's or upcoming APE batches will appear here.",
         ]); ?>
-        <nav id="dashboardApePagination" class="pagination border-t border-slate-100" aria-label="APE action queue pages"></nav>
+        <nav id="dashboardApePagination" class="pagination border-t border-slate-100" aria-label="APE work queue pages"></nav>
     </section>
 
 </div>

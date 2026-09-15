@@ -1024,7 +1024,7 @@ function render_student_footer(): void
                 requestAnimationFrame(syncClearance);
                 new ResizeObserver(syncClearance).observe(toast);
                 const url = new URL(window.location.href);
-                ['uploaded', 'vitals_confirmed', 'activated', 'password_reset'].forEach((key) => url.searchParams.delete(key));
+                ['uploaded', 'activated', 'password_reset'].forEach((key) => url.searchParams.delete(key));
                 if (url.href !== window.location.href) history.replaceState({}, document.title, url);
                 window.setTimeout(dismiss, 5000);
             });
@@ -1123,7 +1123,7 @@ function render_student_auth_footer(): void
             requestAnimationFrame(syncClearance);
             new ResizeObserver(syncClearance).observe(toast);
             const url = new URL(window.location.href);
-            ['uploaded', 'vitals_confirmed', 'activated', 'password_reset'].forEach((key) => url.searchParams.delete(key));
+            ['uploaded', 'activated', 'password_reset'].forEach((key) => url.searchParams.delete(key));
             if (url.href !== window.location.href) history.replaceState({}, document.title, url);
             window.setTimeout(dismiss, 5000);
         });
