@@ -5,6 +5,7 @@ require_once __DIR__ . '/PatientNotification.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../helpers/mail.php';
 require_once __DIR__ . '/ApeWorkflow.php';
+require_once __DIR__ . '/AppointmentWorkflow.php';
 
 function ensure_ape_cycle_schema(): void
 {
@@ -354,8 +355,11 @@ function normalize_ape_batch_time(string $value, string $label): string
     $value = preg_replace('/\s+/', ' ', strtoupper(trim($value))) ?? '';
     $time = null;
 
-    if (preg_match('/^(?:0?[1-9]|1[0-2]):[0-5][0-9] (?:AM|PM)$/', $value)) {
-        $time = DateTimeImmutable::createFromFormat('!g:i A', $value) ?: null;
+    if (preg_match('/^(0?[1-9]|1[0-2]):([0-5][0-9])\s*(AM|PM)$/', $value, $matches)
+        || preg_match('/^(0?[1-9]|1[0-2])([0-5][0-9])\s*(AM|PM)$/', $value, $matches)) {
+        $time = DateTimeImmutable::createFromFormat('!g:i A', "{$matches[1]}:{$matches[2]} {$matches[3]}") ?: null;
+    } elseif (preg_match('/^(0?[1-9]|1[0-2])\s*(AM|PM)$/', $value, $matches)) {
+        $time = DateTimeImmutable::createFromFormat('!g:i A', "{$matches[1]}:00 {$matches[2]}") ?: null;
     } elseif (preg_match('/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/', $value)) {
         // Retain support for normalized internal values used by existing integrations.
         $time = DateTimeImmutable::createFromFormat('!H:i', $value) ?: null;
@@ -365,11 +369,31 @@ function normalize_ape_batch_time(string $value, string $label): string
         throw new InvalidArgumentException("Enter a valid {$label} using AM or PM.");
     }
 
-    $normalized = $time->format('H:i');
-    if ($normalized < '08:00' || $normalized > '17:00') {
-        throw new InvalidArgumentException('APE batch times must be between 8:00 AM and 5:00 PM.');
-    }
     return $time->format('H:i:s');
+}
+
+function ape_validate_batch_working_hours(string $scheduleDate, string $startTime, string $endTime, array $weeklySchedule): array
+{
+    $date = DateTimeImmutable::createFromFormat('!Y-m-d', $scheduleDate);
+    $day = $date ? (int) $date->format('N') : 0;
+    $hours = $weeklySchedule[$day] ?? null;
+    if (!$hours || empty($hours['enabled'])) {
+        throw new InvalidArgumentException('Choose a clinic working day for the APE batch.');
+    }
+
+    $opening = (string) ($hours['start'] ?? '');
+    $closing = (string) ($hours['end'] ?? '');
+    $start = substr($startTime, 0, 5);
+    $end = substr($endTime, 0, 5);
+    if ($start < $opening || $end > $closing) {
+        throw new InvalidArgumentException(sprintf(
+            'The selected day is open from %s to %s. Keep the APE batch within those hours.',
+            date('g:i A', strtotime($opening)),
+            date('g:i A', strtotime($closing))
+        ));
+    }
+
+    return $hours;
 }
 
 function ape_schedule_batches(int $cycleId): array
@@ -537,22 +561,66 @@ function create_ape_schedule_batch(array $input, ?int $actorPersonId): array
         if ($scheduleDate < $cycleRow['compliance_start'] || $scheduleDate > $cycleRow['compliance_end']) {
             throw new InvalidArgumentException('The batch date must be within the APE compliance period.');
         }
+        if ($scheduleDate < date('Y-m-d')) {
+            throw new InvalidArgumentException('The APE batch date cannot be in the past.');
+        }
+        ape_validate_batch_working_hours($scheduleDate, $startTime, $endTime, appointment_weekly_schedule());
+
+        $duplicateName = $db->prepare("SELECT batch_id FROM ape_schedule_batches WHERE ape_cycle_id = ? AND LOWER(batch_name) = LOWER(?) LIMIT 1");
+        $duplicateName->execute([$cycleId, $batchName]);
+        if ($duplicateName->fetchColumn()) {
+            throw new InvalidArgumentException('Use a different batch name. That name already exists in this APE cycle.');
+        }
 
         $overlap = $db->prepare("
             SELECT batch_name, patient_category
             FROM ape_schedule_batches
             WHERE ape_cycle_id = ? AND schedule_date = ? AND status = 'Scheduled'
-              AND patient_category <> ? AND start_time < ? AND end_time > ?
+              AND start_time < ? AND end_time > ?
             LIMIT 1
         ");
-        $overlap->execute([$cycleId, $scheduleDate, $category, $endTime, $startTime]);
+        $overlap->execute([$cycleId, $scheduleDate, $endTime, $startTime]);
         $overlappingBatch = $overlap->fetch();
         if ($overlappingBatch) {
             throw new InvalidArgumentException(sprintf(
-                '%s cannot overlap with %s because Student, Faculty, and School Personnel schedules must use separate times.',
-                $batchName,
+                'This time overlaps the existing APE batch "%s". Choose another time.',
                 $overlappingBatch['batch_name']
             ));
+        }
+
+        $blocked = $db->prepare("
+            SELECT reason
+            FROM appointment_availability_blocks
+            WHERE block_date = ?
+              AND ((start_time IS NULL AND end_time IS NULL) OR (start_time < ? AND end_time > ?))
+            LIMIT 1
+        ");
+        $blocked->execute([$scheduleDate, $endTime, $startTime]);
+        $blockedReason = $blocked->fetchColumn();
+        if ($blockedReason !== false) {
+            $reason = trim((string) $blockedReason);
+            throw new InvalidArgumentException('This time is marked unavailable for appointments'
+                . ($reason !== '' ? ": {$reason}." : '.')
+                . ' Choose another time.');
+        }
+
+        $appointment = $db->prepare("
+            SELECT appointment_datetime
+            FROM appointments
+            WHERE status IN ('Pending', 'Scheduled')
+              AND appointment_datetime < TIMESTAMP(?, ?)
+              AND DATE_ADD(appointment_datetime, INTERVAL 60 MINUTE) > TIMESTAMP(?, ?)
+            ORDER BY appointment_datetime
+            LIMIT 1
+        ");
+        $appointment->execute([$scheduleDate, $endTime, $scheduleDate, $startTime]);
+        $appointmentTime = $appointment->fetchColumn();
+        if ($appointmentTime !== false) {
+            throw new InvalidArgumentException(
+                'This time conflicts with an existing appointment at '
+                . date('g:i A', strtotime((string) $appointmentTime))
+                . '. Resolve that appointment or choose another time.'
+            );
         }
 
         $placeholders = implode(',', array_fill(0, count($selectedIds), '?'));
@@ -727,7 +795,8 @@ function reset_school_year_accounts(): array
         UPDATE accounts a
         INNER JOIN patients pt ON pt.person_id = a.person_id
         INNER JOIN students s ON s.person_id = a.person_id
-        SET a.account_status = 'inactive'
+        SET a.account_status = 'inactive',
+            a.status_reason = 'New school year enrollment status required'
         WHERE a.account_status = 'active'
     ");
     $reset->execute();

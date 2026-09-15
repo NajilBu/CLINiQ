@@ -8,77 +8,14 @@ ensure_ape_workflow_schema();
 $apeRecord = ape_fetch_patient_record($patientId);
 $uploadError = '';
 
-function patient_ape_bmi_classification(float $bmi): string
-{
-    if ($bmi <= 0) {
-        return 'Not calculated';
-    }
-    if ($bmi < 18.5) {
-        return 'Underweight';
-    }
-    if ($bmi < 25) {
-        return 'Normal';
-    }
-    if ($bmi < 30) {
-        return 'Overweight';
-    }
-    return 'Obese';
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confirm_ape_vitals') {
-    try {
-        if (!$apeRecord) {
-            throw new RuntimeException('The clinic must create your APE record before you can enter vitals.');
-        }
-        if (($apeRecord['patient_vitals_status'] ?? 'Not Started') === 'Confirmed') {
-            throw new RuntimeException('Your vitals and BMI have already been confirmed.');
-        }
-        if (empty($apeRecord['schedule_batch_id']) || ($apeRecord['batch_status'] ?? '') !== 'Scheduled') {
-            throw new RuntimeException('Wait for the clinic to assign your APE schedule before entering vitals.');
-        }
-        $height = (float) ($_POST['patient_height_cm'] ?? 0);
-        $weight = (float) ($_POST['patient_weight_kg'] ?? 0);
-        $temperature = (float) ($_POST['patient_temperature'] ?? 0);
-        $bloodPressure = trim((string) ($_POST['patient_blood_pressure'] ?? ''));
-        $pulseRate = (int) ($_POST['patient_pulse_rate'] ?? 0);
-        if ($height < 30 || $height > 250 || $weight < 1 || $weight > 500) {
-            throw new InvalidArgumentException('Enter a valid height and weight.');
-        }
-        if ($temperature < 30 || $temperature > 45) {
-            throw new InvalidArgumentException('Enter a valid temperature between 30 and 45 °C.');
-        }
-        if (!preg_match('/^\d{2,3}\s*\/\s*\d{2,3}$/', $bloodPressure)) {
-            throw new InvalidArgumentException('Enter blood pressure in the format 120/80.');
-        }
-        [$systolic, $diastolic] = array_map('intval', preg_split('/\s*\/\s*/', $bloodPressure));
-        if ($systolic < 70 || $systolic > 250 || $diastolic < 40 || $diastolic > 150 || $diastolic >= $systolic) {
-            throw new InvalidArgumentException('Enter a realistic blood pressure value such as 120/80.');
-        }
-        if ($pulseRate < 20 || $pulseRate > 250) {
-            throw new InvalidArgumentException('Enter a valid pulse rate between 20 and 250 bpm.');
-        }
-        $bmi = round($weight / (($height / 100) ** 2), 2);
-        $stmt = auth_db()->prepare("UPDATE ape_records SET patient_height_cm = ?, patient_weight_kg = ?, patient_bmi = ?, patient_temperature = ?, patient_blood_pressure = ?, patient_pulse_rate = ?, patient_vitals_status = 'Confirmed', patient_vitals_confirmed_at = NOW() WHERE ape_id = ? AND patient_id = ? AND patient_vitals_status = 'Not Started' AND schedule_batch_id IN (SELECT batch_id FROM ape_schedule_batches WHERE status = 'Scheduled')");
-        $stmt->execute([$height, $weight, $bmi, $temperature, $bloodPressure, $pulseRate, (int) $apeRecord['ape_id'], $patientId]);
-        if ($stmt->rowCount() !== 1) {
-            throw new RuntimeException('The vitals could not be confirmed. Refresh and try again.');
-        }
-        ape_log_activity((int) $apeRecord['ape_id'], $patientId, 'Confirmed patient-entered vitals and BMI', 'Patient completed the vitals profile before clinic examination.');
-        header('Location: patient-ape-status.php?vitals_confirmed=1');
-        exit;
-    } catch (Throwable $e) {
-        $uploadError = $e->getMessage();
-    }
-}
-
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'upload_ape_documents') {
     $storedFiles = [];
     try {
         if (!$apeRecord) {
             throw new RuntimeException('The clinic must create your APE record before you can upload documents.');
         }
-        if (($apeRecord['patient_vitals_status'] ?? 'Not Started') !== 'Confirmed' || empty($apeRecord['exam_date']) || ($apeRecord['clearance_status'] ?? '') === 'Cleared' || ($apeRecord['workflow_status'] ?? '') === 'Cleared') {
-            throw new RuntimeException('Document upload opens only after the clinical examination is complete.');
+        if (($apeRecord['clearance_status'] ?? '') === 'Cleared' || ($apeRecord['workflow_status'] ?? '') === 'Cleared') {
+            throw new RuntimeException('Document upload is closed because this APE record is already completed.');
         }
 
         $uploadRequirements = ape_requirements_for_record((int) $apeRecord['ape_id']);
@@ -86,8 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
         $preserveFollowUpReview = [];
         foreach ($uploadRequirements as $uploadRequirement) {
             $documentTypesByKey['r' . (int) $uploadRequirement['requirement_id']] = $uploadRequirement['requirement_name'];
-            if (!empty($uploadRequirement['upload_group']) || (ape_requirements_locked($apeRecord) && (int) ($apeRecord['follow_up_required'] ?? 0) === 1
-                && in_array($uploadRequirement['status'], ['Missing', 'Needs Correction'], true))) {
+            if (!empty($uploadRequirement['checked_at']) || in_array($uploadRequirement['status'], ['Verified', 'Needs Correction'], true)) {
                 $preserveFollowUpReview[$uploadRequirement['requirement_name']] = true;
             }
         }
@@ -142,13 +78,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
             ) VALUES (?, ?, ?, ?, 'Pending', ?)
         ");
         $requirement = $apeDb->prepare("
-            INSERT INTO ape_requirements (ape_id, requirement_name, status, remarks, checked_by_person_id, checked_at)
-            VALUES (?, ?, 'Submitted', NULL, NULL, NULL)
+            INSERT INTO ape_requirements (ape_id, requirement_name, status, remarks, checked_by_person_id, checked_at, upload_group)
+            VALUES (?, ?, 'Submitted', NULL, NULL, NULL, 'initial')
             ON DUPLICATE KEY UPDATE
                 status = 'Submitted',
                 remarks = NULL,
                 checked_by_person_id = NULL,
-                checked_at = NULL
+                checked_at = NULL,
+                upload_group = COALESCE(upload_group, 'initial')
         ");
         $updatedRequirements = [];
         foreach ($storedFiles as $storedUpload) {
@@ -210,7 +147,6 @@ $clearanceStatus = $apeRecord['clearance_status'] ?? 'Pending';
 $studentNote = trim((string) ($apeRecord['patient_visible_note'] ?? ''));
 $missingItems = trim((string) ($apeRecord['missing_items'] ?? ''));
 $requirementStatus = $apeRecord['requirement_status'] ?? 'Not Checked';
-$patientVitalsConfirmed = ($apeRecord['patient_vitals_status'] ?? 'Not Started') === 'Confirmed';
 $hasScheduledBatch = !empty($apeRecord['schedule_batch_id']) && ($apeRecord['batch_status'] ?? '') === 'Scheduled';
 $actionNeeded = $clearanceStatus !== 'Cleared' && $apeStatus !== 'Not Started' && $hasScheduledBatch;
 $batchScheduleLabel = $hasScheduledBatch
@@ -218,16 +154,14 @@ $batchScheduleLabel = $hasScheduledBatch
         . date('g:i A', strtotime((string) $apeRecord['batch_start_time'])) . '–'
         . date('g:i A', strtotime((string) $apeRecord['batch_end_time']))
     : '';
-$currentBmi = (float) ($apeRecord['patient_bmi'] ?? 0);
-$currentBmiClassification = patient_ape_bmi_classification($currentBmi);
-$requirementsVerified = $patientVitalsConfirmed && ($requirementStatus === 'Checked' || in_array($apeStatus, [
+$requirementsVerified = $requirementStatus === 'Checked' || in_array($apeStatus, [
     'Requirements Checked',
     'Submitted',
     'Reviewed',
     'Scheduled',
     'Follow-up Required',
     'Cleared',
-], true));
+], true);
 $requirementsNeedCorrection = $requirementStatus === 'Needs Correction';
 $examCompleted = !empty($apeRecord['exam_date']);
 $apeQueue = $apeRecord ? ape_record_queue($apeRecord) : 'examination';
@@ -238,53 +172,52 @@ foreach ($uploadedDocuments as $uploadedDocument) {
 }
 $allRequiredDocumentsUploaded = ape_initial_uploads_present($apeRecord ?? []);
 $documentsAwaitingReview = $allRequiredDocumentsUploaded && (int) ($apeRecord['required_unverified_count'] ?? 0) > 0;
-$canUploadDocuments = $patientVitalsConfirmed && $examCompleted
+$digitalSubmissionComplete = ape_digital_submission_complete($apeRecord ?? []);
+$canUploadDocuments = $apeRecord
     && $clearanceStatus !== 'Cleared'
     && $apeStatus !== 'Cleared';
 $nextActionTitle = match (true) {
     $clearanceStatus === 'Cleared' => 'APE completed',
-    $apeQueue === 'digital_submission' => $documentsAwaitingReview ? 'Wait for clinic document review' : 'Upload APE documents',
+    $apeQueue === 'digital_submission' && !$allRequiredDocumentsUploaded => 'Upload APE documents',
+    $apeQueue === 'digital_submission' && !$examCompleted => 'Attend your scheduled examination',
+    $apeQueue === 'digital_submission' => 'Wait for clinic document review',
     $apeQueue === 'follow_up' && !ape_document_follow_up($apeRecord) && !ape_deferred_submission_complete($apeRecord) => 'Submit follow-up documents for archive review',
     $requirementsNeedCorrection => 'Return corrected hard-copy requirements',
     $apeStatus === 'Follow-up Required' => 'Complete the required follow-up',
-    !$hasScheduledBatch => 'Wait for your APE schedule',
-    !$patientVitalsConfirmed => 'Complete your vitals and BMI',
-    !$examCompleted || !$requirementsVerified => 'Attend examination',
+    $apeQueue === 'examination' => ape_schedule_is_current($apeRecord) ? 'Attend examination' : 'Wait for your APE schedule',
     $documentsAwaitingReview => 'Wait for clinic document review',
     $apeStatus === 'Reviewed' => 'Wait for the final clinical decision',
     default => 'Upload verified APE documents',
 };
 $nextActionCopy = match (true) {
     $clearanceStatus === 'Cleared' => 'Your APE record is already cleared by the clinic.',
-    $apeQueue === 'digital_submission' => $documentsAwaitingReview
-        ? 'Your required uploads are waiting for clinic archive review. Any recorded follow-up remains pending.'
-        : 'Upload the initially clinic-verified documents within seven days of examination. Follow-up or correction documents use their assigned due date and do not block this initial step.',
+    $apeQueue === 'digital_submission' && !$allRequiredDocumentsUploaded => $examCompleted
+        ? 'Complete your regular document uploads within seven days of examination. Follow-up documents use their separately assigned return date.'
+        : 'Upload any available APE documents now. Missing files will not prevent you from attending your assigned examination.',
+    $apeQueue === 'digital_submission' && !$examCompleted => 'Your files are ready for clinic comparison. Attend the assigned examination even if clinic review is still pending.',
+    $apeQueue === 'digital_submission' => 'Your regular documents are waiting for clinic archive review. Follow-up documents keep their separately assigned return date.',
     $apeQueue === 'follow_up' && !ape_document_follow_up($apeRecord) && !ape_deferred_submission_complete($apeRecord) => 'Your initial documents are archived. Upload the returned documents by their assigned due date, then wait for clinic archive review.',
     $requirementsNeedCorrection => $studentNote ?: 'Return the corrected hard-copy requirements requested by the clinic.',
     $apeStatus === 'Follow-up Required' => $studentNote ?: 'Complete the referral or other follow-up requested by the clinic.',
-    !$hasScheduledBatch => 'The clinic has not assigned your examination batch yet. Your vitals form will open after a schedule is assigned.',
-    !$patientVitalsConfirmed => 'Enter and confirm your height, weight, BMI, and vital signs before visiting the clinic for examination.',
-    !$examCompleted || !$requirementsVerified => $studentNote ?: ($hasScheduledBatch
-        ? "Attend {$apeRecord['batch_name']} on {$batchScheduleLabel} and bring your hard-copy requirements."
-        : 'Your vitals are confirmed. Wait for the clinic to assign your examination batch.'),
+    $apeQueue === 'examination' => ape_schedule_is_current($apeRecord)
+        ? "Attend {$apeRecord['batch_name']} now and bring any available hard-copy requirements."
+        : 'Your digital files may be complete, but the clinic must still assign or open your examination schedule.',
     $documentsAwaitingReview => 'Your documents were submitted and are waiting for clinic archive review.',
     $apeStatus === 'Reviewed' => $studentNote ?: 'Your examination and document archive are complete. The clinic will now record the final decision.',
     default => $studentNote ?: ($apeRecord ? 'Complete the current APE step shown below.' : 'No APE record has been opened by the clinic yet.'),
 };
 $currentStep = $apeRecord ? ape_record_step_index($apeRecord) + 1 : 1;
-$apePercent = $currentStep === 5 ? 100 : ($currentStep - 1) * 20;
-$showFindings = $currentStep >= 2;
-$showDocuments = $currentStep >= 3;
-$showActivity = $currentStep >= 2;
+$apePercent = $clearanceStatus === 'Cleared' ? 100 : (($digitalSubmissionComplete ? 25 : 0) + ($examCompleted ? 25 : 0));
+$showFindings = $examCompleted;
+$showDocuments = (bool) $apeRecord;
+$showActivity = (bool) $apeRecord;
 $headerBadge = $clearanceStatus === 'Cleared' ? 'student-badge-success' : ($actionNeeded ? 'student-badge-warning' : 'student-badge-info');
 $actionBadgeLabel = match (true) {
-    $apeQueue === 'digital_submission' => $documentsAwaitingReview ? 'Under Clinic Review' : 'Digital Submission',
+    $apeQueue === 'digital_submission' => $documentsAwaitingReview ? 'Under Clinic Review' : 'Digital Keeping',
     $apeQueue === 'follow_up' => 'Follow-up Required',
     $requirementsNeedCorrection => 'Correction Needed',
     $apeStatus === 'Follow-up Required' => 'Follow-up Required',
-    !$hasScheduledBatch => 'Waiting for Schedule',
-    !$patientVitalsConfirmed => 'Vitals and BMI First',
-    !$examCompleted || !$requirementsVerified => 'Examination',
+    $apeQueue === 'examination' => ape_schedule_is_current($apeRecord) ? 'Examination Now' : 'Waiting for Schedule',
     $documentsAwaitingReview => 'Under Clinic Review',
     $apeStatus === 'Reviewed' => 'Final Decision Pending',
     default => 'Current Step',
@@ -293,43 +226,41 @@ $actionBadgeLabel = match (true) {
 $flowSteps = [
     [
         'number' => 1,
-        'icon' => $hasScheduledBatch ? 'monitor_heart' : 'calendar_month',
-        'title' => $hasScheduledBatch ? 'Patient vitals and BMI' : 'APE schedule assignment',
-        'copy' => !$hasScheduledBatch
-            ? 'Wait for the clinic to assign your APE examination batch.'
-            : ($patientVitalsConfirmed
-            ? 'You confirmed your height, weight, BMI, and vital signs.'
-            : 'Enter and confirm your vitals and BMI before visiting the clinic.'),
+        'icon' => 'cloud_upload',
+        'title' => 'Digital document keeping',
+        'copy' => $digitalSubmissionComplete
+            ? 'All regular documents are uploaded and approved.'
+            : ($examCompleted
+                ? 'Complete regular uploads within seven days of examination.'
+                : 'Upload available documents now; incomplete files will not block examination.'),
+        'done' => $digitalSubmissionComplete,
+        'current' => $apeQueue === 'digital_submission' && !ape_schedule_is_current($apeRecord ?? []),
     ],
     [
         'number' => 2,
-        'icon' => 'task_alt',
+        'icon' => 'stethoscope',
         'title' => 'Examination',
-        'copy' => $examCompleted && $requirementsVerified
-            ? 'Clinic recorded your examination and checked your hard-copy requirements.'
-            : ($patientVitalsConfirmed
-                ? ($hasScheduledBatch ? "Attend {$apeRecord['batch_name']} on {$batchScheduleLabel}." : 'Wait for the clinic to assign your examination batch.')
-                : 'Confirm your vitals and BMI before visiting the clinic.'),
+        'copy' => $examCompleted
+            ? 'Clinic recorded your examination and checked the hard copies you presented.'
+            : ($hasScheduledBatch ? "Attend {$apeRecord['batch_name']} on {$batchScheduleLabel}, even if uploads are incomplete." : 'Wait for the clinic to assign your examination batch.'),
+        'done' => $examCompleted,
+        'current' => !$examCompleted && $apeQueue === 'examination',
     ],
     [
         'number' => 3,
-        'icon' => 'cloud_upload',
-        'title' => 'Digital document keeping',
-        'copy' => $examCompleted
-            ? 'Upload the examined and checked forms for the clinic digital record.'
-            : 'This opens only after the clinic examination.',
-    ],
-    [
-        'number' => 4,
         'icon' => 'medical_services',
         'title' => 'Final Decision or Follow-up',
         'copy' => 'The clinic clears the record or requests treatment, clearance, or referral follow-up.',
+        'done' => $clearanceStatus === 'Cleared',
+        'current' => !$examCompleted ? false : in_array($apeQueue, ['final_decision', 'follow_up'], true),
     ],
     [
-        'number' => 5,
+        'number' => 4,
         'icon' => 'verified_user',
         'title' => 'Completed APE',
         'copy' => 'Your patient clinic record is cleared.',
+        'done' => $clearanceStatus === 'Cleared',
+        'current' => false,
     ],
 ];
 
@@ -388,8 +319,6 @@ foreach ($requirements as $requirement) {
     } else {
         $lockedDetail = match (true) {
             $requirementsNeedCorrection => 'Bring the corrected hard copy back to the clinic before continuing.',
-            !$patientVitalsConfirmed => 'Confirm your vitals and BMI before continuing.',
-            !$examCompleted || !$requirementsVerified => 'Complete the clinic examination before uploading digital copies.',
             default => 'Document upload is locked at the current APE step.',
         };
         $documents[] = [
@@ -413,8 +342,6 @@ foreach ($documents as &$documentCard) {
 }
 unset($documentCard);
 $uploadableDocumentCount = count(array_filter($documents, static fn(array $document): bool => !$document['disabled']));
-$canEnterPatientVitals = $apeRecord && $hasScheduledBatch && !$patientVitalsConfirmed && $clearanceStatus !== 'Cleared';
-
 render_student_header('APE Status', 'ape');
 ?>
 
@@ -434,11 +361,6 @@ render_student_header('APE Status', 'ape');
     <div class="student-note student-note-success mb-4">
         <span class="material-symbols-outlined">check_circle</span>
         <div><?= (int) $_GET['uploaded'] ?> APE document(s) were uploaded together and are waiting for clinic verification.</div>
-    </div>
-<?php elseif (isset($_GET['vitals_confirmed'])): ?>
-    <div class="student-note student-note-success mb-4">
-        <span class="material-symbols-outlined">check_circle</span>
-        <div>Your vitals and BMI were confirmed. You can now present your hard-copy APE requirements to the clinic.</div>
     </div>
 <?php elseif ($uploadError !== ''): ?>
     <div class="student-note student-note-danger mb-4">
@@ -501,13 +423,13 @@ render_student_header('APE Status', 'ape');
                 <?php foreach ($flowSteps as $step): ?>
                     <?php
                     $stepNumber = (int) $step['number'];
-                    $isDone = $stepNumber < $currentStep || ($currentStep === 5 && $stepNumber === 5);
-                    $isCurrent = $stepNumber === $currentStep && !$isDone;
+                    $isDone = (bool) ($step['done'] ?? false);
+                    $isCurrent = (bool) ($step['current'] ?? false) && !$isDone;
                     $stepClass = $isDone ? 'is-done' : ($isCurrent ? 'is-current' : 'is-locked');
                     $badgeClass = $isDone ? 'student-badge-success' : ($isCurrent ? 'student-badge-warning' : 'student-badge-info');
-                    $badgeLabel = $isDone ? 'Done' : ($isCurrent ? 'Current' : ($stepNumber === 2 && !$requirementsVerified ? 'Locked' : 'Next'));
-                    $stepTitle = $isDone || $isCurrent ? $step['title'] : 'Next APE step';
-                    $stepCopy = $isDone || $isCurrent ? $step['copy'] : 'This step will appear after you complete the current stage.';
+                    $badgeLabel = $isDone ? 'Done' : ($isCurrent ? 'Current' : 'Next');
+                    $stepTitle = $step['title'];
+                    $stepCopy = $step['copy'];
                     ?>
                     <div class="student-ape-step <?= student_e($stepClass) ?>">
                         <span class="student-ape-step-rail" aria-hidden="true"></span>
@@ -516,7 +438,7 @@ render_student_header('APE Status', 'ape');
                         </span>
                         <div class="student-ape-step-body">
                             <div class="student-ape-step-top">
-                                <span class="student-ape-step-count">Step <?= (int) $stepNumber ?> of 5</span>
+                                <span class="student-ape-step-count">Step <?= (int) $stepNumber ?> of 4</span>
                                 <span class="student-badge <?= student_e($badgeClass) ?>"><?= student_e($badgeLabel) ?></span>
                             </div>
                             <strong><?= student_e($stepTitle) ?></strong>
@@ -555,74 +477,6 @@ render_student_header('APE Status', 'ape');
     </section>
     <?php endif; ?>
 
-    <?php if ($apeRecord): ?>
-    <section class="student-card">
-        <div class="student-card-header">
-            <div>
-                <h2 class="student-card-title">Vitals and BMI</h2>
-                <p class="student-card-copy"><?= $hasScheduledBatch ? 'Enter these values before presenting your hard-copy APE requirements to the clinic.' : 'Vitals entry opens after the clinic assigns your APE schedule.' ?></p>
-            </div>
-            <span class="student-badge <?= $patientVitalsConfirmed ? 'student-badge-success' : ($hasScheduledBatch ? 'student-badge-warning' : 'student-badge-info') ?>">
-                <?= $patientVitalsConfirmed ? 'Confirmed' : ($hasScheduledBatch ? 'Not Started' : 'Waiting Schedule') ?>
-            </span>
-        </div>
-        <div class="student-card-pad">
-            <?php if ($patientVitalsConfirmed): ?>
-                <div class="student-note student-note-success mb-4"><span class="material-symbols-outlined">verified</span><div><strong>Patient-entered profile confirmed.</strong> Present your hard-copy requirements to the clinic. The clinic will record official examination findings separately.</div></div>
-                <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    <div class="ape-flow-field"><p class="clinic-label mb-1">Height</p><strong><?= student_e(number_format((float) $apeRecord['patient_height_cm'], 2)) ?> cm</strong></div>
-                    <div class="ape-flow-field"><p class="clinic-label mb-1">Weight</p><strong><?= student_e(number_format((float) $apeRecord['patient_weight_kg'], 2)) ?> kg</strong></div>
-                    <div class="ape-flow-field"><p class="clinic-label mb-1">BMI</p><strong><?= student_e(number_format($currentBmi, 2)) ?></strong><span><?= student_e($currentBmiClassification) ?></span></div>
-                    <div class="ape-flow-field"><p class="clinic-label mb-1">Temperature</p><strong><?= student_e(number_format((float) $apeRecord['patient_temperature'], 1)) ?> °C</strong></div>
-                    <div class="ape-flow-field"><p class="clinic-label mb-1">Blood Pressure</p><strong><?= student_e($apeRecord['patient_blood_pressure']) ?></strong></div>
-                    <div class="ape-flow-field"><p class="clinic-label mb-1">Pulse Rate</p><strong><?= (int) $apeRecord['patient_pulse_rate'] ?> bpm</strong></div>
-                </div>
-            <?php elseif ($canEnterPatientVitals): ?>
-                <form method="post" class="grid grid-cols-1 md:grid-cols-3 gap-4" id="ape-vitals-form">
-                    <input type="hidden" name="action" value="confirm_ape_vitals">
-                    <div>
-                        <label class="student-label" for="patient_height_cm">Height (cm)</label>
-                        <input class="student-input" id="patient_height_cm" name="patient_height_cm" type="number" min="30" max="250" step="0.01" placeholder="e.g. 170" required>
-                    </div>
-                    <div>
-                        <label class="student-label" for="patient_weight_kg">Weight (kg)</label>
-                        <input class="student-input" id="patient_weight_kg" name="patient_weight_kg" type="number" min="1" max="500" step="0.01" placeholder="e.g. 60" required>
-                    </div>
-                    <div>
-                        <label class="student-label" for="patient_bmi">BMI (calculated)</label>
-                        <input class="student-input" id="patient_bmi" name="patient_bmi_display" type="text" placeholder="Enter height/weight" readonly>
-                    </div>
-                    <div>
-                        <label class="student-label" for="patient_temperature">Temperature (°C)</label>
-                        <input class="student-input" id="patient_temperature" name="patient_temperature" type="number" min="30" max="45" step="0.01" placeholder="e.g. 36.6" required>
-                    </div>
-                    <div>
-                        <label class="student-label" for="patient_blood_pressure">Blood Pressure</label>
-                        <input class="student-input" id="patient_blood_pressure" name="patient_blood_pressure" type="text" pattern="\d{2,3}\s*/\s*\d{2,3}" placeholder="e.g. 120/80" required>
-                    </div>
-                    <div>
-                        <label class="student-label" for="patient_pulse_rate">Pulse Rate (bpm)</label>
-                        <input class="student-input" id="patient_pulse_rate" name="patient_pulse_rate" type="number" min="20" max="250" placeholder="e.g. 72" required>
-                    </div>
-                    
-                    <div class="md:col-span-3 student-note student-note-warning">
-                        <span class="material-symbols-outlined">info</span>
-                        <div>Review your entries carefully. After confirmation, these values will be locked and shown to clinic staff.</div>
-                    </div>
-                    
-                    <button class="student-button md:col-span-3" type="submit" data-confirm-submit data-confirm-type="primary" data-confirm-title="Confirm vitals and BMI?" data-confirm-message="These values will be locked and shared with the clinic for review." data-confirm-toast="Confirming vitals and BMI...">
-                        <span class="material-symbols-outlined">verified</span>
-                        Confirm Vitals and BMI
-                    </button>
-                </form>
-            <?php elseif (!$hasScheduledBatch && !$patientVitalsConfirmed): ?>
-                <div class="student-note student-note-info"><span class="material-symbols-outlined">calendar_month</span><div><strong>Waiting for APE schedule.</strong> The clinic will assign your examination batch before you enter vitals and BMI.</div></div>
-            <?php else: ?>
-                <div class="student-note student-note-info"><span class="material-symbols-outlined">info</span><div>This completed APE record predates the patient vitals profile step. No new patient-entered values are required.</div></div>
-            <?php endif; ?>
-        </div>
-    </section>
-    <?php endif; ?>
     </div>
 
     <?php if ($showDocuments): ?>
@@ -798,53 +652,6 @@ render_student_header('APE Status', 'ape');
 <?php endif; ?>
 
 <script>
-    const apeHeightInput = document.getElementById('patient_height_cm');
-    const apeWeightInput = document.getElementById('patient_weight_kg');
-    const apeBmiOutput = document.getElementById('patient_bmi');
-    const apeBmiClassification = document.getElementById('patient_bmi_classification');
-    const apeVitalsForm = document.getElementById('ape-vitals-form');
-    const apeBloodPressureInput = document.getElementById('patient_blood_pressure');
-
-    function classifyApeBmi(bmi) {
-        if (!Number.isFinite(bmi) || bmi <= 0) return '';
-        if (bmi < 18.5) return 'Underweight';
-        if (bmi < 25) return 'Normal';
-        if (bmi < 30) return 'Overweight';
-        return 'Obese';
-    }
-
-    function updateApeBmi() {
-        if (!apeHeightInput || !apeWeightInput || !apeBmiOutput) return;
-        const height = Number(apeHeightInput.value);
-        const weight = Number(apeWeightInput.value);
-        const bmi = height > 0 && weight > 0 ? weight / ((height / 100) ** 2) : 0;
-        apeBmiOutput.value = bmi > 0 ? bmi.toFixed(2) : '';
-        if (apeBmiClassification) {
-            apeBmiClassification.textContent = classifyApeBmi(bmi);
-        }
-    }
-    apeHeightInput?.addEventListener('input', updateApeBmi);
-    apeWeightInput?.addEventListener('input', updateApeBmi);
-
-    apeVitalsForm?.addEventListener('submit', (event) => {
-        if (!apeBloodPressureInput) return;
-        const parts = apeBloodPressureInput.value.split('/').map((part) => Number(part.trim()));
-        const [systolic, diastolic] = parts;
-        const isValidBloodPressure = parts.length === 2
-            && Number.isFinite(systolic)
-            && Number.isFinite(diastolic)
-            && systolic >= 70
-            && systolic <= 250
-            && diastolic >= 40
-            && diastolic <= 150
-            && diastolic < systolic;
-        apeBloodPressureInput.setCustomValidity(isValidBloodPressure ? '' : 'Enter a realistic blood pressure value such as 120/80.');
-        if (!isValidBloodPressure) {
-            event.preventDefault();
-            apeBloodPressureInput.reportValidity();
-        }
-    });
-
     function selectApeFile(documentKey) {
         document.getElementById(`ape-file-${documentKey}`).click();
     }

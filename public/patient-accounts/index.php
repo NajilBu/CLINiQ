@@ -43,7 +43,23 @@ $selectedSectionPosition = trim((string) ($individualValues['section_or_position
 
 $programOptions = patient_account_active_programs();
 $departmentOptions = patient_account_active_departments();
-$recentAccounts = recent_patient_accounts();
+$recentAccountSearch = trim((string) ($_GET['account_search'] ?? ''));
+$recentAccountType = strtolower(trim((string) ($_GET['account_type'] ?? '')));
+$recentAccountStatus = strtolower(trim((string) ($_GET['account_status'] ?? '')));
+$recentAccounts = array_values(array_filter(recent_patient_accounts(), static function (array $account) use ($recentAccountSearch, $recentAccountType, $recentAccountStatus): bool {
+    $patientType = strtolower(trim((string) ($account['patient_type'] ?? '')));
+    $accountStatus = strtolower(trim((string) ($account['account_status'] ?? '')));
+    $searchText = strtolower(trim(implode(' ', [
+        $account['id_number'] ?? '',
+        $account['full_name'] ?? '',
+        $account['patient_type'] ?? '',
+        $account['account_status'] ?? '',
+        $account['status_reason'] ?? '',
+    ])));
+    return ($recentAccountSearch === '' || str_contains($searchText, strtolower($recentAccountSearch)))
+        && ($recentAccountType === '' || $patientType === $recentAccountType)
+        && ($recentAccountStatus === '' || $accountStatus === $recentAccountStatus);
+}));
 $recentAccountPageSize = 10;
 $recentAccountPageCount = max(1, (int) ceil(count($recentAccounts) / $recentAccountPageSize));
 
@@ -371,32 +387,32 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
                     <span data-recent-account-count><?= count($recentAccounts) ?></span> account(s) shown
                 </p>
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-[minmax(18rem,1fr)_10rem_10rem] gap-3 w-full xl:max-w-4xl">
+            <form method="get" class="grid grid-cols-1 sm:grid-cols-[minmax(18rem,1fr)_10rem_10rem] gap-3 w-full xl:max-w-4xl" data-no-ajax="true">
                 <div>
                     <label class="clinic-label" for="recentAccountSearch">Search</label>
                     <div class="relative">
-                        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[20px]">search</span>
-                        <input class="clinic-input pl-10" id="recentAccountSearch" type="search" placeholder="Search ID, name, type..." data-recent-account-search>
+                        <button type="submit" class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[20px] bg-transparent border-0 p-0 cursor-pointer" aria-label="Search patient accounts">search</button>
+                        <input class="clinic-input pl-10" id="recentAccountSearch" name="account_search" type="search" placeholder="Search ID, name, type..." value="<?= e($recentAccountSearch) ?>" data-recent-account-search>
                     </div>
                 </div>
                 <div>
                     <label class="clinic-label" for="recentAccountTypeFilter">Patient Type</label>
-                    <select class="clinic-input" id="recentAccountTypeFilter" data-recent-account-type-filter>
-                        <option value="">All</option>
-                        <option value="student">Student</option>
-                        <option value="faculty">Faculty</option>
-                        <option value="school personnel">Personnel</option>
+                    <select class="clinic-input" id="recentAccountTypeFilter" name="account_type" onchange="this.form.requestSubmit()" data-recent-account-type-filter>
+                        <option value="" <?= $recentAccountType === '' ? 'selected' : '' ?>>All</option>
+                        <option value="student" <?= $recentAccountType === 'student' ? 'selected' : '' ?>>Student</option>
+                        <option value="faculty" <?= $recentAccountType === 'faculty' ? 'selected' : '' ?>>Faculty</option>
+                        <option value="school personnel" <?= $recentAccountType === 'school personnel' ? 'selected' : '' ?>>Personnel</option>
                     </select>
                 </div>
                 <div>
                     <label class="clinic-label" for="recentAccountStatusFilter">Account Status</label>
-                    <select class="clinic-input" id="recentAccountStatusFilter" data-recent-account-status-filter>
-                        <option value="">All</option>
-                        <option value="active">Active</option>
-                        <option value="inactive">Inactive</option>
+                    <select class="clinic-input" id="recentAccountStatusFilter" name="account_status" onchange="this.form.requestSubmit()" data-recent-account-status-filter>
+                        <option value="" <?= $recentAccountStatus === '' ? 'selected' : '' ?>>All</option>
+                        <option value="active" <?= $recentAccountStatus === 'active' ? 'selected' : '' ?>>Active</option>
+                        <option value="inactive" <?= $recentAccountStatus === 'inactive' ? 'selected' : '' ?>>Inactive</option>
                     </select>
                 </div>
-            </div>
+            </form>
         </div>
     </div>
     <div class="overflow-x-auto">
@@ -423,12 +439,6 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
                         </button>
                     </th>
                     <th class="p-0">
-                        <button type="button" class="sort-header w-full h-full p-3 flex items-center justify-between gap-2 text-left text-[11px] uppercase tracking-widest" data-recent-account-sort="birthdate" data-sort-type="date">
-                            Birthdate
-                            <span class="material-symbols-outlined sort-icon">unfold_more</span>
-                        </button>
-                    </th>
-                    <th class="p-0">
                         <button type="button" class="sort-header w-full h-full p-3 flex items-center justify-between gap-2 text-left text-[11px] uppercase tracking-widest" data-recent-account-sort="status" data-sort-type="text">
                             Account Status
                             <span class="material-symbols-outlined sort-icon">unfold_more</span>
@@ -449,8 +459,8 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
                         $account['id_number'] ?? '',
                         $account['full_name'] ?? '',
                         $account['patient_type'] ?? '',
-                        $account['birthdate'] ?? '',
                         $account['account_status'] ?? '',
+                        $account['status_reason'] ?? '',
                         !empty($account['created_at']) ? date('M d, Y', strtotime($account['created_at'])) : '',
                     ])));
                     ?>
@@ -459,7 +469,6 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
                         data-sort-id="<?= e(strtolower((string) $account['id_number'])) ?>"
                         data-sort-patient="<?= e(strtolower((string) $account['full_name'])) ?>"
                         data-sort-type="<?= e(strtolower((string) $account['patient_type'])) ?>"
-                        data-sort-birthdate="<?= e((string) ($account['birthdate'] ?? '')) ?>"
                         data-sort-status="<?= e(strtolower((string) $account['account_status'])) ?>"
                         data-sort-created="<?= e((string) ($account['created_at'] ?? '')) ?>"
                         data-search-text="<?= e($accountSearchText) ?>"
@@ -469,17 +478,21 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
                         <td class="p-3 font-bold"><?= e($account['id_number']) ?></td>
                         <td class="p-3"><?= e($account['full_name']) ?></td>
                         <td class="p-3"><?= e($account['patient_type']) ?></td>
-                        <td class="p-3"><?= e($account['birthdate'] ?: '—') ?></td>
-                        <td class="p-3"><span class="badge <?= e(status_badge_class($account['account_status'])) ?>"><?= e(ucfirst($account['account_status'])) ?></span></td>
+                        <td class="p-3">
+                            <span class="badge <?= e(status_badge_class($account['account_status'])) ?>"><?= e(ucfirst($account['account_status'])) ?></span>
+                            <?php if (($account['account_status'] ?? '') === 'inactive'): ?>
+                                <div class="mt-1 text-[11px] font-bold text-slate-500"><?= e(trim((string) ($account['status_reason'] ?? '')) ?: 'Reason not recorded') ?></div>
+                            <?php endif; ?>
+                        </td>
                         <td class="p-3"><?= e(date('M d, Y', strtotime($account['created_at']))) ?></td>
                     </tr>
                 <?php endforeach; ?>
                 <tr class="border-t border-slate-100" style="height: 49px; display: none" data-recent-account-no-results>
-                    <td colspan="7" class="p-3 text-center text-sm font-bold text-slate-500">No patient accounts match the current filters.</td>
+                    <td colspan="6" class="p-3 text-center text-sm font-bold text-slate-500">No patient accounts match the current filters.</td>
                 </tr>
                 <?php for ($emptyRow = 0; $emptyRow < $recentAccountPageSize; $emptyRow++): ?>
                     <tr class="border-t border-slate-100" style="height: 49px<?= $emptyRow < max(0, $recentAccountPageSize - min($recentAccountPageSize, count($recentAccounts))) ? '' : '; display: none' ?>" aria-hidden="true" data-recent-account-empty-row>
-                        <td colspan="7" class="p-3">&nbsp;</td>
+                        <td colspan="6" class="p-3">&nbsp;</td>
                     </tr>
                 <?php endfor; ?>
             </tbody>

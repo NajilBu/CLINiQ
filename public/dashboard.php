@@ -155,6 +155,33 @@ $scheduleItems = [];
 $dashboardToday = date('Y-m-d');
 $todayApeBatchesByDate = appointment_ape_batches_for_range($dashboardToday, $dashboardToday);
 $todayApeBatches = $todayApeBatchesByDate[$dashboardToday] ?? [];
+$unavailableStmt = appointment_db()->prepare("
+    SELECT availability_block_id, block_date, start_time, end_time, reason
+    FROM appointment_availability_blocks
+    WHERE block_date = ?
+    ORDER BY start_time IS NULL DESC, start_time ASC, availability_block_id ASC
+");
+$unavailableStmt->execute([$dashboardToday]);
+$todayUnavailableBlocks = $unavailableStmt->fetchAll();
+$scheduleUnavailableItems = [];
+
+foreach ($todayUnavailableBlocks as $block) {
+    $isFullDay = empty($block['start_time']) || empty($block['end_time']);
+    $startMinute = $isFullDay
+        ? $scheduleStartMinutes
+        : ((int) substr((string) $block['start_time'], 0, 2) * 60) + (int) substr((string) $block['start_time'], 3, 2);
+    $endMinute = $isFullDay
+        ? $scheduleEndMinutes
+        : ((int) substr((string) $block['end_time'], 0, 2) * 60) + (int) substr((string) $block['end_time'], 3, 2);
+    if ($endMinute <= $scheduleStartMinutes || $startMinute >= $scheduleEndMinutes) {
+        continue;
+    }
+    $block['_is_full_day'] = $isFullDay;
+    $block['_start_minute'] = max($startMinute, $scheduleStartMinutes);
+    $block['_end_minute'] = min($endMinute, $scheduleEndMinutes);
+    $scheduleUnavailableItems[] = $block;
+}
+$scheduleUnavailableItems = appointment_merge_continuous_unavailable_blocks($scheduleUnavailableItems);
 
 $appointmentRows = $appointments;
 $appointmentRows = array_merge($appointmentRows, array_map(static function (array $batch): array {
@@ -647,7 +674,7 @@ render_header('Main Dashboard');
                     </div>
                 </div>
                 <div class="flex items-center gap-2 shrink-0">
-                    <span class="badge badge-in-progress text-[9px]"><?= count($appointments) ?> appointment(s) &bull; <?= count($todayApeBatches) ?> APE batch(es)</span>
+                    <span class="badge badge-in-progress text-[9px]"><?= count($appointments) ?> appointment(s) &bull; <?= count($todayApeBatches) ?> APE batch(es) &bull; <?= count($scheduleUnavailableItems) ?> unavailable</span>
                     <a href="<?= app_url('appointments/index.php') ?>"
                         class="btn btn-sm btn-ghost text-slate-400 hover:text-primary text-decoration-none">
                         <span class="material-symbols-outlined text-[18px]">calendar_month</span>
@@ -665,6 +692,31 @@ render_header('Main Dashboard');
                                     <span aria-hidden="true"></span>
                                 </div>
                             <?php endfor; ?>
+
+                            <div class="dashboard-calendar-unavailable-layer" aria-label="Today's unavailable periods">
+                                <?php foreach ($scheduleUnavailableItems as $block):
+                                    $calendarDuration = $scheduleEndMinutes - $scheduleStartMinutes;
+                                    $top = (($block['_start_minute'] - $scheduleStartMinutes) / $calendarDuration) * 100;
+                                    $height = (($block['_end_minute'] - $block['_start_minute']) / $calendarDuration) * 100;
+                                    $blockStart = !empty($block['_is_full_day']) ? 'All day' : date('g:i A', strtotime((string) $block['start_time']));
+                                    $blockEnd = !empty($block['_is_full_day']) ? '' : date('g:i A', strtotime((string) $block['end_time']));
+                                    $blockTime = $blockEnd !== '' ? $blockStart . '–' . $blockEnd : $blockStart;
+                                    $blockReason = trim((string) ($block['reason'] ?? '')) ?: 'Clinic unavailable';
+                                    ?>
+                                    <a class="dashboard-calendar-unavailable"
+                                        href="<?= app_url('appointments/index.php#clinic-availability') ?>"
+                                        style="top: calc(<?= number_format($top, 4, '.', '') ?>% + 2px); height: calc(<?= number_format($height, 4, '.', '') ?>% - 4px);"
+                                        title="<?= e('Unavailable — ' . $blockTime . ' — ' . $blockReason) ?>"
+                                        aria-label="<?= e('Unavailable, ' . $blockTime . ', ' . $blockReason . '. Open clinic availability.') ?>">
+                                        <div class="dashboard-calendar-unavailable-time">
+                                            <span class="material-symbols-outlined" aria-hidden="true">event_busy</span>
+                                            <?= e($blockTime) ?>
+                                            <span class="dashboard-calendar-unavailable-badge">Unavailable</span>
+                                        </div>
+                                        <strong><?= e($blockReason) ?></strong>
+                                    </a>
+                                <?php endforeach; ?>
+                            </div>
 
                             <div class="dashboard-calendar-events">
                                 <?php foreach ($scheduleItems as $apt):

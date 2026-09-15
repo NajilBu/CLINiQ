@@ -76,6 +76,7 @@ CREATE TABLE accounts (
   email VARCHAR(160) NULL,
   account_status ENUM('inactive', 'active', 'suspended')
     NOT NULL DEFAULT 'inactive',
+  status_reason VARCHAR(255) NULL,
   activated_at DATETIME NULL,
   last_login_at DATETIME NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -108,6 +109,25 @@ CREATE TABLE students (
   FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE CASCADE,
   FOREIGN KEY (program_id) REFERENCES programs(id),
   INDEX idx_students_program (program_id)
+);
+
+CREATE TABLE student_enrollment_declarations (
+  declaration_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  account_id BIGINT UNSIGNED NOT NULL,
+  academic_year VARCHAR(20) NOT NULL,
+  enrollment_status ENUM('Still Enrolled', 'Not Currently Enrolled') NOT NULL,
+  non_enrollment_reason ENUM('Leave of Absence', 'Graduated', 'Transferred', 'Withdrawn', 'Other') NULL,
+  submitted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT chk_student_enrollment_declaration_reason
+    CHECK (
+      (enrollment_status = 'Still Enrolled' AND non_enrollment_reason IS NULL)
+      OR
+      (enrollment_status = 'Not Currently Enrolled' AND non_enrollment_reason IS NOT NULL)
+    ),
+  CONSTRAINT fk_student_enrollment_declarations_account
+    FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+  UNIQUE INDEX uq_student_enrollment_declaration_year (account_id, academic_year),
+  INDEX idx_student_enrollment_declarations_status_year (enrollment_status, academic_year)
 );
 
 CREATE TABLE school_employees (

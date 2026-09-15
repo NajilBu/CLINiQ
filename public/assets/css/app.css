@@ -3451,6 +3451,72 @@ textarea.record-sheet-field {
 .dashboard-calendar-events {
     position: absolute;
     inset: 0 0 0 5.1rem;
+    z-index: 2;
+    pointer-events: none;
+}
+
+.dashboard-calendar-unavailable-layer {
+    position: absolute;
+    inset: 0 0 0 5.1rem;
+    z-index: 1;
+}
+
+.dashboard-calendar-unavailable {
+    position: absolute;
+    left: 3px;
+    right: 3px;
+    display: flex;
+    min-height: 2.8rem;
+    overflow: hidden;
+    flex-direction: column;
+    justify-content: center;
+    padding: 0.34rem 0.6rem;
+    border: 1px dashed #f87171;
+    border-left: 4px solid #dc2626;
+    border-radius: 0.65rem;
+    background: repeating-linear-gradient(135deg, #fff1f2, #fff1f2 10px, #ffe4e6 10px, #ffe4e6 20px);
+    color: #991b1b;
+    text-decoration: none;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45);
+    transition: filter 150ms ease, box-shadow 150ms ease;
+}
+
+.dashboard-calendar-unavailable:hover,
+.dashboard-calendar-unavailable:focus-visible {
+    filter: saturate(1.12);
+    box-shadow: 0 4px 12px rgba(153, 27, 27, 0.16);
+    color: #7f1d1d;
+}
+
+.dashboard-calendar-unavailable-time {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    overflow: hidden;
+    font-size: 0.64rem;
+    font-weight: 900;
+    white-space: nowrap;
+}
+
+.dashboard-calendar-unavailable-time .material-symbols-outlined {
+    font-size: 0.8rem;
+}
+
+.dashboard-calendar-unavailable-badge {
+    padding: 0.1rem 0.4rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.82);
+    font-size: 0.52rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.dashboard-calendar-unavailable strong {
+    margin-top: 0.14rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.72rem;
+    white-space: nowrap;
 }
 
 .dashboard-calendar-event {
@@ -3472,6 +3538,7 @@ textarea.record-sheet-field {
     color: #17261d;
     line-height: 1.2;
     transition: box-shadow 150ms ease, transform 150ms ease;
+    pointer-events: auto;
 }
 
 .dashboard-calendar-event:hover {

@@ -387,6 +387,7 @@ function create_inactive_patient_account(array $input): array
             SET
                 password_hash = ?,
                 account_status = "inactive",
+                status_reason = "Awaiting initial account activation",
                 activated_at = NULL
             WHERE person_id = ?
         ');
@@ -498,8 +499,8 @@ function recent_patient_accounts(?int $limit = null): array
         SELECT
             p.id_number,
             CONCAT_WS(' ', p.first_name, p.middle_name, p.last_name) AS full_name,
-            p.birthdate,
             a.account_status,
+            a.status_reason,
             a.activated_at,
             a.created_at,
             CASE

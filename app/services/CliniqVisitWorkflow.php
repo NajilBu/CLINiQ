@@ -129,6 +129,45 @@ function cliniq_visit_staff_members(): array
     ")->fetchAll();
 }
 
+/** @return array<int,array{id:int,name:string,role:string}> */
+function cliniq_visit_attending_clinicians(): array
+{
+    return cliniq_visit_db()->query("
+        SELECT cs.person_id AS id,
+               TRIM(CONCAT_WS(' ', pe.first_name, pe.middle_name, pe.last_name)) AS name,
+               cs.staff_role AS role
+        FROM clinic_staff cs
+        JOIN people pe ON pe.id = cs.person_id
+        JOIN accounts a ON a.person_id = cs.person_id
+        WHERE cs.staff_role IN ('doctor', 'nurse')
+          AND a.account_status = 'active'
+        ORDER BY FIELD(cs.staff_role, 'doctor', 'nurse'), pe.last_name, pe.first_name
+    ")->fetchAll();
+}
+
+function cliniq_visit_attending_clinician_id(int $personId): int
+{
+    if ($personId < 1) {
+        throw new InvalidArgumentException('Select the doctor or nurse who attended the patient.');
+    }
+
+    $stmt = cliniq_visit_db()->prepare("
+        SELECT 1
+        FROM clinic_staff cs
+        JOIN accounts a ON a.person_id = cs.person_id
+        WHERE cs.person_id = ?
+          AND cs.staff_role IN ('doctor', 'nurse')
+          AND a.account_status = 'active'
+        LIMIT 1
+    ");
+    $stmt->execute([$personId]);
+    if (!$stmt->fetchColumn()) {
+        throw new InvalidArgumentException('Select an active doctor or nurse who attended the patient.');
+    }
+
+    return $personId;
+}
+
 function cliniq_visit_entry_has_content(array $entry): bool
 {
     foreach (['symptoms', 'diagnosis', 'treatment', 'referral', 'remarks', 'amendment_reason'] as $key) {
@@ -340,7 +379,12 @@ function cliniq_visit_create(array $visit, array $entry = [], array $vitals = []
         cliniq_visit_insert_vitals($db, $visitId, $entryId, $vitals, $staffId);
         cliniq_inventory_dispense_medicines($db, (int) $entryId, $dispensings, $staffId);
         $db->commit();
-        audit_log_event('visits', 'visit_created', $staffId, 'staff', 'visit', $visitId, ['patient_person_id' => $patientPersonId, 'source' => $visit['visit_source'] ?? 'Staff Recorded']);
+        $auditActorId = !empty($visit['recorded_by_person_id']) ? (int) $visit['recorded_by_person_id'] : $staffId;
+        audit_log_event('visits', 'visit_created', $auditActorId, 'staff', 'visit', $visitId, [
+            'patient_person_id' => $patientPersonId,
+            'attended_by_person_id' => $staffId,
+            'source' => $visit['visit_source'] ?? 'Staff Recorded',
+        ]);
         return $visitId;
     } catch (Throwable $e) {
         if ($db->inTransaction()) {

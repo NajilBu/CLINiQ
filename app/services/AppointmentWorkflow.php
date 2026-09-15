@@ -40,6 +40,46 @@ function appointment_duration_minutes(): int
     return 60;
 }
 
+/**
+ * Combine touching or overlapping unavailable periods when their reasons match.
+ * Each item must contain normalized _start_minute and _end_minute values.
+ */
+function appointment_merge_continuous_unavailable_blocks(array $blocks): array
+{
+    usort($blocks, static function (array $left, array $right): int {
+        return [(int) ($left['_start_minute'] ?? 0), (int) ($left['_end_minute'] ?? 0)]
+            <=> [(int) ($right['_start_minute'] ?? 0), (int) ($right['_end_minute'] ?? 0)];
+    });
+
+    $merged = [];
+    foreach ($blocks as $block) {
+        $start = (int) ($block['_start_minute'] ?? 0);
+        $end = (int) ($block['_end_minute'] ?? 0);
+        if ($end <= $start) {
+            continue;
+        }
+
+        $reason = trim((string) ($block['reason'] ?? '')) ?: 'Clinic unavailable';
+        $block['reason'] = $reason;
+        $lastIndex = count($merged) - 1;
+        if ($lastIndex >= 0) {
+            $lastReason = trim((string) ($merged[$lastIndex]['reason'] ?? '')) ?: 'Clinic unavailable';
+            $isContinuous = $start <= (int) $merged[$lastIndex]['_end_minute'];
+            if ($isContinuous && strcasecmp($lastReason, $reason) === 0) {
+                if ($end > (int) $merged[$lastIndex]['_end_minute']) {
+                    $merged[$lastIndex]['_end_minute'] = $end;
+                    $merged[$lastIndex]['end_time'] = $block['end_time'] ?? $merged[$lastIndex]['end_time'];
+                }
+                $merged[$lastIndex]['_is_full_day'] = !empty($merged[$lastIndex]['_is_full_day']) || !empty($block['_is_full_day']);
+                continue;
+            }
+        }
+        $merged[] = $block;
+    }
+
+    return $merged;
+}
+
 function appointment_confirmation_cutoff_sql(): string
 {
     return 'DATE_ADD(appointment_datetime, INTERVAL ' . appointment_duration_minutes() . ' MINUTE)';

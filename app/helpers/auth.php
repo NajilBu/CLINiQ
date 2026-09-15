@@ -143,6 +143,7 @@ function complete_first_registration(string $password, string $confirmPassword):
             SET
                 password_hash = ?,
                 account_status = "active",
+                status_reason = NULL,
                 activated_at = NOW()
             WHERE id = ?
         ');
@@ -181,7 +182,23 @@ function begin_re_enrollment(array $account): void
         'account_id' => (int) ($account['account_id'] ?? 0),
         'person_id'  => (int) ($account['person_id'] ?? 0),
         'type'       => (string) ($account['account_type'] ?? 'patient'),
+        'academic_year' => student_current_academic_year(),
     ];
+}
+
+function student_current_academic_year(?DateTimeImmutable $today = null): string
+{
+    $today ??= new DateTimeImmutable('today');
+    $startYear = (int) $today->format('Y');
+    if ((int) $today->format('n') < 6) {
+        $startYear--;
+    }
+    return $startYear . '-' . ($startYear + 1);
+}
+
+function student_non_enrollment_reasons(): array
+{
+    return ['Leave of Absence', 'Graduated', 'Transferred', 'Withdrawn', 'Other'];
 }
 
 function re_enrollment_pending(): bool
@@ -198,7 +215,7 @@ function re_enrollment_context(): ?array
 /**
  * Confirm student re-enrollment and reactivate the student account.
  */
-function complete_re_enrollment(): void
+function complete_re_enrollment(string $enrollmentStatus, string $nonEnrollmentReason = ''): void
 {
     $ctx = re_enrollment_context();
     if ($ctx === null) {
@@ -208,17 +225,67 @@ function complete_re_enrollment(): void
         unset($_SESSION['re_enrollment']);
         throw new RuntimeException('Only student accounts can complete school-year enrollment confirmation.');
     }
-    $db = auth_db();
-    $stmt = $db->prepare("
-        UPDATE accounts a
-        INNER JOIN students s ON s.person_id = a.person_id
-        SET a.account_status = 'active', a.activated_at = NOW()
-        WHERE a.id = ? AND a.person_id = ? AND a.account_status = 'inactive'
-    ");
-    $stmt->execute([(int) $ctx['account_id'], (int) $ctx['person_id']]);
-    if ($stmt->rowCount() !== 1) {
-        throw new RuntimeException('Your account could not be reactivated. Please contact the clinic.');
+    $enrollmentStatus = trim($enrollmentStatus);
+    $nonEnrollmentReason = trim($nonEnrollmentReason);
+    if (!in_array($enrollmentStatus, ['Still Enrolled', 'Not Currently Enrolled'], true)) {
+        throw new InvalidArgumentException('Select your current enrollment status.');
     }
+    if ($enrollmentStatus === 'Not Currently Enrolled'
+        && !in_array($nonEnrollmentReason, student_non_enrollment_reasons(), true)) {
+        throw new InvalidArgumentException('Select why you are not currently enrolled.');
+    }
+    if ($enrollmentStatus === 'Still Enrolled') {
+        $nonEnrollmentReason = '';
+    }
+
+    $db = auth_db();
+    $db->beginTransaction();
+    try {
+        $accountId = (int) $ctx['account_id'];
+        $personId = (int) $ctx['person_id'];
+        $academicYear = trim((string) ($ctx['academic_year'] ?? '')) ?: student_current_academic_year();
+
+        $declaration = $db->prepare("
+            INSERT INTO student_enrollment_declarations
+                (account_id, academic_year, enrollment_status, non_enrollment_reason)
+            VALUES (?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                enrollment_status = VALUES(enrollment_status),
+                non_enrollment_reason = VALUES(non_enrollment_reason),
+                submitted_at = CURRENT_TIMESTAMP
+        ");
+        $declaration->execute([
+            $accountId,
+            $academicYear,
+            $enrollmentStatus,
+            $nonEnrollmentReason !== '' ? $nonEnrollmentReason : null,
+        ]);
+
+        $stmt = $db->prepare("
+            UPDATE accounts a
+            INNER JOIN students s ON s.person_id = a.person_id
+            SET a.account_status = 'active',
+                a.status_reason = NULL,
+                a.activated_at = COALESCE(a.activated_at, NOW())
+            WHERE a.id = ? AND a.person_id = ? AND a.account_status = 'inactive'
+        ");
+        $stmt->execute([$accountId, $personId]);
+        if ($stmt->rowCount() !== 1) {
+            throw new RuntimeException('Your account could not be reactivated. Please contact the clinic.');
+        }
+        $db->commit();
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        throw $e;
+    }
+
+    audit_log_event('auth', 'student_enrollment_declared', (int) $ctx['person_id'], 'student', 'account', (int) $ctx['account_id'], [
+        'academic_year' => (string) ($ctx['academic_year'] ?? student_current_academic_year()),
+        'enrollment_status' => $enrollmentStatus,
+        'non_enrollment_reason' => $nonEnrollmentReason !== '' ? $nonEnrollmentReason : null,
+    ]);
     unset($_SESSION['re_enrollment']);
 }
 

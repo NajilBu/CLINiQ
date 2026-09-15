@@ -1573,7 +1573,7 @@ render_clinic_command_header(
                     <section class="settings-section border-2 border-red-200 bg-red-50 space-y-4">
                         <div>
                             <h3 class="font-headline text-lg font-extrabold text-red-800 mb-1">Start New School Year</h3>
-                            <p class="settings-help mb-0 text-red-700">This resets <strong>active student patient accounts only</strong> to inactive. Faculty, personnel, clinic staff, and other patient accounts remain active. Students must confirm they are still enrolled on their next login.</p>
+                            <p class="settings-help mb-0 text-red-700">This resets <strong>active student patient accounts only</strong> to inactive. Faculty, personnel, clinic staff, and other patient accounts remain active. Students must submit their current enrollment status on their next login.</p>
                         </div>
                         <form method="post" data-no-ajax="true">
                             <input type="hidden" name="action" value="reset_school_year">

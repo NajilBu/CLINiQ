@@ -5,6 +5,7 @@ require_once __DIR__ . '/../../app/services/CliniqVisitWorkflow.php';
 require_login();
 
 $patients = cliniq_visit_patients();
+$attendingClinicians = cliniq_visit_attending_clinicians();
 $medicineInventory = cliniq_inventory_available_medicines();
 $equipmentInventory = cliniq_inventory_db()->query("SELECT item_id AS id, item_name, quantity, unit FROM inventory_items WHERE item_type = 'Equipment' AND is_active = 1 ORDER BY item_name")->fetchAll();
 $preselectedPatientId = (int) ($_GET['patient_id'] ?? 0);
@@ -45,6 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $referralType = '';
         }
         $staffPersonId = cliniq_visit_staff_person_id();
+        $attendingPersonId = cliniq_visit_attending_clinician_id((int) ($_POST['attended_by_person_id'] ?? 0));
         $dispensings = cliniq_inventory_dispensing_rows($_POST);
         $visitId = cliniq_visit_create([
             'patient_person_id' => $patientId,
@@ -54,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'visit_source' => 'Staff Recorded',
             'action_taken' => $actionTaken,
             'recorded_by_person_id' => $staffPersonId,
-            'attended_by_person_id' => $staffPersonId,
+            'attended_by_person_id' => $attendingPersonId,
         ], [
             'symptoms' => trim($_POST['symptoms'] ?? ''),
             'diagnosis' => trim($_POST['diagnosis'] ?? ''),
@@ -163,6 +165,18 @@ render_clinic_command_header(
             <div>
                 <label class="clinic-label">Time of Arrival</label>
                 <input class="record-sheet-field px-4" value="<?= e(date('g:i A')) ?>" readonly>
+            </div>
+            <div>
+                <label class="clinic-label" for="attendingClinician">Attended By</label>
+                <select class="record-sheet-field px-4" id="attendingClinician" name="attended_by_person_id" required>
+                    <option value="">Select doctor or nurse</option>
+                    <?php foreach ($attendingClinicians as $clinician): ?>
+                        <option value="<?= (int) $clinician['id'] ?>"><?= e($clinician['name']) ?> — <?= e(ucfirst((string) $clinician['role'])) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <?php if (!$attendingClinicians): ?>
+                    <p class="settings-help mt-2 mb-0 text-red-700">No active doctor or nurse account is available. Activate a clinician account before recording a visit.</p>
+                <?php endif; ?>
             </div>
         </section>
     </div>

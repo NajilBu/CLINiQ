@@ -5,6 +5,7 @@ require_once __DIR__ . '/../../app/services/CliniqVisitWorkflow.php';
 require_login();
 
 $id = (int) ($_GET['id'] ?? 0);
+$attendingClinicians = cliniq_visit_attending_clinicians();
 $entryPoint = $_GET['from'] ?? 'logbook';
 $entryPoint = in_array($entryPoint, ['profile', 'dashboard'], true) ? $entryPoint : 'logbook';
 
@@ -17,12 +18,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $existingVisit = cliniq_visit_fetch($id);
     $visitDb = cliniq_visit_db();
     $staffPersonId = cliniq_visit_staff_person_id();
+    $attendingPersonId = 0;
+    if (in_array($mode, ['begin_visit', 'intake', 'save_treatment', 'append'], true)) {
+        try {
+            $attendingPersonId = cliniq_visit_attending_clinician_id((int) ($_POST['attended_by_person_id'] ?? 0));
+        } catch (InvalidArgumentException $e) {
+            flash_message('warning', $e->getMessage());
+            header('Location: view.php?id=' . $id . '&from=' . urlencode($returnFrom));
+            exit;
+        }
+    }
     $dispensings = cliniq_inventory_dispensing_rows($_POST);
     $isExistingSelfLogbookVisit = $existingVisit && strcasecmp((string) ($existingVisit['visit_source'] ?? ''), 'Self Logbook') === 0;
 
     if ($existingVisit && $mode === 'begin_visit' && ($existingVisit['status'] ?? 'Unaddressed') === 'Unaddressed') {
         $update = $visitDb->prepare("UPDATE visits SET status = 'Active', addressed_at = COALESCE(addressed_at, NOW()), recorded_by_person_id = COALESCE(recorded_by_person_id, ?), attended_by_person_id = ? WHERE visit_id = ?");
-        $update->execute([$staffPersonId, $staffPersonId, $id]);
+        $update->execute([$staffPersonId, $attendingPersonId, $id]);
 
         flash_message('success', 'Treatment session started.');
     } elseif ($existingVisit && $mode === 'no_show' && ($existingVisit['status'] ?? 'Unaddressed') === 'Unaddressed') {
@@ -44,13 +55,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $update = $visitDb->prepare("
             UPDATE visits
             SET status = 'Cancelled',
-                action_taken = ?,
-                attended_by_person_id = COALESCE(attended_by_person_id, ?)
+                action_taken = ?
             WHERE visit_id = ?
         ");
         $update->execute([
             trim($_POST['cancel_reason'] ?? '') ?: 'Treatment cancelled by attending staff.',
-            $staffPersonId,
             $id,
         ]);
 
@@ -84,7 +93,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $purpose,
                 $actionTaken ?: null,
                 $staffPersonId,
-                $staffPersonId,
+                $attendingPersonId,
                 $id,
             ]);
 
@@ -100,16 +109,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'referral' => $referralType,
                 'remarks' => $remarks,
             ];
-            $entryId = cliniq_visit_save_primary_entry($visitDb, $id, $entry, $staffPersonId);
+            $entryId = cliniq_visit_save_primary_entry($visitDb, $id, $entry, $attendingPersonId);
             if ($dispensings && !$entryId) {
-                $entryId = cliniq_visit_insert_entry($visitDb, $id, ['remarks' => 'Medicine dispensing recorded.'], $staffPersonId);
+                $entryId = cliniq_visit_insert_entry($visitDb, $id, ['remarks' => 'Medicine dispensing recorded.'], $attendingPersonId);
             }
             cliniq_visit_insert_vitals($visitDb, $id, $entryId, [
                 'temperature' => $temperature,
                 'blood_pressure' => $bloodPressure,
                 'pulse_rate' => $pulseRate,
-            ], $staffPersonId);
-            cliniq_inventory_dispense_medicines($visitDb, (int) $entryId, $dispensings, $staffPersonId);
+            ], $attendingPersonId);
+            cliniq_inventory_dispense_medicines($visitDb, (int) $entryId, $dispensings, $attendingPersonId);
 
             $visitDb->commit();
             if ($newStatus === 'Completed') {
@@ -149,13 +158,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 flash_message('warning', 'Enter the reason for the amendment before saving.');
             } elseif (cliniq_visit_entry_has_content($entry) || $statusChanged || $hasDispensing) {
                 $visitDb->beginTransaction();
-                $entryId = cliniq_visit_insert_entry($visitDb, $id, $entry, $staffPersonId);
+                $entryId = cliniq_visit_insert_entry($visitDb, $id, $entry, $attendingPersonId);
                 if ($dispensings && !$entryId) {
-                    $entryId = cliniq_visit_insert_entry($visitDb, $id, ['remarks' => 'Medicine dispensing amendment.'], $staffPersonId);
+                    $entryId = cliniq_visit_insert_entry($visitDb, $id, ['remarks' => 'Medicine dispensing amendment.'], $attendingPersonId);
                 }
-                cliniq_inventory_dispense_medicines($visitDb, (int) $entryId, $dispensings, $staffPersonId);
-                $update = $visitDb->prepare("\n                    UPDATE visits\n                    SET status = ?,\n                        addressed_at = CASE WHEN ? = 1 THEN COALESCE(addressed_at, NOW()) ELSE addressed_at END,\n                        completed_at = CASE WHEN ? = 1 THEN COALESCE(completed_at, NOW()) ELSE completed_at END,\n                        attended_by_person_id = COALESCE(attended_by_person_id, ?)\n                    WHERE visit_id = ?\n                ");
-                $update->execute([$newStatus, $markAddressed ? 1 : 0, $markCompleted ? 1 : 0, $staffPersonId, $id]);
+                cliniq_inventory_dispense_medicines($visitDb, (int) $entryId, $dispensings, $attendingPersonId);
+                $update = $visitDb->prepare("\n                    UPDATE visits\n                    SET status = ?,\n                        addressed_at = CASE WHEN ? = 1 THEN COALESCE(addressed_at, NOW()) ELSE addressed_at END,\n                        completed_at = CASE WHEN ? = 1 THEN COALESCE(completed_at, NOW()) ELSE completed_at END,\n                        attended_by_person_id = ?\n                    WHERE visit_id = ?\n                ");
+                $update->execute([$newStatus, $markAddressed ? 1 : 0, $markCompleted ? 1 : 0, $attendingPersonId, $id]);
                 $visitDb->commit();
                 flash_message('success', cliniq_visit_entry_has_content($entry) ? 'Treatment information appended.' : 'Visit status updated with amendment reason.');
             } else {
@@ -269,7 +278,7 @@ if ($courseDepartment === '') {
 if ($yearLevel === '') {
     $yearLevel = 'Not specified';
 }
-$handledByName = $visit['attended_by_name'] ?: ($canAddressFromLogbook ? current_user()['name'] : 'Not yet attended');
+$handledByName = $visit['attended_by_name'] ?: 'Not yet assigned';
 $logbookSymptomsValue = $isReadOnlyLogbook ? $sheetSymptoms : '';
 $logbookDiagnosisValue = $isReadOnlyLogbook ? $sheetDiagnosis : '';
 $logbookTreatmentValue = $isReadOnlyLogbook ? $sheetManagement : '';
@@ -526,8 +535,13 @@ render_header($pageTitle);
                 <div class="record-sheet-display"><?= e($displayChiefComplaint) ?></div>
             </div>
             <div>
-                <label class="clinic-label">Handled By / Staff</label>
-                <input class="record-sheet-field px-4" value="<?= e($handledByName) ?>" readonly>
+                <label class="clinic-label" for="profileAttendingClinician">Attended By</label>
+                <select class="record-sheet-field px-4" id="profileAttendingClinician" name="attended_by_person_id" data-amendable disabled required>
+                    <option value="">Select doctor or nurse</option>
+                    <?php foreach ($attendingClinicians as $clinician): ?>
+                        <option value="<?= (int) $clinician['id'] ?>" <?= (int) ($visit['attended_by'] ?? 0) === (int) $clinician['id'] ? 'selected' : '' ?>><?= e($clinician['name']) ?> — <?= e(ucfirst((string) $clinician['role'])) ?></option>
+                    <?php endforeach; ?>
+                </select>
             </div>
         </section>
 
@@ -820,7 +834,7 @@ exit;
             <span class="badge <?= visit_status_badge_class($status) ?>"><?= e($status) ?></span>
             <?php if ($canAddressFromLogbook): ?>
                 <span class="badge badge-active">Ready to Start</span>
-                <button type="submit" form="beginTreatmentForm" class="sheet-chip-button">
+                <button type="button" class="sheet-chip-button" data-begin-assessment>
                     <span class="material-symbols-outlined">play_arrow</span>
                     Begin Assessment
                 </button>
@@ -859,8 +873,20 @@ exit;
                 <div class="record-sheet-display"><?= e($displayChiefComplaint) ?></div>
             </div>
             <div>
-                <label class="clinic-label">Handled By / Staff</label>
-                <div class="record-sheet-display"><?= e($handledByName) ?></div>
+                <label class="clinic-label" for="logbookAttendingClinician">Attended By</label>
+                <?php if ($canAddressFromLogbook || $canTreatFromLogbook): ?>
+                    <select class="record-sheet-field px-4" id="logbookAttendingClinician" name="attended_by_person_id" data-attending-clinician required>
+                        <option value="">Select doctor or nurse</option>
+                        <?php foreach ($attendingClinicians as $clinician): ?>
+                            <option value="<?= (int) $clinician['id'] ?>" <?= (int) ($visit['attended_by'] ?? 0) === (int) $clinician['id'] ? 'selected' : '' ?>><?= e($clinician['name']) ?> — <?= e(ucfirst((string) $clinician['role'])) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <?php if (!$attendingClinicians): ?>
+                        <p class="settings-help mt-2 mb-0 text-red-700">No active doctor or nurse account is available.</p>
+                    <?php endif; ?>
+                <?php else: ?>
+                    <div class="record-sheet-display"><?= e($handledByName) ?></div>
+                <?php endif; ?>
             </div>
         </section>
 
@@ -1073,6 +1099,7 @@ Tracking.</p>
 <form id="beginTreatmentForm" method="post" style="display:none;">
     <input type="hidden" name="mode" value="begin_visit">
     <input type="hidden" name="from" value="<?= e($entryPoint) ?>">
+    <input type="hidden" name="attended_by_person_id" data-begin-attending-clinician>
 </form>
 
 <form id="logbookNoShowForm" method="post" style="display:none;">
@@ -1082,6 +1109,14 @@ Tracking.</p>
 
 
 <script>
+document.querySelector('[data-begin-assessment]')?.addEventListener('click', () => {
+    const clinician = document.querySelector('[data-attending-clinician]');
+    if (!clinician || !clinician.reportValidity()) return;
+    const hidden = document.querySelector('[data-begin-attending-clinician]');
+    if (hidden) hidden.value = clinician.value;
+    document.getElementById('beginTreatmentForm')?.requestSubmit();
+});
+
 function syncDispensingRow(row) {
     const typeSelect = row.querySelector('.js-dispensing-type');
     const itemSelect = row.querySelector('.js-visit-inventory-item');

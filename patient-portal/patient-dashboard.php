@@ -88,9 +88,12 @@ if (re_enrollment_pending()) {
         exit;
     }
     $reEnrollError = '';
+    $selectedEnrollmentStatus = trim((string) ($_POST['enrollment_status'] ?? ''));
+    $selectedNonEnrollmentReason = trim((string) ($_POST['non_enrollment_reason'] ?? ''));
+    $nonEnrollmentReasons = student_non_enrollment_reasons();
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'complete_re_enrollment') {
         try {
-            complete_re_enrollment();
+            complete_re_enrollment($selectedEnrollmentStatus, $selectedNonEnrollmentReason);
             header('Location: patient-dashboard.php?re_enrolled=1');
             exit;
         } catch (Throwable $e) {
@@ -102,8 +105,8 @@ if (re_enrollment_pending()) {
     <section class="student-page-header">
         <div>
             <p class="student-eyebrow">New School Year</p>
-            <h1 class="student-title">Are you still enrolled?</h1>
-            <p class="student-subtitle">The clinic has started a new school year. Please confirm you are still enrolled to regain access to your health portal.</p>
+            <h1 class="student-title">Update your enrollment status</h1>
+            <p class="student-subtitle">The clinic has started a new school year. Submit your current status to continue to your health portal.</p>
         </div>
         <span class="student-badge student-badge-warning">
             <span class="material-symbols-outlined text-[14px]">how_to_reg</span>
@@ -117,8 +120,8 @@ if (re_enrollment_pending()) {
                 <span class="material-symbols-outlined">school</span>
             </span>
             <div>
-                <h2 class="student-card-title">Confirm Enrollment</h2>
-                <p class="student-card-copy">By confirming, you declare that you are currently enrolled this school year and should have access to clinic health services.</p>
+                <h2 class="student-card-title">Enrollment Declaration</h2>
+                <p class="student-card-copy">Choose the answer that describes your current enrollment for <?= student_e((string) ($reCtx['academic_year'] ?? student_current_academic_year())) ?>.</p>
             </div>
         </div>
 
@@ -131,17 +134,52 @@ if (re_enrollment_pending()) {
 
         <div class="student-note student-note-warning mb-5">
             <span class="material-symbols-outlined">info</span>
-            <div>If you are no longer enrolled, do <strong>not</strong> confirm. Contact the clinic if you have questions about your account.</div>
+            <div>Your response will be recorded and your portal access will resume immediately after submission.</div>
         </div>
 
-        <form method="post">
+        <form method="post" id="re-enrollment-form" class="space-y-5">
             <input type="hidden" name="action" value="complete_re_enrollment">
-            <button type="submit" class="student-button w-full" data-confirm-submit data-confirm-type="primary" data-confirm-title="Confirm you are still enrolled?" data-confirm-message="This will reactivate your account for the new school year." data-confirm-toast="Confirming...">
+            <div class="student-field">
+                <label class="student-label" for="enrollment-status">Current Enrollment Status</label>
+                <select id="enrollment-status" name="enrollment_status" class="student-select" required>
+                    <option value="">Select your status</option>
+                    <option value="Still Enrolled" <?= $selectedEnrollmentStatus === 'Still Enrolled' ? 'selected' : '' ?>>Still Enrolled</option>
+                    <option value="Not Currently Enrolled" <?= $selectedEnrollmentStatus === 'Not Currently Enrolled' ? 'selected' : '' ?>>Not Currently Enrolled</option>
+                </select>
+            </div>
+            <div class="student-field" id="non-enrollment-reason-field" <?= $selectedEnrollmentStatus === 'Not Currently Enrolled' ? '' : 'hidden' ?>>
+                <label class="student-label" for="non-enrollment-reason">Reason</label>
+                <select id="non-enrollment-reason" name="non_enrollment_reason" class="student-select" <?= $selectedEnrollmentStatus === 'Not Currently Enrolled' ? 'required' : 'disabled' ?>>
+                    <option value="">Select a reason</option>
+                    <?php foreach ($nonEnrollmentReasons as $reason): ?>
+                        <option value="<?= student_e($reason) ?>" <?= $selectedNonEnrollmentReason === $reason ? 'selected' : '' ?>><?= student_e($reason) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <button type="submit" class="student-button w-full" data-confirm-submit data-confirm-type="primary" data-confirm-title="Submit enrollment declaration?" data-confirm-message="Your response will be recorded and your account will be reactivated immediately." data-confirm-toast="Submitting...">
                 <span class="material-symbols-outlined">how_to_reg</span>
-                Yes, I am Still Enrolled
+                Submit and Continue
             </button>
         </form>
     </section>
+    <script>
+        (() => {
+            const status = document.getElementById('enrollment-status');
+            const reasonField = document.getElementById('non-enrollment-reason-field');
+            const reason = document.getElementById('non-enrollment-reason');
+            const syncReasonField = () => {
+                const needsReason = status.value === 'Not Currently Enrolled';
+                reasonField.hidden = !needsReason;
+                reason.disabled = !needsReason;
+                reason.required = needsReason;
+                if (!needsReason) {
+                    reason.value = '';
+                }
+            };
+            status.addEventListener('change', syncReasonField);
+            syncReasonField();
+        })();
+    </script>
     <?php
     render_student_footer();
     return;
@@ -173,9 +211,11 @@ $scheduledApeBatchLabel = $hasScheduledApeBatch
         . date('g:i A', strtotime((string) $latestApe['batch_end_time']))
     : '';
 $apeStatus = $latestApe['workflow_status'] ?? 'Not Started';
-$apeQueue = $latestApe ? ape_record_queue($latestApe) : 'examination';
+$apeQueue = $latestApe ? ape_record_queue($latestApe) : 'digital_submission';
 $apeStep = $latestApe ? ape_record_step_index($latestApe) : 0;
-$apePercent = $apeQueue === 'completed' ? 100 : $apeStep * 20;
+$apeDigitalSubmissionComplete = ape_digital_submission_complete($latestApe ?? []);
+$apeExamCompleted = !empty($latestApe['exam_date']);
+$apePercent = $apeQueue === 'completed' ? 100 : (($apeDigitalSubmissionComplete ? 25 : 0) + ($apeExamCompleted ? 25 : 0));
 $apeCompleted = $apePercent >= 100 || ($latestApe['clearance_status'] ?? '') === 'Cleared';
 $apeBadgeClass = match ($latestApe['clearance_status'] ?? '') {
     'Cleared' => 'student-badge-success',
@@ -184,17 +224,15 @@ $apeBadgeClass = match ($latestApe['clearance_status'] ?? '') {
 };
 $apeNote = trim((string) ($latestApe['patient_visible_note'] ?? ''));
 $apeRequirementStatus = $latestApe['requirement_status'] ?? 'Not Checked';
-$apePatientVitalsConfirmed = ($latestApe['patient_vitals_status'] ?? 'Not Started') === 'Confirmed';
-$apeRequirementsVerified = $apePatientVitalsConfirmed && ($apeRequirementStatus === 'Checked' || in_array($apeStatus, [
+$apeRequirementsVerified = $apeRequirementStatus === 'Checked' || in_array($apeStatus, [
     'Requirements Checked',
     'Submitted',
     'Reviewed',
     'Scheduled',
     'Follow-up Required',
     'Cleared',
-], true));
+], true);
 $apeRequirementsNeedCorrection = $apeRequirementStatus === 'Needs Correction';
-$apeExamCompleted = !empty($latestApe['exam_date']);
 $apeAllDocumentsUploaded = ape_initial_uploads_present($latestApe ?? []);
 $apeDocumentsAwaitingReview = $apeAllDocumentsUploaded && (int) ($latestApe['required_unverified_count'] ?? 0) > 0;
 $clinicNotes = [];
@@ -249,26 +287,30 @@ $clinicNoteClass = static fn(string $type): string => match ($type) {
 };
 $apeActionTitle = match (true) {
     ($latestApe['clearance_status'] ?? 'Pending') === 'Cleared' => 'APE completed',
-    $apeQueue === 'digital_submission' => $apeDocumentsAwaitingReview ? 'Wait for clinic document review' : 'Upload APE documents',
+    $apeQueue === 'digital_submission' && !$apeAllDocumentsUploaded => 'Upload APE documents',
+    $apeQueue === 'digital_submission' && !$apeExamCompleted => 'Attend your scheduled examination',
+    $apeQueue === 'digital_submission' => 'Wait for clinic document review',
     $apeQueue === 'follow_up' && !ape_document_follow_up($latestApe) && !ape_deferred_submission_complete($latestApe) => 'Submit follow-up documents for archive review',
     $apeRequirementsNeedCorrection => 'Return corrected hard-copy requirements',
     $apeStatus === 'Follow-up Required' => 'Complete the required follow-up',
-    !$apePatientVitalsConfirmed => 'Complete your vitals and BMI',
-    !$apeExamCompleted || !$apeRequirementsVerified => 'Attend examination',
+    $apeQueue === 'examination' => ape_schedule_is_current($latestApe ?? []) ? 'Attend examination' : 'Wait for your APE schedule',
     $apeDocumentsAwaitingReview => 'Wait for clinic document review',
     $apeStatus === 'Reviewed' => 'Wait for the final clinical decision',
     default => 'Upload verified APE documents',
 };
 $apeActionCopy = match (true) {
     ($latestApe['clearance_status'] ?? 'Pending') === 'Cleared' => 'Your APE record is already cleared by the clinic.',
-    $apeQueue === 'digital_submission' => $apeDocumentsAwaitingReview
-        ? 'Your required uploads are waiting for clinic archive review. Any recorded follow-up remains pending.'
-        : 'Upload the initially clinic-verified group within seven days of examination. Deferred documents keep their assigned due date and do not block this step.',
+    $apeQueue === 'digital_submission' && !$apeAllDocumentsUploaded => $apeExamCompleted
+        ? 'Complete regular uploads within seven days of examination. Follow-up documents use their separately assigned return date.'
+        : 'Upload any available documents now. Incomplete files will not prevent attendance during your assigned examination schedule.',
+    $apeQueue === 'digital_submission' && !$apeExamCompleted => 'Your files are ready for clinic comparison. Attend your examination even if clinic review is still pending.',
+    $apeQueue === 'digital_submission' => 'Your regular documents are waiting for clinic archive review.',
     $apeQueue === 'follow_up' && !ape_document_follow_up($latestApe) && !ape_deferred_submission_complete($latestApe) => 'The initial group is archived. Upload the returned documents by their assigned due date and wait for clinic archive review.',
     $apeRequirementsNeedCorrection => $apeNote ?: 'Return the corrected hard-copy requirements requested by the clinic.',
     $apeStatus === 'Follow-up Required' => $apeNote ?: 'Complete the referral or other follow-up requested by the clinic.',
-    !$apePatientVitalsConfirmed => 'Enter and confirm your vitals and BMI before visiting the clinic for examination.',
-    !$apeExamCompleted || !$apeRequirementsVerified => $apeNote ?: 'Your vitals are confirmed. Visit the clinic for examination and hard-copy document review.',
+    $apeQueue === 'examination' => ape_schedule_is_current($latestApe ?? [])
+        ? "Attend {$latestApe['batch_name']} now and bring any available hard-copy requirements."
+        : 'Continue early digital uploads while waiting for the clinic to assign or open your examination schedule.',
     $apeDocumentsAwaitingReview => 'Your documents are waiting for clinic archive review.',
     $apeStatus === 'Reviewed' => $apeNote ?: 'Your examination and documents are complete and awaiting the clinic\'s final decision.',
     default => $apeNote ?: ($latestApe ? 'Complete the current APE step in your APE status page.' : 'Start your APE record with the clinic.'),

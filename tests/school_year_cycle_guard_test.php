@@ -41,6 +41,7 @@ if (str_contains($cycleService, "SET a.account_status = 'inactive',\n           
 foreach ([
     'active student patient accounts only',
     'Faculty, personnel, clinic staff, and other patient accounts remain active.',
+    'Students must submit their current enrollment status on their next login.',
     'Reset active student accounts?',
 ] as $expected) {
     if (!str_contains($settingsPage, $expected)) {
@@ -50,10 +51,46 @@ foreach ([
 
 $patientLogin = file_get_contents(dirname(__DIR__) . '/patient-portal/patient-login.php');
 $patientDashboard = file_get_contents(dirname(__DIR__) . '/patient-portal/patient-dashboard.php');
+$authHelper = file_get_contents(dirname(__DIR__) . '/app/helpers/auth.php');
+$productionSchema = file_get_contents(dirname(__DIR__) . '/database/production_schema.sql');
+$declarationMigration = file_get_contents(dirname(__DIR__) . '/database/migrations/20260915_create_student_enrollment_declarations.sql');
 if (!str_contains((string) $patientLogin, "\$wasActivated && (\$patient['account_type'] ?? '') === 'student'")
     || str_contains((string) $patientDashboard, 'Confirm Employment')
     || str_contains((string) $patientDashboard, 'still employed')) {
     throw new RuntimeException('Only students should enter or see the school-year confirmation flow.');
+}
+
+foreach ([
+    'Still Enrolled',
+    'Not Currently Enrolled',
+    'name="non_enrollment_reason"',
+    'complete_re_enrollment($selectedEnrollmentStatus, $selectedNonEnrollmentReason)',
+] as $expected) {
+    if (!str_contains((string) $patientDashboard, $expected)) {
+        throw new RuntimeException("The student enrollment declaration form is missing: {$expected}");
+    }
+}
+
+if (preg_match('/<textarea[^>]*name=["\'](?:explanation|reason)["\']/i', (string) $patientDashboard)
+    || preg_match('/<input[^>]*type=["\']file["\']/i', (string) $patientDashboard)) {
+    throw new RuntimeException('The enrollment declaration must not request an explanation or supporting file.');
+}
+
+foreach ([
+    'INSERT INTO student_enrollment_declarations',
+    "SET a.account_status = 'active'",
+    "['Leave of Absence', 'Graduated', 'Transferred', 'Withdrawn', 'Other']",
+] as $expected) {
+    if (!str_contains((string) $authHelper, $expected)) {
+        throw new RuntimeException("The immediate student reactivation workflow is missing: {$expected}");
+    }
+}
+
+foreach ([$productionSchema, $declarationMigration] as $schemaSource) {
+    if (!str_contains((string) $schemaSource, 'student_enrollment_declarations')
+        || !str_contains((string) $schemaSource, 'non_enrollment_reason')) {
+        throw new RuntimeException('The enrollment declaration database schema is incomplete.');
+    }
 }
 
 echo "School year cycle guard test passed. No database writes.\n";

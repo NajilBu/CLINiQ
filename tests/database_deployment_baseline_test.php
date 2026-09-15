@@ -17,14 +17,18 @@ if ($schema === false || $runner === false || $envLoader === false) {
 preg_match_all('/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`?([a-zA-Z0-9_]+)`?/i', $schema, $matches);
 $tables = array_values(array_unique($matches[1] ?? []));
 
-foreach (['people', 'patients', 'patient_notifications', 'visits', 'appointments', 'ape_records', 'ape_documents', 'clinic_feedback', 'login_attempts', 'schema_migrations'] as $table) {
+foreach (['people', 'patients', 'patient_notifications', 'student_enrollment_declarations', 'visits', 'appointments', 'ape_records', 'ape_documents', 'clinic_feedback', 'login_attempts', 'schema_migrations'] as $table) {
     if (!in_array($table, $tables, true)) {
         throw new RuntimeException("Production baseline is missing {$table}.");
     }
 }
 
-if (count($tables) !== 35) {
-    throw new RuntimeException('Expected 35 production tables including patient_notifications, login_attempts, and schema_migrations; found ' . count($tables) . '.');
+if (count($tables) !== 36) {
+    throw new RuntimeException('Expected 36 production tables including student_enrollment_declarations, patient_notifications, login_attempts, and schema_migrations; found ' . count($tables) . '.');
+}
+
+if (!preg_match('/CREATE TABLE accounts \([\s\S]*?status_reason VARCHAR\(255\) NULL,/i', $schema)) {
+    throw new RuntimeException('Production accounts must include the inactive status reason.');
 }
 
 $schemaBeforeTriggers = explode('DELIMITER //', $schema, 2)[0];

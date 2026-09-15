@@ -37,6 +37,19 @@ $varied[6]['end'] = '20:00';
 if (appointment_weekly_hour_bounds($varied) !== [7, 18]) {
     throw new RuntimeException('Calendar bounds should span open days only.');
 }
+
+$mergedUnavailable = appointment_merge_continuous_unavailable_blocks([
+    ['_start_minute' => 600, '_end_minute' => 660, 'start_time' => '10:00:00', 'end_time' => '11:00:00', 'reason' => null],
+    ['_start_minute' => 660, '_end_minute' => 720, 'start_time' => '11:00:00', 'end_time' => '12:00:00', 'reason' => 'Clinic unavailable'],
+    ['_start_minute' => 780, '_end_minute' => 840, 'start_time' => '13:00:00', 'end_time' => '14:00:00', 'reason' => 'Staff meeting'],
+    ['_start_minute' => 840, '_end_minute' => 900, 'start_time' => '14:00:00', 'end_time' => '15:00:00', 'reason' => 'Equipment maintenance'],
+]);
+if (count($mergedUnavailable) !== 3
+    || $mergedUnavailable[0]['_start_minute'] !== 600
+    || $mergedUnavailable[0]['_end_minute'] !== 720
+    || $mergedUnavailable[0]['end_time'] !== '12:00:00') {
+    throw new RuntimeException('Continuous unavailable periods with the same reason were not merged correctly.');
+}
 try {
     appointment_schedule_from_form([
         'base_start' => '08:00', 'base_end' => '17:00', 'open_days' => ['1'],
@@ -56,6 +69,13 @@ if (!appointment_slot_is_open_for_schedule($schedule, '2026-09-15', '09:00:00')
     || appointment_slot_is_open_for_schedule($schedule, '2026-09-14', '09:00:00')
     || appointment_slot_is_open_for_schedule($schedule, '2026-09-15', '09:30:00')) {
     throw new RuntimeException('Appointment slot validation did not respect the weekly schedule.');
+}
+
+$patientAppointmentSource = file_get_contents(dirname(__DIR__) . '/patient-portal/patient-appointment.php');
+if (!str_contains($patientAppointmentSource, 'slot.hidden = !isWithinHours;')
+    || !str_contains($patientAppointmentSource, 'start >= hours.start && end <= hours.end')
+    || str_contains($patientAppointmentSource, "isClosed ? 'Closed'")) {
+    throw new RuntimeException('Patient time picker must hide slots outside the selected clinic hours.');
 }
 
 [$start, $end] = appointment_week_bounds(new DateTimeImmutable('2026-09-16'));

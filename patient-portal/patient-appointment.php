@@ -518,25 +518,26 @@ render_student_header('Appointments', 'appointment');
         timeSlots.forEach((slot) => {
             const start = slot.dataset.time.slice(0, 5);
             const end = String(Number(start.slice(0, 2)) + 1).padStart(2, '0') + ':00';
-            const isClosed = !hours?.enabled || start < hours.start || end > hours.end;
+            const isWithinHours = Boolean(hours?.enabled) && start >= hours.start && end <= hours.end;
             const isClinicBlocked = blockedTimes.includes(slot.dataset.time);
             const isReserved = reservedTimes.includes(slot.dataset.time);
             const isApeBlocked = apeTimes.includes(slot.dataset.time);
-            const isUnavailable = isClosed || isClinicBlocked || isReserved || isApeBlocked;
+            const isUnavailable = !isWithinHours || isClinicBlocked || isReserved || isApeBlocked;
+            slot.hidden = !isWithinHours;
             slot.classList.toggle('disabled', isUnavailable);
             slot.classList.toggle('is-blocked', isClinicBlocked || isApeBlocked);
             slot.classList.toggle('is-reserved', isReserved);
             slot.disabled = isUnavailable;
-            slot.title = isClosed ? 'Outside clinic working hours' : (isApeBlocked
+            slot.title = !isWithinHours ? '' : (isApeBlocked
                 ? 'Reserved for APE examinations'
                 : (isReserved
                     ? 'Another patient has already requested this time'
                     : (isClinicBlocked ? 'This time is unavailable' : '')));
-            slot.querySelector('.student-calendar-time-status').textContent = isClosed ? 'Closed' : (isApeBlocked
+            slot.querySelector('.student-calendar-time-status').textContent = isApeBlocked
                 ? 'APE Examination'
                 : (isReserved
                     ? 'Reserved'
-                    : (isClinicBlocked ? 'Unavailable' : 'Available')));
+                    : (isClinicBlocked ? 'Unavailable' : 'Available'));
 
             if (isUnavailable && slot.classList.contains('selected')) {
                 slot.classList.remove('selected');
@@ -557,7 +558,7 @@ render_student_header('Appointments', 'appointment');
         document.body.classList.add('student-time-modal-open');
 
         if (focusFirstTime) {
-            const firstAvailableTime = timeSlots.find((slot) => !slot.disabled);
+            const firstAvailableTime = timeSlots.find((slot) => !slot.hidden && !slot.disabled);
             firstAvailableTime?.focus({ preventScroll: true });
         }
     }

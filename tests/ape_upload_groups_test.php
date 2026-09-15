@@ -59,12 +59,12 @@ expect(!ape_can_review_returned_documents(array_replace($r, ['exam_date'=>null])
 expect(!ape_can_review_returned_documents(array_replace($r, ['required_document_count'=>0])), 'Initial archive remains a prerequisite.');
 expect(!ape_can_review_returned_documents(array_replace($r, ['clearance_status'=>'Cleared'])), 'Completed record cannot be reopened.');
 $earlyReturn = array_replace($r, ['follow_up_due_date'=>'2026-09-04', 'deferred_upload_due_date'=>'2026-09-04']);
-foreach (['2026-09-03', '2026-09-04', '2026-09-05', '2026-09-09', '2026-09-10'] as $day) {
+foreach (['2026-09-03', '2026-09-04'] as $day) {
     $deadline = ape_deadline_status($earlyReturn, new DateTimeImmutable($day));
-    expect($deadline['label'] === 'On Track', 'No document warning before the full examination week passes: '.$day);
-    expect($deadline['due_date'] === '2026-09-04', 'Warning grace must not change the saved return date.');
+    expect($deadline['label'] === 'On Track', 'Follow-up remains on track through its assigned return date: '.$day);
+    expect($deadline['due_date'] === '2026-09-04', 'Follow-up retains the saved return date.');
 }
-expect(ape_deadline_status($earlyReturn, new DateTimeImmutable('2026-09-11'))['label'] === 'Overdue', 'Warn after examination +7 days.');
+expect(ape_deadline_status($earlyReturn, new DateTimeImmutable('2026-09-05'))['label'] === 'Overdue', 'Follow-up warns immediately after its assigned return date.');
 expect(ape_deadline_status($r, new DateTimeImmutable('2026-09-14'))['label'] === 'On Track', 'No due-tomorrow urgent warning.');
 expect(ape_deadline_status($r, new DateTimeImmutable('2026-09-15'))['label'] === 'On Track', 'Allow the entire assigned due date.');
 expect(ape_deadline_status($r, new DateTimeImmutable('2026-09-16'))['label'] === 'Overdue', 'Warn after a later assigned due date passes.');
@@ -82,7 +82,7 @@ expect(ape_record_queue(fixtureRecord(array_slice($requirements,0,2),$initial,$r
 $allDeferred=$requirements; foreach($allDeferred as &$req)$req['upload_group']='follow_up'; unset($req);
 expect(ape_record_queue(fixtureRecord($allDeferred))==='follow_up','No initial documents means nothing to wait for in initial group.');
 $unassigned=$requirements; $unassigned[0]['upload_group']=null;
-expect(!ape_digital_submission_complete(fixtureRecord($unassigned,$initial)),'Unassigned legacy group must not silently advance.');
+expect(ape_digital_submission_complete(fixtureRecord($unassigned,$initial)),'Legacy unassigned requirements are treated as initial uploads in the digital-first flow.');
 expect(ape_record_queue(fixtureRecord($requirements,$initial,['exam_date'=>null]))==='examination','Exam prerequisite preserved.');
 
 class GroupTestStatement extends PDOStatement {
@@ -99,9 +99,9 @@ $fake=new GroupTestPDO();
 $plan=ape_hard_copy_review_plan($requirements,'follow_up',[3],'Return certificate');
 ape_apply_hard_copy_review($fake,$apeId,1,$plan,'2026-09-03','2026-09-15');
 expect(count($fake->calls)===3,'Review updates each requirement once.');
-expect($fake->calls[0][1][6]==='2026-09-10' && $fake->calls[0][1][7]==='initial','Initial deadline/group saved.');
-expect($fake->calls[2][1][4]===1 && $fake->calls[2][1][5]==='2026-09-15' && $fake->calls[2][1][7]==='follow_up','Deferred assigned date/group saved.');
-expect(str_contains($fake->calls[0][0],'upload_group = COALESCE(upload_group, ?)'),'Return review preserves original group.');
+expect($fake->calls[0][1][6]==='2026-09-10' && $fake->calls[0][1][9]==='initial','Initial deadline/group saved.');
+expect($fake->calls[2][1][4]===1 && $fake->calls[2][1][5]==='2026-09-15' && $fake->calls[2][1][9]==='follow_up','Deferred assigned date/group saved.');
+expect(str_contains($fake->calls[0][0],'ELSE COALESCE(upload_group, ?)'),'Return review preserves an existing group.');
 
 // Exercise the production archive branch with a fake connection, replacing only its requirement fetch.
 $source=file_get_contents(__DIR__.'/../public/ape/view.php');
@@ -148,6 +148,7 @@ function e($value): string { return htmlspecialchars((string)$value,ENT_QUOTES,'
 $renderStart=strpos($source,'function render_ape_hard_copy_review_fields(');
 $renderEnd=strpos($source,'$record = fetch_ape_record($id);',$renderStart);
 eval(substr($source,$renderStart,$renderEnd-$renderStart));
+expect(str_contains($source, "default => !empty(\$record['requirements_saved_at']) ? 'follow_up' : 'complete'"), 'A new unsaved hard-copy review must default to Complete.');
 $record=fixtureRecord($requirements);
 ob_start(); render_ape_hard_copy_review_fields($requirements,'follow_up',$record); $html=ob_get_clean();
 expect(str_contains($html,'Sep 10, 2026') && str_contains($html,'Sep 15, 2026'),'Clinic summary shows both deadlines.');
@@ -156,10 +157,23 @@ expect(!preg_match('/<(input|select|textarea)\b/',$html),'Saved summary stays lo
 $record['requirements_saved_at']=null;
 ob_start(); render_ape_hard_copy_review_fields($requirements,'follow_up',$record); $html=ob_get_clean();
 expect(str_contains($html,'Deferred TB Cert') && !preg_match('/<(input|select|textarea)\b/',$html),'Old unlocked saved examination renders a read-only summary.');
+$previewRequirements = $requirements;
+$previewRequirements[2]['_latest_document'] = array_replace(upload(104, 'Deferred TB Cert', 'Pending'), ['original_filename' => 'tb-certificate.pdf']);
+ob_start(); render_ape_hard_copy_review_fields($previewRequirements,'follow_up',$record); $previewHtml=ob_get_clean();
+expect(
+    str_contains($previewHtml, 'Preview File')
+        && str_contains($previewHtml, 'ape/document.php?id=104')
+        && str_contains($previewHtml, 'data-file-preview'),
+    'A requirement with an uploaded file must show its protected preview action beside the status.'
+);
+$withoutPreview = $requirements;
+ob_start(); render_ape_hard_copy_review_fields($withoutPreview,'follow_up',$record); $withoutPreviewHtml=ob_get_clean();
+expect(!str_contains($withoutPreviewHtml, 'Preview File'), 'A requirement without an upload must not show a preview action.');
 
 // Render the actual uploaded-file panel, not a duplicate test template.
 $record=fixtureRecord($requirements,[...$initial,upload(104,'Deferred TB Cert','Pending')],['requirements_saved_at'=>null]);
 $queueKey=ape_record_queue($record);
+$examSaved=!empty($record['exam_date']);
 $reviewDocuments=[upload(100,'Deferred TB Cert','Needs Correction'),upload(104,'Deferred TB Cert','Pending'),...$initial];
 foreach($reviewDocuments as &$doc)$doc['original_filename']='fixture.pdf'; unset($doc);
 $setupStart=strpos($source,"\$reviewUploadGroup = \$queueKey");
