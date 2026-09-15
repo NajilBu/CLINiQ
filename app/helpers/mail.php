@@ -9,7 +9,9 @@ require_once __DIR__ . '/../lib/phpmailer/src/SMTP.php';
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception as MailException;
 
-const CLINIQ_EMAIL_LOGO_CID = 'cliniq-clinic-logo';
+// Content-IDs must be RFC 2392-style identifiers for clients such as Gmail to
+// resolve the embedded image as inline content instead of an attachment.
+const CLINIQ_EMAIL_LOGO_CID = 'cliniq-clinic-logo@cliniq.local';
 const CLINIQ_EMAIL_LOGO_PLACEHOLDER = '{{CLINIQ_EMAIL_LOGO}}';
 
 function cliniq_email_logo_path(): ?string

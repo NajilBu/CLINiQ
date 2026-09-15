@@ -1,0 +1,6 @@
+RewriteEngine On
+
+# Keep legacy local CLINiQ links on the canonical Docker application.
+RewriteCond %{HTTP_HOST} ^(localhost|127\.0\.0\.1)(:[0-9]+)?$ [NC]
+RewriteCond %{REQUEST_URI} ^/CLINiQ(?:/|$) [NC]
+RewriteRule ^(.*)$ http://localhost:8081/$1 [R=307,L,NE]

@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../app/helpers/brand.php';
 require_once __DIR__ . '/../../app/helpers/student_id.php';
 require_once __DIR__ . '/../../app/services/SystemSettings.php';
 require_once __DIR__ . '/../../app/services/ProfilePhoto.php';
+require_once __DIR__ . '/../../app/services/PatientNotification.php';
 
 function student_start_session(): void
 {
@@ -346,6 +347,14 @@ function render_student_header(string $title, string $active = ''): void
     $navItems = student_nav_items();
     $profilePhotoPath = profile_photo_normalize_path($profile['profile_photo_path'] ?? null);
     $profilePhotoSrc = $profilePhotoPath !== null ? '../public/' . $profilePhotoPath : null;
+    $notificationUnreadCount = 0;
+    if (empty($profile['first_registration']) && (int) ($profile['person_id'] ?? 0) > 0) {
+        try {
+            $notificationUnreadCount = patient_notification_unread_count(auth_db(), (int) $profile['person_id']);
+        } catch (Throwable) {
+            // Keep the patient portal available if a deployment has not run the notification migration yet.
+        }
+    }
     if (!empty($profile['first_registration'])) {
         $navItems = array_intersect_key($navItems, ['dashboard' => true]);
     }
@@ -378,7 +387,7 @@ function render_student_header(string $title, string $active = ''): void
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title><?= student_e($title) ?> | <?= student_e($clinicProfile['system_name']) ?> Patient Portal</title>
         <meta name="csrf-token" content="<?= student_e(csrf_token()) ?>">
-        <script src="../public/assets/js/csrf.js?v=1" defer></script>
+        <script src="../public/assets/js/csrf.js?v=2" defer></script>
         <link rel="icon" href="<?= student_e($clinicLogoSrc) ?>">
         <link rel="apple-touch-icon" href="<?= student_e($clinicLogoSrc) ?>">
         <link href="../public/assets/vendor/fonts/inter-manrope.css?v=offline-1" rel="stylesheet">
@@ -409,7 +418,7 @@ function render_student_header(string $title, string $active = ''): void
             };
         </script>
         <link href="../public/assets/css/app.css?v=emergency-contact-1" rel="stylesheet">
-        <link href="assets/css/patient.css?v=profile-photo-2" rel="stylesheet">
+        <link href="assets/css/patient.css?v=<?= filemtime(__DIR__ . '/../assets/css/patient.css') ?>" rel="stylesheet">
         <style>
             :root {
                 --cliniq-primary: <?= student_e($theme['primary']) ?>;
@@ -458,6 +467,27 @@ function render_student_header(string $title, string $active = ''): void
                     <?php endforeach; ?>
                 </nav>
 
+                <?php if (empty($profile['first_registration'])): ?>
+                    <div class="student-notifications" data-patient-notifications data-endpoint="patient-notifications.php">
+                        <button type="button" class="student-notification-toggle" data-notification-toggle aria-label="Notifications" aria-expanded="false" aria-controls="patient-notification-panel">
+                            <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
+                            <span class="student-notification-badge" data-notification-badge <?= $notificationUnreadCount > 0 ? '' : 'hidden' ?>><?= min(99, $notificationUnreadCount) ?></span>
+                        </button>
+                        <section id="patient-notification-panel" class="student-notification-panel" data-notification-panel hidden aria-label="Patient notifications">
+                            <div class="student-notification-heading">
+                                <div>
+                                    <strong>Notifications</strong>
+                                    <span data-notification-summary><?= $notificationUnreadCount ?> unread</span>
+                                </div>
+                                <button type="button" data-notification-mark-all <?= $notificationUnreadCount > 0 ? '' : 'disabled' ?>>Mark all read</button>
+                            </div>
+                            <div class="student-notification-list" data-notification-list>
+                                <p class="student-notification-state">Loading notifications…</p>
+                            </div>
+                        </section>
+                    </div>
+                <?php endif; ?>
+
                 <div class="student-profile-chip">
                     <?php if (empty($profile['first_registration'])): ?>
                         <button type="button" class="student-profile-photo" data-profile-photo-open="patient-profile-photo-modal" title="Change profile picture" aria-label="Change profile picture">
@@ -484,15 +514,50 @@ function render_student_header(string $title, string $active = ''): void
                         </a>
                     </div>
                 </div>
+
+                <?php if (empty($profile['first_registration'])): ?>
+                    <details class="student-mobile-account">
+                        <summary class="student-mobile-account-toggle" aria-label="Open account menu">
+                            <span class="material-symbols-outlined" aria-hidden="true">account_circle</span>
+                            <span class="sr-only">Account menu</span>
+                        </summary>
+                        <div class="student-mobile-account-menu">
+                            <div class="student-mobile-account-identity">
+                                <?php if ($profilePhotoSrc !== null): ?>
+                                    <img src="<?= student_e($profilePhotoSrc) ?>" alt="<?= student_e($profile['name']) ?> profile picture">
+                                <?php else: ?>
+                                    <span><?= student_e(student_initials($profile['name'])) ?></span>
+                                <?php endif; ?>
+                                <div>
+                                    <strong><?= student_e($profile['name']) ?></strong>
+                                    <small><?= student_e($profile['student_id']) ?></small>
+                                </div>
+                            </div>
+                            <button type="button" class="student-mobile-account-action" data-profile-photo-open="patient-profile-photo-modal">
+                                <span class="material-symbols-outlined" aria-hidden="true">photo_camera</span>
+                                Change profile picture
+                            </button>
+                            <button type="button" class="student-mobile-account-action" onclick="document.getElementById('change-password-modal').classList.remove('hidden')">
+                                <span class="material-symbols-outlined" aria-hidden="true">key</span>
+                                Change password
+                            </button>
+                            <a href="patient-login.php?logout=1" onclick="localStorage.clear();" class="student-mobile-account-action is-danger text-decoration-none">
+                                <span class="material-symbols-outlined" aria-hidden="true">logout</span>
+                                Sign out
+                            </a>
+                        </div>
+                    </details>
+                <?php endif; ?>
             </header>
 
             <main class="student-main">
                 <?php if ($flashSuccess): ?>
-                    <div class="student-note student-note-success mb-4 flex items-center justify-between">
+                    <div class="student-note student-note-success student-toast flex items-center justify-between" data-student-toast role="status" aria-live="polite">
                         <div class="flex items-center gap-2">
                             <span class="material-symbols-outlined">check_circle</span>
                             <div><?= student_e($flashSuccess) ?></div>
                         </div>
+                        <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
                     </div>
                 <?php endif; ?>
 
@@ -523,8 +588,21 @@ function render_student_footer(): void
     $photoPath = profile_photo_normalize_path($profile['profile_photo_path'] ?? null);
     $photoSrc = $photoPath !== null ? '../public/' . $photoPath : null;
     $returnTo = basename((string) ($_SERVER['SCRIPT_NAME'] ?? 'patient-dashboard.php'));
+    $navItems = student_nav_items();
+    if (!empty($profile['first_registration'])) {
+        $navItems = array_intersect_key($navItems, ['dashboard' => true]);
+    }
     ?>
             </main>
+            <nav class="student-mobile-bottom-nav" aria-label="Patient navigation">
+                <?php foreach ($navItems as $item): ?>
+                    <?php $isActive = basename($item['url']) === $returnTo; ?>
+                    <a href="<?= student_e($item['url']) ?>" class="student-mobile-bottom-nav-link <?= $isActive ? 'active' : '' ?> text-decoration-none" <?= $isActive ? 'aria-current="page"' : '' ?>>
+                        <span class="material-symbols-outlined" aria-hidden="true"><?= student_e($item['icon']) ?></span>
+                        <span><?= student_e($item['label']) ?></span>
+                    </a>
+                <?php endforeach; ?>
+            </nav>
         </div>
 
         <div id="patient-profile-photo-modal" class="profile-photo-modal" role="dialog" aria-modal="true" aria-labelledby="patient-profile-photo-title" hidden>
@@ -624,6 +702,148 @@ function render_student_footer(): void
         </div>
 
         <script>
+            (() => {
+                const root = document.querySelector('[data-patient-notifications]');
+                if (!root) return;
+
+                const endpoint = root.dataset.endpoint;
+                const toggle = root.querySelector('[data-notification-toggle]');
+                const panel = root.querySelector('[data-notification-panel]');
+                const badge = root.querySelector('[data-notification-badge]');
+                const summary = root.querySelector('[data-notification-summary]');
+                const list = root.querySelector('[data-notification-list]');
+                const markAll = root.querySelector('[data-notification-mark-all]');
+                let loading = false;
+
+                const iconFor = (category) => ({
+                    appointment: 'event_available',
+                    ape: 'fact_check',
+                    referral: 'medical_information'
+                })[category] || 'notifications';
+
+                const formatDate = (value) => {
+                    const date = new Date(String(value || '').replace(' ', 'T'));
+                    return Number.isNaN(date.getTime()) ? '' : new Intl.DateTimeFormat(undefined, {
+                        month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+                    }).format(date);
+                };
+
+                const setCount = (count) => {
+                    const unread = Math.max(0, Number(count) || 0);
+                    badge.textContent = unread > 99 ? '99+' : String(unread);
+                    badge.hidden = unread === 0;
+                    summary.textContent = `${unread} unread`;
+                    markAll.disabled = unread === 0;
+                };
+
+                const postAction = async (action, notificationId = null) => {
+                    const body = new URLSearchParams({ action });
+                    if (notificationId) body.set('notification_id', String(notificationId));
+                    const response = await fetch(endpoint, { method: 'POST', body });
+                    if (!response.ok) throw new Error('Unable to update notification.');
+                    return response.json();
+                };
+
+                const render = (items) => {
+                    list.replaceChildren();
+                    if (!items.length) {
+                        const empty = document.createElement('p');
+                        empty.className = 'student-notification-state';
+                        empty.textContent = 'No notifications yet.';
+                        list.append(empty);
+                        return;
+                    }
+
+                    items.forEach((item) => {
+                        const button = document.createElement('button');
+                        button.type = 'button';
+                        button.className = `student-notification-item${item.read_at ? '' : ' is-unread'}`;
+
+                        const icon = document.createElement('span');
+                        icon.className = 'student-notification-icon material-symbols-outlined';
+                        icon.textContent = iconFor(item.category);
+
+                        const content = document.createElement('span');
+                        content.className = 'student-notification-content';
+                        const title = document.createElement('strong');
+                        title.textContent = item.title;
+                        const message = document.createElement('span');
+                        message.textContent = item.message;
+                        const time = document.createElement('small');
+                        time.textContent = formatDate(item.created_at);
+                        content.append(title, message, time);
+                        button.append(icon, content);
+
+                        button.addEventListener('click', async () => {
+                            try {
+                                if (!item.read_at) await postAction('mark_read', item.notification_id);
+                            } finally {
+                                if (item.target_url) window.location.href = item.target_url;
+                                else loadNotifications();
+                            }
+                        });
+                        list.append(button);
+                    });
+                };
+
+                const loadNotifications = async () => {
+                    if (loading || document.hidden) return;
+                    loading = true;
+                    try {
+                        const response = await fetch(endpoint, { headers: { Accept: 'application/json' } });
+                        if (!response.ok) throw new Error('Unable to load notifications.');
+                        const data = await response.json();
+                        setCount(data.unread_count);
+                        render(Array.isArray(data.notifications) ? data.notifications : []);
+                    } catch (_) {
+                        if (!list.children.length || list.querySelector('.student-notification-state')) {
+                            list.replaceChildren();
+                            const error = document.createElement('p');
+                            error.className = 'student-notification-state';
+                            error.textContent = 'Notifications are temporarily unavailable.';
+                            list.append(error);
+                        }
+                    } finally {
+                        loading = false;
+                    }
+                };
+
+                toggle.addEventListener('click', () => {
+                    const opening = panel.hidden;
+                    panel.hidden = !opening;
+                    toggle.setAttribute('aria-expanded', opening ? 'true' : 'false');
+                    if (opening) loadNotifications();
+                });
+                markAll.addEventListener('click', async () => {
+                    try {
+                        const data = await postAction('mark_all_read');
+                        setCount(data.unread_count);
+                        render(Array.isArray(data.notifications) ? data.notifications : []);
+                    } catch (_) {
+                        loadNotifications();
+                    }
+                });
+                document.addEventListener('click', (event) => {
+                    if (!panel.hidden && !root.contains(event.target)) {
+                        panel.hidden = true;
+                        toggle.setAttribute('aria-expanded', 'false');
+                    }
+                });
+                document.addEventListener('keydown', (event) => {
+                    if (event.key === 'Escape' && !panel.hidden) {
+                        panel.hidden = true;
+                        toggle.setAttribute('aria-expanded', 'false');
+                        toggle.focus();
+                    }
+                });
+                document.addEventListener('visibilitychange', () => {
+                    if (!document.hidden) loadNotifications();
+                });
+
+                loadNotifications();
+                window.setInterval(loadNotifications, 30000);
+            })();
+
             (() => {
                 const topbar = document.querySelector('.student-topbar');
                 const toggle = document.querySelector('.student-nav-toggle');
@@ -757,6 +977,24 @@ function render_student_footer(): void
                 document.querySelectorAll('.profile-photo-modal.is-open').forEach(closeProfilePhotoModal);
             });
 
+            if (window.matchMedia('(max-width: 640px)').matches) {
+            document.querySelectorAll('details[data-mobile-accordion]').forEach((panel) => {
+                panel.addEventListener('toggle', () => {
+                    if (!panel.open) return;
+                    document.querySelectorAll('details[data-mobile-accordion][open]').forEach((other) => {
+                        if (other !== panel) other.open = false;
+                    });
+                });
+            });
+
+            document.querySelectorAll('[data-mobile-open-panel]').forEach((trigger) => {
+                trigger.addEventListener('click', () => {
+                    const panel = document.getElementById(trigger.dataset.mobileOpenPanel);
+                    if (panel instanceof HTMLDetailsElement) panel.open = true;
+                });
+            });
+        }
+
             function toggleModalPwVisibility(inputId, btn) {
                 const inp = document.getElementById(inputId);
                 if (inp) {
@@ -767,6 +1005,28 @@ function render_student_footer(): void
             }
         </script>
         <script src="../public/assets/js/file-preview.js?v=ape-popup-2"></script>
+        <script>
+            document.querySelectorAll('[data-student-toast]').forEach((toast) => {
+                const syncClearance = () => {
+                    document.body.classList.add('has-student-toast');
+                    document.documentElement.style.setProperty('--student-toast-clearance', `${Math.ceil(toast.getBoundingClientRect().height) + 24}px`);
+                };
+                const dismiss = () => {
+                    toast.remove();
+                    if (!document.querySelector('[data-student-toast]')) {
+                        document.body.classList.remove('has-student-toast');
+                        document.documentElement.style.removeProperty('--student-toast-clearance');
+                    }
+                };
+                toast.querySelector('.student-toast-dismiss')?.addEventListener('click', dismiss);
+                requestAnimationFrame(syncClearance);
+                new ResizeObserver(syncClearance).observe(toast);
+                const url = new URL(window.location.href);
+                ['uploaded', 'vitals_confirmed', 'activated', 'password_reset'].forEach((key) => url.searchParams.delete(key));
+                if (url.href !== window.location.href) history.replaceState({}, document.title, url);
+                window.setTimeout(dismiss, 5000);
+            });
+        </script>
     </body>
     </html>
     <?php
@@ -785,7 +1045,7 @@ function render_student_auth_header(string $title): void
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title><?= student_e($title) ?> | <?= student_e($clinicProfile['system_name']) ?> Patient Portal</title>
         <meta name="csrf-token" content="<?= student_e(csrf_token()) ?>">
-        <script src="../public/assets/js/csrf.js?v=1" defer></script>
+        <script src="../public/assets/js/csrf.js?v=2" defer></script>
         <link rel="icon" href="<?= student_e($clinicLogoSrc) ?>">
         <link rel="apple-touch-icon" href="<?= student_e($clinicLogoSrc) ?>">
         <link href="../public/assets/vendor/fonts/inter-manrope.css?v=offline-1" rel="stylesheet">
@@ -814,7 +1074,7 @@ function render_student_auth_header(string $title): void
             };
         </script>
         <link href="../public/assets/css/app.css?v=file-preview-2" rel="stylesheet">
-        <link href="assets/css/patient.css?v=profile-photo-2" rel="stylesheet">
+        <link href="assets/css/patient.css?v=<?= filemtime(__DIR__ . '/../assets/css/patient.css') ?>" rel="stylesheet">
         <style>
             :root {
                 --cliniq-primary: <?= student_e($theme['primary']) ?>;
@@ -844,6 +1104,28 @@ function render_student_auth_header(string $title): void
 function render_student_auth_footer(): void
 {
     ?>
+    <script>
+        document.querySelectorAll('[data-student-toast]').forEach((toast) => {
+            const syncClearance = () => {
+                document.body.classList.add('has-student-toast');
+                document.documentElement.style.setProperty('--student-toast-clearance', `${Math.ceil(toast.getBoundingClientRect().height) + 24}px`);
+            };
+            const dismiss = () => {
+                toast.remove();
+                if (!document.querySelector('[data-student-toast]')) {
+                    document.body.classList.remove('has-student-toast');
+                    document.documentElement.style.removeProperty('--student-toast-clearance');
+                }
+            };
+            toast.querySelector('.student-toast-dismiss')?.addEventListener('click', dismiss);
+            requestAnimationFrame(syncClearance);
+            new ResizeObserver(syncClearance).observe(toast);
+            const url = new URL(window.location.href);
+            ['uploaded', 'vitals_confirmed', 'activated', 'password_reset'].forEach((key) => url.searchParams.delete(key));
+            if (url.href !== window.location.href) history.replaceState({}, document.title, url);
+            window.setTimeout(dismiss, 5000);
+        });
+    </script>
     </body>
     </html>
     <?php

@@ -24,6 +24,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 render_header('Login');
 ?>
 <style>
+    body {
+        background:
+            radial-gradient(circle at 12% 16%, color-mix(in srgb, var(--cliniq-primary) 18%, transparent), transparent 28rem),
+            radial-gradient(circle at 88% 84%, color-mix(in srgb, var(--cliniq-primary-fixed) 74%, transparent), transparent 32rem),
+            linear-gradient(
+                135deg,
+                color-mix(in srgb, var(--cliniq-primary) 14%, #ffffff),
+                color-mix(in srgb, var(--cliniq-surface-low) 84%, #ffffff) 48%,
+                color-mix(in srgb, var(--cliniq-primary) 18%, #ffffff)
+            ) !important;
+        background-attachment: fixed;
+    }
+
+    .auth-main {
+        background: transparent !important;
+    }
+
     .staff-login-card {
         width: min(100%, 54rem);
         overflow: hidden;
@@ -228,7 +245,6 @@ render_header('Login');
         box-shadow: 0 10px 28px rgba(var(--cliniq-shadow-rgb), 0.08);
     }
 
-    body.is-electron-runtime .cliniq-entry-logo,
     body.is-electron-runtime .staff-login-logo {
         border-radius: 1rem;
     }
@@ -287,6 +303,7 @@ render_header('Login');
             <?php endif; ?>
 
             <form method="post">
+                <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
                 <div class="staff-field">
                     <label for="id_number">ID Number</label>
                     <input class="staff-login-input" id="id_number" name="id_number" type="text" value="<?= e($_POST['id_number'] ?? 'STAFF-0001') ?>" placeholder="STAFF-0001" autocomplete="username" required>

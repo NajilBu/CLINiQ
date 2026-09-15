@@ -65,10 +65,10 @@ function set_page_back_link(string $url, string $label = 'Back'): void
     ];
 }
 
-function render_clinic_command_header(string $eyebrow, string $heading, string $subheading = '', string $actionsHtml = ''): void
+function render_clinic_command_header(string $eyebrow, string $heading, string $subheading = '', string $actionsHtml = '', string $class = ''): void
 {
     ?>
-    <div class="dashboard-hero flex flex-col lg:flex-row lg:items-center justify-between gap-5 mb-8">
+    <div class="dashboard-hero <?= e($class) ?> flex flex-col lg:flex-row lg:items-center justify-between gap-5 mb-8">
         <div>
             <p class="text-[11px] font-black text-primary uppercase tracking-widest mb-2"><?= e($eyebrow) ?></p>
             <h1 class="font-headline text-3xl md:text-4xl font-extrabold text-[#17261d]"><?= e($heading) ?></h1>

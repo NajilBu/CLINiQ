@@ -32,6 +32,11 @@ function ensure_staff_profiles_schema(): void
     ensure_system_settings_schema();
 
     $db = auth_db();
+    $profilePhotoColumns = $db->query("SHOW COLUMNS FROM people LIKE 'profile_photo_path'")->fetchAll();
+    if (empty($profilePhotoColumns)) {
+        $db->exec("ALTER TABLE people ADD COLUMN profile_photo_path VARCHAR(255) NULL AFTER last_name");
+    }
+
     $columns = $db->query("SHOW COLUMNS FROM accounts LIKE 'email'")->fetchAll();
     if (empty($columns)) {
         $db->exec("ALTER TABLE accounts ADD COLUMN email VARCHAR(160) NULL");
@@ -343,6 +348,83 @@ function cliniq_setting_write(string $key, array $value, ?int $updatedBy = null)
         json_encode($value),
         $updatedBy,
     ]);
+}
+
+function cliniq_backup_external_settings(): array
+{
+    $saved = cliniq_setting_read('backup.external_destination', [
+        'enabled' => false,
+        'folder' => '',
+    ]);
+
+    return [
+        'enabled' => filter_var($saved['enabled'] ?? false, FILTER_VALIDATE_BOOLEAN),
+        'folder' => trim((string) ($saved['folder'] ?? '')),
+    ];
+}
+
+function save_cliniq_backup_external_settings(array $input, ?int $updatedBy = null): array
+{
+    $folder = trim((string) ($input['folder'] ?? ''));
+    $folder = str_replace('\\', '/', $folder);
+    $folder = trim($folder, " /");
+
+    if (strlen($folder) > 180) {
+        throw new InvalidArgumentException('The external backup folder name is too long.');
+    }
+    if ($folder !== '' && (str_starts_with($folder, '/') || preg_match('/^[A-Za-z]:/', $folder) === 1)) {
+        throw new InvalidArgumentException('Enter a folder relative to the connected backup drive, not a full drive path.');
+    }
+    foreach (explode('/', $folder) as $segment) {
+        if ($segment === '..' || preg_match('/[<>:"|?*\x00]/', $segment) === 1) {
+            throw new InvalidArgumentException('The external backup folder contains an invalid name.');
+        }
+    }
+
+    $settings = [
+        'enabled' => !empty($input['enabled']),
+        'folder' => $folder,
+    ];
+    cliniq_setting_write('backup.external_destination', $settings, $updatedBy);
+    return $settings;
+}
+
+function cliniq_clinic_server_settings(): array
+{
+    return cliniq_setting_read('clinic.server', [
+        'configured' => false,
+        'hostname' => '',
+        'local_ip' => '',
+    ]);
+}
+
+function save_cliniq_clinic_server_settings(array $input, ?int $updatedBy = null): array
+{
+    $hostname = trim((string) ($input['hostname'] ?? ''));
+    $localIp = trim((string) ($input['local_ip'] ?? ''));
+    if ($hostname === '' || strlen($hostname) > 63 || preg_match('/^[A-Za-z0-9][A-Za-z0-9-]{0,62}$/', $hostname) !== 1) {
+        throw new InvalidArgumentException('The clinic server computer name is invalid.');
+    }
+    if (filter_var($localIp, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false || $localIp === '127.0.0.1') {
+        throw new InvalidArgumentException('The clinic server must have a non-loopback IPv4 address.');
+    }
+
+    $settings = [
+        'configured' => true,
+        'hostname' => $hostname,
+        'local_ip' => $localIp,
+    ];
+    cliniq_setting_write('clinic.server', $settings, $updatedBy);
+    return $settings;
+}
+
+function clear_cliniq_clinic_server_settings(?int $updatedBy = null): void
+{
+    cliniq_setting_write('clinic.server', [
+        'configured' => false,
+        'hostname' => '',
+        'local_ip' => '',
+    ], $updatedBy);
 }
 
 function default_ape_required_documents(): array

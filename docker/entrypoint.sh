@@ -4,11 +4,13 @@ set -eu
 mkdir -p \
     /var/www/html/storage/documents/ape \
     /var/www/html/public/uploads \
+    /var/lib/php/sessions \
     "${BACKUP_ROOT:-/var/backups/cliniq}"
 
 chown -R www-data:www-data \
     /var/www/html/storage/documents \
     /var/www/html/public/uploads \
+    /var/lib/php/sessions \
     "${BACKUP_ROOT:-/var/backups/cliniq}"
 
 attempt=1

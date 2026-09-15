@@ -1,8 +1,8 @@
 (() => {
     'use strict';
 
-    const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
-    if (!token) return;
+    const readToken = () => document.querySelector('meta[name="csrf-token"]')?.content || '';
+    if (!readToken()) return;
 
     const sameOrigin = (url) => {
         try {
@@ -21,7 +21,7 @@
             input.name = '_csrf';
             form.prepend(input);
         }
-        input.value = token;
+        input.value = readToken();
     };
 
     document.querySelectorAll('form').forEach(secureForm);
@@ -41,7 +41,8 @@
         const url = request?.url || String(input);
         if (sameOrigin(url) && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
             const headers = new Headers(init.headers || request?.headers || {});
-            headers.set('X-CSRF-Token', token);
+            const token = readToken();
+            if (token) headers.set('X-CSRF-Token', token);
             init = { ...init, headers };
         }
         return originalFetch(input, init);
@@ -54,7 +55,8 @@
         return originalOpen.call(this, method, url, ...rest);
     };
     XMLHttpRequest.prototype.send = function (...args) {
-        if (this.__cliniqCsrf) this.setRequestHeader('X-CSRF-Token', token);
+        const token = readToken();
+        if (this.__cliniqCsrf && token) this.setRequestHeader('X-CSRF-Token', token);
         return originalSend.apply(this, args);
     };
 })();

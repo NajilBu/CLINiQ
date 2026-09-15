@@ -109,6 +109,7 @@ render_clinic_command_header(
 </style>
 
 <form method="post" id="visitForm" class="space-y-6">
+    <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <section class="clinic-card p-6 space-y-5">
             <h2 class="font-headline text-lg font-extrabold text-[#1c2a59] flex items-center gap-2 mb-1">

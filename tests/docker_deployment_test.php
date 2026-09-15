@@ -39,7 +39,7 @@ foreach (['cliniq_database', 'cliniq_documents', 'cliniq_uploads', 'cliniq_backu
         throw new RuntimeException("Compose configuration is missing {$expected}.");
     }
 }
-foreach (['profiles: ["quick-tunnel"]', 'cloudflare/cloudflared', 'http://gateway:8080', 'public-gateway.conf'] as $expected) {
+foreach (['profiles: ["quick-tunnel"]', 'cloudflare/cloudflared', 'http://gateway:8081', 'public-gateway.conf'] as $expected) {
     if (!str_contains($compose, $expected)) {
         throw new RuntimeException("Compose quick tunnel configuration is missing {$expected}.");
     }
@@ -83,7 +83,7 @@ foreach (['/var/backups/cliniq', '/usr/bin/mariadb-dump', 'DIRECTORY_SEPARATOR']
         throw new RuntimeException("Backup service is not container-compatible: {$expected}");
     }
 }
-if (!str_contains($electron, "DEFAULT_CLINIC_URL = 'http://localhost:8080/public/'")) {
+if (!str_contains($electron, "DEFAULT_CLINIC_URL = 'http://localhost:8081/public/'")) {
     throw new RuntimeException('Electron must connect to the local Docker application port.');
 }
 if (!str_contains($electron, "new URL('../patient-portal/', clinicBaseUrl)")) {

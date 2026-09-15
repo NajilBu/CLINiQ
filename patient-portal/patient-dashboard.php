@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../app/config/database.php';
 require_once __DIR__ . '/../app/services/AppointmentWorkflow.php';
 require_once __DIR__ . '/../app/services/ApeWorkflow.php';
+require_once __DIR__ . '/../app/services/ClinicFeedback.php';
 require_once __DIR__ . '/includes/patient-layout.php';
 
 ensure_appointment_schema();
@@ -151,6 +152,9 @@ if (re_enrollment_pending()) {
 
 $patientId = (int) $profile['patient_id'];
 $appointmentPatientId = (int) $profile['person_id'];
+$pendingFeedbackVisits = clinic_feedback_pending_active_visits(auth_db(), $appointmentPatientId);
+$feedbackRequired = count($pendingFeedbackVisits) > 0;
+$feedbackPortalUrl = '../public/clinic-feedback.php?portal=1';
 
 $appointmentStmt = appointment_db()->prepare("
     SELECT *
@@ -287,7 +291,7 @@ if (empty($profile['emergency_instructions'])) {
 }
 $passportComplete = empty($passportMissing);
 $apeNeedsAction = ($latestApe['clearance_status'] ?? 'Pending') !== 'Cleared';
-$requiredActionCount = ($passportComplete ? 0 : 1) + ($apeNeedsAction ? 1 : 0);
+$requiredActionCount = ($passportComplete ? 0 : 1) + ($apeNeedsAction ? 1 : 0) + ($feedbackRequired ? 1 : 0);
 $profileDetailLabel = match ($profile['account_type'] ?? 'patient') {
     'student' => 'Program',
     'faculty', 'school_personnel' => 'Department',
@@ -327,9 +331,10 @@ render_student_header('Dashboard', 'dashboard');
 ?>
 
 <?php if (isset($_GET['activated'])): ?>
-    <div class="student-note student-note-success mb-4">
+    <div class="student-note student-note-success student-toast" data-student-toast role="status" aria-live="polite">
         <span class="material-symbols-outlined">check_circle</span>
         <div>Your account is now active. Your dashboard is fully unlocked.</div>
+        <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
     </div>
 <?php endif; ?>
 
@@ -400,6 +405,26 @@ render_student_header('Dashboard', 'dashboard');
             </article>
         <?php endif; ?>
 
+        <?php if ($feedbackRequired): ?>
+            <article class="student-action-card student-action-card-danger">
+                <div class="flex items-start gap-4">
+                    <span class="student-action-step student-action-step-danger"><?= (int) (($passportComplete ? 0 : 1) + ($apeNeedsAction ? 1 : 0) + 1) ?></span>
+                    <span class="student-icon-box student-icon-box-danger">
+                        <span class="material-symbols-outlined">rate_review</span>
+                    </span>
+                    <div>
+                        <p class="student-action-kicker">Required clinic feedback</p>
+                        <h2>Share feedback for your active clinic visit</h2>
+                        <p><?= count($pendingFeedbackVisits) === 1 ? 'One active visit needs feedback.' : count($pendingFeedbackVisits) . ' active visits need feedback.' ?> You cannot request another clinic appointment until this required feedback is completed.</p>
+                    </div>
+                </div>
+                <a href="<?= student_e($feedbackPortalUrl) ?>" class="student-button-danger text-decoration-none">
+                    Complete Required Feedback
+                    <span class="material-symbols-outlined">arrow_forward</span>
+                </a>
+            </article>
+        <?php endif; ?>
+
         <?php if ($requiredActionCount === 0): ?>
             <article class="student-action-card">
                 <div class="flex items-start gap-4">
@@ -417,7 +442,31 @@ render_student_header('Dashboard', 'dashboard');
     </div>
 </section>
 
-<div class="student-grid">
+<section class="student-dashboard-mobile-overview" aria-label="Dashboard summaries">
+    <a href="patient-ape-status.php" class="student-dashboard-summary-row text-decoration-none" aria-label="View APE Status">
+        <span class="student-icon-box"><span class="material-symbols-outlined">task_alt</span></span>
+        <span class="student-dashboard-summary-copy">
+            <strong>APE Status</strong>
+            <span><?= student_e($latestApe ? ape_record_stage_label($latestApe) : $apeStatus) ?> · <?= (int) $apePercent ?>% complete</span>
+        </span>
+        <span class="student-badge <?= student_e($apeBadgeClass) ?>"><?= student_e($latestApe['clearance_status'] ?? 'Pending') ?></span>
+        <span class="material-symbols-outlined student-dashboard-summary-arrow" aria-hidden="true">chevron_right</span>
+    </a>
+
+    <a href="patient-appointment.php" class="student-dashboard-summary-row text-decoration-none" aria-label="View Appointments">
+        <span class="student-icon-box"><span class="material-symbols-outlined">calendar_month</span></span>
+        <span class="student-dashboard-summary-copy">
+            <strong>Appointments</strong>
+            <span><?php if ($latestAppointment): ?><?= student_e(date('M j, Y · g:i A', strtotime($latestAppointment['appointment_datetime']))) ?><?php else: ?>No appointment scheduled<?php endif; ?></span>
+        </span>
+        <span class="student-badge <?= student_e($appointmentBadgeClass) ?>"><?= student_e($appointmentDisplayStatus) ?></span>
+        <span class="material-symbols-outlined student-dashboard-summary-arrow" aria-hidden="true">chevron_right</span>
+    </a>
+</section>
+
+<div class="student-grid student-dashboard-detail-stack">
+    <details class="student-mobile-more dashboard-profile-more" open>
+        <summary>Profile details</summary>
     <section class="student-card student-card-pad student-span-4 student-clickable-card" data-href="patient-passport.php" role="link" tabindex="0" aria-label="Open Health Passport profile">
         <div class="flex items-center gap-3 mb-5">
             <?php $dashboardPhotoPath = profile_photo_normalize_path($profile['profile_photo_path'] ?? null); ?>
@@ -453,8 +502,9 @@ render_student_header('Dashboard', 'dashboard');
             </div>
         </div>
     </section>
+    </details>
 
-    <section class="student-card student-span-4 student-clickable-card" data-href="patient-ape-status.php" role="link" tabindex="0" aria-label="Open APE status">
+    <section class="student-card student-span-4 student-clickable-card student-dashboard-duplicate" data-href="patient-ape-status.php" role="link" tabindex="0" aria-label="Open APE status">
         <div class="student-card-header">
             <div>
                 <h2 class="student-card-title">APE Progress</h2>
@@ -504,7 +554,7 @@ render_student_header('Dashboard', 'dashboard');
         </div>
     </section>
 
-    <section class="student-card student-span-4 student-clickable-card" data-href="patient-appointment.php" role="link" tabindex="0" aria-label="Open appointment page">
+    <section class="student-card student-span-4 student-clickable-card student-dashboard-duplicate" data-href="patient-appointment.php" role="link" tabindex="0" aria-label="Open appointment page">
         <div class="student-card-header">
             <div>
                 <h2 class="student-card-title">Appointment</h2>
@@ -544,6 +594,8 @@ render_student_header('Dashboard', 'dashboard');
     </section>
 </div>
 
+<details class="student-mobile-more dashboard-clinic-notes" open>
+    <summary>Clinic notes</summary>
 <section class="student-card mt-4">
     <div class="student-card-header">
         <div>
@@ -561,9 +613,13 @@ render_student_header('Dashboard', 'dashboard');
         <?php endforeach; ?>
     </div>
 </section>
+</details>
 
 <script>
 (function () {
+    if (window.matchMedia('(max-width: 640px)').matches) {
+        document.querySelectorAll('.dashboard-profile-more, .dashboard-clinic-notes').forEach((panel) => panel.removeAttribute('open'));
+    }
     document.querySelectorAll('[data-href].student-clickable-card').forEach((card) => {
         const navigate = () => {
             window.location.href = card.dataset.href;

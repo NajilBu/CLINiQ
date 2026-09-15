@@ -3,7 +3,7 @@
 The clinic application, backup scheduler, and MariaDB run as separate containers. Database data,
 uploaded documents, and backups use independent Docker volumes. The database is
 not published to the host network; only the application is available at
-`127.0.0.1:8080` until the Cloudflare Tunnel step is completed.
+`127.0.0.1:8081` until the Cloudflare Tunnel step is completed.
 
 ## Prepare configuration
 
@@ -34,7 +34,7 @@ fresh volume, and applies pending migrations before Apache begins serving.
 Check the local health endpoint:
 
 ```powershell
-Invoke-RestMethod http://127.0.0.1:8080/public/api/health.php
+Invoke-RestMethod http://127.0.0.1:8081/public/api/health.php
 ```
 
 Expected result: `status` is `ready` and the database service is `ready`.
@@ -58,6 +58,14 @@ docker compose --profile maintenance run --rm restore-test
 The root database credential is blanked in the normal `app` and `backup`
 containers. Only this short-lived maintenance container receives it, creates the
 temporary verification database, and removes that database before exiting.
+
+## External-drive backup and recovery
+
+Do not enable an external backup copy until a BitLocker-encrypted removable drive
+has been prepared. The Compose default is a local development placeholder and is
+not disaster recovery. Follow [the external-drive backup and recovery runbook](docs/EXTERNAL_DRIVE_BACKUP_AND_RECOVERY.md)
+to prepare the drive, mount it into Docker, verify an encrypted copy, and perform
+the replacement-computer recovery drill.
 
 For a full recovery drill, decrypt a snapshot into a new temporary folder inside
 the app container, then copy that folder to a protected administrator location:
@@ -99,7 +107,7 @@ redirects to the patient login. The gateway exposes only the patient portal,
 required static assets and clinic logo, and the emergency passport endpoint.
 Staff login, visitor registration, settings, backups, and every other route
 return `404` through the public address. They remain available locally through
-Electron and `http://localhost:8080/public/`.
+Electron and `http://localhost:8081/public/`.
 
 Replace `$tunnelUrl` below with the temporary address and verify both sides of
 the boundary:

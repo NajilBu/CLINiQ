@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../app/config/database.php';
 require_once __DIR__ . '/../app/services/AppointmentWorkflow.php';
+require_once __DIR__ . '/../app/services/ClinicFeedback.php';
 require_once __DIR__ . '/includes/patient-layout.php';
 
 ensure_appointment_schema();
@@ -12,6 +13,9 @@ $db = appointment_db();
 $patientProfileStmt = $db->prepare('SELECT COUNT(*) FROM patients WHERE person_id = ?');
 $patientProfileStmt->execute([$patientId]);
 $hasAppointmentPatientProfile = (int) $patientProfileStmt->fetchColumn() === 1;
+$pendingFeedbackVisits = clinic_feedback_pending_active_visits($db, $patientId);
+$feedbackRequired = count($pendingFeedbackVisits) > 0;
+$feedbackPortalUrl = '../public/clinic-feedback.php?portal=1';
 
 $timeSlots = [
     ['value' => '08:00:00', 'label' => '8:00 AM'],
@@ -73,7 +77,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!$hasAppointmentPatientProfile || 
 
     $blocksForPostMonth = appointment_blocks_for_month($month);
 
-    if ($type === '') {
+    if ($feedbackRequired) {
+        $error = 'Required feedback for your active clinic visit is still pending. You cannot request another clinic appointment until this feedback is completed.';
+    } elseif ($type === '') {
         $error = 'Please choose an appointment purpose.';
     } elseif (!$selectedDate || $selectedDate->format('Y-m-d') !== $dateStr) {
         $error = 'Please choose a valid appointment date.';
@@ -108,6 +114,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!$hasAppointmentPatientProfile || 
             }
         }
     }
+}
+
+if ($success) {
+    student_start_session();
+    $_SESSION['student_flash_success'] = 'Appointment updated. ' . $successMessage;
+    header('Location: patient-appointment.php?month=' . urlencode($month->format('Y-m')));
+    exit;
 }
 
 $blocksByDate = appointment_blocks_for_month($month);
@@ -173,12 +186,13 @@ render_student_header('Appointments', 'appointment');
 </section>
 
 <?php if ($success): ?>
-    <div class="student-note student-note-success mb-4">
+    <div class="student-note student-note-success student-toast" data-student-toast role="status" aria-live="polite">
         <span class="material-symbols-outlined">check_circle</span>
         <div>
             <strong>Appointment updated.</strong>
             <?= student_e($successMessage) ?>
         </div>
+        <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
     </div>
 <?php elseif ($error !== ''): ?>
     <div class="student-note student-note-danger mb-4">
@@ -190,7 +204,7 @@ render_student_header('Appointments', 'appointment');
     </div>
 <?php endif; ?>
 
-<div class="student-grid">
+<div class="student-grid student-appointment-layout">
     <section class="student-card student-span-7">
         <div class="student-card-header">
             <div>
@@ -200,6 +214,16 @@ render_student_header('Appointments', 'appointment');
             <span class="student-badge student-badge-warning">Pending First</span>
         </div>
         <div class="student-card-pad">
+            <?php if ($feedbackRequired): ?>
+                <div class="student-note student-note-danger">
+                    <span class="material-symbols-outlined">rate_review</span>
+                    <div>
+                        <strong>Feedback required before another appointment.</strong><br>
+                        <?= count($pendingFeedbackVisits) === 1 ? 'One active visit needs your feedback.' : count($pendingFeedbackVisits) . ' active visits need your feedback.' ?> You cannot request another clinic appointment until this required feedback is completed.
+                        <p class="mt-3 mb-0"><a href="<?= student_e($feedbackPortalUrl) ?>" class="student-button-danger text-decoration-none">Complete Required Feedback <span class="material-symbols-outlined">arrow_forward</span></a></p>
+                    </div>
+                </div>
+            <?php else: ?>
             <form id="booking-form" method="POST" action="?month=<?= student_e($month->format('Y-m')) ?>">
                 <input type="hidden" name="appt_date" id="appt-date-input" value="">
                 <input type="hidden" name="appt_time" id="appt-time-input" value="">
@@ -277,10 +301,16 @@ render_student_header('Appointments', 'appointment');
                     </div>
                     <p class="student-calendar-action-hint">
                         <span class="material-symbols-outlined" aria-hidden="true">touch_app</span>
-                        Double-click an available date to choose a time. On touchscreens, tap once.
+                        <span class="student-calendar-desktop-hint">Double-click an available date to choose a time. On touchscreens, tap once.</span>
+                        <span class="student-calendar-mobile-hint">Tap a date to select a time.</span>
                     </p>
                 </div>
 
+                <div class="student-appointment-booking-sheet" id="appointment-booking-sheet" aria-hidden="true">
+                    <div class="student-appointment-booking-sheet-head">
+                        <div><p>Appointment details</p><strong>Finish your request</strong></div>
+                        <button type="button" data-close-booking-sheet aria-label="Close appointment details"><span class="material-symbols-outlined">close</span></button>
+                    </div>
                 <div class="student-field">
                     <label class="student-label" for="appt-type">Appointment Purpose</label>
                     <select id="appt-type" name="appt_type" class="student-select" required>
@@ -310,10 +340,14 @@ render_student_header('Appointments', 'appointment');
                     Send Appointment Request
                     <span class="material-symbols-outlined">send</span>
                 </button>
+                </div>
             </form>
+            <?php endif; ?>
         </div>
     </section>
 
+    <details class="student-mobile-more appointment-calendar-guide">
+        <summary>Calendar guide</summary>
     <section class="student-card student-span-5">
         <div class="student-card-header">
             <div>
@@ -364,6 +398,7 @@ render_student_header('Appointments', 'appointment');
             </div>
         </div>
     </section>
+    </details>
 </div>
 
 <div class="student-calendar-time-modal" id="appointment-time-modal" aria-hidden="true">
@@ -405,6 +440,8 @@ render_student_header('Appointments', 'appointment');
     </div>
 </div>
 
+<details class="student-mobile-more appointment-history">
+    <summary>Recent appointment requests</summary>
 <section class="student-card mt-4">
     <div class="student-card-header">
         <div>
@@ -472,7 +509,9 @@ render_student_header('Appointments', 'appointment');
         <?php endif; ?>
     </div>
 </section>
+</details>
 
+<?php if (!$feedbackRequired): ?>
 <script>
     const availability = <?= json_encode($availabilityPayload, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
     const dateInput = document.getElementById('appt-date-input');
@@ -482,6 +521,8 @@ render_student_header('Appointments', 'appointment');
     const selectedDateLabel = document.getElementById('selected-date-label');
     const selectedScheduleSummary = document.getElementById('selected-schedule-summary');
     const selectedScheduleText = document.getElementById('selected-schedule-text');
+    const bookingSheet = document.getElementById('appointment-booking-sheet');
+    const mobileBookingSheet = window.matchMedia('(max-width: 640px)').matches;
     const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
 
     function formatSelectedDate(date) {
@@ -531,6 +572,16 @@ render_student_header('Appointments', 'appointment');
         document.body.classList.remove('student-time-modal-open');
     }
 
+    function closeBookingSheet() {
+        bookingSheet.classList.remove('active');
+        bookingSheet.setAttribute('aria-hidden', 'true');
+    }
+
+    function openBookingSheet() {
+        bookingSheet.classList.add('active');
+        bookingSheet.setAttribute('aria-hidden', 'false');
+    }
+
     function openTimeModal(focusFirstTime = false) {
         timeModal.classList.add('active');
         timeModal.setAttribute('aria-hidden', 'false');
@@ -556,6 +607,7 @@ render_student_header('Appointments', 'appointment');
         updateTimeSlots(button.dataset.date);
         selectedDateLabel.textContent = formatSelectedDate(button.dataset.date);
         closeTimeModal();
+        closeBookingSheet();
 
         if (!revealTimes) {
             return;
@@ -589,7 +641,12 @@ render_student_header('Appointments', 'appointment');
             selectedScheduleText.textContent = formatSelectedDate(dateInput.value) + ' at ' + chosenTime;
             selectedScheduleSummary.hidden = false;
             closeTimeModal();
+            if (mobileBookingSheet) openBookingSheet();
         });
+    });
+
+    document.querySelectorAll('[data-close-booking-sheet]').forEach((button) => {
+        button.addEventListener('click', closeBookingSheet);
     });
 
     document.querySelectorAll('[data-close-time-modal]').forEach((button) => {
@@ -615,5 +672,6 @@ render_student_header('Appointments', 'appointment');
         }
     });
 </script>
+<?php endif; ?>
 
 <?php render_student_footer(); ?>

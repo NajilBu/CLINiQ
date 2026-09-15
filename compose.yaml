@@ -13,11 +13,14 @@ services:
       database:
         condition: service_healthy
     ports:
-      - "127.0.0.1:8080:80"
+      - "127.0.0.1:8081:80"
     volumes:
       - cliniq_documents:/var/www/html/storage/documents
       - cliniq_uploads:/var/www/html/public/uploads
       - cliniq_backups:/var/backups/cliniq
+      - cliniq_sessions:/var/lib/php/sessions
+      # Development placeholder only. Production must mount a prepared encrypted external drive.
+      - ${BACKUP_EXTERNAL_HOST_PATH:-./external-backups}:/var/backups/external
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "http://localhost/public/api/health.php"]
       interval: 30s
@@ -42,6 +45,8 @@ services:
       - cliniq_documents:/var/www/html/storage/documents:ro
       - cliniq_uploads:/var/www/html/public/uploads:ro
       - cliniq_backups:/var/backups/cliniq
+      # Development placeholder only. Production must mount a prepared encrypted external drive.
+      - ${BACKUP_EXTERNAL_HOST_PATH:-./external-backups}:/var/backups/external
     networks:
       - cliniq_internal
 
@@ -57,12 +62,14 @@ services:
         condition: service_healthy
     volumes:
       - cliniq_backups:/var/backups/cliniq
+      # Development placeholder only. Production must mount a prepared encrypted external drive.
+      - ${BACKUP_EXTERNAL_HOST_PATH:-./external-backups}:/var/backups/external:ro
     networks:
       - cliniq_internal
 
   gateway:
     image: nginx:1.27-alpine
-    profiles: ["quick-tunnel"]
+    profiles: ["public-portal", "quick-tunnel"]
     restart: unless-stopped
     depends_on:
       app:
@@ -82,11 +89,13 @@ services:
 
   cloudflared:
     image: cloudflare/cloudflared:latest
-    profiles: ["quick-tunnel"]
+    profiles: ["public-portal"]
     restart: unless-stopped
-    command: tunnel --no-autoupdate --url http://gateway:8080
+    command: tunnel --no-autoupdate run --token-file /etc/cloudflared/tunnel-token
     depends_on:
       - gateway
+    volumes:
+      - ./docker/cloudflared:/etc/cloudflared:ro
     read_only: true
     security_opt:
       - no-new-privileges:true
@@ -111,9 +120,20 @@ services:
 
 volumes:
   cliniq_database:
+    name: cliniq_cliniq_database
+    external: true
   cliniq_documents:
+    name: cliniq_cliniq_documents
+    external: true
   cliniq_uploads:
+    name: cliniq_cliniq_uploads
+    external: true
   cliniq_backups:
+    name: cliniq_cliniq_backups
+    external: true
+  cliniq_sessions:
+    name: cliniq_cliniq_sessions
+    external: true
 
 networks:
   cliniq_internal:
