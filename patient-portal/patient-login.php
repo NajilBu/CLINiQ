@@ -92,9 +92,10 @@ render_student_auth_header('Patient Login');
             <p class="student-card-copy mb-5">Enter the password provided by the clinic or the password you created after activation.</p>
 
             <?php if (($_GET['password_reset'] ?? '') === '1'): ?>
-                <div class="student-note student-note-success mb-4">
+                <div class="student-note student-note-success student-toast" data-student-toast role="status" aria-live="polite">
                     <span class="material-symbols-outlined">check_circle</span>
                     <div>Password updated. You can now sign in with your new password.</div>
+                    <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
                 </div>
             <?php endif; ?>
 

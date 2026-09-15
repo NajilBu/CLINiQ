@@ -8,6 +8,10 @@ $submitted = false;
 $idNumber = '';
 $email = '';
 
+student_start_session();
+$submitted = !empty($_SESSION['patient_password_recovery_success']);
+unset($_SESSION['patient_password_recovery_success']);
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $idNumber = normalize_id_number(trim((string) ($_POST['id_number'] ?? '')));
     $email = trim((string) ($_POST['email'] ?? ''));
@@ -20,11 +24,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         try {
             request_patient_password_reset($idNumber, $email, $_SERVER['REMOTE_ADDR'] ?? null);
-            $submitted = true;
         } catch (Throwable $exception) {
             error_log('[CLINiQ Password Reset] Request failed: ' . $exception->getMessage());
-            $submitted = true;
         }
+        $_SESSION['patient_password_recovery_success'] = true;
+        header('Location: patient-forgot-password.php');
+        exit;
     }
 }
 render_student_auth_header('Recover Password');
@@ -57,9 +62,10 @@ render_student_auth_header('Recover Password');
             <h2 class="student-card-title text-xl">Password recovery</h2>
             <p class="student-card-copy mb-5">Enter your ID number and school email. The clinic system will send recovery instructions.</p>
 
-            <div class="student-note student-note-success mb-4 <?= $submitted ? '' : 'hidden' ?>">
+            <div class="student-note student-note-success student-toast <?= $submitted ? '' : 'hidden' ?>" data-student-toast role="status" aria-live="polite">
                 <span class="material-symbols-outlined">mark_email_read</span>
                 <div>If the ID number and email match an active patient account, recovery instructions will arrive shortly. Check the spam folder as well.</div>
+                <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
             </div>
 
             <div class="student-note student-note-danger mb-4 <?= $error === '' ? 'hidden' : '' ?>">
