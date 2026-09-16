@@ -197,6 +197,7 @@ CREATE TABLE patients (
   show_bmi_on_passport TINYINT(1) NOT NULL DEFAULT 1,
   emergency_token CHAR(64) NULL UNIQUE,
   token_enabled TINYINT(1) NOT NULL DEFAULT 1,
+  access_status ENUM('Applicant', 'Official') NOT NULL DEFAULT 'Official',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE CASCADE

@@ -530,6 +530,53 @@ h6,
     line-height: 1;
 }
 
+.app-alert-sound-toggle,
+.app-alert-connection {
+    min-height: 2.25rem;
+    border-radius: 0.85rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.48rem 0.72rem;
+    font-size: 0.7rem;
+    font-weight: 800;
+}
+
+.app-alert-sound-toggle {
+    border: 1px solid rgba(220, 38, 38, 0.24);
+    background: #fff7f7;
+    color: #b91c1c;
+    cursor: pointer;
+}
+
+.app-alert-sound-toggle:hover {
+    border-color: rgba(220, 38, 38, 0.48);
+    background: #fee2e2;
+}
+
+.app-alert-sound-toggle[aria-pressed="true"] {
+    border-color: rgba(100, 116, 139, 0.28);
+    background: #f8fafc;
+    color: #64748b;
+}
+
+.app-alert-sound-toggle .material-symbols-outlined,
+.app-alert-connection .material-symbols-outlined {
+    font-size: 1rem;
+}
+
+.app-alert-connection {
+    border: 1px solid #f59e0b;
+    background: #fffbeb;
+    color: #92400e;
+}
+
+.app-alert-sound-toggle[hidden],
+.app-alert-connection[hidden],
+.app-alert-link[hidden] {
+    display: none !important;
+}
+
 .app-logout {
     display: inline-flex;
     align-items: center;

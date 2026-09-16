@@ -44,7 +44,7 @@ $stmt = auth_db()->prepare("
     LEFT JOIN departments ed ON ed.id = se.department_id
     LEFT JOIN clinic_staff cs ON cs.person_id = pe.id
     LEFT JOIN departments cd ON cd.id = cs.department_id
-    WHERE pt.emergency_token = ? AND pt.token_enabled = 1
+    WHERE pt.emergency_token = ? AND pt.token_enabled = 1 AND pt.access_status = 'Official'
     LIMIT 1
 ");
 $stmt->execute([$token]);

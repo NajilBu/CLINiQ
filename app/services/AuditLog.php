@@ -73,7 +73,7 @@ function audit_log_event(
 function audit_log_module_label(string $module): string
 {
     return [
-        'accounts' => 'Staff accounts',
+        'accounts' => 'Account management',
         'ape' => 'Annual physical examination',
         'auth' => 'Sign-in activity',
         'incident' => 'Emergency incidents',
@@ -100,6 +100,10 @@ function audit_log_action_label(string $action): string
         'inventory_transaction_recorded' => 'Recorded an inventory transaction',
         'passport_profile_updated' => 'Updated emergency passport information',
         'passport_viewed' => 'Viewed an emergency health passport',
+        'patient_account_deactivated' => 'Deactivated a patient account',
+        'patient_account_reactivated' => 'Reactivated a patient account',
+        'patient_access_changed_to_applicant' => 'Changed portal access to Applicant',
+        'patient_access_promoted' => 'Changed portal access to Official',
         'patient_profile_photo_updated' => 'Updated their patient profile picture',
         'risk_settings_reset' => 'Restored the default incident-risk settings',
         'risk_settings_updated' => 'Updated incident-risk settings',

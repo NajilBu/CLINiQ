@@ -28,6 +28,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new InvalidArgumentException('Select a valid Excel workbook before importing.');
             }
             $bulkResults = create_bulk_inactive_patient_accounts($payload);
+        } elseif ($action === 'deactivate_account') {
+            $changedAccount = deactivate_patient_account(
+                (int) ($_POST['account_id'] ?? 0),
+                (string) ($_POST['inactive_reason'] ?? ''),
+                (int) ($user['person_id'] ?? $user['id'] ?? 0) ?: null
+            );
+            flash_message('success', (string) $changedAccount['patient_name'] . ' can no longer sign in.');
+            header('Location: ' . app_url('patient-accounts/index.php'));
+            exit;
+        } elseif ($action === 'reactivate_account') {
+            $changedAccount = reactivate_patient_account(
+                (int) ($_POST['account_id'] ?? 0),
+                (int) ($user['person_id'] ?? $user['id'] ?? 0) ?: null
+            );
+            flash_message('success', (string) $changedAccount['patient_name'] . ' can sign in again.');
+            header('Location: ' . app_url('patient-accounts/index.php'));
+            exit;
+        } elseif ($action === 'change_access_status') {
+            $changedAccess = change_patient_access_status(
+                (int) ($_POST['account_id'] ?? 0),
+                (string) ($_POST['access_status'] ?? ''),
+                (int) ($user['person_id'] ?? $user['id'] ?? 0) ?: null
+            );
+            flash_message('success', (string) $changedAccess['patient_name'] . ' is now ' . $changedAccess['access_status'] . '.');
+            header('Location: ' . app_url('patient-accounts/index.php'));
+            exit;
         }
     } catch (Throwable $e) {
         $pageError = $e->getMessage();
@@ -40,13 +66,15 @@ $selectedPatientType = (string) ($individualValues['patient_type'] ?? 'student')
 $selectedProgramDepartment = strtoupper(trim((string) ($individualValues['program_or_department'] ?? '')));
 $selectedYearEmployment = trim((string) ($individualValues['year_level_or_employment_type'] ?? ''));
 $selectedSectionPosition = trim((string) ($individualValues['section_or_position'] ?? ''));
+$selectedAccessStatus = patient_access_status_normalize($individualValues['access_status'] ?? 'Applicant');
 
 $programOptions = patient_account_active_programs();
 $departmentOptions = patient_account_active_departments();
 $recentAccountSearch = trim((string) ($_GET['account_search'] ?? ''));
 $recentAccountType = strtolower(trim((string) ($_GET['account_type'] ?? '')));
 $recentAccountStatus = strtolower(trim((string) ($_GET['account_status'] ?? '')));
-$recentAccounts = array_values(array_filter(recent_patient_accounts(), static function (array $account) use ($recentAccountSearch, $recentAccountType, $recentAccountStatus): bool {
+$recentAccessStatus = strtolower(trim((string) ($_GET['access_status'] ?? '')));
+$recentAccounts = array_values(array_filter(recent_patient_accounts(), static function (array $account) use ($recentAccountSearch, $recentAccountType, $recentAccountStatus, $recentAccessStatus): bool {
     $patientType = strtolower(trim((string) ($account['patient_type'] ?? '')));
     $accountStatus = strtolower(trim((string) ($account['account_status'] ?? '')));
     $searchText = strtolower(trim(implode(' ', [
@@ -55,10 +83,12 @@ $recentAccounts = array_values(array_filter(recent_patient_accounts(), static fu
         $account['patient_type'] ?? '',
         $account['account_status'] ?? '',
         $account['status_reason'] ?? '',
+        $account['access_status'] ?? '',
     ])));
     return ($recentAccountSearch === '' || str_contains($searchText, strtolower($recentAccountSearch)))
         && ($recentAccountType === '' || $patientType === $recentAccountType)
-        && ($recentAccountStatus === '' || $accountStatus === $recentAccountStatus);
+        && ($recentAccountStatus === '' || $accountStatus === $recentAccountStatus)
+        && ($recentAccessStatus === '' || strtolower((string) ($account['access_status'] ?? '')) === $recentAccessStatus);
 }));
 $recentAccountPageSize = 10;
 $recentAccountPageCount = max(1, (int) ceil(count($recentAccounts) / $recentAccountPageSize));
@@ -128,6 +158,7 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
             <span>ID: <code><?= e($createdAccount['id_number']) ?></code></span>
             <span>Password: <code><?= e($createdAccount['password']) ?></code></span>
             <span class="badge badge-pending">Inactive</span>
+            <span class="badge <?= $createdAccount['access_status'] === 'Official' ? 'badge-completed' : 'badge-pending' ?>"><?= e($createdAccount['access_status']) ?></span>
         </div>
         <p class="text-xs font-bold text-emerald-800 mt-3 mb-0">Give the password privately to the account owner. They will use it on the login page and create their own password in the dashboard.</p>
     </section>
@@ -195,6 +226,14 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
                         <option value="faculty" <?= $selectedPatientType === 'faculty' ? 'selected' : '' ?>>Faculty</option>
                         <option value="school_personnel" <?= $selectedPatientType === 'school_personnel' ? 'selected' : '' ?>>Non-Teaching Personnel (NTP)</option>
                     </select>
+                </div>
+                <div>
+                    <label class="clinic-label" for="access_status">Portal Access</label>
+                    <select class="clinic-input" id="access_status" name="access_status" required>
+                        <option value="Applicant" <?= $selectedAccessStatus === 'Applicant' ? 'selected' : '' ?>>Applicant — APE and records only</option>
+                        <option value="Official" <?= $selectedAccessStatus === 'Official' ? 'selected' : '' ?>>Official — passport and appointments enabled</option>
+                    </select>
+                    <p class="text-[11px] font-bold text-slate-500 mt-1">Applicants become Official automatically after final APE clearance.</p>
                 </div>
                 <div>
                     <label class="clinic-label" for="id_number">ID Number</label>
@@ -352,6 +391,7 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
                         <th class="p-3">ID Number</th>
                         <th class="p-3">Name</th>
                         <th class="p-3">Type</th>
+                        <th class="p-3">Portal Access</th>
                         <th class="p-3">Password</th>
                         <th class="p-3">Result</th>
                     </tr>
@@ -364,6 +404,7 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
                             <td class="p-3 font-bold"><?= e($result['id_number']) ?></td>
                             <td class="p-3"><?= e($result['name']) ?></td>
                             <td class="p-3"><?= e(patient_account_type_label($result['type'])) ?></td>
+                            <td class="p-3"><?= e($result['access_status'] ?: '—') ?></td>
                             <td class="p-3"><code><?= e($result['password'] ?: '—') ?></code></td>
                             <td class="p-3">
                                 <span class="badge <?= $result['status'] === 'created' ? 'badge-completed' : 'badge-high' ?>">
@@ -387,7 +428,7 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
                     <span data-recent-account-count><?= count($recentAccounts) ?></span> account(s) shown
                 </p>
             </div>
-            <form method="get" class="grid grid-cols-1 sm:grid-cols-[minmax(18rem,1fr)_10rem_10rem] gap-3 w-full xl:max-w-4xl" data-no-ajax="true">
+            <form method="get" class="grid grid-cols-1 sm:grid-cols-[minmax(16rem,1fr)_9rem_9rem_9rem] gap-3 w-full xl:max-w-5xl" data-no-ajax="true">
                 <div>
                     <label class="clinic-label" for="recentAccountSearch">Search</label>
                     <div class="relative">
@@ -410,6 +451,14 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
                         <option value="" <?= $recentAccountStatus === '' ? 'selected' : '' ?>>All</option>
                         <option value="active" <?= $recentAccountStatus === 'active' ? 'selected' : '' ?>>Active</option>
                         <option value="inactive" <?= $recentAccountStatus === 'inactive' ? 'selected' : '' ?>>Inactive</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="clinic-label" for="recentAccessStatusFilter">Portal Access</label>
+                    <select class="clinic-input" id="recentAccessStatusFilter" name="access_status" onchange="this.form.requestSubmit()" data-recent-access-status-filter>
+                        <option value="" <?= $recentAccessStatus === '' ? 'selected' : '' ?>>All</option>
+                        <option value="applicant" <?= $recentAccessStatus === 'applicant' ? 'selected' : '' ?>>Applicant</option>
+                        <option value="official" <?= $recentAccessStatus === 'official' ? 'selected' : '' ?>>Official</option>
                     </select>
                 </div>
             </form>
@@ -445,11 +494,18 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
                         </button>
                     </th>
                     <th class="p-0">
+                        <button type="button" class="sort-header w-full h-full p-3 flex items-center justify-between gap-2 text-left text-[11px] uppercase tracking-widest" data-recent-account-sort="access" data-sort-type="text">
+                            Portal Access
+                            <span class="material-symbols-outlined sort-icon">unfold_more</span>
+                        </button>
+                    </th>
+                    <th class="p-0">
                         <button type="button" class="sort-header w-full h-full p-3 flex items-center justify-between gap-2 text-left text-[11px] uppercase tracking-widest" data-recent-account-sort="created" data-sort-type="date">
                             Created
                             <span class="material-symbols-outlined sort-icon">unfold_more</span>
                         </button>
                     </th>
+                    <th class="p-3 text-[11px] uppercase tracking-widest text-right">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -461,6 +517,7 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
                         $account['patient_type'] ?? '',
                         $account['account_status'] ?? '',
                         $account['status_reason'] ?? '',
+                        $account['access_status'] ?? '',
                         !empty($account['created_at']) ? date('M d, Y', strtotime($account['created_at'])) : '',
                     ])));
                     ?>
@@ -470,10 +527,12 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
                         data-sort-patient="<?= e(strtolower((string) $account['full_name'])) ?>"
                         data-sort-type="<?= e(strtolower((string) $account['patient_type'])) ?>"
                         data-sort-status="<?= e(strtolower((string) $account['account_status'])) ?>"
+                        data-sort-access="<?= e(strtolower((string) $account['access_status'])) ?>"
                         data-sort-created="<?= e((string) ($account['created_at'] ?? '')) ?>"
                         data-search-text="<?= e($accountSearchText) ?>"
                         data-patient-type="<?= e(strtolower((string) $account['patient_type'])) ?>"
-                        data-account-status="<?= e(strtolower((string) $account['account_status'])) ?>">
+                        data-account-status="<?= e(strtolower((string) $account['account_status'])) ?>"
+                        data-access-status="<?= e(strtolower((string) $account['access_status'])) ?>">
                         <td class="p-3 font-bold text-slate-500" data-recent-account-number><?= $accountIndex + 1 ?></td>
                         <td class="p-3 font-bold"><?= e($account['id_number']) ?></td>
                         <td class="p-3"><?= e($account['full_name']) ?></td>
@@ -484,15 +543,44 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
                                 <div class="mt-1 text-[11px] font-bold text-slate-500"><?= e(trim((string) ($account['status_reason'] ?? '')) ?: 'Reason not recorded') ?></div>
                             <?php endif; ?>
                         </td>
+                        <td class="p-3">
+                            <span class="badge <?= ($account['access_status'] ?? '') === 'Official' ? 'badge-completed' : 'badge-pending' ?>"><?= e($account['access_status'] ?? 'Official') ?></span>
+                        </td>
                         <td class="p-3"><?= e(date('M d, Y', strtotime($account['created_at']))) ?></td>
+                        <td class="p-3 text-right">
+                            <?php $nextAccess = ($account['access_status'] ?? 'Official') === 'Official' ? 'Applicant' : 'Official'; ?>
+                            <form method="post" class="inline-flex mr-2">
+                                <input type="hidden" name="action" value="change_access_status">
+                                <input type="hidden" name="account_id" value="<?= (int) $account['account_id'] ?>">
+                                <input type="hidden" name="access_status" value="<?= e($nextAccess) ?>">
+                                <button type="submit" class="btn btn-sm btn-outline" data-confirm-submit data-confirm-type="<?= $nextAccess === 'Official' ? 'primary' : 'danger' ?>" data-confirm-title="Change portal access to <?= e($nextAccess) ?>?" data-confirm-message="<?= e($nextAccess === 'Official' ? 'Health Passport and appointment booking will become available.' : 'Health Passport and appointment booking will be disabled until the account becomes Official again.') ?>" data-confirm-toast="Updating portal access...">
+                                    <?= e($nextAccess) ?>
+                                </button>
+                            </form>
+                            <?php if (($account['account_status'] ?? '') === 'active'): ?>
+                                <button type="button" class="btn btn-sm btn-danger" data-open-account-deactivation data-account-id="<?= (int) $account['account_id'] ?>" data-account-name="<?= e((string) $account['full_name']) ?>">
+                                    <span class="material-symbols-outlined text-[15px]">person_off</span> Deactivate
+                                </button>
+                            <?php elseif (str_starts_with((string) ($account['status_reason'] ?? ''), patient_account_manual_inactive_prefix())): ?>
+                                <form method="post" class="inline-flex">
+                                    <input type="hidden" name="action" value="reactivate_account">
+                                    <input type="hidden" name="account_id" value="<?= (int) $account['account_id'] ?>">
+                                    <button type="submit" class="btn btn-sm btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Reactivate this account?" data-confirm-message="<?= e((string) $account['full_name']) ?> will be able to sign in again." data-confirm-toast="Reactivating patient account...">
+                                        <span class="material-symbols-outlined text-[15px]">person_check</span> Reactivate
+                                    </button>
+                                </form>
+                            <?php else: ?>
+                                <span class="text-xs font-bold text-slate-400">No action</span>
+                            <?php endif; ?>
+                        </td>
                     </tr>
                 <?php endforeach; ?>
                 <tr class="border-t border-slate-100" style="height: 49px; display: none" data-recent-account-no-results>
-                    <td colspan="6" class="p-3 text-center text-sm font-bold text-slate-500">No patient accounts match the current filters.</td>
+                    <td colspan="8" class="p-3 text-center text-sm font-bold text-slate-500">No patient accounts match the current filters.</td>
                 </tr>
                 <?php for ($emptyRow = 0; $emptyRow < $recentAccountPageSize; $emptyRow++): ?>
                     <tr class="border-t border-slate-100" style="height: 49px<?= $emptyRow < max(0, $recentAccountPageSize - min($recentAccountPageSize, count($recentAccounts))) ? '' : '; display: none' ?>" aria-hidden="true" data-recent-account-empty-row>
-                        <td colspan="6" class="p-3">&nbsp;</td>
+                        <td colspan="8" class="p-3">&nbsp;</td>
                     </tr>
                 <?php endfor; ?>
             </tbody>
@@ -511,12 +599,68 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
     </nav>
 </section>
 
+<div class="modal-backdrop" id="deactivatePatientAccountModal" aria-hidden="true">
+    <div class="modal-content bg-white rounded-[2rem] p-6 w-full max-w-lg shadow-2xl">
+        <div class="flex items-start justify-between gap-3 mb-5">
+            <div class="flex items-start gap-3">
+                <span class="w-11 h-11 rounded-xl bg-red-50 text-red-600 flex items-center justify-center">
+                    <span class="material-symbols-outlined">person_off</span>
+                </span>
+                <div>
+                    <p class="clinic-label mb-1">Patient Account</p>
+                    <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Deactivate account</h2>
+                    <p class="text-xs font-bold text-slate-500 mb-0" data-deactivation-patient-name>Select why this patient should no longer be able to sign in.</p>
+                </div>
+            </div>
+            <button type="button" class="btn btn-ghost" onclick="closeModal('deactivatePatientAccountModal')" aria-label="Close account deactivation popup">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+        <form method="post" id="deactivatePatientAccountForm" class="space-y-4">
+            <input type="hidden" name="action" value="deactivate_account">
+            <input type="hidden" name="account_id" value="" data-deactivation-account-id>
+            <div>
+                <label class="clinic-label" for="inactiveReason">Reason</label>
+                <select class="clinic-input" id="inactiveReason" name="inactive_reason" required>
+                    <option value="">Select a reason</option>
+                    <?php foreach (patient_account_manual_inactive_reasons() as $inactiveReason): ?>
+                        <option value="<?= e($inactiveReason) ?>"><?= e($inactiveReason) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-bold text-red-700">
+                Medical records will remain available to authorized clinic staff. Only patient sign-in will be disabled.
+            </div>
+            <div class="flex justify-end gap-3">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('deactivatePatientAccountModal')">Cancel</button>
+                <button type="submit" class="btn btn-danger" data-confirm-submit data-confirm-type="danger" data-confirm-title="Deactivate this patient account?" data-confirm-message="The patient will not be able to sign in until the clinic reactivates the account." data-confirm-toast="Deactivating patient account...">
+                    <span class="material-symbols-outlined text-[18px]">person_off</span> Deactivate account
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
         </div>
     </section>
 </div>
 
 <script src="<?= app_url('assets/vendor/sheetjs/xlsx.full.min.js?v=0.20.3') ?>"></script>
 <script>
+if (document.documentElement.dataset.patientAccountStatusReady !== 'true') {
+    document.documentElement.dataset.patientAccountStatusReady = 'true';
+    document.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-open-account-deactivation]');
+        if (!button) return;
+        const modal = document.getElementById('deactivatePatientAccountModal');
+        if (!modal) return;
+        modal.querySelector('[data-deactivation-account-id]').value = button.dataset.accountId || '';
+        modal.querySelector('[data-deactivation-patient-name]').textContent = `Select why ${button.dataset.accountName || 'this patient'} should no longer be able to sign in.`;
+        modal.querySelector('[name="inactive_reason"]').value = '';
+        showModal('deactivatePatientAccountModal');
+    });
+}
+
 function initRecentPatientAccountPagination() {
     const section = document.getElementById('recentPatientAccounts');
     if (!section) return;
@@ -535,6 +679,7 @@ function initRecentPatientAccountPagination() {
     const searchInput = section.querySelector('[data-recent-account-search]');
     const typeFilter = section.querySelector('[data-recent-account-type-filter]');
     const statusFilter = section.querySelector('[data-recent-account-status-filter]');
+    const accessFilter = section.querySelector('[data-recent-access-status-filter]');
     const pageList = section.querySelector('[data-recent-account-pages]');
     const previousButton = section.querySelector('[data-recent-account-previous]');
     const nextButton = section.querySelector('[data-recent-account-next]');
@@ -575,7 +720,8 @@ function initRecentPatientAccountPagination() {
         const hasActiveFilter = Boolean(
             (searchInput?.value || '').trim() ||
             (typeFilter?.value || '').trim() ||
-            (statusFilter?.value || '').trim()
+            (statusFilter?.value || '').trim() ||
+            (accessFilter?.value || '').trim()
         );
         section.classList.toggle('has-active-account-filter', hasActiveFilter);
         section.classList.toggle('has-active-account-sort', sortField !== '');
@@ -661,15 +807,18 @@ function initRecentPatientAccountPagination() {
         const query = (searchInput?.value || '').trim().toLowerCase();
         const selectedType = (typeFilter?.value || '').trim().toLowerCase();
         const selectedStatus = (statusFilter?.value || '').trim().toLowerCase();
+        const selectedAccess = (accessFilter?.value || '').trim().toLowerCase();
 
         filteredRows = rows.filter((row) => {
             const searchText = row.dataset.searchText || '';
             const patientType = row.dataset.patientType || '';
             const accountStatus = row.dataset.accountStatus || '';
+            const accessStatus = row.dataset.accessStatus || '';
             const matchesSearch = query === '' || searchText.includes(query);
             const matchesType = selectedType === '' || patientType === selectedType;
             const matchesStatus = selectedStatus === '' || accountStatus === selectedStatus;
-            return matchesSearch && matchesType && matchesStatus;
+            const matchesAccess = selectedAccess === '' || accessStatus === selectedAccess;
+            return matchesSearch && matchesType && matchesStatus && matchesAccess;
         });
         filteredRows.sort(compareRows);
 
@@ -687,6 +836,7 @@ function initRecentPatientAccountPagination() {
     searchInput?.addEventListener('input', applyFilters);
     typeFilter?.addEventListener('change', applyFilters);
     statusFilter?.addEventListener('change', applyFilters);
+    accessFilter?.addEventListener('change', applyFilters);
     sortButtons.forEach((button) => {
         button.addEventListener('click', () => {
             const nextField = button.dataset.recentAccountSort || '';
@@ -914,7 +1064,7 @@ const excelMessage = document.getElementById('excelMessage');
 const excelPreview = document.getElementById('excelPreview');
 const bulkPayload = document.getElementById('bulkPayload');
 const bulkImportButton = document.getElementById('bulkImportButton');
-const requiredColumns = ['id_number', 'patient_type', 'first_name', 'last_name', 'birthdate', 'sex'];
+const requiredColumns = ['id_number', 'patient_type', 'access_status', 'first_name', 'last_name', 'birthdate', 'sex'];
 
 function normalizeHeader(value) {
     return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
@@ -960,6 +1110,7 @@ excelFile?.addEventListener('change', async () => {
                 return {
                     ...row,
                     id_number: String(row.id_number || '').toUpperCase(),
+                    access_status: String(row.access_status || '').trim(),
                     sex: String(row.sex || '').trim(),
                     program_or_department: String(row.program_or_department || '').toUpperCase(),
                     section_or_position: ['student', 'faculty'].includes(importType)
@@ -981,8 +1132,8 @@ excelFile?.addEventListener('change', async () => {
 
         const previewRows = rows.slice(0, 20);
         excelPreview.innerHTML = `<table class="w-full text-xs">
-            <thead class="bg-slate-50"><tr><th class="p-2 text-left">No.</th><th class="p-2 text-left">ID</th><th class="p-2 text-left">Type</th><th class="p-2 text-left">Name</th><th class="p-2 text-left">Birthdate</th><th class="p-2 text-left">Sex</th></tr></thead>
-            <tbody>${previewRows.map((row, index) => `<tr class="border-t border-slate-100"><td class="p-2 font-bold text-slate-500">${index + 1}</td><td class="p-2">${escapeHtml(row.id_number)}</td><td class="p-2">${escapeHtml(row.patient_type)}</td><td class="p-2">${escapeHtml([row.first_name,row.middle_name,row.last_name].filter(Boolean).join(' '))}</td><td class="p-2">${escapeHtml(row.birthdate)}</td><td class="p-2">${escapeHtml(row.sex)}</td></tr>`).join('')}</tbody>
+            <thead class="bg-slate-50"><tr><th class="p-2 text-left">No.</th><th class="p-2 text-left">ID</th><th class="p-2 text-left">Type</th><th class="p-2 text-left">Access</th><th class="p-2 text-left">Name</th><th class="p-2 text-left">Birthdate</th><th class="p-2 text-left">Sex</th></tr></thead>
+            <tbody>${previewRows.map((row, index) => `<tr class="border-t border-slate-100"><td class="p-2 font-bold text-slate-500">${index + 1}</td><td class="p-2">${escapeHtml(row.id_number)}</td><td class="p-2">${escapeHtml(row.patient_type)}</td><td class="p-2">${escapeHtml(row.access_status)}</td><td class="p-2">${escapeHtml([row.first_name,row.middle_name,row.last_name].filter(Boolean).join(' '))}</td><td class="p-2">${escapeHtml(row.birthdate)}</td><td class="p-2">${escapeHtml(row.sex)}</td></tr>`).join('')}</tbody>
         </table>${rows.length > 20 ? `<p class="text-xs font-bold text-slate-500 mt-2">Showing 20 of ${rows.length} rows.</p>` : ''}`;
     } catch (error) {
         excelMessage.textContent = error instanceof Error ? error.message : 'Unable to read the Excel workbook.';
@@ -997,6 +1148,7 @@ document.getElementById('downloadImportResults')?.addEventListener('click', () =
         'ID Number': row.id_number,
         'Name': row.name,
         'Patient Type': row.type,
+        'Portal Access': row.access_status,
         'Password': row.password,
         'Result': row.status === 'created' ? 'Created' : row.status,
     })));

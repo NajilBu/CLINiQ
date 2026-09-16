@@ -10,6 +10,7 @@ ensure_ape_workflow_schema();
 appointment_sync_overdue_confirmations();
 
 $profile = student_require_login();
+$isOfficialAccess = patient_has_official_access($profile);
 $firstRegistrationError = '';
 if (!empty($profile['first_registration'])) {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'complete_first_registration') {
@@ -31,7 +32,7 @@ if (!empty($profile['first_registration'])) {
         <div>
             <p class="student-eyebrow">First Registration</p>
             <h1 class="student-title">Welcome, <?= student_e($profile['first_name']) ?></h1>
-            <p class="student-subtitle">Create your permanent password to activate and unlock your CLINiQ account.</p>
+            <p class="student-subtitle">Create your permanent password to activate your CLINiQ account. Portal features follow the Applicant or Official access assigned by the clinic.</p>
         </div>
         <span class="student-badge student-badge-warning">
             <span class="material-symbols-outlined text-[14px]">lock</span>
@@ -46,7 +47,7 @@ if (!empty($profile['first_registration'])) {
             </span>
             <div>
                 <h2 class="student-card-title">Create your password</h2>
-                <p class="student-card-copy">Your identity has been verified. Dashboard features will remain locked until this step is completed.</p>
+                <p class="student-card-copy">Your identity has been verified. Create your password to enter the patient dashboard.</p>
             </div>
         </div>
 
@@ -330,13 +331,14 @@ if (empty($profile['emergency_instructions'])) {
 }
 $passportComplete = empty($passportMissing);
 $apeNeedsAction = ($latestApe['clearance_status'] ?? 'Pending') !== 'Cleared';
-$requiredActionCount = ($passportComplete ? 0 : 1) + ($apeNeedsAction ? 1 : 0) + ($feedbackRequired ? 1 : 0);
+$passportRequired = $isOfficialAccess && !$passportComplete;
+$requiredActionCount = ($passportRequired ? 1 : 0) + ($apeNeedsAction ? 1 : 0) + ($feedbackRequired ? 1 : 0);
 $profileDetailLabel = match ($profile['account_type'] ?? 'patient') {
     'student' => 'Program',
     'faculty', 'school_personnel' => 'Department',
     default => 'Affiliation',
 };
-$accountBadgeLabel = ($profile['account_type'] ?? '') === 'student' ? 'Enrolled' : 'Active';
+$accountBadgeLabel = $isOfficialAccess ? 'Official' : 'Applicant';
 
 $appointmentStatus = $latestAppointment['status'] ?? 'No Request';
 $appointmentBadgeClass = match ($appointmentStatus) {
@@ -372,7 +374,7 @@ render_student_header('Dashboard', 'dashboard');
 <?php if (isset($_GET['activated'])): ?>
     <div class="student-note student-note-success student-toast" data-student-toast role="status" aria-live="polite">
         <span class="material-symbols-outlined">check_circle</span>
-        <div>Your account is now active. Your dashboard is fully unlocked.</div>
+        <div>Your sign-in is now active. Your available portal features are shown on the dashboard.</div>
         <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
     </div>
 <?php endif; ?>
@@ -384,12 +386,19 @@ render_student_header('Dashboard', 'dashboard');
         <h1 class="student-title">Welcome back, <?= student_e($profile['first_name']) ?></h1>
         <p class="student-subtitle">Track your APE requirements, clinic notes, and appointment requests in one place.</p>
     </div>
-    <span class="student-badge student-badge-success">
-        <span class="material-symbols-outlined text-[14px]">verified</span>
+    <span class="student-badge <?= $isOfficialAccess ? 'student-badge-success' : 'student-badge-warning' ?>">
+        <span class="material-symbols-outlined text-[14px]"><?= $isOfficialAccess ? 'verified' : 'hourglass_top' ?></span>
         <?= student_e($accountBadgeLabel) ?>
     </span>
 </div>
 </section>
+
+<?php if (!$isOfficialAccess): ?>
+    <div class="student-note student-note-warning mb-4" role="status">
+        <span class="material-symbols-outlined">lock_clock</span>
+        <div><strong>Applicant access</strong><br>Complete your APE and receive final clinic clearance to unlock your Health Passport and appointment booking.</div>
+    </div>
+<?php endif; ?>
 
 <section class="student-required-actions mb-4" aria-label="Required student actions">
     <div class="student-required-actions-head">
@@ -404,7 +413,7 @@ render_student_header('Dashboard', 'dashboard');
     </div>
 
     <div class="student-required-action-list">
-        <?php if (!$passportComplete): ?>
+        <?php if ($passportRequired): ?>
             <article class="student-action-card student-action-card-danger">
                 <div class="flex items-start gap-4">
                     <span class="student-action-step student-action-step-danger">1</span>
@@ -427,7 +436,7 @@ render_student_header('Dashboard', 'dashboard');
         <?php if ($apeNeedsAction): ?>
             <article class="student-action-card">
                 <div class="flex items-start gap-4">
-                    <span class="student-action-step"><?= $passportComplete ? 1 : 2 ?></span>
+                    <span class="student-action-step"><?= $passportRequired ? 2 : 1 ?></span>
                     <span class="student-icon-box">
                         <span class="material-symbols-outlined">upload_file</span>
                     </span>
@@ -447,7 +456,7 @@ render_student_header('Dashboard', 'dashboard');
         <?php if ($feedbackRequired): ?>
             <article class="student-action-card student-action-card-danger">
                 <div class="flex items-start gap-4">
-                    <span class="student-action-step student-action-step-danger"><?= (int) (($passportComplete ? 0 : 1) + ($apeNeedsAction ? 1 : 0) + 1) ?></span>
+                    <span class="student-action-step student-action-step-danger"><?= (int) (($passportRequired ? 1 : 0) + ($apeNeedsAction ? 1 : 0) + 1) ?></span>
                     <span class="student-icon-box student-icon-box-danger">
                         <span class="material-symbols-outlined">rate_review</span>
                     </span>
@@ -492,6 +501,7 @@ render_student_header('Dashboard', 'dashboard');
         <span class="material-symbols-outlined student-dashboard-summary-arrow" aria-hidden="true">chevron_right</span>
     </a>
 
+    <?php if ($isOfficialAccess): ?>
     <a href="patient-appointment.php" class="student-dashboard-summary-row text-decoration-none" aria-label="View Appointments">
         <span class="student-icon-box"><span class="material-symbols-outlined">calendar_month</span></span>
         <span class="student-dashboard-summary-copy">
@@ -501,12 +511,19 @@ render_student_header('Dashboard', 'dashboard');
         <span class="student-badge <?= student_e($appointmentBadgeClass) ?>"><?= student_e($appointmentDisplayStatus) ?></span>
         <span class="material-symbols-outlined student-dashboard-summary-arrow" aria-hidden="true">chevron_right</span>
     </a>
+    <?php else: ?>
+    <div class="student-dashboard-summary-row" aria-label="Appointments locked for Applicant access">
+        <span class="student-icon-box"><span class="material-symbols-outlined">lock</span></span>
+        <span class="student-dashboard-summary-copy"><strong>Appointments</strong><span>Available after final APE clearance</span></span>
+        <span class="student-badge student-badge-warning">Locked</span>
+    </div>
+    <?php endif; ?>
 </section>
 
 <div class="student-grid student-dashboard-detail-stack">
     <details class="student-mobile-more dashboard-profile-more" open>
         <summary>Profile details</summary>
-    <section class="student-card student-card-pad student-span-4 student-clickable-card" data-href="patient-passport.php" role="link" tabindex="0" aria-label="Open Health Passport profile">
+    <section class="student-card student-card-pad student-span-4<?= $isOfficialAccess ? ' student-clickable-card' : '' ?>"<?= $isOfficialAccess ? ' data-href="patient-passport.php" role="link" tabindex="0" aria-label="Open Health Passport profile"' : ' aria-label="Patient profile"' ?>>
         <div class="flex items-center gap-3 mb-5">
             <?php $dashboardPhotoPath = profile_photo_normalize_path($profile['profile_photo_path'] ?? null); ?>
             <span class="student-dashboard-profile-photo">
@@ -538,6 +555,10 @@ render_student_header('Dashboard', 'dashboard');
             <div>
                 <span class="student-label">Email</span>
                 <p class="text-sm font-black text-primary mb-0"><?= student_e($profile['email']) ?></p>
+            </div>
+            <div>
+                <span class="student-label">Portal Access</span>
+                <p class="text-sm font-black text-[#17261d] mb-0"><?= student_e($profile['access_status']) ?></p>
             </div>
         </div>
     </section>
@@ -593,16 +614,21 @@ render_student_header('Dashboard', 'dashboard');
         </div>
     </section>
 
-    <section class="student-card student-span-4 student-clickable-card student-dashboard-duplicate" data-href="patient-appointment.php" role="link" tabindex="0" aria-label="Open appointment page">
+    <section class="student-card student-span-4<?= $isOfficialAccess ? ' student-clickable-card' : '' ?> student-dashboard-duplicate"<?= $isOfficialAccess ? ' data-href="patient-appointment.php" role="link" tabindex="0" aria-label="Open appointment page"' : ' aria-label="Appointments locked for Applicant access"' ?>>
         <div class="student-card-header">
             <div>
                 <h2 class="student-card-title">Appointment</h2>
                 <p class="student-card-copy">Latest clinic request status</p>
             </div>
-            <span class="student-badge <?= student_e($appointmentBadgeClass) ?>"><?= student_e($appointmentDisplayStatus) ?></span>
+            <span class="student-badge <?= $isOfficialAccess ? student_e($appointmentBadgeClass) : 'student-badge-warning' ?>"><?= $isOfficialAccess ? student_e($appointmentDisplayStatus) : 'Locked' ?></span>
         </div>
         <div class="student-card-pad">
-            <?php if ($latestAppointment): ?>
+            <?php if (!$isOfficialAccess): ?>
+                <div class="student-note student-note-warning mb-4">
+                    <span class="material-symbols-outlined">lock</span>
+                    <div><strong>Applicant access</strong><br>Appointment booking unlocks after final APE clearance.</div>
+                </div>
+            <?php elseif ($latestAppointment): ?>
                 <div class="student-note <?= student_e($appointmentNoteClass) ?> mb-4">
                     <span class="material-symbols-outlined"><?= student_e($appointmentIcon) ?></span>
                     <div>
@@ -625,10 +651,12 @@ render_student_header('Dashboard', 'dashboard');
                     </div>
                 </div>
             <?php endif; ?>
-            <a href="patient-appointment.php" class="student-button-secondary w-full text-decoration-none">
-                Manage Appointment
-                <span class="material-symbols-outlined">schedule</span>
-            </a>
+            <?php if ($isOfficialAccess): ?>
+                <a href="patient-appointment.php" class="student-button-secondary w-full text-decoration-none">
+                    Manage Appointment
+                    <span class="material-symbols-outlined">schedule</span>
+                </a>
+            <?php endif; ?>
         </div>
     </section>
 </div>

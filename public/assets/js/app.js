@@ -884,37 +884,196 @@ function formatDateTime(dateStr) {
 
 
 // ============================================================
-// AJAX ALERT POLLING (existing functionality)
+// LIVE EMERGENCY ALERT MONITOR
 // ============================================================
+
+const cliniqAlertMonitor = {
+    requestInFlight: false,
+    pendingCount: 0,
+    latestAlertId: 0,
+    pollTimer: null,
+    alarmSource: null,
+    audioContext: null,
+    muted: false,
+    initialized: false,
+};
+
+function cliniqStoredAlertPreference(key, fallback = '') {
+    try {
+        return window.localStorage.getItem(key) ?? fallback;
+    } catch (error) {
+        return fallback;
+    }
+}
+
+function cliniqSaveAlertPreference(key, value) {
+    try {
+        window.localStorage.setItem(key, value);
+    } catch (error) {
+        // Private browsing can reject storage; the current page still works.
+    }
+}
+
+function cliniqAlertAudioContext() {
+    if (cliniqAlertMonitor.audioContext) return cliniqAlertMonitor.audioContext;
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return null;
+    cliniqAlertMonitor.audioContext = new AudioContextClass();
+    return cliniqAlertMonitor.audioContext;
+}
+
+function cliniqCreateAlertLoopBuffer(context) {
+    const loopSeconds = 1.4;
+    const frameCount = Math.floor(context.sampleRate * loopSeconds);
+    const buffer = context.createBuffer(1, frameCount, context.sampleRate);
+    const samples = buffer.getChannelData(0);
+    const toneWindows = [
+        { start: 0, duration: 0.22, frequency: 880 },
+        { start: 0.3, duration: 0.24, frequency: 660 },
+    ];
+
+    for (let index = 0; index < frameCount; index += 1) {
+        const time = index / context.sampleRate;
+        for (const tone of toneWindows) {
+            const localTime = time - tone.start;
+            if (localTime < 0 || localTime > tone.duration) continue;
+            const envelope = Math.sin(Math.PI * (localTime / tone.duration));
+            samples[index] = Math.sin(2 * Math.PI * tone.frequency * localTime) * envelope * 0.11;
+            break;
+        }
+    }
+    return buffer;
+}
+
+function cliniqStopAlertAlarm() {
+    if (cliniqAlertMonitor.alarmSource !== null) {
+        try {
+            cliniqAlertMonitor.alarmSource.stop();
+            cliniqAlertMonitor.alarmSource.disconnect();
+        } catch (error) {
+            // The source may already have ended during page navigation.
+        }
+        cliniqAlertMonitor.alarmSource = null;
+    }
+}
+
+function cliniqStartAlertAlarm() {
+    if (cliniqAlertMonitor.muted || cliniqAlertMonitor.pendingCount < 1 || cliniqAlertMonitor.alarmSource !== null) return;
+    const context = cliniqAlertAudioContext();
+    if (!context || context.state !== 'running') return;
+    const source = context.createBufferSource();
+    source.buffer = cliniqCreateAlertLoopBuffer(context);
+    source.loop = true;
+    source.connect(context.destination);
+    source.start();
+    cliniqAlertMonitor.alarmSource = source;
+}
+
+function cliniqUpdateAlertSoundControls() {
+    const audioLocked = !cliniqAlertMonitor.muted
+        && cliniqAlertMonitor.pendingCount > 0
+        && (!cliniqAlertMonitor.audioContext || cliniqAlertMonitor.audioContext.state !== 'running');
+    document.querySelectorAll('[data-alert-sound-toggle]').forEach((button) => {
+        button.hidden = cliniqAlertMonitor.pendingCount < 1;
+        button.setAttribute('aria-pressed', cliniqAlertMonitor.muted ? 'true' : 'false');
+        button.title = audioLocked
+            ? 'Enable continuous emergency alarm'
+            : (cliniqAlertMonitor.muted ? 'Resume continuous emergency alarm' : 'Mute continuous emergency alarm');
+        const icon = button.querySelector('[data-alert-sound-icon]');
+        const label = button.querySelector('[data-alert-sound-label]');
+        if (icon) icon.textContent = audioLocked ? 'notifications_active' : (cliniqAlertMonitor.muted ? 'volume_off' : 'volume_up');
+        if (label) label.textContent = audioLocked ? 'Enable alarm' : (cliniqAlertMonitor.muted ? 'Unmute alarm' : 'Mute alarm');
+    });
+}
+
+function cliniqSyncAlertAlarm() {
+    cliniqUpdateAlertSoundControls();
+    if (cliniqAlertMonitor.pendingCount > 0 && !cliniqAlertMonitor.muted) {
+        cliniqStartAlertAlarm();
+    } else {
+        cliniqStopAlertAlarm();
+    }
+}
+
+async function cliniqUnlockAlertAudio() {
+    if (cliniqAlertMonitor.muted || cliniqAlertMonitor.pendingCount < 1) return;
+    const context = cliniqAlertAudioContext();
+    if (!context) return;
+    if (context.state === 'suspended') {
+        try {
+            await context.resume();
+        } catch (error) {
+            return;
+        }
+    }
+    cliniqStartAlertAlarm();
+    cliniqUpdateAlertSoundControls();
+}
+
+function cliniqSetAlertMuted(muted) {
+    cliniqAlertMonitor.muted = Boolean(muted);
+    cliniqSaveAlertPreference('cliniqAlertSoundMuted', cliniqAlertMonitor.muted ? '1' : '0');
+    if (!cliniqAlertMonitor.muted) cliniqUnlockAlertAudio();
+    cliniqSyncAlertAlarm();
+}
+
+function cliniqSetAlertConnectionState(connected) {
+    document.querySelectorAll('[data-alert-connection-status]').forEach((status) => {
+        status.hidden = connected;
+    });
+}
+
+function cliniqRenderLiveAlertState(data) {
+    const pendingCount = Number(data.pending_count || 0);
+    const criticalCount = Number(data.critical_count || 0);
+    const latestAlertId = Number(data.latest_alert_id || 0);
+    cliniqAlertMonitor.pendingCount = pendingCount;
+    cliniqAlertMonitor.latestAlertId = latestAlertId;
+
+    if (document.body) {
+        document.body.classList.toggle('has-active-alerts', pendingCount > 0);
+        document.body.dataset.activeAlertCount = String(pendingCount);
+        document.body.dataset.criticalAlertCount = String(criticalCount);
+    }
+
+    document.querySelectorAll('[data-live-alert-link]').forEach((link) => {
+        link.hidden = pendingCount < 1;
+        link.classList.toggle('has-alerts', pendingCount > 0);
+        link.classList.toggle('has-active-alerts', pendingCount > 0);
+        if (data.alert_url) link.href = data.alert_url;
+        link.title = pendingCount === 1 ? 'Open the pending emergency alert' : `View ${pendingCount} pending emergency alerts`;
+        const badge = link.querySelector('.app-alert-badge');
+        if (badge) badge.textContent = pendingCount > 99 ? '99+' : String(pendingCount);
+    });
+
+    const latestSeen = Number(cliniqStoredAlertPreference('cliniqLatestAlertSeen', '0'));
+    if (latestAlertId > latestSeen) {
+        const latestAlert = data.latest_alert || {};
+        const location = latestAlert.location ? ` at ${latestAlert.location}` : '';
+        showToast(`New emergency alert${location}. Open Alerts to respond.`, 'error', 8000);
+        cliniqSaveAlertPreference('cliniqLatestAlertSeen', String(latestAlertId));
+    }
+
+    cliniqSyncAlertAlarm();
+}
 
 async function refreshAlerts() {
     const feed = document.querySelector('[data-alert-feed]');
     const statusUrl = document.body ? document.body.dataset.alertStatusUrl : '';
     const requestUrl = statusUrl || (feed ? feed.dataset.alertFeed : '');
-    if (!requestUrl) {
-        return;
-    }
+    if (!requestUrl || cliniqAlertMonitor.requestInFlight) return;
 
+    cliniqAlertMonitor.requestInFlight = true;
     try {
-        const response = await fetch(requestUrl);
-        const data = await response.json();
-        const count = document.getElementById('pending-alert-count');
-        const pendingCount = Number(data.pending_count || 0);
-        const criticalCount = Number(data.critical_count || 0);
-
-        if (document.body) {
-            document.body.classList.toggle('has-active-alerts', pendingCount > 0);
-            document.body.dataset.activeAlertCount = String(pendingCount);
-            document.body.dataset.criticalAlertCount = String(criticalCount);
-        }
-
-        document.querySelectorAll('.app-alert-link.has-alerts').forEach((link) => {
-            link.classList.toggle('has-active-alerts', pendingCount > 0);
+        const response = await fetch(requestUrl, {
+            credentials: 'same-origin',
+            cache: 'no-store',
+            headers: { Accept: 'application/json' },
         });
-
-        if (count) {
-            count.textContent = data.pending_count;
-        }
+        if (!response.ok) throw new Error(`Alert polling failed with status ${response.status}`);
+        const data = await response.json();
+        cliniqSetAlertConnectionState(true);
+        cliniqRenderLiveAlertState(data);
 
         if (!feed) {
             return;
@@ -935,8 +1094,41 @@ async function refreshAlerts() {
             </div>
         `).join('');
     } catch (e) {
-        // Silently fail on network errors
+        cliniqSetAlertConnectionState(false);
+    } finally {
+        cliniqAlertMonitor.requestInFlight = false;
     }
+}
+
+function initContinuousAlertMonitor() {
+    if (cliniqAlertMonitor.initialized || !document.body?.dataset.alertStatusUrl) return;
+    cliniqAlertMonitor.initialized = true;
+    cliniqAlertMonitor.pendingCount = Number(document.body.dataset.activeAlertCount || 0);
+    cliniqAlertMonitor.muted = cliniqStoredAlertPreference('cliniqAlertSoundMuted', '0') === '1';
+
+    document.addEventListener('click', (event) => {
+        const muteButton = event.target.closest('[data-alert-sound-toggle]');
+        if (muteButton) {
+            const context = cliniqAlertAudioContext();
+            if (!cliniqAlertMonitor.muted && context && context.state !== 'running') {
+                cliniqUnlockAlertAudio();
+            } else {
+                cliniqSetAlertMuted(!cliniqAlertMonitor.muted);
+            }
+            return;
+        }
+        cliniqUnlockAlertAudio();
+    });
+    document.addEventListener('keydown', cliniqUnlockAlertAudio, { once: true });
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) refreshAlerts();
+    });
+    window.addEventListener('online', refreshAlerts);
+    window.addEventListener('offline', () => cliniqSetAlertConnectionState(false));
+
+    cliniqSyncAlertAlarm();
+    refreshAlerts();
+    cliniqAlertMonitor.pollTimer = window.setInterval(refreshAlerts, 10000);
 }
 
 
@@ -1748,9 +1940,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initApeExamResultFields();
     initApeHardCopyReview();
 
-    // Start alert polling
-    refreshAlerts();
-    setInterval(refreshAlerts, 5000);
+    // Keep emergency alerts and the continuous alarm live without page refreshes.
+    initContinuousAlertMonitor();
 
     // Auto-show flash toasts (rendered by PHP into data attributes)
     const flashContainer = document.getElementById('flash-toasts');

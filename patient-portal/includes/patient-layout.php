@@ -7,6 +7,7 @@ require_once __DIR__ . '/../../app/helpers/student_id.php';
 require_once __DIR__ . '/../../app/services/SystemSettings.php';
 require_once __DIR__ . '/../../app/services/ProfilePhoto.php';
 require_once __DIR__ . '/../../app/services/PatientNotification.php';
+require_once __DIR__ . '/../../app/services/PatientAccessStatus.php';
 
 function student_start_session(): void
 {
@@ -61,6 +62,9 @@ function student_nav_items(): array
             'label' => 'APE Status', 'url' => 'patient-ape-status.php', 'icon' => 'fact_check',
         ]] + array_slice($items, 1, null, true);
     }
+    if (!patient_has_official_access($profile)) {
+        unset($items['appointment'], $items['passport']);
+    }
     return $items;
 }
 
@@ -86,6 +90,7 @@ function student_profile_from_identity(array $identity): array
         'person_id' => (int) ($identity['person_id'] ?? 0),
         'account_id' => (int) ($identity['account_id'] ?? 0),
         'account_status' => (string) ($identity['account_status'] ?? ''),
+        'access_status' => patient_access_status_normalize($identity['access_status'] ?? 'Official', 'Official'),
         'first_registration' => !empty($identity['first_registration']),
         'account_type' => (string) ($identity['account_type'] ?? 'patient'),
         'has_clinical_record' => !empty($identity['has_clinical_record']),
@@ -174,6 +179,7 @@ function student_current_profile(): ?array
             pt.weight_kg,
             pt.bmi,
             pt.show_bmi_on_passport,
+            pt.access_status,
             vs.temperature,
             vs.blood_pressure,
             vs.pulse_rate,
@@ -275,6 +281,19 @@ function student_require_login(): array
     return $profile;
 }
 
+function student_require_official_access(string $feature): array
+{
+    $profile = student_require_login();
+    if (patient_has_official_access($profile)) {
+        return $profile;
+    }
+
+    student_start_session();
+    $_SESSION['student_flash_error'] = $feature . ' becomes available when your account is Official. Complete your APE clearance or contact the clinic.';
+    header('Location: patient-dashboard.php?access=applicant');
+    exit;
+}
+
 function student_logout(): void
 {
     student_start_session();
@@ -294,6 +313,7 @@ function student_find_patient_by_number(string $studentNumber): ?array
             a.id AS account_id,
             a.password_hash,
             a.account_status,
+            a.status_reason,
             a.activated_at,
             p.id AS person_id,
             p.id_number,

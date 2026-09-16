@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../helpers/auth.php';
 require_once __DIR__ . '/AuditLog.php';
+require_once __DIR__ . '/PatientAccessStatus.php';
 
 function passport_viewer_from_person_id(int $personId): ?array
 {
@@ -15,7 +16,8 @@ function passport_viewer_from_person_id(int $personId): ?array
                p.first_name, p.middle_name, p.last_name, a.email
         FROM people p
         JOIN accounts a ON a.person_id = p.id
-        WHERE p.id = ? AND a.account_status = \'active\'
+        JOIN patients pt ON pt.person_id = p.id
+        WHERE p.id = ? AND a.account_status = \'active\' AND pt.access_status = \'Official\'
         LIMIT 1
     ');
     $stmt->execute([$personId]);
@@ -56,7 +58,8 @@ function passport_authenticate_viewer(string $studentNumber, string $password): 
                p.id AS person_id, p.id_number, p.first_name, p.middle_name, p.last_name, a.email
         FROM accounts a
         JOIN people p ON p.id = a.person_id
-        WHERE p.id_number = ?
+        JOIN patients pt ON pt.person_id = p.id
+        WHERE p.id_number = ? AND pt.access_status = \'Official\'
         LIMIT 1
     ');
     $stmt->execute([$studentNumber]);

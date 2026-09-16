@@ -34,9 +34,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } elseif ($patient['account_status'] === 'inactive') {
                 auth_throttle_clear($db, 'patient', $studentIdValue);
                 $wasActivated = !empty($patient['activated_at']);
-                if ($wasActivated && ($patient['account_type'] ?? '') === 'student') {
+                $schoolYearReset = (string) ($patient['status_reason'] ?? '') === 'New school year enrollment status required';
+                $awaitingInitialActivation = (string) ($patient['status_reason'] ?? '') === 'Awaiting initial account activation';
+                if ($wasActivated && $schoolYearReset && ($patient['account_type'] ?? '') === 'student') {
                     begin_re_enrollment($patient);
-                } elseif (!$wasActivated) {
+                } elseif (!$wasActivated && $awaitingInitialActivation) {
                     begin_first_registration($patient);
                 } else {
                     $error = 'This account is inactive. Please contact the clinic for assistance.';

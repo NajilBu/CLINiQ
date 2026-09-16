@@ -23,10 +23,36 @@ foreach ([
     'this.form.requestSubmit()',
     "\$account['status_reason']",
     'Reason not recorded',
+    'name="inactive_reason"',
+    'data-open-account-deactivation',
+    'Deactivate account',
+    'reactivate_account',
 ] as $expected) {
     if (!str_contains($page, $expected)) {
         throw new RuntimeException("Patient account filtering or inactive-reason display is missing: {$expected}");
     }
+}
+
+foreach ([
+    'function deactivate_patient_account(',
+    'function reactivate_patient_account(',
+    'patient_account_manual_inactive_reasons',
+    'Manually deactivated: ',
+    "audit_log_event('accounts', 'patient_account_deactivated'",
+    "audit_log_event('accounts', 'patient_account_reactivated'",
+] as $expected) {
+    if (!str_contains($service, $expected)) {
+        throw new RuntimeException("Manual patient account status management is missing: {$expected}");
+    }
+}
+
+$patientLogin = file_get_contents($root . '/patient-portal/patient-login.php');
+$patientLayout = file_get_contents($root . '/patient-portal/includes/patient-layout.php');
+if ($patientLogin === false || $patientLayout === false
+    || !str_contains($patientLogin, '$wasActivated && $schoolYearReset')
+    || !str_contains($patientLogin, '!$wasActivated && $awaitingInitialActivation')
+    || !str_contains($patientLayout, 'a.status_reason')) {
+    throw new RuntimeException('Manual deactivation must not enter the student school-year self-reactivation flow.');
 }
 
 $recentAccountsTable = explode('<section class="clinic-card overflow-hidden" id="recentPatientAccounts">', $page, 2)[1] ?? '';

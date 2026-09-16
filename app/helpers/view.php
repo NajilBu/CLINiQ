@@ -330,13 +330,19 @@ function render_header(string $title): void
                         <input name="q" placeholder="<?= $searchPlaceholder ?>" autocomplete="off" value="<?= isset($_GET['q']) ? e($_GET['q']) : '' ?>">
                     </form>
                     <div class="app-topbar-meta">
-                        <?php if ($activeAlertCount > 0): ?>
-                            <a href="<?= e($pendingAlertUrl) ?>" class="app-alert-link has-alerts <?= $activeAlertCount > 0 ? 'has-active-alerts' : '' ?> text-decoration-none" title="<?= e($pendingAlertTitle) ?>" data-no-ajax="true">
-                                <span class="material-symbols-outlined">notification_important</span>
-                                <span class="app-alert-label">Pending Alerts</span>
-                                <span class="app-alert-badge"><?= $activeAlertCount > 99 ? '99+' : $activeAlertCount ?></span>
-                            </a>
-                        <?php endif; ?>
+                        <span class="app-alert-connection" data-alert-connection-status role="status" hidden>
+                            <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+                            Live alerts offline
+                        </span>
+                        <button type="button" class="app-alert-sound-toggle" data-alert-sound-toggle title="Mute continuous emergency alarm" aria-pressed="false" hidden>
+                            <span class="material-symbols-outlined" data-alert-sound-icon aria-hidden="true">volume_up</span>
+                            <span data-alert-sound-label>Mute alarm</span>
+                        </button>
+                        <a href="<?= e($pendingAlertUrl) ?>" class="app-alert-link <?= $activeAlertCount > 0 ? 'has-alerts has-active-alerts' : '' ?> text-decoration-none" title="<?= e($pendingAlertTitle) ?>" data-live-alert-link data-no-ajax="true" <?= $activeAlertCount > 0 ? '' : 'hidden' ?>>
+                            <span class="material-symbols-outlined">notification_important</span>
+                            <span class="app-alert-label">Pending Alerts</span>
+                            <span class="app-alert-badge" id="pending-alert-count" aria-live="polite"><?= $activeAlertCount > 99 ? '99+' : $activeAlertCount ?></span>
+                        </a>
                         <span><?= e(date('l, F j')) ?></span>
                         <button type="button" class="app-profile-photo" data-profile-photo-open="staff-profile-photo-modal" title="Change profile picture" aria-label="Change profile picture">
                             <?php if ($staffPhotoUrl !== null): ?>

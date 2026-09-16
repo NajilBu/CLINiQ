@@ -65,7 +65,8 @@ $authHelper = file_get_contents(dirname(__DIR__) . '/app/helpers/auth.php');
 $productionSchema = file_get_contents(dirname(__DIR__) . '/database/production_schema.sql');
 $declarationMigration = file_get_contents(dirname(__DIR__) . '/database/migrations/20260915_create_student_enrollment_declarations.sql');
 $schoolYearMigration = file_get_contents(dirname(__DIR__) . '/database/migrations/20260916_create_student_school_year_enrollments.sql');
-if (!str_contains((string) $patientLogin, "\$wasActivated && (\$patient['account_type'] ?? '') === 'student'")
+if (!str_contains((string) $patientLogin, "\$wasActivated && \$schoolYearReset && (\$patient['account_type'] ?? '') === 'student'")
+    || !str_contains((string) $patientLogin, "'New school year enrollment status required'")
     || str_contains((string) $patientDashboard, 'Confirm Employment')
     || str_contains((string) $patientDashboard, 'still employed')) {
     throw new RuntimeException('Only students should enter or see the school-year confirmation flow.');

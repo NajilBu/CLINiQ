@@ -7,7 +7,7 @@ require_once __DIR__ . '/../app/services/AuditLog.php';
 
 ensure_alert_workflow_schema();
 ensure_ape_workflow_schema();
-$profile = student_require_login();
+$profile = student_require_official_access('Health Passport');
 $patientId = (int) $profile['patient_id'];
 
 $latestBmiRecord = null;

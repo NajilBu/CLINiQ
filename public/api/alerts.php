@@ -1,10 +1,16 @@
 <?php
 
-require_once __DIR__ . '/../../app/config/database.php';
-require_once __DIR__ . '/../../app/services/AlertWorkflow.php';
-ensure_alert_workflow_schema();
+require_once __DIR__ . '/../../app/helpers/auth.php';
 
 header('Content-Type: application/json');
+header('Cache-Control: no-store, private, max-age=0');
+header('Pragma: no-cache');
+
+if (current_user() === null) {
+    http_response_code(401);
+    echo json_encode(['error' => 'Authentication required.']);
+    exit;
+}
 
 $alerts = auth_db()->query("
     SELECT id, reporter_name, location, concern, incident_type, risk_level, risk_score, response_guidance, status, created_at
@@ -31,9 +37,19 @@ $summary = auth_db()->query("
 ")->fetch();
 $count = $summary['total'] ?? 0;
 $criticalCount = $summary['critical_total'] ?? 0;
+$pendingCount = (int) $count;
+$latestAlert = $alerts[0] ?? null;
+$latestAlertId = (int) ($latestAlert['id'] ?? 0);
+$alertUrl = $pendingCount === 1 && $latestAlertId > 0
+    ? app_url('alerts/view.php?id=' . $latestAlertId)
+    : app_url('alerts/index.php?status=pending');
 
 echo json_encode([
-    'pending_count' => (int) $count,
+    'pending_count' => $pendingCount,
     'critical_count' => (int) $criticalCount,
+    'latest_alert_id' => $latestAlertId,
+    'latest_alert' => $latestAlert,
+    'alert_url' => $alertUrl,
+    'checked_at' => gmdate(DATE_ATOM),
     'alerts' => $alerts,
-]);
+], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);

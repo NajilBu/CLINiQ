@@ -4,6 +4,8 @@ require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../helpers/student_id.php';
 require_once __DIR__ . '/ApeWorkflow.php';
 require_once __DIR__ . '/ApeCycleService.php';
+require_once __DIR__ . '/AuditLog.php';
+require_once __DIR__ . '/PatientAccessStatus.php';
 
 function can_manage_patient_accounts(?array $user): bool
 {
@@ -29,6 +31,175 @@ function patient_account_type_label(string $value): string
         'faculty' => 'Faculty',
         default => 'Non-Teaching Personnel (NTP)',
     };
+}
+
+function patient_account_manual_inactive_reasons(): array
+{
+    return [
+        'No longer enrolled',
+        'Leave of absence',
+        'Graduated',
+        'Transferred',
+        'Withdrawn',
+        'Employment ended',
+        'Duplicate account',
+        'Account owner requested deactivation',
+        'Administrative hold',
+    ];
+}
+
+function patient_account_manual_inactive_prefix(): string
+{
+    return 'Manually deactivated: ';
+}
+
+function deactivate_patient_account(int $accountId, string $reason, ?int $actorPersonId): array
+{
+    $reason = trim($reason);
+    if ($accountId < 1) {
+        throw new InvalidArgumentException('Select a valid patient account.');
+    }
+    if (!in_array($reason, patient_account_manual_inactive_reasons(), true)) {
+        throw new InvalidArgumentException('Select a valid reason for deactivating this account.');
+    }
+
+    $db = auth_db();
+    $db->beginTransaction();
+    try {
+        $query = $db->prepare("
+            SELECT a.id AS account_id, a.person_id, a.account_status,
+                   TRIM(CONCAT_WS(' ', p.first_name, p.middle_name, p.last_name)) AS patient_name
+            FROM accounts a
+            INNER JOIN people p ON p.id = a.person_id
+            INNER JOIN patients pt ON pt.person_id = a.person_id
+            LEFT JOIN clinic_staff cs ON cs.person_id = a.person_id
+            WHERE a.id = ? AND cs.person_id IS NULL
+            LIMIT 1
+            FOR UPDATE
+        ");
+        $query->execute([$accountId]);
+        $account = $query->fetch();
+        if (!$account) {
+            throw new RuntimeException('Patient account was not found.');
+        }
+        if (($account['account_status'] ?? '') !== 'active') {
+            throw new RuntimeException('Only an active patient account can be deactivated.');
+        }
+
+        $update = $db->prepare("UPDATE accounts SET account_status = 'inactive', status_reason = ? WHERE id = ? AND account_status = 'active'");
+        $update->execute([patient_account_manual_inactive_prefix() . $reason, $accountId]);
+        if ($update->rowCount() !== 1) {
+            throw new RuntimeException('The patient account could not be deactivated.');
+        }
+        $db->commit();
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        throw $e;
+    }
+
+    audit_log_event('accounts', 'patient_account_deactivated', $actorPersonId, 'staff', 'account', $accountId, [
+        'reason' => $reason,
+        'patient_person_id' => (int) $account['person_id'],
+    ]);
+    return $account;
+}
+
+function reactivate_patient_account(int $accountId, ?int $actorPersonId): array
+{
+    if ($accountId < 1) {
+        throw new InvalidArgumentException('Select a valid patient account.');
+    }
+
+    $db = auth_db();
+    $db->beginTransaction();
+    try {
+        $query = $db->prepare("
+            SELECT a.id AS account_id, a.person_id, a.account_status, a.status_reason,
+                   TRIM(CONCAT_WS(' ', p.first_name, p.middle_name, p.last_name)) AS patient_name
+            FROM accounts a
+            INNER JOIN people p ON p.id = a.person_id
+            INNER JOIN patients pt ON pt.person_id = a.person_id
+            LEFT JOIN clinic_staff cs ON cs.person_id = a.person_id
+            WHERE a.id = ? AND cs.person_id IS NULL
+            LIMIT 1
+            FOR UPDATE
+        ");
+        $query->execute([$accountId]);
+        $account = $query->fetch();
+        if (!$account) {
+            throw new RuntimeException('Patient account was not found.');
+        }
+        $expectedPrefix = patient_account_manual_inactive_prefix();
+        if (($account['account_status'] ?? '') !== 'inactive'
+            || !str_starts_with((string) ($account['status_reason'] ?? ''), $expectedPrefix)) {
+            throw new RuntimeException('Only an account manually deactivated by the clinic can be reactivated here.');
+        }
+
+        $update = $db->prepare("UPDATE accounts SET account_status = 'active', status_reason = NULL WHERE id = ? AND account_status = 'inactive'");
+        $update->execute([$accountId]);
+        if ($update->rowCount() !== 1) {
+            throw new RuntimeException('The patient account could not be reactivated.');
+        }
+        $db->commit();
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        throw $e;
+    }
+
+    audit_log_event('accounts', 'patient_account_reactivated', $actorPersonId, 'staff', 'account', $accountId, [
+        'previous_reason' => (string) $account['status_reason'],
+        'patient_person_id' => (int) $account['person_id'],
+    ]);
+    return $account;
+}
+
+function change_patient_access_status(int $accountId, string $accessStatus, ?int $actorPersonId): array
+{
+    if ($accountId < 1) {
+        throw new InvalidArgumentException('Choose a valid patient account.');
+    }
+
+    $db = auth_db();
+    try {
+        $db->beginTransaction();
+        $stmt = $db->prepare('
+            SELECT a.person_id, TRIM(CONCAT_WS(" ", p.first_name, p.middle_name, p.last_name)) AS patient_name
+            FROM accounts a
+            JOIN people p ON p.id = a.person_id
+            JOIN patients pt ON pt.person_id = p.id
+            WHERE a.id = ?
+            LIMIT 1
+            FOR UPDATE
+        ');
+        $stmt->execute([$accountId]);
+        $account = $stmt->fetch();
+        if (!$account) {
+            throw new RuntimeException('Patient account not found.');
+        }
+
+        $result = patient_access_status_set(
+            $db,
+            (int) $account['person_id'],
+            $accessStatus,
+            $actorPersonId,
+            'manual_account_management'
+        );
+        $db->commit();
+
+        return $result + [
+            'patient_name' => trim((string) $account['patient_name']),
+            'person_id' => (int) $account['person_id'],
+        ];
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        throw $e;
+    }
 }
 
 function patient_account_default_email(string $firstName, string $lastName): string
@@ -302,6 +473,7 @@ function create_inactive_patient_account(array $input): array
     $yearEmployment = trim((string) ($input['year_level_or_employment_type'] ?? ''));
     $sectionPosition = trim((string) ($input['section_or_position'] ?? ''));
     $academicYear = trim((string) ($input['academic_year'] ?? ''));
+    $accessStatus = patient_access_status_normalize($input['access_status'] ?? 'Applicant');
     $programId = null;
     $departmentId = null;
 
@@ -413,10 +585,10 @@ function create_inactive_patient_account(array $input): array
         }
 
         $patient = $db->prepare('
-            INSERT INTO patients (person_id, emergency_token, token_enabled)
-            VALUES (?, ?, 1)
+            INSERT INTO patients (person_id, emergency_token, token_enabled, access_status)
+            VALUES (?, ?, 1, ?)
         ');
-        $patient->execute([$personId, bin2hex(random_bytes(32))]);
+        $patient->execute([$personId, bin2hex(random_bytes(32)), $accessStatus]);
 
         $account = $db->prepare('
             UPDATE accounts
@@ -479,6 +651,7 @@ function create_inactive_patient_account(array $input): array
             'name' => trim(implode(' ', array_filter([$firstName, $middleName, $lastName]))),
             'type' => $type,
             'password' => $initialPassword,
+            'access_status' => $accessStatus,
             'status' => 'created',
         ];
     } catch (Throwable $e) {
@@ -523,6 +696,7 @@ function create_bulk_inactive_patient_accounts(array $rows): array
                 ]))) ?: '—',
                 'type' => patient_account_type((string) ($row['patient_type'] ?? $row['category'] ?? 'school_personnel')),
                 'password' => '',
+                'access_status' => '',
                 'status' => $e->getMessage(),
             ];
         }
@@ -535,10 +709,13 @@ function recent_patient_accounts(?int $limit = null): array
 {
     $sql = "
         SELECT
+            a.id AS account_id,
+            p.id AS person_id,
             p.id_number,
             CONCAT_WS(' ', p.first_name, p.middle_name, p.last_name) AS full_name,
             a.account_status,
             a.status_reason,
+            pt.access_status,
             a.activated_at,
             a.created_at,
             CASE

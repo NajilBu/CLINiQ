@@ -7,7 +7,7 @@ require_once __DIR__ . '/includes/patient-layout.php';
 ensure_appointment_schema();
 appointment_sync_overdue_confirmations();
 
-$profile = student_require_login();
+$profile = student_require_official_access('Appointment booking');
 $patientId = (int) $profile['person_id'];
 $db = appointment_db();
 $patientProfileStmt = $db->prepare('SELECT COUNT(*) FROM patients WHERE person_id = ?');

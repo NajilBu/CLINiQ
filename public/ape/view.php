@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/ApeWorkflow.php';
 require_once __DIR__ . '/../../app/services/PatientNotification.php';
+require_once __DIR__ . '/../../app/services/PatientAccessStatus.php';
 require_login();
 ensure_ape_workflow_schema();
 
@@ -528,6 +529,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($stmt->rowCount() !== 1) {
                 throw new RuntimeException('The examination status changed before clearance could be saved. Refresh and try again.');
             }
+            patient_access_promote_after_ape_clearance($apeDb, (int) $record['patient_id'], $id, $staffPersonId);
             $activityLabel = 'Cleared patient after APE examination';
             $activityNotes = $patientNote ?: 'No additional patient instruction.';
         } elseif ($action === 'finalize_exam_follow_up') {
@@ -567,6 +569,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $document->execute([$staffPersonId, $id]);
             $requirement = $apeDb->prepare("UPDATE ape_requirements SET status = 'Verified', checked_by_person_id = ?, checked_at = NOW() WHERE ape_id = ? AND requirement_name = 'Follow-up clearance'");
             $requirement->execute([$staffPersonId, $id]);
+            patient_access_promote_after_ape_clearance($apeDb, (int) $record['patient_id'], $id, $staffPersonId);
             $activityLabel = 'Approved follow-up clearance';
         } elseif ($action === 'return_clearance') {
             $missingItems = trim((string) ($_POST['missing_items'] ?? '')) ?: 'Clearance correction required.';
