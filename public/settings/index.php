@@ -722,12 +722,6 @@ render_clinic_command_header(
             <span class="material-symbols-outlined">admin_panel_settings</span>
             <span>Staff Profiles</span>
         </a>
-        <?php if ($canManagePatientAccounts): ?>
-            <a href="<?= e(app_url('patient-accounts/index.php')) ?>" class="settings-tab-link text-decoration-none" data-no-ajax="true">
-                <span class="material-symbols-outlined">manage_accounts</span>
-                <span>Patient Accounts</span>
-            </a>
-        <?php endif; ?>
         <?php if ($canManageApeCycles): ?>
             <a href="index.php?tab=ape-cycle" class="settings-tab-link <?= $currentTab === 'ape-cycle' ? 'active' : '' ?> text-decoration-none" data-settings-tab="ape-cycle" data-no-ajax="true">
                 <span class="material-symbols-outlined">event_repeat</span>

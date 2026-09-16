@@ -40,13 +40,20 @@ function patient_access_status_set(
     }
 
     $status = patient_access_status_normalize($status);
-    $lookup = $db->prepare('SELECT access_status FROM patients WHERE person_id = ? FOR UPDATE');
+    $lookup = $db->prepare('SELECT pt.access_status, EXISTS (SELECT 1 FROM students s WHERE s.person_id = pt.person_id) AS is_student FROM patients pt WHERE pt.person_id = ? FOR UPDATE');
     $lookup->execute([$personId]);
-    $current = $lookup->fetchColumn();
-    if ($current === false) {
+    $patient = $lookup->fetch();
+    if (!$patient) {
         throw new RuntimeException('Patient profile not found.');
     }
-    $current = patient_access_status_normalize($current, 'Official');
+    $current = patient_access_status_normalize($patient['access_status'] ?? 'Official', 'Official');
+    $isStudent = (int) ($patient['is_student'] ?? 0) === 1;
+    if (!$isStudent && $status === 'Applicant') {
+        throw new InvalidArgumentException('Applicant access is available only to students.');
+    }
+    if ($isStudent && $current === 'Official' && $status === 'Applicant') {
+        throw new InvalidArgumentException('An Official student cannot be changed back to Applicant.');
+    }
     if ($current === $status) {
         return ['changed' => false, 'previous_status' => $current, 'access_status' => $status];
     }

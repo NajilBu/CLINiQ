@@ -473,7 +473,9 @@ function create_inactive_patient_account(array $input): array
     $yearEmployment = trim((string) ($input['year_level_or_employment_type'] ?? ''));
     $sectionPosition = trim((string) ($input['section_or_position'] ?? ''));
     $academicYear = trim((string) ($input['academic_year'] ?? ''));
-    $accessStatus = patient_access_status_normalize($input['access_status'] ?? 'Applicant');
+    $accessStatus = $type === 'student'
+        ? patient_access_status_normalize($input['access_status'] ?? 'Applicant')
+        : 'Official';
     $programId = null;
     $departmentId = null;
 

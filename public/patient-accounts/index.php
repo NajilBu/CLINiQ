@@ -66,7 +66,9 @@ $selectedPatientType = (string) ($individualValues['patient_type'] ?? 'student')
 $selectedProgramDepartment = strtoupper(trim((string) ($individualValues['program_or_department'] ?? '')));
 $selectedYearEmployment = trim((string) ($individualValues['year_level_or_employment_type'] ?? ''));
 $selectedSectionPosition = trim((string) ($individualValues['section_or_position'] ?? ''));
-$selectedAccessStatus = patient_access_status_normalize($individualValues['access_status'] ?? 'Applicant');
+$selectedAccessStatus = $selectedPatientType === 'student'
+    ? patient_access_status_normalize($individualValues['access_status'] ?? 'Applicant')
+    : 'Official';
 
 $programOptions = patient_account_active_programs();
 $departmentOptions = patient_account_active_departments();
@@ -100,47 +102,8 @@ render_clinic_command_header(
     'Create inactive patient accounts individually or import an official list from Excel.'
 );
 
-$canManageSettings = in_array($user['role'] ?? '', ['admin', 'doctor', 'it_expert'], true);
-$canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
 ?>
-<div class="settings-shell">
-    <aside class="settings-tabs">
-        <a href="<?= app_url('settings/index.php?tab=general') ?>" class="settings-tab-link text-decoration-none" data-no-ajax="true">
-            <span class="material-symbols-outlined">corporate_fare</span>
-            <span>Clinic Profile</span>
-        </a>
-        <a href="<?= app_url('settings/index.php?tab=account') ?>" class="settings-tab-link text-decoration-none" data-no-ajax="true">
-            <span class="material-symbols-outlined">admin_panel_settings</span>
-            <span>Staff Profiles</span>
-        </a>
-        <a href="<?= app_url('patient-accounts/index.php') ?>" class="settings-tab-link active text-decoration-none" data-no-ajax="true">
-            <span class="material-symbols-outlined">manage_accounts</span>
-            <span>Patient Accounts</span>
-        </a>
-        <?php if ($canManageApeCycles): ?>
-            <a href="<?= app_url('settings/index.php?tab=ape-cycle') ?>" class="settings-tab-link text-decoration-none" data-no-ajax="true">
-                <span class="material-symbols-outlined">event_repeat</span>
-                <span>APE Cycle</span>
-            </a>
-        <?php endif; ?>
-        <a href="<?= app_url('settings/index.php?tab=dropdowns') ?>" class="settings-tab-link text-decoration-none" data-no-ajax="true">
-            <span class="material-symbols-outlined">list_alt</span>
-            <span>Dropdowns</span>
-        </a>
-        <a href="<?= app_url('settings/index.php?tab=clinical') ?>" class="settings-tab-link text-decoration-none" data-no-ajax="true">
-            <span class="material-symbols-outlined">emergency</span>
-            <span>Incident Risk</span>
-        </a>
-        <a href="<?= app_url('settings/index.php?tab=email') ?>" class="settings-tab-link text-decoration-none" data-no-ajax="true">
-            <span class="material-symbols-outlined">mail</span>
-            <span>Email</span>
-        </a>
-        <a href="<?= app_url('settings/index.php?tab=maintenance') ?>" class="settings-tab-link text-decoration-none" data-no-ajax="true">
-            <span class="material-symbols-outlined">restart_alt</span>
-            <span>Maintenance</span>
-        </a>
-    </aside>
-
+<div class="patient-accounts-page">
     <section class="settings-panel">
         <div class="settings-panel-body">
 
@@ -233,7 +196,7 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
                         <option value="Applicant" <?= $selectedAccessStatus === 'Applicant' ? 'selected' : '' ?>>Applicant — APE and records only</option>
                         <option value="Official" <?= $selectedAccessStatus === 'Official' ? 'selected' : '' ?>>Official — passport and appointments enabled</option>
                     </select>
-                    <p class="text-[11px] font-bold text-slate-500 mt-1">Applicants become Official automatically after final APE clearance.</p>
+                    <p class="text-[11px] font-bold text-slate-500 mt-1" id="access_status_hint">Only students may be Applicants. Applicants become Official automatically after final APE clearance.</p>
                 </div>
                 <div>
                     <label class="clinic-label" for="id_number">ID Number</label>
@@ -548,15 +511,19 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
                         </td>
                         <td class="p-3"><?= e(date('M d, Y', strtotime($account['created_at']))) ?></td>
                         <td class="p-3 text-right">
-                            <?php $nextAccess = ($account['access_status'] ?? 'Official') === 'Official' ? 'Applicant' : 'Official'; ?>
-                            <form method="post" class="inline-flex mr-2">
-                                <input type="hidden" name="action" value="change_access_status">
-                                <input type="hidden" name="account_id" value="<?= (int) $account['account_id'] ?>">
-                                <input type="hidden" name="access_status" value="<?= e($nextAccess) ?>">
-                                <button type="submit" class="btn btn-sm btn-outline" data-confirm-submit data-confirm-type="<?= $nextAccess === 'Official' ? 'primary' : 'danger' ?>" data-confirm-title="Change portal access to <?= e($nextAccess) ?>?" data-confirm-message="<?= e($nextAccess === 'Official' ? 'Health Passport and appointment booking will become available.' : 'Health Passport and appointment booking will be disabled until the account becomes Official again.') ?>" data-confirm-toast="Updating portal access...">
-                                    <?= e($nextAccess) ?>
-                                </button>
-                            </form>
+                            <?php
+                            $currentAccess = (string) ($account['access_status'] ?? 'Official');
+                            ?>
+                            <?php if ($currentAccess === 'Applicant'): ?>
+                                <form method="post" class="inline-flex mr-2">
+                                    <input type="hidden" name="action" value="change_access_status">
+                                    <input type="hidden" name="account_id" value="<?= (int) $account['account_id'] ?>">
+                                    <input type="hidden" name="access_status" value="Official">
+                                    <button type="submit" class="btn btn-sm btn-outline" data-confirm-submit data-confirm-type="primary" data-confirm-title="Change portal access to Official?" data-confirm-message="Health Passport and appointment booking will become available." data-confirm-toast="Updating portal access...">
+                                        Official
+                                    </button>
+                                </form>
+                            <?php endif; ?>
                             <?php if (($account['account_status'] ?? '') === 'active'): ?>
                                 <button type="button" class="btn btn-sm btn-danger" data-open-account-deactivation data-account-id="<?= (int) $account['account_id'] ?>" data-account-name="<?= e((string) $account['full_name']) ?>">
                                     <span class="material-symbols-outlined text-[15px]">person_off</span> Deactivate
@@ -569,8 +536,6 @@ $canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
                                         <span class="material-symbols-outlined text-[15px]">person_check</span> Reactivate
                                     </button>
                                 </form>
-                            <?php else: ?>
-                                <span class="text-xs font-bold text-slate-400">No action</span>
                             <?php endif; ?>
                         </td>
                     </tr>
@@ -950,6 +915,8 @@ function updateIndividualAccountHints() {
     const sectionPositionInput = document.getElementById('section_or_position');
     const studentSectionSelect = document.getElementById('student_section_code');
     const sectionLabel = document.getElementById('section_or_position_label');
+    const accessStatus = document.getElementById('access_status');
+    const accessStatusHint = document.getElementById('access_status_hint');
     const fieldMappings = [
         ['id_number', null, 'id_number_hint', hints.idPlaceholder, hints.idHint],
         ['program_or_department', 'program_or_department_label', 'program_or_department_hint', hints.programPlaceholder, hints.programHint, hints.programLabel],
@@ -1014,6 +981,20 @@ function updateIndividualAccountHints() {
     if (sectionHint) sectionHint.textContent = hints.sectionHint;
     if (facultySelected && sectionPositionInput) {
         sectionPositionInput.value = sectionPositionInput.value.toUpperCase();
+    }
+
+    if (accessStatus) {
+        const applicantOption = accessStatus.querySelector('option[value="Applicant"]');
+        if (applicantOption) {
+            applicantOption.hidden = !studentSelected;
+            applicantOption.disabled = !studentSelected;
+        }
+        if (!studentSelected) accessStatus.value = 'Official';
+    }
+    if (accessStatusHint) {
+        accessStatusHint.textContent = studentSelected
+            ? 'Applicants become Official automatically after final APE clearance.'
+            : 'Faculty and Non-Teaching Personnel receive Official portal access.';
     }
 
     updateStudentSectionPreview();
@@ -1110,7 +1091,7 @@ excelFile?.addEventListener('change', async () => {
                 return {
                     ...row,
                     id_number: String(row.id_number || '').toUpperCase(),
-                    access_status: String(row.access_status || '').trim(),
+                    access_status: importType === 'student' ? String(row.access_status || '').trim() : 'Official',
                     sex: String(row.sex || '').trim(),
                     program_or_department: String(row.program_or_department || '').toUpperCase(),
                     section_or_position: ['student', 'faculty'].includes(importType)

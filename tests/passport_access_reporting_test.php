@@ -19,7 +19,7 @@ $assertions = [
     'passport authentication supports every active account type' => !str_contains(file_get_contents($root . '/app/services/PassportAccess.php'), 'JOIN students'),
     'passport login formats viewer ID numbers' => str_contains($public, 'name="student_number" required placeholder="Your ID number" autocomplete="username" data-id-number-format'),
     'passport includes the complete emergency profile' => str_contains($public, 'passport-modern-info-allergy') && str_contains($public, 'passport-modern-info-bmi') && str_contains($public, 'passport-modern-contact'),
-    'public passport respects BMI visibility preference' => str_contains($public, "show_bmi_on_passport'] ?? 1"),
+    'public passport respects body measurements visibility preference' => str_contains($public, "if (\$latestVitals && (int) (\$patient['show_bmi_on_passport'] ?? 1) === 1)") && substr_count($public, "show_bmi_on_passport'] ?? 1") === 1,
     'only location is required' => substr_count($public, 'name="location" required') === 1,
     'risk questions are optional' => !str_contains($public, 'name="incident_type" required'),
     'reporter urgency is optional' => str_contains($public, 'name="reporter_risk_rating"'),

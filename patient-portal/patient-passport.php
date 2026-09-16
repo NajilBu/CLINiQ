@@ -242,8 +242,8 @@ render_student_header('Emergency Health Passport', 'passport');
                             <input type="checkbox" id="show_bmi_on_passport" name="show_bmi_on_passport" value="1" role="switch" <?= $passport['show_bmi'] ? 'checked' : '' ?>>
                             <span class="passport-visibility-track" aria-hidden="true"><span></span></span>
                             <span class="passport-visibility-copy">
-                                <strong>Show BMI on Emergency Passport</strong>
-                                <small>Turn this off to hide only your BMI value from the QR/NFC passport.</small>
+                                <strong>Show Body Measurements on Emergency Passport</strong>
+                                <small>Turn this off to hide your height, weight, and BMI from the QR/NFC passport.</small>
                             </span>
                         </label>
                     </div>
@@ -552,7 +552,7 @@ render_student_header('Emergency Health Passport', 'passport');
                         </article>
 
                         <?php if ($passport['height_cm'] || $passport['weight_kg'] || $passport['bmi']): ?>
-                            <article class="passport-modern-info passport-modern-info-bmi">
+                            <article class="passport-modern-info passport-modern-info-bmi" id="prev-body-measurements" <?= $passport['show_bmi'] ? '' : 'hidden' ?>>
                                 <div class="passport-modern-info-heading">
                                     <span class="material-symbols-outlined">monitor_weight</span>
                                     <span>Body Measurements</span>
@@ -560,7 +560,7 @@ render_student_header('Emergency Health Passport', 'passport');
                                 <div class="passport-modern-metrics">
                                     <span><strong><?= student_e((string) ($passport['height_cm'] ?: '—')) ?></strong><small>Height (cm)</small></span>
                                     <span><strong><?= student_e((string) ($passport['weight_kg'] ?: '—')) ?></strong><small>Weight (kg)</small></span>
-                                                <span id="prev-bmi-metric" <?= $passport['show_bmi'] ? '' : 'hidden' ?>><strong><?= student_e((string) ($passport['bmi'] ?: '—')) ?></strong><small>BMI</small></span>
+                                    <span><strong><?= student_e((string) ($passport['bmi'] ?: '—')) ?></strong><small>BMI</small></span>
                                 </div>
                             </article>
                         <?php endif; ?>
@@ -709,14 +709,14 @@ render_student_header('Emergency Health Passport', 'passport');
         });
     }
 
-    const bmiVisibility = $('show_bmi_on_passport');
-    const bmiMetric = $('prev-bmi-metric');
-    if (bmiVisibility && bmiMetric) {
-        const syncBmiVisibility = () => {
-            bmiMetric.hidden = !bmiVisibility.checked;
+    const bodyMeasurementsVisibility = $('show_bmi_on_passport');
+    const bodyMeasurements = $('prev-body-measurements');
+    if (bodyMeasurementsVisibility && bodyMeasurements) {
+        const syncBodyMeasurementsVisibility = () => {
+            bodyMeasurements.hidden = !bodyMeasurementsVisibility.checked;
         };
-        bmiVisibility.addEventListener('change', syncBmiVisibility);
-        syncBmiVisibility();
+        bodyMeasurementsVisibility.addEventListener('change', syncBodyMeasurementsVisibility);
+        syncBodyMeasurementsVisibility();
     }
 
 })();

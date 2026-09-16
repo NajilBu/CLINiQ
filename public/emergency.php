@@ -311,15 +311,13 @@ render_header('Emergency Health Passport');
                                         <div class="passport-modern-instructions"><?= nl2br(e($patient['emergency_instructions'] ?: 'Notify the clinic immediately.')) ?></div>
                                     </article>
 
-                                    <?php if ($latestVitals): ?>
+                                    <?php if ($latestVitals && (int) ($patient['show_bmi_on_passport'] ?? 1) === 1): ?>
                                         <article class="passport-modern-info passport-modern-info-bmi">
                                             <div class="passport-modern-info-heading"><span class="material-symbols-outlined">monitor_weight</span><span>Body Measurements</span></div>
                                             <div class="passport-modern-metrics">
                                                 <span><strong><?= e((string) ($latestVitals['patient_height_cm'] ?: '—')) ?></strong><small>Height (cm)</small></span>
                                                 <span><strong><?= e((string) ($latestVitals['patient_weight_kg'] ?: '—')) ?></strong><small>Weight (kg)</small></span>
-                                                <?php if ((int) ($patient['show_bmi_on_passport'] ?? 1) === 1): ?>
-                                                    <span><strong><?= e((string) ($latestVitals['patient_bmi'] ?: '—')) ?></strong><small>BMI</small></span>
-                                                <?php endif; ?>
+                                                <span><strong><?= e((string) ($latestVitals['patient_bmi'] ?: '—')) ?></strong><small>BMI</small></span>
                                             </div>
                                         </article>
                                     <?php endif; ?>

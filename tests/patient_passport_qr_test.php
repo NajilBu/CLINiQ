@@ -21,8 +21,8 @@ $assertions = [
     'NFC support is feature detected' => str_contains($script, "'NDEFReader' in window"),
     'NFC writer stores the passport URL' => str_contains($script, "recordType: 'url'") && str_contains($script, 'data: passportUrl'),
     'NFC writing requires a secure context' => str_contains($script, 'window.isSecureContext'),
-    'patient controls BMI passport visibility' => str_contains($page, 'name="show_bmi_on_passport"') && str_contains($page, 'role="switch"'),
-    'patient preview follows BMI visibility' => str_contains($page, 'id="prev-bmi-metric"') && str_contains($page, 'syncBmiVisibility'),
+    'patient controls body measurements passport visibility' => str_contains($page, 'name="show_bmi_on_passport"') && str_contains($page, 'Show Body Measurements on Emergency Passport') && str_contains($page, 'height, weight, and BMI'),
+    'patient preview hides or shows all body measurements together' => str_contains($page, 'id="prev-body-measurements"') && str_contains($page, 'syncBodyMeasurementsVisibility') && !str_contains($page, 'id="prev-bmi-metric"'),
     'local QR library file exists' => is_file($library) && filesize($library) > 10000,
 ];
 

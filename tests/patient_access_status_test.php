@@ -13,10 +13,13 @@ $appointment = file_get_contents($root . '/patient-portal/patient-appointment.ph
 $passport = file_get_contents($root . '/patient-portal/patient-passport.php');
 $passportAccess = file_get_contents($root . '/app/services/PassportAccess.php');
 $emergency = file_get_contents($root . '/public/emergency.php');
+$clinicShell = file_get_contents($root . '/app/helpers/view.php');
+$settingsPage = file_get_contents($root . '/public/settings/index.php');
 $schema = file_get_contents($root . '/database/production_schema.sql');
 $migration = file_get_contents($root . '/database/migrations/20260916_add_patient_access_status.sql');
+$studentOnlyMigration = file_get_contents($root . '/database/migrations/20260916_student_only_applicant_status.sql');
 
-foreach ([$service, $accounts, $accountPage, $apeView, $layout, $dashboard, $appointment, $passport, $passportAccess, $emergency, $schema, $migration] as $source) {
+foreach ([$service, $accounts, $accountPage, $apeView, $layout, $dashboard, $appointment, $passport, $passportAccess, $emergency, $clinicShell, $settingsPage, $schema, $migration, $studentOnlyMigration] as $source) {
     if ($source === false) {
         throw new RuntimeException('Patient access status test source could not be read.');
     }
@@ -37,6 +40,26 @@ foreach ([
     if (!str_contains($accounts, $expected)) {
         throw new RuntimeException("Patient account creation or management is missing: {$expected}");
     }
+}
+
+if (!str_contains($clinicShell, "'Patient Accounts' => ['url' => app_url('patient-accounts/index.php')")
+    || str_contains($settingsPage, '<span>Patient Accounts</span>')) {
+    throw new RuntimeException('Patient Accounts must be located in the main clinic sidebar, not the Settings submenu.');
+}
+
+if (!str_contains($service, "\$current === 'Official' && \$status === 'Applicant'")
+    || !str_contains($service, 'An Official student cannot be changed back to Applicant.')
+    || !str_contains($service, 'Applicant access is available only to students.')
+    || !str_contains($accountPage, "if (\$currentAccess === 'Applicant')")
+    || str_contains($accountPage, '>No action<')) {
+    throw new RuntimeException('Official student access must be a one-way status in both the service and account controls.');
+}
+
+if (!str_contains($accounts, "\$accessStatus = \$type === 'student'")
+    || !str_contains($accountPage, "importType === 'student' ? String(row.access_status || '').trim() : 'Official'")
+    || !str_contains($accountPage, 'Only students may be Applicants.')
+    || !str_contains($studentOnlyMigration, "pt.access_status = 'Applicant'")) {
+    throw new RuntimeException('Applicant status must be restricted to students during creation, import, and migration.');
 }
 
 foreach ([
