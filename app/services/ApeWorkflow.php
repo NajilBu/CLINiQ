@@ -682,14 +682,31 @@ function ape_school_year_history_available(): bool
 
 function ape_record_select_sql(): string
 {
+    // The production database contains older case-sensitive program columns alongside
+    // newer enrollment columns. Give the generated label one explicit collation before
+    // comparing it to an empty string, so mixed legacy collations cannot crash the
+    // patient dashboard query.
+    $courseSectionExpression = static function (string $programCode, string $yearLevel, string $section): string {
+        return "NULLIF(
+            TRIM(CONCAT({$programCode}, '-', {$yearLevel}, UPPER({$section}))) COLLATE utf8mb4_unicode_ci,
+            _utf8mb4'' COLLATE utf8mb4_unicode_ci
+        )";
+    };
+
+    $currentCourseSection = $courseSectionExpression('pr.program_code', 's.year_level', 's.section');
     $historyCourseSection = '';
     $historyJoins = '';
     if (ape_school_year_history_available()) {
-        $historyCourseSection = "NULLIF(TRIM(CONCAT(history_program.program_code, '-', school_year_history.year_level, UPPER(school_year_history.section))), ''),";
+        $historyCourseSection = $courseSectionExpression(
+            'history_program.program_code',
+            'school_year_history.year_level',
+            'school_year_history.section'
+        ) . ',';
         $historyJoins = "
         LEFT JOIN student_school_year_enrollments school_year_history
             ON school_year_history.student_person_id = p.id
-           AND school_year_history.academic_year = ar.academic_year
+           AND school_year_history.academic_year COLLATE utf8mb4_unicode_ci
+               = ar.academic_year COLLATE utf8mb4_unicode_ci
         LEFT JOIN programs history_program ON history_program.id = school_year_history.program_id";
     }
 
@@ -719,7 +736,7 @@ function ape_record_select_sql(): string
             p.birthdate,
             COALESCE(
                 {$historyCourseSection}
-                NULLIF(TRIM(CONCAT(pr.program_code, '-', s.year_level, UPPER(s.section))), ''),
+                {$currentCourseSection},
                 ed.department_code,
                 'Patient'
             ) AS course_section,

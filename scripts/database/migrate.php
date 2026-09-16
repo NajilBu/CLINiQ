@@ -15,6 +15,33 @@ function migration_checksum_is_known_compatible(string $name, string $stored, st
             && strtolower($current) === 'f76f217f30da37172d193d9c5c972eb0274c47e86a7d73c217aed808039c7be7';
     }
 
+    if ($name === '20260915_fix_faculty_ntp_numeric_id_padding.sql') {
+        // This already-applied migration was corrected to cast the generated
+        // sequence before LPAD. Accept only the original deployed checksum.
+        return strtolower($stored) === '2f635a84d8f7d0b57489a8b788ad4e81cf2f9b25339fb6549c2062b195cc1706'
+            && strtolower($current) === '409fab1bf0fb1ebd2de0218dc0f3eade5b9a4c1bab35ff6473f3a72c1bbf81fa';
+    }
+
+    $knownRevisedMigrations = [
+        '20260915_normalize_faculty_ntp_ids.sql' => [
+            'fc0cc0b20977770914cafc6ea9dcd3021582a724eefcd63ab43fa5023635d223',
+            'c040f4af964cb2797a4c1c58e8c79e3c032d96573c6f7ebbd378755eb3de188a',
+        ],
+        '20260915_remove_legacy_ape_vitals_workflow.sql' => [
+            '6fd531f73e42f85dcc5e641135ff724def9dd4cbaf1f0e7e5baa403686d4e00c',
+            '478c96692587dca3fffe648440452283d6f62014ecdd2e4f5e222b947daedff3',
+        ],
+        '20260915_student_only_ape_scheduling.sql' => [
+            '350bc450f49dd7ade8d125a74883da1e0a07de2a770e6da6b19627756096ccbe',
+            'e9c9168c20e4ce98d3cab86a5f211919a5a38349468625a2e927cfeb4d46ddcb',
+        ],
+    ];
+    if (isset($knownRevisedMigrations[$name])) {
+        [$originalChecksum, $revisedChecksum] = $knownRevisedMigrations[$name];
+        return strtolower($stored) === $originalChecksum
+            && strtolower($current) === $revisedChecksum;
+    }
+
     if ($name !== '20260910_add_passport_bmi_visibility.sql') {
         return false;
     }
