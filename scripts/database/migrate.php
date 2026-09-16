@@ -6,13 +6,39 @@ require_once dirname(__DIR__, 2) . '/app/config/env.php';
 
 const CLINIQ_BASELINE_THROUGH = '20260908_passport_access_audit_reporting.sql';
 
-function migration_checksum_is_known_compatible(string $name, string $stored, string $current): bool
+function migration_checksum_is_known_compatible(string $name, string $stored, string $current, ?string $file = null): bool
 {
+    if ($file !== null && is_file($file)) {
+        $contents = file_get_contents($file);
+        $lfChecksum = $contents === false ? false : hash('sha256', str_replace("\r\n", "\n", $contents));
+        // A Windows Docker build can preserve CRLF while the applied migration
+        // was recorded from the same LF source. Accept only that exact match.
+        if ($lfChecksum !== false && hash_equals(strtolower($stored), strtolower($lfChecksum))) {
+            return true;
+        }
+    }
+
     if ($name === '20260913_create_patient_notifications.sql') {
         // This migration's SQL was unchanged; an earlier Windows checkout recorded
         // the CRLF variant. Accept only that exact historical checksum.
         return strtolower($stored) === '54393ca51fa1a3aa5d4de114cef36d426f3d4cc7503e2f0fccb45b84585454b9'
             && strtolower($current) === 'f76f217f30da37172d193d9c5c972eb0274c47e86a7d73c217aed808039c7be7';
+    }
+
+    if ($name === '20260915_student_only_ape_scheduling.sql') {
+        // This migration was changed only to make the ape_records entry_mode
+        // addition idempotent when the production schema already contains it.
+        // Accept only the original migration checksum and this exact revision.
+        $originalChecksums = [
+            '350bc450f49dd7ade8d125a74883da1e0a07de2a770e6da6b19627756096ccbe',
+        ];
+        $idempotentChecksums = [
+            '6263b13984783554a45022d6c58cdf91a2152e5b53723eea69498158e70bbb1e',
+            '9c0d2cb7f3b93988c021dda5c44321a9e42161f8ee29f67e48b7aa2d4b6a4814',
+        ];
+
+        return in_array(strtolower($stored), $originalChecksums, true)
+            && in_array(strtolower($current), $idempotentChecksums, true);
     }
 
     if ($name !== '20260910_add_passport_bmi_visibility.sql') {
@@ -237,7 +263,7 @@ try {
 
         if (isset($known[$name])) {
             if (!hash_equals((string) $known[$name], $checksum)
-                && !migration_checksum_is_known_compatible($name, (string) $known[$name], $checksum)) {
+                && !migration_checksum_is_known_compatible($name, (string) $known[$name], $checksum, $file)) {
                 throw new RuntimeException('Applied migration was modified: ' . $name);
             }
             continue;

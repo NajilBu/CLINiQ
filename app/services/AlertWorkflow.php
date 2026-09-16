@@ -265,7 +265,7 @@ function classify_reported_incident(array $answers): array
     $settings = risk_settings();
     $score = 0;
     $reasons = [];
-    $assessmentFields = ['incident_type', 'observed_condition', 'breathing_status', 'bleeding_status', 'pain_level', 'mobility_status', 'notes'];
+    $assessmentFields = ['incident_type', 'observed_condition', 'breathing_status', 'bleeding_status', 'pain_level', 'mobility_status'];
     $hasAssessmentInput = false;
     foreach ($assessmentFields as $field) {
         if (trim((string) ($answers[$field] ?? '')) !== '') {

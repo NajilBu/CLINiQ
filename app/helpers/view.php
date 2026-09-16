@@ -141,7 +141,8 @@ function render_header(string $title): void
         header('X-Content-Type-Options: nosniff');
         header('X-Frame-Options: SAMEORIGIN');
         header('Referrer-Policy: same-origin');
-        header('Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()');
+        $cameraPolicy = !empty($GLOBALS['cliniq_page_camera_allowed']) ? '(self)' : '()';
+        header('Permissions-Policy: camera=' . $cameraPolicy . ', microphone=(), geolocation=(), payment=(), usb=()');
         if ($user) {
             header('Cache-Control: no-store, private, max-age=0');
             header('Pragma: no-cache');
