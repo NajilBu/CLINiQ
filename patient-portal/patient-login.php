@@ -105,6 +105,14 @@ render_student_auth_header('Patient Login');
                 </div>
             <?php endif; ?>
 
+            <?php if (($_GET['registered'] ?? '') === '1'): ?>
+                <div class="student-note student-note-success student-toast" data-student-toast role="status" aria-live="polite">
+                    <span class="material-symbols-outlined">check_circle</span>
+                    <div>Your Applicant account was created. Sign in with your student number and password.</div>
+                    <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+                </div>
+            <?php endif; ?>
+
             <div id="error-alert" class="student-note student-note-danger mb-4 <?= $error === '' ? 'hidden' : '' ?>">
                 <span class="material-symbols-outlined">error</span>
                 <div id="error-msg"><?= student_e($error !== '' ? $error : 'Invalid ID Number or password. Please try again.') ?></div>
@@ -136,6 +144,10 @@ render_student_auth_header('Patient Login');
 
             <p class="text-center text-xs font-bold text-slate-500 mt-4">
                 First login? Enter the password provided by the clinic.
+            </p>
+            <hr class="student-auth-divider">
+            <p class="text-center text-xs font-bold text-slate-500">
+                New student? <a href="patient-register.php" class="student-auth-link text-decoration-none">Create an Applicant account.</a>
             </p>
         </div>
     </section>

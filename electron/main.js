@@ -4,6 +4,9 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const { spawn } = require('node:child_process');
 
+// Emergency alarms must start as soon as the signed-in clinic UI receives an alert.
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+
 const DEFAULT_CLINIC_URL = 'http://localhost:8081/public/';
 const HEALTH_TIMEOUT_MS = 5000;
 const EXTERNAL_BACKUP_MARKER = '.cliniq-external-backup-drive.json';

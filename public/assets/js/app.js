@@ -893,10 +893,19 @@ const cliniqAlertMonitor = {
     latestAlertId: 0,
     pollTimer: null,
     alarmSource: null,
+    previewSource: null,
     audioContext: null,
     muted: false,
+    soundId: 'urgent-pulse',
     initialized: false,
 };
+
+const CLINIQ_ALERT_SOUNDS = Object.freeze(['urgent-pulse', 'double-chime', 'rapid-siren']);
+
+function cliniqNormalizeAlertSound(soundId) {
+    const normalized = String(soundId || '').trim().toLowerCase();
+    return CLINIQ_ALERT_SOUNDS.includes(normalized) ? normalized : 'urgent-pulse';
+}
 
 function cliniqStoredAlertPreference(key, fallback = '') {
     try {
@@ -922,15 +931,29 @@ function cliniqAlertAudioContext() {
     return cliniqAlertMonitor.audioContext;
 }
 
-function cliniqCreateAlertLoopBuffer(context) {
-    const loopSeconds = 1.4;
+function cliniqCreateAlertLoopBuffer(context, soundId = 'urgent-pulse') {
+    const selectedSound = cliniqNormalizeAlertSound(soundId);
+    const loopSeconds = selectedSound === 'rapid-siren' ? 1.05 : 1.4;
     const frameCount = Math.floor(context.sampleRate * loopSeconds);
     const buffer = context.createBuffer(1, frameCount, context.sampleRate);
     const samples = buffer.getChannelData(0);
-    const toneWindows = [
-        { start: 0, duration: 0.22, frequency: 880 },
-        { start: 0.3, duration: 0.24, frequency: 660 },
-    ];
+    const patterns = {
+        'urgent-pulse': [
+            { start: 0, duration: 0.22, frequency: 880 },
+            { start: 0.3, duration: 0.24, frequency: 660 },
+        ],
+        'double-chime': [
+            { start: 0, duration: 0.3, frequency: 660 },
+            { start: 0.38, duration: 0.38, frequency: 990 },
+        ],
+        'rapid-siren': [
+            { start: 0, duration: 0.18, frequency: 760 },
+            { start: 0.2, duration: 0.18, frequency: 1040 },
+            { start: 0.4, duration: 0.18, frequency: 760 },
+            { start: 0.6, duration: 0.18, frequency: 1040 },
+        ],
+    };
+    const toneWindows = patterns[selectedSound];
 
     for (let index = 0; index < frameCount; index += 1) {
         const time = index / context.sampleRate;
@@ -962,11 +985,38 @@ function cliniqStartAlertAlarm() {
     const context = cliniqAlertAudioContext();
     if (!context || context.state !== 'running') return;
     const source = context.createBufferSource();
-    source.buffer = cliniqCreateAlertLoopBuffer(context);
+    source.buffer = cliniqCreateAlertLoopBuffer(context, cliniqAlertMonitor.soundId);
     source.loop = true;
     source.connect(context.destination);
     source.start();
     cliniqAlertMonitor.alarmSource = source;
+}
+
+async function cliniqPreviewAlertSound(soundId) {
+    const context = cliniqAlertAudioContext();
+    if (!context) return;
+    if (context.state === 'suspended') {
+        try {
+            await context.resume();
+        } catch (error) {
+            return;
+        }
+    }
+    if (cliniqAlertMonitor.previewSource) {
+        try {
+            cliniqAlertMonitor.previewSource.stop();
+        } catch (error) {
+            // A previous preview may already have completed.
+        }
+    }
+    const source = context.createBufferSource();
+    source.buffer = cliniqCreateAlertLoopBuffer(context, soundId);
+    source.connect(context.destination);
+    source.addEventListener('ended', () => {
+        if (cliniqAlertMonitor.previewSource === source) cliniqAlertMonitor.previewSource = null;
+    }, { once: true });
+    cliniqAlertMonitor.previewSource = source;
+    source.start();
 }
 
 function cliniqUpdateAlertSoundControls() {
@@ -1012,7 +1062,7 @@ async function cliniqUnlockAlertAudio() {
 
 function cliniqSetAlertMuted(muted) {
     cliniqAlertMonitor.muted = Boolean(muted);
-    cliniqSaveAlertPreference('cliniqAlertSoundMuted', cliniqAlertMonitor.muted ? '1' : '0');
+    cliniqSaveAlertPreference('cliniqMutedAlertId', cliniqAlertMonitor.muted ? String(cliniqAlertMonitor.latestAlertId) : '0');
     if (!cliniqAlertMonitor.muted) cliniqUnlockAlertAudio();
     cliniqSyncAlertAlarm();
 }
@@ -1027,8 +1077,18 @@ function cliniqRenderLiveAlertState(data) {
     const pendingCount = Number(data.pending_count || 0);
     const criticalCount = Number(data.critical_count || 0);
     const latestAlertId = Number(data.latest_alert_id || 0);
+    const selectedSound = cliniqNormalizeAlertSound(data.alert_sound || cliniqAlertMonitor.soundId);
+    const soundChanged = selectedSound !== cliniqAlertMonitor.soundId;
+    const mutedAlertId = Number(cliniqStoredAlertPreference('cliniqMutedAlertId', '0'));
     cliniqAlertMonitor.pendingCount = pendingCount;
     cliniqAlertMonitor.latestAlertId = latestAlertId;
+    cliniqAlertMonitor.soundId = selectedSound;
+    cliniqAlertMonitor.muted = pendingCount > 0 && latestAlertId > 0 && mutedAlertId === latestAlertId;
+    if (pendingCount < 1 || latestAlertId > mutedAlertId) {
+        cliniqSaveAlertPreference('cliniqMutedAlertId', '0');
+        cliniqAlertMonitor.muted = false;
+    }
+    if (soundChanged) cliniqStopAlertAlarm();
 
     if (document.body) {
         document.body.classList.toggle('has-active-alerts', pendingCount > 0);
@@ -1104,9 +1164,16 @@ function initContinuousAlertMonitor() {
     if (cliniqAlertMonitor.initialized || !document.body?.dataset.alertStatusUrl) return;
     cliniqAlertMonitor.initialized = true;
     cliniqAlertMonitor.pendingCount = Number(document.body.dataset.activeAlertCount || 0);
-    cliniqAlertMonitor.muted = cliniqStoredAlertPreference('cliniqAlertSoundMuted', '0') === '1';
+    cliniqAlertMonitor.muted = false;
+    cliniqAlertMonitor.soundId = cliniqNormalizeAlertSound(document.body.dataset.alertSound);
 
     document.addEventListener('click', (event) => {
+        const previewButton = event.target.closest('[data-preview-alert-sound]');
+        if (previewButton) {
+            const soundField = document.getElementById('alert_sound');
+            void cliniqPreviewAlertSound(soundField?.value || cliniqAlertMonitor.soundId);
+            return;
+        }
         const muteButton = event.target.closest('[data-alert-sound-toggle]');
         if (muteButton) {
             const context = cliniqAlertAudioContext();
@@ -1127,8 +1194,9 @@ function initContinuousAlertMonitor() {
     window.addEventListener('offline', () => cliniqSetAlertConnectionState(false));
 
     cliniqSyncAlertAlarm();
-    refreshAlerts();
-    cliniqAlertMonitor.pollTimer = window.setInterval(refreshAlerts, 10000);
+    void cliniqUnlockAlertAudio();
+    void refreshAlerts();
+    cliniqAlertMonitor.pollTimer = window.setInterval(refreshAlerts, 3000);
 }
 
 

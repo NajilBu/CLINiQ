@@ -784,6 +784,21 @@ render_clinic_command_header(
                                 <label class="clinic-label" for="system_purpose">System Purpose</label>
                                 <textarea class="settings-textarea" id="system_purpose" name="system_purpose" <?= !$canManageSettings ? 'readonly' : '' ?> required><?= profile_setting_value($clinicProfile, 'system_purpose') ?></textarea>
                             </div>
+                            <div class="settings-field md:col-span-2">
+                                <label class="clinic-label" for="alert_sound">Emergency Alert Sound</label>
+                                <div class="flex flex-col sm:flex-row gap-3">
+                                    <select class="settings-input flex-1" id="alert_sound" name="alert_sound" <?= !$canManageSettings ? 'disabled' : '' ?>>
+                                        <?php foreach (clinic_alert_sound_options() as $soundKey => $soundLabel): ?>
+                                            <option value="<?= e($soundKey) ?>" <?= ($clinicProfile['alert_sound'] ?? 'urgent-pulse') === $soundKey ? 'selected' : '' ?>><?= e($soundLabel) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <button type="button" class="btn btn-secondary justify-center" data-preview-alert-sound>
+                                        <span class="material-symbols-outlined text-[18px]">volume_up</span>
+                                        Preview Sound
+                                    </button>
+                                </div>
+                                <p class="settings-help mb-0">This sound is used automatically for new pending emergency alerts on every signed-in clinic device.</p>
+                            </div>
                         </div>
                         <div class="flex justify-end">
                             <button class="btn btn-primary" <?= !$canManageSettings ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Save clinic profile?" data-confirm-message="This updates the shared system name and clinic identity used by CLINiQ." data-confirm-toast="Saving clinic profile...">

@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../../app/helpers/auth.php';
+require_once __DIR__ . '/../../app/services/SystemSettings.php';
 
 header('Content-Type: application/json');
 header('Cache-Control: no-store, private, max-age=0');
@@ -43,6 +44,7 @@ $latestAlertId = (int) ($latestAlert['id'] ?? 0);
 $alertUrl = $pendingCount === 1 && $latestAlertId > 0
     ? app_url('alerts/view.php?id=' . $latestAlertId)
     : app_url('alerts/index.php?status=pending');
+$clinicProfile = clinic_profile_settings();
 
 echo json_encode([
     'pending_count' => $pendingCount,
@@ -50,6 +52,7 @@ echo json_encode([
     'latest_alert_id' => $latestAlertId,
     'latest_alert' => $latestAlert,
     'alert_url' => $alertUrl,
+    'alert_sound' => (string) ($clinicProfile['alert_sound'] ?? 'urgent-pulse'),
     'checked_at' => gmdate(DATE_ATOM),
     'alerts' => $alerts,
 ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);

@@ -6,7 +6,7 @@ ALTER TABLE school_employees
   MODIFY role_classification ENUM('Faculty', 'Non-Teaching Personnel') NOT NULL;
 
 ALTER TABLE ape_records
-  ADD COLUMN IF NOT EXISTS entry_mode ENUM('Student Scheduled', 'Clinic Manual') NOT NULL DEFAULT 'Student Scheduled'
+  ADD COLUMN entry_mode ENUM('Student Scheduled', 'Clinic Manual') NOT NULL DEFAULT 'Student Scheduled'
   AFTER schedule_batch_id;
 
 UPDATE ape_schedule_batches b

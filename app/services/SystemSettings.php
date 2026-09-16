@@ -807,6 +807,16 @@ function default_clinic_profile_settings(): array
         'physical_address' => 'Alcalde Jose Street, Brgy. Kapasigan, Pasig City, Metro Manila, Philippines, 1600',
         'system_purpose' => 'School clinic information management system for patient records, visits, APE workflow, emergency alerts, appointments, inventory, referrals, and reports.',
         'logo_path' => 'assets/img/clinic-logo.png',
+        'alert_sound' => 'urgent-pulse',
+    ];
+}
+
+function clinic_alert_sound_options(): array
+{
+    return [
+        'urgent-pulse' => 'Urgent Pulse',
+        'double-chime' => 'Double Chime',
+        'rapid-siren' => 'Rapid Siren',
     ];
 }
 
@@ -827,6 +837,9 @@ function normalize_clinic_profile_settings(array $input): array
 
     if (!filter_var($settings['contact_email'], FILTER_VALIDATE_EMAIL)) {
         $settings['contact_email'] = $defaults['contact_email'];
+    }
+    if (!array_key_exists($settings['alert_sound'], clinic_alert_sound_options())) {
+        $settings['alert_sound'] = $defaults['alert_sound'];
     }
     $settings['logo_path'] = clinic_profile_logo_path($settings);
 
