@@ -230,7 +230,7 @@ $nextActionCopy = match (true) {
     default => $studentNote ?: ($apeRecord ? 'Complete the current APE step shown below.' : 'No APE record has been opened by the clinic yet.'),
 };
 $currentStep = $apeRecord ? ape_record_step_index($apeRecord) + 1 : 1;
-$apePercent = $clearanceStatus === 'Cleared' ? 100 : (($digitalSubmissionComplete ? 25 : 0) + ($examCompleted ? 25 : 0));
+$apePercent = $apeRecord ? ape_record_progress_percent($apeRecord) : 0;
 $showFindings = $examCompleted;
 $showDocuments = (bool) $apeRecord;
 $showActivity = (bool) $apeRecord;
@@ -257,6 +257,7 @@ $flowSteps = [
                 ? 'Complete regular uploads within seven days of examination.'
                 : 'Upload available documents now; incomplete files will not block examination.'),
         'done' => $digitalSubmissionComplete,
+        'in_progress' => !$digitalSubmissionComplete && (bool) $apeRecord,
         'current' => $apeQueue === 'digital_submission' && !ape_examination_is_available($apeRecord ?? []),
     ],
     [
@@ -431,7 +432,7 @@ render_student_header('APE Status', 'ape');
         <span class="student-label">Completion</span>
         <strong class="student-ape-summary-value"><?= (int) $apePercent ?>%</strong>
         <div class="student-ape-summary-progress" aria-hidden="true"><span style="width: <?= (int) $apePercent ?>%;"></span></div>
-        <span class="student-ape-summary-copy">Step <?= max(1, (int) $apeStep) ?> of 4</span>
+        <span class="student-ape-summary-copy">Step <?= max(1, (int) $currentStep) ?> of 4</span>
     </article>
     <article class="student-card student-ape-summary-card">
         <span class="student-label">Batch schedule</span>
@@ -480,17 +481,18 @@ render_student_header('APE Status', 'ape');
                     <?php
                     $stepNumber = (int) $step['number'];
                     $isDone = (bool) ($step['done'] ?? false);
+                    $isInProgress = (bool) ($step['in_progress'] ?? false) && !$isDone;
                     $isCurrent = (bool) ($step['current'] ?? false) && !$isDone;
-                    $stepClass = $isDone ? 'is-done' : ($isCurrent ? 'is-current' : 'is-locked');
-                    $badgeClass = $isDone ? 'student-badge-success' : ($isCurrent ? 'student-badge-warning' : 'student-badge-info');
-                    $badgeLabel = $isDone ? 'Done' : ($isCurrent ? 'Current' : 'Next');
+                    $stepClass = $isDone ? 'is-done' : (($isCurrent || $isInProgress) ? 'is-current' : 'is-locked');
+                    $badgeClass = $isDone ? 'student-badge-success' : (($isCurrent || $isInProgress) ? 'student-badge-warning' : 'student-badge-info');
+                    $badgeLabel = $isDone ? 'Done' : ($isCurrent ? 'Current' : ($isInProgress ? 'In Progress' : 'Next'));
                     $stepTitle = $step['title'];
                     $stepCopy = $step['copy'];
                     ?>
                     <div class="student-ape-step <?= student_e($stepClass) ?>">
                         <span class="student-ape-step-rail" aria-hidden="true"></span>
                         <span class="student-ape-step-index">
-                            <span class="material-symbols-outlined"><?= student_e($isDone ? 'check' : ($isCurrent ? 'pending_actions' : $step['icon'])) ?></span>
+                            <span class="material-symbols-outlined"><?= student_e($isDone ? 'check' : (($isCurrent || $isInProgress) ? 'pending_actions' : $step['icon'])) ?></span>
                         </span>
                         <div class="student-ape-step-body" data-mobile-step-label="<?= student_e($step['title']) ?>">
                             <div class="student-ape-step-top">
@@ -499,7 +501,7 @@ render_student_header('APE Status', 'ape');
                             </div>
                             <strong><?= student_e($stepTitle) ?></strong>
                             <span><?= student_e($stepCopy) ?></span>
-                            <?php if ($isCurrent && $canUploadDocuments): ?>
+                            <?php if (($isCurrent || $isInProgress) && $stepNumber === 1 && $canUploadDocuments): ?>
                                 <a class="student-ape-step-action" data-mobile-open-panel="ape-documents-panel" href="#ape-documents-panel">Upload APE documents <span class="material-symbols-outlined">arrow_downward</span></a>
                             <?php endif; ?>
                         </div>

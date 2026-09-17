@@ -60,8 +60,10 @@ $scheduledNow = array_replace($waiting, [
 ]);
 expect_four_step(ape_record_queue($waiting) === 'digital_submission', 'Digital Keeping must be first before the examination window.');
 expect_four_step(ape_record_step_index($waiting) === 0, 'Digital Keeping must be step one.');
+expect_four_step(ape_record_progress_percent($waiting) === 0, 'An incomplete record before examination day must remain at zero percent.');
 expect_four_step(ape_record_queue($scheduledNow) === 'examination', 'The active schedule must allow examination despite incomplete files.');
 expect_four_step(ape_record_step_index($scheduledNow) === 1, 'Examination must be step two.');
+expect_four_step(ape_record_progress_percent($scheduledNow) === 25, 'Progress must advance when examination opens even if Digital Keeping is incomplete.');
 $missedSchedule = array_replace($fixedSchedule, [
     'batch_start_at' => $now->modify('-2 hours')->format('Y-m-d H:i:s'),
     'batch_end_at' => $now->modify('-1 hour')->format('Y-m-d H:i:s'),
@@ -72,6 +74,7 @@ expect_four_step(ape_next_action($missedSchedule)['label'] === 'Record Examinati
 $digital = array_replace($waiting, ['exam_date' => '2026-09-15']);
 expect_four_step(ape_record_queue($digital) === 'final_decision', 'Incomplete regular files must remain in Final Decision after examination.');
 expect_four_step(ape_record_step_index($digital) === 2, 'A saved examination must not move backward to Digital Keeping.');
+expect_four_step(ape_record_progress_percent($digital) === 50, 'A completed examination must advance progress while Digital Keeping remains incomplete.');
 $deadline = ape_deadline_status($digital, new DateTimeImmutable('2026-09-22'));
 expect_four_step(($deadline['label'] ?? '') === 'On Track' && ($deadline['due_date'] ?? '') === '2026-09-22', 'Regular uploads must allow the full seven days after examination.');
 expect_four_step(ape_deadline_status($digital, new DateTimeImmutable('2026-09-23'))['label'] === 'Overdue', 'Final Decision must show overdue regular uploads after the seven-day deadline.');
@@ -93,6 +96,7 @@ expect_four_step(ape_record_step_index($final) === 2, 'Final decision or follow-
 $completed = array_replace($final, ['workflow_status' => 'Cleared', 'clearance_status' => 'Cleared']);
 expect_four_step(ape_record_queue($completed) === 'completed', 'Cleared record must enter the completed queue.');
 expect_four_step(ape_record_step_index($completed) === 3, 'Completed must be step four.');
+expect_four_step(ape_record_progress_percent($completed) === 100, 'A cleared APE record must show full progress.');
 
 $batchNow = new DateTimeImmutable('2026-09-15 09:00:00');
 $batches = [
@@ -113,5 +117,10 @@ $viewSource = file_get_contents(__DIR__ . '/../public/ape/view.php');
 expect_four_step(str_contains($viewSource, 'data-final-decision-documents'), 'Final Decision must display outstanding regular documents.');
 expect_four_step(str_contains($viewSource, "in_array(\$archiveQueue, ['final_decision', 'follow_up'], true)"), 'Final Decision and Follow-up must allow pending regular uploads to be archived without returning to Digital Keeping.');
 expect_four_step(str_contains($viewSource, 'Complete and archive every regular digital document before clearing the patient.'), 'Clearance must remain protected until regular digital documents are archived.');
+
+$patientStatusSource = file_get_contents(__DIR__ . '/../patient-portal/patient-ape-status.php');
+expect_four_step(str_contains($patientStatusSource, "'in_progress' => !\$digitalSubmissionComplete"), 'Incomplete Digital Keeping must remain visibly in progress when examination opens.');
+expect_four_step(str_contains($patientStatusSource, "\$isInProgress ? 'In Progress'"), 'The Digital Keeping step must show an In Progress badge.');
+expect_four_step(str_contains($patientStatusSource, 'max(1, (int) $currentStep)'), 'The APE summary must show the calculated current step.');
 
 echo "APE four-step workflow tests passed.\n";

@@ -299,6 +299,27 @@ function ape_record_step_index(array $record): int
     };
 }
 
+/**
+ * Report patient-facing progress without treating incomplete digital keeping as
+ * a gate that prevents the scheduled examination from advancing the workflow.
+ */
+function ape_record_progress_percent(array $record): int
+{
+    if (($record['workflow_status'] ?? '') === 'Cleared' || ($record['clearance_status'] ?? '') === 'Cleared') {
+        return 100;
+    }
+
+    if (!empty($record['exam_date'])) {
+        return 50;
+    }
+
+    if (ape_digital_submission_complete($record) || ape_examination_is_available($record)) {
+        return 25;
+    }
+
+    return 0;
+}
+
 function ape_schedule_is_current(array $record, ?DateTimeImmutable $now = null): bool
 {
     if (empty($record['schedule_batch_id']) || ($record['batch_status'] ?? '') !== 'Scheduled') {
