@@ -1436,6 +1436,37 @@ html:has(.student-body) body {
     font-weight: 600;
 }
 
+.student-remember-row {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin: -0.15rem 0 1rem;
+    color: var(--student-fg);
+    cursor: pointer;
+    font-size: 0.84rem;
+    font-weight: 500;
+}
+
+.student-remember-row:hover {
+    color: var(--student-primary-dark);
+}
+
+.student-remember-row input {
+    width: 1.15rem;
+    height: 1.15rem;
+    flex: 0 0 auto;
+    margin: 0;
+    border: 1px solid var(--student-border);
+    border-radius: 0.3rem;
+    accent-color: var(--student-primary);
+}
+
+.student-remember-row:focus-within {
+    outline: 3px solid rgba(var(--cliniq-focus-rgb), 0.13);
+    outline-offset: 3px;
+    border-radius: 0.25rem;
+}
+
 .student-stat {
     padding: 1rem;
     background: #ffffff;
@@ -3537,6 +3568,7 @@ body.student-time-modal-open {
     .student-mobile-account { position:relative; z-index:90; display:block; order:3; } .student-mobile-account summary { list-style:none; } .student-mobile-account summary::-webkit-details-marker { display:none; }
     .student-notification-toggle, .student-mobile-account-toggle, .student-calendar-time-close { display:grid; width:44px; height:44px; min-width:44px; min-height:44px; place-items:center; padding:0; border:1px solid var(--student-border-soft); border-radius:12px; background:#fff; color:var(--student-primary-dark); box-shadow:none; }
     .student-notification-toggle .material-symbols-outlined, .student-mobile-account-toggle .material-symbols-outlined { font-size:24px; }
+    .student-mobile-account-avatar { display:grid; width:30px; height:30px; place-items:center; overflow:hidden; border-radius:50%; background:var(--student-primary-soft); color:var(--student-primary-dark); font-size:12px; font-weight:700; object-fit:cover; }
     .student-mobile-account[open] .student-mobile-account-menu { position:fixed; z-index:95; top:calc(64px + env(safe-area-inset-top) + 8px); right:16px; display:grid; width:min(19rem,calc(100vw - 32px)); gap:4px; padding:12px; border:1px solid var(--student-border-soft); border-radius:16px; background:#fff; box-shadow:0 14px 30px rgba(23,38,29,.18); } .student-mobile-account-identity { display:flex; align-items:center; gap:10px; min-width:0; padding:4px 4px 10px; border-bottom:1px solid var(--student-border-soft); } .student-mobile-account-identity > img, .student-mobile-account-identity > span { display:grid; width:36px; height:36px; flex:0 0 36px; place-items:center; overflow:hidden; border-radius:50%; background:var(--student-primary-soft); color:var(--student-primary-dark); font-size:13px; font-weight:700; object-fit:cover; } .student-mobile-account-identity > div { min-width:0; } .student-mobile-account-identity strong, .student-mobile-account-identity small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .student-mobile-account-identity strong { color:var(--student-fg); font-size:14px; line-height:1.3; } .student-mobile-account-identity small { margin-top:2px; color:var(--student-muted); font-size:12px; } .student-mobile-account-action { display:flex; align-items:center; min-height:44px; gap:10px; padding:8px; border:0; border-radius:10px; background:transparent; color:var(--student-fg); font-size:14px; font-weight:600; text-align:left; } .student-mobile-account-action:hover, .student-mobile-account-action:focus-visible { background:var(--student-primary-soft); color:var(--student-primary-dark); } .student-mobile-account-action .material-symbols-outlined { font-size:20px; } .student-mobile-account-action.is-danger { color:var(--student-danger); }
     .student-notification-panel { position:fixed; top:72px; right:16px; left:16px; width:auto; max-height:calc(100dvh - 88px); border-radius:16px; }
     .student-mobile-bottom-nav { position:fixed; z-index:70; right:0; bottom:0; left:0; display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); min-height:calc(var(--student-mobile-nav-height) + env(safe-area-inset-bottom)); padding:4px 8px calc(4px + env(safe-area-inset-bottom)); border-top:1px solid var(--student-border-soft); background:rgba(255, 255, 255, .96); box-shadow:0 -8px 24px rgba(23, 38, 29, .08); backdrop-filter:blur(14px); }
@@ -3674,6 +3706,7 @@ body.student-time-modal-open {
     .student-mobile-account summary::-webkit-details-marker { display: none; }
     .student-mobile-account-toggle { display: grid; width: 44px; height: 44px; min-width: 44px; min-height: 44px; place-items: center; padding: 0; border: 1px solid var(--student-border-soft); border-radius: 12px; background: #fff; color: var(--student-primary-dark); box-shadow: none; cursor: pointer; }
     .student-mobile-account-toggle .material-symbols-outlined { font-size: 24px; }
+    .student-mobile-account-avatar { display: grid; width: 30px; height: 30px; place-items: center; overflow: hidden; border-radius: 50%; background: var(--student-primary-soft); color: var(--student-primary-dark); font-size: 12px; font-weight: 700; object-fit: cover; }
     .student-mobile-account[open] .student-mobile-account-menu { position: absolute; z-index: 95; top: calc(100% + 12px); right: 0; display: grid; width: 19rem; gap: 4px; padding: 12px; border: 1px solid var(--student-border-soft); border-radius: 16px; background: #fff; box-shadow: 0 14px 30px rgba(23, 38, 29, .18); }
     .student-mobile-account-identity { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 4px 4px 10px; border-bottom: 1px solid var(--student-border-soft); }
     .student-mobile-account-identity > img, .student-mobile-account-identity > span { display: grid; width: 36px; height: 36px; flex: 0 0 36px; place-items: center; overflow: hidden; border-radius: 50%; background: var(--student-primary-soft); color: var(--student-primary-dark); font-size: 13px; font-weight: 700; object-fit: cover; }
@@ -3681,7 +3714,8 @@ body.student-time-modal-open {
     .student-mobile-account-identity strong, .student-mobile-account-identity small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .student-mobile-account-identity strong { color: var(--student-fg); font-size: 14px; line-height: 1.3; }
     .student-mobile-account-identity small { margin-top: 2px; color: var(--student-muted); font-size: 12px; }
-    .student-mobile-account-action { display: flex; align-items: center; min-height: 44px; gap: 10px; padding: 8px; border: 0; border-radius: 10px; background: transparent; color: var(--student-fg); font-size: 14px; font-weight: 600; text-align: left; }
+    .student-mobile-account-form { width: 100%; margin: 0; }
+    .student-mobile-account-action { display: flex; width: 100%; box-sizing: border-box; align-items: center; min-height: 44px; gap: 10px; padding: 8px; border: 0; border-radius: 10px; background: transparent; color: var(--student-fg); font-size: 14px; font-weight: 600; text-align: left; }
     .student-mobile-account-action:hover, .student-mobile-account-action:focus-visible { background: var(--student-primary-soft); color: var(--student-primary-dark); }
     .student-mobile-account-action .material-symbols-outlined { font-size: 20px; }
     .student-mobile-account-action.is-danger { color: var(--student-danger); }
@@ -3739,10 +3773,12 @@ body.student-time-modal-open {
     .patient-document-more > :not(summary) { display: block !important; }
 
     /* Desktop Dashboard: action-first hierarchy without stretched empty cards. */
-    .student-dashboard-detail-stack { align-items: start; }
-    .student-dashboard-profile-slot > .student-mobile-more { display: flex; flex: 1 1 auto; flex-direction: column; }
-    .student-dashboard-profile-slot > .student-mobile-more > .student-card { flex: 1 1 auto; }
-    .student-dashboard-detail-stack > .student-dashboard-duplicate { align-self: start; }
+    .student-dashboard-detail-stack { align-items: stretch; }
+    .student-dashboard-profile-slot,
+    .student-dashboard-detail-stack > .student-dashboard-duplicate { align-self: stretch; }
+    .student-dashboard-profile-slot > .student-mobile-more { display: flex; height: 100%; flex: 1 1 auto; flex-direction: column; }
+    .student-dashboard-profile-slot > .student-mobile-more > .student-card { height: 100%; flex: 1 1 auto; box-sizing: border-box; }
+    .student-dashboard-detail-stack > .student-dashboard-duplicate { height: 100%; }
     .student-dashboard-profile-slot > .student-mobile-more > .student-card { min-height: 21.7rem; }
     .student-dashboard-appointment-card { min-height: 21.7rem; }
     .student-dashboard-appointment-card { display: flex; flex-direction: column; }

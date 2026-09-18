@@ -306,6 +306,58 @@ function student_logout(): void
     session_destroy();
 }
 
+function student_remember_cookie_name(): string
+{
+    return 'cliniq_student_device';
+}
+
+function student_forget_device(): void
+{
+    $token = (string) ($_COOKIE[student_remember_cookie_name()] ?? '');
+    if ($token !== '') {
+        $stmt = auth_db()->prepare('UPDATE student_remembered_devices SET revoked_at = NOW() WHERE token_hash = ?');
+        $stmt->execute([hash('sha256', $token)]);
+    }
+    setcookie(student_remember_cookie_name(), '', time() - 3600, '/', '', true, true);
+}
+
+function student_remember_device(int $accountId): void
+{
+    $token = bin2hex(random_bytes(32));
+    $stmt = auth_db()->prepare('INSERT INTO student_remembered_devices (account_id, token_hash, user_agent, expires_at) VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL 30 DAY))');
+    $stmt->execute([$accountId, hash('sha256', $token), substr((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 512)]);
+    setcookie(student_remember_cookie_name(), $token, [
+        'expires' => time() + 30 * 86400,
+        'path' => '/',
+        'secure' => true,
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
+}
+
+function student_restore_remembered_session(): bool
+{
+    if (!empty($_SESSION['patient_person_id'])) {
+        return true;
+    }
+    $token = (string) ($_COOKIE[student_remember_cookie_name()] ?? '');
+    if ($token === '') {
+        return false;
+    }
+    $stmt = auth_db()->prepare('SELECT d.device_id, a.id AS account_id, a.account_status, p.id AS person_id FROM student_remembered_devices d JOIN accounts a ON a.id = d.account_id JOIN people p ON p.id = a.person_id JOIN patients pt ON pt.person_id = p.id JOIN students s ON s.person_id = p.id WHERE d.token_hash = ? AND d.revoked_at IS NULL AND d.expires_at > NOW() LIMIT 1');
+    $stmt->execute([hash('sha256', $token)]);
+    $device = $stmt->fetch();
+    if (!$device || $device['account_status'] !== 'active') {
+        student_forget_device();
+        return false;
+    }
+    $_SESSION['patient_account_id'] = (int) $device['account_id'];
+    $_SESSION['patient_person_id'] = (int) $device['person_id'];
+    $update = auth_db()->prepare('UPDATE student_remembered_devices SET last_used_at = NOW() WHERE device_id = ?');
+    $update->execute([(int) $device['device_id']]);
+    return true;
+}
+
 function student_find_patient_by_number(string $studentNumber): ?array
 {
     $stmt = auth_db()->prepare('
@@ -540,7 +592,11 @@ function render_student_header(string $title, string $active = ''): void
                 <?php if (empty($profile['first_registration'])): ?>
                     <details class="student-mobile-account">
                         <summary class="student-mobile-account-toggle" aria-label="Open account menu">
-                            <span class="material-symbols-outlined" aria-hidden="true">account_circle</span>
+                            <?php if ($profilePhotoSrc !== null): ?>
+                                <img class="student-mobile-account-avatar" src="<?= student_e($profilePhotoSrc) ?>" alt="<?= student_e($profile['name']) ?> profile picture">
+                            <?php else: ?>
+                                <span class="student-mobile-account-avatar"><?= student_e(student_initials($profile['name'])) ?></span>
+                            <?php endif; ?>
                             <span class="sr-only">Account menu</span>
                         </summary>
                         <div class="student-mobile-account-menu">
@@ -563,6 +619,15 @@ function render_student_header(string $title, string $active = ''): void
                                 <span class="material-symbols-outlined" aria-hidden="true">key</span>
                                 Change password
                             </button>
+                            <form method="POST" action="patient-login.php" class="student-mobile-account-form">
+                                <input type="hidden" name="_csrf" value="<?= student_e(csrf_token()) ?>">
+                                <input type="hidden" name="action" value="forget_device">
+                                <input type="hidden" name="return_to" value="dashboard">
+                                <button type="submit" class="student-mobile-account-action">
+                                    <span class="material-symbols-outlined" aria-hidden="true">phonelink_erase</span>
+                                    Forget this device
+                                </button>
+                            </form>
                             <a href="patient-login.php?logout=1" onclick="localStorage.clear();" class="student-mobile-account-action is-danger text-decoration-none">
                                 <span class="material-symbols-outlined" aria-hidden="true">logout</span>
                                 Sign out

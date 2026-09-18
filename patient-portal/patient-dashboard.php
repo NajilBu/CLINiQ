@@ -385,6 +385,14 @@ render_student_header('Dashboard', 'dashboard');
     </div>
 <?php endif; ?>
 
+<?php if (isset($_GET['device_forgotten'])): ?>
+    <div class="student-note student-note-success student-toast" data-student-toast role="status" aria-live="polite">
+        <span class="material-symbols-outlined">verified_user</span>
+        <div>This device has been forgotten. You will stay signed in here, but future visits will require your password.</div>
+        <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+    </div>
+<?php endif; ?>
+
 <section class="student-card student-card-pad mb-4 student-dashboard-welcome" aria-label="Patient dashboard overview">
 <div class="student-page-header">
     <div>
@@ -405,13 +413,6 @@ render_student_header('Dashboard', 'dashboard');
     </a>
 <?php endif; ?>
 </section>
-
-<?php if (!$isOfficialAccess): ?>
-    <div class="student-note student-note-warning mb-4" role="status">
-        <span class="material-symbols-outlined">lock_clock</span>
-        <div><strong>Applicant access</strong><br>Complete your APE and receive final clinic clearance to unlock your Health Passport and appointment booking.</div>
-    </div>
-<?php endif; ?>
 
 <?php if (!$isOfficialAccess): ?>
     <div class="student-note student-note-warning mb-4" role="status">
@@ -585,6 +586,7 @@ render_student_header('Dashboard', 'dashboard');
                 <p class="text-sm font-black text-[#17261d] mb-0"><?= student_e($profile['access_status']) ?></p>
             </div>
         </div>
+
     </section>
     </details>
     </div>
@@ -630,7 +632,7 @@ render_student_header('Dashboard', 'dashboard');
         </div>
     </section>
 
-    <section class="student-card student-span-4<?= $isOfficialAccess ? ' student-clickable-card' : '' ?> student-dashboard-duplicate"<?= $isOfficialAccess ? ' data-href="patient-appointment.php" role="link" tabindex="0" aria-label="Open appointment page"' : ' aria-label="Appointments locked for Applicant access"' ?>>
+    <section class="student-card student-span-4<?= $isOfficialAccess ? ' student-clickable-card' : '' ?> student-dashboard-duplicate student-dashboard-appointment-card"<?= $isOfficialAccess ? ' data-href="patient-appointment.php" role="link" tabindex="0" aria-label="Open appointment page"' : ' aria-label="Appointments locked for Applicant access"' ?>>
         <div class="student-card-header">
             <div>
                 <h2 class="student-card-title">Appointment</h2>
