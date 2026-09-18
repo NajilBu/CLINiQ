@@ -1032,30 +1032,60 @@ function ape_document_storage_root(): string
     return dirname(__DIR__, 2) . '/storage/documents/ape';
 }
 
-function ape_document_absolute_path(string $storedPath): ?string
+function ape_document_relative_name(string $storedPath): ?string
 {
-    $normalizedPath = ltrim(str_replace('\\', '/', trim($storedPath)), '/');
-    $allowedPrefixes = ['storage/documents/ape/', 'uploads/ape/'];
-    $relativeName = null;
-
-    foreach ($allowedPrefixes as $prefix) {
-        if (str_starts_with($normalizedPath, $prefix)) {
-            $relativeName = substr($normalizedPath, strlen($prefix));
-            break;
-        }
-    }
-
-    if ($relativeName === null || $relativeName === '' || basename($relativeName) !== $relativeName) {
+    $normalizedPath = str_replace('\\', '/', trim($storedPath));
+    if ($normalizedPath === '' || str_contains($normalizedPath, "\0") || str_contains($normalizedPath, '..')) {
         return null;
     }
 
-    $protectedPath = ape_document_storage_root() . DIRECTORY_SEPARATOR . $relativeName;
-    if (is_file($protectedPath)) {
-        return $protectedPath;
+    $relativeName = null;
+    foreach (['/storage/documents/ape/', '/public/uploads/ape/', '/uploads/ape/'] as $marker) {
+        $position = strripos('/' . ltrim($normalizedPath, '/'), $marker);
+        if ($position !== false) {
+            $relativeName = substr('/' . ltrim($normalizedPath, '/'), $position + strlen($marker));
+            break;
+        }
+    }
+    if ($relativeName === null && basename($normalizedPath) === $normalizedPath) {
+        $relativeName = $normalizedPath;
     }
 
-    $legacyPath = dirname(__DIR__, 2) . '/public/uploads/ape/' . $relativeName;
-    return is_file($legacyPath) ? $legacyPath : null;
+    if (
+        $relativeName === null
+        || $relativeName === ''
+        || basename($relativeName) !== $relativeName
+        || !preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]*$/', $relativeName)
+    ) {
+        return null;
+    }
+
+    return $relativeName;
+}
+
+function ape_document_lookup(string $storedPath): array
+{
+    $relativeName = ape_document_relative_name($storedPath);
+    if ($relativeName === null) {
+        return ['status' => 'invalid_path', 'relative_name' => null, 'absolute_path' => null];
+    }
+
+    $candidates = [
+        ape_document_storage_root() . DIRECTORY_SEPARATOR . $relativeName,
+        dirname(__DIR__, 2) . '/public/uploads/ape/' . $relativeName,
+    ];
+    foreach ($candidates as $candidate) {
+        if (is_file($candidate) && is_readable($candidate)) {
+            return ['status' => 'available', 'relative_name' => $relativeName, 'absolute_path' => $candidate];
+        }
+    }
+
+    return ['status' => 'missing_file', 'relative_name' => $relativeName, 'absolute_path' => null];
+}
+
+function ape_document_absolute_path(string $storedPath): ?string
+{
+    return ape_document_lookup($storedPath)['absolute_path'];
 }
 
 function ape_store_uploaded_file(array $file, string $prefix): array

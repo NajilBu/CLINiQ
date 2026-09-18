@@ -151,6 +151,8 @@ function render_header(string $title): void
 
     $clinicProfile = clinic_profile_settings();
     $clinicLogoUrl = app_url(clinic_profile_logo_path($clinicProfile));
+    $customAlertSoundPath = clinic_profile_alert_sound_path($clinicProfile);
+    $customAlertSoundUrl = $customAlertSoundPath !== '' ? app_url($customAlertSoundPath) : '';
     $theme = active_cliniq_theme();
     $pageBackLink = $GLOBALS['cliniq_page_back_link'] ?? null;
     $currentPath = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
@@ -271,7 +273,7 @@ function render_header(string $title): void
         </style>
     <script src="<?= app_url('assets/js/id-number-format.js?v=' . filemtime(__DIR__ . '/../../public/assets/js/id-number-format.js')) ?>"></script>
     </head>
-    <body class="<?= e($bodyClasses) ?>" data-cliniq-runtime="<?= $isElectronRuntime ? 'electron' : 'browser' ?>" data-cliniq-app-url="<?= e(app_url()) ?>" data-cliniq-patient-portal-url="<?= e($patientPortalUrl) ?>"<?php if ($user): ?> data-alert-status-url="<?= e(app_url('api/alerts.php')) ?>" data-active-alert-count="<?= (int) $activeAlertCount ?>" data-critical-alert-count="<?= (int) $criticalAlertCount ?>" data-alert-sound="<?= e((string) ($clinicProfile['alert_sound'] ?? 'urgent-pulse')) ?>"<?php endif; ?>>
+    <body class="<?= e($bodyClasses) ?>" data-cliniq-runtime="<?= $isElectronRuntime ? 'electron' : 'browser' ?>" data-cliniq-app-url="<?= e(app_url()) ?>" data-cliniq-patient-portal-url="<?= e($patientPortalUrl) ?>"<?php if ($user): ?> data-alert-status-url="<?= e(app_url('api/alerts.php')) ?>" data-active-alert-count="<?= (int) $activeAlertCount ?>" data-critical-alert-count="<?= (int) $criticalAlertCount ?>" data-alert-sound="<?= e((string) ($clinicProfile['alert_sound'] ?? 'urgent-pulse')) ?>" data-alert-sound-url="<?= e($customAlertSoundUrl) ?>"<?php endif; ?>>
     <?php if ($user): ?>
         <div class="app-shell">
             <aside class="app-sidebar">

@@ -25,6 +25,7 @@ foreach ([
     "'latest_alert_id'",
     "'alert_url'",
     "'alert_sound'",
+    "'alert_sound_url'",
 ] as $expected) {
     if (!str_contains($endpoint, $expected)) {
         throw new RuntimeException("The live alert endpoint is incomplete: {$expected}");
@@ -37,6 +38,7 @@ foreach ([
     'data-alert-connection-status',
     'id="pending-alert-count"',
     'data-alert-sound=',
+    'data-alert-sound-url=',
 ] as $expected) {
     if (!str_contains($layout, $expected)) {
         throw new RuntimeException("The shared clinic header is missing a live alert control: {$expected}");
@@ -53,7 +55,12 @@ foreach ([
     'function cliniqStartAlertAlarm()',
     'function cliniqStopAlertAlarm()',
     'function cliniqCreateAlertLoopBuffer(context,',
-    'function cliniqPreviewAlertSound(soundId)',
+    "function cliniqPreviewAlertSound(soundId, customUrl = '')",
+    'function cliniqStopAlertSoundPreview()',
+    'function initCustomAlertSoundUpload()',
+    'new Audio(cliniqAlertMonitor.soundUrl)',
+    "audio.loop = true",
+    'URL.createObjectURL(file)',
     "'double-chime'",
     "'rapid-siren'",
     'source.loop = true',
@@ -68,6 +75,9 @@ foreach ([
     'clinic_alert_sound_options()',
     'data-preview-alert-sound',
     'name="alert_sound"',
+    'name="alert_sound_file"',
+    'data-stop-alert-sound-preview',
+    'name="reset_alert_sound"',
 ] as $expected) {
     if (!str_contains($settings, $expected)) {
         throw new RuntimeException("Clinic Profile is missing an alert-sound control: {$expected}");
@@ -78,6 +88,10 @@ foreach ([
     "'alert_sound' => 'urgent-pulse'",
     "'double-chime' => 'Double Chime'",
     "'rapid-siren' => 'Rapid Siren'",
+    "'custom_alert_sound_path' => ''",
+    'function save_uploaded_clinic_alert_sound(array $file)',
+    "'audio/mpeg' => 'mp3'",
+    "'audio/ogg' => 'ogg'",
 ] as $expected) {
     if (!str_contains($systemSettings, $expected)) {
         throw new RuntimeException("Clinic alert-sound settings are incomplete: {$expected}");

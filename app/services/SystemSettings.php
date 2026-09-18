@@ -808,6 +808,8 @@ function default_clinic_profile_settings(): array
         'system_purpose' => 'School clinic information management system for patient records, visits, APE workflow, emergency alerts, appointments, inventory, referrals, and reports.',
         'logo_path' => 'assets/img/clinic-logo.png',
         'alert_sound' => 'urgent-pulse',
+        'custom_alert_sound_path' => '',
+        'custom_alert_sound_name' => '',
     ];
 }
 
@@ -818,6 +820,21 @@ function clinic_alert_sound_options(): array
         'double-chime' => 'Double Chime',
         'rapid-siren' => 'Rapid Siren',
     ];
+}
+
+function clinic_profile_alert_sound_path(?array $profile = null): string
+{
+    $soundPath = str_replace('\\', '/', trim((string) (($profile ?? [])['custom_alert_sound_path'] ?? '')));
+    if (
+        $soundPath === ''
+        || str_contains($soundPath, '..')
+        || str_starts_with($soundPath, '/')
+        || !preg_match('#^uploads/settings/[A-Za-z0-9._-]+\.(mp3|wav|ogg)$#i', $soundPath)
+    ) {
+        return '';
+    }
+
+    return $soundPath;
 }
 
 function clinic_profile_settings(): array
@@ -839,9 +856,16 @@ function normalize_clinic_profile_settings(array $input): array
         $settings['contact_email'] = $defaults['contact_email'];
     }
     if (!array_key_exists($settings['alert_sound'], clinic_alert_sound_options())) {
-        $settings['alert_sound'] = $defaults['alert_sound'];
+        $settings['alert_sound'] = $settings['alert_sound'] === 'custom'
+            && clinic_profile_alert_sound_path($settings) !== ''
+            ? 'custom'
+            : $defaults['alert_sound'];
     }
     $settings['logo_path'] = clinic_profile_logo_path($settings);
+    $settings['custom_alert_sound_path'] = clinic_profile_alert_sound_path($settings);
+    $settings['custom_alert_sound_name'] = $settings['custom_alert_sound_path'] === ''
+        ? ''
+        : mb_substr(basename(trim((string) ($input['custom_alert_sound_name'] ?? 'Custom alert sound'))), 0, 255);
 
     return $settings;
 }
@@ -910,6 +934,55 @@ function save_uploaded_clinic_logo(array $file): string
     }
 
     return 'uploads/settings/' . $fileName;
+}
+
+function save_uploaded_clinic_alert_sound(array $file): array
+{
+    $error = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($error === UPLOAD_ERR_NO_FILE) {
+        return [];
+    }
+    if ($error !== UPLOAD_ERR_OK) {
+        throw new InvalidArgumentException('Choose a valid MP3, WAV, or OGG alert sound before saving.');
+    }
+    if ((int) ($file['size'] ?? 0) > 5 * 1024 * 1024) {
+        throw new InvalidArgumentException('Custom alert sound must be 5 MB or smaller.');
+    }
+
+    $temporaryPath = (string) ($file['tmp_name'] ?? '');
+    if ($temporaryPath === '' || !is_uploaded_file($temporaryPath)) {
+        throw new InvalidArgumentException('Alert sound upload could not be verified.');
+    }
+
+    $mimeType = function_exists('mime_content_type') ? (string) mime_content_type($temporaryPath) : '';
+    $allowedTypes = [
+        'audio/mpeg' => 'mp3',
+        'audio/mp3' => 'mp3',
+        'audio/wav' => 'wav',
+        'audio/x-wav' => 'wav',
+        'audio/wave' => 'wav',
+        'audio/vnd.wave' => 'wav',
+        'audio/ogg' => 'ogg',
+        'application/ogg' => 'ogg',
+    ];
+    if (!isset($allowedTypes[$mimeType])) {
+        throw new InvalidArgumentException('Custom alert sound must be a valid MP3, WAV, or OGG audio file.');
+    }
+
+    $uploadDirectory = dirname(__DIR__, 2) . '/public/uploads/settings';
+    if (!is_dir($uploadDirectory) && !mkdir($uploadDirectory, 0775, true) && !is_dir($uploadDirectory)) {
+        throw new RuntimeException('Unable to create the alert sound upload folder.');
+    }
+
+    $fileName = 'clinic-alert-' . date('YmdHis') . '-' . bin2hex(random_bytes(4)) . '.' . $allowedTypes[$mimeType];
+    if (!move_uploaded_file($temporaryPath, $uploadDirectory . '/' . $fileName)) {
+        throw new RuntimeException('Unable to save the custom alert sound.');
+    }
+
+    return [
+        'path' => 'uploads/settings/' . $fileName,
+        'name' => mb_substr(basename((string) ($file['name'] ?? 'Custom alert sound')), 0, 255),
+    ];
 }
 
 function cliniq_theme_presets(): array

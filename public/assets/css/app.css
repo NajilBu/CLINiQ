@@ -2353,6 +2353,95 @@ textarea:focus {
     gap: 0.42rem;
 }
 
+.settings-alert-sound-card {
+    display: grid;
+    gap: 0.85rem;
+    padding: 1rem;
+    border: 1px solid rgba(var(--cliniq-focus-rgb), 0.18);
+    border-radius: 1rem;
+    background: rgba(var(--cliniq-focus-rgb), 0.035);
+}
+
+.settings-alert-sound-picker {
+    display: grid;
+    grid-template-columns: minmax(13rem, 1fr) auto;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.settings-alert-sound-actions {
+    display: flex;
+    gap: 0.55rem;
+}
+
+.settings-alert-sound-upload {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    min-height: 4.5rem;
+    padding: 0.85rem 1rem;
+    border: 2px dashed rgba(var(--cliniq-focus-rgb), 0.28);
+    border-radius: 0.9rem;
+    background: #ffffff;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.settings-alert-sound-upload:hover {
+    border-color: var(--cliniq-primary);
+    background: var(--cliniq-surface-low);
+}
+
+.settings-alert-sound-upload > .material-symbols-outlined {
+    color: var(--cliniq-primary);
+    font-size: 2rem;
+}
+
+.settings-alert-sound-upload span:nth-child(2) {
+    display: grid;
+    gap: 0.15rem;
+}
+
+.settings-alert-sound-upload strong {
+    color: #17261d;
+    font-size: 0.86rem;
+}
+
+.settings-alert-sound-upload small,
+.settings-alert-sound-file {
+    color: #64748b;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.settings-alert-sound-upload input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.settings-alert-sound-file {
+    min-height: 1rem;
+    margin: -0.35rem 0 0;
+}
+
+.settings-alert-sound-reset {
+    justify-self: start;
+}
+
+@media (max-width: 720px) {
+    .settings-alert-sound-picker {
+        grid-template-columns: 1fr;
+    }
+
+    .settings-alert-sound-actions {
+        flex-wrap: wrap;
+    }
+}
+
 .settings-input,
 .settings-textarea {
     width: 100%;
