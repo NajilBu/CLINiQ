@@ -64,16 +64,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $profileInput = $_POST;
             $currentProfile = clinic_profile_settings();
             $profileInput['logo_path'] = clinic_profile_logo_path($currentProfile);
+            $profileInput['custom_alert_sound_path'] = clinic_profile_alert_sound_path($currentProfile);
+            $profileInput['custom_alert_sound_name'] = (string) ($currentProfile['custom_alert_sound_name'] ?? '');
             $uploadedLogoPath = save_uploaded_clinic_logo($_FILES['logo_file'] ?? []);
+            $resetAlertSound = (string) ($_POST['reset_alert_sound'] ?? '') === '1';
+            $uploadedAlertSound = $resetAlertSound ? [] : save_uploaded_clinic_alert_sound($_FILES['alert_sound_file'] ?? []);
             if ($uploadedLogoPath !== '') {
                 $profileInput['logo_path'] = $uploadedLogoPath;
+            }
+            if ($uploadedAlertSound !== []) {
+                $profileInput['alert_sound'] = 'custom';
+                $profileInput['custom_alert_sound_path'] = $uploadedAlertSound['path'];
+                $profileInput['custom_alert_sound_name'] = $uploadedAlertSound['name'];
+            }
+            if ($resetAlertSound) {
+                $profileInput['alert_sound'] = 'urgent-pulse';
+                $profileInput['custom_alert_sound_path'] = '';
+                $profileInput['custom_alert_sound_name'] = '';
             }
             if ((string) ($_POST['save_intent'] ?? '') === 'logo' && $uploadedLogoPath === '') {
                 throw new InvalidArgumentException('Choose a PNG, JPG, or WebP logo before saving.');
             }
             save_clinic_profile_settings($profileInput, $updatedBy);
             audit_log_event('settings', 'clinic_profile_updated', $updatedBy, 'staff', 'settings', null);
-            flash_message('success', $uploadedLogoPath !== '' ? 'Clinic profile and system logo saved.' : 'Clinic profile settings saved.');
+            $savedMessage = $uploadedAlertSound !== []
+                ? 'Clinic profile and custom alert sound saved.'
+                : ($resetAlertSound
+                    ? 'The default emergency alert sound was restored.'
+                    : ($uploadedLogoPath !== '' ? 'Clinic profile and system logo saved.' : 'Clinic profile settings saved.'));
+            flash_message('success', $savedMessage);
         } catch (Throwable $e) {
             flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $e->getMessage());
         }
@@ -567,6 +586,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $clinicProfile = clinic_profile_settings();
 $systemLogoPath = clinic_profile_logo_path($clinicProfile);
 $systemLogoUrl = app_url($systemLogoPath);
+$customAlertSoundPath = clinic_profile_alert_sound_path($clinicProfile);
+$customAlertSoundUrl = $customAlertSoundPath !== '' ? app_url($customAlertSoundPath) : '';
 $systemLogoExtension = strtolower((string) pathinfo($systemLogoPath, PATHINFO_EXTENSION));
 $systemLogoDownloadName = 'cliniq-system-logo.' . (in_array($systemLogoExtension, ['png', 'jpg', 'jpeg', 'webp'], true) ? $systemLogoExtension : 'png');
 $themePresets = cliniq_theme_presets();
@@ -759,6 +780,8 @@ render_clinic_command_header(
                     <form method="post" class="settings-section space-y-5" enctype="multipart/form-data" id="clinicProfileForm" data-no-ajax="true">
                         <input type="hidden" name="action" value="save_profile">
                         <input type="hidden" name="logo_path" value="<?= profile_setting_value($clinicProfile, 'logo_path') ?>">
+                        <input type="hidden" name="custom_alert_sound_path" value="<?= e($customAlertSoundPath) ?>">
+                        <input type="hidden" name="custom_alert_sound_name" value="<?= profile_setting_value($clinicProfile, 'custom_alert_sound_name') ?>">
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
                             <div class="settings-field">
                                 <label class="clinic-label" for="system_name">System Name</label>
@@ -786,22 +809,50 @@ render_clinic_command_header(
                             </div>
                             <div class="settings-field md:col-span-2">
                                 <label class="clinic-label" for="alert_sound">Emergency Alert Sound</label>
-                                <div class="flex flex-col sm:flex-row gap-3">
-                                    <select class="settings-input flex-1" id="alert_sound" name="alert_sound" <?= !$canManageSettings ? 'disabled' : '' ?>>
-                                        <?php foreach (clinic_alert_sound_options() as $soundKey => $soundLabel): ?>
-                                            <option value="<?= e($soundKey) ?>" <?= ($clinicProfile['alert_sound'] ?? 'urgent-pulse') === $soundKey ? 'selected' : '' ?>><?= e($soundLabel) ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                    <button type="button" class="btn btn-secondary justify-center" data-preview-alert-sound>
-                                        <span class="material-symbols-outlined text-[18px]">volume_up</span>
-                                        Preview Sound
-                                    </button>
+                                <div class="settings-alert-sound-card" data-alert-sound-settings data-custom-sound-url="<?= e($customAlertSoundUrl) ?>">
+                                    <div class="settings-alert-sound-picker">
+                                        <select class="settings-input" id="alert_sound" name="alert_sound" <?= !$canManageSettings ? 'disabled' : '' ?>>
+                                            <?php foreach (clinic_alert_sound_options() as $soundKey => $soundLabel): ?>
+                                                <option value="<?= e($soundKey) ?>" <?= ($clinicProfile['alert_sound'] ?? 'urgent-pulse') === $soundKey ? 'selected' : '' ?>><?= e($soundLabel) ?></option>
+                                            <?php endforeach; ?>
+                                            <?php if ($customAlertSoundPath !== ''): ?>
+                                                <option value="custom" <?= ($clinicProfile['alert_sound'] ?? '') === 'custom' ? 'selected' : '' ?>>Custom uploaded sound</option>
+                                            <?php endif; ?>
+                                        </select>
+                                        <div class="settings-alert-sound-actions">
+                                            <button type="button" class="btn btn-secondary justify-center" data-preview-alert-sound>
+                                                <span class="material-symbols-outlined text-[18px]">play_arrow</span>
+                                                Preview
+                                            </button>
+                                            <button type="button" class="btn btn-secondary justify-center" data-stop-alert-sound-preview>
+                                                <span class="material-symbols-outlined text-[18px]">stop</span>
+                                                Stop
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <?php if ($canManageSettings): ?>
+                                        <label class="settings-alert-sound-upload" for="alert_sound_file">
+                                            <span class="material-symbols-outlined" aria-hidden="true">audio_file</span>
+                                            <span>
+                                                <strong><?= $customAlertSoundPath !== '' ? 'Replace custom sound' : 'Upload custom sound' ?></strong>
+                                                <small>MP3, WAV, or OGG · maximum 5 MB</small>
+                                            </span>
+                                            <input id="alert_sound_file" name="alert_sound_file" type="file" accept="audio/mpeg,audio/wav,audio/ogg,.mp3,.wav,.ogg" data-alert-sound-file>
+                                        </label>
+                                        <p class="settings-alert-sound-file" data-alert-sound-file-name><?= e((string) ($clinicProfile['custom_alert_sound_name'] ?? 'No custom audio selected')) ?></p>
+                                    <?php endif; ?>
+                                    <?php if ($customAlertSoundPath !== '' && $canManageSettings): ?>
+                                        <button type="submit" class="btn btn-secondary settings-alert-sound-reset" name="reset_alert_sound" value="1" data-confirm-submit data-confirm-type="danger" data-confirm-title="Restore the default alert sound?" data-confirm-message="The uploaded custom sound will stop being used on every clinic device." data-confirm-toast="Restoring default alert sound...">
+                                            <span class="material-symbols-outlined text-[18px]">restart_alt</span>
+                                            Restore Default
+                                        </button>
+                                    <?php endif; ?>
                                 </div>
                                 <p class="settings-help mb-0">This sound is used automatically for new pending emergency alerts on every signed-in clinic device.</p>
                             </div>
                         </div>
                         <div class="flex justify-end">
-                            <button class="btn btn-primary" <?= !$canManageSettings ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Save clinic profile?" data-confirm-message="This updates the shared system name and clinic identity used by CLINiQ." data-confirm-toast="Saving clinic profile...">
+                            <button class="btn btn-primary" <?= !$canManageSettings ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Save clinic profile?" data-confirm-message="This updates the shared clinic identity and emergency alert sound used by CLINiQ." data-confirm-toast="Saving clinic profile...">
                                 <span class="material-symbols-outlined text-[18px]">save</span>
                                 Save Profile
                             </button>
@@ -958,7 +1009,7 @@ render_clinic_command_header(
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div class="settings-field">
                                         <label class="clinic-label" for="new_staff_name">Full Name</label>
-                                        <input class="settings-input" id="new_staff_name" name="name" placeholder="Dr. Maria Santos" required>
+                                        <input class="settings-input" id="new_staff_name" name="name" placeholder="Dr. Maria Santos" maxlength="100" data-person-name title="Use letters, spaces, apostrophes, periods, and hyphens only." required>
                                     </div>
                                     <div class="settings-field">
                                         <label class="clinic-label" for="new_staff_email">Email Address</label>
@@ -966,7 +1017,7 @@ render_clinic_command_header(
                                     </div>
                                     <div class="settings-field">
                                         <label class="clinic-label" for="new_staff_id_number">Login ID Number</label>
-                                        <input class="settings-input" id="new_staff_id_number" name="id_number" placeholder="STAFF-0006" pattern="STAFF-[0-9]{4}" style="text-transform:uppercase;">
+                                        <input class="settings-input" id="new_staff_id_number" name="id_number" placeholder="0000002" pattern="[0-9]{7}" inputmode="numeric" maxlength="7" title="Enter exactly seven continuous digits.">
                                     </div>
                                     <div class="settings-field">
                                         <label class="clinic-label" for="new_staff_role">Role</label>
@@ -979,18 +1030,19 @@ render_clinic_command_header(
                                     <div class="settings-field">
                                         <label class="clinic-label" for="new_staff_password">Password</label>
                                         <div class="password-field-control">
-                                            <input class="settings-input" id="new_staff_password" name="password" type="password" minlength="8" autocomplete="new-password" required>
+                                            <input class="settings-input" id="new_staff_password" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" title="Use uppercase, lowercase, number, and special character." required>
                                             <button type="button" class="password-visibility-button" data-password-toggle="new_staff_password" aria-label="Show password" aria-pressed="false"><span class="material-symbols-outlined">visibility</span></button>
                                         </div>
                                     </div>
                                     <div class="settings-field">
                                         <label class="clinic-label" for="new_staff_password_confirmation">Confirm Password</label>
                                         <div class="password-field-control">
-                                            <input class="settings-input" id="new_staff_password_confirmation" name="password_confirmation" type="password" minlength="8" autocomplete="new-password" required>
+                                            <input class="settings-input" id="new_staff_password_confirmation" name="password_confirmation" type="password" minlength="8" maxlength="128" autocomplete="new-password" required>
                                             <button type="button" class="password-visibility-button" data-password-toggle="new_staff_password_confirmation" aria-label="Show confirmation password" aria-pressed="false"><span class="material-symbols-outlined">visibility</span></button>
                                         </div>
                                     </div>
                                 </div>
+                                <p class="settings-help mb-0">Password must contain uppercase, lowercase, a number, and a special character.</p>
                                 <div class="flex justify-end">
                                     <button class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Create staff profile?" data-confirm-message="This staff member will be able to sign in and create records under their own name." data-confirm-toast="Creating staff profile...">
                                         <span class="material-symbols-outlined text-[18px]">person_add</span>
@@ -1043,7 +1095,7 @@ render_clinic_command_header(
                                             </div>
                                             <div class="settings-field">
                                                 <label class="clinic-label" for="staff_id_number_<?= $staffId ?>">ID Number</label>
-                                                <input class="settings-input" id="staff_id_number_<?= $staffId ?>" name="id_number" value="<?= e($staffProfile['id_number']) ?>" pattern="STAFF-[0-9]{4}" style="text-transform:uppercase;" <?= !$canManageStaffProfiles ? 'readonly' : '' ?> required>
+                                                <input class="settings-input" id="staff_id_number_<?= $staffId ?>" name="id_number" value="<?= e($staffProfile['id_number']) ?>" pattern="[0-9]{7}" inputmode="numeric" maxlength="7" title="Enter exactly seven continuous digits." <?= !$canManageStaffProfiles ? 'readonly' : '' ?> required>
                                             </div>
                                             <div class="settings-field">
                                                 <label class="clinic-label" for="staff_role_<?= $staffId ?>">Role</label>

@@ -52,14 +52,11 @@ function request_patient_registration_code(string $studentNumber, string $email,
 {
     ensure_patient_registration_schema();
     $studentNumber = patient_account_normalize_id_number($studentNumber, 'student');
-    $email = strtolower(trim($email));
-    $confirmation = strtolower(trim($confirmation));
+    $email = account_assert_institutional_email($email);
+    $confirmation = account_normalize_email($confirmation);
     $ipAddress = substr(trim((string) $ipAddress), 0, 45) ?: null;
     if (!patient_account_id_number_is_valid($studentNumber, 'student')) {
         throw new InvalidArgumentException(patient_account_id_number_validation_message('student'));
-    }
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        throw new InvalidArgumentException('Enter a valid email address.');
     }
     if ($email !== $confirmation) {
         throw new InvalidArgumentException('Email address and confirmation do not match.');
@@ -163,14 +160,9 @@ function complete_patient_registration(int $verificationId, array $input): array
         throw new InvalidArgumentException('Enter valid first, middle, and last names.');
     }
     if (!patient_account_valid_birthdate($birthdate)) {
-        throw new InvalidArgumentException('Enter a valid birthdate that is not in the future.');
+        throw new InvalidArgumentException('Enter a valid birthdate within the last 120 years and not in the future.');
     }
-    if (strlen($password) < 8 || !preg_match('/\d/', $password)) {
-        throw new InvalidArgumentException('Password must be at least eight characters and contain a number.');
-    }
-    if ($password !== $passwordConfirmation) {
-        throw new InvalidArgumentException('Passwords do not match.');
-    }
+    account_assert_strong_password($password, $passwordConfirmation);
 
     $db = auth_db();
     $activeCycle = $db->query("SELECT ape_cycle_id, academic_year FROM ape_cycles WHERE status = 'Active' ORDER BY started_at DESC LIMIT 1")->fetch();

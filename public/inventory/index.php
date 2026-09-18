@@ -101,7 +101,6 @@ $activeColumns = [
     ['headerName' => 'Reorder At', 'field' => 'reorderLevel', 'minWidth' => 120, 'flex' => 0.6],
     ['headerName' => 'Expiration', 'field' => 'expirationHtml', 'cellRenderer' => 'html', 'sortField' => 'expirationSort', 'sortType' => 'date', 'minWidth' => 140, 'flex' => 0.7],
     ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'sortField' => 'statusSort', 'sortType' => 'number', 'minWidth' => 160, 'flex' => 0.8],
-    ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'minWidth' => 90, 'maxWidth' => 110, 'flex' => 0.4],
 ];
 
 $archivedColumns = [
@@ -110,7 +109,6 @@ $archivedColumns = [
     ['headerName' => 'Final Stock', 'field' => 'quantityHtml', 'cellRenderer' => 'html', 'sortField' => 'quantitySort', 'sortType' => 'number', 'minWidth' => 140, 'flex' => 0.7],
     ['headerName' => 'Expiration', 'field' => 'expirationHtml', 'cellRenderer' => 'html', 'sortField' => 'expirationSort', 'sortType' => 'date', 'minWidth' => 140, 'flex' => 0.7],
     ['headerName' => 'Archived', 'field' => 'archivedHtml', 'cellRenderer' => 'html', 'sortField' => 'archivedSort', 'sortType' => 'date', 'minWidth' => 180, 'flex' => 0.9],
-    ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'minWidth' => 90, 'maxWidth' => 110, 'flex' => 0.4],
 ];
 
 $equipmentColumns = [
@@ -119,7 +117,6 @@ $equipmentColumns = [
     ['headerName' => 'Available', 'field' => 'stockHtml', 'cellRenderer' => 'html', 'sortField' => 'stockSort', 'sortType' => 'number', 'minWidth' => 220, 'flex' => 1],
     ['headerName' => 'Minimum Available', 'field' => 'reorderLevel', 'minWidth' => 170, 'flex' => 0.75],
     ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'sortField' => 'statusSort', 'sortType' => 'number', 'minWidth' => 160, 'flex' => 0.8],
-    ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortable' => false, 'filter' => false, 'minWidth' => 90, 'maxWidth' => 110, 'flex' => 0.4],
 ];
 
 $loanColumns = [
@@ -213,6 +210,7 @@ foreach ($visibleItems as $item) {
     ]);
     if ($isArchived) {
         $restoreMessage = e('Restore ' . $item['item_name'] . ' to active inventory?');
+        $restoreActions = '<div class="row-actions-list"><form method="post" action="restore.php" data-inventory-form><input type="hidden" name="id" value="' . (int) $item['id'] . '"><button type="submit" class="btn btn-sm btn-outline" data-confirm-submit data-confirm-type="primary" data-confirm-title="Restore inventory item?" data-confirm-message="' . $restoreMessage . '" data-confirm-toast="Restoring inventory item..."><span class="material-symbols-outlined text-[14px]">restore</span>Restore</button></form></div>';
         $inventoryRows[] = [
             'highlightKeys' => [],
             'itemSort' => $item['item_name'],
@@ -226,7 +224,8 @@ foreach ($visibleItems as $item) {
             'archivedSort' => $item['archived_at'],
             'archivedHtml' => '<div><strong class="text-sm text-slate-700">' . e(date('M d, Y', strtotime($item['archived_at']))) . '</strong><p class="text-xs font-bold text-slate-400 mb-0">' . e($item['archived_by_name'] ?: 'System') . '</p></div>',
             'reasonHtml' => '<span class="text-sm font-bold text-slate-500">' . e($item['archived_reason'] ?: 'No reason recorded') . '</span>',
-            'actionsHtml' => row_actions_button('Inventory actions', '<form method="post" action="restore.php" data-inventory-form><input type="hidden" name="id" value="' . (int) $item['id'] . '"><button type="submit" class="btn btn-sm btn-outline" data-confirm-submit data-confirm-type="primary" data-confirm-title="Restore inventory item?" data-confirm-message="' . $restoreMessage . '" data-confirm-toast="Restoring inventory item..."><span class="material-symbols-outlined text-[14px]">restore</span>Restore</button></form>'),
+            'rowActionsTitle' => 'Inventory actions — ' . $item['item_name'],
+            'rowActionsHtml' => $restoreActions,
         ];
         continue;
     }
@@ -261,7 +260,8 @@ foreach ($visibleItems as $item) {
         'expirationHtml' => '<span class="text-sm font-bold ' . $expirationClass . '">' . e($expirationLabel) . '</span>',
         'statusSort' => $isLow ? 0 : ($isExpiring ? 1 : 2),
         'statusHtml' => inventory_status_badge($displayQuantityForStatus),
-        'actionsHtml' => row_actions_button('Inventory actions', $actionsHtml),
+        'rowActionsTitle' => 'Inventory actions — ' . $item['item_name'],
+        'rowActionsHtml' => $actionsHtml,
     ];
 }
 
@@ -503,6 +503,7 @@ render_clinic_command_header(
         'pageSize' => 10,
         'pagination' => true,
         'paginationControls' => 'inventoryPagination',
+        'keyboardRows' => $activeTab !== 'activity',
         'emptyTitle' => match ($activeTab) {
             'equipment' => 'No equipment items',
             'expiring' => 'No expiring items',

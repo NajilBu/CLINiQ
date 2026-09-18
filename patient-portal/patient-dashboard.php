@@ -216,7 +216,7 @@ $apeQueue = $latestApe ? ape_record_queue($latestApe) : 'digital_submission';
 $apeStep = $latestApe ? ape_record_step_index($latestApe) : 0;
 $apeDigitalSubmissionComplete = ape_digital_submission_complete($latestApe ?? []);
 $apeExamCompleted = !empty($latestApe['exam_date']);
-$apePercent = $apeQueue === 'completed' ? 100 : (($apeDigitalSubmissionComplete ? 25 : 0) + ($apeExamCompleted ? 25 : 0));
+$apePercent = $latestApe ? ape_record_progress_percent($latestApe) : 0;
 $apeCompleted = $apePercent >= 100 || ($latestApe['clearance_status'] ?? '') === 'Cleared';
 $apeBadgeClass = match ($latestApe['clearance_status'] ?? '') {
     'Cleared' => 'student-badge-success',
