@@ -57,7 +57,7 @@ function cliniq_visit_patients(string $search = '', int $limit = 500): array
             pe.birthdate,
             pe.sex,
             COALESCE(
-                NULLIF(TRIM(CONCAT(pr.program_code, '-', s.year_level, UPPER(s.section))), ''),
+                NULLIF(TRIM(CONCAT(pr.program_code, '-', s.year_level, UPPER(s.section))) COLLATE utf8mb4_bin, _utf8mb4'' COLLATE utf8mb4_bin),
                 ed.department_code,
                 cd.department_code,
                 'Patient'
@@ -90,7 +90,7 @@ function cliniq_visit_patient_by_id_number(string $idNumber): ?array
                END AS patient_type,
                s.year_level,
                COALESCE(
-                   NULLIF(TRIM(CONCAT(pr.program_code, '-', s.year_level, UPPER(s.section))), ''),
+                   NULLIF(TRIM(CONCAT(pr.program_code, '-', s.year_level, UPPER(s.section))) COLLATE utf8mb4_bin, _utf8mb4'' COLLATE utf8mb4_bin),
                    ed.department_code,
                    cd.department_code,
                    'Patient'

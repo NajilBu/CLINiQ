@@ -685,11 +685,11 @@ function ape_record_select_sql(): string
     $historyCourseSection = '';
     $historyJoins = '';
     if (ape_school_year_history_available()) {
-        $historyCourseSection = "NULLIF(TRIM(CONCAT(history_program.program_code, '-', school_year_history.year_level, UPPER(school_year_history.section))), ''),";
+        $historyCourseSection = "NULLIF(TRIM(CONCAT(history_program.program_code, '-', school_year_history.year_level, UPPER(school_year_history.section))) COLLATE utf8mb4_bin, _utf8mb4'' COLLATE utf8mb4_bin),";
         $historyJoins = "
         LEFT JOIN student_school_year_enrollments school_year_history
             ON school_year_history.student_person_id = p.id
-           AND school_year_history.academic_year = ar.academic_year
+           AND school_year_history.academic_year COLLATE utf8mb4_bin = ar.academic_year COLLATE utf8mb4_bin
         LEFT JOIN programs history_program ON history_program.id = school_year_history.program_id";
     }
 
@@ -719,7 +719,7 @@ function ape_record_select_sql(): string
             p.birthdate,
             COALESCE(
                 {$historyCourseSection}
-                NULLIF(TRIM(CONCAT(pr.program_code, '-', s.year_level, UPPER(s.section))), ''),
+                NULLIF(TRIM(CONCAT(pr.program_code, '-', s.year_level, UPPER(s.section))) COLLATE utf8mb4_bin, _utf8mb4'' COLLATE utf8mb4_bin),
                 ed.department_code,
                 'Patient'
             ) AS course_section,
