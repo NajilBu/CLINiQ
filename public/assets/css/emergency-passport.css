@@ -362,3 +362,121 @@
     .public-passport .passport-modern-contact { grid-template-columns: auto minmax(0, 1fr); }
     .public-passport .passport-modern-call { grid-column: 1 / -1; width: 100%; }
 }
+
+/* Public Emergency Passport dark-mode contract. The preview is rendered
+   outside the student shell, so it needs the clinic theme hook explicitly. */
+html.cliniq-dark .public-passport {
+    --passport-primary: #55a66d;
+    --passport-primary-dark: #2f6f45;
+    --passport-primary-soft: #214b30;
+    --passport-border: #3d8054;
+    --passport-muted: #a9b9ad;
+    --passport-fg: #edf8f0;
+    color: var(--passport-fg) !important;
+    background: #122219 !important;
+    border-color: var(--passport-border) !important;
+}
+
+html.cliniq-dark .public-passport .passport-modern-content,
+html.cliniq-dark .public-passport .passport-modern-section,
+html.cliniq-dark .public-passport .passport-modern-info,
+html.cliniq-dark .public-passport .passport-modern-contact,
+html.cliniq-dark .public-passport .emergency-report-section,
+html.cliniq-dark .public-passport .emergency-photo-evidence {
+    color: var(--passport-fg) !important;
+    background: #172a20 !important;
+    border-color: var(--passport-border) !important;
+}
+
+html.cliniq-dark .public-passport .passport-modern-blood {
+    color: #b9e8c5 !important;
+    background: #1d3828 !important;
+    border: 1px solid var(--passport-border);
+    box-shadow: none !important;
+}
+
+html.cliniq-dark .public-passport .passport-modern-status {
+    color: #b9e8c5 !important;
+    background: #214b30 !important;
+}
+
+html.cliniq-dark .public-passport .passport-modern-status.is-active {
+    color: #ffb4b4 !important;
+    background: #422127 !important;
+}
+
+html.cliniq-dark .public-passport .passport-modern-info-instructions,
+html.cliniq-dark .public-passport .passport-modern-instructions {
+    color: #f8d78b !important;
+    background: #3f3218 !important;
+    border-color: #80652a !important;
+}
+
+html.cliniq-dark .public-passport .passport-modern-tag {
+    color: #ffb4b4 !important;
+    background: #422127 !important;
+    border-color: #89434f !important;
+}
+
+html.cliniq-dark .public-passport .passport-modern-personal-item,
+html.cliniq-dark .public-passport .passport-modern-metrics span,
+html.cliniq-dark .public-passport .passport-modern-contact-icon {
+    background: #214b30 !important;
+}
+
+html.cliniq-dark .public-passport .passport-modern-value,
+html.cliniq-dark .public-passport .passport-modern-personal-item strong,
+html.cliniq-dark .public-passport .passport-modern-medical-item strong,
+html.cliniq-dark .public-passport .passport-modern-contact-details strong,
+html.cliniq-dark .public-passport .passport-modern-section-title,
+html.cliniq-dark .public-passport .passport-modern-info-heading,
+html.cliniq-dark .public-passport .emergency-report-section-heading h2,
+html.cliniq-dark .public-passport .emergency-risk-check > legend {
+    color: var(--passport-fg) !important;
+}
+
+html.cliniq-dark .public-passport .passport-modern-info-heading,
+html.cliniq-dark .public-passport .passport-modern-personal-item span,
+html.cliniq-dark .public-passport .passport-modern-medical-item > span,
+html.cliniq-dark .public-passport .passport-modern-contact-details > span,
+html.cliniq-dark .public-passport .passport-modern-contact-details small,
+html.cliniq-dark .public-passport .passport-modern-metrics small,
+html.cliniq-dark .public-passport .passport-modern-updated,
+html.cliniq-dark .public-passport .emergency-report-section-heading p,
+html.cliniq-dark .public-passport .emergency-report-section-copy {
+    color: var(--passport-muted) !important;
+}
+
+html.cliniq-dark .public-passport .emergency-risk-check {
+    background: #122219 !important;
+}
+
+html.cliniq-dark .passport-page .emergency-action-dock {
+    background: rgba(18, 34, 25, 0.98) !important;
+    border-color: var(--passport-border) !important;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.42) !important;
+}
+
+html.cliniq-dark .passport-page .emergency-dock-button-secondary {
+    color: #ffb4b4 !important;
+    background: #422127 !important;
+}
+
+html.cliniq-dark .passport-page .emergency-dock-button-secondary:hover,
+html.cliniq-dark .passport-page .emergency-dock-button-secondary:focus-visible {
+    color: #ffffff !important;
+    background: #68313b !important;
+}
+
+html.cliniq-dark .public-passport .passport-modern-call,
+html.cliniq-dark .passport-page .emergency-camera-launch {
+    color: #ffffff !important;
+    background: #418b5a !important;
+}
+
+html.cliniq-dark .public-passport .passport-modern-call:hover,
+html.cliniq-dark .public-passport .passport-modern-call:focus-visible,
+html.cliniq-dark .passport-page .emergency-camera-launch:hover,
+html.cliniq-dark .passport-page .emergency-camera-launch:focus-visible {
+    background: #55a66d !important;
+}

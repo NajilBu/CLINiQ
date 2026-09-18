@@ -232,7 +232,7 @@ $theme = active_cliniq_theme();
 
 ?>
 <!doctype html>
-<html class="light" lang="en">
+<html class="light<?= !empty($theme['dark_mode']) ? ' dark cliniq-dark' : '' ?>" lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -525,9 +525,6 @@ $theme = active_cliniq_theme();
     <main class="visit-main <?= $form['reason'] === VISITOR_REASON_BORROW_EQUIPMENT ? 'is-borrowing' : '' ?>">
         <section class="visit-card">
             <div class="visit-card-header border-b border-outline-variant/20 text-center">
-                <div class="visit-card-icon inline-flex items-center justify-center bg-primary-fixed text-primary rounded-xl border border-outline-variant/40">
-                    <span class="material-symbols-outlined">edit_note</span>
-                </div>
                 <h1 class="visit-card-title font-headline font-extrabold text-[#17261d] mb-1">Clinic Visit Log Form</h1>
                 <p class="visit-card-subtitle text-xs sm:text-sm font-bold text-slate-500">Please provide your details for clinic assessment.</p>
             </div>

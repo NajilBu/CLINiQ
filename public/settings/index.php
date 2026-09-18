@@ -110,7 +110,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             save_cliniq_theme_settings(
                 (string) ($_POST['theme'] ?? default_cliniq_theme_key()),
                 $updatedBy,
-                (string) ($_POST['custom_color'] ?? '#3F7D52')
+                (string) ($_POST['custom_color'] ?? '#3F7D52'),
+                (string) ($_POST['dark_mode'] ?? '') === '1'
             );
             audit_log_event('settings', 'theme_updated', $updatedBy, 'staff', 'settings', null);
             flash_message('success', 'System color theme updated.');
@@ -594,6 +595,7 @@ $themePresets = cliniq_theme_presets();
 $themeSettings = cliniq_theme_settings();
 $activeTheme = $themeSettings['theme'];
 $customThemeColor = $themeSettings['custom_color'];
+$darkModeEnabled = (bool) ($themeSettings['dark_mode'] ?? false);
 $staffProfiles = staff_profiles();
 $staffRoles = staff_profile_roles();
 $settings = risk_settings();
@@ -933,6 +935,15 @@ render_clinic_command_header(
                                 <span class="material-symbols-outlined settings-theme-picker-icon" aria-hidden="true">colorize</span>
                             </label>
                         </div>
+                        <label class="settings-dark-mode-row">
+                            <span>
+                                <strong>Dark mode</strong>
+                                <small>Apply a dark appearance to the clinic staff UI and public landing, feedback, and visitor pages.</small>
+                            </span>
+                            <input type="hidden" name="dark_mode" value="0">
+                            <input class="settings-dark-mode-input" type="checkbox" name="dark_mode" value="1" <?= $darkModeEnabled ? 'checked' : '' ?> <?= !$canManageSettings ? 'disabled' : '' ?> aria-label="Enable dark mode">
+                            <span class="settings-theme-switch" aria-hidden="true"><span class="settings-theme-switch-thumb"></span></span>
+                        </label>
                         <div class="flex justify-end mt-5">
                             <button class="btn btn-primary" <?= !$canManageSettings ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Apply color theme?" data-confirm-message="This will update the CLINiQ interface theme for all pages using the shared shell." data-confirm-toast="Applying theme...">
                                 <span class="material-symbols-outlined text-[18px]">palette</span>

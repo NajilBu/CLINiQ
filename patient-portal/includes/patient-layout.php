@@ -466,6 +466,9 @@ function render_student_header(string $title, string $active = ''): void
         <link rel="apple-touch-icon" href="<?= student_e($clinicLogoSrc) ?>">
         <link href="../public/assets/vendor/fonts/inter-manrope.css?v=offline-1" rel="stylesheet">
         <link href="../public/assets/vendor/fonts/material-symbols.css?v=offline-1" rel="stylesheet">
+        <script>
+            try { if (localStorage.getItem('cliniq-student-dark-mode') === '1') document.documentElement.classList.add('student-dark'); } catch (error) {}
+        </script>
         <script src="../public/assets/vendor/tailwind/tailwind-cdn.js?v=offline-1"></script>
         <script>
             tailwind.config = {
@@ -564,7 +567,7 @@ function render_student_header(string $title, string $active = ''): void
 
                 <div class="student-profile-chip">
                     <?php if (empty($profile['first_registration'])): ?>
-                        <button type="button" class="student-profile-photo" data-profile-photo-open="patient-profile-photo-modal" title="Change profile picture" aria-label="Change profile picture">
+                        <button type="button" class="student-profile-photo" data-account-menu-trigger aria-expanded="false" aria-controls="student-account-menu" title="Open account menu" aria-label="Open account menu">
                             <?php if ($profilePhotoSrc !== null): ?>
                                 <img src="<?= student_e($profilePhotoSrc) ?>" alt="<?= student_e($profile['name']) ?> profile picture">
                             <?php else: ?>
@@ -599,7 +602,7 @@ function render_student_header(string $title, string $active = ''): void
                             <?php endif; ?>
                             <span class="sr-only">Account menu</span>
                         </summary>
-                        <div class="student-mobile-account-menu">
+                        <div id="student-account-menu" class="student-mobile-account-menu">
                             <div class="student-mobile-account-identity">
                                 <?php if ($profilePhotoSrc !== null): ?>
                                     <img src="<?= student_e($profilePhotoSrc) ?>" alt="<?= student_e($profile['name']) ?> profile picture">
@@ -628,6 +631,11 @@ function render_student_header(string $title, string $active = ''): void
                                     Forget this device
                                 </button>
                             </form>
+                            <button type="button" class="student-mobile-account-action" data-student-theme-toggle aria-pressed="false">
+                                <span class="material-symbols-outlined" aria-hidden="true">dark_mode</span>
+                                <span data-student-theme-label>Dark mode</span>
+                                <span class="student-theme-switch" aria-hidden="true"><span class="student-theme-switch-thumb"></span></span>
+                            </button>
                             <a href="patient-login.php?logout=1" onclick="localStorage.clear();" class="student-mobile-account-action is-danger text-decoration-none">
                                 <span class="material-symbols-outlined" aria-hidden="true">logout</span>
                                 Sign out
@@ -955,20 +963,48 @@ function render_student_footer(): void
             (() => {
                 const accountMenu = document.querySelector('.student-mobile-account');
                 const accountToggle = accountMenu?.querySelector('.student-mobile-account-toggle');
+                const desktopAccountTrigger = document.querySelector('[data-account-menu-trigger]');
                 if (!accountMenu || !accountToggle) return;
 
+                const setAccountMenuState = (open) => {
+                    accountMenu.open = open;
+                    desktopAccountTrigger?.setAttribute('aria-expanded', open ? 'true' : 'false');
+                };
+                desktopAccountTrigger?.addEventListener('click', () => setAccountMenuState(!accountMenu.open));
+
                 document.addEventListener('click', (event) => {
-                    if (accountMenu.open && !accountMenu.contains(event.target)) {
-                        accountMenu.open = false;
+                    if (accountMenu.open && !accountMenu.contains(event.target) && !desktopAccountTrigger?.contains(event.target)) {
+                        setAccountMenuState(false);
                     }
                 });
                 document.addEventListener('keydown', (event) => {
                     if (event.key === 'Escape' && accountMenu.open) {
-                        accountMenu.open = false;
-                        accountToggle.focus();
+                        setAccountMenuState(false);
+                        (desktopAccountTrigger || accountToggle)?.focus();
                     }
                 });
             })();
+
+            const studentThemeKey = 'cliniq-student-dark-mode';
+            const studentThemeRoot = document.documentElement;
+            const studentThemeButtons = document.querySelectorAll('[data-student-theme-toggle]');
+            const syncStudentThemeControls = () => {
+                const enabled = studentThemeRoot.classList.contains('student-dark');
+                studentThemeButtons.forEach((button) => {
+                    button.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+                    const label = button.querySelector('[data-student-theme-label]');
+                    if (label) label.textContent = enabled ? 'Light mode' : 'Dark mode';
+                    const icon = button.querySelector('.material-symbols-outlined');
+                    if (icon) icon.textContent = enabled ? 'light_mode' : 'dark_mode';
+                });
+            };
+            studentThemeButtons.forEach((button) => button.addEventListener('click', () => {
+                const enabled = !studentThemeRoot.classList.contains('student-dark');
+                studentThemeRoot.classList.toggle('student-dark', enabled);
+                try { localStorage.setItem(studentThemeKey, enabled ? '1' : '0'); } catch (error) {}
+                syncStudentThemeControls();
+            }));
+            syncStudentThemeControls();
 
             const profilePhotoMotionMs = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 240;
 
@@ -1125,20 +1161,10 @@ function render_student_footer(): void
         <script src="../public/assets/js/file-preview.js?v=ape-popup-2"></script>
         <script>
             document.querySelectorAll('[data-student-toast]').forEach((toast) => {
-                const syncClearance = () => {
-                    document.body.classList.add('has-student-toast');
-                    document.documentElement.style.setProperty('--student-toast-clearance', `${Math.ceil(toast.getBoundingClientRect().height) + 24}px`);
-                };
                 const dismiss = () => {
                     toast.remove();
-                    if (!document.querySelector('[data-student-toast]')) {
-                        document.body.classList.remove('has-student-toast');
-                        document.documentElement.style.removeProperty('--student-toast-clearance');
-                    }
                 };
                 toast.querySelector('.student-toast-dismiss')?.addEventListener('click', dismiss);
-                requestAnimationFrame(syncClearance);
-                new ResizeObserver(syncClearance).observe(toast);
                 const url = new URL(window.location.href);
                 ['uploaded', 'activated', 'password_reset'].forEach((key) => url.searchParams.delete(key));
                 if (url.href !== window.location.href) history.replaceState({}, document.title, url);
@@ -1168,6 +1194,9 @@ function render_student_auth_header(string $title): void
         <link rel="apple-touch-icon" href="<?= student_e($clinicLogoSrc) ?>">
         <link href="../public/assets/vendor/fonts/inter-manrope.css?v=offline-1" rel="stylesheet">
         <link href="../public/assets/vendor/fonts/material-symbols.css?v=offline-1" rel="stylesheet">
+        <script>
+            try { if (localStorage.getItem('cliniq-student-dark-mode') === '1') document.documentElement.classList.add('student-dark'); } catch (error) {}
+        </script>
         <script src="../public/assets/vendor/tailwind/tailwind-cdn.js?v=offline-1"></script>
         <script>
             tailwind.config = {
@@ -1224,20 +1253,10 @@ function render_student_auth_footer(): void
     ?>
     <script>
         document.querySelectorAll('[data-student-toast]').forEach((toast) => {
-            const syncClearance = () => {
-                document.body.classList.add('has-student-toast');
-                document.documentElement.style.setProperty('--student-toast-clearance', `${Math.ceil(toast.getBoundingClientRect().height) + 24}px`);
-            };
             const dismiss = () => {
                 toast.remove();
-                if (!document.querySelector('[data-student-toast]')) {
-                    document.body.classList.remove('has-student-toast');
-                    document.documentElement.style.removeProperty('--student-toast-clearance');
-                }
             };
             toast.querySelector('.student-toast-dismiss')?.addEventListener('click', dismiss);
-            requestAnimationFrame(syncClearance);
-            new ResizeObserver(syncClearance).observe(toast);
             const url = new URL(window.location.href);
             ['uploaded', 'activated', 'password_reset'].forEach((key) => url.searchParams.delete(key));
             if (url.href !== window.location.href) history.replaceState({}, document.title, url);

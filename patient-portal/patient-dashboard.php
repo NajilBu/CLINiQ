@@ -32,7 +32,6 @@ if (!empty($profile['first_registration'])) {
         <div>
             <p class="student-eyebrow">First Registration</p>
             <h1 class="student-title">Welcome, <?= student_e($profile['first_name']) ?></h1>
-            <p class="student-subtitle">Create your permanent password to activate your CLINiQ account. Portal features follow the Applicant or Official access assigned by the clinic.</p>
         </div>
         <span class="student-badge student-badge-warning">
             <span class="material-symbols-outlined text-[14px]">lock</span>
@@ -107,7 +106,6 @@ if (re_enrollment_pending()) {
         <div>
             <p class="student-eyebrow">New School Year</p>
             <h1 class="student-title">Update your enrollment status</h1>
-            <p class="student-subtitle">The clinic has started a new school year. Submit your current status to continue to your health portal.</p>
         </div>
         <span class="student-badge student-badge-warning">
             <span class="material-symbols-outlined text-[14px]">how_to_reg</span>
@@ -320,6 +318,47 @@ $apeActionCopy = match (true) {
     $apeStatus === 'Reviewed' => $apeNote ?: 'Your examination and documents are complete and awaiting the clinic\'s final decision.',
     default => $apeNote ?: ($latestApe ? 'Complete the current APE step in your APE status page.' : 'Start your APE record with the clinic.'),
 };
+$apePhaseLabel = match (true) {
+    !$latestApe => 'Not Started',
+    ($latestApe['clearance_status'] ?? '') === 'Cleared' => 'Completed',
+    !empty($latestApe['exam_date']) => 'Examination',
+    default => ape_record_stage_label($latestApe),
+};
+$apePhaseStatus = match (true) {
+    !$latestApe => 'Not Started',
+    ($latestApe['clearance_status'] ?? '') === 'Cleared' => 'Completed',
+    !empty($latestApe['exam_date']) => 'Completed',
+    $apeRequirementsNeedCorrection => 'Correction Needed',
+    $apeStatus === 'Follow-up Required' => 'Follow-up Required',
+    $apeQueue === 'digital_submission' && $apeDocumentsAwaitingReview => 'Under Clinic Review',
+    $apeQueue === 'examination' && $hasScheduledApeBatch => 'Scheduled',
+    $apeQueue === 'examination' => 'Waiting for Schedule',
+    default => $apeStatus,
+};
+$apeActionStatus = match (true) {
+    !$latestApe => 'Not Started',
+    ($latestApe['clearance_status'] ?? '') === 'Cleared' => 'Complete',
+    $apeRequirementsNeedCorrection => 'Needs Correction',
+    $apeQueue === 'digital_submission' && !$apeAllDocumentsUploaded => 'Upload Required',
+    $apeQueue === 'digital_submission' && $apeDocumentsAwaitingReview => 'Under Review',
+    $apeQueue === 'digital_submission' => 'Documents Complete',
+    $apeQueue === 'examination' && $hasScheduledApeBatch => 'Scheduled',
+    $apeQueue === 'examination' => 'Waiting for Schedule',
+    $apeQueue === 'follow_up' => 'Follow-up Required',
+    default => 'In Progress',
+};
+$apePhaseBadgeClass = match ($apePhaseStatus) {
+    'Completed' => 'student-badge-success',
+    'Correction Needed', 'Follow-up Required' => 'student-badge-danger',
+    'Scheduled', 'Under Clinic Review' => 'student-badge-info',
+    default => 'student-badge-warning',
+};
+$apeActionBadgeClass = match ($apeActionStatus) {
+    'Complete', 'Documents Complete' => 'student-badge-success',
+    'Needs Correction', 'Follow-up Required' => 'student-badge-danger',
+    'Under Review', 'Scheduled' => 'student-badge-info',
+    default => 'student-badge-warning',
+};
 $passportMissing = [];
 if (empty($profile['blood_type']) || $profile['blood_type'] === 'Unknown') {
     $passportMissing[] = 'blood type';
@@ -398,7 +437,6 @@ render_student_header('Dashboard', 'dashboard');
     <div>
         <p class="student-eyebrow">Patient Health Portal</p>
         <h1 class="student-title">Welcome back, <?= student_e($profile['first_name']) ?></h1>
-        <p class="student-subtitle">Track your APE requirements, clinic notes, and appointment requests in one place.</p>
     </div>
     <span class="student-badge <?= $isOfficialAccess ? 'student-badge-success' : 'student-badge-warning' ?>">
         <span class="material-symbols-outlined text-[14px]"><?= $isOfficialAccess ? 'verified' : 'hourglass_top' ?></span>
@@ -581,10 +619,6 @@ render_student_header('Dashboard', 'dashboard');
                 <span class="student-label">Email</span>
                 <p class="text-sm font-black text-primary mb-0"><?= student_e($profile['email']) ?></p>
             </div>
-            <div>
-                <span class="student-label">Portal Access</span>
-                <p class="text-sm font-black text-[#17261d] mb-0"><?= student_e($profile['access_status']) ?></p>
-            </div>
         </div>
 
     </section>
@@ -597,7 +631,7 @@ render_student_header('Dashboard', 'dashboard');
                 <h2 class="student-card-title">APE Progress</h2>
                 <p class="student-card-copy">Your current clearance path</p>
             </div>
-            <span class="student-badge <?= student_e($apeBadgeClass) ?>"><?= student_e($latestApe ? ape_record_stage_label($latestApe) : $apeStatus) ?></span>
+            <span class="student-badge <?= student_e($apeBadgeClass) ?>"><?= student_e($apePhaseLabel) ?></span>
         </div>
         <div class="student-card-pad">
             <div class="flex items-end justify-between mb-3">
@@ -611,16 +645,16 @@ render_student_header('Dashboard', 'dashboard');
                 <div class="student-progress-step">
                     <span class="student-progress-step-icon material-symbols-outlined">task_alt</span>
                     <div>
-                        <strong><?= ($latestApe['clearance_status'] ?? '') === 'Cleared' ? 'Completed APE' : 'Current APE Phase' ?></strong>
+                        <strong><?= student_e($apePhaseLabel) ?></strong>
                     </div>
-                    <span class="student-badge <?= student_e($apeBadgeClass) ?>"><?= student_e($latestApe['clearance_status'] ?? 'Pending') ?></span>
+                    <span class="student-badge <?= student_e($apePhaseBadgeClass) ?>"><?= student_e($apePhaseStatus) ?></span>
                 </div>
                 <div class="student-progress-step">
                     <span class="student-progress-step-icon material-symbols-outlined">cloud_upload</span>
                     <div>
-                        <strong>Required action</strong>
+                        <strong><?= student_e($apeActionTitle) ?></strong>
                     </div>
-                    <span class="student-badge <?= student_e($apeBadgeClass) ?>"><?= student_e($latestApe['verification_status'] ?? 'Pending') ?></span>
+                    <span class="student-badge <?= student_e($apeActionBadgeClass) ?>"><?= student_e($apeActionStatus) ?></span>
                 </div>
             </div>
             <?php if (!$hasScheduledApeBatch && $latestApe && ($latestApe['clearance_status'] ?? '') !== 'Cleared'): ?>

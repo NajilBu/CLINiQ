@@ -1076,11 +1076,13 @@ function cliniq_theme_settings(): array
     $saved = cliniq_setting_read('clinic.theme', [
         'theme' => default_cliniq_theme_key(),
         'custom_color' => '#3F7D52',
+        'dark_mode' => false,
     ]);
 
     return [
         'theme' => cliniq_normalize_theme_key((string) ($saved['theme'] ?? default_cliniq_theme_key())),
         'custom_color' => cliniq_normalize_hex_color((string) ($saved['custom_color'] ?? '#3F7D52')) ?? '#3F7D52',
+        'dark_mode' => filter_var($saved['dark_mode'] ?? false, FILTER_VALIDATE_BOOLEAN),
     ];
 }
 
@@ -1149,7 +1151,7 @@ function cliniq_custom_theme(string $color): array
     ];
 }
 
-function save_cliniq_theme_settings(string $theme, ?int $updatedBy = null, string $customColor = '#3F7D52'): void
+function save_cliniq_theme_settings(string $theme, ?int $updatedBy = null, string $customColor = '#3F7D52', bool $darkMode = false): void
 {
     $theme = cliniq_normalize_theme_key($theme);
     $customColor = cliniq_normalize_hex_color($customColor);
@@ -1160,6 +1162,7 @@ function save_cliniq_theme_settings(string $theme, ?int $updatedBy = null, strin
     cliniq_setting_write('clinic.theme', [
         'theme' => $theme,
         'custom_color' => $customColor ?? '#3F7D52',
+        'dark_mode' => $darkMode,
     ], $updatedBy);
 }
 
@@ -1172,7 +1175,7 @@ function active_cliniq_theme(): array
         ? cliniq_custom_theme($settings['custom_color'])
         : $themes[$key];
 
-    return ['key' => $key] + $theme;
+    return ['key' => $key, 'dark_mode' => $settings['dark_mode']] + $theme;
 }
 
 // ── Mail / SMTP Settings ─────────────────────────────────────────────────────

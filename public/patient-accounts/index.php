@@ -94,6 +94,54 @@ $recentAccounts = array_values(array_filter(recent_patient_accounts(), static fu
 }));
 $recentAccountPageSize = 10;
 $recentAccountPageCount = max(1, (int) ceil(count($recentAccounts) / $recentAccountPageSize));
+$recentAccountColumns = [
+    ['headerName' => 'ID No.', 'field' => 'idNumber', 'sortField' => 'idNumber'],
+    ['headerName' => 'Patient', 'field' => 'patient', 'sortField' => 'patient'],
+    ['headerName' => 'Type', 'field' => 'type', 'sortField' => 'type'],
+    ['headerName' => 'Account Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'sortField' => 'status'],
+    ['headerName' => 'Portal Access', 'field' => 'accessHtml', 'cellRenderer' => 'html', 'sortField' => 'access'],
+    ['headerName' => 'Created', 'field' => 'created', 'sortField' => 'created'],
+    ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortField' => 'actions', 'sortable' => false],
+];
+$recentAccountRows = [];
+foreach ($recentAccounts as $account) {
+    $accountStatus = (string) ($account['account_status'] ?? '');
+    $accessStatus = (string) ($account['access_status'] ?? 'Official');
+    $statusHtml = '<span class="badge ' . e(status_badge_class($accountStatus)) . '">' . e(ucfirst($accountStatus)) . '</span>';
+    if ($accountStatus === 'inactive') {
+        $statusHtml .= '<div class="mt-1 text-[11px] font-bold text-slate-500">' . e(trim((string) ($account['status_reason'] ?? '')) ?: 'Reason not recorded') . '</div>';
+    }
+    $accessHtml = '<span class="badge ' . ($accessStatus === 'Official' ? 'badge-completed' : 'badge-pending') . '">' . e($accessStatus) . '</span>';
+    $actionsHtml = '';
+    if ($accessStatus === 'Applicant') {
+        $actionsHtml .= '<form method="post" class="inline-flex mr-2">'
+            . '<input type="hidden" name="action" value="change_access_status">'
+            . '<input type="hidden" name="account_id" value="' . (int) $account['account_id'] . '">'
+            . '<input type="hidden" name="access_status" value="Official">'
+            . '<button type="submit" class="btn btn-sm btn-outline" data-confirm-submit data-confirm-type="primary" data-confirm-title="Change portal access to Official?" data-confirm-message="Health Passport and appointment booking will become available." data-confirm-toast="Updating portal access...">Official</button>'
+            . '</form>';
+    }
+    if ($accountStatus === 'active') {
+        $actionsHtml .= '<button type="button" class="btn btn-sm btn-danger" data-open-account-deactivation data-account-id="' . (int) $account['account_id'] . '" data-account-name="' . e((string) $account['full_name']) . '"><span class="material-symbols-outlined text-[15px]">person_off</span> Deactivate</button>';
+    } elseif (str_starts_with((string) ($account['status_reason'] ?? ''), patient_account_manual_inactive_prefix())) {
+        $actionsHtml .= '<form method="post" class="inline-flex">'
+            . '<input type="hidden" name="action" value="reactivate_account">'
+            . '<input type="hidden" name="account_id" value="' . (int) $account['account_id'] . '">'
+            . '<button type="submit" class="btn btn-sm btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Reactivate this account?" data-confirm-message="' . e((string) $account['full_name']) . ' will be able to sign in again." data-confirm-toast="Reactivating patient account..."><span class="material-symbols-outlined text-[15px]">person_check</span> Reactivate</button>'
+            . '</form>';
+    }
+    $recentAccountRows[] = [
+        'idNumber' => (string) $account['id_number'],
+        'patient' => (string) $account['full_name'],
+        'type' => (string) $account['patient_type'],
+        'status' => strtolower($accountStatus),
+        'statusHtml' => $statusHtml,
+        'access' => strtolower($accessStatus),
+        'accessHtml' => $accessHtml,
+        'created' => date('M d, Y', strtotime((string) $account['created_at'])),
+        'actionsHtml' => '<div class="flex flex-wrap justify-end gap-2">' . $actionsHtml . '</div>',
+    ];
+}
 
 render_header('Patient Accounts');
 render_clinic_command_header(
@@ -427,7 +475,18 @@ render_clinic_command_header(
             </form>
         </div>
     </div>
-    <div class="overflow-x-auto">
+    <?php render_ag_grid('recentPatientAccountsGrid', $recentAccountColumns, $recentAccountRows, [
+        'pagination' => true,
+        'paginationControls' => 'recentPatientAccountsPagination',
+        'pageSize' => $recentAccountPageSize,
+        'rowHeight' => 64,
+        'height' => 'patient-registry',
+        'fitColumns' => true,
+        'emptyTitle' => 'No patient accounts found',
+        'emptyText' => 'No patient accounts match the current filters.',
+    ]); ?>
+    <nav id="recentPatientAccountsPagination" class="pagination border-t border-slate-100" aria-label="Recent patient accounts pages"></nav>
+    <?php if (false): ?><div class="overflow-x-auto">
         <table class="w-full text-sm">
             <thead class="bg-slate-50 text-left">
                 <tr>
@@ -561,7 +620,7 @@ render_clinic_command_header(
         </div>
 
         <button type="button" class="pagination-arrow <?= $recentAccountPageCount === 1 ? 'page-disabled' : '' ?>" aria-label="Next page" data-recent-account-next<?= $recentAccountPageCount === 1 ? ' disabled' : '' ?>>&rsaquo;</button>
-    </nav>
+    </nav><?php endif; ?>
 </section>
 
 <div class="modal-backdrop" id="deactivatePatientAccountModal" aria-hidden="true">
@@ -629,6 +688,8 @@ if (document.documentElement.dataset.patientAccountStatusReady !== 'true') {
 function initRecentPatientAccountPagination() {
     const section = document.getElementById('recentPatientAccounts');
     if (!section) return;
+    // Recent Patient Accounts is rendered by the shared AG Grid instance now.
+    return;
     if (section.dataset.paginationReady === 'true' && section.dataset.boundNodeCount === String(section.querySelectorAll('[data-recent-account-row]').length)) {
         return;
     }

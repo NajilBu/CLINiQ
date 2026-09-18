@@ -212,6 +212,12 @@ function ape_record_queue(array $record): string
     }
 
     if (!empty($record['exam_date'])) {
+        // The examination can be recorded before digital keeping is complete,
+        // but later clinical phases must remain locked until Step 1 is verified.
+        if (!ape_digital_submission_complete($record)) {
+            return 'digital_submission';
+        }
+
         if (!ape_deferred_submission_complete($record) || (int)($record['follow_up_required'] ?? 0) === 1 || in_array(($record['clearance_status'] ?? ''), ['For Follow-up', 'Submitted'], true)) {
             return 'follow_up';
         }
@@ -310,6 +316,12 @@ function ape_record_progress_percent(array $record): int
     }
 
     if (!empty($record['exam_date'])) {
+        // Keep progress on Step 1 until the required digital documents are
+        // verified, even when the clinic has already saved the examination.
+        if (!ape_digital_submission_complete($record)) {
+            return 25;
+        }
+
         return 50;
     }
 

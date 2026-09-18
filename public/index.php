@@ -15,7 +15,7 @@ $theme = active_cliniq_theme();
 
 ?>
 <!doctype html>
-<html class="light" lang="en">
+<html class="light<?= !empty($theme['dark_mode']) ? ' dark cliniq-dark' : '' ?>" lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">

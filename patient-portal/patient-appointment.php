@@ -13,6 +13,10 @@ $db = appointment_db();
 $patientProfileStmt = $db->prepare('SELECT COUNT(*) FROM patients WHERE person_id = ?');
 $patientProfileStmt->execute([$patientId]);
 $hasAppointmentPatientProfile = (int) $patientProfileStmt->fetchColumn() === 1;
+$activeAppointmentStmt = $db->prepare("\n    SELECT appointment_id, appointment_datetime, purpose, status\n    FROM appointments\n    WHERE patient_id = ?\n      AND status <> 'Completed'\n    ORDER BY appointment_datetime DESC, created_at DESC\n    LIMIT 1\n");
+$activeAppointmentStmt->execute([$patientId]);
+$activeAppointment = $activeAppointmentStmt->fetch() ?: null;
+$appointmentBookingBlocked = $activeAppointment !== null;
 $pendingFeedbackVisits = clinic_feedback_pending_active_visits($db, $patientId);
 $feedbackRequired = count($pendingFeedbackVisits) > 0;
 $feedbackPortalUrl = '../public/clinic-feedback.php?portal=1';
@@ -71,7 +75,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!$hasAppointmentPatientProfile || 
 
     $blocksForPostMonth = appointment_blocks_for_month($month);
 
-    if ($feedbackRequired) {
+    if ($appointmentBookingBlocked) {
+        $error = 'You already have an appointment request. You must complete it before booking another appointment.';
+    } elseif ($feedbackRequired) {
         $error = 'Required feedback for your active clinic visit is still pending. You cannot request another clinic appointment until this feedback is completed.';
     } elseif ($type === '') {
         $error = 'Please choose an appointment purpose.';
@@ -171,7 +177,6 @@ render_student_header('Appointments', 'appointment');
     <div>
         <p class="student-eyebrow">Clinic Appointment</p>
         <h1 class="student-title">Request Appointment</h1>
-        <p class="student-subtitle">Choose your preferred schedule. The clinic will approve the request before it becomes official.</p>
     </div>
     <span class="student-badge student-badge-info">
         <span class="material-symbols-outlined text-[14px]">approval</span>
@@ -215,6 +220,14 @@ render_student_header('Appointments', 'appointment');
                         <strong>Feedback required before another appointment.</strong><br>
                         <?= count($pendingFeedbackVisits) === 1 ? 'One active visit needs your feedback.' : count($pendingFeedbackVisits) . ' active visits need your feedback.' ?> You cannot request another clinic appointment until this required feedback is completed.
                         <p class="mt-3 mb-0"><a href="<?= student_e($feedbackPortalUrl) ?>" class="student-button-danger text-decoration-none">Complete Required Feedback <span class="material-symbols-outlined">arrow_forward</span></a></p>
+                    </div>
+                </div>
+            <?php elseif ($appointmentBookingBlocked): ?>
+                <div class="student-note student-note-warning">
+                    <span class="material-symbols-outlined">event_busy</span>
+                    <div>
+                        <strong>Appointment already active.</strong><br>
+                        You can only have one appointment at a time. Complete your current appointment before booking another.
                     </div>
                 </div>
             <?php else: ?>

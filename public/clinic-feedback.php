@@ -157,7 +157,7 @@ $feedbackSteps = [
 ];
 ?>
 <!doctype html>
-<html lang="en" class="feedback-document"><head>
+<html lang="en" class="feedback-document<?= !empty($theme['dark_mode']) ? ' cliniq-dark' : '' ?>"><head>
     <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
     <script src="<?= app_url('assets/js/csrf.js?v=' . filemtime(__DIR__ . '/assets/js/csrf.js')) ?>" defer></script>

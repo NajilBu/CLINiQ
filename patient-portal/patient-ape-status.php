@@ -41,6 +41,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
             $latestExistingByType[$existingDocument['document_type']] ??= $existingDocument;
         }
         $batchFiles = $_FILES['documents'] ?? [];
+        $maxFilesPerRequirement = 3;
+        foreach ($documentTypesByKey as $documentKey => $documentType) {
+            $selectedErrors = $batchFiles['error'][$documentKey] ?? [];
+            $selectedErrors = is_array($selectedErrors) ? $selectedErrors : [$selectedErrors];
+            $selectedCount = count(array_filter($selectedErrors, static fn($error): bool => (int) $error !== UPLOAD_ERR_NO_FILE));
+            if ($selectedCount > $maxFilesPerRequirement) {
+                throw new InvalidArgumentException(sprintf(
+                    '%s has %d files selected. A maximum of %d files is allowed per requirement; combine additional pages into one PDF before uploading.',
+                    $documentType,
+                    $selectedCount,
+                    $maxFilesPerRequirement
+                ));
+            }
+        }
         $requiredDocumentKeys = [];
         foreach ($documentTypesByKey as $documentKey => $documentType) {
             $existing = $latestExistingByType[$documentType] ?? null;
@@ -373,7 +387,6 @@ render_student_header('APE Status', 'ape');
     <div>
         <p class="student-eyebrow">Annual Physical Examination</p>
         <h1 class="student-title">APE Status</h1>
-        <p class="student-subtitle">Complete the documents requested by the clinic and monitor your clearance status.</p>
     </div>
     <span class="student-badge <?= student_e($headerBadge) ?>">
         <span class="material-symbols-outlined text-[14px]">pending_actions</span>
@@ -617,7 +630,7 @@ render_student_header('APE Status', 'ape');
                 <div class="ape-batch-submit-bar">
                     <div>
                         <strong id="ape-selected-summary">No files selected</strong>
-                        <span>Select files first. You can change or remove them before submitting. Each PDF, JPG/JPEG, or PNG file must be 2 MB or smaller.</span>
+                        <span>Select up to 3 files per requirement. If you have more, combine them into one PDF first. You can change or remove files before submitting; each PDF, JPG/JPEG, or PNG file must be 2 MB or smaller.</span>
                     </div>
                     <button class="student-button" id="ape-submit-all" type="submit" disabled>
                         <span class="material-symbols-outlined">cloud_upload</span>
@@ -746,8 +759,16 @@ render_student_header('APE Status', 'ape');
 
     function handleApeFileSelected(input) {
         const maxFileSize = 2 * 1024 * 1024;
+        const maxFilesPerRequirement = 3;
         const allowedTypes = { pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png' };
         const selectedFiles = Array.from(input.files || []);
+        if (selectedFiles.length > maxFilesPerRequirement) {
+            window.alert(`You selected ${selectedFiles.length} files for ${input.dataset.documentName || 'this requirement'}. A maximum of ${maxFilesPerRequirement} files is allowed. Please combine additional pages into one PDF before uploading.`);
+            input.value = '';
+            updateApeFileRow(input);
+            refreshApeBatchSummary();
+            return;
+        }
         const oversizedFile = selectedFiles.find((file) => file.size > maxFileSize);
         if (oversizedFile) {
             window.alert(`${oversizedFile.name} is larger than 2 MB. Please choose files that are 2 MB or smaller.`);
