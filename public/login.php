@@ -306,7 +306,7 @@ render_header('Login');
                 <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
                 <div class="staff-field">
                     <label for="id_number">ID Number</label>
-                    <input class="staff-login-input" id="id_number" name="id_number" type="text" value="<?= e($_POST['id_number'] ?? 'STAFF-0001') ?>" placeholder="STAFF-0001" autocomplete="username" required>
+                    <input class="staff-login-input" id="id_number" name="id_number" type="text" value="<?= e($_POST['id_number'] ?? '') ?>" placeholder="0000002" inputmode="numeric" pattern="[0-9]{7}" maxlength="7" title="Enter exactly seven continuous digits." autocomplete="username" required>
                 </div>
 
                 <div class="staff-field">

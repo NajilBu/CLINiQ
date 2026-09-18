@@ -1017,7 +1017,7 @@ render_clinic_command_header(
                                     </div>
                                     <div class="settings-field">
                                         <label class="clinic-label" for="new_staff_id_number">Login ID Number</label>
-                                        <input class="settings-input" id="new_staff_id_number" name="id_number" placeholder="STAFF-0006" pattern="STAFF-[0-9]{4}" style="text-transform:uppercase;">
+                                        <input class="settings-input" id="new_staff_id_number" name="id_number" placeholder="0000002" pattern="[0-9]{7}" inputmode="numeric" maxlength="7" title="Enter exactly seven continuous digits.">
                                     </div>
                                     <div class="settings-field">
                                         <label class="clinic-label" for="new_staff_role">Role</label>
@@ -1095,7 +1095,7 @@ render_clinic_command_header(
                                             </div>
                                             <div class="settings-field">
                                                 <label class="clinic-label" for="staff_id_number_<?= $staffId ?>">ID Number</label>
-                                                <input class="settings-input" id="staff_id_number_<?= $staffId ?>" name="id_number" value="<?= e($staffProfile['id_number']) ?>" pattern="STAFF-[0-9]{4}" style="text-transform:uppercase;" <?= !$canManageStaffProfiles ? 'readonly' : '' ?> required>
+                                                <input class="settings-input" id="staff_id_number_<?= $staffId ?>" name="id_number" value="<?= e($staffProfile['id_number']) ?>" pattern="[0-9]{7}" inputmode="numeric" maxlength="7" title="Enter exactly seven continuous digits." <?= !$canManageStaffProfiles ? 'readonly' : '' ?> required>
                                             </div>
                                             <div class="settings-field">
                                                 <label class="clinic-label" for="staff_role_<?= $staffId ?>">Role</label>

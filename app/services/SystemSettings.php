@@ -137,7 +137,7 @@ function create_staff_profile(array $input): void
     ensure_staff_profiles_schema();
 
     $name = trim((string) ($input['name'] ?? ''));
-    $idNumber = strtoupper(trim((string) ($input['id_number'] ?? $input['email'] ?? '')));
+    $idNumber = trim((string) ($input['id_number'] ?? $input['email'] ?? ''));
     $role = normalize_staff_profile_role((string) ($input['role'] ?? 'staff'));
     $password = (string) ($input['password'] ?? '');
     $passwordConfirmation = (string) ($input['password_confirmation'] ?? '');
@@ -148,8 +148,8 @@ function create_staff_profile(array $input): void
     if ($idNumber === '') {
         $idNumber = next_staff_profile_id_number();
     }
-    if (!preg_match('/^STAFF-[0-9]{4}$/', $idNumber)) {
-        throw new InvalidArgumentException('Staff login ID must use the format STAFF-0001.');
+    if (!preg_match('/^[0-9]{7}$/', $idNumber)) {
+        throw new InvalidArgumentException('Staff login ID must contain exactly seven continuous digits, for example 0000002.');
     }
     account_assert_strong_password($password, $passwordConfirmation);
 
@@ -214,7 +214,7 @@ function update_staff_profile(array $input): void
 
     $id = (int) ($input['user_id'] ?? 0);
     $name = trim((string) ($input['name'] ?? ''));
-    $idNumber = strtoupper(trim((string) ($input['id_number'] ?? $input['email'] ?? '')));
+    $idNumber = trim((string) ($input['id_number'] ?? $input['email'] ?? ''));
     $role = normalize_staff_profile_role((string) ($input['role'] ?? 'staff'));
 
     if ($id <= 0) {
@@ -223,8 +223,8 @@ function update_staff_profile(array $input): void
     if ($name === '') {
         throw new InvalidArgumentException('Enter the staff member name.');
     }
-    if (!preg_match('/^STAFF-[0-9]{4}$/', $idNumber)) {
-        throw new InvalidArgumentException('Staff login ID must use the format STAFF-0001.');
+    if (!preg_match('/^[0-9]{7}$/', $idNumber)) {
+        throw new InvalidArgumentException('Staff login ID must contain exactly seven continuous digits, for example 0000002.');
     }
 
     [$firstName, $middleName, $lastName] = split_staff_profile_name($name);
@@ -299,12 +299,16 @@ function split_staff_profile_name(string $name): array
 function next_staff_profile_id_number(): string
 {
     $next = (int) auth_db()->query("
-        SELECT COALESCE(MAX(CAST(SUBSTRING(id_number, 7) AS UNSIGNED)), 0) + 1
+        SELECT COALESCE(MAX(CAST(id_number AS UNSIGNED)), 0) + 1
         FROM people
-        WHERE id_number REGEXP '^STAFF-[0-9]{4}$'
+        WHERE id_number REGEXP '^[0-9]{7}$'
     ")->fetchColumn();
 
-    return 'STAFF-' . str_pad((string) $next, 4, '0', STR_PAD_LEFT);
+    if ($next > 9999999) {
+        throw new RuntimeException('No seven-digit staff login IDs remain available.');
+    }
+
+    return str_pad((string) $next, 7, '0', STR_PAD_LEFT);
 }
 
 function staff_profile_default_department_id(): ?int

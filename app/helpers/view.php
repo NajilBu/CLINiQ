@@ -610,12 +610,14 @@ function render_ag_grid(string $gridId, array $columns, array $rows, array $opti
     $pagination = !empty($options['pagination']);
     $paginationControls = (string) ($options['paginationControls'] ?? '');
     $stateKey = preg_replace('/[^A-Za-z0-9_.:-]/', '-', (string) ($options['stateKey'] ?? '')) ?? '';
+    $keyboardRows = !empty($options['keyboardRows']);
     $rowHeight = max(40, (int) ($options['rowHeight'] ?? 70));
 
     echo '<div id="' . e($gridId) . '" class="cliniq-ag-grid ag-theme-quartz ' . $heightClass . '" data-ag-grid ' .
          ($searchInput ? 'data-search-input="' . e($searchInput) . '" ' : '') .
          ($paginationControls ? 'data-pagination-controls="' . e($paginationControls) . '" ' : '') .
          ($stateKey ? 'data-state-key="' . e($stateKey) . '" ' : '') .
+         ($keyboardRows ? 'data-keyboard-rows="true" ' : 'data-keyboard-rows="false" ') .
          ($fitColumns ? 'data-fit-columns="true" ' : 'data-fit-columns="false" ') .
          ($pagination ? 'data-pagination="true" ' : 'data-pagination="false" ') .
          'data-row-height="' . $rowHeight . '" ' .

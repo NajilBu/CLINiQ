@@ -200,6 +200,7 @@
         const paginationControlsId = grid.dataset.paginationControls || '';
         const rowHeight = Number(grid.dataset.rowHeight || 70);
         const shouldFitColumns = grid.dataset.fitColumns !== 'false';
+        const keyboardRows = grid.dataset.keyboardRows === 'true';
         const stateKey = grid.dataset.stateKey ? `cliniq-grid-state:${grid.dataset.stateKey}` : '';
         let savedState = null;
         if (stateKey) {
@@ -324,7 +325,7 @@
             paginationPageSizeSelector: false,
             suppressPaginationPanel: paginationEnabled && Boolean(paginationControlsId),
             animateRows: true,
-            suppressCellFocus: true,
+            suppressCellFocus: !keyboardRows,
             rowHeight,
             headerHeight: 48,
             overlayNoRowsTemplate: makeEmptyOverlay(grid.dataset.emptyTitle, grid.dataset.emptyText),
@@ -336,6 +337,12 @@
             },
             onCellClicked: navigateRow,
             onRowClicked: navigateRow,
+            onCellKeyDown: (params) => {
+                const key = params.event?.key;
+                if (!keyboardRows || (key !== 'Enter' && key !== ' ')) return;
+                params.event.preventDefault();
+                navigateRow(params);
+            },
             onPaginationChanged: (params) => {
                 renderPaginationControls(params.api);
                 refreshRowNumbers(params.api);
