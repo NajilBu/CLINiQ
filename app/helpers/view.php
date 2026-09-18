@@ -609,11 +609,13 @@ function render_ag_grid(string $gridId, array $columns, array $rows, array $opti
     $fitColumns = $options['fitColumns'] ?? true;
     $pagination = !empty($options['pagination']);
     $paginationControls = (string) ($options['paginationControls'] ?? '');
+    $stateKey = preg_replace('/[^A-Za-z0-9_.:-]/', '-', (string) ($options['stateKey'] ?? '')) ?? '';
     $rowHeight = max(40, (int) ($options['rowHeight'] ?? 70));
 
     echo '<div id="' . e($gridId) . '" class="cliniq-ag-grid ag-theme-quartz ' . $heightClass . '" data-ag-grid ' .
          ($searchInput ? 'data-search-input="' . e($searchInput) . '" ' : '') .
          ($paginationControls ? 'data-pagination-controls="' . e($paginationControls) . '" ' : '') .
+         ($stateKey ? 'data-state-key="' . e($stateKey) . '" ' : '') .
          ($fitColumns ? 'data-fit-columns="true" ' : 'data-fit-columns="false" ') .
          ($pagination ? 'data-pagination="true" ' : 'data-pagination="false" ') .
          'data-row-height="' . $rowHeight . '" ' .

@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/AccountValidation.php';
 
 function ensure_system_settings_schema(): void
 {
@@ -141,8 +142,8 @@ function create_staff_profile(array $input): void
     $password = (string) ($input['password'] ?? '');
     $passwordConfirmation = (string) ($input['password_confirmation'] ?? '');
 
-    if ($name === '') {
-        throw new InvalidArgumentException('Enter the staff member name.');
+    if (!account_valid_person_name($name)) {
+        throw new InvalidArgumentException("Staff name may contain only letters, spaces, apostrophes, periods, and hyphens.");
     }
     if ($idNumber === '') {
         $idNumber = next_staff_profile_id_number();
@@ -150,12 +151,7 @@ function create_staff_profile(array $input): void
     if (!preg_match('/^STAFF-[0-9]{4}$/', $idNumber)) {
         throw new InvalidArgumentException('Staff login ID must use the format STAFF-0001.');
     }
-    if (strlen($password) < 8) {
-        throw new InvalidArgumentException('Password must be at least 8 characters.');
-    }
-    if ($password !== $passwordConfirmation) {
-        throw new InvalidArgumentException('Password and confirmation password must match.');
-    }
+    account_assert_strong_password($password, $passwordConfirmation);
 
     [$firstName, $middleName, $lastName] = split_staff_profile_name($name);
     $db = auth_db();
@@ -167,6 +163,10 @@ function create_staff_profile(array $input): void
         if ($duplicate->fetchColumn()) {
             throw new InvalidArgumentException('That staff login ID already exists.');
         }
+
+        $emailLocalPart = strtolower(preg_replace('/[^a-z0-9]+/i', '', $lastName) . '_' . preg_replace('/[^a-z0-9]+/i', '', $firstName));
+        $email = account_assert_institutional_email($emailLocalPart . '@plpasig.edu.ph');
+        account_assert_email_available($db, $email);
 
         $stmt = $db->prepare('
             INSERT INTO people (id_number, first_name, middle_name, last_name)
@@ -188,7 +188,6 @@ function create_staff_profile(array $input): void
         ');
         $stmt->execute([$personId, bin2hex(random_bytes(32))]);
 
-        $email = strtolower(str_replace(' ', '', $lastName) . '_' . str_replace(' ', '', $firstName)) . '@plpasig.edu.ph';
         $stmt = $db->prepare('
             INSERT INTO accounts (person_id, email, password_hash, account_status, activated_at)
             VALUES (?, ?, ?, "active", NOW())

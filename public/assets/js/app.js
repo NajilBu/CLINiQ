@@ -1593,15 +1593,34 @@ function initConfirmedPasswordForms(root = document) {
         form.dataset.passwordConfirmationReady = 'true';
         const password = form.querySelector('[name="password"]');
         const confirmation = form.querySelector('[name="password_confirmation"]');
+        const namePattern = /^[\p{L} .'-]+$/u;
+        form.querySelectorAll('[data-person-name]').forEach((input) => {
+            input.addEventListener('input', () => {
+                input.setCustomValidity(input.value && !namePattern.test(input.value)
+                    ? 'Use only letters, spaces, apostrophes, periods, and hyphens.'
+                    : '');
+            });
+        });
         if (!password || !confirmation) return;
 
         const validateMatch = () => {
+            const strongPassword = password.value.length >= 8
+                && password.value.length <= 128
+                && /[a-z]/.test(password.value)
+                && /[A-Z]/.test(password.value)
+                && /\d/.test(password.value)
+                && /[^A-Za-z0-9]/.test(password.value);
+            password.setCustomValidity('');
             confirmation.setCustomValidity('');
+            if (password.value !== '' && !strongPassword) {
+                password.setCustomValidity('Use 8–128 characters with uppercase, lowercase, number, and special character.');
+                return false;
+            }
             if (confirmation.value !== '' && password.value !== confirmation.value) {
                 confirmation.setCustomValidity('Passwords do not match.');
                 return false;
             }
-            return password.value === confirmation.value;
+            return strongPassword && password.value === confirmation.value;
         };
 
         password.addEventListener('input', validateMatch);
@@ -1613,7 +1632,8 @@ function initConfirmedPasswordForms(root = document) {
         form.addEventListener('submit', (event) => {
             if (!validateMatch()) {
                 event.preventDefault();
-                confirmation.reportValidity();
+                if (!password.checkValidity()) password.reportValidity();
+                else confirmation.reportValidity();
             }
         });
     });

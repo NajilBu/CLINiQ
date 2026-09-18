@@ -1009,7 +1009,7 @@ render_clinic_command_header(
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div class="settings-field">
                                         <label class="clinic-label" for="new_staff_name">Full Name</label>
-                                        <input class="settings-input" id="new_staff_name" name="name" placeholder="Dr. Maria Santos" required>
+                                        <input class="settings-input" id="new_staff_name" name="name" placeholder="Dr. Maria Santos" maxlength="100" data-person-name title="Use letters, spaces, apostrophes, periods, and hyphens only." required>
                                     </div>
                                     <div class="settings-field">
                                         <label class="clinic-label" for="new_staff_email">Email Address</label>
@@ -1030,18 +1030,19 @@ render_clinic_command_header(
                                     <div class="settings-field">
                                         <label class="clinic-label" for="new_staff_password">Password</label>
                                         <div class="password-field-control">
-                                            <input class="settings-input" id="new_staff_password" name="password" type="password" minlength="8" autocomplete="new-password" required>
+                                            <input class="settings-input" id="new_staff_password" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" title="Use uppercase, lowercase, number, and special character." required>
                                             <button type="button" class="password-visibility-button" data-password-toggle="new_staff_password" aria-label="Show password" aria-pressed="false"><span class="material-symbols-outlined">visibility</span></button>
                                         </div>
                                     </div>
                                     <div class="settings-field">
                                         <label class="clinic-label" for="new_staff_password_confirmation">Confirm Password</label>
                                         <div class="password-field-control">
-                                            <input class="settings-input" id="new_staff_password_confirmation" name="password_confirmation" type="password" minlength="8" autocomplete="new-password" required>
+                                            <input class="settings-input" id="new_staff_password_confirmation" name="password_confirmation" type="password" minlength="8" maxlength="128" autocomplete="new-password" required>
                                             <button type="button" class="password-visibility-button" data-password-toggle="new_staff_password_confirmation" aria-label="Show confirmation password" aria-pressed="false"><span class="material-symbols-outlined">visibility</span></button>
                                         </div>
                                     </div>
                                 </div>
+                                <p class="settings-help mb-0">Password must contain uppercase, lowercase, a number, and a special character.</p>
                                 <div class="flex justify-end">
                                     <button class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Create staff profile?" data-confirm-message="This staff member will be able to sign in and create records under their own name." data-confirm-toast="Creating staff profile...">
                                         <span class="material-symbols-outlined text-[18px]">person_add</span>

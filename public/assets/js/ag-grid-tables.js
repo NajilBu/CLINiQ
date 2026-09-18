@@ -200,6 +200,16 @@
         const paginationControlsId = grid.dataset.paginationControls || '';
         const rowHeight = Number(grid.dataset.rowHeight || 70);
         const shouldFitColumns = grid.dataset.fitColumns !== 'false';
+        const stateKey = grid.dataset.stateKey ? `cliniq-grid-state:${grid.dataset.stateKey}` : '';
+        let savedState = null;
+        if (stateKey) {
+            try {
+                savedState = JSON.parse(window.localStorage.getItem(stateKey) || 'null');
+            } catch (error) {
+                window.localStorage.removeItem(stateKey);
+            }
+        }
+        let restoringState = Boolean(savedState);
         const autoHeight = grid.classList.contains('cliniq-ag-grid-patient-registry');
         const columnDefs = normalizeColumns(readGridJson(grid, '[data-grid-columns]', []), shouldFitColumns);
 
@@ -283,6 +293,19 @@
             }
         }
 
+        function persistGridState(api) {
+            if (!stateKey || restoringState || !api) return;
+            try {
+                window.localStorage.setItem(stateKey, JSON.stringify({
+                    filterModel: api.getFilterModel ? api.getFilterModel() : null,
+                    columnState: api.getColumnState ? api.getColumnState() : null,
+                    page: paginationEnabled && api.paginationGetCurrentPage ? api.paginationGetCurrentPage() : 0
+                }));
+            } catch (error) {
+                console.warn('Unable to save table state for', grid.id, error);
+            }
+        }
+
         const gridOptions = {
             rowData,
             columnDefs,
@@ -316,9 +339,16 @@
             onPaginationChanged: (params) => {
                 renderPaginationControls(params.api);
                 refreshRowNumbers(params.api);
+                persistGridState(params.api);
             },
-            onSortChanged: (params) => refreshRowNumbers(params.api),
-            onFilterChanged: (params) => refreshRowNumbers(params.api)
+            onSortChanged: (params) => {
+                refreshRowNumbers(params.api);
+                persistGridState(params.api);
+            },
+            onFilterChanged: (params) => {
+                refreshRowNumbers(params.api);
+                persistGridState(params.api);
+            }
         };
 
         function announceGridReady(params) {
@@ -347,6 +377,19 @@
         }
 
         const api = window.agGrid.createGrid(grid, gridOptions);
+        if (savedState) {
+            if (savedState.columnState && api.applyColumnState) {
+                api.applyColumnState({ state: savedState.columnState, applyOrder: true });
+            }
+            if (savedState.filterModel && api.setFilterModel) {
+                api.setFilterModel(savedState.filterModel);
+            }
+            if (paginationEnabled && Number.isInteger(savedState.page) && api.paginationGoToPage) {
+                api.paginationGoToPage(savedState.page);
+            }
+        }
+        restoringState = false;
+        persistGridState(api);
         fitColumns(api);
         renderPaginationControls(api);
 
