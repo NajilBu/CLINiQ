@@ -217,6 +217,48 @@ function cliniq_backup_copy_tree(string $source, string $destination): int
     return $count;
 }
 
+/**
+ * Verify that every document record has a corresponding file in one of the
+ * protected upload locations before a backup is marked successful.
+ */
+function cliniq_backup_audit_ape_documents(PDO $db, string $projectRoot): array
+{
+    $rows = $db->query('SELECT document_id, file_path FROM ape_documents')->fetchAll(PDO::FETCH_ASSOC);
+    $available = 0;
+    $missing = [];
+    foreach ($rows as $row) {
+        $storedPath = str_replace('\\', '/', trim((string) ($row['file_path'] ?? '')));
+        $filename = basename($storedPath);
+        if ($filename === '' || $filename === '.' || $filename === '..' || !preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]*$/', $filename)) {
+            $missing[] = (int) ($row['document_id'] ?? 0);
+            continue;
+        }
+        $candidates = [
+            $projectRoot . '/storage/documents/ape/' . $filename,
+            $projectRoot . '/public/uploads/ape/' . $filename,
+        ];
+        $found = false;
+        foreach ($candidates as $candidate) {
+            if (is_file($candidate) && is_readable($candidate)) {
+                $found = true;
+                break;
+            }
+        }
+        if ($found) {
+            $available++;
+        } else {
+            $missing[] = (int) ($row['document_id'] ?? 0);
+        }
+    }
+
+    return [
+        'rows' => count($rows),
+        'available' => $available,
+        'missing' => count($missing),
+        'missing_document_ids' => $missing,
+    ];
+}
+
 function cliniq_backup_encryption_key(): string
 {
     $configured = (string) env_value('BACKUP_ENCRYPTION_KEY', '');
@@ -528,13 +570,14 @@ function cliniq_backup_run(string $type = 'daily', bool $force = false, bool $sc
         }
 
         $projectRoot = dirname(__DIR__, 2);
+        $db = auth_db();
+        $apeAudit = cliniq_backup_audit_ape_documents($db, $projectRoot);
         $documentCount = 0;
         $documentCount += cliniq_backup_copy_tree($projectRoot . '/storage/documents', $staging . '/documents/storage');
         $documentCount += cliniq_backup_copy_tree($projectRoot . '/public/uploads', $staging . '/documents/public-uploads');
 
-        $db = auth_db();
         $tableCount = (int) $db->query('SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()')->fetchColumn();
-        $apeDocumentRows = (int) $db->query('SELECT COUNT(*) FROM ape_documents')->fetchColumn();
+        $apeDocumentRows = $apeAudit['rows'];
         $configuration = [
             'application' => 'CLINiQ',
             'database' => $dbName,
@@ -556,6 +599,8 @@ function cliniq_backup_run(string $type = 'daily', bool $force = false, bool $sc
             'database' => $dbName,
             'database_tables' => $tableCount,
             'ape_document_rows' => $apeDocumentRows,
+            'ape_document_available_rows' => $apeAudit['available'],
+            'ape_document_missing_rows' => $apeAudit['missing'],
             'copied_document_files' => $documentCount,
             'file_count' => count($files),
             'total_bytes' => array_sum(array_column($files, 'bytes')),
@@ -578,9 +623,12 @@ function cliniq_backup_run(string $type = 'daily', bool $force = false, bool $sc
         cliniq_backup_apply_retention($root . DIRECTORY_SEPARATOR . 'Daily', CLINIQ_BACKUP_DAILY_RETENTION);
         cliniq_backup_apply_retention($root . DIRECTORY_SEPARATOR . 'Weekly', CLINIQ_BACKUP_WEEKLY_RETENTION);
         $verified = cliniq_backup_verify($destination, false);
+        $backupHasWarning = $apeAudit['missing'] > 0;
         $status = [
-            'state' => 'success',
-            'message' => ucfirst($type) . ' backup completed and verified.',
+            'state' => $backupHasWarning ? 'warning' : 'success',
+            'message' => $backupHasWarning
+                ? ucfirst($type) . ' backup completed, but ' . $apeAudit['missing'] . ' historical APE document file(s) are missing. Available files were backed up.'
+                : ucfirst($type) . ' backup completed and verified.',
             'last_success_at' => $manifest['created_at'],
             'last_success_path' => $destination,
             'last_success_type' => $type,
@@ -588,6 +636,10 @@ function cliniq_backup_run(string $type = 'daily', bool $force = false, bool $sc
             'weekly_copy_path' => $weeklyPath,
             'file_count' => $manifest['file_count'],
             'total_bytes' => $manifest['total_bytes'],
+            'ape_document_rows' => $manifest['ape_document_rows'],
+            'ape_document_available_rows' => $manifest['ape_document_available_rows'],
+            'ape_document_missing_rows' => $manifest['ape_document_missing_rows'],
+            'ape_document_missing_ids' => $apeAudit['missing_document_ids'],
             'external_backup' => $external,
         ];
         cliniq_backup_write_status($status);

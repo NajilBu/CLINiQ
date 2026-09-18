@@ -15,7 +15,8 @@ RUN a2enmod headers rewrite \
 
 COPY docker/apache-cliniq.conf /etc/apache2/sites-available/cliniq.conf
 COPY docker/php-production.ini /usr/local/etc/php/conf.d/cliniq-production.ini
-RUN a2ensite cliniq
+COPY docker/mpm-prefork-cliniq.conf /etc/apache2/conf-available/mpm-prefork-cliniq.conf
+RUN a2ensite cliniq && a2enconf mpm-prefork-cliniq
 
 WORKDIR /var/www/html
 COPY . /var/www/html
