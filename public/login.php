@@ -317,10 +317,6 @@ render_header('Login');
                 <button class="btn btn-primary w-full min-h-[2.9rem] mt-2" type="submit">Sign in</button>
             </form>
 
-            <p class="text-center text-xs font-bold text-slate-500 mt-4">
-                First login? Enter the password provided by the clinic.
-            </p>
-
             <div class="staff-note">
                 <span class="material-symbols-outlined text-[16px]">lock</span>
                 Access is restricted to registered clinic staff.

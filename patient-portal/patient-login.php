@@ -175,9 +175,6 @@ render_student_auth_header('Patient Login');
                 </button>
             </form>
 
-            <p class="text-center text-xs font-bold text-slate-500 mt-4">
-                First login? Enter the password provided by the clinic.
-            </p>
             <hr class="student-auth-divider">
             <p class="text-center text-xs font-bold text-slate-500">
                 New student? <a href="patient-register.php" class="student-auth-link text-decoration-none">Create an Applicant account.</a>
