@@ -117,10 +117,6 @@ render_student_header('Emergency Health Passport', 'passport');
         <p class="student-eyebrow">Emergency Health</p>
         <h1 class="student-title">Health Passport</h1>
     </div>
-    <span class="student-badge passport-badge-emergency">
-        <span class="material-symbols-outlined passport-icon-sm">emergency</span>
-        Emergency Access
-    </span>
 </section>
 
 <?php if (!empty($passportError)): ?>
@@ -140,7 +136,13 @@ render_student_header('Emergency Health Passport', 'passport');
 </div>
 <?php endif; ?>
 
-<p class="passport-privacy-summary"><span class="material-symbols-outlined" aria-hidden="true">privacy_tip</span><span>Your QR/NFC passport shares only the emergency details you choose. Keep them accurate—access is logged. <a href="<?= student_e(student_legal_url('privacy')) ?>" target="_blank" rel="noopener" class="student-auth-link">Privacy Notice</a>.</span></p>
+<div class="passport-summary-row">
+    <p class="passport-privacy-summary"><span class="material-symbols-outlined" aria-hidden="true">privacy_tip</span><span>Your QR/NFC passport shares only the emergency details you choose. Keep them accurate—access is logged. <a href="<?= student_e(student_legal_url('privacy')) ?>" target="_blank" rel="noopener" class="student-auth-link">Privacy Notice</a>.</span></p>
+    <span class="student-badge passport-badge-emergency">
+        <span class="material-symbols-outlined passport-icon-sm">emergency</span>
+        Emergency Access
+    </span>
+</div>
 
 <form method="POST" action="" id="passport-form" data-emergency-contact-form>
 <nav class="passport-mobile-tabs" aria-label="Passport sections">

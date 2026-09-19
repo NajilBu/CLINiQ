@@ -1079,11 +1079,19 @@ html:has(.student-body) body {
     line-height: 1.5;
 }
 
+.passport-summary-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
 .passport-privacy-summary {
     display: flex;
     align-items: flex-start;
     gap: 0.55rem;
-    margin: 0 0 1rem;
+    margin: 0;
     color: var(--student-muted);
     font-size: 0.8rem;
     font-weight: 650;
@@ -1094,6 +1102,13 @@ html:has(.student-body) body {
     color: var(--student-primary);
     font-size: 1.15rem;
     margin-top: 0.02rem;
+}
+
+.passport-summary-row .passport-badge-emergency { flex: 0 0 auto; }
+
+@media (max-width: 640px) {
+    .passport-summary-row { align-items: flex-start; }
+    .passport-summary-row .passport-badge-emergency { margin-top: 0.1rem; }
 }
 
 .ape-timeline-clinical-entry {
