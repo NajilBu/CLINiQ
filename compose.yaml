@@ -67,6 +67,28 @@ services:
     networks:
       - cliniq_internal
 
+  loadtest:
+    image: grafana/k6:latest
+    profiles: ["loadtest"]
+    restart: "no"
+    user: "0:0"
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      BASE_URL: ${LOAD_TEST_BASE_URL:-http://app}
+      STUDENT_ID: ${LOAD_TEST_STUDENT_ID:-}
+      STUDENT_PASSWORD: ${LOAD_TEST_STUDENT_PASSWORD:-}
+      ADMIN_BASE_URL: ${LOAD_TEST_ADMIN_BASE_URL:-}
+      ADMIN_COOKIE: ${LOAD_TEST_ADMIN_COOKIE:-}
+      LOAD_TEST_ALLOW_PRODUCTION: ${LOAD_TEST_ALLOW_PRODUCTION:-0}
+    command: ["run", "--summary-export=/results/enrollment-surge-summary.json", "/scripts/enrollment-surge.js"]
+    volumes:
+      - ./tests/load:/scripts:ro
+      - cliniq_load_test_results:/results
+    networks:
+      - cliniq_internal
+
   gateway:
     image: nginx:1.27-alpine
     profiles: ["public-portal", "quick-tunnel"]
@@ -122,6 +144,7 @@ services:
       - docker/.env
     volumes:
       - cliniq_database:/var/lib/mysql
+      - ./docker/mariadb.cnf:/etc/mysql/conf.d/cliniq.cnf:ro
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s
@@ -147,6 +170,8 @@ volumes:
   cliniq_sessions:
     name: cliniq_cliniq_sessions
     external: true
+  cliniq_load_test_results:
+    name: cliniq_load_test_results
 
 networks:
   cliniq_internal:

@@ -232,7 +232,7 @@ $theme = active_cliniq_theme();
 
 ?>
 <!doctype html>
-<html class="light" lang="en">
+<html class="light<?= !empty($theme['dark_mode']) ? ' dark cliniq-dark' : '' ?>" lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -293,10 +293,20 @@ $theme = active_cliniq_theme();
 
         .visit-main {
             flex: 1 1 auto;
-            display: grid;
+            display: flex;
+            flex-direction: column;
             align-items: center;
-            justify-items: center;
-            padding: clamp(4.75rem, 8vh, 6.25rem) 1rem 1rem;
+            justify-content: center !important;
+            align-content: flex-start;
+            gap: clamp(1rem, 2vh, 1.5rem);
+            min-height: 0;
+            box-sizing: border-box;
+            padding: clamp(1.5rem, 3vh, 3rem) 1rem;
+        }
+
+        .visit-main > .visit-card,
+        .visit-main > .inline-flex {
+            flex: 0 0 auto;
         }
 
         .visit-main.is-borrowing {
@@ -334,14 +344,14 @@ $theme = active_cliniq_theme();
 
         .visit-input {
             width: 100%;
-            min-height: 2.45rem;
-            padding: 0.55rem 0.5rem 0.55rem 2.2rem;
+            min-height: 3.05rem;
+            padding: 0.78rem 0.7rem 0.78rem 2.55rem;
             border: 0;
             border-bottom: 2px solid #e2e8f0;
             border-radius: 0;
             background: transparent;
             color: #17261d;
-            font-size: 0.8125rem;
+            font-size: 1rem;
             font-weight: 500;
             line-height: 1.35;
             outline: none;
@@ -359,23 +369,23 @@ $theme = active_cliniq_theme();
 
         .visit-input::placeholder {
             color: #cbd5e1;
-            font-size: 0.8125rem;
+            font-size: 1rem;
             font-weight: 400;
             line-height: 1.35;
         }
 
         .visit-label {
             display: block;
-            margin: 0 0 0.28rem 0.25rem;
+            margin: 0 0 0.45rem 0.25rem;
             color: #94a3b8;
-            font-size: 0.625rem;
+            font-size: 0.75rem;
             font-weight: 600;
             letter-spacing: 0.08em;
             text-transform: uppercase;
         }
 
         .visit-card-header {
-            padding: clamp(1.15rem, 3vh, 1.9rem) 2rem clamp(1rem, 2.4vh, 1.45rem);
+            padding: clamp(1.5rem, 3vh, 2.15rem) 2.25rem clamp(1.35rem, 2.4vh, 1.8rem);
         }
 
         .visit-card-icon {
@@ -385,16 +395,16 @@ $theme = active_cliniq_theme();
         }
 
         .visit-card-title {
-            font-size: clamp(1.65rem, 2vw, 2.15rem);
+            font-size: clamp(2rem, 2.5vw, 2.55rem);
             line-height: 1.08;
         }
 
         .visit-card-form {
-            padding: clamp(1rem, 2.3vh, 1.45rem) clamp(1.25rem, 3vw, 2.25rem);
+            padding: clamp(1.4rem, 2.8vh, 2rem) clamp(1.75rem, 3vw, 2.75rem);
         }
 
         .visit-form-grid {
-            row-gap: clamp(0.85rem, 1.8vh, 1.2rem);
+            row-gap: clamp(1.1rem, 2vh, 1.5rem);
         }
 
         .borrow-equipment-panel {
@@ -411,8 +421,8 @@ $theme = active_cliniq_theme();
         }
 
         .visit-time-pill {
-            min-height: 2.65rem;
-            padding: 0.65rem 0.9rem;
+            min-height: 2.9rem;
+            padding: 0.72rem 1rem;
         }
 
         .visit-card-footer {
@@ -444,8 +454,9 @@ $theme = active_cliniq_theme();
 
         @media (min-width: 769px) and (max-height: 930px) {
             .visit-main {
-                padding-top: 4.25rem;
-                padding-bottom: 0.6rem;
+                justify-content: center !important;
+                padding-top: 1rem;
+                padding-bottom: 1rem;
             }
 
             .visit-card {
@@ -453,8 +464,8 @@ $theme = active_cliniq_theme();
             }
 
             .visit-card-header {
-                padding-top: 0.95rem;
-                padding-bottom: 0.9rem;
+                padding-top: 1.3rem;
+                padding-bottom: 1.15rem;
             }
 
             .visit-card-icon {
@@ -464,7 +475,7 @@ $theme = active_cliniq_theme();
             }
 
             .visit-card-title {
-                font-size: 1.8rem;
+                font-size: 2.15rem;
             }
 
             .visit-card-subtitle {
@@ -473,19 +484,19 @@ $theme = active_cliniq_theme();
             }
 
             .visit-card-form {
-                padding-top: 0.95rem;
-                padding-bottom: 0.9rem;
+                padding-top: 1.2rem;
+                padding-bottom: 1.1rem;
             }
 
             .visit-input {
-                min-height: 2.15rem;
-                padding-top: 0.42rem;
-                padding-bottom: 0.42rem;
+                min-height: 2.85rem;
+                padding-top: 0.68rem;
+                padding-bottom: 0.68rem;
             }
 
             .visit-label {
-                margin-bottom: 0.2rem;
-                font-size: 0.58rem;
+                margin-bottom: 0.36rem;
+                font-size: 0.7rem;
             }
 
             .visit-lookup-status {
@@ -504,13 +515,13 @@ $theme = active_cliniq_theme();
             }
 
             .visit-time-pill {
-                min-height: 2.35rem;
-                padding: 0.5rem 0.75rem;
+                min-height: 2.6rem;
+                padding: 0.6rem 0.85rem;
             }
 
             .visit-card-footer {
-                padding-top: 0.55rem;
-                padding-bottom: 0.55rem;
+                padding-top: 0.7rem;
+                padding-bottom: 0.7rem;
             }
         }
 
@@ -525,9 +536,6 @@ $theme = active_cliniq_theme();
     <main class="visit-main <?= $form['reason'] === VISITOR_REASON_BORROW_EQUIPMENT ? 'is-borrowing' : '' ?>">
         <section class="visit-card">
             <div class="visit-card-header border-b border-outline-variant/20 text-center">
-                <div class="visit-card-icon inline-flex items-center justify-center bg-primary-fixed text-primary rounded-xl border border-outline-variant/40">
-                    <span class="material-symbols-outlined">edit_note</span>
-                </div>
                 <h1 class="visit-card-title font-headline font-extrabold text-[#17261d] mb-1">Clinic Visit Log Form</h1>
                 <p class="visit-card-subtitle text-xs sm:text-sm font-bold text-slate-500">Please provide your details for clinic assessment.</p>
             </div>
@@ -705,6 +713,11 @@ $theme = active_cliniq_theme();
                 <span class="text-[9px] font-black text-slate-300 uppercase tracking-widest">Clinic DTR compatible</span>
             </div>
         </section>
+        <a href="<?= e(app_url('clinic-feedback.php')) ?>" class="mx-auto inline-flex items-center gap-2 rounded-full border border-primary/25 bg-white px-5 py-2.5 text-xs font-black text-primary shadow-sm transition hover:bg-primary-fixed focus:outline-none focus:ring-2 focus:ring-primary/30" style="margin-top: 0 !important;">
+            <span class="material-symbols-outlined text-[18px]" aria-hidden="true">rate_review</span>
+            Give feedback about a clinic visit
+            <span class="material-symbols-outlined text-[18px]" aria-hidden="true">arrow_forward</span>
+        </a>
     </main>
 </div>
 

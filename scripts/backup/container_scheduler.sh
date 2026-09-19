@@ -25,7 +25,7 @@ while true; do
     }
 
     case "$result" in
-        *'"state": "success"'*) echo "$result" ;;
+        *'"state": "success"'*|*'"state": "warning"'*) echo "$result" ;;
     esac
 
     sleep 300

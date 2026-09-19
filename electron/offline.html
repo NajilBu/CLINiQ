@@ -8,19 +8,25 @@
     <link rel="stylesheet" href="offline.css">
 </head>
 <body>
+    <button type="button" class="theme-toggle" id="themeToggle" aria-pressed="false" aria-label="Switch to dark mode">
+        <span aria-hidden="true" class="theme-toggle-icon">☾</span>
+        <span id="themeToggleLabel">Dark mode</span>
+    </button>
     <main class="offline-shell">
         <section class="offline-card" aria-labelledby="offlineTitle">
-            <div class="offline-mark" aria-hidden="true">Q</div>
+            <div class="offline-mark" aria-hidden="true">
+                <img src="assets/cliniq-desktop-icon.png" alt="">
+            </div>
             <p class="offline-eyebrow">CLINiQ Clinic</p>
-            <h1 id="offlineTitle">Clinic server is unavailable</h1>
-            <p class="offline-copy">Start Apache and MySQL in XAMPP, then try connecting again.</p>
+            <h1 id="offlineTitle">The clinic system is not ready</h1>
+            <p class="offline-copy">Please make sure Docker is running and the CLINiQ clinic services have started, then try again.</p>
 
             <div class="offline-status" role="status" aria-live="polite">
                 <span class="status-dot" id="statusDot"></span>
-                <span id="connectionStatus">Waiting for the local clinic server</span>
+                <span id="connectionStatus">Waiting for the clinic system to start</span>
             </div>
 
-            <button type="button" id="retryButton">Retry Connection</button>
+            <button type="button" id="retryButton">Try again</button>
             <p class="offline-address" id="clinicAddress"></p>
         </section>
     </main>

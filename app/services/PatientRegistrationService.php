@@ -8,6 +8,7 @@ require_once __DIR__ . '/AuditLog.php';
 require_once __DIR__ . '/ApeCycleService.php';
 require_once __DIR__ . '/ApeWorkflow.php';
 require_once __DIR__ . '/PatientAccountService.php';
+require_once __DIR__ . '/SystemSettings.php';
 
 const CLINIQ_PATIENT_REGISTRATION_CODE_MINUTES = 15;
 const CLINIQ_PATIENT_REGISTRATION_MAX_ATTEMPTS = 5;
@@ -156,6 +157,9 @@ function complete_patient_registration(int $verificationId, array $input): array
     $section = normalize_student_section_code((string) ($input['section'] ?? ''));
     $password = (string) ($input['password'] ?? '');
     $passwordConfirmation = (string) ($input['password_confirmation'] ?? '');
+    if (($input['legal_acknowledgement'] ?? '') !== '1') {
+        throw new InvalidArgumentException('You must review and acknowledge the Terms of Use and Privacy Notice before creating an account.');
+    }
     if (!patient_account_valid_name($firstName) || !patient_account_valid_name($lastName) || ($middleName !== '' && !patient_account_valid_name($middleName))) {
         throw new InvalidArgumentException('Enter valid first, middle, and last names.');
     }
@@ -203,5 +207,10 @@ function complete_patient_registration(int $verificationId, array $input): array
         throw $exception;
     }
     audit_log_event('accounts', 'patient_self_registered', $personId, 'student', 'account', $accountId, ['access_status' => 'Applicant']);
+    audit_log_event('privacy', 'student_legal_acknowledged', $personId, 'student', 'account', $accountId, [
+        'terms_version' => cliniq_legal_documents()['version'],
+        'privacy_notice_version' => cliniq_legal_documents()['version'],
+        'source' => 'patient-registration',
+    ]);
     return ['person_id' => $personId, 'account_id' => $accountId, 'student_number' => $studentNumber, 'email' => $email, 'access_status' => 'Applicant'];
 }

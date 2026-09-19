@@ -398,7 +398,7 @@ render_header('Main Dashboard');
     <div class="dashboard-metrics grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
         <a href="<?= app_url('visits/index.php') ?>"
             class="dashboard-metric-card flex items-center gap-4 text-decoration-none hover:shadow-md hover:border-emerald-200 transition-all cursor-pointer">
-            <div class="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+            <div class="dashboard-metric-icon dashboard-metric-icon--success w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
                 <span class="material-symbols-outlined text-[24px]">group</span>
             </div>
             <div class="min-w-0">
@@ -411,7 +411,7 @@ render_header('Main Dashboard');
         </a>
         <a href="<?= app_url('inventory/index.php') ?>"
             class="dashboard-metric-card flex items-center gap-4 text-decoration-none hover:shadow-md hover:border-amber-200 transition-all cursor-pointer">
-            <div class="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+            <div class="dashboard-metric-icon dashboard-metric-icon--warning w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
                 <span class="material-symbols-outlined text-[24px]">inventory_2</span>
             </div>
             <div class="min-w-0">
@@ -424,7 +424,7 @@ render_header('Main Dashboard');
         </a>
         <a href="<?= app_url('appointments/index.php') ?>"
             class="dashboard-metric-card flex items-center gap-4 text-decoration-none hover:shadow-md hover:border-primary transition-all cursor-pointer">
-            <div class="w-12 h-12 rounded-2xl bg-primary-fixed text-primary flex items-center justify-center shrink-0">
+            <div class="dashboard-metric-icon dashboard-metric-icon--primary w-12 h-12 rounded-2xl bg-primary-fixed text-primary flex items-center justify-center shrink-0">
                 <span class="material-symbols-outlined text-[24px]">event_available</span>
             </div>
             <div class="min-w-0">
@@ -437,7 +437,7 @@ render_header('Main Dashboard');
         </a>
         <a href="<?= app_url('ape/index.php') ?>"
             class="dashboard-metric-card flex items-center gap-4 text-decoration-none hover:shadow-md hover:border-primary transition-all cursor-pointer">
-            <div class="w-12 h-12 rounded-2xl bg-primary-fixed text-primary flex items-center justify-center shrink-0">
+            <div class="dashboard-metric-icon dashboard-metric-icon--primary w-12 h-12 rounded-2xl bg-primary-fixed text-primary flex items-center justify-center shrink-0">
                 <span class="material-symbols-outlined text-[24px]">fact_check</span>
             </div>
             <div class="min-w-0">
@@ -450,7 +450,7 @@ render_header('Main Dashboard');
         </a>
         <a href="<?= app_url('visits/index.php?status=all') ?>"
             class="dashboard-metric-card flex items-center gap-4 text-decoration-none hover:shadow-md hover:border-blue-200 transition-all cursor-pointer col-span-2 sm:col-span-1">
-            <div class="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+            <div class="dashboard-metric-icon dashboard-metric-icon--info w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
                 <span class="material-symbols-outlined text-[24px]">personal_injury</span>
             </div>
             <div class="min-w-0">
@@ -560,17 +560,17 @@ render_header('Main Dashboard');
 
         <!-- Appointments requiring clinic action (left panel) -->
         <section class="clinic-card overflow-hidden flex flex-col h-[520px]" style="height: 520px;">
-            <div class="p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
-                <div class="flex items-center gap-3">
+            <div class="dashboard-day-schedule-header p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
+                <div class="dashboard-day-schedule-heading flex items-center gap-3">
                     <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
                         <span class="material-symbols-outlined">pending_actions</span>
                     </div>
-                    <div>
+                    <div class="dashboard-day-schedule-heading-copy">
                         <h2 class="font-headline text-lg font-extrabold text-[#17261d] m-0">Appointments</h2>
                         <p class="text-xs font-bold text-slate-500 m-0">Review booking requests and confirm completed visits.</p>
                     </div>
                 </div>
-                <div class="flex items-center gap-2 shrink-0">
+                <div class="dashboard-day-schedule-actions flex items-center gap-2 shrink-0">
                     <?php if (count($pendingAppointments) > 0): ?>
                         <span class="badge badge-pending text-[10px]"><?= count($pendingAppointments) ?> action needed</span>
                     <?php endif; ?>
@@ -660,18 +660,18 @@ render_header('Main Dashboard');
         </section>
 
         <!-- Today's Appointment Schedule -->
-        <section class="clinic-card overflow-hidden flex flex-col h-[520px]" style="height: 520px;">
-            <div class="p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
-                <div class="flex items-center gap-3">
+        <section class="clinic-card dashboard-appointments-card overflow-hidden flex flex-col h-[520px]" style="height: 520px;">
+            <div class="dashboard-day-schedule-header p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
+                <div class="dashboard-day-schedule-heading flex items-center gap-3">
                     <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
                         <span class="material-symbols-outlined">event</span>
                     </div>
-                    <div>
+                    <div class="dashboard-day-schedule-heading-copy">
                         <h2 class="font-headline text-lg font-extrabold text-[#17261d] m-0">Today's Schedule</h2>
                         <p class="text-xs font-bold text-slate-500 m-0"><?= e(date('l, F j, Y')) ?> &bull; 8:00 AM–5:00 PM</p>
                     </div>
                 </div>
-                <div class="flex items-center gap-2 shrink-0">
+                <div class="dashboard-day-schedule-actions flex items-center gap-2 shrink-0">
                     <span class="badge badge-in-progress text-[9px]"><?= count($appointments) ?> appointment(s) &bull; <?= count($todayApeBatches) ?> APE batch(es) &bull; <?= count($scheduleUnavailableItems) ?> unavailable</span>
                     <a href="<?= app_url('appointments/index.php') ?>"
                         class="btn btn-sm btn-ghost text-slate-400 hover:text-primary text-decoration-none">

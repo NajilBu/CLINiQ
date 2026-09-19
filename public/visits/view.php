@@ -425,6 +425,30 @@ render_header($pageTitle);
         background: #fff1f2;
         color: #be123c;
     }
+    html.cliniq-dark .sheet-chip-button {
+        border-color: #4b6d55 !important;
+        background: #1b2c21 !important;
+        color: #dcebe0 !important;
+    }
+    html.cliniq-dark .sheet-chip-button:hover,
+    html.cliniq-dark .sheet-chip-button:focus-visible {
+        border-color: #66b77a !important;
+        background: #284b32 !important;
+        color: #ffffff !important;
+        outline: 2px solid #8dd39e;
+        outline-offset: 2px;
+    }
+    html.cliniq-dark .sheet-chip-button.danger {
+        border-color: #8f4a52 !important;
+        background: #4a252a !important;
+        color: #ffd7da !important;
+    }
+    html.cliniq-dark .sheet-chip-button.danger:hover,
+    html.cliniq-dark .sheet-chip-button.danger:focus-visible {
+        border-color: #d2767e !important;
+        background: #633039 !important;
+        color: #ffffff !important;
+    }
     .sheet-chip-button .material-symbols-outlined {
         font-size: 0.88rem;
     }

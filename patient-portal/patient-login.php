@@ -3,6 +3,23 @@ require_once __DIR__ . '/includes/patient-layout.php';
 
 if (isset($_GET['logout'])) {
     student_logout();
+    header('Location: patient-login.php?logged_out=1');
+    exit;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'forget_device') {
+    csrf_enforce_request();
+    student_forget_device();
+    $destination = ($_POST['return_to'] ?? '') === 'dashboard'
+        ? 'patient-dashboard.php?device_forgotten=1'
+        : 'patient-login.php?device_forgotten=1';
+    header('Location: ' . $destination);
+    exit;
+}
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST' && ($_GET['logged_out'] ?? '') !== '1' && ($_GET['device_forgotten'] ?? '') !== '1' && student_restore_remembered_session()) {
+    header('Location: patient-dashboard.php');
+    exit;
 }
 
 $error = '';
@@ -55,6 +72,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['patient_account_id'] = (int) $patient['account_id'];
                 $_SESSION['patient_person_id'] = (int) $patient['person_id'];
                 student_record_successful_login((int) $patient['account_id']);
+                if (!empty($_POST['remember_device'])) {
+                    student_remember_device((int) $patient['account_id']);
+                }
                 audit_log_event('auth', 'student_login_success', (int) $patient['person_id'], 'student', 'person', (int) $patient['person_id']);
                 csrf_rotate_token();
                 header('Location: patient-dashboard.php');
@@ -113,6 +133,14 @@ render_student_auth_header('Patient Login');
                 </div>
             <?php endif; ?>
 
+            <?php if (($_GET['device_forgotten'] ?? '') === '1'): ?>
+                <div class="student-note student-note-success student-toast" data-student-toast role="status" aria-live="polite">
+                    <span class="material-symbols-outlined">shield</span>
+                    <div>This device has been forgotten. You will need to sign in again.</div>
+                    <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+                </div>
+            <?php endif; ?>
+
             <div id="error-alert" class="student-note student-note-danger mb-4 <?= $error === '' ? 'hidden' : '' ?>">
                 <span class="material-symbols-outlined">error</span>
                 <div id="error-msg"><?= student_e($error !== '' ? $error : 'Invalid ID Number or password. Please try again.') ?></div>
@@ -135,6 +163,11 @@ render_student_auth_header('Patient Login');
                         <button type="button" class="student-toggle-pw" data-target="password">Show</button>
                     </div>
                 </div>
+
+                <label class="student-remember-row">
+                    <input type="checkbox" name="remember_device" value="1">
+                    <span>Keep me signed in for 30 days</span>
+                </label>
 
                 <button type="submit" class="student-button w-full">
                     Sign in

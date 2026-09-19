@@ -264,6 +264,35 @@ function system_report_styles(): string
 .report-document-dashboard .report-chart-track,
 .report-document-dashboard .report-progress-track { background: var(--cliniq-surface-low, #edf3ef); }
 .report-document-dashboard .report-remarks textarea { border-color: var(--cliniq-outline, #cfded3); background: var(--cliniq-surface-low, #fbfdfb); color: var(--cliniq-foreground, #334155); font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+html.cliniq-dark .report-document-dashboard { color: #dcebe0; }
+html.cliniq-dark .report-document-dashboard .report-section { border-color: #3b5945; background: #14271b; box-shadow: 0 12px 28px rgba(0,0,0,.16); }
+html.cliniq-dark .report-document-dashboard .report-section-number { background: #1d4934; color: #9be3ae; box-shadow: inset 0 0 0 1px #4d9b68; }
+html.cliniq-dark .report-document-dashboard .report-section h2 { color: #e7f4ea; }
+html.cliniq-dark .report-document-dashboard .report-section-description { color: #b3c9ba; }
+html.cliniq-dark .report-document-dashboard .report-metric,
+html.cliniq-dark .report-document-dashboard .inventory-metric-group { border-color: #3b5945; background: #1b2c21; }
+html.cliniq-dark .report-document-dashboard .inventory-metric-grid .report-metric { background: #1b3424; }
+html.cliniq-dark .report-document-dashboard .report-metric-label,
+html.cliniq-dark .report-document-dashboard .report-metric-note { color: #a9c0b0; }
+html.cliniq-dark .report-document-dashboard .report-metric-value,
+html.cliniq-dark .report-document-dashboard .inventory-metric-group-title { color: #9be3ae; }
+html.cliniq-dark .report-document-dashboard .report-chart { border-color: #3b5945; background: #1b2c21; }
+html.cliniq-dark .report-document-dashboard .report-chart h3 { color: #e7f4ea; }
+html.cliniq-dark .report-document-dashboard .report-chart-kind { color: #a9c0b0; }
+html.cliniq-dark .report-document-dashboard .report-chart-track,
+html.cliniq-dark .report-document-dashboard .report-progress-track { background: #294535; }
+html.cliniq-dark .report-document-dashboard .report-chart-label,
+html.cliniq-dark .report-document-dashboard .report-chart-legend div,
+html.cliniq-dark .report-document-dashboard .report-progress-legend div,
+html.cliniq-dark .report-document-dashboard .report-column-item span { color: #b3c9ba; }
+html.cliniq-dark .report-document-dashboard .report-chart-value,
+html.cliniq-dark .report-document-dashboard .report-donut-total,
+html.cliniq-dark .report-document-dashboard .report-point-value,
+html.cliniq-dark .report-document-dashboard .report-column-item strong { color: #9be3ae; }
+html.cliniq-dark .report-document-dashboard .report-donut-caption,
+html.cliniq-dark .report-document-dashboard .report-axis-label { fill: #a9c0b0; }
+html.cliniq-dark .report-document-dashboard .report-empty { border-color: #4b6d55; color: #a9c0b0; }
+html.cliniq-dark .report-document-dashboard .report-remarks textarea { border-color: #4b6d55; background: #0d1b13; color: #e7f4ea; }
 @media (max-width: 760px) {
   .report-document { width: 100%; margin: 0; }
   .report-cover, .report-body { padding: 28px 22px; }

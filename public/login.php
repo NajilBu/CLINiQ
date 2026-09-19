@@ -279,9 +279,6 @@ render_header('Login');
     <div class="staff-login-card">
         <section class="staff-login-panel">
             <div>
-                <a href="<?= app_url('index.php') ?>" class="staff-login-logo text-decoration-none" aria-label="Go to <?= e($clinicProfile['system_name']) ?> access portal">
-                    <img src="<?= e($clinicLogoUrl) ?>" alt="<?= e($clinicProfile['department']) ?> logo">
-                </a>
                 <p class="staff-login-eyebrow">
                     <a href="<?= app_url('index.php') ?>" class="text-white/70 hover:text-white text-decoration-none"><?= e($clinicProfile['department']) ?></a>
                 </p>

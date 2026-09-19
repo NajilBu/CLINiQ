@@ -92,6 +92,25 @@ $stmt->bindValue($parameterIndex++, $offset, PDO::PARAM_INT);
 $stmt->bindValue($parameterIndex, $perPage, PDO::PARAM_INT);
 $stmt->execute();
 $logs = $stmt->fetchAll();
+$auditRows = [];
+foreach ($logs as $log) {
+    $auditRows[] = [
+        'created' => date('M d, Y g:i A', strtotime($log['created_at'])),
+        'actor' => '<p class="audit-primary-text">' . e($log['actor_name'] ?: ucfirst((string) $log['actor_type'])) . '</p><p class="audit-secondary-text">' . e($log['actor_id_number'] ?: audit_log_module_label((string) $log['actor_type'])) . '</p>',
+        'activity' => '<p class="audit-primary-text">' . e(audit_log_action_label((string) $log['action'])) . '</p><p class="audit-secondary-text">' . e(audit_log_module_label((string) $log['module'])) . '</p>',
+        'target' => audit_log_target_label($log),
+        'outcome' => '<span class="badge ' . e($log['outcome'] === 'success' ? 'badge-completed' : 'badge-high') . '">' . e($log['outcome'] === 'success' ? 'Successful' : 'Failed') . '</span>',
+        'details' => '<span class="audit-detail-summary">' . e(audit_log_metadata_summary($log['metadata'] ?? null)) . '</span>',
+    ];
+}
+$auditColumns = [
+    ['headerName' => 'Date and time', 'field' => 'created', 'sortField' => 'created', 'sortType' => 'date', 'minWidth' => 170],
+    ['headerName' => 'Performed by', 'field' => 'actor', 'cellRenderer' => 'html', 'minWidth' => 190],
+    ['headerName' => 'Activity', 'field' => 'activity', 'cellRenderer' => 'html', 'minWidth' => 180],
+    ['headerName' => 'Affected record', 'field' => 'target', 'minWidth' => 180],
+    ['headerName' => 'Result', 'field' => 'outcome', 'cellRenderer' => 'html', 'minWidth' => 125, 'maxWidth' => 150],
+    ['headerName' => 'Additional information', 'field' => 'details', 'cellRenderer' => 'html', 'minWidth' => 220],
+];
 $modules = auth_db()->query('SELECT DISTINCT module FROM audit_logs ORDER BY module')->fetchAll(PDO::FETCH_COLUMN);
 $actions = auth_db()->query('SELECT DISTINCT action FROM audit_logs ORDER BY action')->fetchAll(PDO::FETCH_COLUMN);
 $printQuery = http_build_query(array_filter([
@@ -129,26 +148,13 @@ render_clinic_command_header(
 </section>
 <section class="clinic-card overflow-hidden">
     <div class="p-6 border-b border-slate-100"><h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Activity history</h2><p class="text-xs font-bold text-slate-500 mb-0"><?= number_format($total) ?> matching activities</p></div>
-    <div class="overflow-x-auto"><table class="audit-table"><thead><tr><th>Date and time</th><th>Performed by</th><th>Activity</th><th>Affected record</th><th>Result</th><th>Additional information</th></tr></thead><tbody>
-    <?php foreach ($logs as $log): ?>
-        <tr>
-            <td class="audit-nowrap"><?= e(date('M d, Y g:i A', strtotime($log['created_at']))) ?></td>
-            <td>
-                <p class="audit-primary-text"><?= e($log['actor_name'] ?: ucfirst((string) $log['actor_type'])) ?></p>
-                <p class="audit-secondary-text"><?= e($log['actor_id_number'] ?: audit_log_module_label((string) $log['actor_type'])) ?></p>
-            </td>
-            <td>
-                <p class="audit-primary-text"><?= e(audit_log_action_label((string) $log['action'])) ?></p>
-                <p class="audit-secondary-text"><?= e(audit_log_module_label((string) $log['module'])) ?></p>
-            </td>
-            <td class="audit-target-text"><?= e(audit_log_target_label($log)) ?></td>
-            <td><span class="badge <?= e($log['outcome'] === 'success' ? 'badge-completed' : 'badge-high') ?>"><?= e($log['outcome'] === 'success' ? 'Successful' : 'Failed') ?></span></td>
-            <td class="audit-detail-text">
-                <p class="audit-detail-summary"><?= e(audit_log_metadata_summary($log['metadata'] ?? null)) ?></p>
-            </td>
-        </tr>
-    <?php endforeach; ?>
-    <?php if (!$logs): ?><tr><td colspan="6" class="p-8 text-center text-sm font-bold text-slate-400">No audit events match these filters.</td></tr><?php endif; ?></tbody></table></div>
+    <?php render_ag_grid('auditLogGrid', $auditColumns, $auditRows, [
+        'height' => 'compact',
+        'rowHeight' => 76,
+        'fitColumns' => true,
+        'emptyTitle' => 'No audit events found',
+        'emptyText' => 'No audit events match these filters.',
+    ]); ?>
     <?php if ($pages > 1): ?><div class="p-4 flex items-center justify-between border-t border-slate-100"><span class="text-xs font-bold text-slate-500">Page <?= $page ?> of <?= $pages ?></span><div class="flex gap-2"><?php if ($page > 1): ?><a class="btn btn-sm btn-outline text-decoration-none" href="?<?= e(http_build_query(array_merge($_GET, ['page' => $page - 1]))) ?>">Previous</a><?php endif; ?><?php if ($page < $pages): ?><a class="btn btn-sm btn-outline text-decoration-none" href="?<?= e(http_build_query(array_merge($_GET, ['page' => $page + 1]))) ?>">Next</a><?php endif; ?></div></div><?php endif; ?>
 </section>
 </div>

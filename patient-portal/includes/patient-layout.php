@@ -306,6 +306,94 @@ function student_logout(): void
     session_destroy();
 }
 
+function student_legal_url(string $document): string
+{
+    return '../public/legal/' . ($document === 'terms' ? 'terms-of-use.php' : 'privacy-notice.php');
+}
+
+function student_legal_links(): string
+{
+    return '<a href="' . student_e(student_legal_url('terms')) . '" class="student-auth-link text-decoration-none">Terms of Use</a><span aria-hidden="true"> · </span><a href="' . student_e(student_legal_url('privacy')) . '" class="student-auth-link text-decoration-none">Privacy Notice</a>';
+}
+
+function render_student_cookie_banner(): void
+{
+    ?>
+    <aside class="student-cookie-banner" data-student-cookie-banner role="status" aria-label="Cookie notice" hidden>
+        <div class="student-cookie-copy">
+            <span class="material-symbols-outlined" aria-hidden="true">cookie</span>
+            <p><strong>Essential cookies</strong><br>CLINiQ uses necessary cookies for secure login, sessions, and device preferences. By continuing, you acknowledge this use. See our <a href="<?= student_e(student_legal_url('privacy')) ?>" class="student-auth-link">Privacy Notice</a>.</p>
+        </div>
+        <button type="button" class="student-button student-cookie-dismiss" data-student-cookie-dismiss>Got it</button>
+    </aside>
+    <script>
+        (() => {
+            const banner = document.querySelector('[data-student-cookie-banner]');
+            if (!banner) return;
+            const cookieName = 'cliniq_cookie_notice=';
+            const acknowledged = document.cookie.split(';').some((cookie) => cookie.trim().startsWith(cookieName));
+            if (!acknowledged) banner.hidden = false;
+            banner.querySelector('[data-student-cookie-dismiss]')?.addEventListener('click', () => {
+                document.cookie = 'cliniq_cookie_notice=acknowledged; Max-Age=31536000; Path=/; SameSite=Lax';
+                banner.hidden = true;
+            });
+        })();
+    </script>
+    <?php
+}
+
+function student_remember_cookie_name(): string
+{
+    return 'cliniq_student_device';
+}
+
+function student_forget_device(): void
+{
+    $token = (string) ($_COOKIE[student_remember_cookie_name()] ?? '');
+    if ($token !== '') {
+        $stmt = auth_db()->prepare('UPDATE student_remembered_devices SET revoked_at = NOW() WHERE token_hash = ?');
+        $stmt->execute([hash('sha256', $token)]);
+    }
+    setcookie(student_remember_cookie_name(), '', time() - 3600, '/', '', true, true);
+}
+
+function student_remember_device(int $accountId): void
+{
+    $token = bin2hex(random_bytes(32));
+    $stmt = auth_db()->prepare('INSERT INTO student_remembered_devices (account_id, token_hash, user_agent, expires_at) VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL 30 DAY))');
+    $stmt->execute([$accountId, hash('sha256', $token), substr((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 512)]);
+    setcookie(student_remember_cookie_name(), $token, [
+        'expires' => time() + 30 * 86400,
+        'path' => '/',
+        'secure' => true,
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
+}
+
+function student_restore_remembered_session(): bool
+{
+    if (!empty($_SESSION['patient_person_id'])) {
+        return true;
+    }
+    $token = (string) ($_COOKIE[student_remember_cookie_name()] ?? '');
+    if ($token === '') {
+        return false;
+    }
+    $stmt = auth_db()->prepare('SELECT d.device_id, a.id AS account_id, a.account_status, p.id AS person_id FROM student_remembered_devices d JOIN accounts a ON a.id = d.account_id JOIN people p ON p.id = a.person_id JOIN patients pt ON pt.person_id = p.id JOIN students s ON s.person_id = p.id WHERE d.token_hash = ? AND d.revoked_at IS NULL AND d.expires_at > NOW() LIMIT 1');
+    $stmt->execute([hash('sha256', $token)]);
+    $device = $stmt->fetch();
+    if (!$device || $device['account_status'] !== 'active') {
+        student_forget_device();
+        return false;
+    }
+    $_SESSION['patient_account_id'] = (int) $device['account_id'];
+    $_SESSION['patient_person_id'] = (int) $device['person_id'];
+    $update = auth_db()->prepare('UPDATE student_remembered_devices SET last_used_at = NOW() WHERE device_id = ?');
+    $update->execute([(int) $device['device_id']]);
+    return true;
+}
+
 function student_find_patient_by_number(string $studentNumber): ?array
 {
     $stmt = auth_db()->prepare('
@@ -414,6 +502,9 @@ function render_student_header(string $title, string $active = ''): void
         <link rel="apple-touch-icon" href="<?= student_e($clinicLogoSrc) ?>">
         <link href="../public/assets/vendor/fonts/inter-manrope.css?v=offline-1" rel="stylesheet">
         <link href="../public/assets/vendor/fonts/material-symbols.css?v=offline-1" rel="stylesheet">
+        <script>
+            try { if (localStorage.getItem('cliniq-student-dark-mode') === '1') document.documentElement.classList.add('student-dark'); } catch (error) {}
+        </script>
         <script src="../public/assets/vendor/tailwind/tailwind-cdn.js?v=offline-1"></script>
         <script>
             tailwind.config = {
@@ -512,7 +603,7 @@ function render_student_header(string $title, string $active = ''): void
 
                 <div class="student-profile-chip">
                     <?php if (empty($profile['first_registration'])): ?>
-                        <button type="button" class="student-profile-photo" data-profile-photo-open="patient-profile-photo-modal" title="Change profile picture" aria-label="Change profile picture">
+                        <button type="button" class="student-profile-photo" data-account-menu-trigger aria-expanded="false" aria-controls="student-account-menu" title="Open account menu" aria-label="Open account menu">
                             <?php if ($profilePhotoSrc !== null): ?>
                                 <img src="<?= student_e($profilePhotoSrc) ?>" alt="<?= student_e($profile['name']) ?> profile picture">
                             <?php else: ?>
@@ -540,10 +631,14 @@ function render_student_header(string $title, string $active = ''): void
                 <?php if (empty($profile['first_registration'])): ?>
                     <details class="student-mobile-account">
                         <summary class="student-mobile-account-toggle" aria-label="Open account menu">
-                            <span class="material-symbols-outlined" aria-hidden="true">account_circle</span>
+                            <?php if ($profilePhotoSrc !== null): ?>
+                                <img class="student-mobile-account-avatar" src="<?= student_e($profilePhotoSrc) ?>" alt="<?= student_e($profile['name']) ?> profile picture">
+                            <?php else: ?>
+                                <span class="student-mobile-account-avatar"><?= student_e(student_initials($profile['name'])) ?></span>
+                            <?php endif; ?>
                             <span class="sr-only">Account menu</span>
                         </summary>
-                        <div class="student-mobile-account-menu">
+                        <div id="student-account-menu" class="student-mobile-account-menu">
                             <div class="student-mobile-account-identity">
                                 <?php if ($profilePhotoSrc !== null): ?>
                                     <img src="<?= student_e($profilePhotoSrc) ?>" alt="<?= student_e($profile['name']) ?> profile picture">
@@ -562,6 +657,20 @@ function render_student_header(string $title, string $active = ''): void
                             <button type="button" class="student-mobile-account-action" onclick="document.getElementById('change-password-modal').classList.remove('hidden')">
                                 <span class="material-symbols-outlined" aria-hidden="true">key</span>
                                 Change password
+                            </button>
+                            <form method="POST" action="patient-login.php" class="student-mobile-account-form">
+                                <input type="hidden" name="_csrf" value="<?= student_e(csrf_token()) ?>">
+                                <input type="hidden" name="action" value="forget_device">
+                                <input type="hidden" name="return_to" value="dashboard">
+                                <button type="submit" class="student-mobile-account-action">
+                                    <span class="material-symbols-outlined" aria-hidden="true">phonelink_erase</span>
+                                    Forget this device
+                                </button>
+                            </form>
+                            <button type="button" class="student-mobile-account-action" data-student-theme-toggle aria-pressed="false">
+                                <span class="material-symbols-outlined" aria-hidden="true">dark_mode</span>
+                                <span data-student-theme-label>Dark mode</span>
+                                <span class="student-theme-switch" aria-hidden="true"><span class="student-theme-switch-thumb"></span></span>
                             </button>
                             <a href="patient-login.php?logout=1" onclick="localStorage.clear();" class="student-mobile-account-action is-danger text-decoration-none">
                                 <span class="material-symbols-outlined" aria-hidden="true">logout</span>
@@ -625,7 +734,9 @@ function render_student_footer(): void
                     </a>
                 <?php endforeach; ?>
             </nav>
+            <p class="text-center text-xs font-bold text-slate-500 py-5">Your clinic portal privacy information: <?= student_legal_links() ?></p>
         </div>
+        <?php render_student_cookie_banner(); ?>
 
         <div id="patient-profile-photo-modal" class="profile-photo-modal" role="dialog" aria-modal="true" aria-labelledby="patient-profile-photo-title" hidden>
             <div class="profile-photo-dialog">
@@ -890,20 +1001,48 @@ function render_student_footer(): void
             (() => {
                 const accountMenu = document.querySelector('.student-mobile-account');
                 const accountToggle = accountMenu?.querySelector('.student-mobile-account-toggle');
+                const desktopAccountTrigger = document.querySelector('[data-account-menu-trigger]');
                 if (!accountMenu || !accountToggle) return;
 
+                const setAccountMenuState = (open) => {
+                    accountMenu.open = open;
+                    desktopAccountTrigger?.setAttribute('aria-expanded', open ? 'true' : 'false');
+                };
+                desktopAccountTrigger?.addEventListener('click', () => setAccountMenuState(!accountMenu.open));
+
                 document.addEventListener('click', (event) => {
-                    if (accountMenu.open && !accountMenu.contains(event.target)) {
-                        accountMenu.open = false;
+                    if (accountMenu.open && !accountMenu.contains(event.target) && !desktopAccountTrigger?.contains(event.target)) {
+                        setAccountMenuState(false);
                     }
                 });
                 document.addEventListener('keydown', (event) => {
                     if (event.key === 'Escape' && accountMenu.open) {
-                        accountMenu.open = false;
-                        accountToggle.focus();
+                        setAccountMenuState(false);
+                        (desktopAccountTrigger || accountToggle)?.focus();
                     }
                 });
             })();
+
+            const studentThemeKey = 'cliniq-student-dark-mode';
+            const studentThemeRoot = document.documentElement;
+            const studentThemeButtons = document.querySelectorAll('[data-student-theme-toggle]');
+            const syncStudentThemeControls = () => {
+                const enabled = studentThemeRoot.classList.contains('student-dark');
+                studentThemeButtons.forEach((button) => {
+                    button.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+                    const label = button.querySelector('[data-student-theme-label]');
+                    if (label) label.textContent = enabled ? 'Light mode' : 'Dark mode';
+                    const icon = button.querySelector('.material-symbols-outlined');
+                    if (icon) icon.textContent = enabled ? 'light_mode' : 'dark_mode';
+                });
+            };
+            studentThemeButtons.forEach((button) => button.addEventListener('click', () => {
+                const enabled = !studentThemeRoot.classList.contains('student-dark');
+                studentThemeRoot.classList.toggle('student-dark', enabled);
+                try { localStorage.setItem(studentThemeKey, enabled ? '1' : '0'); } catch (error) {}
+                syncStudentThemeControls();
+            }));
+            syncStudentThemeControls();
 
             const profilePhotoMotionMs = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 240;
 
@@ -1060,20 +1199,10 @@ function render_student_footer(): void
         <script src="../public/assets/js/file-preview.js?v=ape-popup-2"></script>
         <script>
             document.querySelectorAll('[data-student-toast]').forEach((toast) => {
-                const syncClearance = () => {
-                    document.body.classList.add('has-student-toast');
-                    document.documentElement.style.setProperty('--student-toast-clearance', `${Math.ceil(toast.getBoundingClientRect().height) + 24}px`);
-                };
                 const dismiss = () => {
                     toast.remove();
-                    if (!document.querySelector('[data-student-toast]')) {
-                        document.body.classList.remove('has-student-toast');
-                        document.documentElement.style.removeProperty('--student-toast-clearance');
-                    }
                 };
                 toast.querySelector('.student-toast-dismiss')?.addEventListener('click', dismiss);
-                requestAnimationFrame(syncClearance);
-                new ResizeObserver(syncClearance).observe(toast);
                 const url = new URL(window.location.href);
                 ['uploaded', 'activated', 'password_reset'].forEach((key) => url.searchParams.delete(key));
                 if (url.href !== window.location.href) history.replaceState({}, document.title, url);
@@ -1103,6 +1232,9 @@ function render_student_auth_header(string $title): void
         <link rel="apple-touch-icon" href="<?= student_e($clinicLogoSrc) ?>">
         <link href="../public/assets/vendor/fonts/inter-manrope.css?v=offline-1" rel="stylesheet">
         <link href="../public/assets/vendor/fonts/material-symbols.css?v=offline-1" rel="stylesheet">
+        <script>
+            try { if (localStorage.getItem('cliniq-student-dark-mode') === '1') document.documentElement.classList.add('student-dark'); } catch (error) {}
+        </script>
         <script src="../public/assets/vendor/tailwind/tailwind-cdn.js?v=offline-1"></script>
         <script>
             tailwind.config = {
@@ -1157,22 +1289,14 @@ function render_student_auth_header(string $title): void
 function render_student_auth_footer(): void
 {
     ?>
+    <p class="text-center text-xs font-bold text-slate-500 py-5"><?= student_legal_links() ?></p>
+    <?php render_student_cookie_banner(); ?>
     <script>
         document.querySelectorAll('[data-student-toast]').forEach((toast) => {
-            const syncClearance = () => {
-                document.body.classList.add('has-student-toast');
-                document.documentElement.style.setProperty('--student-toast-clearance', `${Math.ceil(toast.getBoundingClientRect().height) + 24}px`);
-            };
             const dismiss = () => {
                 toast.remove();
-                if (!document.querySelector('[data-student-toast]')) {
-                    document.body.classList.remove('has-student-toast');
-                    document.documentElement.style.removeProperty('--student-toast-clearance');
-                }
             };
             toast.querySelector('.student-toast-dismiss')?.addEventListener('click', dismiss);
-            requestAnimationFrame(syncClearance);
-            new ResizeObserver(syncClearance).observe(toast);
             const url = new URL(window.location.href);
             ['uploaded', 'activated', 'password_reset'].forEach((key) => url.searchParams.delete(key));
             if (url.href !== window.location.href) history.replaceState({}, document.title, url);

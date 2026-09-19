@@ -17,7 +17,8 @@ if (!empty($profile['first_registration'])) {
         try {
             complete_first_registration(
                 (string) ($_POST['password'] ?? ''),
-                (string) ($_POST['confirm_password'] ?? '')
+                (string) ($_POST['confirm_password'] ?? ''),
+                ($_POST['legal_acknowledgement'] ?? '') === '1'
             );
             header('Location: patient-dashboard.php?activated=1');
             exit;
@@ -32,7 +33,6 @@ if (!empty($profile['first_registration'])) {
         <div>
             <p class="student-eyebrow">First Registration</p>
             <h1 class="student-title">Welcome, <?= student_e($profile['first_name']) ?></h1>
-            <p class="student-subtitle">Create your permanent password to activate your CLINiQ account. Portal features follow the Applicant or Official access assigned by the clinic.</p>
         </div>
         <span class="student-badge student-badge-warning">
             <span class="material-symbols-outlined text-[14px]">lock</span>
@@ -69,6 +69,7 @@ if (!empty($profile['first_registration'])) {
                 <input id="confirm-password" name="confirm_password" class="student-input" type="password" minlength="8" autocomplete="new-password" required>
             </div>
             <p class="student-card-copy text-[11px]">Use at least 8 characters with at least one number.</p>
+            <label class="flex items-start gap-3 text-xs font-bold text-slate-600"><input class="mt-0.5" type="checkbox" name="legal_acknowledgement" value="1" required><span>I have read and acknowledge the <a href="<?= student_e(student_legal_url('terms')) ?>" target="_blank" rel="noopener" class="student-auth-link">Terms of Use</a> and <a href="<?= student_e(student_legal_url('privacy')) ?>" target="_blank" rel="noopener" class="student-auth-link">Privacy Notice</a>, including how CLINiQ processes health information.</span></label>
             <button type="submit" class="student-button w-full">
                 Activate Account
                 <span class="material-symbols-outlined">verified_user</span>
@@ -107,7 +108,6 @@ if (re_enrollment_pending()) {
         <div>
             <p class="student-eyebrow">New School Year</p>
             <h1 class="student-title">Update your enrollment status</h1>
-            <p class="student-subtitle">The clinic has started a new school year. Submit your current status to continue to your health portal.</p>
         </div>
         <span class="student-badge student-badge-warning">
             <span class="material-symbols-outlined text-[14px]">how_to_reg</span>
@@ -320,6 +320,47 @@ $apeActionCopy = match (true) {
     $apeStatus === 'Reviewed' => $apeNote ?: 'Your examination and documents are complete and awaiting the clinic\'s final decision.',
     default => $apeNote ?: ($latestApe ? 'Complete the current APE step in your APE status page.' : 'Start your APE record with the clinic.'),
 };
+$apePhaseLabel = match (true) {
+    !$latestApe => 'Not Started',
+    ($latestApe['clearance_status'] ?? '') === 'Cleared' => 'Completed',
+    !empty($latestApe['exam_date']) => 'Examination',
+    default => ape_record_stage_label($latestApe),
+};
+$apePhaseStatus = match (true) {
+    !$latestApe => 'Not Started',
+    ($latestApe['clearance_status'] ?? '') === 'Cleared' => 'Completed',
+    !empty($latestApe['exam_date']) => 'Completed',
+    $apeRequirementsNeedCorrection => 'Correction Needed',
+    $apeStatus === 'Follow-up Required' => 'Follow-up Required',
+    $apeQueue === 'digital_submission' && $apeDocumentsAwaitingReview => 'Under Clinic Review',
+    $apeQueue === 'examination' && $hasScheduledApeBatch => 'Scheduled',
+    $apeQueue === 'examination' => 'Waiting for Schedule',
+    default => $apeStatus,
+};
+$apeActionStatus = match (true) {
+    !$latestApe => 'Not Started',
+    ($latestApe['clearance_status'] ?? '') === 'Cleared' => 'Complete',
+    $apeRequirementsNeedCorrection => 'Needs Correction',
+    $apeQueue === 'digital_submission' && !$apeAllDocumentsUploaded => 'Upload Required',
+    $apeQueue === 'digital_submission' && $apeDocumentsAwaitingReview => 'Under Review',
+    $apeQueue === 'digital_submission' => 'Documents Complete',
+    $apeQueue === 'examination' && $hasScheduledApeBatch => 'Scheduled',
+    $apeQueue === 'examination' => 'Waiting for Schedule',
+    $apeQueue === 'follow_up' => 'Follow-up Required',
+    default => 'In Progress',
+};
+$apePhaseBadgeClass = match ($apePhaseStatus) {
+    'Completed' => 'student-badge-success',
+    'Correction Needed', 'Follow-up Required' => 'student-badge-danger',
+    'Scheduled', 'Under Clinic Review' => 'student-badge-info',
+    default => 'student-badge-warning',
+};
+$apeActionBadgeClass = match ($apeActionStatus) {
+    'Complete', 'Documents Complete' => 'student-badge-success',
+    'Needs Correction', 'Follow-up Required' => 'student-badge-danger',
+    'Under Review', 'Scheduled' => 'student-badge-info',
+    default => 'student-badge-warning',
+};
 $passportMissing = [];
 if (empty($profile['blood_type']) || $profile['blood_type'] === 'Unknown') {
     $passportMissing[] = 'blood type';
@@ -385,12 +426,19 @@ render_student_header('Dashboard', 'dashboard');
     </div>
 <?php endif; ?>
 
+<?php if (isset($_GET['device_forgotten'])): ?>
+    <div class="student-note student-note-success student-toast" data-student-toast role="status" aria-live="polite">
+        <span class="material-symbols-outlined">verified_user</span>
+        <div>This device has been forgotten. You will stay signed in here, but future visits will require your password.</div>
+        <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+    </div>
+<?php endif; ?>
+
 <section class="student-card student-card-pad mb-4 student-dashboard-welcome" aria-label="Patient dashboard overview">
 <div class="student-page-header">
     <div>
         <p class="student-eyebrow">Patient Health Portal</p>
         <h1 class="student-title">Welcome back, <?= student_e($profile['first_name']) ?></h1>
-        <p class="student-subtitle">Track your APE requirements, clinic notes, and appointment requests in one place.</p>
     </div>
     <span class="student-badge <?= $isOfficialAccess ? 'student-badge-success' : 'student-badge-warning' ?>">
         <span class="material-symbols-outlined text-[14px]"><?= $isOfficialAccess ? 'verified' : 'hourglass_top' ?></span>
@@ -405,13 +453,6 @@ render_student_header('Dashboard', 'dashboard');
     </a>
 <?php endif; ?>
 </section>
-
-<?php if (!$isOfficialAccess): ?>
-    <div class="student-note student-note-warning mb-4" role="status">
-        <span class="material-symbols-outlined">lock_clock</span>
-        <div><strong>Applicant access</strong><br>Complete your APE and receive final clinic clearance to unlock your Health Passport and appointment booking.</div>
-    </div>
-<?php endif; ?>
 
 <?php if (!$isOfficialAccess): ?>
     <div class="student-note student-note-warning mb-4" role="status">
@@ -580,11 +621,8 @@ render_student_header('Dashboard', 'dashboard');
                 <span class="student-label">Email</span>
                 <p class="text-sm font-black text-primary mb-0"><?= student_e($profile['email']) ?></p>
             </div>
-            <div>
-                <span class="student-label">Portal Access</span>
-                <p class="text-sm font-black text-[#17261d] mb-0"><?= student_e($profile['access_status']) ?></p>
-            </div>
         </div>
+
     </section>
     </details>
     </div>
@@ -595,7 +633,7 @@ render_student_header('Dashboard', 'dashboard');
                 <h2 class="student-card-title">APE Progress</h2>
                 <p class="student-card-copy">Your current clearance path</p>
             </div>
-            <span class="student-badge <?= student_e($apeBadgeClass) ?>"><?= student_e($latestApe ? ape_record_stage_label($latestApe) : $apeStatus) ?></span>
+            <span class="student-badge <?= student_e($apeBadgeClass) ?>"><?= student_e($apePhaseLabel) ?></span>
         </div>
         <div class="student-card-pad">
             <div class="flex items-end justify-between mb-3">
@@ -609,16 +647,16 @@ render_student_header('Dashboard', 'dashboard');
                 <div class="student-progress-step">
                     <span class="student-progress-step-icon material-symbols-outlined">task_alt</span>
                     <div>
-                        <strong><?= ($latestApe['clearance_status'] ?? '') === 'Cleared' ? 'Completed APE' : 'Current APE Phase' ?></strong>
+                        <strong><?= student_e($apePhaseLabel) ?></strong>
                     </div>
-                    <span class="student-badge <?= student_e($apeBadgeClass) ?>"><?= student_e($latestApe['clearance_status'] ?? 'Pending') ?></span>
+                    <span class="student-badge <?= student_e($apePhaseBadgeClass) ?>"><?= student_e($apePhaseStatus) ?></span>
                 </div>
                 <div class="student-progress-step">
                     <span class="student-progress-step-icon material-symbols-outlined">cloud_upload</span>
                     <div>
-                        <strong>Required action</strong>
+                        <strong><?= student_e($apeActionTitle) ?></strong>
                     </div>
-                    <span class="student-badge <?= student_e($apeBadgeClass) ?>"><?= student_e($latestApe['verification_status'] ?? 'Pending') ?></span>
+                    <span class="student-badge <?= student_e($apeActionBadgeClass) ?>"><?= student_e($apeActionStatus) ?></span>
                 </div>
             </div>
             <?php if (!$hasScheduledApeBatch && $latestApe && ($latestApe['clearance_status'] ?? '') !== 'Cleared'): ?>
@@ -630,7 +668,7 @@ render_student_header('Dashboard', 'dashboard');
         </div>
     </section>
 
-    <section class="student-card student-span-4<?= $isOfficialAccess ? ' student-clickable-card' : '' ?> student-dashboard-duplicate"<?= $isOfficialAccess ? ' data-href="patient-appointment.php" role="link" tabindex="0" aria-label="Open appointment page"' : ' aria-label="Appointments locked for Applicant access"' ?>>
+    <section class="student-card student-span-4<?= $isOfficialAccess ? ' student-clickable-card' : '' ?> student-dashboard-duplicate student-dashboard-appointment-card"<?= $isOfficialAccess ? ' data-href="patient-appointment.php" role="link" tabindex="0" aria-label="Open appointment page"' : ' aria-label="Appointments locked for Applicant access"' ?>>
         <div class="student-card-header">
             <div>
                 <h2 class="student-card-title">Appointment</h2>

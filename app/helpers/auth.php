@@ -4,6 +4,7 @@ require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/env.php';
 require_once __DIR__ . '/../services/AuditLog.php';
 require_once __DIR__ . '/../services/ProfilePhoto.php';
+require_once __DIR__ . '/../services/SystemSettings.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     $configuredAppUrl = (string) env_value('APP_URL', '');
@@ -98,7 +99,7 @@ function begin_first_registration(array $account): string
     return $portal;
 }
 
-function complete_first_registration(string $password, string $confirmPassword): void
+function complete_first_registration(string $password, string $confirmPassword, bool $legalAcknowledgement = false): void
 {
     $context = first_registration_context();
     if ($context === null) {
@@ -112,6 +113,9 @@ function complete_first_registration(string $password, string $confirmPassword):
     }
     if ($password !== $confirmPassword) {
         throw new InvalidArgumentException('Passwords do not match.');
+    }
+    if (!$legalAcknowledgement) {
+        throw new InvalidArgumentException('You must review and acknowledge the Terms of Use and Privacy Notice before activating your account.');
     }
 
     $authDb = auth_db();
@@ -153,6 +157,11 @@ function complete_first_registration(string $password, string $confirmPassword):
         ]);
         $authDb->commit();
         unset($_SESSION['first_registration']);
+        audit_log_event('privacy', 'student_legal_acknowledged', (int) $context['person_id'], 'student', 'account', (int) $context['account_id'], [
+            'terms_version' => cliniq_legal_documents()['version'],
+            'privacy_notice_version' => cliniq_legal_documents()['version'],
+            'source' => 'first-registration',
+        ]);
     } catch (Throwable $e) {
         if ($authDb->inTransaction()) {
             $authDb->rollBack();

@@ -140,6 +140,292 @@ body.has-active-alerts::after {
     }
 }
 
+/* ============================================================
+   DARK THEME CONTRAST OVERRIDES
+   Keep hard-coded utility classes and inline page styles readable
+   when the clinic theme is switched to dark mode.
+   ============================================================ */
+html.cliniq-dark,
+html.cliniq-dark body {
+    color: #e8f2ea !important;
+    background: var(--cliniq-background) !important;
+}
+
+html.cliniq-dark .app-shell,
+html.cliniq-dark .app-main,
+html.cliniq-dark .app-content,
+html.cliniq-dark .app-topbar,
+html.cliniq-dark .app-sidebar,
+html.cliniq-dark .app-sidebar-footer,
+html.cliniq-dark .settings-shell,
+html.cliniq-dark .settings-panel,
+html.cliniq-dark .settings-section,
+html.cliniq-dark .settings-logo-preview-card,
+html.cliniq-dark .settings-logo-controls,
+html.cliniq-dark .clinic-card,
+html.cliniq-dark .modal-content {
+    color: #e8f2ea !important;
+    background-color: var(--cliniq-card) !important;
+    border-color: var(--cliniq-border) !important;
+}
+
+html.cliniq-dark .app-sidebar,
+html.cliniq-dark .app-sidebar-footer {
+    background-color: color-mix(in srgb, var(--cliniq-primary) 5%, var(--cliniq-background)) !important;
+}
+
+html.cliniq-dark .app-content,
+html.cliniq-dark .app-main {
+    background-color: var(--cliniq-background) !important;
+}
+
+html.cliniq-dark .app-brand-title,
+html.cliniq-dark .app-brand-subtitle,
+html.cliniq-dark .app-nav-link,
+html.cliniq-dark .app-nav-link .material-symbols-outlined,
+html.cliniq-dark .app-nav-label,
+html.cliniq-dark .app-user-copy,
+html.cliniq-dark .app-user-copy strong,
+html.cliniq-dark .app-user-label,
+html.cliniq-dark .app-content h1,
+html.cliniq-dark .app-content h2,
+html.cliniq-dark .app-content h3,
+html.cliniq-dark .app-content h4,
+html.cliniq-dark .settings-panel h1,
+html.cliniq-dark .settings-panel h2,
+html.cliniq-dark .settings-panel h3,
+html.cliniq-dark .settings-panel h4,
+html.cliniq-dark .settings-section strong,
+html.cliniq-dark .settings-section label,
+html.cliniq-dark .settings-theme-option,
+html.cliniq-dark .settings-theme-option span,
+html.cliniq-dark .settings-theme-option strong,
+html.cliniq-dark .settings-dark-mode-row strong,
+html.cliniq-dark .settings-dark-mode-row small {
+    color: #e8f2ea !important;
+}
+
+html.cliniq-dark .app-nav-link:hover,
+html.cliniq-dark .app-nav-link.active,
+html.cliniq-dark .app-mobile-nav-link.active,
+html.cliniq-dark .settings-tab-link.active {
+    color: #ffffff !important;
+    background-color: #245f36 !important;
+}
+
+html.cliniq-dark .app-nav-link:hover .material-symbols-outlined,
+html.cliniq-dark .app-nav-link.active .material-symbols-outlined {
+    color: #ffffff !important;
+}
+
+html.cliniq-dark .app-search,
+html.cliniq-dark .app-search input,
+html.cliniq-dark .settings-input,
+html.cliniq-dark .settings-textarea,
+html.cliniq-dark .clinic-input,
+html.cliniq-dark .clinic-select,
+html.cliniq-dark .clinic-textarea {
+    color: #e8f2ea !important;
+    background-color: var(--cliniq-surface) !important;
+    border-color: #4b6d55 !important;
+}
+
+html.cliniq-dark .app-search input::placeholder,
+html.cliniq-dark .settings-input::placeholder,
+html.cliniq-dark .settings-textarea::placeholder,
+html.cliniq-dark .clinic-input::placeholder,
+html.cliniq-dark .clinic-textarea::placeholder {
+    color: #9db2a2 !important;
+}
+
+html.cliniq-dark .settings-theme-option,
+html.cliniq-dark .settings-dark-mode-row,
+html.cliniq-dark .settings-logo-dropzone {
+    background: var(--cliniq-card) !important;
+    color: #e8f2ea !important;
+    border-color: #3f6049 !important;
+}
+
+html.cliniq-dark .settings-theme-option:hover,
+html.cliniq-dark .settings-theme-option.active,
+html.cliniq-dark .settings-theme-option:has(input:checked) {
+    background: var(--cliniq-primary-fixed) !important;
+    border-color: var(--cliniq-primary) !important;
+    color: #ffffff !important;
+}
+
+html.cliniq-dark .settings-theme-option .material-symbols-outlined,
+html.cliniq-dark .settings-theme-option input:checked + * {
+    color: #ffffff !important;
+}
+
+html.cliniq-dark .app-content .bg-white,
+html.cliniq-dark .app-content [class*="bg-white"],
+html.cliniq-dark .app-content [class*="bg-slate-50"],
+html.cliniq-dark .app-content [class*="bg-gray-50"] {
+    background-color: var(--cliniq-card) !important;
+}
+
+html.cliniq-dark .app-content [class*="text-[#17261d]"],
+html.cliniq-dark .app-content [class*="text-slate-"],
+html.cliniq-dark .app-content [class*="text-gray-"],
+html.cliniq-dark .app-content [class*="text-zinc-"] {
+    color: #dcebe0 !important;
+}
+
+html.cliniq-dark .app-content [class*="border-slate-"],
+html.cliniq-dark .app-content [class*="border-gray-"],
+html.cliniq-dark .app-content [class*="border-[#"] {
+    border-color: #3b5945 !important;
+}
+
+html.cliniq-dark .app-content table,
+html.cliniq-dark .app-content th,
+html.cliniq-dark .app-content td,
+html.cliniq-dark .app-content .settings-field,
+html.cliniq-dark .app-content .settings-help {
+    color: #dcebe0 !important;
+    border-color: #3b5945 !important;
+}
+
+html.cliniq-dark .app-user-menu-popover,
+html.cliniq-dark .app-user-menu-popover a,
+html.cliniq-dark .app-user-menu-popover button {
+    color: #e8f2ea !important;
+    background-color: var(--cliniq-card) !important;
+    border-color: #3b5945 !important;
+}
+
+html.cliniq-dark .portal-card,
+html.cliniq-dark .portal-option,
+html.cliniq-dark .visit-card {
+    color: #e8f2ea !important;
+    background: var(--cliniq-card) !important;
+    border-color: #3b5945 !important;
+}
+
+html.cliniq-dark .visit-input,
+html.cliniq-dark .visit-input::placeholder {
+    color: #e8f2ea !important;
+    border-color: #4b6d55 !important;
+}
+
+/* Clinic-wide dark mode: controlled by authorized staff in Settings. */
+html.cliniq-dark {
+    --cliniq-background: color-mix(in srgb, var(--cliniq-primary) 10%, #07100a);
+    --cliniq-foreground: #e6f1e8;
+    --cliniq-card: color-mix(in srgb, var(--cliniq-primary) 16%, #0d1810);
+    --cliniq-secondary: color-mix(in srgb, var(--cliniq-primary) 19%, #101d14);
+    --cliniq-muted: color-mix(in srgb, var(--cliniq-primary) 22%, #132117);
+    --cliniq-muted-foreground: #a9b9ad;
+    --cliniq-border: color-mix(in srgb, var(--cliniq-primary) 30%, #1e3023);
+    --cliniq-surface: color-mix(in srgb, var(--cliniq-primary) 11%, #0b150e);
+    --cliniq-surface-low: color-mix(in srgb, var(--cliniq-primary) 22%, #122319);
+    --cliniq-outline: color-mix(in srgb, var(--cliniq-primary) 48%, #263d2c);
+    --cliniq-primary-fixed: color-mix(in srgb, var(--cliniq-primary) 46%, #102117);
+    --cliniq-accent: color-mix(in srgb, var(--cliniq-primary) 34%, #112219);
+    color-scheme: dark;
+}
+
+html.cliniq-dark body { background: var(--cliniq-background); color: var(--cliniq-foreground); }
+html.cliniq-dark .app-shell,
+html.cliniq-dark .app-main,
+html.cliniq-dark .app-content,
+html.cliniq-dark .auth-main { background: var(--cliniq-background); color: var(--cliniq-foreground); }
+html.cliniq-dark .app-topbar,
+html.cliniq-dark .app-sidebar,
+html.cliniq-dark .app-user-menu-popover,
+html.cliniq-dark .modal-content,
+html.cliniq-dark .settings-panel,
+html.cliniq-dark .settings-section,
+html.cliniq-dark .card,
+html.cliniq-dark .clinic-card { background: var(--cliniq-card); color: var(--cliniq-foreground); border-color: var(--cliniq-border); }
+html.cliniq-dark input,
+html.cliniq-dark select,
+html.cliniq-dark textarea,
+html.cliniq-dark .app-search { background: var(--cliniq-surface); color: var(--cliniq-foreground); border-color: var(--cliniq-outline); }
+html.cliniq-dark table th { background: var(--cliniq-muted); color: var(--cliniq-foreground); }
+html.cliniq-dark table td { border-color: var(--cliniq-border); }
+html.cliniq-dark .portal-card,
+html.cliniq-dark .portal-option,
+html.cliniq-dark .visit-card { background: var(--cliniq-card); color: var(--cliniq-foreground); border-color: var(--cliniq-border); }
+html.cliniq-dark .visit-input { color: var(--cliniq-foreground); border-color: var(--cliniq-outline); }
+html.cliniq-dark .visit-input::placeholder { color: var(--cliniq-muted-foreground); }
+html.cliniq-dark .text-slate-500,
+html.cliniq-dark .text-slate-600,
+html.cliniq-dark .settings-help { color: var(--cliniq-muted-foreground) !important; }
+
+.settings-dark-mode-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 1.25rem;
+    padding: 1rem 1.1rem;
+    border: 1px solid var(--cliniq-outline);
+    border-radius: .8rem;
+    background: var(--cliniq-surface-low);
+}
+.settings-dark-mode-row span { display: grid; gap: .2rem; }
+.settings-dark-mode-row strong { color: var(--cliniq-foreground); font-size: .9rem; }
+.settings-dark-mode-row small { color: var(--cliniq-muted-foreground); font-size: .75rem; }
+.settings-dark-mode-row { position: relative; }
+.settings-dark-mode-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+.settings-theme-switch {
+    position: relative;
+    display: inline-flex !important;
+    flex: 0 0 48px;
+    width: 48px;
+    height: 28px;
+    align-items: center;
+    padding: 2px;
+    border: 1px solid var(--cliniq-outline);
+    border-radius: 999px;
+    background: var(--cliniq-surface-low);
+    box-sizing: border-box;
+    transition: background .2s ease, border-color .2s ease;
+}
+.settings-theme-switch-thumb {
+    display: block !important;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--cliniq-muted-foreground);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .2);
+    gap: 0 !important;
+    transition: background .2s ease, transform .2s ease;
+}
+.settings-dark-mode-input:checked + .settings-theme-switch {
+    border-color: var(--cliniq-primary);
+    background: var(--cliniq-primary);
+}
+.settings-dark-mode-input:checked + .settings-theme-switch .settings-theme-switch-thumb {
+    background: #fff;
+    transform: translateX(20px);
+}
+.settings-dark-mode-input:focus-visible + .settings-theme-switch {
+    outline: 3px solid color-mix(in srgb, var(--cliniq-primary) 35%, transparent);
+    outline-offset: 3px;
+}
+@media (max-width: 640px) {
+    .settings-dark-mode-row { align-items: flex-start; gap: .75rem; }
+    .settings-dark-mode-row > span:first-child { min-width: 0; }
+    .settings-dark-mode-row small { line-height: 1.35; }
+    .settings-theme-switch { flex-basis: 44px; width: 44px; height: 26px; }
+    .settings-theme-switch-thumb { width: 20px; height: 20px; }
+    .settings-dark-mode-input:checked + .settings-theme-switch .settings-theme-switch-thumb { transform: translateX(18px); }
+}
+
 * {
     scrollbar-color: #cbd8ce transparent;
     scrollbar-width: thin;
@@ -984,6 +1270,106 @@ h6,
     .profile-photo-stage {
         transition: none;
     }
+}
+
+/* Profile photo modal dark-mode contract. The modal is rendered at body level,
+   so keep this scoped to the theme root instead of .app-content. */
+html.cliniq-dark .profile-photo-modal {
+    background: rgba(4, 13, 8, 0.78);
+}
+
+html.cliniq-dark .profile-photo-dialog {
+    border-color: #4d735a;
+    background: #172a20;
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+}
+
+html.cliniq-dark .profile-photo-dialog-header {
+    border-bottom: 1px solid #365742;
+    padding-bottom: 1rem;
+}
+
+html.cliniq-dark .profile-photo-dialog-header h3,
+html.cliniq-dark .profile-photo-confirmation h4 {
+    color: #e6f2e9;
+}
+
+html.cliniq-dark .profile-photo-eyebrow {
+    color: #67b77d;
+}
+
+html.cliniq-dark .profile-photo-close {
+    border-color: #4d735a;
+    color: #dcebe0;
+    background: #1d3828;
+}
+
+html.cliniq-dark .profile-photo-close:hover,
+html.cliniq-dark .profile-photo-close:focus-visible {
+    color: #ffffff;
+    background: #285239;
+    border-color: #72c38a;
+}
+
+html.cliniq-dark .profile-photo-preview-frame {
+    border-color: #e6f2e9;
+    box-shadow: 0 0 0 1px #4d735a, 0 14px 34px rgba(0, 0, 0, 0.35);
+}
+
+html.cliniq-dark .profile-photo-help {
+    color: #b5c9ba;
+}
+
+html.cliniq-dark .profile-photo-dialog-actions .btn.btn-ghost {
+    border-color: #4d735a;
+    color: #dcebe0;
+    background: #1d3828;
+}
+
+html.cliniq-dark .profile-photo-dialog-actions .btn.btn-ghost:hover,
+html.cliniq-dark .profile-photo-dialog-actions .btn.btn-ghost:focus-visible {
+    color: #ffffff;
+    background: #285239;
+    border-color: #72c38a;
+}
+
+html.cliniq-dark .profile-photo-dialog-actions .btn.btn-primary {
+    color: #ffffff;
+    background: #418b5a;
+    border-color: #418b5a;
+}
+
+html.cliniq-dark .profile-photo-dialog-actions .btn.btn-primary:hover,
+html.cliniq-dark .profile-photo-dialog-actions .btn.btn-primary:focus-visible {
+    color: #ffffff;
+    background: #55a66d;
+    border-color: #55a66d;
+}
+
+html.cliniq-dark .profile-photo-dialog-actions .btn.btn-primary:disabled {
+    color: #8ea998;
+    background: #263b2e;
+    border-color: #3a5442;
+    opacity: 1;
+}
+
+/* Keep the topbar avatar visually consistent with profile avatars. */
+html.cliniq-dark .app-profile-photo {
+    border-color: #f3fbf5;
+    color: #07875f;
+    background: #d9f2e3;
+    box-shadow: 0 0 0 1px #4d735a, 0 5px 14px rgba(0, 0, 0, 0.3);
+}
+
+html.cliniq-dark .app-profile-photo .profile-photo-camera {
+    border-color: #d9f2e3;
+    color: #d9f2e3;
+    background: #1d3828;
+}
+
+html.cliniq-dark .app-profile-photo:hover,
+html.cliniq-dark .app-profile-photo:focus-visible {
+    box-shadow: 0 0 0 3px rgba(114, 195, 138, 0.28), 0 5px 14px rgba(0, 0, 0, 0.3);
 }
 
 .app-user-menu {
@@ -2432,6 +2818,21 @@ textarea:focus {
     justify-self: start;
 }
 
+html.cliniq-dark .settings-alert-sound-upload {
+    background: #142219;
+    border-color: rgba(var(--cliniq-focus-rgb), 0.42);
+    color: var(--cliniq-foreground);
+}
+
+html.cliniq-dark .settings-alert-sound-upload:hover {
+    background: #1b2c21;
+    border-color: var(--cliniq-primary);
+}
+
+html.cliniq-dark .settings-alert-sound-upload strong { color: var(--cliniq-foreground); }
+html.cliniq-dark .settings-alert-sound-upload small,
+html.cliniq-dark .settings-alert-sound-file { color: var(--cliniq-muted-foreground); }
+
 @media (max-width: 720px) {
     .settings-alert-sound-picker {
         grid-template-columns: 1fr;
@@ -3536,10 +3937,60 @@ textarea.record-sheet-field {
 .dashboard-appointments-card {
     height: auto;
     max-height: none;
+    container-type: inline-size;
 }
 
 .dashboard-day-schedule-section {
     min-width: 0;
+}
+
+.dashboard-day-schedule-header {
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.dashboard-day-schedule-heading {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.dashboard-day-schedule-heading-copy {
+    min-width: 0;
+}
+
+.dashboard-day-schedule-heading-copy h2,
+.dashboard-day-schedule-heading-copy p {
+    white-space: nowrap;
+}
+
+.dashboard-day-schedule-actions {
+    flex: 0 0 auto;
+    min-width: 0;
+    margin-left: auto;
+}
+
+@container (max-width: 52rem) {
+    .dashboard-day-schedule-actions {
+        width: 100%;
+        justify-content: flex-end;
+        margin-left: 0;
+    }
+}
+
+@media (max-width: 1100px) {
+    .dashboard-day-schedule-header {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .dashboard-day-schedule-heading {
+        flex: 1 1 18rem;
+    }
+
+    .dashboard-day-schedule-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
 }
 
 .dashboard-day-schedule-date {
@@ -5339,4 +5790,1779 @@ body.is-electron-runtime .app-content {
     :is(.modal-backdrop, .file-preview-backdrop, .appointment-date-modal,
         .student-modal, .student-calendar-time-modal,
         #change-password-modal, #ape-upload-confirm-modal) { transition: none; }
+}
+
+/* Final cascade layer: dark mode must win over page/component defaults. */
+html.cliniq-dark .app-sidebar,
+html.cliniq-dark .app-topbar,
+html.cliniq-dark .app-content,
+html.cliniq-dark .app-main,
+html.cliniq-dark .settings-shell,
+html.cliniq-dark .settings-panel,
+html.cliniq-dark .settings-section,
+html.cliniq-dark .settings-theme-option,
+html.cliniq-dark .settings-dark-mode-row,
+html.cliniq-dark .clinic-card,
+html.cliniq-dark .modal-content,
+html.cliniq-dark .portal-card,
+html.cliniq-dark .portal-option,
+html.cliniq-dark .visit-card {
+    background: #17231b !important;
+    color: #e8f2ea !important;
+    border-color: #3b5945 !important;
+}
+
+html.cliniq-dark .app-sidebar,
+html.cliniq-dark .app-content,
+html.cliniq-dark .app-main { background-color: #0d1510 !important; }
+html.cliniq-dark .app-sidebar { background-color: #0b120d !important; }
+html.cliniq-dark .app-brand-title,
+html.cliniq-dark .app-brand-subtitle,
+html.cliniq-dark .app-nav-link,
+html.cliniq-dark .app-nav-link .material-symbols-outlined,
+html.cliniq-dark .app-nav-label,
+html.cliniq-dark .app-user-copy,
+html.cliniq-dark .app-user-copy strong,
+html.cliniq-dark .app-user-label,
+html.cliniq-dark .app-content h1,
+html.cliniq-dark .app-content h2,
+html.cliniq-dark .app-content h3,
+html.cliniq-dark .app-content h4,
+html.cliniq-dark .settings-panel h1,
+html.cliniq-dark .settings-panel h2,
+html.cliniq-dark .settings-panel h3,
+html.cliniq-dark .settings-panel h4,
+html.cliniq-dark .settings-section strong,
+html.cliniq-dark .settings-section label,
+html.cliniq-dark .settings-theme-option,
+html.cliniq-dark .settings-theme-option span,
+html.cliniq-dark .settings-theme-option strong,
+html.cliniq-dark .settings-dark-mode-row strong,
+html.cliniq-dark .settings-dark-mode-row small,
+html.cliniq-dark .app-content [class*="text-[#17261d]"],
+html.cliniq-dark .app-content [class*="text-slate-"],
+html.cliniq-dark .app-content [class*="text-gray-"] {
+    color: #e8f2ea !important;
+}
+html.cliniq-dark .app-content .bg-white,
+html.cliniq-dark .app-content [class*="bg-white"],
+html.cliniq-dark .app-content [class*="bg-slate-50"],
+html.cliniq-dark .app-content [class*="bg-gray-50"] {
+    background-color: #17231b !important;
+}
+html.cliniq-dark .app-nav-link:hover,
+html.cliniq-dark .app-nav-link.active,
+html.cliniq-dark .app-mobile-nav-link.active,
+html.cliniq-dark .settings-tab-link.active,
+html.cliniq-dark .settings-theme-option:hover,
+html.cliniq-dark .settings-theme-option.active,
+html.cliniq-dark .settings-theme-option:has(input:checked) {
+    color: #ffffff !important;
+    background-color: #245f36 !important;
+}
+html.cliniq-dark .app-search,
+html.cliniq-dark .app-search input,
+html.cliniq-dark .settings-input,
+html.cliniq-dark .settings-textarea,
+html.cliniq-dark .clinic-input,
+html.cliniq-dark .clinic-select,
+html.cliniq-dark .clinic-textarea,
+html.cliniq-dark .visit-input {
+    color: #e8f2ea !important;
+    background-color: #101a14 !important;
+    border-color: #4b6d55 !important;
+}
+html.cliniq-dark .app-search input::placeholder,
+html.cliniq-dark .settings-input::placeholder,
+html.cliniq-dark .settings-textarea::placeholder,
+html.cliniq-dark .visit-input::placeholder { color: #9db2a2 !important; }
+html.cliniq-dark .app-content table,
+html.cliniq-dark .app-content th,
+html.cliniq-dark .app-content td,
+html.cliniq-dark .settings-help { color: #dcebe0 !important; border-color: #3b5945 !important; }
+
+/* Dashboard-specific surfaces that intentionally declare light defaults. */
+html.cliniq-dark .dashboard-page .dashboard-metric-card,
+html.cliniq-dark .dashboard-page .dashboard-activity-card,
+html.cliniq-dark .dashboard-page .dashboard-appointments-card,
+html.cliniq-dark .dashboard-page .dashboard-day-schedule-section,
+html.cliniq-dark .dashboard-page .dashboard-alert-panel,
+html.cliniq-dark .dashboard-page .dashboard-alert-card,
+html.cliniq-dark .dashboard-page .dashboard-day-calendar,
+html.cliniq-dark .dashboard-page .dashboard-day-calendar-canvas,
+html.cliniq-dark .dashboard-page .dashboard-visitor-grid-wrap,
+html.cliniq-dark .dashboard-page .cliniq-ag-grid .ag-root-wrapper,
+html.cliniq-dark .dashboard-page .cliniq-ag-grid .ag-root,
+html.cliniq-dark .dashboard-page .cliniq-ag-grid .ag-header,
+html.cliniq-dark .dashboard-page .cliniq-ag-grid .ag-body-viewport {
+    background: #17231b !important;
+    color: #e8f2ea !important;
+    border-color: #3b5945 !important;
+}
+
+html.cliniq-dark .dashboard-page .dashboard-metric-card p,
+html.cliniq-dark .dashboard-page .dashboard-metric-card .dashboard-metric-value,
+html.cliniq-dark .dashboard-page .dashboard-day-schedule-date,
+html.cliniq-dark .dashboard-page .dashboard-calendar-hour time,
+html.cliniq-dark .dashboard-page .dashboard-calendar-event,
+html.cliniq-dark .dashboard-page .dashboard-calendar-event strong,
+html.cliniq-dark .dashboard-page .dashboard-calendar-event-details > span:not(.badge),
+html.cliniq-dark .dashboard-page .dashboard-calendar-sample-badge,
+html.cliniq-dark .dashboard-page .ag-cell,
+html.cliniq-dark .dashboard-page .ag-header-cell-label,
+html.cliniq-dark .dashboard-page .ag-header-cell-text {
+    color: #e8f2ea !important;
+}
+
+html.cliniq-dark .dashboard-page .dashboard-metric-card .material-symbols-outlined,
+html.cliniq-dark .dashboard-page .dashboard-alert-icon,
+html.cliniq-dark .dashboard-page .dashboard-calendar-event .material-symbols-outlined {
+    color: var(--cliniq-primary) !important;
+}
+
+html.cliniq-dark .dashboard-page .dashboard-schedule-placeholder-note,
+html.cliniq-dark .dashboard-page .dashboard-calendar-hour span,
+html.cliniq-dark .dashboard-page .ag-row,
+html.cliniq-dark .dashboard-page .ag-header {
+    background: #1b2c21 !important;
+    color: #b9cdbd !important;
+    border-color: #3b5945 !important;
+}
+
+html.cliniq-dark .dashboard-page .dashboard-day-calendar-canvas {
+    background: linear-gradient(90deg, #101a14 0, #101a14 5.1rem, #17231b 5.1rem) !important;
+}
+
+html.cliniq-dark .dashboard-page .dashboard-calendar-event {
+    background: #244a30 !important;
+    border-color: #4b8a5f !important;
+    color: #f0fff3 !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .28) !important;
+}
+
+html.cliniq-dark .dashboard-page .dashboard-calendar-event.is-ape {
+    background: #1d4934 !important;
+    border-color: #53b779 !important;
+    color: #eaffef !important;
+}
+
+html.cliniq-dark .dashboard-page .dashboard-calendar-unavailable {
+    background: repeating-linear-gradient(135deg, #3b2024, #3b2024 10px, #49262b 10px, #49262b 20px) !important;
+    color: #ffd7da !important;
+    border-color: #d66b73 !important;
+}
+
+html.cliniq-dark .dashboard-page .dashboard-calendar-unavailable-badge,
+html.cliniq-dark .dashboard-page .dashboard-calendar-sample-badge {
+    background: #26382c !important;
+    color: #cfe4d3 !important;
+}
+
+html.cliniq-dark .dashboard-page .ag-row-hover,
+html.cliniq-dark .dashboard-page .ag-row-selected,
+html.cliniq-dark .dashboard-page .ag-header-cell:hover {
+    background: #244a30 !important;
+}
+
+/* Keep glyphs visible inside pale icon buttons/tiles in dark mode. */
+html.cliniq-dark .dashboard-page .material-symbols-outlined[class*="text-white"],
+html.cliniq-dark .dashboard-page [class*="bg-slate-100"] .material-symbols-outlined,
+html.cliniq-dark .dashboard-page [class*="bg-gray-100"] .material-symbols-outlined,
+html.cliniq-dark .dashboard-page [class*="bg-indigo-50"] .material-symbols-outlined,
+html.cliniq-dark .dashboard-page [class*="bg-emerald-50"] .material-symbols-outlined,
+html.cliniq-dark .dashboard-page [class*="bg-amber-50"] .material-symbols-outlined {
+    color: var(--cliniq-primary) !important;
+}
+
+html.cliniq-dark .dashboard-page .dashboard-activity-card > header .material-symbols-outlined,
+html.cliniq-dark .dashboard-page .dashboard-day-schedule-section > header .material-symbols-outlined,
+html.cliniq-dark .dashboard-page .dashboard-activity-card button .material-symbols-outlined,
+html.cliniq-dark .dashboard-page .dashboard-day-schedule-section button .material-symbols-outlined {
+    color: var(--cliniq-primary) !important;
+}
+
+html.cliniq-dark .dashboard-page .dashboard-metric-card .material-symbols-outlined,
+html.cliniq-dark .dashboard-page .dashboard-alert-card .material-symbols-outlined {
+    color: var(--cliniq-primary) !important;
+}
+
+html.cliniq-dark .dashboard-page .dashboard-metric-card:nth-child(2) .material-symbols-outlined,
+html.cliniq-dark .dashboard-page .dashboard-calendar-event-time .material-symbols-outlined,
+html.cliniq-dark .dashboard-page .text-indigo-400.material-symbols-outlined {
+    color: #8fa8ff !important;
+}
+
+html.cliniq-dark .dashboard-page .text-amber-500.material-symbols-outlined,
+html.cliniq-dark .dashboard-page .text-orange-500.material-symbols-outlined {
+    color: #ffc05c !important;
+}
+
+html.cliniq-dark .dashboard-page .text-red-400.material-symbols-outlined,
+html.cliniq-dark .dashboard-page .text-red-500.material-symbols-outlined {
+    color: #ff8991 !important;
+}
+
+/* Site-wide staff dark mode: normalize every route, not only dashboard. */
+html.cliniq-dark .app-content .card,
+html.cliniq-dark .app-content .clinic-card,
+html.cliniq-dark .app-content .settings-section,
+html.cliniq-dark .app-content .settings-panel,
+html.cliniq-dark .app-content .modal-content,
+html.cliniq-dark .app-content .file-preview-card,
+html.cliniq-dark .app-content .appointment-date-modal-card,
+html.cliniq-dark .app-content .empty-state,
+html.cliniq-dark .app-content .alert-card,
+html.cliniq-dark .app-content .table-wrap,
+html.cliniq-dark .app-content .data-table-wrap {
+    background: #17231b !important;
+    color: #e8f2ea !important;
+    border-color: #3b5945 !important;
+}
+
+html.cliniq-dark .app-content [class*="bg-white"],
+html.cliniq-dark .app-content [class*="bg-slate-50"],
+html.cliniq-dark .app-content [class*="bg-slate-100"],
+html.cliniq-dark .app-content [class*="bg-gray-50"],
+html.cliniq-dark .app-content [class*="bg-gray-100"],
+html.cliniq-dark .app-content [class*="bg-indigo-50"],
+html.cliniq-dark .app-content [class*="bg-emerald-50"],
+html.cliniq-dark .app-content [class*="bg-amber-50"] {
+    background-color: #1b2c21 !important;
+    color: #e8f2ea !important;
+    border-color: #3b5945 !important;
+}
+
+html.cliniq-dark .app-content table,
+html.cliniq-dark .app-content thead,
+html.cliniq-dark .app-content tbody,
+html.cliniq-dark .app-content tr,
+html.cliniq-dark .app-content th,
+html.cliniq-dark .app-content td,
+html.cliniq-dark .app-content .ag-root-wrapper,
+html.cliniq-dark .app-content .ag-root,
+html.cliniq-dark .app-content .ag-header,
+html.cliniq-dark .app-content .ag-row,
+html.cliniq-dark .app-content .ag-cell {
+    background-color: #17231b !important;
+    color: #dcebe0 !important;
+    border-color: #3b5945 !important;
+}
+
+html.cliniq-dark .app-content .ag-header,
+html.cliniq-dark .app-content thead,
+html.cliniq-dark .app-content th {
+    background-color: #101a14 !important;
+    color: #e8f2ea !important;
+}
+
+html.cliniq-dark .app-content tr:hover,
+html.cliniq-dark .app-content .ag-row-hover,
+html.cliniq-dark .app-content .ag-row-selected {
+    background-color: #244a30 !important;
+}
+
+html.cliniq-dark .app-content .material-symbols-outlined {
+    color: #b9cdbd;
+}
+
+html.cliniq-dark .app-content [class*="bg-white"] .material-symbols-outlined,
+html.cliniq-dark .app-content [class*="bg-slate-"] .material-symbols-outlined,
+html.cliniq-dark .app-content [class*="bg-gray-"] .material-symbols-outlined,
+html.cliniq-dark .app-content [class*="bg-indigo-"] .material-symbols-outlined,
+html.cliniq-dark .app-content [class*="bg-emerald-"] .material-symbols-outlined,
+html.cliniq-dark .app-content [class*="bg-amber-"] .material-symbols-outlined,
+html.cliniq-dark .app-content button .material-symbols-outlined,
+html.cliniq-dark .app-content a .material-symbols-outlined {
+    color: var(--cliniq-primary) !important;
+}
+
+html.cliniq-dark .app-content .btn-primary .material-symbols-outlined,
+html.cliniq-dark .app-content .btn-danger .material-symbols-outlined,
+html.cliniq-dark .app-content [class*="bg-primary"] .material-symbols-outlined,
+html.cliniq-dark .app-content [class*="bg-red-"] .material-symbols-outlined,
+html.cliniq-dark .app-content [class*="bg-green-600"] .material-symbols-outlined {
+    color: #ffffff !important;
+}
+
+html.cliniq-dark .app-content [class*="text-slate-"],
+html.cliniq-dark .app-content [class*="text-gray-"],
+html.cliniq-dark .app-content [class*="text-zinc-"],
+html.cliniq-dark .app-content [class*="text-[#17261d]"] {
+    color: #dcebe0 !important;
+}
+
+html.cliniq-dark .app-content [class*="border-slate-"],
+html.cliniq-dark .app-content [class*="border-gray-"],
+html.cliniq-dark .app-content [class*="border-zinc-"] {
+    border-color: #3b5945 !important;
+}
+
+/* Controls shared by Reports and Feedback pages. */
+html.cliniq-dark .reports-page .report-period-option,
+html.cliniq-dark .feedback-period-option {
+    background: #1b2c21 !important;
+    color: #dcebe0 !important;
+    border-color: #3b5945 !important;
+}
+
+html.cliniq-dark .reports-page .report-period-option.is-active,
+html.cliniq-dark .reports-page .report-period-option:has(input:checked),
+html.cliniq-dark .feedback-period-option.is-active,
+html.cliniq-dark .feedback-period-option:has(input:checked) {
+    background: #245f36 !important;
+    color: #ffffff !important;
+    border-color: #66b77a !important;
+}
+
+/* Theme-token utility used by metric/status icon tiles. */
+html.cliniq-dark .app-content [class*="bg-primary-fixed"] .material-symbols-outlined,
+html.cliniq-dark .app-content [class*="bg-primary-fixed"] {
+    color: var(--cliniq-primary) !important;
+}
+
+html.cliniq-dark .app-content [class*="bg-primary-fixed"] .material-symbols-outlined,
+html.cliniq-dark .app-content [class*="bg-emerald-50"] .material-symbols-outlined,
+html.cliniq-dark .app-content [class*="bg-amber-50"] .material-symbols-outlined,
+html.cliniq-dark .app-content [class*="bg-blue-50"] .material-symbols-outlined {
+    color: #2f8f57 !important;
+}
+
+/* Metric icon tiles use one dedicated component surface in dark mode. */
+.dashboard-metric-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+html.cliniq-dark .dashboard-metric-icon {
+    background: #1b2c21 !important;
+    border: 1px solid #2f513b;
+    color: #70d58f !important;
+}
+
+html.cliniq-dark .dashboard-metric-icon--success { color: #70d58f !important; }
+html.cliniq-dark .dashboard-metric-icon--warning { color: #ffc05c !important; }
+html.cliniq-dark .dashboard-metric-icon--primary { color: #70d58f !important; }
+html.cliniq-dark .dashboard-metric-icon--info { color: #8fa8ff !important; }
+html.cliniq-dark .dashboard-metric-icon .material-symbols-outlined {
+    color: inherit !important;
+}
+
+/* Permanent icon contract for the entire staff UI. Icons follow the
+   foreground color of their control instead of competing utility rules. */
+html.cliniq-dark .material-symbols-outlined,
+html.cliniq-dark .material-symbols-rounded,
+html.cliniq-dark .material-symbols-sharp {
+    color: inherit !important;
+}
+
+html.cliniq-dark button,
+html.cliniq-dark a,
+html.cliniq-dark label,
+html.cliniq-dark .btn,
+html.cliniq-dark .app-nav-link,
+html.cliniq-dark .settings-tab-link,
+html.cliniq-dark .status-badge,
+html.cliniq-dark .badge {
+    color: inherit;
+}
+
+html.cliniq-dark .btn-primary,
+html.cliniq-dark .btn-danger,
+html.cliniq-dark [class*="bg-primary"],
+html.cliniq-dark [class*="bg-red-600"],
+html.cliniq-dark [class*="bg-green-600"] {
+    color: #ffffff !important;
+}
+
+/* Final all-route control normalization. */
+html.cliniq-dark .app-content .btn:not(.btn-primary):not(.btn-danger),
+html.cliniq-dark .app-content .btn-secondary,
+html.cliniq-dark .app-content .btn-outline,
+html.cliniq-dark .app-content .btn-ghost,
+html.cliniq-dark .app-content .btn-icon,
+html.cliniq-dark .app-sidebar-toggle,
+html.cliniq-dark .app-user-menu-trigger {
+    background: #1b2c21 !important;
+    color: #dcebe0 !important;
+    border-color: #4b6d55 !important;
+}
+
+html.cliniq-dark .app-content .btn:not(.btn-primary):not(.btn-danger):hover,
+html.cliniq-dark .app-content .btn-secondary:hover,
+html.cliniq-dark .app-content .btn-outline:hover,
+html.cliniq-dark .app-content .btn-ghost:hover,
+html.cliniq-dark .app-content .btn-icon:hover,
+html.cliniq-dark .app-sidebar-toggle:hover,
+html.cliniq-dark .app-user-menu-trigger:hover {
+    background: #284b32 !important;
+    color: #ffffff !important;
+}
+
+html.cliniq-dark .app-content .badge,
+html.cliniq-dark .app-content .status-badge,
+html.cliniq-dark .app-content .status-tab span {
+    background: #244a30 !important;
+    color: #dcebe0 !important;
+    border-color: #4b6d55 !important;
+}
+
+html.cliniq-dark .app-content .badge-active,
+html.cliniq-dark .app-content .badge-completed,
+html.cliniq-dark .app-content .badge-resolved,
+html.cliniq-dark .app-content .badge-in-progress {
+    background: #1d4934 !important;
+    color: #baf1c9 !important;
+}
+
+html.cliniq-dark .app-content .badge-critical,
+html.cliniq-dark .app-content .badge-high,
+html.cliniq-dark .app-content .badge-cancelled {
+    background: #4a252a !important;
+    color: #ffd7da !important;
+}
+
+html.cliniq-dark .app-content .badge-pending,
+html.cliniq-dark .app-content .badge-moderate,
+html.cliniq-dark .app-content .badge-low {
+    background: #493a1e !important;
+    color: #ffe2a3 !important;
+}
+
+html.cliniq-dark .app-content .btn:not(.btn-primary):not(.btn-danger) .material-symbols-outlined,
+html.cliniq-dark .app-content .btn-secondary .material-symbols-outlined,
+html.cliniq-dark .app-content .btn-outline .material-symbols-outlined,
+html.cliniq-dark .app-content .btn-ghost .material-symbols-outlined,
+html.cliniq-dark .app-sidebar-toggle .material-symbols-outlined,
+html.cliniq-dark .app-user-menu-trigger .material-symbols-outlined {
+    color: inherit !important;
+}
+
+/* Shared dark states for pagination, tabs, alerts, and queue maps. */
+html.cliniq-dark .app-content .pagination,
+html.cliniq-dark .app-content .pagination a,
+html.cliniq-dark .app-content .pagination button {
+    background: #1b2c21 !important;
+    color: #dcebe0 !important;
+    border-color: #4b6d55 !important;
+}
+
+html.cliniq-dark .app-content .pagination a.page-active,
+html.cliniq-dark .app-content .pagination button.page-active {
+    background: #3f8b58 !important;
+    color: #ffffff !important;
+    border-color: #66b77a !important;
+}
+
+html.cliniq-dark .app-content .pagination a.page-disabled,
+html.cliniq-dark .app-content .pagination button.page-disabled,
+html.cliniq-dark .app-content .pagination button:disabled {
+    background: #26382c !important;
+    color: #8aa194 !important;
+    border-color: #3b5945 !important;
+    opacity: 1 !important;
+}
+
+html.cliniq-dark .app-content .status-tab,
+html.cliniq-dark .app-content .status-tab span,
+html.cliniq-dark .app-content .tab-btn,
+html.cliniq-dark .app-content [role="tab"] {
+    background: #1b2c21 !important;
+    color: #b9cdbd !important;
+    border-color: #3b5945 !important;
+}
+
+html.cliniq-dark .app-content .status-tab.active,
+html.cliniq-dark .app-content .tab-btn.active,
+html.cliniq-dark .app-content [role="tab"][aria-selected="true"] {
+    background: #245f36 !important;
+    color: #ffffff !important;
+    border-color: #66b77a !important;
+}
+
+html.cliniq-dark .app-content .status-tab .material-symbols-outlined,
+html.cliniq-dark .app-content .tab-btn .material-symbols-outlined,
+html.cliniq-dark .app-content [role="tab"] .material-symbols-outlined {
+    color: inherit !important;
+}
+
+html.cliniq-dark .app-content .dashboard-alert-panel,
+html.cliniq-dark .app-content .dashboard-alert-card,
+html.cliniq-dark .app-content .alert-report-field {
+    background: #3b2024 !important;
+    color: #ffd7da !important;
+    border-color: #d66b73 !important;
+}
+
+html.cliniq-dark .app-content .dashboard-alert-panel h1,
+html.cliniq-dark .app-content .dashboard-alert-panel h2,
+html.cliniq-dark .app-content .dashboard-alert-panel h3,
+html.cliniq-dark .app-content .dashboard-alert-panel p,
+html.cliniq-dark .app-content .dashboard-alert-panel span,
+html.cliniq-dark .app-content .alert-report-field .material-symbols-outlined {
+    color: #ffd7da !important;
+}
+
+html.cliniq-dark .app-content .ape-queue-map-card,
+html.cliniq-dark .app-content .ape-queue-map-card[class*="bg-white"],
+html.cliniq-dark .app-content .ape-queue-map-card[class*="bg-primary-fixed"] {
+    background: #1b2c21 !important;
+    color: #dcebe0 !important;
+    border-color: #3b5945 !important;
+}
+
+html.cliniq-dark .app-content .ape-queue-map-card[class*="bg-primary-fixed"] {
+    background: #245f36 !important;
+    color: #ffffff !important;
+    border-color: #66b77a !important;
+}
+
+html.cliniq-dark .app-content .ape-queue-map-card .ape-queue-map-label,
+html.cliniq-dark .app-content .ape-queue-map-card strong,
+html.cliniq-dark .app-content .ape-queue-map-card .material-symbols-outlined {
+    color: inherit !important;
+}
+
+/* APE work queues: normalize the remaining light utility surfaces for dark mode. */
+html.cliniq-dark .app-content .ape-queue-map-card .bg-white,
+html.cliniq-dark .app-content .ape-queue-map-card[class*="bg-white"] .bg-white,
+html.cliniq-dark .app-content button[class*="bg-primary-fixed"],
+html.cliniq-dark .app-content a[class*="bg-primary-fixed"] {
+    background: #1d4934 !important;
+    color: #e7f4ea !important;
+    border-color: #4d9b68 !important;
+}
+
+html.cliniq-dark .app-content button[class*="bg-primary-fixed"] .text-slate-700,
+html.cliniq-dark .app-content button[class*="bg-primary-fixed"] .text-slate-500,
+html.cliniq-dark .app-content button[class*="bg-primary-fixed"] .text-primary,
+html.cliniq-dark .app-content button[class*="bg-primary-fixed"] .material-symbols-outlined {
+    color: #9be3ae !important;
+}
+
+html.cliniq-dark .app-content .ape-queue-map-card .bg-white {
+    background: #102018 !important;
+    color: #9be3ae !important;
+}
+
+html.cliniq-dark .app-content .ape-queue-map-card[class*="bg-primary-fixed"] .bg-white {
+    background: #102018 !important;
+    color: #baf1c9 !important;
+}
+
+html.cliniq-dark .app-content .ape-queue-map-card[class*="bg-primary-fixed"] .ape-queue-map-label,
+html.cliniq-dark .app-content .ape-queue-map-card[class*="bg-primary-fixed"] strong {
+    color: #ffffff !important;
+}
+
+html.cliniq-dark .app-content .ape-queue-map-card:not([class*="bg-primary-fixed"]) .ape-queue-map-label,
+html.cliniq-dark .app-content .ape-queue-map-card:not([class*="bg-primary-fixed"]) strong {
+    color: #dcebe0 !important;
+}
+
+html.cliniq-dark .app-content [class*="bg-white"]:has(.font-headline.text-2xl),
+html.cliniq-dark .app-content [class*="bg-white"]:has(.font-headline.text-xl) {
+    background: #1b2c21 !important;
+    color: #dcebe0 !important;
+    border-color: #3b5945 !important;
+}
+
+html.cliniq-dark .app-content .text-\[\#17261d\],
+html.cliniq-dark .app-content .text-slate-800,
+html.cliniq-dark .app-content .text-slate-700 {
+    color: #e7f4ea !important;
+}
+
+html.cliniq-dark .app-content .text-slate-500,
+html.cliniq-dark .app-content .text-slate-400 {
+    color: #a9c0b0 !important;
+}
+
+html.cliniq-dark #apeBatchPickerModal .modal-content,
+html.cliniq-dark #apeBatchPickerModal [class*="bg-white"] {
+    background: #14271b !important;
+    color: #dcebe0 !important;
+    border-color: #3b5945 !important;
+}
+
+html.cliniq-dark #apeBatchPickerModal [class*="bg-primary-fixed"] {
+    background: #1d4934 !important;
+    color: #e7f4ea !important;
+    border-color: #4d9b68 !important;
+}
+
+html.cliniq-dark #apeBatchPickerModal .text-slate-800,
+html.cliniq-dark #apeBatchPickerModal .text-slate-700,
+html.cliniq-dark #apeBatchPickerModal .text-slate-500,
+html.cliniq-dark #apeBatchPickerModal .text-slate-300 {
+    color: #dcebe0 !important;
+}
+
+/* APE record review panels are defined inline in view.php; keep them on the same dark contract. */
+html.cliniq-dark .app-content .ape-flow-panel,
+html.cliniq-dark .app-content .ape-flow-action,
+html.cliniq-dark .app-content .ape-flow-field,
+html.cliniq-dark .app-content .ape-checklist-row,
+html.cliniq-dark .app-content .ape-document-review-card,
+html.cliniq-dark .app-content .ape-flow-panel [class*="bg-white"] {
+    background: #14271b !important;
+    color: #dcebe0 !important;
+    border-color: #3b5945 !important;
+}
+
+html.cliniq-dark .app-content .ape-flow-action.muted,
+html.cliniq-dark .app-content .ape-requirement-chip,
+html.cliniq-dark .app-content .ape-flow-panel [class*="bg-amber"],
+html.cliniq-dark .app-content .ape-flow-panel [class*="bg-emerald-50"] {
+    background: #2c3420 !important;
+    color: #f5d98b !important;
+    border-color: #8d7132 !important;
+}
+
+html.cliniq-dark .app-content .ape-flow-shell .text-\[\#17261d\],
+html.cliniq-dark .app-content .ape-flow-shell .text-slate-800,
+html.cliniq-dark .app-content .ape-flow-shell .text-slate-700,
+html.cliniq-dark .app-content .ape-flow-shell .text-slate-600,
+html.cliniq-dark .app-content .ape-flow-shell h1,
+html.cliniq-dark .app-content .ape-flow-shell h2,
+html.cliniq-dark .app-content .ape-flow-shell h3,
+html.cliniq-dark .app-content .ape-flow-shell strong {
+    color: #e7f4ea !important;
+}
+
+html.cliniq-dark .app-content .ape-flow-shell .text-slate-500,
+html.cliniq-dark .app-content .ape-flow-shell .text-slate-400,
+html.cliniq-dark .app-content .ape-flow-shell .text-slate-300,
+html.cliniq-dark .app-content .ape-flow-shell p,
+html.cliniq-dark .app-content .ape-flow-shell small {
+    color: #a9c0b0 !important;
+}
+
+html.cliniq-dark .app-content .ape-flow-shell .ape-flow-step[class*="bg-primary-fixed"] {
+    background: #1d4934 !important;
+    border-color: #4d9b68 !important;
+}
+
+html.cliniq-dark .app-content .ape-flow-shell .ape-flow-step[class*="bg-emerald-50"] {
+    background: #1b3d2b !important;
+    border-color: #4d9b68 !important;
+}
+
+html.cliniq-dark .app-content .ape-flow-shell .ape-flow-step[class*="bg-slate-50"] {
+    background: #1b2c21 !important;
+    border-color: #3b5945 !important;
+}
+
+html.cliniq-dark .app-content .ape-flow-shell .ape-flow-step-index.bg-white {
+    background: #1b3424 !important;
+    color: #a9c0b0 !important;
+}
+
+html.cliniq-dark .app-content .ape-flow-shell .ape-checklist-meta strong,
+html.cliniq-dark .app-content .ape-flow-shell .ape-checklist-meta span {
+    color: #e7f4ea !important;
+}
+
+html.cliniq-dark .app-content .ape-flow-shell .ape-checklist-meta span,
+html.cliniq-dark .app-content .ape-flow-shell .ape-document-review-card .text-slate-400 {
+    color: #a9c0b0 !important;
+}
+
+html.cliniq-dark .app-content .ape-flow-shell .ape-requirement-status[data-status="Missing"] { color: #f5d98b !important; border-color: #8d7132 !important; background: #2c3420 !important; }
+html.cliniq-dark .app-content .ape-flow-shell .ape-requirement-status[data-status="Submitted"] { color: #a9c9ff !important; border-color: #557bb4 !important; background: #1b2f4a !important; }
+html.cliniq-dark .app-content .ape-flow-shell .ape-requirement-status[data-status="Verified"] { color: #baf1c9 !important; border-color: #4d9b68 !important; background: #1b4930 !important; }
+html.cliniq-dark .app-content .ape-flow-shell .ape-requirement-status[data-status="Needs Correction"] { color: #ffd7da !important; border-color: #d66b73 !important; background: #4a252a !important; }
+
+html.cliniq-dark .app-content .ape-flow-shell .ape-flow-activity,
+html.cliniq-dark .app-content .ape-flow-shell .ape-flow-activity > div {
+    border-color: #3b5945 !important;
+}
+
+html.cliniq-dark #apeAddRequirementModal .modal-content,
+html.cliniq-dark #apeAddRequirementModal .modal-content [class*="bg-white"] {
+    background: #14271b !important;
+    color: #dcebe0 !important;
+    border-color: #3b5945 !important;
+}
+
+html.cliniq-dark .app-content .ape-flow-panel [class*="bg-emerald-50"] {
+    background: #1b4930 !important;
+    color: #dcebe0 !important;
+    border-color: #4d9b68 !important;
+}
+
+html.cliniq-dark .app-content .ape-flow-panel [class*="bg-emerald-50"] .text-slate-500,
+html.cliniq-dark .app-content .ape-flow-panel [class*="bg-emerald-50"] p {
+    color: #baf1c9 !important;
+}
+
+html.cliniq-dark .app-content .ape-checklist-row .ape-requirement-status[data-status="Verified"] {
+    background: #1b4930 !important;
+    color: #d5f7dd !important;
+    border-color: #4d9b68 !important;
+}
+
+html.cliniq-dark .app-content .ape-checklist-row .clinic-input {
+    background: #0d1b13 !important;
+    color: #dcebe0 !important;
+    border-color: #4b6d55 !important;
+}
+
+html.cliniq-dark .app-content .ape-checklist-row .clinic-input::placeholder {
+    color: #9fbaaa !important;
+}
+
+html.cliniq-dark .app-content [data-hard-copy-review] {
+    background: #1b4930 !important;
+    color: #dcebe0 !important;
+    border-color: #4d9b68 !important;
+}
+
+html.cliniq-dark .app-content [data-hard-copy-review] .text-slate-500,
+html.cliniq-dark .app-content [data-hard-copy-review] p {
+    color: #baf1c9 !important;
+}
+
+html.cliniq-dark .app-content [data-hard-copy-review] [class*="bg-white"] {
+    background: #14271b !important;
+    color: #dcebe0 !important;
+    border-color: #3b5945 !important;
+}
+
+html.cliniq-dark .app-content [data-hard-copy-review] {
+    margin-bottom: 0.75rem !important;
+}
+
+/* Unified rounded quick filters. The icon is inline; only the count is a badge. */
+.status-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-height: 2.75rem;
+    padding: 0.55rem 0.9rem;
+    border: 1px solid var(--cliniq-border) !important;
+    border-radius: 999px;
+    border-bottom-width: 1px !important;
+}
+
+.status-tab > .material-symbols-outlined {
+    display: inline-block;
+    width: auto;
+    height: auto;
+    margin: 0 !important;
+    padding: 0;
+    border: 0 !important;
+    border-radius: 0;
+    background: transparent !important;
+    font-size: 1.05rem;
+    line-height: 1;
+}
+
+.status-tab > span:not(.material-symbols-outlined) {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.25rem;
+    padding: 0.12rem 0.45rem;
+    border-radius: 999px;
+    background: var(--cliniq-muted) !important;
+    color: var(--cliniq-muted-foreground) !important;
+    font-size: 0.65rem;
+    line-height: 1;
+}
+
+html.cliniq-dark .app-content .status-tab {
+    background: #1b2c21 !important;
+    color: #b9cdbd !important;
+    border-color: #3b5945 !important;
+}
+
+html.cliniq-dark .app-content .status-tab:hover {
+    background: #284b32 !important;
+    color: #ffffff !important;
+    border-color: #66b77a !important;
+}
+
+html.cliniq-dark .app-content .status-tab.active {
+    background: #245f36 !important;
+    color: #ffffff !important;
+    border-color: #66b77a !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, .18);
+}
+
+html.cliniq-dark .app-content .status-tab .material-symbols-outlined {
+    background: transparent !important;
+    color: inherit !important;
+}
+
+html.cliniq-dark .app-content .status-tab > span:not(.material-symbols-outlined) {
+    background: #26382c !important;
+    color: #cfe4d3 !important;
+}
+
+html.cliniq-dark .app-content .status-tab.active > span:not(.material-symbols-outlined) {
+    background: #3f8b58 !important;
+    color: #ffffff !important;
+}
+
+/* Unified dark table contract for native tables and AG Grid tables. */
+html.cliniq-dark .app-content table,
+html.cliniq-dark .app-content .cliniq-ag-grid {
+    --ag-background-color: #17231b;
+    --ag-foreground-color: #dcebe0;
+    --ag-border-color: #3b5945;
+    --ag-secondary-border-color: #304a38;
+    --ag-header-background-color: #101a14;
+    --ag-header-foreground-color: #b9cdbd;
+    --ag-odd-row-background-color: #17231b;
+    --ag-row-hover-color: #244a30;
+    --ag-selected-row-background-color: #284b32;
+    --ag-font-family: Inter, sans-serif;
+    --ag-font-size: 0.82rem;
+    --ag-row-height: 4.25rem;
+    --ag-header-height: 3.5rem;
+}
+
+html.cliniq-dark .app-content table thead tr,
+html.cliniq-dark .app-content table thead th,
+html.cliniq-dark .app-content .cliniq-ag-grid .ag-header,
+html.cliniq-dark .app-content .cliniq-ag-grid .ag-header-row,
+html.cliniq-dark .app-content .cliniq-ag-grid .ag-header-cell {
+    background: #101a14 !important;
+    color: #b9cdbd !important;
+    border-color: #3b5945 !important;
+}
+
+html.cliniq-dark .app-content table thead th,
+html.cliniq-dark .app-content .cliniq-ag-grid .ag-header-cell-label {
+    padding: 0.85rem 1rem !important;
+    color: #b9cdbd !important;
+    font-size: 0.68rem !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.08em;
+    line-height: 1.2;
+    text-transform: uppercase;
+}
+
+html.cliniq-dark .app-content table tbody tr,
+html.cliniq-dark .app-content .cliniq-ag-grid .ag-row,
+html.cliniq-dark .app-content .cliniq-ag-grid .ag-cell {
+    background: #17231b !important;
+    color: #dcebe0 !important;
+    border-color: #3b5945 !important;
+}
+
+/* Hybrid table geometry: remove AG Grid's column rules and keep row rules. */
+html.cliniq-dark .app-content .cliniq-ag-grid .ag-ltr .ag-cell,
+html.cliniq-dark .app-content .cliniq-ag-grid .ag-rtl .ag-cell,
+html.cliniq-dark .app-content .cliniq-ag-grid .ag-cell,
+html.cliniq-dark .app-content .cliniq-ag-grid .ag-header-cell,
+html.cliniq-dark .app-content .cliniq-ag-grid .ag-header-cell-resize {
+    --ag-cell-horizontal-border: none !important;
+    border-left: 0 !important;
+    border-right: 0 !important;
+}
+
+html.cliniq-dark .app-content .cliniq-ag-grid .ag-row {
+    border-bottom: var(--ag-row-border-style) var(--ag-row-border-color) var(--ag-row-border-width) !important;
+}
+
+html.cliniq-dark .app-content table {
+    border-collapse: collapse !important;
+}
+
+html.cliniq-dark .app-content table th,
+html.cliniq-dark .app-content table td {
+    border-left: 0 !important;
+    border-right: 0 !important;
+    border-top: 0 !important;
+    border-bottom: 1px solid #3b5945 !important;
+}
+
+/* Appointment availability dark-mode contract. */
+html.cliniq-dark .app-content .working-hours-summary,
+html.cliniq-dark .app-content .appointment-availability-sidebar,
+html.cliniq-dark .app-content .appointment-availability-form-card,
+html.cliniq-dark .app-content .appointment-week-calendar,
+html.cliniq-dark .app-content .appointment-week-day-column,
+html.cliniq-dark .app-content .appointment-week-time-column,
+html.cliniq-dark .app-content .appointment-date-modal-card,
+html.cliniq-dark .app-content .working-hours-modal-card {
+    background: #17231b !important;
+    color: #e8f2ea !important;
+    border-color: #3b5945 !important;
+}
+
+html.cliniq-dark .app-content .working-hours-summary {
+    background: linear-gradient(120deg, #1b3524, #17231b 72%) !important;
+}
+
+html.cliniq-dark .app-content .working-hours-summary-icon {
+    background: #245f36 !important;
+    color: #ffffff !important;
+    border-color: #66b77a !important;
+}
+
+/* Patient profile cards contain inline light-theme defaults; override them explicitly. */
+html.cliniq-dark .app-content .patient-profile-card {
+    background: #17231b !important;
+    color: #e8f2ea !important;
+    border-color: #3b5945 !important;
+    box-shadow: 0 14px 30px rgba(0, 0, 0, 0.18) !important;
+}
+
+html.cliniq-dark .app-content .patient-profile-field,
+html.cliniq-dark .app-content .patient-profile-note,
+html.cliniq-dark .app-content .care-timeline-toolbar {
+    background: #1b2c21 !important;
+    color: #dcebe0 !important;
+    border-color: #3b5945 !important;
+}
+
+html.cliniq-dark .app-content .patient-profile-field strong,
+html.cliniq-dark .app-content .patient-profile-note strong,
+html.cliniq-dark .app-content .patient-profile-event-content,
+html.cliniq-dark .app-content .patient-profile-event-content h3 {
+    color: #e8f2ea !important;
+}
+
+html.cliniq-dark .app-content .patient-profile-event-meta,
+html.cliniq-dark .app-content .patient-profile-note .clinic-label,
+html.cliniq-dark .app-content .patient-profile-field .clinic-label {
+    color: #b9cdbd !important;
+}
+
+html.cliniq-dark .app-content .patient-profile-event:hover {
+    background: #1b2c21 !important;
+}
+
+html.cliniq-dark .app-content .patient-profile-event-icon {
+    background: #245f36 !important;
+    color: #ffffff !important;
+}
+
+html.cliniq-dark .app-content .patient-profile-event-icon.alert {
+    background: #54252b !important;
+    color: #ffb4b4 !important;
+}
+
+html.cliniq-dark .app-content .care-timeline-pagination {
+    border-color: #3b5945 !important;
+}
+
+html.cliniq-dark .app-content .working-hours-summary-heading h3,
+html.cliniq-dark .app-content .appointment-week-range strong,
+html.cliniq-dark .app-content .appointment-availability-form-card h3,
+html.cliniq-dark .app-content .appointment-availability-block-list h3,
+html.cliniq-dark .app-content .working-hours-modal-title-row h3,
+html.cliniq-dark .app-content .working-hours-quick-set h4,
+html.cliniq-dark .app-content .working-hours-days-heading h4,
+html.cliniq-dark .app-content .working-hours-override-heading h4,
+html.cliniq-dark .app-content .working-hours-month-preview h4 {
+    color: #e8f2ea !important;
+}
+
+html.cliniq-dark .app-content .working-hours-count,
+html.cliniq-dark .app-content .appointment-week-range span,
+html.cliniq-dark .app-content .working-hours-summary-chip,
+html.cliniq-dark .app-content .working-hours-modal-header > p,
+html.cliniq-dark .app-content .working-hours-quick-set p,
+html.cliniq-dark .app-content .working-hours-days-heading p,
+html.cliniq-dark .app-content .working-hours-override-heading p,
+html.cliniq-dark .app-content .working-hours-month-preview p,
+html.cliniq-dark .app-content .working-hours-safety-note {
+    color: #b9cdbd !important;
+}
+
+html.cliniq-dark .app-content .working-hours-summary-chip,
+html.cliniq-dark .app-content .working-hours-quick-set,
+html.cliniq-dark .app-content .working-hours-future-panel,
+html.cliniq-dark .app-content .working-hours-override,
+html.cliniq-dark .app-content .working-hours-month-preview,
+html.cliniq-dark .app-content .working-hours-open-day,
+html.cliniq-dark .app-content .appointment-block-row,
+html.cliniq-dark .app-content .appointment-date-modal-toolbar,
+html.cliniq-dark .app-content .appointment-date-modal-selected {
+    background: #1b2c21 !important;
+    color: #dcebe0 !important;
+    border-color: #3b5945 !important;
+}
+
+html.cliniq-dark .app-content .working-hours-summary-chip strong,
+html.cliniq-dark .app-content .appointment-week-header strong,
+html.cliniq-dark .app-content .appointment-block-row strong,
+html.cliniq-dark .app-content .appointment-date-modal-toolbar strong {
+    color: #e8f2ea !important;
+}
+
+html.cliniq-dark .app-content .appointment-week-header {
+    background: #101a14 !important;
+    color: #b9cdbd !important;
+    border-color: #3b5945 !important;
+}
+
+html.cliniq-dark .app-content .appointment-week-header.is-today {
+    background: #245f36 !important;
+}
+
+html.cliniq-dark .app-content .appointment-week-header.is-today strong,
+html.cliniq-dark .app-content .appointment-week-header.is-today span {
+    color: #ffffff !important;
+}
+
+html.cliniq-dark .app-content .appointment-week-header.is-past,
+html.cliniq-dark .app-content .appointment-week-day-column.is-past,
+html.cliniq-dark .app-content .appointment-week-day-column.is-past:hover,
+html.cliniq-dark .app-content .appointment-week-day-column.is-past:focus-visible {
+    background: #101a14 !important;
+}
+
+html.cliniq-dark .app-content .appointment-week-time-column time {
+    color: #b9cdbd !important;
+}
+
+html.cliniq-dark .app-content .appointment-week-hour-cell {
+    background: rgba(23, 35, 27, 0.82) !important;
+    border-color: #304a38 !important;
+}
+
+/* Preserve the light-mode distinction between selectable and unavailable hours. */
+html.cliniq-dark .app-content .appointment-week-hour-cell:disabled,
+html.cliniq-dark .app-content .appointment-week-day-column.is-past .appointment-week-hour-cell {
+    background: repeating-linear-gradient(
+        -45deg,
+        #101a14,
+        #101a14 8px,
+        #17231b 8px,
+        #17231b 16px
+    ) !important;
+    cursor: not-allowed !important;
+}
+
+html.cliniq-dark .app-content .appointment-week-day-column.is-past {
+    background: repeating-linear-gradient(
+        -45deg,
+        #101a14,
+        #101a14 8px,
+        #17231b 8px,
+        #17231b 16px
+    ) !important;
+}
+
+html.cliniq-dark .app-content .appointment-date-picker-trigger,
+html.cliniq-dark .app-content .working-hours-mode-switch button,
+html.cliniq-dark .app-content .working-hours-close,
+html.cliniq-dark .app-content .working-hours-saved-months button,
+html.cliniq-dark .app-content .appointment-date-modal-day {
+    background: #101a14 !important;
+    color: #dcebe0 !important;
+    border-color: #4b6d55 !important;
+}
+
+html.cliniq-dark .app-content .appointment-selected-date-chip {
+    background: #245f36 !important;
+    color: #ffffff !important;
+    border-color: #66b77a !important;
+}
+
+html.cliniq-dark .app-content .appointment-selected-date-chip::after {
+    color: #ffffff !important;
+    opacity: 0.9 !important;
+}
+
+html.cliniq-dark .app-content .working-hours-mode-switch button.is-active,
+html.cliniq-dark .app-content .working-hours-open-day:has(input:checked) {
+    background: #245f36 !important;
+    color: #ffffff !important;
+    border-color: #66b77a !important;
+}
+
+html.cliniq-dark .app-content .appointment-availability-sidebar .form-textarea,
+html.cliniq-dark .app-content .appointment-availability-sidebar .form-input,
+html.cliniq-dark .app-content .appointment-availability-sidebar .form-select,
+html.cliniq-dark .app-content .working-hours-modal-card .form-input,
+html.cliniq-dark .app-content .working-hours-modal-card .form-select {
+    background: #101a14 !important;
+    color: #e8f2ea !important;
+    border-color: #4b6d55 !important;
+}
+
+html.cliniq-dark .app-content .appointment-availability-sidebar .form-textarea::placeholder {
+    color: #8fa896 !important;
+}
+
+html.cliniq-dark .app-content table tbody tr:hover,
+html.cliniq-dark .app-content .cliniq-ag-grid .ag-row-hover,
+html.cliniq-dark .app-content .cliniq-ag-grid .ag-row-hover .ag-cell {
+    background: #244a30 !important;
+}
+
+html.cliniq-dark .app-content table tbody td,
+html.cliniq-dark .app-content .cliniq-ag-grid .ag-cell {
+    min-height: 4.25rem;
+    padding: 0.85rem 1rem !important;
+    color: #dcebe0 !important;
+    border-color: #3b5945 !important;
+    vertical-align: middle;
+}
+
+html.cliniq-dark .app-content .cliniq-ag-grid .ag-body-vertical-scroll,
+html.cliniq-dark .app-content .cliniq-ag-grid .ag-body-horizontal-scroll {
+    background: #101a14 !important;
+    border-color: #3b5945 !important;
+}
+
+html.cliniq-dark .app-content .cliniq-ag-grid .ag-body-viewport::-webkit-scrollbar-thumb,
+html.cliniq-dark .app-content .cliniq-ag-grid .ag-center-cols-viewport::-webkit-scrollbar-thumb {
+    background: #3f6b4c !important;
+    border-color: #101a14 !important;
+}
+
+html.cliniq-dark .app-content table .badge,
+html.cliniq-dark .app-content .cliniq-ag-grid .badge {
+    min-height: 2rem;
+    padding: 0.35rem 0.75rem !important;
+    border-radius: 999px !important;
+    font-size: 0.64rem !important;
+    line-height: 1;
+}
+
+html.cliniq-dark .app-content table .btn,
+html.cliniq-dark .app-content .cliniq-ag-grid .btn {
+    min-height: 2.5rem;
+    border-radius: 0.75rem;
+}
+/* Complete dark-mode control contract for variants that predate the shared
+   .btn rules. Keep hover, focus, active, and disabled states readable on
+   every staff route. */
+html.cliniq-dark .app-content .btn-soft-danger {
+    background: #4a252a !important;
+    color: #ffd7da !important;
+    border-color: #8f4a52 !important;
+}
+html.cliniq-dark .app-content .btn-soft-danger:hover,
+html.cliniq-dark .app-content .btn-soft-danger:focus-visible {
+    background: #633039 !important;
+    color: #ffffff !important;
+    border-color: #d2767e !important;
+}
+html.cliniq-dark .app-content .btn-icon-danger {
+    background: transparent !important;
+    color: #ff9da5 !important;
+    border-color: transparent !important;
+}
+html.cliniq-dark .app-content .btn-icon-danger:hover,
+html.cliniq-dark .app-content .btn-icon-danger:focus-visible {
+    background: #4a252a !important;
+    color: #ffd7da !important;
+}
+html.cliniq-dark .app-content .btn-icon-slate {
+    background: transparent !important;
+    color: #b9cdbd !important;
+    border-color: transparent !important;
+}
+html.cliniq-dark .app-content .btn-icon-slate:hover,
+html.cliniq-dark .app-content .btn-icon-slate:focus-visible {
+    background: #284b32 !important;
+    color: #ffffff !important;
+}
+html.cliniq-dark .app-content .password-visibility-button {
+    color: #b9cdbd !important;
+    background: transparent !important;
+}
+html.cliniq-dark .app-content .password-visibility-button:hover,
+html.cliniq-dark .app-content .password-visibility-button:focus-visible {
+    color: #ffffff !important;
+    background: #284b32 !important;
+    outline: 2px solid #66b77a;
+    outline-offset: 2px;
+}
+html.cliniq-dark .app-content .btn:focus-visible,
+html.cliniq-dark .app-content .btn-icon:focus-visible,
+html.cliniq-dark .app-content .pagination a:focus-visible,
+html.cliniq-dark .app-content .pagination button:focus-visible {
+    outline: 2px solid #8dd39e !important;
+    outline-offset: 2px;
+}
+html.cliniq-dark .app-content .btn:disabled,
+html.cliniq-dark .app-content .btn-icon:disabled {
+    background: #26382c !important;
+    color: #8aa194 !important;
+    border-color: #3b5945 !important;
+    box-shadow: none !important;
+    cursor: not-allowed;
+    opacity: 1 !important;
+}
+html.cliniq-dark .reports-page .report-period-option:hover,
+html.cliniq-dark .reports-page .report-period-option:focus-within,
+html.cliniq-dark .reports-page .report-module-card:hover,
+html.cliniq-dark .reports-page .report-module-card:focus-within,
+html.cliniq-dark .reports-page .report-section-navigation-link:hover,
+html.cliniq-dark .reports-page .report-section-navigation-link:focus-visible {
+    background: #284b32 !important;
+    color: #ffffff !important;
+    border-color: #66b77a !important;
+}
+html.cliniq-dark .reports-page .report-helper-action:hover,
+html.cliniq-dark .reports-page .report-helper-action:focus-visible {
+    color: #ffffff !important;
+}
+/* Complete dark-mode modal contract. This final cascade covers shared
+   dialogs and page-specific modal internals without changing their behavior. */
+html.cliniq-dark .modal-backdrop,
+html.cliniq-dark .file-preview-backdrop,
+html.cliniq-dark .appointment-date-modal,
+html.cliniq-dark .student-modal,
+html.cliniq-dark .student-calendar-time-modal,
+html.cliniq-dark #change-password-modal,
+html.cliniq-dark #ape-upload-confirm-modal {
+    background: rgba(4, 10, 7, 0.78) !important;
+    color: #e8f2ea !important;
+}
+
+html.cliniq-dark .modal-content,
+html.cliniq-dark .row-actions-modal,
+html.cliniq-dark .file-preview-dialog,
+html.cliniq-dark .appointment-date-modal-card,
+html.cliniq-dark .student-calendar-time-dialog,
+html.cliniq-dark .student-modal > div,
+html.cliniq-dark #change-password-modal > div,
+html.cliniq-dark #ape-upload-confirm-modal > div {
+    background: #17231b !important;
+    color: #e8f2ea !important;
+    border-color: #3b5945 !important;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.42) !important;
+}
+
+html.cliniq-dark .modal-content h1,
+html.cliniq-dark .modal-content h2,
+html.cliniq-dark .modal-content h3,
+html.cliniq-dark .modal-content h4,
+html.cliniq-dark .row-actions-modal h3,
+html.cliniq-dark .file-preview-dialog h3,
+html.cliniq-dark .appointment-date-modal-card h3,
+html.cliniq-dark .student-modal h1,
+html.cliniq-dark .student-modal h2,
+html.cliniq-dark .student-modal h3,
+html.cliniq-dark .student-modal h4,
+html.cliniq-dark .modal-content label,
+html.cliniq-dark .modal-content strong {
+    color: #e8f2ea !important;
+}
+
+html.cliniq-dark .modal-content p,
+html.cliniq-dark .modal-content small,
+html.cliniq-dark .modal-content .text-slate-500,
+html.cliniq-dark .modal-content .text-slate-600,
+html.cliniq-dark .row-actions-eyebrow,
+html.cliniq-dark .student-modal [class*="muted"] {
+    color: #a9b9ad !important;
+}
+
+html.cliniq-dark .modal-content input,
+html.cliniq-dark .modal-content select,
+html.cliniq-dark .modal-content textarea,
+html.cliniq-dark .student-modal input,
+html.cliniq-dark .student-modal select,
+html.cliniq-dark .student-modal textarea,
+html.cliniq-dark .row-actions-modal input,
+html.cliniq-dark .row-actions-modal select,
+html.cliniq-dark .row-actions-modal textarea {
+    background: #101a14 !important;
+    color: #e8f2ea !important;
+    border-color: #4b6d55 !important;
+}
+
+html.cliniq-dark .modal-content input::placeholder,
+html.cliniq-dark .modal-content textarea::placeholder,
+html.cliniq-dark .student-modal input::placeholder,
+html.cliniq-dark .student-modal textarea::placeholder {
+    color: #8fa896 !important;
+}
+
+html.cliniq-dark .modal-content input:focus,
+html.cliniq-dark .modal-content select:focus,
+html.cliniq-dark .modal-content textarea:focus,
+html.cliniq-dark .student-modal input:focus,
+html.cliniq-dark .student-modal select:focus,
+html.cliniq-dark .student-modal textarea:focus {
+    border-color: #66b77a !important;
+    box-shadow: 0 0 0 3px rgba(102, 183, 122, 0.2) !important;
+    outline: none;
+}
+
+html.cliniq-dark .row-actions-modal-header,
+html.cliniq-dark .modal-content header,
+html.cliniq-dark .modal-content footer,
+html.cliniq-dark .appointment-date-modal-header,
+html.cliniq-dark .appointment-date-modal-actions {
+    border-color: #3b5945 !important;
+}
+
+html.cliniq-dark .row-actions-close,
+html.cliniq-dark .file-preview-close,
+html.cliniq-dark .appointment-date-modal-close,
+html.cliniq-dark .modal-content [aria-label*="Close"],
+html.cliniq-dark .modal-content [aria-label*="close"] {
+    background: #1b2c21 !important;
+    color: #b9cdbd !important;
+    border-color: #4b6d55 !important;
+}
+
+html.cliniq-dark .row-actions-close:hover,
+html.cliniq-dark .row-actions-close:focus-visible,
+html.cliniq-dark .file-preview-close:hover,
+html.cliniq-dark .file-preview-close:focus-visible,
+html.cliniq-dark .appointment-date-modal-close:hover,
+html.cliniq-dark .appointment-date-modal-close:focus-visible,
+html.cliniq-dark .modal-content [aria-label*="Close"]:hover,
+html.cliniq-dark .modal-content [aria-label*="close"]:hover {
+    background: #284b32 !important;
+    color: #ffffff !important;
+    border-color: #66b77a !important;
+}
+
+html.cliniq-dark .modal-content .btn:disabled,
+html.cliniq-dark .modal-content button:disabled,
+html.cliniq-dark .student-modal button:disabled {
+    background: #26382c !important;
+    color: #8aa194 !important;
+    border-color: #3b5945 !important;
+    opacity: 1 !important;
+}
+/* Row-action dialogs are mounted outside .app-content, so they need their
+   own button cascade instead of relying on the route-level control rules. */
+html.cliniq-dark .row-actions-modal .btn:not(.btn-primary):not(.btn-danger),
+html.cliniq-dark .row-actions-modal .btn-outline,
+html.cliniq-dark .row-actions-modal .btn-ghost {
+    background: #1b2c21 !important;
+    color: #dcebe0 !important;
+    border-color: #4b6d55 !important;
+}
+html.cliniq-dark .row-actions-modal .btn:not(.btn-primary):not(.btn-danger):hover,
+html.cliniq-dark .row-actions-modal .btn-outline:hover,
+html.cliniq-dark .row-actions-modal .btn-ghost:hover,
+html.cliniq-dark .row-actions-modal .btn:not(.btn-primary):not(.btn-danger):focus-visible,
+html.cliniq-dark .row-actions-modal .btn-outline:focus-visible,
+html.cliniq-dark .row-actions-modal .btn-ghost:focus-visible {
+    background: #284b32 !important;
+    color: #ffffff !important;
+    border-color: #66b77a !important;
+}
+html.cliniq-dark .row-actions-modal .btn-primary,
+html.cliniq-dark .row-actions-modal .btn-danger {
+    color: #ffffff !important;
+}
+html.cliniq-dark .row-actions-modal .btn:disabled {
+    background: #26382c !important;
+    color: #8aa194 !important;
+    border-color: #3b5945 !important;
+    box-shadow: none !important;
+    opacity: 1 !important;
+}
+/* Shared advanced-filter dialog treatment across Patients, Visits, Alerts,
+   Appointments, Inventory, and Referrals. */
+html.cliniq-dark [id*="AdvancedFilterModal"] .bg-primary-fixed,
+html.cliniq-dark [id="advancedFilterModal"] .bg-primary-fixed {
+    background: #245f36 !important;
+    color: #ffffff !important;
+}
+html.cliniq-dark [id*="AdvancedFilterModal"] .border-slate-100,
+html.cliniq-dark [id="advancedFilterModal"] .border-slate-100 {
+    border-color: #3b5945 !important;
+}
+html.cliniq-dark [id*="AdvancedFilterModal"] .btn-ghost,
+html.cliniq-dark [id="advancedFilterModal"] .btn-ghost {
+    background: #1b2c21 !important;
+    color: #dcebe0 !important;
+    border: 1px solid #4b6d55 !important;
+}
+html.cliniq-dark [id*="AdvancedFilterModal"] .btn-ghost:hover,
+html.cliniq-dark [id*="AdvancedFilterModal"] .btn-ghost:focus-visible,
+html.cliniq-dark [id="advancedFilterModal"] .btn-ghost:hover,
+html.cliniq-dark [id="advancedFilterModal"] .btn-ghost:focus-visible {
+    background: #284b32 !important;
+    color: #ffffff !important;
+    border-color: #66b77a !important;
+}
+html.cliniq-dark [id*="AdvancedFilterModal"] .btn-icon-slate,
+html.cliniq-dark [id="advancedFilterModal"] .btn-icon-slate {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 999px;
+    background: #1b2c21 !important;
+    color: #b9cdbd !important;
+    border: 1px solid #4b6d55 !important;
+}
+html.cliniq-dark [id*="AdvancedFilterModal"] .btn-icon-slate:hover,
+html.cliniq-dark [id*="AdvancedFilterModal"] .btn-icon-slate:focus-visible,
+html.cliniq-dark [id="advancedFilterModal"] .btn-icon-slate:hover,
+html.cliniq-dark [id="advancedFilterModal"] .btn-icon-slate:focus-visible {
+    background: #284b32 !important;
+    color: #ffffff !important;
+    border-color: #66b77a !important;
+}
+/* Dynamic confirmation dialogs are appended to body, outside .app-content. */
+html.cliniq-dark #confirmActionModal .modal-content,
+html.cliniq-dark #confirmActionModal .confirm-modal,
+html.cliniq-dark #confirmActionModal > div > div {
+    background: #17231b !important;
+    color: #e8f2ea !important;
+    border-color: #3b5945 !important;
+}
+html.cliniq-dark #confirmActionModal h3,
+html.cliniq-dark #confirmActionModal p,
+html.cliniq-dark #confirmActionModal strong,
+html.cliniq-dark #confirmActionModal label {
+    color: #e8f2ea !important;
+}
+html.cliniq-dark #confirmActionModal .bg-primary-fixed,
+html.cliniq-dark #confirmActionModal [class*="bg-primary-fixed"] {
+    background: #245f36 !important;
+    color: #ffffff !important;
+}
+html.cliniq-dark #confirmActionModal .btn-ghost,
+html.cliniq-dark #confirmActionModal .btn:not(.btn-primary):not(.btn-danger) {
+    background: #1b2c21 !important;
+    color: #dcebe0 !important;
+    border: 1px solid #4b6d55 !important;
+}
+html.cliniq-dark #confirmActionModal .btn-ghost:hover,
+html.cliniq-dark #confirmActionModal .btn-ghost:focus-visible,
+html.cliniq-dark #confirmActionModal .btn:not(.btn-primary):not(.btn-danger):hover,
+html.cliniq-dark #confirmActionModal .btn:not(.btn-primary):not(.btn-danger):focus-visible {
+    background: #284b32 !important;
+    color: #ffffff !important;
+    border-color: #66b77a !important;
+}
+html.cliniq-dark #confirmActionModal .btn-primary,
+html.cliniq-dark #confirmActionModal .btn-danger {
+    color: #ffffff !important;
+}
+html.cliniq-dark #confirmActionModal .btn:disabled {
+    background: #26382c !important;
+    color: #8aa194 !important;
+    border-color: #3b5945 !important;
+    opacity: 1 !important;
+}
+html.cliniq-dark #confirmActionModal [class*="bg-red-50"] {
+    background: #4a252a !important;
+    color: #ffd7da !important;
+}
+html.cliniq-dark #confirmActionModal [class*="bg-blue-50"] {
+    background: #244a62 !important;
+    color: #c7e6ff !important;
+}
+/* Modal secondary actions should remain visibly clickable in dark mode. */
+html.cliniq-dark .modal-content .btn-ghost,
+html.cliniq-dark .modal-content .btn-outline,
+html.cliniq-dark .student-modal .btn-ghost,
+html.cliniq-dark .student-modal .btn-outline {
+    background: #1b2c21 !important;
+    color: #dcebe0 !important;
+    border: 1px solid #4b6d55 !important;
+}
+html.cliniq-dark .modal-content .btn-ghost:hover,
+html.cliniq-dark .modal-content .btn-ghost:focus-visible,
+html.cliniq-dark .modal-content .btn-outline:hover,
+html.cliniq-dark .modal-content .btn-outline:focus-visible,
+html.cliniq-dark .student-modal .btn-ghost:hover,
+html.cliniq-dark .student-modal .btn-ghost:focus-visible,
+html.cliniq-dark .student-modal .btn-outline:hover,
+html.cliniq-dark .student-modal .btn-outline:focus-visible {
+    background: #284b32 !important;
+    color: #ffffff !important;
+    border-color: #66b77a !important;
+}
+/* Alert detail dark-mode contract and aligned response actions. */
+html.cliniq-dark .app-content .app-page-back {
+    background: #1b2c21 !important;
+    color: #dcebe0 !important;
+    border-color: #4b6d55 !important;
+}
+html.cliniq-dark .app-content .app-page-back:hover,
+html.cliniq-dark .app-content .app-page-back:focus-visible {
+    background: #284b32 !important;
+    color: #ffffff !important;
+    border-color: #66b77a !important;
+}
+html.cliniq-dark .app-content .alert-report-field {
+    background: #3b2024 !important;
+    border-color: #d66b73 !important;
+}
+html.cliniq-dark .app-content .alert-report-field strong {
+    color: #ffd7da !important;
+}
+html.cliniq-dark .app-content .alert-report-field .clinic-label {
+    color: #e7a2a8 !important;
+}
+html.cliniq-dark .app-content .alert-report-field strong,
+html.cliniq-dark .app-content .alert-report-field span {
+    text-shadow: none !important;
+}
+html.cliniq-dark .app-content [class*="bg-red-50"] {
+    background: #4a252a !important;
+    color: #ffd7da !important;
+    border-color: #d66b73 !important;
+}
+html.cliniq-dark .app-content [class*="bg-slate-50"] {
+    background: #1b2c21 !important;
+    color: #dcebe0 !important;
+    border-color: #3b5945 !important;
+}
+html.cliniq-dark .app-content [class*="bg-emerald-50"] {
+    background: #1d4934 !important;
+    color: #baf1c9 !important;
+    border-color: #4d9b68 !important;
+}
+html.cliniq-dark .app-content .clinic-response-actions {
+    align-items: center;
+}
+html.cliniq-dark .app-content .clinic-response-actions form {
+    margin: 0;
+}
+
+/* Public and authentication surfaces must follow the shared dark theme too. */
+html.cliniq-dark .portal-card,
+html.cliniq-dark .portal-option,
+html.cliniq-dark .visit-card,
+html.cliniq-dark .staff-login-card,
+html.cliniq-dark .feedback-public .clinic-card {
+    background: #17231b !important;
+    color: var(--cliniq-foreground) !important;
+    border-color: var(--cliniq-border) !important;
+}
+html.cliniq-dark .portal-option-secondary,
+html.cliniq-dark .portal-option-primary {
+    background: #19271e !important;
+}
+html.cliniq-dark .portal-card h1,
+html.cliniq-dark .portal-card .font-headline,
+html.cliniq-dark .portal-header .font-headline,
+html.cliniq-dark .portal-option .font-headline,
+html.cliniq-dark .portal-option .text-slate-500,
+html.cliniq-dark .portal-card .text-slate-500,
+html.cliniq-dark .portal-card .text-slate-400,
+html.cliniq-dark .portal-footer,
+html.cliniq-dark .portal-header .text-slate-400 {
+    color: var(--cliniq-foreground) !important;
+}
+html.cliniq-dark .portal-card p,
+html.cliniq-dark .portal-card .text-slate-500,
+html.cliniq-dark .portal-card .text-slate-400,
+html.cliniq-dark .portal-footer {
+    color: var(--cliniq-muted-foreground) !important;
+}
+html.cliniq-dark .portal-option .portal-icon.bg-white,
+html.cliniq-dark .portal-arrow {
+    background: #e8f2ea !important;
+    color: #28583a !important;
+}
+html.cliniq-dark .portal-header,
+html.cliniq-dark .portal-footer {
+    background: transparent !important;
+}
+
+html.cliniq-dark .cliniq-entry-back {
+    background: #1b2c21 !important;
+    color: var(--cliniq-foreground) !important;
+    border: 1px solid var(--cliniq-border);
+}
+html.cliniq-dark .cliniq-entry-back:hover,
+html.cliniq-dark .cliniq-entry-back:focus-visible {
+    background: #244a30 !important;
+    color: #fff !important;
+}
+html.cliniq-dark .cliniq-entry-divider { background: var(--cliniq-border) !important; }
+html.cliniq-dark .cliniq-entry-brand,
+html.cliniq-dark .cliniq-entry-brand .text-slate-400,
+html.cliniq-dark .cliniq-entry-name,
+html.cliniq-dark .cliniq-entry-subtitle { color: var(--cliniq-foreground) !important; }
+
+html.cliniq-dark .staff-login-card { box-shadow: 0 24px 64px rgba(0, 0, 0, .28); }
+html.cliniq-dark .staff-login-form { background: #17231b !important; }
+html.cliniq-dark .staff-login-form h2,
+html.cliniq-dark .staff-login-form label,
+html.cliniq-dark .staff-login-form .text-slate-500,
+html.cliniq-dark .staff-note { color: var(--cliniq-foreground) !important; }
+html.cliniq-dark .staff-login-form .text-slate-500,
+html.cliniq-dark .staff-note { color: var(--cliniq-muted-foreground) !important; }
+html.cliniq-dark .staff-login-input {
+    background: #101a14 !important;
+    color: var(--cliniq-foreground) !important;
+    border-color: var(--cliniq-outline) !important;
+}
+html.cliniq-dark .staff-login-input:focus { background: #142219 !important; }
+html.cliniq-dark .staff-toggle-pw { color: var(--cliniq-muted-foreground) !important; }
+
+html.cliniq-dark .feedback-page .btn-outline,
+html.cliniq-dark .feedback-page .btn-ghost {
+    background: #1b2c21 !important;
+    color: var(--cliniq-foreground) !important;
+    border-color: var(--cliniq-outline) !important;
+}
+html.cliniq-dark .feedback-page .btn-outline:hover,
+html.cliniq-dark .feedback-page .btn-ghost:hover { background: #244a30 !important; }
+html.cliniq-dark .feedback-notice { background: #4a252a !important; color: #ffd7da !important; border-color: #d66b73 !important; }
+html.cliniq-dark .btn-outline,
+html.cliniq-dark .btn-ghost {
+    background: #1b2c21 !important;
+    color: var(--cliniq-foreground) !important;
+    border-color: var(--cliniq-outline) !important;
+}
+html.cliniq-dark .btn-outline:hover,
+html.cliniq-dark .btn-ghost:hover { background: #244a30 !important; }
+
+html.cliniq-dark .visit-card-header,
+html.cliniq-dark .visit-card-form,
+html.cliniq-dark .visit-card-footer { color: var(--cliniq-foreground) !important; }
+html.cliniq-dark .visit-input {
+    background: #101a14 !important;
+    color: var(--cliniq-foreground) !important;
+    border-bottom-color: var(--cliniq-outline) !important;
+}
+html.cliniq-dark .visit-input::placeholder,
+html.cliniq-dark .visit-label,
+html.cliniq-dark .visit-lookup-status { color: var(--cliniq-muted-foreground) !important; }
+html.cliniq-dark .visit-card-footer { background: #1b2c21 !important; border-color: var(--cliniq-border) !important; }
+html.cliniq-dark .visit-time-pill { background: #1b2c21 !important; color: var(--cliniq-muted-foreground) !important; }
+html.cliniq-dark .visit-card-title,
+html.cliniq-dark .visit-card h1,
+html.cliniq-dark .visit-card h2,
+html.cliniq-dark .visit-card h3 { color: var(--cliniq-foreground) !important; }
+html.cliniq-dark .visit-card-icon {
+    background: #1d4934 !important;
+    color: #baf1c9 !important;
+    border-color: #4d9b68 !important;
+}
+html.cliniq-dark .visit-card-subtitle,
+html.cliniq-dark .visit-card .text-slate-500 { color: var(--cliniq-muted-foreground) !important; }
+html.cliniq-dark .visit-card .bg-emerald-50 {
+    background: #1d4934 !important;
+    color: #baf1c9 !important;
+}
+html.cliniq-dark .badge-completed {
+    background: #1d4934 !important;
+    color: #baf1c9 !important;
+    border-color: #4d9b68 !important;
+}
+html.cliniq-dark .badge-active {
+    background: #1b2c21 !important;
+    color: #dcebe0 !important;
+    border-color: var(--cliniq-outline) !important;
+}
+
+/* System Settings dark-mode surface and utility overrides. */
+html.cliniq-dark .settings-shell .settings-panel,
+html.cliniq-dark .settings-shell .settings-section,
+html.cliniq-dark .settings-shell .settings-profile-card,
+html.cliniq-dark .settings-shell .bg-white {
+    background: #142219 !important;
+    color: var(--cliniq-foreground) !important;
+    border-color: var(--cliniq-border) !important;
+}
+
+html.cliniq-dark .settings-shell .bg-slate-50,
+html.cliniq-dark .settings-shell .bg-slate-100 {
+    background: #1b2c21 !important;
+    color: var(--cliniq-foreground) !important;
+    border-color: var(--cliniq-border) !important;
+}
+
+html.cliniq-dark .settings-shell .bg-emerald-50,
+html.cliniq-dark .settings-shell .bg-green-50,
+html.cliniq-dark .settings-shell .bg-blue-50,
+html.cliniq-dark .settings-shell .bg-amber-50,
+html.cliniq-dark .settings-shell .bg-red-50 {
+    background: #1d4934 !important;
+    color: var(--cliniq-foreground) !important;
+    border-color: var(--cliniq-outline) !important;
+}
+
+html.cliniq-dark .settings-shell [class*="bg-[#e8f2ea]"],
+html.cliniq-dark .settings-shell [class*="bg-[#eef8f0]"],
+html.cliniq-dark .settings-shell [class*="bg-[#d7eedc]"],
+html.cliniq-dark .settings-shell [class*="bg-[#fff8e6]"],
+html.cliniq-dark .settings-shell [class*="bg-[#f5faf6]"] {
+    background: #1d4934 !important;
+    color: #baf1c9 !important;
+}
+
+html.cliniq-dark .settings-shell [class*="bg-[#eef8f0]"] {
+    background: #172d20 !important;
+}
+
+html.cliniq-dark .settings-shell [class*="bg-[#f5faf6]"] [class*="text-[#17261d]"],
+html.cliniq-dark .settings-shell [class*="bg-[#f5faf6]"] .text-slate-600 {
+    color: var(--cliniq-foreground) !important;
+}
+
+html.cliniq-dark .settings-shell [class*="bg-[#fff8e6]"] {
+    color: #f4d27b !important;
+}
+
+html.cliniq-dark .settings-shell [class*="text-[#17261d]"],
+html.cliniq-dark .settings-shell .text-slate-600,
+html.cliniq-dark .settings-shell .text-slate-700,
+html.cliniq-dark .settings-shell .text-slate-800 {
+    color: var(--cliniq-foreground) !important;
+}
+
+html.cliniq-dark .settings-shell .text-slate-500,
+html.cliniq-dark .settings-shell .text-slate-400,
+html.cliniq-dark .settings-shell [class*="text-[#64748b]"] {
+    color: var(--cliniq-muted-foreground) !important;
+}
+
+html.cliniq-dark .settings-shell .border-slate-200,
+html.cliniq-dark .settings-shell .border-slate-100,
+html.cliniq-dark .settings-shell [class*="border-white"],
+html.cliniq-dark .settings-shell [class*="border-[#cfe3d3]"],
+html.cliniq-dark .settings-shell [class*="border-[#d8e7d"] {
+    border-color: var(--cliniq-border) !important;
+}
+
+html.cliniq-dark .settings-shell .settings-input,
+html.cliniq-dark .settings-shell .settings-textarea,
+html.cliniq-dark .settings-shell .form-input,
+html.cliniq-dark .settings-shell select,
+html.cliniq-dark .settings-shell input:not([type="checkbox"]):not([type="radio"]),
+html.cliniq-dark .settings-shell textarea {
+    background: #101a14 !important;
+    color: var(--cliniq-foreground) !important;
+    border-color: var(--cliniq-outline) !important;
+}
+
+html.cliniq-dark .settings-shell .settings-profile-row,
+html.cliniq-dark .settings-shell .settings-dropdown-category-link,
+html.cliniq-dark .settings-shell .settings-dropdown-group-link,
+html.cliniq-dark .settings-shell .settings-band-card,
+html.cliniq-dark .settings-shell .settings-score-band {
+    background: #1b2c21 !important;
+    color: var(--cliniq-foreground) !important;
+    border-color: var(--cliniq-outline) !important;
+}
+
+html.cliniq-dark .settings-shell .settings-profile-row:hover,
+html.cliniq-dark .settings-shell .settings-dropdown-category-link:hover,
+html.cliniq-dark .settings-shell .settings-dropdown-group-link:hover {
+    background: #244a30 !important;
+}
+
+html.cliniq-dark .settings-shell .settings-profile-row-copy strong,
+html.cliniq-dark .settings-shell .settings-dropdown-group-heading strong,
+html.cliniq-dark .settings-shell .settings-dropdown-group-link strong,
+html.cliniq-dark .settings-shell .settings-band-card,
+html.cliniq-dark .settings-shell .settings-score-band {
+    color: var(--cliniq-foreground) !important;
+}
+
+html.cliniq-dark .settings-shell .settings-profile-row-copy span,
+html.cliniq-dark .settings-shell .settings-dropdown-group-heading small,
+html.cliniq-dark .settings-shell .settings-dropdown-group-link small {
+    color: var(--cliniq-muted-foreground) !important;
+}
+
+html.cliniq-dark .settings-shell .settings-profile-row-arrow,
+html.cliniq-dark .settings-shell .settings-dropdown-group-link .material-symbols-outlined {
+    color: #8ed6a0 !important;
 }

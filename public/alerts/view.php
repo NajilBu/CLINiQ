@@ -208,27 +208,28 @@ render_header('Alert Report');
                     </form>
                 </div>
             <?php elseif ($alert['status'] === 'In Progress'): ?>
-                <form method="post" action="update.php">
+                <form method="post" action="update.php" id="alertResolutionForm">
                     <input type="hidden" name="id" value="<?= (int) $alert['id'] ?>">
                     <input type="hidden" name="status" value="Resolved">
                     <input type="hidden" name="redirect" value="view.php?id=<?= (int) $alert['id'] ?>">
                     <label class="clinic-label">Accident / Response Report</label>
                     <textarea class="clinic-textarea" name="resolution_report" rows="8" required placeholder="Write what happened, how staff responded, treatment or referral made, and final outcome."><?= e($alert['resolution_report']) ?></textarea>
-                    <div class="mt-4 flex flex-wrap justify-end gap-3">
-                        <button type="submit" class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Resolve this alert?" data-confirm-message="This will save the accident report and mark the alert as Resolved." data-confirm-toast="Resolving alert...">
-                            <span class="material-symbols-outlined text-[18px]">check_circle</span>
-                            Save Report & Resolve
+                </form>
+                <div class="clinic-response-actions mt-4 flex flex-wrap justify-end gap-3">
+                    <form method="post" action="update.php">
+                        <input type="hidden" name="id" value="<?= (int) $alert['id'] ?>">
+                        <input type="hidden" name="status" value="Cancelled">
+                        <input type="hidden" name="redirect" value="view.php?id=<?= (int) $alert['id'] ?>">
+                        <button class="btn btn-ghost" title="Cancel alert" aria-label="Cancel alert" data-confirm-submit data-confirm-type="danger" data-confirm-title="Cancel this alert?" data-confirm-message="This will mark the alert as Cancelled." data-confirm-toast="Cancelling alert...">
+                            <span class="material-symbols-outlined">cancel</span>
+                            Cancel Alert
                         </button>
-                    </div>
-                </form>
-                <form method="post" action="update.php" class="pt-2">
-                    <input type="hidden" name="id" value="<?= (int) $alert['id'] ?>">
-                    <input type="hidden" name="status" value="Cancelled">
-                    <input type="hidden" name="redirect" value="view.php?id=<?= (int) $alert['id'] ?>">
-                    <button class="btn btn-ghost btn-cancel-icon" title="Cancel alert" aria-label="Cancel alert" data-confirm-submit data-confirm-type="danger" data-confirm-title="Cancel this alert?" data-confirm-message="This will mark the alert as Cancelled." data-confirm-toast="Cancelling alert...">
-                        <span class="material-symbols-outlined">cancel</span>
+                    </form>
+                    <button type="submit" form="alertResolutionForm" class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Resolve this alert?" data-confirm-message="This will save the accident report and mark the alert as Resolved." data-confirm-toast="Resolving alert...">
+                        <span class="material-symbols-outlined text-[18px]">check_circle</span>
+                        Save Report & Resolve
                     </button>
-                </form>
+                </div>
             <?php elseif ($alert['status'] === 'Resolved'): ?>
                 <div>
                     <span class="clinic-label">Accident / Response Report</span>

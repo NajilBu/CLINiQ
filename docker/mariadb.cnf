@@ -1,0 +1,10 @@
+[mysqld]
+# Conservative baseline for the current host; validate against host memory before scaling up.
+max_connections = 300
+thread_cache_size = 32
+table_open_cache = 2048
+innodb_buffer_pool_size = 512M
+innodb_log_buffer_size = 32M
+innodb_flush_log_at_trx_commit = 1
+character-set-server = utf8mb4
+collation-server = utf8mb4_unicode_ci

@@ -45,8 +45,14 @@ function audit_log_event(
     string $outcome = 'success'
 ): int {
     try {
-        ensure_audit_log_schema();
-        $stmt = auth_db()->prepare("
+        $db = auth_db();
+        // CREATE/ALTER TABLE implicitly commits a MySQL transaction. The audit
+        // table is provisioned by the schema and by non-transactional requests;
+        // never run the lazy schema check on a workflow transaction connection.
+        if (!$db->inTransaction()) {
+            ensure_audit_log_schema();
+        }
+        $stmt = $db->prepare("
             INSERT INTO audit_logs
                 (actor_person_id, actor_type, module, action, target_type, target_id, outcome, metadata, ip_address, user_agent)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -63,7 +69,7 @@ function audit_log_event(
             $_SERVER['REMOTE_ADDR'] ?? null,
             substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255),
         ]);
-        return (int) auth_db()->lastInsertId();
+        return (int) $db->lastInsertId();
     } catch (Throwable $exception) {
         // Audit failures must never prevent the underlying clinic workflow.
         return 0;

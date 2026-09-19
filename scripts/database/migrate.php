@@ -35,6 +35,7 @@ function migration_checksum_is_known_compatible(string $name, string $stored, st
         $idempotentChecksums = [
             '6263b13984783554a45022d6c58cdf91a2152e5b53723eea69498158e70bbb1e',
             '9c0d2cb7f3b93988c021dda5c44321a9e42161f8ee29f67e48b7aa2d4b6a4814',
+            '1a1de9360978a5d0814cca8b76fc1813bbd7cd5bd7f531903338ca3e3f3475db',
         ];
 
         return in_array(strtolower($stored), $originalChecksums, true)

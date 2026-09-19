@@ -41,6 +41,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
             $latestExistingByType[$existingDocument['document_type']] ??= $existingDocument;
         }
         $batchFiles = $_FILES['documents'] ?? [];
+        $maxFilesPerRequirement = 3;
+        foreach ($documentTypesByKey as $documentKey => $documentType) {
+            $selectedErrors = $batchFiles['error'][$documentKey] ?? [];
+            $selectedErrors = is_array($selectedErrors) ? $selectedErrors : [$selectedErrors];
+            $selectedCount = count(array_filter($selectedErrors, static fn($error): bool => (int) $error !== UPLOAD_ERR_NO_FILE));
+            if ($selectedCount > $maxFilesPerRequirement) {
+                throw new InvalidArgumentException(sprintf(
+                    '%s has %d files selected. A maximum of %d files is allowed per requirement; combine additional pages into one PDF before uploading.',
+                    $documentType,
+                    $selectedCount,
+                    $maxFilesPerRequirement
+                ));
+            }
+        }
         $requiredDocumentKeys = [];
         foreach ($documentTypesByKey as $documentKey => $documentType) {
             $existing = $latestExistingByType[$documentType] ?? null;
@@ -169,6 +183,7 @@ $apeStatus = $apeRecord['workflow_status'] ?? 'Not Started';
 $clearanceStatus = $apeRecord['clearance_status'] ?? 'Pending';
 $studentNote = trim((string) ($apeRecord['patient_visible_note'] ?? ''));
 $missingItems = trim((string) ($apeRecord['missing_items'] ?? ''));
+$missingDocumentCount = $missingItems === '' ? 0 : count(array_filter(preg_split('/\s*,\s*/', $missingItems) ?: []));
 $requirementStatus = $apeRecord['requirement_status'] ?? 'Not Checked';
 $hasScheduledBatch = !empty($apeRecord['schedule_batch_id']) && ($apeRecord['batch_status'] ?? '') === 'Scheduled';
 $actionNeeded = $clearanceStatus !== 'Cleared' && $apeStatus !== 'Not Started' && $hasScheduledBatch;
@@ -373,7 +388,6 @@ render_student_header('APE Status', 'ape');
     <div>
         <p class="student-eyebrow">Annual Physical Examination</p>
         <h1 class="student-title">APE Status</h1>
-        <p class="student-subtitle">Complete the documents requested by the clinic and monitor your clearance status.</p>
     </div>
     <span class="student-badge <?= student_e($headerBadge) ?>">
         <span class="material-symbols-outlined text-[14px]">pending_actions</span>
@@ -519,18 +533,19 @@ render_student_header('APE Status', 'ape');
         <div class="student-card-header">
             <div>
                 <h2 class="student-card-title">Required Documents</h2>
-                <p class="student-card-copy">Upload only documents already checked by the clinic. PDF, JPG/JPEG, and PNG files are allowed, up to 2 MB each.</p>
+                <p class="student-card-copy">PDF, JPG/JPEG, or PNG · up to 2 MB per file</p>
             </div>
             <span class="student-badge <?= student_e($headerBadge) ?>"><?= student_e($clearanceStatus) ?></span>
         </div>
         <div class="student-card-pad">
             <form method="post" enctype="multipart/form-data" id="ape-batch-upload-form">
                 <input type="hidden" name="action" value="upload_ape_documents">
+                <p class="ape-document-guidance"><span class="material-symbols-outlined" aria-hidden="true">lock</span><span>Upload clinic-requested files only. <a href="<?= student_e(student_legal_url('privacy')) ?>" target="_blank" rel="noopener" class="student-auth-link">Privacy Notice</a></span></p>
             <?php if ($missingItems !== ''): ?>
-                <div class="student-note student-note-warning mb-4">
-                    <span class="material-symbols-outlined">info</span>
-                    <div><strong>Clinic note:</strong> <?= student_e($missingItems) ?></div>
-                </div>
+                <details class="ape-missing-documents mb-4">
+                    <summary><span class="material-symbols-outlined" aria-hidden="true">info</span><span><?= $missingDocumentCount > 0 ? student_e((string) $missingDocumentCount) . ' document' . ($missingDocumentCount === 1 ? '' : 's') . ' still needed' : 'Documents still needed' ?></span><span class="material-symbols-outlined ape-missing-documents-chevron" aria-hidden="true">expand_more</span></summary>
+                    <p><?= student_e($missingItems) ?></p>
+                </details>
             <?php endif; ?>
             <div class="student-document-mobile-list" aria-label="Required documents">
                 <?php foreach ($documents as $doc): ?>
@@ -617,7 +632,7 @@ render_student_header('APE Status', 'ape');
                 <div class="ape-batch-submit-bar">
                     <div>
                         <strong id="ape-selected-summary">No files selected</strong>
-                        <span>Select files first. You can change or remove them before submitting. Each PDF, JPG/JPEG, or PNG file must be 2 MB or smaller.</span>
+                        <span>Select up to 3 files per requirement. If you have more, combine them into one PDF first. You can change or remove files before submitting; each PDF, JPG/JPEG, or PNG file must be 2 MB or smaller.</span>
                     </div>
                     <button class="student-button" id="ape-submit-all" type="submit" disabled>
                         <span class="material-symbols-outlined">cloud_upload</span>
@@ -746,8 +761,16 @@ render_student_header('APE Status', 'ape');
 
     function handleApeFileSelected(input) {
         const maxFileSize = 2 * 1024 * 1024;
+        const maxFilesPerRequirement = 3;
         const allowedTypes = { pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png' };
         const selectedFiles = Array.from(input.files || []);
+        if (selectedFiles.length > maxFilesPerRequirement) {
+            window.alert(`You selected ${selectedFiles.length} files for ${input.dataset.documentName || 'this requirement'}. A maximum of ${maxFilesPerRequirement} files is allowed. Please combine additional pages into one PDF before uploading.`);
+            input.value = '';
+            updateApeFileRow(input);
+            refreshApeBatchSummary();
+            return;
+        }
         const oversizedFile = selectedFiles.find((file) => file.size > maxFileSize);
         if (oversizedFile) {
             window.alert(`${oversizedFile.name} is larger than 2 MB. Please choose files that are 2 MB or smaller.`);

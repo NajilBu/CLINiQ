@@ -116,12 +116,7 @@ render_student_header('Emergency Health Passport', 'passport');
     <div>
         <p class="student-eyebrow">Emergency Health</p>
         <h1 class="student-title">Health Passport</h1>
-        <p class="student-subtitle">Manage the information shown on your Emergency Health Passport accessed via QR or NFC.</p>
     </div>
-    <span class="student-badge passport-badge-emergency">
-        <span class="material-symbols-outlined passport-icon-sm">emergency</span>
-        Emergency Access
-    </span>
 </section>
 
 <?php if (!empty($passportError)): ?>
@@ -141,13 +136,12 @@ render_student_header('Emergency Health Passport', 'passport');
 </div>
 <?php endif; ?>
 
-<!-- ── Emergency Notice ── -->
-<div class="student-note student-note-danger mb-4">
-    <span class="material-symbols-outlined">info</span>
-    <div>
-        <strong>This information is shown to emergency responders.</strong>
-        Make sure all fields are accurate. Only emergency-relevant data is displayed on the public passport page &mdash; full medical records are never exposed.
-    </div>
+<div class="passport-summary-row">
+    <p class="passport-privacy-summary"><span class="material-symbols-outlined" aria-hidden="true">privacy_tip</span><span>Your QR/NFC passport shares only the emergency details you choose. Keep them accurate—access is logged. <a href="<?= student_e(student_legal_url('privacy')) ?>" target="_blank" rel="noopener" class="student-auth-link">Privacy Notice</a>.</span></p>
+    <span class="student-badge passport-badge-emergency">
+        <span class="material-symbols-outlined passport-icon-sm">emergency</span>
+        Emergency Access
+    </span>
 </div>
 
 <form method="POST" action="" id="passport-form" data-emergency-contact-form>
@@ -582,15 +576,28 @@ render_student_header('Emergency Health Passport', 'passport');
     });
     syncDirtyState();
 
-    if (!window.matchMedia('(max-width: 640px)').matches) return;
+    const isPhone = window.matchMedia('(max-width: 640px)').matches;
+    const isCompactViewport = window.matchMedia('(max-width: 1024px)').matches;
+    if (!isCompactViewport) return;
 
-    form.classList.add('passport-tab-profile');
+    if (isPhone) form.classList.add('passport-tab-profile');
     document.querySelectorAll('[data-passport-tab]').forEach((tab) => {
         tab.addEventListener('click', () => {
             const group = tab.dataset.passportTab;
-            form.classList.remove('passport-tab-profile', 'passport-tab-emergency', 'passport-tab-access');
-            form.classList.add(`passport-tab-${group}`);
+            if (isPhone) {
+                form.classList.remove('passport-tab-profile', 'passport-tab-emergency', 'passport-tab-access');
+                form.classList.add(`passport-tab-${group}`);
+            }
             document.querySelectorAll('[data-passport-tab]').forEach((item) => item.classList.toggle('is-active', item === tab));
+
+            const target = form.querySelector(`[data-passport-group="${group}"]`);
+            if (!target) return;
+            if (target.matches('details')) target.open = true;
+            const header = document.querySelector('.student-topbar');
+            const headerHeight = header?.getBoundingClientRect().height ?? 72;
+            const tabsHeight = document.querySelector('.passport-mobile-tabs')?.getBoundingClientRect().height ?? 0;
+            const top = target.getBoundingClientRect().top + window.scrollY - headerHeight - tabsHeight - 12;
+            window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
         });
     });
     document.querySelectorAll('[data-passport-token]').forEach((button) => {

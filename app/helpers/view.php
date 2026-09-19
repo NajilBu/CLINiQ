@@ -220,7 +220,7 @@ function render_header(string $title): void
     }
     ?>
     <!doctype html>
-    <html class="light" lang="en">
+    <html class="light<?= !empty($theme['dark_mode']) ? ' dark cliniq-dark' : '' ?>" lang="en">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -259,6 +259,7 @@ function render_header(string $title): void
         <link href="<?= app_url('assets/css/app.css?v=' . filemtime(__DIR__ . '/../../public/assets/css/app.css')) ?>" rel="stylesheet">
         <style>
             :root {
+                --cliniq-background: <?= e($theme['surface']) ?>;
                 --cliniq-primary: <?= e($theme['primary']) ?>;
                 --cliniq-primary-hover: <?= e($theme['primary_container']) ?>;
                 --cliniq-primary-fixed: <?= e($theme['primary_fixed']) ?>;

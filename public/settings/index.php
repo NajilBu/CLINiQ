@@ -110,12 +110,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             save_cliniq_theme_settings(
                 (string) ($_POST['theme'] ?? default_cliniq_theme_key()),
                 $updatedBy,
-                (string) ($_POST['custom_color'] ?? '#3F7D52')
+                (string) ($_POST['custom_color'] ?? '#3F7D52'),
+                (string) ($_POST['dark_mode'] ?? '') === '1'
             );
             audit_log_event('settings', 'theme_updated', $updatedBy, 'staff', 'settings', null);
             flash_message('success', 'System color theme updated.');
         } catch (InvalidArgumentException $e) {
             flash_message('warning', $e->getMessage());
+        }
+        header('Location: index.php?tab=general');
+        exit;
+    }
+
+    if ($action === 'save_legal_documents') {
+        if (!$canManageSettings) {
+            flash_message('error', 'You do not have permission to update the Terms of Use or Privacy Notice.');
+            header('Location: index.php?tab=general');
+            exit;
+        }
+        try {
+            $legalDocuments = save_cliniq_legal_documents($_POST, $updatedBy);
+            audit_log_event('settings', 'legal_documents_updated', $updatedBy, 'staff', 'settings', null, [
+                'version' => $legalDocuments['version'],
+                'previous_version' => $legalDocuments['previous_version'] ?? null,
+            ]);
+            flash_message('success', 'Terms of Use and Privacy Notice updated.');
+        } catch (Throwable $e) {
+            flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $e->getMessage());
         }
         header('Location: index.php?tab=general');
         exit;
@@ -584,6 +605,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $clinicProfile = clinic_profile_settings();
+$legalDocuments = cliniq_legal_documents();
 $systemLogoPath = clinic_profile_logo_path($clinicProfile);
 $systemLogoUrl = app_url($systemLogoPath);
 $customAlertSoundPath = clinic_profile_alert_sound_path($clinicProfile);
@@ -594,6 +616,7 @@ $themePresets = cliniq_theme_presets();
 $themeSettings = cliniq_theme_settings();
 $activeTheme = $themeSettings['theme'];
 $customThemeColor = $themeSettings['custom_color'];
+$darkModeEnabled = (bool) ($themeSettings['dark_mode'] ?? false);
 $staffProfiles = staff_profiles();
 $staffRoles = staff_profile_roles();
 $settings = risk_settings();
@@ -858,7 +881,59 @@ render_clinic_command_header(
                             </button>
                         </div>
                     </form>
+                    <div class="mt-5 flex items-center justify-between gap-4 rounded-xl border border-outline-variant/20 bg-slate-50/70 px-4 py-3">
+                        <div>
+                            <p class="font-headline text-sm font-extrabold text-[#17261d] mb-1">Student Terms &amp; Privacy</p>
+                            <p class="settings-help mb-0">Current policy version: <?= e((string) $legalDocuments['version']) ?><?= !empty($legalDocuments['updated_at']) ? ' · Last updated ' . e((string) $legalDocuments['updated_at']) : '' ?></p>
+                        </div>
+                        <button type="button" class="btn btn-secondary shrink-0" onclick="showModal('studentLegalDocumentsModal')" <?= !$canManageSettings ? 'disabled' : '' ?>>
+                            <span class="material-symbols-outlined text-[18px]">gavel</span>
+                            Edit Terms &amp; Privacy
+                        </button>
+                    </div>
                 </section>
+
+                <div id="studentLegalDocumentsModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="studentLegalDocumentsModalTitle">
+                    <form method="post" data-no-ajax="true" class="modal-content bg-white rounded-[1.5rem] w-full max-w-5xl shadow-2xl border border-outline-variant/10 overflow-hidden" style="max-height:92vh;display:flex;flex-direction:column;">
+                        <input type="hidden" name="action" value="save_legal_documents">
+                        <div class="flex items-start justify-between gap-4 border-b border-outline-variant/20 p-6">
+                            <div>
+                                <p class="clinic-label mb-1">Student Portal</p>
+                                <h3 class="font-headline text-2xl font-extrabold text-[#17261d] mb-2" id="studentLegalDocumentsModalTitle">Terms &amp; Privacy Notice</h3>
+                                <p class="text-sm font-bold text-slate-500 leading-6 mb-0">Edit document details in their own fields, then format the policy text visually. Students see the formatted result.</p>
+                            </div>
+                            <button type="button" class="btn btn-ghost shrink-0" onclick="closeModal('studentLegalDocumentsModal')" aria-label="Close Terms and Privacy editor">
+                                <span class="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+                        <div class="grid gap-5 overflow-y-auto p-6 md:grid-cols-2 legal-form-grid">
+                            <div class="settings-field">
+                                <h4 class="font-headline text-lg font-extrabold text-[#17261d] mb-3">Terms of Use</h4>
+                                <label class="clinic-label" for="terms_title">Document title</label><input class="settings-input mb-3" id="terms_title" name="terms[title]" value="<?= e((string) $legalDocuments['terms']['title']) ?>" required>
+                                <?php foreach (cliniq_legal_document_fields('terms') as $key => $label): ?><label class="clinic-label" for="terms_<?= e($key) ?>"><?= e($label) ?></label><input class="settings-input mb-3" id="terms_<?= e($key) ?>" name="terms[details][<?= e($key) ?>]" value="<?= e((string) ($legalDocuments['terms']['details'][$key] ?? '')) ?>"><?php endforeach; ?>
+                                <label class="clinic-label">Policy text</label><div class="legal-toolbar" data-legal-toolbar="terms_body"><button type="button" data-format="bold"><strong>B</strong></button><button type="button" data-format="italic"><em>I</em></button><button type="button" data-format="formatBlock" data-value="h2">Heading</button><button type="button" data-format="insertUnorderedList">List</button></div>
+                                <div class="legal-rich-editor" id="terms_body" contenteditable="<?= $canManageSettings ? 'true' : 'false' ?>" data-legal-editor aria-label="Terms of Use policy text"><?= $legalDocuments['terms']['body_html'] ?></div><input type="hidden" name="terms[body_html]" data-legal-output="terms_body">
+                            </div>
+                            <div class="settings-field">
+                                <h4 class="font-headline text-lg font-extrabold text-[#17261d] mb-3">Privacy Notice</h4>
+                                <label class="clinic-label" for="privacy_title">Document title</label><input class="settings-input mb-3" id="privacy_title" name="privacy[title]" value="<?= e((string) $legalDocuments['privacy']['title']) ?>" required>
+                                <?php foreach (cliniq_legal_document_fields('privacy') as $key => $label): ?><label class="clinic-label" for="privacy_<?= e($key) ?>"><?= e($label) ?></label><input class="settings-input mb-3" id="privacy_<?= e($key) ?>" name="privacy[details][<?= e($key) ?>]" value="<?= e((string) ($legalDocuments['privacy']['details'][$key] ?? '')) ?>"><?php endforeach; ?>
+                                <label class="clinic-label">Policy text</label><div class="legal-toolbar" data-legal-toolbar="privacy_body"><button type="button" data-format="bold"><strong>B</strong></button><button type="button" data-format="italic"><em>I</em></button><button type="button" data-format="formatBlock" data-value="h2">Heading</button><button type="button" data-format="insertUnorderedList">List</button></div>
+                                <div class="legal-rich-editor" id="privacy_body" contenteditable="<?= $canManageSettings ? 'true' : 'false' ?>" data-legal-editor aria-label="Privacy Notice policy text"><?= $legalDocuments['privacy']['body_html'] ?></div><input type="hidden" name="privacy[body_html]" data-legal-output="privacy_body">
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between gap-3 border-t border-outline-variant/20 bg-slate-50/70 p-5">
+                            <p class="settings-help mb-0">Current version: <?= e((string) $legalDocuments['version']) ?></p>
+                            <div class="flex gap-3">
+                                <button type="button" class="btn btn-ghost" onclick="closeModal('studentLegalDocumentsModal')">Cancel</button>
+                                <button class="btn btn-primary" <?= !$canManageSettings ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Save student legal documents?" data-confirm-message="This changes the legal text displayed to students and used for future acknowledgements." data-confirm-toast="Saving legal documents...">
+                                    <span class="material-symbols-outlined text-[18px]">save</span>
+                                    Save Changes
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
 
                 <section data-logo-placeholder>
                     <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">System Logo</h2>
@@ -933,6 +1008,15 @@ render_clinic_command_header(
                                 <span class="material-symbols-outlined settings-theme-picker-icon" aria-hidden="true">colorize</span>
                             </label>
                         </div>
+                        <label class="settings-dark-mode-row">
+                            <span>
+                                <strong>Dark mode</strong>
+                                <small>Apply a dark appearance to the clinic staff UI and public landing, feedback, and visitor pages.</small>
+                            </span>
+                            <input type="hidden" name="dark_mode" value="0">
+                            <input class="settings-dark-mode-input" type="checkbox" name="dark_mode" value="1" <?= $darkModeEnabled ? 'checked' : '' ?> <?= !$canManageSettings ? 'disabled' : '' ?> aria-label="Enable dark mode">
+                            <span class="settings-theme-switch" aria-hidden="true"><span class="settings-theme-switch-thumb"></span></span>
+                        </label>
                         <div class="flex justify-end mt-5">
                             <button class="btn btn-primary" <?= !$canManageSettings ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Apply color theme?" data-confirm-message="This will update the CLINiQ interface theme for all pages using the shared shell." data-confirm-toast="Applying theme...">
                                 <span class="material-symbols-outlined text-[18px]">palette</span>
@@ -3090,6 +3174,99 @@ render_clinic_command_header(
             });
 
             refreshRows();
+        })();
+    </script>
+
+    <style>
+        .legal-editor-preview { min-height: 28rem; max-height: 34rem; overflow-y: auto; }
+        .legal-editor-preview h1, .legal-editor-preview h2, .legal-editor-preview h3 { color: #17261d; font-weight: 800; line-height: 1.25; margin: 1.4rem 0 .5rem; }
+        .legal-editor-preview h1 { font-size: 1.35rem; margin-top: 0; }
+        .legal-editor-preview h2 { font-size: 1.05rem; border-top: 1px solid #dbe6df; padding-top: .8rem; }
+        .legal-editor-preview h3 { font-size: .95rem; }
+        .legal-editor-preview p { margin: 0 0 .8rem; }
+        .legal-editor-preview ul, .legal-editor-preview ol { margin: 0 0 .8rem 1.15rem; padding: 0; }
+        .legal-editor-preview li { margin: .25rem 0; }
+        .legal-editor-preview strong { color: #17261d; }
+        .legal-editor-preview a { color: var(--cliniq-primary); font-weight: 700; }
+    </style>
+    <script>
+        (() => {
+            const escapeHtml = (value) => String(value)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+            const renderInline = (value) => {
+                let html = escapeHtml(value);
+                html = html.replace(/\[([^\]]+)\]\(([^\)]+)\)/g, (match, label, target) => {
+                    const safeTarget = /^(https?:\/\/|[A-Za-z0-9._\/-]+\.php)/.test(target) ? target : '#';
+                    return `<a href="${escapeHtml(safeTarget)}">${label}</a>`;
+                });
+                return html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+                    .replace(/__([^_]+)__/g, '<strong>$1</strong>')
+                    .replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>')
+                    .replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
+            };
+            const renderMarkdown = (value) => {
+                const lines = String(value).replace(/\r\n?/g, '\n').split('\n');
+                let html = '', paragraph = [], listType = '';
+                const flushParagraph = () => { if (paragraph.length) { html += `<p>${renderInline(paragraph.join(' '))}</p>`; paragraph = []; } };
+                const closeList = () => { if (listType) html += `</${listType}>`; listType = ''; };
+                lines.forEach((line) => {
+                    const text = line.trim();
+                    if (!text) { flushParagraph(); closeList(); return; }
+                    const heading = text.match(/^(#{1,3})\s+(.+)$/);
+                    if (heading) { flushParagraph(); closeList(); const level = heading[1].length; html += `<h${level}>${renderInline(heading[2])}</h${level}>`; return; }
+                    const unordered = text.match(/^[-*]\s+(.+)$/), ordered = text.match(/^\d+[.)]\s+(.+)$/);
+                    if (unordered || ordered) { flushParagraph(); const nextType = ordered ? 'ol' : 'ul'; if (listType !== nextType) { closeList(); listType = nextType; html += `<${listType}>`; } html += `<li>${renderInline((ordered || unordered)[1])}</li>`; return; }
+                    paragraph.push(text);
+                });
+                flushParagraph(); closeList();
+                return html || '<p class="text-slate-400">No document content yet.</p>';
+            };
+            const setupLegalEditor = () => {
+                document.querySelectorAll('[data-legal-preview]').forEach((preview) => {
+                    const id = preview.dataset.legalPreview, textarea = document.getElementById(id), toggle = document.querySelector(`[data-legal-toggle="${id}"]`);
+                    if (!textarea || !toggle || preview.dataset.ready === 'true') return;
+                    preview.dataset.ready = 'true';
+                    const syncPreview = () => { preview.innerHTML = renderMarkdown(textarea.value); };
+                    const setEditing = (editing) => { preview.classList.toggle('hidden', editing); textarea.classList.toggle('hidden', !editing); toggle.textContent = editing ? 'Preview document' : 'Edit source'; if (!editing) syncPreview(); };
+                    syncPreview(); textarea.addEventListener('input', syncPreview); toggle.addEventListener('click', () => setEditing(textarea.classList.contains('hidden')));
+                });
+            };
+            setupLegalEditor();
+            document.addEventListener('cliniq:page-content-replaced', setupLegalEditor);
+        })();
+    </script>
+
+    <style>
+        .legal-rich-editor { min-height: 22rem; max-height: 34rem; overflow-y: auto; border: 1px solid rgba(75, 95, 80, .22); border-radius: .85rem; padding: 1rem; background: #fff; color: #30443a; line-height: 1.65; }
+        .legal-rich-editor:focus { outline: 2px solid var(--cliniq-primary); outline-offset: 2px; }
+        .legal-rich-editor h2 { font: 800 1rem/1.25 inherit; color: #17261d; border-top: 1px solid #dbe6df; padding-top: .85rem; margin: 1.3rem 0 .55rem; }
+        .legal-rich-editor p { margin: 0 0 .8rem; } .legal-rich-editor ul { margin: 0 0 .8rem 1.2rem; padding: 0; }
+        .legal-toolbar { display: flex; flex-wrap: wrap; gap: .4rem; padding: .45rem; border: 1px solid rgba(75, 95, 80, .22); border-bottom: 0; border-radius: .85rem .85rem 0 0; background: #f7faf8; }
+        .legal-toolbar button { min-height: 2rem; border: 0; border-radius: .45rem; padding: 0 .65rem; background: transparent; color: #30443a; cursor: pointer; font-size: .78rem; font-weight: 800; }
+        .legal-toolbar button:hover { background: #e2eee6; }
+        .legal-toolbar + .legal-rich-editor { border-radius: 0 0 .85rem .85rem; }
+    </style>
+    <script>
+        (() => {
+            const setupStructuredLegalEditor = () => {
+                document.querySelectorAll('[data-legal-toolbar]').forEach((toolbar) => {
+                    if (toolbar.dataset.ready === 'true') return;
+                    toolbar.dataset.ready = 'true';
+                    const editor = document.getElementById(toolbar.dataset.legalToolbar);
+                    toolbar.querySelectorAll('button[data-format]').forEach((button) => button.addEventListener('click', () => {
+                        editor?.focus(); document.execCommand(button.dataset.format, false, button.dataset.value || null);
+                    }));
+                });
+                document.querySelectorAll('form:has([data-legal-editor])').forEach((form) => {
+                    if (form.dataset.legalReady === 'true') return;
+                    form.dataset.legalReady = 'true';
+                    form.addEventListener('submit', () => document.querySelectorAll('[data-legal-output]').forEach((output) => {
+                        const editor = document.getElementById(output.dataset.legalOutput); output.value = editor ? editor.innerHTML : '';
+                    }));
+                });
+            };
+            setupStructuredLegalEditor(); document.addEventListener('cliniq:page-content-replaced', setupStructuredLegalEditor);
         })();
     </script>
 

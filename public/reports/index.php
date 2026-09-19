@@ -54,7 +54,7 @@ $mainSystemReport = build_system_report($dateFrom, $dateTo, []);
 
 render_header('Reports');
 ?>
-<link hidden rel="stylesheet" href="<?= e(app_url('assets/css/reports.css?v=3')) ?>">
+<link hidden rel="stylesheet" href="<?= e(app_url('assets/css/reports.css?v=4')) ?>">
 <!-- ═══ Title ═══ -->
 <?php render_clinic_command_header(
     'Reports',
@@ -123,8 +123,11 @@ render_header('Reports');
 <script>
 (() => {
     const chartPalette = ['#2f8553', '#58a978', '#89c79f', '#d4a72c', '#5377b8', '#8b69c7', '#d26b6b', '#64748b'];
-    const chartText = '#475569';
-    const chartValue = '#205f3d';
+    const isDarkReport = document.documentElement.classList.contains('cliniq-dark');
+    const chartText = isDarkReport ? '#b3c9ba' : '#475569';
+    const chartValue = isDarkReport ? '#9be3ae' : '#205f3d';
+    const chartGrid = isDarkReport ? '#35523f' : '#edf3ef';
+    const chartAxis = isDarkReport ? '#4b6d55' : '#dfe9e2';
 
     const enhanceReportCharts = () => {
         if (!window.echarts) return;
@@ -162,7 +165,7 @@ render_header('Reports');
                     tooltip: { trigger: 'item', formatter: '{b}: <b>{c}</b> ({d}%)' },
                     series: [{
                         type: 'pie', radius: ['48%', '72%'], center: ['50%', '50%'], avoidLabelOverlap: true,
-                        itemStyle: { borderColor: '#fff', borderWidth: 3, borderRadius: 5 },
+                         itemStyle: { borderColor: isDarkReport ? '#14271b' : '#fff', borderWidth: 3, borderRadius: 5 },
                         label: { color: chartText, fontSize: 12, fontWeight: 700, formatter: '{b}' },
                         labelLine: { length: 8, length2: 8 },
                         data: rows.map((row) => ({ name: String(row.label ?? ''), value: Number(row.value) || 0 })),
@@ -173,8 +176,8 @@ render_header('Reports');
                 option = {
                     ...shared,
                     grid: { left: 36, right: 18, top: 22, bottom: 38 },
-                    xAxis: { type: 'category', data: labels, axisLabel: { color: chartText, fontSize: 11, fontWeight: 600, interval: 'auto' }, axisLine: { lineStyle: { color: '#dfe9e2' } } },
-                    yAxis: { type: 'value', axisLabel: { color: chartText, fontSize: 11, fontWeight: 600 }, splitLine: { lineStyle: { color: '#edf3ef' } } },
+                     xAxis: { type: 'category', data: labels, axisLabel: { color: chartText, fontSize: 11, fontWeight: 600, interval: 'auto' }, axisLine: { lineStyle: { color: chartAxis } } },
+                     yAxis: { type: 'value', axisLabel: { color: chartText, fontSize: 11, fontWeight: 600 }, splitLine: { lineStyle: { color: chartGrid } } },
                     series: [{ type: 'line', data: values, smooth: true, symbolSize: 8, lineStyle: { width: 3 }, areaStyle: { color: 'rgba(47,133,83,.12)' }, label: { show: true, position: 'top', color: chartValue, fontWeight: 800, fontSize: 11 } }],
                 };
             } else if (chartData.type === 'progress') {
@@ -192,8 +195,8 @@ render_header('Reports');
                 option = {
                     ...shared,
                     grid: isColumn ? { left: 36, right: 16, top: 20, bottom: 52 } : { left: 116, right: 36, top: 16, bottom: 12 },
-                    xAxis: isColumn ? { type: 'category', data: labels, axisLabel: { color: chartText, fontSize: 10, fontWeight: 600, rotate: labels.length > 5 ? 24 : 0, interval: 0 }, axisLine: { lineStyle: { color: '#dfe9e2' } } } : { type: 'value', axisLabel: { color: chartText, fontSize: 11, fontWeight: 600 }, splitLine: { lineStyle: { color: '#edf3ef' } } },
-                    yAxis: isColumn ? { type: 'value', axisLabel: { color: chartText, fontSize: 11, fontWeight: 600 }, splitLine: { lineStyle: { color: '#edf3ef' } } } : { type: 'category', data: labels, axisLabel: { color: chartText, fontSize: 11, fontWeight: 600, width: 102, overflow: 'truncate' }, axisLine: { show: false }, axisTick: { show: false } },
+                     xAxis: isColumn ? { type: 'category', data: labels, axisLabel: { color: chartText, fontSize: 10, fontWeight: 600, rotate: labels.length > 5 ? 24 : 0, interval: 0 }, axisLine: { lineStyle: { color: chartAxis } } } : { type: 'value', axisLabel: { color: chartText, fontSize: 11, fontWeight: 600 }, splitLine: { lineStyle: { color: chartGrid } } },
+                     yAxis: isColumn ? { type: 'value', axisLabel: { color: chartText, fontSize: 11, fontWeight: 600 }, splitLine: { lineStyle: { color: chartGrid } } } : { type: 'category', data: labels, axisLabel: { color: chartText, fontSize: 11, fontWeight: 600, width: 102, overflow: 'truncate' }, axisLine: { show: false }, axisTick: { show: false } },
                     series: [{ type: 'bar', data: values, barMaxWidth: 34, itemStyle: { borderRadius: isColumn ? [6, 6, 0, 0] : [0, 6, 6, 0] }, label: { show: true, position: isColumn ? 'top' : 'right', color: chartValue, fontWeight: 800, fontSize: 11 } }],
                 };
             }

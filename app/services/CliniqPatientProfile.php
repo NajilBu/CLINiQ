@@ -64,7 +64,7 @@ function cliniq_patient_profile_select(): string
             cd.department_code AS staff_department_code,
             cd.department_name AS staff_department_name,
             COALESCE(
-                NULLIF(TRIM(CONCAT(pr.program_code, '-', s.year_level, UPPER(s.section))), ''),
+                NULLIF(TRIM(CONCAT(pr.program_code, '-', s.year_level, UPPER(s.section))) COLLATE utf8mb4_bin, _utf8mb4'' COLLATE utf8mb4_bin),
                 ed.department_code,
                 cd.department_code,
                 'Patient'
