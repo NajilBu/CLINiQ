@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/AccountValidation.php';
 
 function ensure_system_settings_schema(): void
 {
@@ -136,26 +137,21 @@ function create_staff_profile(array $input): void
     ensure_staff_profiles_schema();
 
     $name = trim((string) ($input['name'] ?? ''));
-    $idNumber = strtoupper(trim((string) ($input['id_number'] ?? $input['email'] ?? '')));
+    $idNumber = trim((string) ($input['id_number'] ?? $input['email'] ?? ''));
     $role = normalize_staff_profile_role((string) ($input['role'] ?? 'staff'));
     $password = (string) ($input['password'] ?? '');
     $passwordConfirmation = (string) ($input['password_confirmation'] ?? '');
 
-    if ($name === '') {
-        throw new InvalidArgumentException('Enter the staff member name.');
+    if (!account_valid_person_name($name)) {
+        throw new InvalidArgumentException("Staff name may contain only letters, spaces, apostrophes, periods, and hyphens.");
     }
     if ($idNumber === '') {
         $idNumber = next_staff_profile_id_number();
     }
-    if (!preg_match('/^STAFF-[0-9]{4}$/', $idNumber)) {
-        throw new InvalidArgumentException('Staff login ID must use the format STAFF-0001.');
+    if (!preg_match('/^[0-9]{7}$/', $idNumber)) {
+        throw new InvalidArgumentException('Staff login ID must contain exactly seven continuous digits, for example 0000002.');
     }
-    if (strlen($password) < 8) {
-        throw new InvalidArgumentException('Password must be at least 8 characters.');
-    }
-    if ($password !== $passwordConfirmation) {
-        throw new InvalidArgumentException('Password and confirmation password must match.');
-    }
+    account_assert_strong_password($password, $passwordConfirmation);
 
     [$firstName, $middleName, $lastName] = split_staff_profile_name($name);
     $db = auth_db();
@@ -167,6 +163,10 @@ function create_staff_profile(array $input): void
         if ($duplicate->fetchColumn()) {
             throw new InvalidArgumentException('That staff login ID already exists.');
         }
+
+        $emailLocalPart = strtolower(preg_replace('/[^a-z0-9]+/i', '', $lastName) . '_' . preg_replace('/[^a-z0-9]+/i', '', $firstName));
+        $email = account_assert_institutional_email($emailLocalPart . '@plpasig.edu.ph');
+        account_assert_email_available($db, $email);
 
         $stmt = $db->prepare('
             INSERT INTO people (id_number, first_name, middle_name, last_name)
@@ -188,7 +188,6 @@ function create_staff_profile(array $input): void
         ');
         $stmt->execute([$personId, bin2hex(random_bytes(32))]);
 
-        $email = strtolower(str_replace(' ', '', $lastName) . '_' . str_replace(' ', '', $firstName)) . '@plpasig.edu.ph';
         $stmt = $db->prepare('
             INSERT INTO accounts (person_id, email, password_hash, account_status, activated_at)
             VALUES (?, ?, ?, "active", NOW())
@@ -215,7 +214,7 @@ function update_staff_profile(array $input): void
 
     $id = (int) ($input['user_id'] ?? 0);
     $name = trim((string) ($input['name'] ?? ''));
-    $idNumber = strtoupper(trim((string) ($input['id_number'] ?? $input['email'] ?? '')));
+    $idNumber = trim((string) ($input['id_number'] ?? $input['email'] ?? ''));
     $role = normalize_staff_profile_role((string) ($input['role'] ?? 'staff'));
 
     if ($id <= 0) {
@@ -224,8 +223,8 @@ function update_staff_profile(array $input): void
     if ($name === '') {
         throw new InvalidArgumentException('Enter the staff member name.');
     }
-    if (!preg_match('/^STAFF-[0-9]{4}$/', $idNumber)) {
-        throw new InvalidArgumentException('Staff login ID must use the format STAFF-0001.');
+    if (!preg_match('/^[0-9]{7}$/', $idNumber)) {
+        throw new InvalidArgumentException('Staff login ID must contain exactly seven continuous digits, for example 0000002.');
     }
 
     [$firstName, $middleName, $lastName] = split_staff_profile_name($name);
@@ -300,12 +299,16 @@ function split_staff_profile_name(string $name): array
 function next_staff_profile_id_number(): string
 {
     $next = (int) auth_db()->query("
-        SELECT COALESCE(MAX(CAST(SUBSTRING(id_number, 7) AS UNSIGNED)), 0) + 1
+        SELECT COALESCE(MAX(CAST(id_number AS UNSIGNED)), 0) + 1
         FROM people
-        WHERE id_number REGEXP '^STAFF-[0-9]{4}$'
+        WHERE id_number REGEXP '^[0-9]{7}$'
     ")->fetchColumn();
 
-    return 'STAFF-' . str_pad((string) $next, 4, '0', STR_PAD_LEFT);
+    if ($next > 9999999) {
+        throw new RuntimeException('No seven-digit staff login IDs remain available.');
+    }
+
+    return str_pad((string) $next, 7, '0', STR_PAD_LEFT);
 }
 
 function staff_profile_default_department_id(): ?int
@@ -807,7 +810,34 @@ function default_clinic_profile_settings(): array
         'physical_address' => 'Alcalde Jose Street, Brgy. Kapasigan, Pasig City, Metro Manila, Philippines, 1600',
         'system_purpose' => 'School clinic information management system for patient records, visits, APE workflow, emergency alerts, appointments, inventory, referrals, and reports.',
         'logo_path' => 'assets/img/clinic-logo.png',
+        'alert_sound' => 'urgent-pulse',
+        'custom_alert_sound_path' => '',
+        'custom_alert_sound_name' => '',
     ];
+}
+
+function clinic_alert_sound_options(): array
+{
+    return [
+        'urgent-pulse' => 'Urgent Pulse',
+        'double-chime' => 'Double Chime',
+        'rapid-siren' => 'Rapid Siren',
+    ];
+}
+
+function clinic_profile_alert_sound_path(?array $profile = null): string
+{
+    $soundPath = str_replace('\\', '/', trim((string) (($profile ?? [])['custom_alert_sound_path'] ?? '')));
+    if (
+        $soundPath === ''
+        || str_contains($soundPath, '..')
+        || str_starts_with($soundPath, '/')
+        || !preg_match('#^uploads/settings/[A-Za-z0-9._-]+\.(mp3|wav|ogg)$#i', $soundPath)
+    ) {
+        return '';
+    }
+
+    return $soundPath;
 }
 
 function clinic_profile_settings(): array
@@ -828,7 +858,17 @@ function normalize_clinic_profile_settings(array $input): array
     if (!filter_var($settings['contact_email'], FILTER_VALIDATE_EMAIL)) {
         $settings['contact_email'] = $defaults['contact_email'];
     }
+    if (!array_key_exists($settings['alert_sound'], clinic_alert_sound_options())) {
+        $settings['alert_sound'] = $settings['alert_sound'] === 'custom'
+            && clinic_profile_alert_sound_path($settings) !== ''
+            ? 'custom'
+            : $defaults['alert_sound'];
+    }
     $settings['logo_path'] = clinic_profile_logo_path($settings);
+    $settings['custom_alert_sound_path'] = clinic_profile_alert_sound_path($settings);
+    $settings['custom_alert_sound_name'] = $settings['custom_alert_sound_path'] === ''
+        ? ''
+        : mb_substr(basename(trim((string) ($input['custom_alert_sound_name'] ?? 'Custom alert sound'))), 0, 255);
 
     return $settings;
 }
@@ -897,6 +937,55 @@ function save_uploaded_clinic_logo(array $file): string
     }
 
     return 'uploads/settings/' . $fileName;
+}
+
+function save_uploaded_clinic_alert_sound(array $file): array
+{
+    $error = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($error === UPLOAD_ERR_NO_FILE) {
+        return [];
+    }
+    if ($error !== UPLOAD_ERR_OK) {
+        throw new InvalidArgumentException('Choose a valid MP3, WAV, or OGG alert sound before saving.');
+    }
+    if ((int) ($file['size'] ?? 0) > 5 * 1024 * 1024) {
+        throw new InvalidArgumentException('Custom alert sound must be 5 MB or smaller.');
+    }
+
+    $temporaryPath = (string) ($file['tmp_name'] ?? '');
+    if ($temporaryPath === '' || !is_uploaded_file($temporaryPath)) {
+        throw new InvalidArgumentException('Alert sound upload could not be verified.');
+    }
+
+    $mimeType = function_exists('mime_content_type') ? (string) mime_content_type($temporaryPath) : '';
+    $allowedTypes = [
+        'audio/mpeg' => 'mp3',
+        'audio/mp3' => 'mp3',
+        'audio/wav' => 'wav',
+        'audio/x-wav' => 'wav',
+        'audio/wave' => 'wav',
+        'audio/vnd.wave' => 'wav',
+        'audio/ogg' => 'ogg',
+        'application/ogg' => 'ogg',
+    ];
+    if (!isset($allowedTypes[$mimeType])) {
+        throw new InvalidArgumentException('Custom alert sound must be a valid MP3, WAV, or OGG audio file.');
+    }
+
+    $uploadDirectory = dirname(__DIR__, 2) . '/public/uploads/settings';
+    if (!is_dir($uploadDirectory) && !mkdir($uploadDirectory, 0775, true) && !is_dir($uploadDirectory)) {
+        throw new RuntimeException('Unable to create the alert sound upload folder.');
+    }
+
+    $fileName = 'clinic-alert-' . date('YmdHis') . '-' . bin2hex(random_bytes(4)) . '.' . $allowedTypes[$mimeType];
+    if (!move_uploaded_file($temporaryPath, $uploadDirectory . '/' . $fileName)) {
+        throw new RuntimeException('Unable to save the custom alert sound.');
+    }
+
+    return [
+        'path' => 'uploads/settings/' . $fileName,
+        'name' => mb_substr(basename((string) ($file['name'] ?? 'Custom alert sound')), 0, 255),
+    ];
 }
 
 function cliniq_theme_presets(): array

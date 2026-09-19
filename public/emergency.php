@@ -174,8 +174,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patient && ($_POST['action'] ?? ''
                 $photoPath,
             ]);
 
-            $message = 'The clinic has been notified. Please stay with the student and call the clinic directly if the situation is urgent.';
-            audit_log_event('incident', 'incident_report_submitted', $viewerPersonId ?: null, $viewerPersonId ? 'student' : 'guest', 'patient', (int) $patient['id'], ['location' => $location, 'risk_rating' => $reporterRiskRating]);
+            $message = $classification['level'] === 'Not assessed'
+                ? ($reporterRiskRating
+                    ? 'The clinic has been notified. The report was forwarded without risk-metric answers and marked ' . $reporterRiskRating . ' by the reporter for clinic triage.'
+                    : 'The clinic has been notified. This report was forwarded without risk-metric answers, so clinic staff will assess urgency promptly.')
+                : 'The clinic has been notified. Please stay with the student and call the clinic directly if the situation is urgent.';
+            audit_log_event('incident', 'incident_report_submitted', $viewerPersonId ?: null, $viewerPersonId ? 'student' : 'guest', 'patient', (int) $patient['id'], ['location' => $location, 'risk_level' => $classification['level'], 'reporter_risk_rating' => $reporterRiskRating]);
         }
     }
 }
@@ -207,16 +211,18 @@ $passportUpdatedAt = !empty($patient['updated_at'])
     ? date('F j, Y', strtotime((string) $patient['updated_at']))
     : 'Not recorded';
 $reportFormOpen = $error !== null;
+$GLOBALS['cliniq_page_camera_allowed'] = true;
 
 render_header('Emergency Health Passport');
 ?>
-<link rel="stylesheet" href="<?= app_url('assets/css/emergency-passport.css?v=' . filemtime(__DIR__ . '/assets/css/emergency-passport.css')) ?>">
+<link rel="stylesheet" href="<?= app_url('assets/css/emergency-passport.css?v=' . filemtime(__DIR__ . '/assets/css/emergency-passport.css') . '&layout=2') ?>">
 <div class="passport-page">
     <?php if (!$patient): ?>
         <div class="rounded-2xl bg-red-50 border border-red-100 text-red-700 px-5 py-4 font-bold">Emergency tag not found or
             disabled.</div>
     <?php else: ?>
-        <div class="clinic-card w-full max-w-3xl overflow-hidden">
+        <?php if (!$viewer): ?>
+        <div class="w-full max-w-3xl overflow-hidden">
             <div class="bg-[#173f2a] text-white px-6 py-5">
                 <p class="text-xs font-black uppercase tracking-[0.18em] text-emerald-200 mb-1">CLINiQ</p>
                 <div class="flex items-center gap-3">
@@ -228,6 +234,7 @@ render_header('Emergency Health Passport');
                 </div>
             </div>
             <div class="p-6 md:p-8">
+        <?php endif; ?>
                 <?php if ($authError): ?>
                     <div class="rounded-2xl bg-red-50 border border-red-100 text-red-700 px-5 py-4 font-bold mb-4"><?= e($authError) ?></div>
                 <?php endif; ?>
@@ -265,20 +272,13 @@ render_header('Emergency Health Passport');
                                     <?php endif; ?>
                                 </div>
                                 <div class="passport-modern-identity">
-                                    <div class="passport-modern-kicker-row">
-                                        <span class="passport-modern-pill">Emergency Passport</span>
-                                        <span class="passport-modern-status <?= $hasActiveIncident ? 'is-active' : '' ?>">
-                                            <span class="material-symbols-outlined"><?= $hasActiveIncident ? 'warning' : 'check_circle' ?></span>
-                                            <?= $hasActiveIncident ? 'Active Incident' : 'No Active Incident' ?>
-                                        </span>
-                                    </div>
+                                    <div class="passport-modern-kicker-row"><span class="passport-modern-pill">Emergency Passport</span></div>
                                     <h2 id="passport-holder-heading" class="passport-modern-name"><?= e($passportHolderName ?: 'Patient') ?></h2>
                                     <div class="passport-modern-meta">
                                         <span><?= e($patient['id_number'] ?: 'ID not recorded') ?></span>
-                                        <span aria-hidden="true">&bull;</span>
-                                        <span><?= e($patient['course_section'] ?: 'Program not recorded') ?></span>
                                     </div>
                                 </div>
+                                <span class="passport-modern-status <?= $hasActiveIncident ? 'is-active' : '' ?>"><span class="material-symbols-outlined"><?= $hasActiveIncident ? 'warning' : 'check_circle' ?></span><?= $hasActiveIncident ? 'Active Incident' : 'No Active Incident' ?></span>
                                 <div class="passport-modern-blood" role="img" aria-label="Blood type <?= e($patient['blood_type'] ?: 'unknown') ?>">
                                     <span>Blood type</span>
                                     <strong><?= e($patient['blood_type'] ?: '—') ?></strong>
@@ -334,7 +334,10 @@ render_header('Emergency Health Passport');
                                         <a class="passport-modern-call" href="tel:<?= e($patient['guardian_contact']) ?>"><span class="material-symbols-outlined">call</span>Call Now</a>
                                     <?php endif; ?>
                                 </div>
-
+                                <div class="passport-modern-updated"><span class="material-symbols-outlined">schedule</span> Last updated: <strong><?= e($passportUpdatedAt) ?></strong></div>
+                            </div>
+                        </div>
+                    <div class="passport-emergency-action">
                 <?php if ($message): ?>
                     <div class="rounded-2xl bg-emerald-50 border border-emerald-100 text-emerald-700 px-5 py-4 font-bold mb-4">
                         <?= e($message) ?></div>
@@ -345,33 +348,40 @@ render_header('Emergency Health Passport');
                         <?= e($error) ?></div>
                 <?php endif; ?>
 
-                <button type="button" id="toggle-emergency-report" class="w-full px-5 py-4 bg-red-600 text-white rounded-2xl text-sm font-black shadow-lg hover:bg-red-700 flex items-center justify-center gap-2" aria-controls="emergency-report-panel" aria-expanded="<?= $reportFormOpen ? 'true' : 'false' ?>">
-                    <span class="material-symbols-outlined" aria-hidden="true">emergency</span>
-                    Report an Emergency
-                </button>
-                <p class="text-xs font-bold text-slate-500 text-center mt-3 mb-0">This sends an alert to the clinic response queue.</p>
-
                 <section id="emergency-report-panel" class="mt-6 border-t border-slate-200 pt-6" <?= $reportFormOpen ? '' : 'hidden' ?>>
                     <div class="rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 px-5 py-4 mb-5">
                         <p class="font-black mb-1">Emergency reporting</p>
                         <p class="text-sm font-bold mb-0">Stay with the patient, notify the clinic, and provide the current location. Do not rely on this page alone for urgent care.</p>
                     </div>
-                    <form method="post" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <form method="post" enctype="multipart/form-data" class="emergency-report-form" id="emergency-report-form">
                     <input type="hidden" name="action" value="incident_report">
-                    <div class="md:col-span-2">
+                    <section class="emergency-report-section">
+                        <div class="emergency-report-section-heading">
+                            <span class="material-symbols-outlined" aria-hidden="true">person_pin_circle</span>
+                            <div><h2>Reporter details</h2><p>Tell the clinic where help is needed and how to contact you.</p></div>
+                        </div>
+                        <div class="emergency-report-grid">
+                    <div class="emergency-report-field emergency-report-field-wide">
                         <label class="clinic-label">Reported Location</label>
                         <input class="clinic-input" name="location" required
                             placeholder="Example: Gymnasium, Room 204, gate area">
                     </div>
-                    <div>
+                    <div class="emergency-report-field">
                         <label class="clinic-label">Reporter Name</label>
                         <input class="clinic-input" name="reporter_name" placeholder="Optional for responders" <?= $viewer ? 'value="' . e($viewer['name']) . '" readonly' : '' ?>>
                     </div>
-                    <div>
+                    <div class="emergency-report-field">
                         <label class="clinic-label">Reporter Contact</label>
                         <input class="clinic-input" name="reporter_contact" placeholder="Optional phone number">
                     </div>
-                    <div>
+                        </div>
+                    </section>
+
+                    <fieldset class="emergency-report-section emergency-risk-check">
+                        <legend><span class="material-symbols-outlined" aria-hidden="true">monitor_heart</span> Risk check <small>Optional</small></legend>
+                        <p class="emergency-report-section-copy">Answer only what you can observe. You can still forward the report without these answers.</p>
+                        <div class="emergency-report-grid">
+                    <div class="emergency-report-field">
                         <label class="clinic-label">Incident Type</label>
                         <select class="clinic-input" name="incident_type">
                             <option value="">Select the closest type</option>
@@ -380,7 +390,7 @@ render_header('Emergency Health Passport');
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <div>
+                    <div class="emergency-report-field">
                         <label class="clinic-label">Student Condition</label>
                         <select class="clinic-input" name="observed_condition">
                             <option value="">Select condition</option>
@@ -389,7 +399,7 @@ render_header('Emergency Health Passport');
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <div>
+                    <div class="emergency-report-field">
                         <label class="clinic-label">Breathing</label>
                         <select class="clinic-input" name="breathing_status">
                             <option value="">Select breathing status</option>
@@ -398,7 +408,7 @@ render_header('Emergency Health Passport');
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <div>
+                    <div class="emergency-report-field">
                         <label class="clinic-label">Bleeding</label>
                         <select class="clinic-input" name="bleeding_status">
                             <option value="">Select bleeding status</option>
@@ -407,7 +417,7 @@ render_header('Emergency Health Passport');
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <div>
+                    <div class="emergency-report-field">
                         <label class="clinic-label">Pain Level</label>
                         <select class="clinic-input" name="pain_level">
                             <option value="">Select pain level</option>
@@ -416,7 +426,7 @@ render_header('Emergency Health Passport');
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <div>
+                    <div class="emergency-report-field">
                         <label class="clinic-label">Mobility</label>
                         <select class="clinic-input" name="mobility_status">
                             <option value="">Select mobility</option>
@@ -425,62 +435,188 @@ render_header('Emergency Health Passport');
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <div class="md:col-span-2">
-                        <label class="clinic-label">How urgent does this seem? <span class="font-normal">(Optional)</span></label>
-                        <select class="clinic-input" name="reporter_risk_rating">
-                            <option value="">Not sure / skip</option>
-                            <?php foreach (['Low', 'Moderate', 'High', 'Critical'] as $rating): ?>
-                                <option value="<?= e($rating) ?>"><?= e($rating) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="md:col-span-2">
+                        </div>
+                    </fieldset>
+
+                    <section class="emergency-report-section">
+                        <div class="emergency-report-section-heading">
+                            <span class="material-symbols-outlined" aria-hidden="true">attachment</span>
+                            <div><h2>Supporting details</h2><p>Add context or a photo if it will help the clinic respond.</p></div>
+                        </div>
+                    <div class="emergency-report-field">
                         <label class="clinic-label">Notes</label>
                         <textarea class="clinic-textarea" name="notes" rows="4"
                             placeholder="What happened? What does the student need?"></textarea>
                     </div>
-                    <div class="md:col-span-2">
-                        <label class="clinic-label">Photo Evidence</label>
-                        <input class="clinic-input" name="photo" type="file" accept="image/png,image/jpeg,image/webp">
-                        <p class="text-xs font-bold text-slate-400 mt-2 mb-0">Optional image that will appear in the nurse alert report.</p>
+                    <div class="emergency-report-field emergency-photo-evidence">
+                        <h3 class="emergency-photo-evidence-title">Photo evidence</h3>
+                        <input id="alert-photo" class="clinic-input emergency-photo-input" name="photo" type="file" accept="image/png,image/jpeg,image/webp" aria-hidden="true" tabindex="-1">
+                        <div class="emergency-photo-stage">
+                            <div id="alert-photo-empty" class="emergency-photo-empty" aria-hidden="true">
+                                <span class="material-symbols-outlined">image</span>
+                            </div>
+                            <div id="alert-camera-panel" class="emergency-camera-panel" hidden>
+                                <video id="alert-camera-preview" playsinline autoplay muted aria-label="Live camera preview"></video>
+                                <canvas id="alert-camera-canvas" hidden></canvas>
+                            </div>
+                            <div id="alert-photo-result" class="emergency-photo-result" hidden>
+                                <img id="alert-photo-thumbnail" alt="Captured photo preview">
+                                <div class="emergency-photo-meta"><strong id="alert-photo-name">alert-photo.jpg</strong><span id="alert-photo-time"></span></div>
+                            </div>
+                        </div>
+                        <div class="emergency-photo-evidence-actions">
+                            <span id="alert-photo-status" class="emergency-photo-status">Ready to capture</span>
+                            <div class="emergency-photo-action-buttons">
+                            <button type="button" id="open-alert-camera" class="emergency-camera-launch">
+                                <span class="material-symbols-outlined" aria-hidden="true">photo_camera</span>
+                                <span id="alert-camera-action-label">Take live photo</span>
+                            </button>
+                            <button type="button" id="close-alert-camera" class="emergency-camera-button emergency-camera-button-secondary" hidden>Cancel</button>
+                            </div>
+                        </div>
+                        <p class="text-xs font-bold text-slate-400 mt-2 mb-0">Optional. Take one live photo; it will appear in the nurse alert report.</p>
                     </div>
-                    <div class="md:col-span-2">
-                        <button
-                            class="w-full px-5 py-3 bg-red-600 text-white rounded-2xl text-sm font-black shadow-lg hover:bg-red-700" data-confirm-submit data-confirm-type="danger" data-confirm-title="Submit this emergency report?" data-confirm-message="This will send the possible accident report to the clinic response queue." data-confirm-toast="Submitting emergency report...">Report
-                            Possible Accident to Clinic</button>
-                    </div>
+                    </section>
                     </form>
 
                     <p class="text-xs font-bold text-slate-500 mt-6 mb-0">
                         If this is urgent, call the clinic or school emergency contact immediately after submitting the report.
                     </p>
                 </section>
-                                <div class="passport-modern-updated">
-                                    <span class="material-symbols-outlined">schedule</span>
-                                    Last updated: <strong><?= e($passportUpdatedAt) ?></strong>
-                                </div>
-                            </div>
-                        </div>
+                    </div>
                     </section>
+                <div class="emergency-action-dock" aria-label="Emergency report actions" style="position:fixed;z-index:9999;right:1rem;bottom:1rem;left:1rem;display:grid;grid-template-columns:0.8fr 1.2fr;gap:.65rem;width:min(42rem,calc(100vw - 2rem));margin:0 auto;padding:.65rem;border:1px solid #d8e9dd;border-radius:1rem;background:rgba(255,255,255,.96);box-shadow:0 12px 32px rgba(23,38,29,.22);backdrop-filter:blur(10px);">
+                    <button type="button" id="toggle-emergency-report" class="emergency-dock-button emergency-dock-button-secondary" style="min-height:3rem;padding:.7rem;border:0;border-radius:.7rem;color:#7f1d1d;background:#fff1f2;font:800 .78rem inherit;cursor:pointer;" aria-controls="emergency-report-panel" aria-expanded="<?= $reportFormOpen ? 'true' : 'false' ?>">
+                        Emergency
+                    </button>
+                    <button type="submit" form="emergency-report-form" id="submit-emergency-report" class="emergency-dock-button" style="min-height:3rem;padding:.7rem;border:0;border-radius:.7rem;color:#fff;background:#dc2626;font:800 .78rem inherit;cursor:pointer;" data-confirm-submit data-confirm-type="danger" data-confirm-title="Submit this emergency report?" data-confirm-message="This will send the possible accident report to the clinic response queue." data-confirm-toast="Submitting emergency report..." <?= $reportFormOpen ? '' : 'disabled' ?>>
+                        Report to Clinic
+                    </button>
+                </div>
                 <?php endif; ?>
+        <?php if (!$viewer): ?>
             </div>
         </div>
+        <?php endif; ?>
     <?php endif; ?>
 </div>
 <script>
 (function () {
     var button = document.getElementById('toggle-emergency-report');
     var panel = document.getElementById('emergency-report-panel');
+    var submitButton = document.getElementById('submit-emergency-report');
     if (!button || !panel) return;
 
     button.addEventListener('click', function () {
         var willOpen = panel.hidden;
         panel.hidden = !willOpen;
         button.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+        if (submitButton) submitButton.disabled = !willOpen;
         if (willOpen) {
             panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     });
 })();
+
+(function () {
+    var input = document.getElementById('alert-photo');
+    var openButton = document.getElementById('open-alert-camera');
+    var panel = document.getElementById('alert-camera-panel');
+    var video = document.getElementById('alert-camera-preview');
+    var canvas = document.getElementById('alert-camera-canvas');
+    var closeButton = document.getElementById('close-alert-camera');
+    var emptyState = document.getElementById('alert-photo-empty');
+    var result = document.getElementById('alert-photo-result');
+    var thumbnail = document.getElementById('alert-photo-thumbnail');
+    var photoName = document.getElementById('alert-photo-name');
+    var photoTime = document.getElementById('alert-photo-time');
+    var photoStatus = document.getElementById('alert-photo-status');
+    var actionLabel = document.getElementById('alert-camera-action-label');
+    var stream = null;
+    var hasCapturedPhoto = false;
+
+    if (!input || !openButton || !panel || !video || !canvas || !closeButton || !emptyState || !result || !thumbnail || !photoName || !photoTime || !photoStatus || !actionLabel) return;
+
+    function setCameraAction(action) {
+        var labels = {
+            capture: 'Take Photo',
+            retake: 'Retake Photo',
+            launch: 'Take live photo'
+        };
+        actionLabel.textContent = labels[action] || labels.launch;
+        openButton.setAttribute('aria-label', actionLabel.textContent);
+    }
+
+    function setPhotoStatus(message) {
+        photoStatus.textContent = message;
+    }
+
+    function stopCamera() {
+        if (stream) stream.getTracks().forEach(function (track) { track.stop(); });
+        stream = null;
+        panel.hidden = true;
+        closeButton.hidden = true;
+        emptyState.hidden = hasCapturedPhoto;
+        setPhotoStatus(hasCapturedPhoto ? 'Photo ready' : 'Ready to capture');
+        setCameraAction(hasCapturedPhoto ? 'retake' : 'launch');
+    }
+
+    function showSelectedPhoto(file) {
+        if (!file) return;
+        thumbnail.src = URL.createObjectURL(file);
+        photoName.textContent = file.name || 'alert-photo.jpg';
+        photoTime.textContent = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        result.hidden = false;
+        emptyState.hidden = true;
+        hasCapturedPhoto = true;
+        openButton.hidden = false;
+    }
+
+    async function openCamera() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+            video.srcObject = stream;
+            emptyState.hidden = true;
+            panel.hidden = false;
+            openButton.hidden = false;
+            closeButton.hidden = false;
+            setPhotoStatus('Camera active');
+            setCameraAction('capture');
+        } catch (error) { stopCamera(); }
+    }
+
+    function capturePhoto() {
+        var maxDimension = 1600;
+        var scale = Math.min(1, maxDimension / Math.max(video.videoWidth, video.videoHeight));
+        canvas.width = Math.round(video.videoWidth * scale);
+        canvas.height = Math.round(video.videoHeight * scale);
+        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(function (blob) {
+            if (!blob) return;
+            var photo = new File([blob], 'alert-photo.jpg', { type: 'image/jpeg' });
+            var files = new DataTransfer();
+            files.items.add(photo);
+            input.files = files.files;
+            showSelectedPhoto(photo);
+            stopCamera();
+        }, 'image/jpeg', 0.85);
+    }
+
+    openButton.addEventListener('click', function () {
+        if (stream) capturePhoto();
+        else if (hasCapturedPhoto) {
+            input.value = '';
+            thumbnail.removeAttribute('src');
+            result.hidden = true;
+            hasCapturedPhoto = false;
+            setPhotoStatus('Ready to capture');
+            openCamera();
+        } else openCamera();
+    });
+    closeButton.addEventListener('click', stopCamera);
+    window.addEventListener('pagehide', stopCamera);
+})();
+
 </script>
 <?php render_footer(); ?>

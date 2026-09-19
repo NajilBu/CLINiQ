@@ -205,19 +205,19 @@ render_clinic_command_header(
                 </div>
                 <div>
                     <label class="clinic-label" for="first_name">First Name</label>
-                    <input class="clinic-input" id="first_name" name="first_name" value="<?= e((string) ($individualValues['first_name'] ?? '')) ?>" maxlength="100" data-required-message="Enter the patient's first name." required>
+                    <input class="clinic-input" id="first_name" name="first_name" value="<?= e((string) ($individualValues['first_name'] ?? '')) ?>" maxlength="100" title="Use letters, spaces, apostrophes, periods, and hyphens only." data-required-message="Enter the patient's first name." required>
                 </div>
                 <div>
                     <label class="clinic-label" for="middle_name">Middle Name <span class="normal-case text-slate-400">(optional)</span></label>
-                    <input class="clinic-input" id="middle_name" name="middle_name" value="<?= e((string) ($individualValues['middle_name'] ?? '')) ?>" maxlength="100">
+                    <input class="clinic-input" id="middle_name" name="middle_name" value="<?= e((string) ($individualValues['middle_name'] ?? '')) ?>" maxlength="100" title="Use letters, spaces, apostrophes, periods, and hyphens only.">
                 </div>
                 <div>
                     <label class="clinic-label" for="last_name">Last Name</label>
-                    <input class="clinic-input" id="last_name" name="last_name" value="<?= e((string) ($individualValues['last_name'] ?? '')) ?>" maxlength="100" data-required-message="Enter the patient's last name." required>
+                    <input class="clinic-input" id="last_name" name="last_name" value="<?= e((string) ($individualValues['last_name'] ?? '')) ?>" maxlength="100" title="Use letters, spaces, apostrophes, periods, and hyphens only." data-required-message="Enter the patient's last name." required>
                 </div>
                 <div>
                     <label class="clinic-label" for="birthdate">Birthdate</label>
-                    <input class="clinic-input" id="birthdate" name="birthdate" type="date" value="<?= e((string) ($individualValues['birthdate'] ?? '')) ?>" max="<?= e(date('Y-m-d')) ?>" data-required-message="Select the patient's birthdate." required>
+                    <input class="clinic-input" id="birthdate" name="birthdate" type="date" value="<?= e((string) ($individualValues['birthdate'] ?? '')) ?>" min="<?= e(date('Y-m-d', strtotime('-120 years'))) ?>" max="<?= e(date('Y-m-d')) ?>" data-required-message="Select the patient's birthdate." required>
                 </div>
                 <div>
                     <label class="clinic-label" for="sex">Sex</label>

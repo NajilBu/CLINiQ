@@ -6,6 +6,18 @@ require_once __DIR__ . '/../../app/services/ApeCycleService.php';
 require_login();
 ensure_ape_workflow_schema();
 
+$apeStateKeys = ['queue', 'q', 'population', 'scope', 'batch'];
+$hasExplicitApeState = false;
+foreach ($apeStateKeys as $apeStateKey) {
+    if (array_key_exists($apeStateKey, $_GET)) {
+        $hasExplicitApeState = true;
+        break;
+    }
+}
+if (!$hasExplicitApeState && is_array($_SESSION['ape_work_queue_state'] ?? null)) {
+    $_GET = array_merge($_GET, $_SESSION['ape_work_queue_state']);
+}
+
 $activeQueue = $_GET['queue'] ?? 'digital_submission';
 $search = trim($_GET['q'] ?? '');
 $requestedPopulationScope = strtolower(trim((string) ($_GET['population'] ?? '')));
@@ -16,6 +28,9 @@ $populationScope = ($_SESSION['ape_population_scope'] ?? 'students') === 'facult
     ? 'faculty_ntp'
     : 'students';
 $queues = ape_work_queues();
+if ($activeQueue !== 'all' && !isset($queues[$activeQueue])) {
+    $activeQueue = 'digital_submission';
+}
 
 $activeApeCycle = ape_cycle_current();
 $apeUser = current_user() ?? [];
@@ -37,7 +52,7 @@ usort($schoolYearBatches, static function (array $left, array $right): int {
 });
 $earliestUpcomingBatch = ape_earliest_upcoming_batch($schoolYearBatches);
 $overallRequested = strtolower(trim((string) ($_GET['scope'] ?? ''))) === 'overall';
-$requestedBatchId = filter_input(INPUT_GET, 'batch', FILTER_VALIDATE_INT, [
+$requestedBatchId = filter_var($_GET['batch'] ?? null, FILTER_VALIDATE_INT, [
     'options' => ['min_range' => 1],
 ]);
 $selectedBatchId = null;
@@ -50,6 +65,20 @@ if ($populationScope === 'students' && !$overallRequested) {
 }
 $selectedBatch = $selectedBatchId !== null ? $scheduledBatchesById[$selectedBatchId] : null;
 $isOverallView = $selectedBatch === null;
+
+$persistedApeState = [
+    'queue' => $activeQueue,
+    'population' => $populationScope,
+];
+if ($search !== '') {
+    $persistedApeState['q'] = $search;
+}
+if ($selectedBatchId !== null) {
+    $persistedApeState['batch'] = (string) $selectedBatchId;
+} else {
+    $persistedApeState['scope'] = 'overall';
+}
+$_SESSION['ape_work_queue_state'] = $persistedApeState;
 
 $overallRecords = ape_fetch_records();
 $scopeRecords = ape_fetch_records($search, null, null, $selectedBatchId);
@@ -154,7 +183,7 @@ render_clinic_command_header(
 ?>
 
 <?php if (count($overdueRecords) > 0): ?>
-<details class="bg-red-50 border border-red-200 rounded-2xl mb-8 group">
+<details class="bg-red-50 border border-red-200 rounded-2xl mb-8 group" data-ape-persistent-details="attention">
     <summary class="px-5 py-4 text-red-700 flex items-center justify-between gap-3 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
         <span class="flex items-center gap-2"><span class="material-symbols-outlined text-[18px]">error</span><h2 class="font-headline font-extrabold text-sm m-0"><?= count($overdueRecords) ?> patient(s) need immediate attention</h2></span>
         <span class="material-symbols-outlined text-[20px] transition-transform group-open:rotate-180">expand_more</span>
@@ -212,8 +241,16 @@ render_clinic_command_header(
                 </a>
             <?php endif; ?>
             <div class="flex rounded-xl border border-outline-variant overflow-hidden w-full sm:w-auto" role="group" aria-label="APE population">
-                <a href="?<?= e(http_build_query(['queue' => $activeQueue, 'scope' => 'overall', 'population' => 'students'])) ?>" class="px-4 py-3 text-sm font-extrabold text-decoration-none whitespace-nowrap <?= $populationScope === 'students' ? 'bg-primary text-white' : 'bg-white text-slate-700 hover:bg-slate-50' ?>">Students</a>
-                <a href="?<?= e(http_build_query(['queue' => 'examination', 'scope' => 'overall', 'population' => 'faculty_ntp'])) ?>" class="px-4 py-3 text-sm font-extrabold text-decoration-none whitespace-nowrap border-l border-outline-variant <?= $populationScope === 'faculty_ntp' ? 'bg-primary text-white' : 'bg-white text-slate-700 hover:bg-slate-50' ?>">Faculty &amp; NTP</a>
+                <?php
+                $studentScopeQuery = ['queue' => $activeQueue, 'population' => 'students'];
+                if ($search !== '') $studentScopeQuery['q'] = $search;
+                if ($selectedBatchId !== null) $studentScopeQuery['batch'] = $selectedBatchId;
+                else $studentScopeQuery['scope'] = 'overall';
+                $employeeScopeQuery = ['queue' => 'examination', 'scope' => 'overall', 'population' => 'faculty_ntp'];
+                if ($search !== '') $employeeScopeQuery['q'] = $search;
+                ?>
+                <a href="?<?= e(http_build_query($studentScopeQuery)) ?>" class="px-4 py-3 text-sm font-extrabold text-decoration-none whitespace-nowrap <?= $populationScope === 'students' ? 'bg-primary text-white' : 'bg-white text-slate-700 hover:bg-slate-50' ?>">Students</a>
+                <a href="?<?= e(http_build_query($employeeScopeQuery)) ?>" class="px-4 py-3 text-sm font-extrabold text-decoration-none whitespace-nowrap border-l border-outline-variant <?= $populationScope === 'faculty_ntp' ? 'bg-primary text-white' : 'bg-white text-slate-700 hover:bg-slate-50' ?>">Faculty &amp; NTP</a>
             </div>
             <button type="button" onclick="showModal('apeBatchPickerModal')" class="w-full sm:w-auto min-h-12 px-4 py-2 rounded-xl border border-outline-variant bg-primary-fixed flex items-center gap-3 text-left hover:border-primary transition-colors" title="<?= e($selectedBatch !== null ? 'All queues are filtered to this batch. Choose another batch or Overall.' : 'Overall view includes records from every batch.') ?>">
                 <span class="material-symbols-outlined text-primary text-[20px]">event_available</span>
@@ -322,12 +359,22 @@ render_clinic_command_header(
                 'height' => 'compact',
                 'emptyTitle' => 'No patients here',
                 'emptyText' => $scopeEmptyText,
+                'stateKey' => 'ape-work-queue-' . $populationScope . '-' . $queueKey,
             ]);
             ?>
             <nav id="<?= e($paginationId) ?>" class="pagination" aria-label="<?= e($queue['title']) ?> pages"></nav>
         </section>
     <?php endforeach; ?>
 </div>
+
+<script>
+document.querySelectorAll('[data-ape-persistent-details]').forEach((details) => {
+    const key = `cliniq-ape-details:${details.dataset.apePersistentDetails}`;
+    const saved = window.localStorage.getItem(key);
+    if (saved !== null) details.open = saved === 'open';
+    details.addEventListener('toggle', () => window.localStorage.setItem(key, details.open ? 'open' : 'closed'));
+});
+</script>
 
 <div id="apeBatchPickerModal" class="modal-backdrop" data-no-row-click>
     <div class="modal-content bg-white rounded-[2rem] w-full max-w-3xl p-8 shadow-2xl border border-outline-variant/10" style="max-height:90vh;display:flex;flex-direction:column;overflow:hidden;">
@@ -381,7 +428,7 @@ render_clinic_command_header(
                 <?php foreach ($schoolYearBatches as $batch): ?>
                     <?php
                     $batchId = (int) $batch['batch_id'];
-                    $batchQuery = ['queue' => $activeQueue, 'batch' => $batchId];
+                    $batchQuery = ['queue' => $activeQueue, 'batch' => $batchId, 'population' => 'students'];
                     if ($search !== '') {
                         $batchQuery['q'] = $search;
                     }

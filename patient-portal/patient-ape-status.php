@@ -230,7 +230,7 @@ $nextActionCopy = match (true) {
     default => $studentNote ?: ($apeRecord ? 'Complete the current APE step shown below.' : 'No APE record has been opened by the clinic yet.'),
 };
 $currentStep = $apeRecord ? ape_record_step_index($apeRecord) + 1 : 1;
-$apePercent = $clearanceStatus === 'Cleared' ? 100 : (($digitalSubmissionComplete ? 25 : 0) + ($examCompleted ? 25 : 0));
+$apePercent = $apeRecord ? ape_record_progress_percent($apeRecord) : 0;
 $showFindings = $examCompleted;
 $showDocuments = (bool) $apeRecord;
 $showActivity = (bool) $apeRecord;
@@ -257,6 +257,7 @@ $flowSteps = [
                 ? 'Complete regular uploads within seven days of examination.'
                 : 'Upload available documents now; incomplete files will not block examination.'),
         'done' => $digitalSubmissionComplete,
+        'in_progress' => !$digitalSubmissionComplete && (bool) $apeRecord,
         'current' => $apeQueue === 'digital_submission' && !ape_examination_is_available($apeRecord ?? []),
     ],
     [
@@ -426,6 +427,25 @@ render_student_header('APE Status', 'ape');
     <?php endif; ?>
 </section>
 
+<section class="student-ape-desktop-summary" aria-label="APE status at a glance">
+    <article class="student-card student-ape-summary-card">
+        <span class="student-label">Completion</span>
+        <strong class="student-ape-summary-value"><?= (int) $apePercent ?>%</strong>
+        <div class="student-ape-summary-progress" aria-hidden="true"><span style="width: <?= (int) $apePercent ?>%;"></span></div>
+        <span class="student-ape-summary-copy">Step <?= max(1, (int) $currentStep) ?> of 4</span>
+    </article>
+    <article class="student-card student-ape-summary-card">
+        <span class="student-label">Batch schedule</span>
+        <?php if ($hasScheduledBatch): ?>
+            <strong class="student-ape-summary-value student-ape-summary-value-text"><?= student_e(date('M j, Y', strtotime((string) $apeRecord['batch_schedule_date']))) ?></strong>
+            <span class="student-ape-summary-copy"><?= student_e(date('g:i A', strtotime((string) $apeRecord['batch_start_time']))) ?>–<?= student_e(date('g:i A', strtotime((string) $apeRecord['batch_end_time']))) ?> · <?= student_e($apeRecord['batch_patient_category']) ?></span>
+        <?php else: ?>
+            <strong class="student-ape-summary-value student-ape-summary-value-text">Not scheduled</strong>
+            <span class="student-ape-summary-copy">The clinic will assign your examination schedule.</span>
+        <?php endif; ?>
+    </article>
+</section>
+
 <div class="student-grid student-ape-layout">
     <section class="student-card student-span-5">
         <div class="student-card-header">
@@ -447,29 +467,32 @@ render_student_header('APE Status', 'ape');
             </div>
         <?php endif; ?>
         <div class="student-card-pad">
-            <div class="flex items-end justify-between mb-4">
-                <span class="text-xs font-black text-slate-500 uppercase tracking-wider">Completion</span>
-                <strong class="font-headline text-3xl font-black text-[#17261d]"><?= (int) $apePercent ?>%</strong>
-            </div>
-            <div class="w-full h-3 rounded-full bg-primary-fixed overflow-hidden mb-5">
-                <div class="h-full bg-primary rounded-full" style="width: <?= (int) $apePercent ?>%;"></div>
+            <div class="student-ape-flow-completion">
+                <div class="flex items-end justify-between mb-4">
+                    <span class="text-xs font-black text-slate-500 uppercase tracking-wider">Completion</span>
+                    <strong class="font-headline text-3xl font-black text-[#17261d]"><?= (int) $apePercent ?>%</strong>
+                </div>
+                <div class="w-full h-3 rounded-full bg-primary-fixed overflow-hidden mb-5">
+                    <div class="h-full bg-primary rounded-full" style="width: <?= (int) $apePercent ?>%;"></div>
+                </div>
             </div>
             <div class="student-ape-stepper" aria-label="APE progress steps">
                 <?php foreach ($flowSteps as $step): ?>
                     <?php
                     $stepNumber = (int) $step['number'];
                     $isDone = (bool) ($step['done'] ?? false);
+                    $isInProgress = (bool) ($step['in_progress'] ?? false) && !$isDone;
                     $isCurrent = (bool) ($step['current'] ?? false) && !$isDone;
-                    $stepClass = $isDone ? 'is-done' : ($isCurrent ? 'is-current' : 'is-locked');
-                    $badgeClass = $isDone ? 'student-badge-success' : ($isCurrent ? 'student-badge-warning' : 'student-badge-info');
-                    $badgeLabel = $isDone ? 'Done' : ($isCurrent ? 'Current' : 'Next');
+                    $stepClass = $isDone ? 'is-done' : (($isCurrent || $isInProgress) ? 'is-current' : 'is-locked');
+                    $badgeClass = $isDone ? 'student-badge-success' : (($isCurrent || $isInProgress) ? 'student-badge-warning' : 'student-badge-info');
+                    $badgeLabel = $isDone ? 'Done' : ($isCurrent ? 'Current' : ($isInProgress ? 'In Progress' : 'Next'));
                     $stepTitle = $step['title'];
                     $stepCopy = $step['copy'];
                     ?>
                     <div class="student-ape-step <?= student_e($stepClass) ?>">
                         <span class="student-ape-step-rail" aria-hidden="true"></span>
                         <span class="student-ape-step-index">
-                            <span class="material-symbols-outlined"><?= student_e($isDone ? 'check' : ($isCurrent ? 'pending_actions' : $step['icon'])) ?></span>
+                            <span class="material-symbols-outlined"><?= student_e($isDone ? 'check' : (($isCurrent || $isInProgress) ? 'pending_actions' : $step['icon'])) ?></span>
                         </span>
                         <div class="student-ape-step-body" data-mobile-step-label="<?= student_e($step['title']) ?>">
                             <div class="student-ape-step-top">
@@ -478,7 +501,7 @@ render_student_header('APE Status', 'ape');
                             </div>
                             <strong><?= student_e($stepTitle) ?></strong>
                             <span><?= student_e($stepCopy) ?></span>
-                            <?php if ($isCurrent && $canUploadDocuments): ?>
+                            <?php if (($isCurrent || $isInProgress) && $stepNumber === 1 && $canUploadDocuments): ?>
                                 <a class="student-ape-step-action" data-mobile-open-panel="ape-documents-panel" href="#ape-documents-panel">Upload APE documents <span class="material-symbols-outlined">arrow_downward</span></a>
                             <?php endif; ?>
                         </div>
@@ -489,39 +512,8 @@ render_student_header('APE Status', 'ape');
     </section>
 
     <div class="student-span-7 grid gap-4 student-ape-secondary-panels">
-    <?php if ($showFindings): ?>
-    <details class="patient-mobile-panel" data-mobile-accordion>
-    <summary>Clinic findings and follow-up</summary>
-    <section class="student-card">
-        <div class="student-card-header">
-            <div>
-                <h2 class="student-card-title">Clinic Findings and Follow-Up</h2>
-                <p class="student-card-copy">Examination findings and follow-up instructions recorded for you.</p>
-            </div>
-            <span class="student-badge <?= student_e($headerBadge) ?>"><?= student_e($apeRecord['result_status'] ?? 'No Active Treatment') ?></span>
-        </div>
-        <div class="student-card-pad grid gap-3">
-            <?php foreach ($findings as $finding): ?>
-                <div class="student-note <?= $finding['follow_up_required'] ? 'student-note-warning' : 'student-note-success' ?>">
-                    <span class="material-symbols-outlined"><?= $finding['follow_up_required'] ? 'medical_information' : 'check_circle' ?></span>
-                    <div>
-                        <strong><?= student_e($finding['finding_type'] . ' · ' . $finding['result_status']) ?></strong>
-                        <?= student_e($finding['description']) ?>
-                    </div>
-                </div>
-            <?php endforeach; ?>
-            <?php if (!$findings): ?>
-                <div class="student-note student-note-success"><span class="material-symbols-outlined">check_circle</span><div><strong>No active finding recorded.</strong> <?= student_e($studentNote ?: 'No additional patient instruction has been recorded.') ?></div></div>
-            <?php endif; ?>
-        </div>
-    </section>
-    </details>
-    <?php endif; ?>
-
-    </div>
-
     <?php if ($showDocuments): ?>
-    <details class="patient-mobile-panel student-span-12" data-mobile-accordion id="ape-documents-panel">
+    <details class="patient-mobile-panel" data-mobile-accordion id="ape-documents-panel">
     <summary>Required documents</summary>
     <section class="student-card">
         <div class="student-card-header">
@@ -574,7 +566,7 @@ render_student_header('APE Status', 'ape');
                         <div class="student-document-meta">
                             <div class="flex flex-wrap items-center gap-2">
                                 <h3><?= student_e($doc['name']) ?></h3>
-                                <span class="student-badge <?= student_e($doc['badge']) ?>"><?= student_e($doc['status']) ?></span>
+                                <span class="student-badge <?= student_e($doc['badge']) ?>" id="ape-desktop-status-<?= student_e($doc['key']) ?>" data-default-status="<?= student_e($doc['status']) ?>" data-default-badge="<?= student_e($doc['badge']) ?>"><?= student_e($doc['status']) ?></span>
                             </div>
                             <p class="student-document-detail"><?= student_e($doc['detail']) ?></p>
                             <?php if ($doc['upload_due_date']): ?>
@@ -638,6 +630,7 @@ render_student_header('APE Status', 'ape');
     </section>
     </details>
     <?php endif; ?>
+    </div>
 </div>
 
 <div id="ape-upload-confirm-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
@@ -673,6 +666,26 @@ render_student_header('APE Status', 'ape');
         <span class="student-badge student-badge-info"><?= count($allActivities) ?> Event(s)</span>
     </div>
     <div class="student-card-pad grid gap-3" aria-live="polite">
+        <?php if ($showFindings): ?>
+            <?php foreach ($findings as $finding): ?>
+                <article class="student-document-card ape-timeline-clinical-entry <?= $finding['follow_up_required'] ? 'is-follow-up' : 'is-normal' ?>">
+                    <span class="student-icon-box"><span class="material-symbols-outlined"><?= $finding['follow_up_required'] ? 'medical_information' : 'check_circle' ?></span></span>
+                    <div class="student-document-meta">
+                        <div class="ape-timeline-entry-heading">
+                            <h3><?= student_e($finding['finding_type'] . ' · ' . $finding['result_status']) ?></h3>
+                            <span class="student-badge <?= $finding['follow_up_required'] ? 'student-badge-warning' : 'student-badge-success' ?>"><?= $finding['follow_up_required'] ? 'Follow-up' : 'Clinical update' ?></span>
+                        </div>
+                        <p><?= student_e($finding['description']) ?></p>
+                    </div>
+                </article>
+            <?php endforeach; ?>
+            <?php if (!$findings): ?>
+                <article class="student-document-card ape-timeline-clinical-entry is-normal">
+                    <span class="student-icon-box"><span class="material-symbols-outlined">check_circle</span></span>
+                    <div class="student-document-meta"><h3>No active finding recorded</h3><p><?= student_e($studentNote ?: 'No additional patient instruction has been recorded.') ?></p></div>
+                </article>
+            <?php endif; ?>
+        <?php endif; ?>
         <?php foreach ($activities as $activity): ?>
             <div class="student-document-card">
                 <span class="student-icon-box"><span class="material-symbols-outlined">history</span></span>
@@ -760,6 +773,11 @@ render_student_header('APE Status', 'ape');
 
     function removeApeFile(documentKey) {
         const input = document.getElementById(`ape-file-${documentKey}`);
+        const selectedFiles = Array.from(input?.files || []);
+        if (selectedFiles.length === 0) return;
+        const documentName = input.dataset.documentName || 'this requirement';
+        const fileLabel = `${selectedFiles.length} selected file${selectedFiles.length === 1 ? '' : 's'}`;
+        if (!window.confirm(`Remove ${fileLabel} from ${documentName}?`)) return;
         input.value = '';
         updateApeFileRow(input);
         refreshApeBatchSummary();
@@ -772,6 +790,7 @@ render_student_header('APE Status', 'ape');
         const mobileFilename = document.getElementById(`ape-mobile-file-name-${documentKey}`);
         const mobileRowState = document.getElementById(`ape-mobile-row-state-${documentKey}`);
         const mobileStatus = document.getElementById(`ape-mobile-status-${documentKey}`);
+        const desktopStatus = document.getElementById(`ape-desktop-status-${documentKey}`);
         const mobileRemoveButton = document.getElementById(`ape-mobile-remove-${documentKey}`);
         const selectLabel = actions.querySelector('.ape-select-file span:last-child');
         const removeButton = actions.querySelector('.ape-remove-file');
@@ -793,10 +812,19 @@ render_student_header('APE Status', 'ape');
                 previewButton.textContent = file.name;
                 filename.appendChild(previewButton);
             });
+            const removeFileButton = document.createElement('button');
+            removeFileButton.type = 'button';
+            removeFileButton.className = 'ape-staged-file-remove';
+            removeFileButton.setAttribute('aria-label', `Remove selected file${selectedFiles.length === 1 ? '' : 's'}`);
+            removeFileButton.title = 'Remove selected file(s)';
+            removeFileButton.textContent = '×';
+            removeFileButton.addEventListener('click', () => removeApeFile(documentKey));
+            filename.appendChild(removeFileButton);
             filename.classList.remove('hidden');
             if (mobileFilename) { mobileFilename.textContent = `${selectedFiles.length} file${selectedFiles.length === 1 ? '' : 's'} selected`; mobileFilename.classList.remove('hidden'); }
             if (mobileRowState) { mobileRowState.textContent = mobileRowState.dataset.defaultLabel || ''; mobileRowState.classList.toggle('hidden', !mobileRowState.dataset.defaultLabel); mobileRowState.classList.remove('is-staged'); }
             if (mobileStatus) { mobileStatus.textContent = `${selectedFiles.length} file${selectedFiles.length === 1 ? '' : 's'} attached`; mobileStatus.className = 'student-badge student-badge-success'; }
+            if (desktopStatus) { desktopStatus.textContent = `${selectedFiles.length} file${selectedFiles.length === 1 ? '' : 's'} attached`; desktopStatus.className = 'student-badge student-badge-success'; }
             selectLabel.textContent = 'Change Files';
             removeButton.classList.remove('hidden');
             mobileRemoveButton?.classList.remove('hidden');
@@ -806,6 +834,7 @@ render_student_header('APE Status', 'ape');
             if (mobileFilename) { mobileFilename.textContent = ''; mobileFilename.classList.add('hidden'); }
             if (mobileRowState) { mobileRowState.textContent = mobileRowState.dataset.defaultLabel || ''; mobileRowState.classList.toggle('hidden', !mobileRowState.dataset.defaultLabel); mobileRowState.classList.remove('is-staged'); }
             if (mobileStatus) { mobileStatus.textContent = mobileStatus.dataset.defaultStatus || ''; mobileStatus.className = `student-badge ${mobileStatus.dataset.defaultBadge || ''}`; }
+            if (desktopStatus) { desktopStatus.textContent = desktopStatus.dataset.defaultStatus || ''; desktopStatus.className = `student-badge ${desktopStatus.dataset.defaultBadge || ''}`; }
             selectLabel.textContent = 'Select Files';
             removeButton.classList.add('hidden');
             mobileRemoveButton?.classList.add('hidden');

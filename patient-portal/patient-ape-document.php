@@ -15,11 +15,15 @@ if ($documentId < 1) {
 $stmt = auth_db()->prepare('SELECT d.original_filename, d.file_path FROM ape_documents d JOIN ape_records ar ON ar.ape_id = d.ape_id WHERE d.document_id = ? AND ar.patient_id = ? LIMIT 1');
 $stmt->execute([$documentId, $patientId]);
 $document = $stmt->fetch();
-$absolutePath = $document ? ape_document_absolute_path((string) $document['file_path']) : null;
-
-if (!$document || $absolutePath === null) {
+if (!$document) {
     http_response_code(404);
-    exit('Document not found.');
+    exit('Document record not found.');
+}
+$documentLookup = ape_document_lookup((string) $document['file_path']);
+$absolutePath = $documentLookup['absolute_path'];
+if ($absolutePath === null) {
+    http_response_code(404);
+    exit('The uploaded document file is missing from clinic storage. Please contact the clinic so it can be restored or uploaded again.');
 }
 
 $detectedType = (new finfo(FILEINFO_MIME_TYPE))->file($absolutePath) ?: 'application/octet-stream';

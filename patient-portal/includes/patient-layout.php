@@ -653,7 +653,7 @@ function render_student_footer(): void
                                 Choose Photo
                             </label>
                             <button type="button" class="student-button profile-photo-cancel" data-profile-photo-close>Cancel</button>
-                            <button type="submit" class="student-button" data-profile-photo-save disabled>Review Photo</button>
+                        <button type="submit" class="student-button" data-profile-photo-save disabled hidden>Review Photo</button>
                         </div>
                     </div>
                     <div class="profile-photo-stage profile-photo-confirmation" data-profile-photo-confirmation aria-hidden="true">
@@ -887,6 +887,24 @@ function render_student_footer(): void
                 });
             })();
 
+            (() => {
+                const accountMenu = document.querySelector('.student-mobile-account');
+                const accountToggle = accountMenu?.querySelector('.student-mobile-account-toggle');
+                if (!accountMenu || !accountToggle) return;
+
+                document.addEventListener('click', (event) => {
+                    if (accountMenu.open && !accountMenu.contains(event.target)) {
+                        accountMenu.open = false;
+                    }
+                });
+                document.addEventListener('keydown', (event) => {
+                    if (event.key === 'Escape' && accountMenu.open) {
+                        accountMenu.open = false;
+                        accountToggle.focus();
+                    }
+                });
+            })();
+
             const profilePhotoMotionMs = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 240;
 
             function setProfilePhotoConfirmation(form, confirming) {
@@ -965,7 +983,10 @@ function render_student_footer(): void
                         preview.src = String(reader.result || '');
                         preview.hidden = false;
                         if (fallback) fallback.hidden = true;
-                        if (save) save.disabled = false;
+                        if (save) {
+                            save.disabled = false;
+                            save.hidden = false;
+                        }
                         setProfilePhotoConfirmation(form, false);
                     });
                     reader.readAsDataURL(file);
@@ -998,6 +1019,16 @@ function render_student_footer(): void
                 if (event.key !== 'Escape') return;
                 document.querySelectorAll('.profile-photo-modal.is-open').forEach(closeProfilePhotoModal);
             });
+
+            const desktopMobilePanelQuery = window.matchMedia('(min-width: 641px)');
+            const restoreDesktopMobilePanels = () => {
+                if (!desktopMobilePanelQuery.matches) return;
+                document.querySelectorAll('details[data-mobile-accordion], details.student-mobile-more, details.passport-mobile-panel, details.patient-mobile-panel, details.patient-document-more').forEach((panel) => {
+                    panel.open = true;
+                });
+            };
+            restoreDesktopMobilePanels();
+            desktopMobilePanelQuery.addEventListener?.('change', restoreDesktopMobilePanels);
 
             if (window.matchMedia('(max-width: 640px)').matches) {
             document.querySelectorAll('details[data-mobile-accordion]').forEach((panel) => {

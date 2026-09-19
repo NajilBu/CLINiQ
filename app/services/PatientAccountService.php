@@ -6,6 +6,7 @@ require_once __DIR__ . '/ApeWorkflow.php';
 require_once __DIR__ . '/ApeCycleService.php';
 require_once __DIR__ . '/AuditLog.php';
 require_once __DIR__ . '/PatientAccessStatus.php';
+require_once __DIR__ . '/AccountValidation.php';
 
 function can_manage_patient_accounts(?array $user): bool
 {
@@ -424,20 +425,17 @@ function patient_account_initial_password(string $idNumber): string
 
 function patient_account_valid_birthdate(string $value): bool
 {
-    $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
-    $today = new DateTimeImmutable('today');
-
-    return $date instanceof DateTimeImmutable
-        && $date->format('Y-m-d') === $value
-        && $date <= $today;
+    try {
+        account_assert_valid_birthdate($value);
+        return true;
+    } catch (InvalidArgumentException) {
+        return false;
+    }
 }
 
 function patient_account_valid_name(string $value): bool
 {
-    $length = function_exists('mb_strlen') ? mb_strlen($value) : strlen($value);
-    return $length >= 1
-        && $length <= 100
-        && preg_match("/^[\\p{L} .'-]+$/u", $value) === 1;
+    return account_valid_person_name($value);
 }
 
 function normalize_person_sex(string $value): string
@@ -526,7 +524,7 @@ function create_inactive_patient_account(array $input): array
         throw new InvalidArgumentException("Middle name may contain only letters, spaces, apostrophes, periods, and hyphens.");
     }
     if (!patient_account_valid_birthdate($birthdate)) {
-        throw new InvalidArgumentException('Enter a valid birthdate that is not in the future.');
+        throw new InvalidArgumentException('Enter a valid birthdate within the last 120 years and not in the future.');
     }
     if (strlen($yearEmployment) > 100 || strlen($sectionPosition) > 100) {
         throw new InvalidArgumentException('Employment type, title, or position cannot exceed 100 characters.');
@@ -544,6 +542,7 @@ function create_inactive_patient_account(array $input): array
         if ($duplicate->fetchColumn()) {
             throw new InvalidArgumentException('ID number already exists.');
         }
+        account_assert_email_available($db, $email);
 
         $personStmt = $db->prepare('
             INSERT INTO people (id_number, first_name, middle_name, last_name, birthdate, sex)

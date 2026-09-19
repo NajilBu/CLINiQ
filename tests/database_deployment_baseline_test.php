@@ -17,14 +17,14 @@ if ($schema === false || $runner === false || $envLoader === false) {
 preg_match_all('/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`?([a-zA-Z0-9_]+)`?/i', $schema, $matches);
 $tables = array_values(array_unique($matches[1] ?? []));
 
-foreach (['people', 'patients', 'patient_notifications', 'student_enrollment_declarations', 'student_school_year_enrollments', 'visits', 'appointments', 'ape_records', 'ape_documents', 'clinic_feedback', 'login_attempts', 'schema_migrations'] as $table) {
+foreach (['people', 'patients', 'patient_notifications', 'patient_registration_verifications', 'student_enrollment_declarations', 'student_school_year_enrollments', 'visits', 'appointments', 'ape_records', 'ape_documents', 'clinic_feedback', 'login_attempts', 'schema_migrations'] as $table) {
     if (!in_array($table, $tables, true)) {
         throw new RuntimeException("Production baseline is missing {$table}.");
     }
 }
 
-if (count($tables) !== 37) {
-    throw new RuntimeException('Expected 37 production tables including student school-year history, patient notifications, login attempts, and schema migrations; found ' . count($tables) . '.');
+if (count($tables) !== 38) {
+    throw new RuntimeException('Expected 38 production tables including patient registration verification, student school-year history, patient notifications, login attempts, and schema migrations; found ' . count($tables) . '.');
 }
 
 if (!preg_match('/CREATE TABLE accounts \([\s\S]*?status_reason VARCHAR\(255\) NULL,/i', $schema)) {

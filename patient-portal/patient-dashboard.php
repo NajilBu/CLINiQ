@@ -216,7 +216,7 @@ $apeQueue = $latestApe ? ape_record_queue($latestApe) : 'digital_submission';
 $apeStep = $latestApe ? ape_record_step_index($latestApe) : 0;
 $apeDigitalSubmissionComplete = ape_digital_submission_complete($latestApe ?? []);
 $apeExamCompleted = !empty($latestApe['exam_date']);
-$apePercent = $apeQueue === 'completed' ? 100 : (($apeDigitalSubmissionComplete ? 25 : 0) + ($apeExamCompleted ? 25 : 0));
+$apePercent = $latestApe ? ape_record_progress_percent($latestApe) : 0;
 $apeCompleted = $apePercent >= 100 || ($latestApe['clearance_status'] ?? '') === 'Cleared';
 $apeBadgeClass = match ($latestApe['clearance_status'] ?? '') {
     'Cleared' => 'student-badge-success',
@@ -280,6 +280,10 @@ if (!$latestApe) {
         $clinicNotes[] = ['type' => 'info', 'icon' => 'info', 'text' => 'Complete the current APE step shown above.'];
     }
 }
+$apeDocumentActionCount = count(array_filter($clinicNotes, static fn(array $clinicNote): bool =>
+    str_ends_with($clinicNote['text'], ' is still missing.')
+    || str_ends_with($clinicNote['text'], ' needs a corrected upload.')
+));
 $clinicNoteClass = static fn(string $type): string => match ($type) {
     'success' => 'student-note-success',
     'danger' => 'student-note-danger',
@@ -367,6 +371,8 @@ $appointmentSummary = match ($appointmentStatus) {
     default => 'Manage your appointment request from the appointment page.',
 };
 $appointmentDisplayStatus = $appointmentStatus === 'For Confirmation' ? 'Awaiting clinic confirmation' : $appointmentStatus;
+$appointmentCtaLabel = in_array($appointmentStatus, ['Cancelled', 'No Show'], true) ? 'Book New Appointment' : 'Manage Appointment';
+$appointmentCtaIcon = in_array($appointmentStatus, ['Cancelled', 'No Show'], true) ? 'calendar_add_on' : 'schedule';
 
 render_student_header('Dashboard', 'dashboard');
 ?>
@@ -379,7 +385,7 @@ render_student_header('Dashboard', 'dashboard');
     </div>
 <?php endif; ?>
 
-<section class="student-card student-card-pad mb-4" aria-label="Patient dashboard overview">
+<section class="student-card student-card-pad mb-4 student-dashboard-welcome" aria-label="Patient dashboard overview">
 <div class="student-page-header">
     <div>
         <p class="student-eyebrow">Patient Health Portal</p>
@@ -391,6 +397,13 @@ render_student_header('Dashboard', 'dashboard');
         <?= student_e($accountBadgeLabel) ?>
     </span>
 </div>
+<?php if ($hasScheduledApeBatch): ?>
+    <a href="patient-ape-status.php" class="student-dashboard-batch-summary text-decoration-none">
+        <span class="student-icon-box"><span class="material-symbols-outlined" aria-hidden="true">event_available</span></span>
+        <strong>Current APE batch</strong>
+        <span class="student-dashboard-batch-time"><?= student_e($scheduledApeBatchLabel) ?></span>
+    </a>
+<?php endif; ?>
 </section>
 
 <?php if (!$isOfficialAccess): ?>
@@ -400,7 +413,14 @@ render_student_header('Dashboard', 'dashboard');
     </div>
 <?php endif; ?>
 
-<section class="student-required-actions mb-4" aria-label="Required student actions">
+<?php if (!$isOfficialAccess): ?>
+    <div class="student-note student-note-warning mb-4" role="status">
+        <span class="material-symbols-outlined">lock_clock</span>
+        <div><strong>Applicant access</strong><br>Complete your APE and receive final clinic clearance to unlock your Health Passport and appointment booking.</div>
+    </div>
+<?php endif; ?>
+
+<section class="student-required-actions student-dashboard-next-steps mb-4" aria-label="Required student actions">
     <div class="student-required-actions-head">
         <div>
             <p class="student-eyebrow student-eyebrow-compact">Your next steps</p>
@@ -434,7 +454,7 @@ render_student_header('Dashboard', 'dashboard');
         <?php endif; ?>
 
         <?php if ($apeNeedsAction): ?>
-            <article class="student-action-card">
+            <article class="student-action-card student-dashboard-ape-action">
                 <div class="flex items-start gap-4">
                     <span class="student-action-step"><?= $passportRequired ? 2 : 1 ?></span>
                     <span class="student-icon-box">
@@ -444,6 +464,9 @@ render_student_header('Dashboard', 'dashboard');
                         <p class="student-action-kicker student-action-kicker-primary">APE requirement</p>
                         <h2><?= student_e($apeActionTitle) ?></h2>
                         <p><?= student_e($apeActionCopy) ?></p>
+                        <?php if ($apeDocumentActionCount > 0): ?>
+                            <p class="student-dashboard-action-scope"><strong><?= (int) $apeDocumentActionCount ?> document<?= $apeDocumentActionCount === 1 ? '' : 's' ?> need<?= $apeDocumentActionCount === 1 ? 's' : '' ?> your upload.</strong> Review each requirement below or on APE Status.</p>
+                        <?php endif; ?>
                     </div>
                 </div>
                 <a href="patient-ape-status.php" class="student-button text-decoration-none">
@@ -521,6 +544,7 @@ render_student_header('Dashboard', 'dashboard');
 </section>
 
 <div class="student-grid student-dashboard-detail-stack">
+    <div class="student-dashboard-profile-slot">
     <details class="student-mobile-more dashboard-profile-more" open>
         <summary>Profile details</summary>
     <section class="student-card student-card-pad student-span-4<?= $isOfficialAccess ? ' student-clickable-card' : '' ?>"<?= $isOfficialAccess ? ' data-href="patient-passport.php" role="link" tabindex="0" aria-label="Open Health Passport profile"' : ' aria-label="Patient profile"' ?>>
@@ -563,8 +587,9 @@ render_student_header('Dashboard', 'dashboard');
         </div>
     </section>
     </details>
+    </div>
 
-    <section class="student-card student-span-4 student-clickable-card student-dashboard-duplicate" data-href="patient-ape-status.php" role="link" tabindex="0" aria-label="Open APE status">
+    <section class="student-card student-span-4 student-clickable-card student-dashboard-duplicate student-dashboard-actionable" data-href="patient-ape-status.php" role="link" tabindex="0" aria-label="Open APE status">
         <div class="student-card-header">
             <div>
                 <h2 class="student-card-title">APE Progress</h2>
@@ -596,16 +621,7 @@ render_student_header('Dashboard', 'dashboard');
                     <span class="student-badge <?= student_e($apeBadgeClass) ?>"><?= student_e($latestApe['verification_status'] ?? 'Pending') ?></span>
                 </div>
             </div>
-            <?php if ($hasScheduledApeBatch): ?>
-                <div class="student-note student-note-info mt-4 mb-0">
-                    <span class="material-symbols-outlined">calendar_month</span>
-                    <div>
-                        <strong><?= $apeCompleted ? 'Completed APE batch' : 'Current APE batch' ?>: <?= student_e($latestApe['batch_name']) ?></strong><br>
-                        <?= student_e($latestApe['batch_patient_category'] ?? 'APE') ?> · <?= student_e($scheduledApeBatchLabel) ?><br>
-                        <span class="text-xs"><?= $apeCompleted ? 'This examination batch has been completed.' : 'Your assigned examination schedule is currently active.' ?></span>
-                    </div>
-                </div>
-            <?php elseif ($latestApe && ($latestApe['clearance_status'] ?? '') !== 'Cleared'): ?>
+            <?php if (!$hasScheduledApeBatch && $latestApe && ($latestApe['clearance_status'] ?? '') !== 'Cleared'): ?>
                 <div class="student-note student-note-warning mt-4 mb-0">
                     <span class="material-symbols-outlined">event_busy</span>
                     <div><strong>No active APE batch assigned yet.</strong><br>Wait for the clinic to schedule your examination.</div>
@@ -659,6 +675,7 @@ render_student_header('Dashboard', 'dashboard');
             <?php endif; ?>
         </div>
     </section>
+
 </div>
 
 <details class="student-mobile-more dashboard-clinic-notes" open>

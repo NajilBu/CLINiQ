@@ -14,11 +14,15 @@ if ($documentId <= 0) {
 $stmt = auth_db()->prepare('SELECT document_id, original_filename, file_path FROM ape_documents WHERE document_id = ? LIMIT 1');
 $stmt->execute([$documentId]);
 $document = $stmt->fetch();
-$absolutePath = $document ? ape_document_absolute_path((string) $document['file_path']) : null;
-
-if (!$document || $absolutePath === null) {
+if (!$document) {
     http_response_code(404);
-    exit('Document not found.');
+    exit('Document record not found.');
+}
+$documentLookup = ape_document_lookup((string) $document['file_path']);
+$absolutePath = $documentLookup['absolute_path'];
+if ($absolutePath === null) {
+    http_response_code(404);
+    exit('The document record exists, but its uploaded file is missing from clinic storage. Restore the document volume from backup or ask the patient to upload it again.');
 }
 
 $detectedType = (new finfo(FILEINFO_MIME_TYPE))->file($absolutePath) ?: 'application/octet-stream';

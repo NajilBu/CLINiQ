@@ -176,7 +176,7 @@ render_student_header('Emergency Health Passport', 'passport');
                 </span>
             </div>
             <div class="student-card-pad">
-                <div class="student-grid passport-grid-tight">
+                <div class="student-grid passport-grid-tight passport-personal-grid">
                     <div class="student-span-6 student-field passport-field-compact">
                         <label class="student-label">Full Name</label>
                         <div class="passport-readonly-field"><?= student_e($passport['name']) ?></div>
@@ -224,7 +224,7 @@ render_student_header('Emergency Health Passport', 'passport');
                 </span>
             </div>
             <div class="student-card-pad">
-                <div class="student-grid passport-grid-tight">
+                <div class="student-grid passport-grid-tight passport-bmi-grid">
                     <div class="student-span-4 student-field passport-field-compact">
                         <label class="student-label">Height</label>
                         <div class="passport-readonly-field"><?= $passport['height_cm'] !== null ? student_e(number_format((float) $passport['height_cm'], 2)) . ' cm' : 'Not recorded from APE yet' ?></div>
@@ -266,7 +266,7 @@ render_student_header('Emergency Health Passport', 'passport');
                     Editable
                 </span>
             </div>
-            <div class="student-card-pad grid gap-0">
+            <div class="student-card-pad grid gap-0 passport-emergency-fields">
 
                 <div class="student-field">
                     <label class="student-label" for="allergies">
@@ -495,18 +495,13 @@ render_student_header('Emergency Health Passport', 'passport');
                     <div class="passport-modern-identity">
                         <div class="passport-modern-kicker-row">
                             <span class="passport-modern-pill">Emergency Passport</span>
-                            <span class="passport-modern-status">
-                                <span class="material-symbols-outlined">check_circle</span>
-                                No Active Incident
-                            </span>
                         </div>
                         <div class="passport-modern-name" id="prev-name"><?= student_e($passport['name']) ?></div>
                         <div class="passport-modern-meta">
                             <span id="prev-sid"><?= student_e($passport['student_id']) ?></span>
-                            <span aria-hidden="true">&bull;</span>
-                            <span><?= student_e($profile['course'] ?? 'Not recorded') ?></span>
                         </div>
                     </div>
+                    <span class="passport-modern-status"><span class="material-symbols-outlined">check_circle</span> No Active Incident</span>
                     <div class="passport-modern-blood" role="img" aria-label="Blood type">
                         <span>Blood type</span>
                         <strong id="prev-blood"><?= student_e($passport['blood_type']) ?></strong>
@@ -514,57 +509,25 @@ render_student_header('Emergency Health Passport', 'passport');
                 </div>
 
                 <div class="passport-modern-content">
-                    <div class="passport-modern-info-grid">
-                        <article class="passport-modern-info passport-modern-info-allergy">
-                            <div class="passport-modern-info-heading">
-                                <span class="material-symbols-outlined">allergy</span>
-                                <span>Allergies</span>
-                            </div>
-                            <div class="passport-modern-tags" id="prev-allergies">
-                                <?php foreach (array_filter(array_map('trim', preg_split('/[,;\r\n]+/', $passport['allergies']) ?: [])) as $tag): ?>
-                                    <span class="passport-modern-tag"><?= student_e($tag) ?></span>
-                                <?php endforeach; ?>
-                            </div>
-                        </article>
-
-                        <article class="passport-modern-info passport-modern-info-condition">
-                            <div class="passport-modern-info-heading">
-                                <span class="material-symbols-outlined">cardiology</span>
-                                <span>Medical Conditions</span>
-                            </div>
-                            <div class="passport-modern-value" id="prev-conditions"><?= nl2br(student_e($passport['conditions'])) ?></div>
-                        </article>
-
-                        <article class="passport-modern-info passport-modern-info-medication">
-                            <div class="passport-modern-info-heading">
-                                <span class="material-symbols-outlined">medication</span>
-                                <span>Current Medications</span>
-                            </div>
-                            <div class="passport-modern-value" id="prev-medications"><?= nl2br(student_e($passport['medications'])) ?></div>
-                        </article>
-
-                        <article class="passport-modern-info passport-modern-info-instructions">
-                            <div class="passport-modern-info-heading">
-                                <span class="material-symbols-outlined">emergency_home</span>
-                                <span>Emergency Instructions</span>
-                            </div>
-                            <div class="passport-modern-instructions" id="prev-instructions"><?= nl2br(student_e($passport['instructions'])) ?></div>
-                        </article>
-
-                        <?php if ($passport['height_cm'] || $passport['weight_kg'] || $passport['bmi']): ?>
-                            <article class="passport-modern-info passport-modern-info-bmi" id="prev-body-measurements" <?= $passport['show_bmi'] ? '' : 'hidden' ?>>
-                                <div class="passport-modern-info-heading">
-                                    <span class="material-symbols-outlined">monitor_weight</span>
-                                    <span>Body Measurements</span>
-                                </div>
-                                <div class="passport-modern-metrics">
-                                    <span><strong><?= student_e((string) ($passport['height_cm'] ?: '—')) ?></strong><small>Height (cm)</small></span>
-                                    <span><strong><?= student_e((string) ($passport['weight_kg'] ?: '—')) ?></strong><small>Weight (kg)</small></span>
-                                    <span><strong><?= student_e((string) ($passport['bmi'] ?: '—')) ?></strong><small>BMI</small></span>
-                                </div>
-                            </article>
-                        <?php endif; ?>
-                    </div>
+                    <section class="passport-modern-section">
+                        <div class="passport-modern-section-title"><span class="material-symbols-outlined">person</span> Personal information</div>
+                        <div class="passport-modern-personal-grid">
+                            <div class="passport-modern-personal-item passport-modern-personal-item-wide"><span>Full name</span><strong><?= student_e($passport['name']) ?></strong></div>
+                            <div class="passport-modern-personal-item"><span>ID number</span><strong><?= student_e($passport['student_id']) ?></strong></div>
+                            <div class="passport-modern-personal-item"><span>Date of birth</span><strong><?= student_e($passport['dob']) ?></strong></div>
+                            <div class="passport-modern-personal-item"><span>Sex</span><strong><?= student_e($passport['sex']) ?></strong></div>
+                            <div class="passport-modern-personal-item"><span>Blood type</span><strong><?= student_e($passport['blood_type']) ?></strong></div>
+                        </div>
+                    </section>
+                    <section class="passport-modern-section">
+                        <div class="passport-modern-section-title"><span class="material-symbols-outlined">medical_information</span> Medical information</div>
+                        <div class="passport-modern-medical-list">
+                            <div class="passport-modern-medical-item"><span>Allergies</span><strong id="prev-allergies"><?= student_e($passport['allergies'] ?: 'None reported.') ?></strong></div>
+                            <div class="passport-modern-medical-item"><span>Medical conditions</span><strong id="prev-conditions"><?= nl2br(student_e($passport['conditions'] ?: 'None reported.')) ?></strong></div>
+                            <div class="passport-modern-medical-item"><span>Current medications</span><strong id="prev-medications"><?= nl2br(student_e($passport['medications'] ?: 'No current medications recorded.')) ?></strong></div>
+                            <div class="passport-modern-medical-item"><span>Emergency instructions</span><strong class="passport-modern-instructions" id="prev-instructions"><?= nl2br(student_e($passport['instructions'])) ?></strong></div>
+                        </div>
+                    </section>
 
                     <div class="passport-modern-contact">
                         <div class="passport-modern-contact-icon" aria-hidden="true">
@@ -580,18 +543,6 @@ render_student_header('Emergency Health Passport', 'passport');
                             Call Now
                         </a>
                     </div>
-
-                    <details class="passport-modern-guidance">
-                        <summary>
-                            <span><span class="material-symbols-outlined">emergency</span> Emergency response guidance</span>
-                            <span class="material-symbols-outlined passport-modern-guidance-caret">expand_more</span>
-                        </summary>
-                        <div class="passport-modern-guidance-grid">
-                            <div><strong>Breathing difficulty</strong><span>Sit the patient upright, assist with prescribed medication, and monitor breathing.</span></div>
-                            <div><strong>Allergic reaction</strong><span>Avoid further exposure, monitor the airway, and seek medical assistance.</span></div>
-                            <div><strong>Unconscious patient</strong><span>Place in the recovery position, monitor breathing, and contact the guardian.</span></div>
-                        </div>
-                    </details>
 
                     <div class="passport-modern-updated">
                         <span class="material-symbols-outlined">schedule</span>
@@ -616,7 +567,6 @@ render_student_header('Emergency Health Passport', 'passport');
 (() => {
     const form = document.getElementById('passport-form');
     if (!form) return;
-    if (!window.matchMedia('(max-width: 640px)').matches) return;
     const saveButton = form.querySelector('.passport-save-button');
     const initialValues = new URLSearchParams(new FormData(form)).toString();
     let isDirty = false;
@@ -631,6 +581,8 @@ render_student_header('Emergency Health Passport', 'passport');
         if (!isDirty) event.preventDefault();
     });
     syncDirtyState();
+
+    if (!window.matchMedia('(max-width: 640px)').matches) return;
 
     form.classList.add('passport-tab-profile');
     document.querySelectorAll('[data-passport-tab]').forEach((tab) => {

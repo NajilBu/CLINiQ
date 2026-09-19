@@ -893,10 +893,23 @@ const cliniqAlertMonitor = {
     latestAlertId: 0,
     pollTimer: null,
     alarmSource: null,
+    alarmAudio: null,
+    previewSource: null,
+    previewAudio: null,
+    previewObjectUrl: '',
     audioContext: null,
     muted: false,
+    soundId: 'urgent-pulse',
+    soundUrl: '',
     initialized: false,
 };
+
+const CLINIQ_ALERT_SOUNDS = Object.freeze(['urgent-pulse', 'double-chime', 'rapid-siren', 'custom']);
+
+function cliniqNormalizeAlertSound(soundId) {
+    const normalized = String(soundId || '').trim().toLowerCase();
+    return CLINIQ_ALERT_SOUNDS.includes(normalized) ? normalized : 'urgent-pulse';
+}
 
 function cliniqStoredAlertPreference(key, fallback = '') {
     try {
@@ -922,15 +935,29 @@ function cliniqAlertAudioContext() {
     return cliniqAlertMonitor.audioContext;
 }
 
-function cliniqCreateAlertLoopBuffer(context) {
-    const loopSeconds = 1.4;
+function cliniqCreateAlertLoopBuffer(context, soundId = 'urgent-pulse') {
+    const selectedSound = cliniqNormalizeAlertSound(soundId);
+    const loopSeconds = selectedSound === 'rapid-siren' ? 1.05 : 1.4;
     const frameCount = Math.floor(context.sampleRate * loopSeconds);
     const buffer = context.createBuffer(1, frameCount, context.sampleRate);
     const samples = buffer.getChannelData(0);
-    const toneWindows = [
-        { start: 0, duration: 0.22, frequency: 880 },
-        { start: 0.3, duration: 0.24, frequency: 660 },
-    ];
+    const patterns = {
+        'urgent-pulse': [
+            { start: 0, duration: 0.22, frequency: 880 },
+            { start: 0.3, duration: 0.24, frequency: 660 },
+        ],
+        'double-chime': [
+            { start: 0, duration: 0.3, frequency: 660 },
+            { start: 0.38, duration: 0.38, frequency: 990 },
+        ],
+        'rapid-siren': [
+            { start: 0, duration: 0.18, frequency: 760 },
+            { start: 0.2, duration: 0.18, frequency: 1040 },
+            { start: 0.4, duration: 0.18, frequency: 760 },
+            { start: 0.6, duration: 0.18, frequency: 1040 },
+        ],
+    };
+    const toneWindows = patterns[selectedSound] || patterns['urgent-pulse'];
 
     for (let index = 0; index < frameCount; index += 1) {
         const time = index / context.sampleRate;
@@ -955,24 +982,105 @@ function cliniqStopAlertAlarm() {
         }
         cliniqAlertMonitor.alarmSource = null;
     }
+    if (cliniqAlertMonitor.alarmAudio !== null) {
+        cliniqAlertMonitor.alarmAudio.pause();
+        cliniqAlertMonitor.alarmAudio.currentTime = 0;
+        cliniqAlertMonitor.alarmAudio.src = '';
+        cliniqAlertMonitor.alarmAudio = null;
+    }
 }
 
 function cliniqStartAlertAlarm() {
-    if (cliniqAlertMonitor.muted || cliniqAlertMonitor.pendingCount < 1 || cliniqAlertMonitor.alarmSource !== null) return;
+    if (cliniqAlertMonitor.muted || cliniqAlertMonitor.pendingCount < 1
+        || cliniqAlertMonitor.alarmSource !== null || cliniqAlertMonitor.alarmAudio !== null) return;
+    if (cliniqAlertMonitor.soundId === 'custom' && cliniqAlertMonitor.soundUrl) {
+        const audio = new Audio(cliniqAlertMonitor.soundUrl);
+        audio.loop = true;
+        audio.preload = 'auto';
+        audio.volume = 0.85;
+        cliniqAlertMonitor.alarmAudio = audio;
+        const playback = audio.play();
+        if (playback && typeof playback.catch === 'function') {
+            playback.catch(() => {
+                if (cliniqAlertMonitor.alarmAudio === audio) cliniqAlertMonitor.alarmAudio = null;
+                cliniqUpdateAlertSoundControls();
+            });
+        }
+        return;
+    }
     const context = cliniqAlertAudioContext();
     if (!context || context.state !== 'running') return;
     const source = context.createBufferSource();
-    source.buffer = cliniqCreateAlertLoopBuffer(context);
+    source.buffer = cliniqCreateAlertLoopBuffer(context, cliniqAlertMonitor.soundId);
     source.loop = true;
     source.connect(context.destination);
     source.start();
     cliniqAlertMonitor.alarmSource = source;
 }
 
+function cliniqStopAlertSoundPreview() {
+    if (cliniqAlertMonitor.previewSource) {
+        try {
+            cliniqAlertMonitor.previewSource.stop();
+            cliniqAlertMonitor.previewSource.disconnect();
+        } catch (error) {
+            // A generated preview may already have completed.
+        }
+        cliniqAlertMonitor.previewSource = null;
+    }
+    if (cliniqAlertMonitor.previewAudio) {
+        cliniqAlertMonitor.previewAudio.pause();
+        cliniqAlertMonitor.previewAudio.currentTime = 0;
+        cliniqAlertMonitor.previewAudio.src = '';
+        cliniqAlertMonitor.previewAudio = null;
+    }
+}
+
+async function cliniqPreviewAlertSound(soundId, customUrl = '') {
+    cliniqStopAlertSoundPreview();
+    if (cliniqNormalizeAlertSound(soundId) === 'custom' && customUrl) {
+        const audio = new Audio(customUrl);
+        audio.preload = 'auto';
+        audio.volume = 0.85;
+        audio.addEventListener('ended', () => {
+            if (cliniqAlertMonitor.previewAudio === audio) cliniqAlertMonitor.previewAudio = null;
+        }, { once: true });
+        cliniqAlertMonitor.previewAudio = audio;
+        try {
+            await audio.play();
+        } catch (error) {
+            if (cliniqAlertMonitor.previewAudio === audio) cliniqAlertMonitor.previewAudio = null;
+        }
+        return;
+    }
+    const context = cliniqAlertAudioContext();
+    if (!context) return;
+    if (context.state === 'suspended') {
+        try {
+            await context.resume();
+        } catch (error) {
+            return;
+        }
+    }
+    const source = context.createBufferSource();
+    source.buffer = cliniqCreateAlertLoopBuffer(context, soundId);
+    source.connect(context.destination);
+    source.addEventListener('ended', () => {
+        if (cliniqAlertMonitor.previewSource === source) cliniqAlertMonitor.previewSource = null;
+    }, { once: true });
+    cliniqAlertMonitor.previewSource = source;
+    source.start();
+}
+
 function cliniqUpdateAlertSoundControls() {
+    const customAudioReady = cliniqAlertMonitor.soundId === 'custom'
+        && cliniqAlertMonitor.alarmAudio !== null
+        && !cliniqAlertMonitor.alarmAudio.paused;
     const audioLocked = !cliniqAlertMonitor.muted
         && cliniqAlertMonitor.pendingCount > 0
-        && (!cliniqAlertMonitor.audioContext || cliniqAlertMonitor.audioContext.state !== 'running');
+        && (cliniqAlertMonitor.soundId === 'custom'
+            ? !customAudioReady
+            : (!cliniqAlertMonitor.audioContext || cliniqAlertMonitor.audioContext.state !== 'running'));
     document.querySelectorAll('[data-alert-sound-toggle]').forEach((button) => {
         button.hidden = cliniqAlertMonitor.pendingCount < 1;
         button.setAttribute('aria-pressed', cliniqAlertMonitor.muted ? 'true' : 'false');
@@ -997,6 +1105,11 @@ function cliniqSyncAlertAlarm() {
 
 async function cliniqUnlockAlertAudio() {
     if (cliniqAlertMonitor.muted || cliniqAlertMonitor.pendingCount < 1) return;
+    if (cliniqAlertMonitor.soundId === 'custom' && cliniqAlertMonitor.soundUrl) {
+        cliniqStartAlertAlarm();
+        cliniqUpdateAlertSoundControls();
+        return;
+    }
     const context = cliniqAlertAudioContext();
     if (!context) return;
     if (context.state === 'suspended') {
@@ -1012,7 +1125,7 @@ async function cliniqUnlockAlertAudio() {
 
 function cliniqSetAlertMuted(muted) {
     cliniqAlertMonitor.muted = Boolean(muted);
-    cliniqSaveAlertPreference('cliniqAlertSoundMuted', cliniqAlertMonitor.muted ? '1' : '0');
+    cliniqSaveAlertPreference('cliniqMutedAlertId', cliniqAlertMonitor.muted ? String(cliniqAlertMonitor.latestAlertId) : '0');
     if (!cliniqAlertMonitor.muted) cliniqUnlockAlertAudio();
     cliniqSyncAlertAlarm();
 }
@@ -1027,8 +1140,21 @@ function cliniqRenderLiveAlertState(data) {
     const pendingCount = Number(data.pending_count || 0);
     const criticalCount = Number(data.critical_count || 0);
     const latestAlertId = Number(data.latest_alert_id || 0);
+    const selectedSound = cliniqNormalizeAlertSound(data.alert_sound || cliniqAlertMonitor.soundId);
+    const selectedSoundUrl = selectedSound === 'custom' ? String(data.alert_sound_url || '') : '';
+    const soundChanged = selectedSound !== cliniqAlertMonitor.soundId
+        || selectedSoundUrl !== cliniqAlertMonitor.soundUrl;
+    const mutedAlertId = Number(cliniqStoredAlertPreference('cliniqMutedAlertId', '0'));
     cliniqAlertMonitor.pendingCount = pendingCount;
     cliniqAlertMonitor.latestAlertId = latestAlertId;
+    cliniqAlertMonitor.soundId = selectedSound;
+    cliniqAlertMonitor.soundUrl = selectedSoundUrl;
+    cliniqAlertMonitor.muted = pendingCount > 0 && latestAlertId > 0 && mutedAlertId === latestAlertId;
+    if (pendingCount < 1 || latestAlertId > mutedAlertId) {
+        cliniqSaveAlertPreference('cliniqMutedAlertId', '0');
+        cliniqAlertMonitor.muted = false;
+    }
+    if (soundChanged) cliniqStopAlertAlarm();
 
     if (document.body) {
         document.body.classList.toggle('has-active-alerts', pendingCount > 0);
@@ -1104,9 +1230,29 @@ function initContinuousAlertMonitor() {
     if (cliniqAlertMonitor.initialized || !document.body?.dataset.alertStatusUrl) return;
     cliniqAlertMonitor.initialized = true;
     cliniqAlertMonitor.pendingCount = Number(document.body.dataset.activeAlertCount || 0);
-    cliniqAlertMonitor.muted = cliniqStoredAlertPreference('cliniqAlertSoundMuted', '0') === '1';
+    cliniqAlertMonitor.muted = false;
+    cliniqAlertMonitor.soundId = cliniqNormalizeAlertSound(document.body.dataset.alertSound);
+    cliniqAlertMonitor.soundUrl = cliniqAlertMonitor.soundId === 'custom'
+        ? String(document.body.dataset.alertSoundUrl || '')
+        : '';
 
     document.addEventListener('click', (event) => {
+        const previewButton = event.target.closest('[data-preview-alert-sound]');
+        if (previewButton) {
+            const soundField = document.getElementById('alert_sound');
+            const settings = previewButton.closest('[data-alert-sound-settings]');
+            const fileField = settings?.querySelector('[data-alert-sound-file]');
+            const selectedSound = soundField?.value || cliniqAlertMonitor.soundId;
+            const previewUrl = selectedSound === 'custom'
+                ? (cliniqAlertMonitor.previewObjectUrl || settings?.dataset.customSoundUrl || cliniqAlertMonitor.soundUrl)
+                : '';
+            void cliniqPreviewAlertSound(selectedSound, previewUrl);
+            return;
+        }
+        if (event.target.closest('[data-stop-alert-sound-preview]')) {
+            cliniqStopAlertSoundPreview();
+            return;
+        }
         const muteButton = event.target.closest('[data-alert-sound-toggle]');
         if (muteButton) {
             const context = cliniqAlertAudioContext();
@@ -1127,8 +1273,36 @@ function initContinuousAlertMonitor() {
     window.addEventListener('offline', () => cliniqSetAlertConnectionState(false));
 
     cliniqSyncAlertAlarm();
-    refreshAlerts();
-    cliniqAlertMonitor.pollTimer = window.setInterval(refreshAlerts, 10000);
+    void cliniqUnlockAlertAudio();
+    void refreshAlerts();
+    cliniqAlertMonitor.pollTimer = window.setInterval(refreshAlerts, 3000);
+}
+
+function initCustomAlertSoundUpload() {
+    document.querySelectorAll('[data-alert-sound-settings]').forEach((settings) => {
+        const fileField = settings.querySelector('[data-alert-sound-file]');
+        const soundField = settings.querySelector('#alert_sound');
+        const fileName = settings.querySelector('[data-alert-sound-file-name]');
+        if (!fileField || fileField.dataset.alertSoundReady === 'true') return;
+        fileField.dataset.alertSoundReady = 'true';
+        fileField.addEventListener('change', () => {
+            cliniqStopAlertSoundPreview();
+            if (cliniqAlertMonitor.previewObjectUrl) {
+                URL.revokeObjectURL(cliniqAlertMonitor.previewObjectUrl);
+                cliniqAlertMonitor.previewObjectUrl = '';
+            }
+            const file = fileField.files?.[0];
+            if (!file) return;
+            cliniqAlertMonitor.previewObjectUrl = URL.createObjectURL(file);
+            if (fileName) fileName.textContent = file.name;
+            let customOption = Array.from(soundField?.options || []).find((option) => option.value === 'custom');
+            if (!customOption && soundField) {
+                customOption = new Option('Custom uploaded sound', 'custom');
+                soundField.add(customOption);
+            }
+            if (soundField) soundField.value = 'custom';
+        });
+    });
 }
 
 
@@ -1419,15 +1593,34 @@ function initConfirmedPasswordForms(root = document) {
         form.dataset.passwordConfirmationReady = 'true';
         const password = form.querySelector('[name="password"]');
         const confirmation = form.querySelector('[name="password_confirmation"]');
+        const namePattern = /^[\p{L} .'-]+$/u;
+        form.querySelectorAll('[data-person-name]').forEach((input) => {
+            input.addEventListener('input', () => {
+                input.setCustomValidity(input.value && !namePattern.test(input.value)
+                    ? 'Use only letters, spaces, apostrophes, periods, and hyphens.'
+                    : '');
+            });
+        });
         if (!password || !confirmation) return;
 
         const validateMatch = () => {
+            const strongPassword = password.value.length >= 8
+                && password.value.length <= 128
+                && /[a-z]/.test(password.value)
+                && /[A-Z]/.test(password.value)
+                && /\d/.test(password.value)
+                && /[^A-Za-z0-9]/.test(password.value);
+            password.setCustomValidity('');
             confirmation.setCustomValidity('');
+            if (password.value !== '' && !strongPassword) {
+                password.setCustomValidity('Use 8–128 characters with uppercase, lowercase, number, and special character.');
+                return false;
+            }
             if (confirmation.value !== '' && password.value !== confirmation.value) {
                 confirmation.setCustomValidity('Passwords do not match.');
                 return false;
             }
-            return password.value === confirmation.value;
+            return strongPassword && password.value === confirmation.value;
         };
 
         password.addEventListener('input', validateMatch);
@@ -1439,7 +1632,8 @@ function initConfirmedPasswordForms(root = document) {
         form.addEventListener('submit', (event) => {
             if (!validateMatch()) {
                 event.preventDefault();
-                confirmation.reportValidity();
+                if (!password.checkValidity()) password.reportValidity();
+                else confirmation.reportValidity();
             }
         });
     });
@@ -1553,6 +1747,7 @@ function cliniqAfterContentSwap(root) {
     }
     initStudentIdFormatting(root || document);
     initLogoPlaceholders(root || document);
+    initCustomAlertSoundUpload();
     initDragScrolling(root || document);
     initPatientAccountTypeFields(root || document);
     initConfirmedPasswordForms(root || document);
@@ -1917,6 +2112,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // UI-only system logo preview in General Settings
     initLogoPlaceholders();
+    initCustomAlertSoundUpload();
     initExternalBackupDestinationStatus();
 
     // Initialize tabs from URL
