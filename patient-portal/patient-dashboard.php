@@ -17,7 +17,8 @@ if (!empty($profile['first_registration'])) {
         try {
             complete_first_registration(
                 (string) ($_POST['password'] ?? ''),
-                (string) ($_POST['confirm_password'] ?? '')
+                (string) ($_POST['confirm_password'] ?? ''),
+                ($_POST['legal_acknowledgement'] ?? '') === '1'
             );
             header('Location: patient-dashboard.php?activated=1');
             exit;
@@ -68,6 +69,7 @@ if (!empty($profile['first_registration'])) {
                 <input id="confirm-password" name="confirm_password" class="student-input" type="password" minlength="8" autocomplete="new-password" required>
             </div>
             <p class="student-card-copy text-[11px]">Use at least 8 characters with at least one number.</p>
+            <label class="flex items-start gap-3 text-xs font-bold text-slate-600"><input class="mt-0.5" type="checkbox" name="legal_acknowledgement" value="1" required><span>I have read and acknowledge the <a href="<?= student_e(student_legal_url('terms')) ?>" target="_blank" rel="noopener" class="student-auth-link">Terms of Use</a> and <a href="<?= student_e(student_legal_url('privacy')) ?>" target="_blank" rel="noopener" class="student-auth-link">Privacy Notice</a>, including how CLINiQ processes health information.</span></label>
             <button type="submit" class="student-button w-full">
                 Activate Account
                 <span class="material-symbols-outlined">verified_user</span>

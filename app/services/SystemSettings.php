@@ -353,6 +353,49 @@ function cliniq_setting_write(string $key, array $value, ?int $updatedBy = null)
     ]);
 }
 
+function default_cliniq_legal_documents(): array
+{
+    $defaults = ['terms' => '', 'privacy' => '', 'version' => '2026-09-19', 'updated_at' => null];
+    foreach (['terms', 'privacy'] as $document) {
+        $path = __DIR__ . '/../../docs/legal/' . ($document === 'terms' ? 'terms-of-use.md' : 'privacy-notice.md');
+        if (is_file($path)) {
+            $defaults[$document] = (string) file_get_contents($path);
+        }
+    }
+    return $defaults;
+}
+
+function cliniq_legal_documents(): array
+{
+    $defaults = default_cliniq_legal_documents();
+    $saved = cliniq_setting_read('legal.documents', $defaults);
+    foreach (['terms', 'privacy'] as $document) {
+        $saved[$document] = trim((string) ($saved[$document] ?? $defaults[$document]));
+        if ($saved[$document] === '') {
+            $saved[$document] = $defaults[$document];
+        }
+    }
+    $saved['version'] = trim((string) ($saved['version'] ?? $defaults['version'])) ?: $defaults['version'];
+    $saved['updated_at'] = $saved['updated_at'] ?? null;
+    return $saved;
+}
+
+function save_cliniq_legal_documents(array $input, ?int $updatedBy = null): array
+{
+    $current = cliniq_legal_documents();
+    $terms = trim((string) ($input['terms'] ?? ''));
+    $privacy = trim((string) ($input['privacy'] ?? ''));
+    if ($terms === '' || $privacy === '') {
+        throw new InvalidArgumentException('Both the Terms of Use and Privacy Notice are required.');
+    }
+    if (mb_strlen($terms) > 100000 || mb_strlen($privacy) > 100000) {
+        throw new InvalidArgumentException('Each legal document must be 100,000 characters or fewer.');
+    }
+    $settings = ['terms' => $terms, 'privacy' => $privacy, 'version' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s')];
+    cliniq_setting_write('legal.documents', $settings, $updatedBy);
+    return $settings + ['previous_version' => $current['version']];
+}
+
 function cliniq_backup_external_settings(): array
 {
     $saved = cliniq_setting_read('backup.external_destination', [

@@ -323,6 +323,10 @@ render_header('Emergency Health Passport');
                                     <?php endif; ?>
                                 </div>
 
+                                <div class="rounded-2xl bg-slate-50 border border-slate-200 text-slate-600 px-5 py-4 text-sm mb-5">
+                                    <strong class="text-slate-800">Emergency privacy notice.</strong>
+                                    This page displays only the emergency information selected for this passport. Access is logged. Use the information only to help the identified person; do not copy, publish, or use it for another purpose. See the <a href="legal/privacy-notice.php" target="_blank" rel="noopener" class="underline font-bold">CLINiQ Privacy Notice</a>.
+                                </div>
                                 <div class="passport-modern-contact">
                                     <div class="passport-modern-contact-icon" aria-hidden="true"><span class="material-symbols-outlined">phone_in_talk</span></div>
                                     <div class="passport-modern-contact-details">

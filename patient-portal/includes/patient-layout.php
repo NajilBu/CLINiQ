@@ -306,6 +306,42 @@ function student_logout(): void
     session_destroy();
 }
 
+function student_legal_url(string $document): string
+{
+    return '../public/legal/' . ($document === 'terms' ? 'terms-of-use.php' : 'privacy-notice.php');
+}
+
+function student_legal_links(): string
+{
+    return '<a href="' . student_e(student_legal_url('terms')) . '" class="student-auth-link text-decoration-none">Terms of Use</a><span aria-hidden="true"> · </span><a href="' . student_e(student_legal_url('privacy')) . '" class="student-auth-link text-decoration-none">Privacy Notice</a>';
+}
+
+function render_student_cookie_banner(): void
+{
+    ?>
+    <aside class="student-cookie-banner" data-student-cookie-banner role="status" aria-label="Cookie notice" hidden>
+        <div class="student-cookie-copy">
+            <span class="material-symbols-outlined" aria-hidden="true">cookie</span>
+            <p><strong>Essential cookies</strong><br>CLINiQ uses necessary cookies for secure login, sessions, and device preferences. By continuing, you acknowledge this use. See our <a href="<?= student_e(student_legal_url('privacy')) ?>" class="student-auth-link">Privacy Notice</a>.</p>
+        </div>
+        <button type="button" class="student-button student-cookie-dismiss" data-student-cookie-dismiss>Got it</button>
+    </aside>
+    <script>
+        (() => {
+            const banner = document.querySelector('[data-student-cookie-banner]');
+            if (!banner) return;
+            const cookieName = 'cliniq_cookie_notice=';
+            const acknowledged = document.cookie.split(';').some((cookie) => cookie.trim().startsWith(cookieName));
+            if (!acknowledged) banner.hidden = false;
+            banner.querySelector('[data-student-cookie-dismiss]')?.addEventListener('click', () => {
+                document.cookie = 'cliniq_cookie_notice=acknowledged; Max-Age=31536000; Path=/; SameSite=Lax';
+                banner.hidden = true;
+            });
+        })();
+    </script>
+    <?php
+}
+
 function student_remember_cookie_name(): string
 {
     return 'cliniq_student_device';
@@ -698,7 +734,9 @@ function render_student_footer(): void
                     </a>
                 <?php endforeach; ?>
             </nav>
+            <p class="text-center text-xs font-bold text-slate-500 py-5">Your clinic portal privacy information: <?= student_legal_links() ?></p>
         </div>
+        <?php render_student_cookie_banner(); ?>
 
         <div id="patient-profile-photo-modal" class="profile-photo-modal" role="dialog" aria-modal="true" aria-labelledby="patient-profile-photo-title" hidden>
             <div class="profile-photo-dialog">
@@ -1251,6 +1289,8 @@ function render_student_auth_header(string $title): void
 function render_student_auth_footer(): void
 {
     ?>
+    <p class="text-center text-xs font-bold text-slate-500 py-5"><?= student_legal_links() ?></p>
+    <?php render_student_cookie_banner(); ?>
     <script>
         document.querySelectorAll('[data-student-toast]').forEach((toast) => {
             const dismiss = () => {

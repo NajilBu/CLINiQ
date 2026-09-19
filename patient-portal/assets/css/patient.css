@@ -1033,6 +1033,52 @@ html:has(.student-body) body {
     gap: 0.75rem;
 }
 
+.ape-document-guidance {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: 0 0 1rem;
+    color: var(--student-muted);
+    font-size: 0.78rem;
+    font-weight: 650;
+}
+
+.ape-document-guidance .material-symbols-outlined {
+    color: var(--student-primary);
+    font-size: 1.05rem;
+}
+
+.ape-missing-documents {
+    border: 1px solid #fde68a;
+    border-radius: 0.75rem;
+    background: var(--student-warning-soft);
+    color: #7c4a03;
+}
+
+.ape-missing-documents summary {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.8rem 0.9rem;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 800;
+    list-style: none;
+}
+
+.ape-missing-documents summary::-webkit-details-marker { display: none; }
+
+.ape-missing-documents-chevron { margin-left: auto; transition: transform 160ms ease; }
+.ape-missing-documents[open] .ape-missing-documents-chevron { transform: rotate(180deg); }
+
+.ape-missing-documents p {
+    margin: 0;
+    padding: 0 0.9rem 0.85rem 2.35rem;
+    font-size: 0.78rem;
+    font-weight: 650;
+    line-height: 1.5;
+}
+
 .ape-timeline-clinical-entry {
     position: relative;
     border-left-width: 4px;
@@ -1303,6 +1349,36 @@ html:has(.student-body) body {
 }
 
 .student-toast-dismiss .material-symbols-outlined { font-size: 20px; }
+
+.student-cookie-banner {
+    position: fixed;
+    z-index: 140;
+    right: 16px;
+    bottom: max(16px, env(safe-area-inset-bottom));
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    width: min(560px, calc(100vw - 32px));
+    padding: 14px 16px;
+    border: 1px solid var(--student-border-soft);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, .98);
+    box-shadow: 0 14px 34px rgba(23, 38, 29, .18);
+    color: var(--student-primary-dark);
+}
+
+.student-cookie-banner[hidden] { display: none; }
+.student-cookie-copy { display: flex; align-items: flex-start; gap: 10px; min-width: 0; flex: 1 1 auto; }
+.student-cookie-copy .material-symbols-outlined { margin-top: 2px; color: var(--student-primary); }
+.student-cookie-copy p { margin: 0; font-size: 12px; line-height: 1.45; }
+.student-cookie-dismiss { flex: 0 0 auto; min-height: 38px; padding: 8px 14px; }
+
+html.student-dark .student-cookie-banner { background: #122219; border-color: var(--student-border-soft); color: var(--student-fg); }
+
+@media (max-width: 600px) {
+    .student-cookie-banner { right: 10px; bottom: max(10px, env(safe-area-inset-bottom)); width: calc(100vw - 20px); align-items: flex-end; }
+    .student-cookie-dismiss { padding-inline: 12px; }
+}
 
 .student-field {
     display: grid;

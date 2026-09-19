@@ -148,6 +148,7 @@ render_student_header('Emergency Health Passport', 'passport');
         Make sure all fields are accurate. Only emergency-relevant data is displayed on the public passport page &mdash; full medical records are never exposed.
     </div>
 </div>
+<div class="student-note student-note-info mb-4"><span class="material-symbols-outlined">privacy_tip</span><div>Saving these fields controls what selected emergency information can be shown through your QR/NFC passport. Passport views are logged, and anyone who scans the tag must use the information only to help in an emergency. Read the <a href="<?= student_e(student_legal_url('privacy')) ?>" target="_blank" rel="noopener" class="student-auth-link">Privacy Notice</a>.</div></div>
 
 <form method="POST" action="" id="passport-form" data-emergency-contact-form>
 <nav class="passport-mobile-tabs" aria-label="Passport sections">

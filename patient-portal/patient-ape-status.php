@@ -183,6 +183,7 @@ $apeStatus = $apeRecord['workflow_status'] ?? 'Not Started';
 $clearanceStatus = $apeRecord['clearance_status'] ?? 'Pending';
 $studentNote = trim((string) ($apeRecord['patient_visible_note'] ?? ''));
 $missingItems = trim((string) ($apeRecord['missing_items'] ?? ''));
+$missingDocumentCount = $missingItems === '' ? 0 : count(array_filter(preg_split('/\s*,\s*/', $missingItems) ?: []));
 $requirementStatus = $apeRecord['requirement_status'] ?? 'Not Checked';
 $hasScheduledBatch = !empty($apeRecord['schedule_batch_id']) && ($apeRecord['batch_status'] ?? '') === 'Scheduled';
 $actionNeeded = $clearanceStatus !== 'Cleared' && $apeStatus !== 'Not Started' && $hasScheduledBatch;
@@ -532,18 +533,19 @@ render_student_header('APE Status', 'ape');
         <div class="student-card-header">
             <div>
                 <h2 class="student-card-title">Required Documents</h2>
-                <p class="student-card-copy">Upload only documents already checked by the clinic. PDF, JPG/JPEG, and PNG files are allowed, up to 2 MB each.</p>
+                <p class="student-card-copy">PDF, JPG/JPEG, or PNG · up to 2 MB per file</p>
             </div>
             <span class="student-badge <?= student_e($headerBadge) ?>"><?= student_e($clearanceStatus) ?></span>
         </div>
         <div class="student-card-pad">
             <form method="post" enctype="multipart/form-data" id="ape-batch-upload-form">
                 <input type="hidden" name="action" value="upload_ape_documents">
+                <p class="ape-document-guidance"><span class="material-symbols-outlined" aria-hidden="true">lock</span><span>Upload clinic-requested files only. <a href="<?= student_e(student_legal_url('privacy')) ?>" target="_blank" rel="noopener" class="student-auth-link">Privacy Notice</a></span></p>
             <?php if ($missingItems !== ''): ?>
-                <div class="student-note student-note-warning mb-4">
-                    <span class="material-symbols-outlined">info</span>
-                    <div><strong>Clinic note:</strong> <?= student_e($missingItems) ?></div>
-                </div>
+                <details class="ape-missing-documents mb-4">
+                    <summary><span class="material-symbols-outlined" aria-hidden="true">info</span><span><?= $missingDocumentCount > 0 ? student_e((string) $missingDocumentCount) . ' document' . ($missingDocumentCount === 1 ? '' : 's') . ' still needed' : 'Documents still needed' ?></span><span class="material-symbols-outlined ape-missing-documents-chevron" aria-hidden="true">expand_more</span></summary>
+                    <p><?= student_e($missingItems) ?></p>
+                </details>
             <?php endif; ?>
             <div class="student-document-mobile-list" aria-label="Required documents">
                 <?php foreach ($documents as $doc): ?>

@@ -122,6 +122,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    if ($action === 'save_legal_documents') {
+        if (!$canManageSettings) {
+            flash_message('error', 'You do not have permission to update the Terms of Use or Privacy Notice.');
+            header('Location: index.php?tab=general');
+            exit;
+        }
+        try {
+            $legalDocuments = save_cliniq_legal_documents($_POST, $updatedBy);
+            audit_log_event('settings', 'legal_documents_updated', $updatedBy, 'staff', 'settings', null, [
+                'version' => $legalDocuments['version'],
+                'previous_version' => $legalDocuments['previous_version'] ?? null,
+            ]);
+            flash_message('success', 'Terms of Use and Privacy Notice updated.');
+        } catch (Throwable $e) {
+            flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $e->getMessage());
+        }
+        header('Location: index.php?tab=general');
+        exit;
+    }
+
     if (in_array($action, ['create_staff_profile', 'update_staff_profile', 'reset_staff_password'], true)) {
         if (!$canManageStaffProfiles) {
             flash_message('error', 'Only administrators, doctors, or IT experts can manage staff profiles.');
@@ -585,6 +605,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $clinicProfile = clinic_profile_settings();
+$legalDocuments = cliniq_legal_documents();
 $systemLogoPath = clinic_profile_logo_path($clinicProfile);
 $systemLogoUrl = app_url($systemLogoPath);
 $customAlertSoundPath = clinic_profile_alert_sound_path($clinicProfile);
@@ -860,7 +881,61 @@ render_clinic_command_header(
                             </button>
                         </div>
                     </form>
+                    <div class="mt-5 flex items-center justify-between gap-4 rounded-xl border border-outline-variant/20 bg-slate-50/70 px-4 py-3">
+                        <div>
+                            <p class="font-headline text-sm font-extrabold text-[#17261d] mb-1">Student Terms &amp; Privacy</p>
+                            <p class="settings-help mb-0">Current policy version: <?= e((string) $legalDocuments['version']) ?><?= !empty($legalDocuments['updated_at']) ? ' · Last updated ' . e((string) $legalDocuments['updated_at']) : '' ?></p>
+                        </div>
+                        <button type="button" class="btn btn-secondary shrink-0" onclick="showModal('studentLegalDocumentsModal')" <?= !$canManageSettings ? 'disabled' : '' ?>>
+                            <span class="material-symbols-outlined text-[18px]">gavel</span>
+                            Edit Terms &amp; Privacy
+                        </button>
+                    </div>
                 </section>
+
+                <div id="studentLegalDocumentsModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="studentLegalDocumentsModalTitle">
+                    <form method="post" data-no-ajax="true" class="modal-content bg-white rounded-[1.5rem] w-full max-w-5xl shadow-2xl border border-outline-variant/10 overflow-hidden" style="max-height:92vh;display:flex;flex-direction:column;">
+                        <input type="hidden" name="action" value="save_legal_documents">
+                        <div class="flex items-start justify-between gap-4 border-b border-outline-variant/20 p-6">
+                            <div>
+                                <p class="clinic-label mb-1">Student Portal</p>
+                                <h3 class="font-headline text-2xl font-extrabold text-[#17261d] mb-2" id="studentLegalDocumentsModalTitle">Terms &amp; Privacy Notice</h3>
+                                <p class="text-sm font-bold text-slate-500 leading-6 mb-0">Update the legal text shown to students and used for future acknowledgements. Plain text or Markdown is supported.</p>
+                            </div>
+                            <button type="button" class="btn btn-ghost shrink-0" onclick="closeModal('studentLegalDocumentsModal')" aria-label="Close Terms and Privacy editor">
+                                <span class="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+                        <div class="grid gap-5 overflow-y-auto p-6 md:grid-cols-2">
+                            <div class="settings-field">
+                                <div class="mb-2 flex items-center justify-between gap-3">
+                                    <label class="clinic-label mb-0" for="legal_terms">Terms of Use</label>
+                                    <button type="button" class="btn btn-ghost px-3 py-2 text-xs" data-legal-toggle="legal_terms">Edit source</button>
+                                </div>
+                                <article class="legal-editor-preview rounded-xl border border-outline-variant/20 bg-slate-50/70 p-5 text-sm leading-7 text-slate-700" data-legal-preview="legal_terms" aria-label="Terms of Use preview"></article>
+                                <textarea class="settings-textarea hidden" id="legal_terms" name="terms" rows="18" maxlength="100000" <?= !$canManageSettings ? 'readonly' : '' ?> required><?= e((string) $legalDocuments['terms']) ?></textarea>
+                            </div>
+                            <div class="settings-field">
+                                <div class="mb-2 flex items-center justify-between gap-3">
+                                    <label class="clinic-label mb-0" for="legal_privacy">Privacy Notice</label>
+                                    <button type="button" class="btn btn-ghost px-3 py-2 text-xs" data-legal-toggle="legal_privacy">Edit source</button>
+                                </div>
+                                <article class="legal-editor-preview rounded-xl border border-outline-variant/20 bg-slate-50/70 p-5 text-sm leading-7 text-slate-700" data-legal-preview="legal_privacy" aria-label="Privacy Notice preview"></article>
+                                <textarea class="settings-textarea hidden" id="legal_privacy" name="privacy" rows="18" maxlength="100000" <?= !$canManageSettings ? 'readonly' : '' ?> required><?= e((string) $legalDocuments['privacy']) ?></textarea>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between gap-3 border-t border-outline-variant/20 bg-slate-50/70 p-5">
+                            <p class="settings-help mb-0">Current version: <?= e((string) $legalDocuments['version']) ?></p>
+                            <div class="flex gap-3">
+                                <button type="button" class="btn btn-ghost" onclick="closeModal('studentLegalDocumentsModal')">Cancel</button>
+                                <button class="btn btn-primary" <?= !$canManageSettings ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Save student legal documents?" data-confirm-message="This changes the legal text displayed to students and used for future acknowledgements." data-confirm-toast="Saving legal documents...">
+                                    <span class="material-symbols-outlined text-[18px]">save</span>
+                                    Save Changes
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
 
                 <section data-logo-placeholder>
                     <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">System Logo</h2>
@@ -3101,6 +3176,66 @@ render_clinic_command_header(
             });
 
             refreshRows();
+        })();
+    </script>
+
+    <style>
+        .legal-editor-preview { min-height: 28rem; max-height: 34rem; overflow-y: auto; }
+        .legal-editor-preview h1, .legal-editor-preview h2, .legal-editor-preview h3 { color: #17261d; font-weight: 800; line-height: 1.25; margin: 1.4rem 0 .5rem; }
+        .legal-editor-preview h1 { font-size: 1.35rem; margin-top: 0; }
+        .legal-editor-preview h2 { font-size: 1.05rem; border-top: 1px solid #dbe6df; padding-top: .8rem; }
+        .legal-editor-preview h3 { font-size: .95rem; }
+        .legal-editor-preview p { margin: 0 0 .8rem; }
+        .legal-editor-preview ul, .legal-editor-preview ol { margin: 0 0 .8rem 1.15rem; padding: 0; }
+        .legal-editor-preview li { margin: .25rem 0; }
+        .legal-editor-preview strong { color: #17261d; }
+        .legal-editor-preview a { color: var(--cliniq-primary); font-weight: 700; }
+    </style>
+    <script>
+        (() => {
+            const escapeHtml = (value) => String(value)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+            const renderInline = (value) => {
+                let html = escapeHtml(value);
+                html = html.replace(/\[([^\]]+)\]\(([^\)]+)\)/g, (match, label, target) => {
+                    const safeTarget = /^(https?:\/\/|[A-Za-z0-9._\/-]+\.php)/.test(target) ? target : '#';
+                    return `<a href="${escapeHtml(safeTarget)}">${label}</a>`;
+                });
+                return html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+                    .replace(/__([^_]+)__/g, '<strong>$1</strong>')
+                    .replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>')
+                    .replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
+            };
+            const renderMarkdown = (value) => {
+                const lines = String(value).replace(/\r\n?/g, '\n').split('\n');
+                let html = '', paragraph = [], listType = '';
+                const flushParagraph = () => { if (paragraph.length) { html += `<p>${renderInline(paragraph.join(' '))}</p>`; paragraph = []; } };
+                const closeList = () => { if (listType) html += `</${listType}>`; listType = ''; };
+                lines.forEach((line) => {
+                    const text = line.trim();
+                    if (!text) { flushParagraph(); closeList(); return; }
+                    const heading = text.match(/^(#{1,3})\s+(.+)$/);
+                    if (heading) { flushParagraph(); closeList(); const level = heading[1].length; html += `<h${level}>${renderInline(heading[2])}</h${level}>`; return; }
+                    const unordered = text.match(/^[-*]\s+(.+)$/), ordered = text.match(/^\d+[.)]\s+(.+)$/);
+                    if (unordered || ordered) { flushParagraph(); const nextType = ordered ? 'ol' : 'ul'; if (listType !== nextType) { closeList(); listType = nextType; html += `<${listType}>`; } html += `<li>${renderInline((ordered || unordered)[1])}</li>`; return; }
+                    paragraph.push(text);
+                });
+                flushParagraph(); closeList();
+                return html || '<p class="text-slate-400">No document content yet.</p>';
+            };
+            const setupLegalEditor = () => {
+                document.querySelectorAll('[data-legal-preview]').forEach((preview) => {
+                    const id = preview.dataset.legalPreview, textarea = document.getElementById(id), toggle = document.querySelector(`[data-legal-toggle="${id}"]`);
+                    if (!textarea || !toggle || preview.dataset.ready === 'true') return;
+                    preview.dataset.ready = 'true';
+                    const syncPreview = () => { preview.innerHTML = renderMarkdown(textarea.value); };
+                    const setEditing = (editing) => { preview.classList.toggle('hidden', editing); textarea.classList.toggle('hidden', !editing); toggle.textContent = editing ? 'Preview document' : 'Edit source'; if (!editing) syncPreview(); };
+                    syncPreview(); textarea.addEventListener('input', syncPreview); toggle.addEventListener('click', () => setEditing(textarea.classList.contains('hidden')));
+                });
+            };
+            setupLegalEditor();
+            document.addEventListener('cliniq:page-content-replaced', setupLegalEditor);
         })();
     </script>
 

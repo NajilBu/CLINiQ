@@ -234,6 +234,7 @@ render_student_header('Appointments', 'appointment');
             <form id="booking-form" method="POST" action="?month=<?= student_e($month->format('Y-m')) ?>">
                 <input type="hidden" name="appt_date" id="appt-date-input" value="">
                 <input type="hidden" name="appt_time" id="appt-time-input" value="">
+                <div class="student-note student-note-info mb-4"><span class="material-symbols-outlined">privacy_tip</span><div>Appointment details and your note are added to your clinic record so staff can schedule and prepare for your visit. See the <a href="<?= student_e(student_legal_url('privacy')) ?>" target="_blank" rel="noopener" class="student-auth-link">Privacy Notice</a>.</div></div>
 
                 <div class="student-field" id="appointment-calendar-panel"
                      data-availability="<?= student_e(json_encode($availabilityPayload, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)) ?>"
