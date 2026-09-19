@@ -1,5 +1,5 @@
 {
-  "name": "cliniq-clinic-desktop",
+  "name": "cliniq-desktop",
   "version": "0.1.0",
   "description": "Secure Electron desktop shell for the CLINiQ clinic interface.",
   "private": true,
