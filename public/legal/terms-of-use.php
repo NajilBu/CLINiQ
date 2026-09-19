@@ -1,3 +1,3 @@
 <?php
-$legalDocument = 'terms-of-use.md';
+$legalDocument = 'terms';
 require __DIR__ . '/_document.php';

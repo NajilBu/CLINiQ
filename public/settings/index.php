@@ -900,28 +900,26 @@ render_clinic_command_header(
                             <div>
                                 <p class="clinic-label mb-1">Student Portal</p>
                                 <h3 class="font-headline text-2xl font-extrabold text-[#17261d] mb-2" id="studentLegalDocumentsModalTitle">Terms &amp; Privacy Notice</h3>
-                                <p class="text-sm font-bold text-slate-500 leading-6 mb-0">Update the legal text shown to students and used for future acknowledgements. Plain text or Markdown is supported.</p>
+                                <p class="text-sm font-bold text-slate-500 leading-6 mb-0">Edit document details in their own fields, then format the policy text visually. Students see the formatted result.</p>
                             </div>
                             <button type="button" class="btn btn-ghost shrink-0" onclick="closeModal('studentLegalDocumentsModal')" aria-label="Close Terms and Privacy editor">
                                 <span class="material-symbols-outlined">close</span>
                             </button>
                         </div>
-                        <div class="grid gap-5 overflow-y-auto p-6 md:grid-cols-2">
+                        <div class="grid gap-5 overflow-y-auto p-6 md:grid-cols-2 legal-form-grid">
                             <div class="settings-field">
-                                <div class="mb-2 flex items-center justify-between gap-3">
-                                    <label class="clinic-label mb-0" for="legal_terms">Terms of Use</label>
-                                    <button type="button" class="btn btn-ghost px-3 py-2 text-xs" data-legal-toggle="legal_terms">Edit source</button>
-                                </div>
-                                <article class="legal-editor-preview rounded-xl border border-outline-variant/20 bg-slate-50/70 p-5 text-sm leading-7 text-slate-700" data-legal-preview="legal_terms" aria-label="Terms of Use preview"></article>
-                                <textarea class="settings-textarea hidden" id="legal_terms" name="terms" rows="18" maxlength="100000" <?= !$canManageSettings ? 'readonly' : '' ?> required><?= e((string) $legalDocuments['terms']) ?></textarea>
+                                <h4 class="font-headline text-lg font-extrabold text-[#17261d] mb-3">Terms of Use</h4>
+                                <label class="clinic-label" for="terms_title">Document title</label><input class="settings-input mb-3" id="terms_title" name="terms[title]" value="<?= e((string) $legalDocuments['terms']['title']) ?>" required>
+                                <?php foreach (cliniq_legal_document_fields('terms') as $key => $label): ?><label class="clinic-label" for="terms_<?= e($key) ?>"><?= e($label) ?></label><input class="settings-input mb-3" id="terms_<?= e($key) ?>" name="terms[details][<?= e($key) ?>]" value="<?= e((string) ($legalDocuments['terms']['details'][$key] ?? '')) ?>"><?php endforeach; ?>
+                                <label class="clinic-label">Policy text</label><div class="legal-toolbar" data-legal-toolbar="terms_body"><button type="button" data-format="bold"><strong>B</strong></button><button type="button" data-format="italic"><em>I</em></button><button type="button" data-format="formatBlock" data-value="h2">Heading</button><button type="button" data-format="insertUnorderedList">List</button></div>
+                                <div class="legal-rich-editor" id="terms_body" contenteditable="<?= $canManageSettings ? 'true' : 'false' ?>" data-legal-editor aria-label="Terms of Use policy text"><?= $legalDocuments['terms']['body_html'] ?></div><input type="hidden" name="terms[body_html]" data-legal-output="terms_body">
                             </div>
                             <div class="settings-field">
-                                <div class="mb-2 flex items-center justify-between gap-3">
-                                    <label class="clinic-label mb-0" for="legal_privacy">Privacy Notice</label>
-                                    <button type="button" class="btn btn-ghost px-3 py-2 text-xs" data-legal-toggle="legal_privacy">Edit source</button>
-                                </div>
-                                <article class="legal-editor-preview rounded-xl border border-outline-variant/20 bg-slate-50/70 p-5 text-sm leading-7 text-slate-700" data-legal-preview="legal_privacy" aria-label="Privacy Notice preview"></article>
-                                <textarea class="settings-textarea hidden" id="legal_privacy" name="privacy" rows="18" maxlength="100000" <?= !$canManageSettings ? 'readonly' : '' ?> required><?= e((string) $legalDocuments['privacy']) ?></textarea>
+                                <h4 class="font-headline text-lg font-extrabold text-[#17261d] mb-3">Privacy Notice</h4>
+                                <label class="clinic-label" for="privacy_title">Document title</label><input class="settings-input mb-3" id="privacy_title" name="privacy[title]" value="<?= e((string) $legalDocuments['privacy']['title']) ?>" required>
+                                <?php foreach (cliniq_legal_document_fields('privacy') as $key => $label): ?><label class="clinic-label" for="privacy_<?= e($key) ?>"><?= e($label) ?></label><input class="settings-input mb-3" id="privacy_<?= e($key) ?>" name="privacy[details][<?= e($key) ?>]" value="<?= e((string) ($legalDocuments['privacy']['details'][$key] ?? '')) ?>"><?php endforeach; ?>
+                                <label class="clinic-label">Policy text</label><div class="legal-toolbar" data-legal-toolbar="privacy_body"><button type="button" data-format="bold"><strong>B</strong></button><button type="button" data-format="italic"><em>I</em></button><button type="button" data-format="formatBlock" data-value="h2">Heading</button><button type="button" data-format="insertUnorderedList">List</button></div>
+                                <div class="legal-rich-editor" id="privacy_body" contenteditable="<?= $canManageSettings ? 'true' : 'false' ?>" data-legal-editor aria-label="Privacy Notice policy text"><?= $legalDocuments['privacy']['body_html'] ?></div><input type="hidden" name="privacy[body_html]" data-legal-output="privacy_body">
                             </div>
                         </div>
                         <div class="flex items-center justify-between gap-3 border-t border-outline-variant/20 bg-slate-50/70 p-5">
@@ -3236,6 +3234,39 @@ render_clinic_command_header(
             };
             setupLegalEditor();
             document.addEventListener('cliniq:page-content-replaced', setupLegalEditor);
+        })();
+    </script>
+
+    <style>
+        .legal-rich-editor { min-height: 22rem; max-height: 34rem; overflow-y: auto; border: 1px solid rgba(75, 95, 80, .22); border-radius: .85rem; padding: 1rem; background: #fff; color: #30443a; line-height: 1.65; }
+        .legal-rich-editor:focus { outline: 2px solid var(--cliniq-primary); outline-offset: 2px; }
+        .legal-rich-editor h2 { font: 800 1rem/1.25 inherit; color: #17261d; border-top: 1px solid #dbe6df; padding-top: .85rem; margin: 1.3rem 0 .55rem; }
+        .legal-rich-editor p { margin: 0 0 .8rem; } .legal-rich-editor ul { margin: 0 0 .8rem 1.2rem; padding: 0; }
+        .legal-toolbar { display: flex; flex-wrap: wrap; gap: .4rem; padding: .45rem; border: 1px solid rgba(75, 95, 80, .22); border-bottom: 0; border-radius: .85rem .85rem 0 0; background: #f7faf8; }
+        .legal-toolbar button { min-height: 2rem; border: 0; border-radius: .45rem; padding: 0 .65rem; background: transparent; color: #30443a; cursor: pointer; font-size: .78rem; font-weight: 800; }
+        .legal-toolbar button:hover { background: #e2eee6; }
+        .legal-toolbar + .legal-rich-editor { border-radius: 0 0 .85rem .85rem; }
+    </style>
+    <script>
+        (() => {
+            const setupStructuredLegalEditor = () => {
+                document.querySelectorAll('[data-legal-toolbar]').forEach((toolbar) => {
+                    if (toolbar.dataset.ready === 'true') return;
+                    toolbar.dataset.ready = 'true';
+                    const editor = document.getElementById(toolbar.dataset.legalToolbar);
+                    toolbar.querySelectorAll('button[data-format]').forEach((button) => button.addEventListener('click', () => {
+                        editor?.focus(); document.execCommand(button.dataset.format, false, button.dataset.value || null);
+                    }));
+                });
+                document.querySelectorAll('form:has([data-legal-editor])').forEach((form) => {
+                    if (form.dataset.legalReady === 'true') return;
+                    form.dataset.legalReady = 'true';
+                    form.addEventListener('submit', () => document.querySelectorAll('[data-legal-output]').forEach((output) => {
+                        const editor = document.getElementById(output.dataset.legalOutput); output.value = editor ? editor.innerHTML : '';
+                    }));
+                });
+            };
+            setupStructuredLegalEditor(); document.addEventListener('cliniq:page-content-replaced', setupStructuredLegalEditor);
         })();
     </script>
 

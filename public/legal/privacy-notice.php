@@ -1,3 +1,3 @@
 <?php
-$legalDocument = 'privacy-notice.md';
+$legalDocument = 'privacy';
 require __DIR__ . '/_document.php';

@@ -353,14 +353,65 @@ function cliniq_setting_write(string $key, array $value, ?int $updatedBy = null)
     ]);
 }
 
+function cliniq_legal_document_fields(string $document): array
+{
+    return $document === 'terms'
+        ? ['effective_date' => 'Effective date', 'system_owner' => 'System owner', 'contact_office' => 'Contact office', 'contact_email' => 'Contact email', 'contact_phone' => 'Contact phone']
+        : ['effective_date' => 'Effective date', 'controller' => 'Personal information controller', 'clinic_address' => 'Clinic address', 'privacy_contact' => 'Data Protection Officer / privacy contact'];
+}
+
+function cliniq_legal_markdown_html(string $markdown): string
+{
+    $html = ''; $paragraph = []; $list = null;
+    $flush = static function () use (&$html, &$paragraph): void { if ($paragraph !== []) { $html .= '<p>' . e(implode(' ', array_map('trim', $paragraph))) . '</p>'; $paragraph = []; } };
+    foreach (preg_split('/\R/', $markdown) ?: [] as $line) {
+        $line = trim($line);
+        if ($line === '') { $flush(); if ($list !== null) { $html .= '</' . $list . '>'; $list = null; } continue; }
+        if (preg_match('/^(#{1,3})\s+(.+)$/', $line, $match)) { $flush(); if ($list !== null) { $html .= '</' . $list . '>'; $list = null; } $html .= '<h' . strlen($match[1]) . '>' . e($match[2]) . '</h' . strlen($match[1]) . '>'; continue; }
+        if (preg_match('/^[-*]\s+(.+)$/', $line, $match)) { $flush(); if ($list !== 'ul') { if ($list !== null) { $html .= '</' . $list . '>'; } $list = 'ul'; $html .= '<ul>'; } $html .= '<li>' . e($match[1]) . '</li>'; continue; }
+        $paragraph[] = $line;
+    }
+    $flush(); if ($list !== null) { $html .= '</' . $list . '>'; }
+    return $html;
+}
+
+function cliniq_sanitize_legal_html(string $html): string
+{
+    $html = strip_tags($html, '<h1><h2><h3><p><ul><ol><li><strong><em><br><a>');
+    $html = preg_replace('/<(h[1-3]|p|ul|ol|li|strong|em|br)\b[^>]*>/i', '<$1>', $html) ?? $html;
+    return preg_replace_callback('/<a\b([^>]*)>/i', static function (array $match): string {
+        if (!preg_match('/href\s*=\s*(["\'])(.*?)\1/i', $match[1], $href)) { return '<a>'; }
+        $url = trim(html_entity_decode($href[2], ENT_QUOTES, 'UTF-8'));
+        return preg_match('/^(?:https:\/\/|[A-Za-z0-9._\/-]+\.php(?:\?[^\s]*)?)$/', $url) ? '<a href="' . e($url) . '" target="_blank" rel="noopener">' : '<a>';
+    }, $html) ?? '';
+}
+
+function cliniq_legal_document_normalize(string $document, mixed $value): array
+{
+    $fields = cliniq_legal_document_fields($document);
+    if (is_array($value)) {
+        $details = is_array($value['details'] ?? null) ? $value['details'] : [];
+        $normalizedDetails = [];
+        foreach (array_keys($fields) as $key) {
+            $normalizedDetails[$key] = trim((string) ($details[$key] ?? ''));
+        }
+        return ['title' => trim((string) ($value['title'] ?? ($document === 'terms' ? 'Terms of Use' : 'Privacy Notice'))), 'details' => $normalizedDetails, 'body_html' => cliniq_sanitize_legal_html((string) ($value['body_html'] ?? ''))];
+    }
+    $legacy = trim((string) $value);
+    $title = $document === 'terms' ? 'Terms of Use' : 'Privacy Notice';
+    if (preg_match('/^#\s+(.+)$/m', $legacy, $match)) { $title = trim($match[1]); }
+    $details = array_fill_keys(array_keys($fields), '');
+    foreach ($fields as $key => $label) { if (preg_match('/\*\*' . preg_quote($label, '/') . ':\*\*\s*(.+)$/mi', $legacy, $match)) { $details[$key] = trim($match[1]); } }
+    $body = preg_replace('/^#\s+.+$|^\*\*[^\n]+:\*\*.*$/m', '', $legacy) ?? $legacy;
+    return ['title' => $title, 'details' => $details, 'body_html' => cliniq_legal_markdown_html($body)];
+}
+
 function default_cliniq_legal_documents(): array
 {
-    $defaults = ['terms' => '', 'privacy' => '', 'version' => '2026-09-19', 'updated_at' => null];
+    $defaults = ['terms' => [], 'privacy' => [], 'version' => '2026-09-19', 'updated_at' => null];
     foreach (['terms', 'privacy'] as $document) {
         $path = __DIR__ . '/../../docs/legal/' . ($document === 'terms' ? 'terms-of-use.md' : 'privacy-notice.md');
-        if (is_file($path)) {
-            $defaults[$document] = (string) file_get_contents($path);
-        }
+        $defaults[$document] = cliniq_legal_document_normalize($document, is_file($path) ? (string) file_get_contents($path) : '');
     }
     return $defaults;
 }
@@ -370,10 +421,7 @@ function cliniq_legal_documents(): array
     $defaults = default_cliniq_legal_documents();
     $saved = cliniq_setting_read('legal.documents', $defaults);
     foreach (['terms', 'privacy'] as $document) {
-        $saved[$document] = trim((string) ($saved[$document] ?? $defaults[$document]));
-        if ($saved[$document] === '') {
-            $saved[$document] = $defaults[$document];
-        }
+        $saved[$document] = cliniq_legal_document_normalize($document, $saved[$document] ?? $defaults[$document]);
     }
     $saved['version'] = trim((string) ($saved['version'] ?? $defaults['version'])) ?: $defaults['version'];
     $saved['updated_at'] = $saved['updated_at'] ?? null;
@@ -383,12 +431,12 @@ function cliniq_legal_documents(): array
 function save_cliniq_legal_documents(array $input, ?int $updatedBy = null): array
 {
     $current = cliniq_legal_documents();
-    $terms = trim((string) ($input['terms'] ?? ''));
-    $privacy = trim((string) ($input['privacy'] ?? ''));
-    if ($terms === '' || $privacy === '') {
+    $terms = cliniq_legal_document_normalize('terms', $input['terms'] ?? []);
+    $privacy = cliniq_legal_document_normalize('privacy', $input['privacy'] ?? []);
+    if ($terms['title'] === '' || $privacy['title'] === '' || $terms['body_html'] === '' || $privacy['body_html'] === '') {
         throw new InvalidArgumentException('Both the Terms of Use and Privacy Notice are required.');
     }
-    if (mb_strlen($terms) > 100000 || mb_strlen($privacy) > 100000) {
+    if (mb_strlen($terms['body_html']) > 100000 || mb_strlen($privacy['body_html']) > 100000) {
         throw new InvalidArgumentException('Each legal document must be 100,000 characters or fewer.');
     }
     $settings = ['terms' => $terms, 'privacy' => $privacy, 'version' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s')];

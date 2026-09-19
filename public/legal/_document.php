@@ -3,20 +3,16 @@
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/SystemSettings.php';
 
-$document = (string) ($legalDocument ?? 'privacy-notice.md');
-$allowedDocuments = ['terms-of-use.md', 'privacy-notice.md'];
+$document = (string) ($legalDocument ?? 'privacy');
+$allowedDocuments = ['terms', 'privacy'];
 if (!in_array($document, $allowedDocuments, true)) {
     http_response_code(404);
     exit('Legal document not found.');
 }
 
-$documentPath = __DIR__ . '/../../docs/legal/' . $document;
 $legalDocuments = cliniq_legal_documents();
-$documentText = $document === 'terms-of-use.md'
-    ? (string) ($legalDocuments['terms'] ?? '')
-    : (string) ($legalDocuments['privacy'] ?? '');
-$documentText = $documentText !== '' ? $documentText : (is_file($documentPath) ? (string) file_get_contents($documentPath) : 'This legal document is temporarily unavailable.');
-$pageTitle = $document === 'terms-of-use.md' ? 'Terms of Use' : 'Privacy Notice';
+$documentData = $legalDocuments[$document] ?? [];
+$pageTitle = $document === 'terms' ? 'Terms of Use' : 'Privacy Notice';
 $clinicProfile = clinic_profile_settings();
 $theme = active_cliniq_theme();
 
@@ -95,6 +91,17 @@ function render_legal_document(string $markdown): string
     $closeList();
     return $html;
 }
+
+function render_structured_legal_document(array $document): string
+{
+    $html = '<h1>' . e((string) ($document['title'] ?? 'Legal document')) . '</h1>';
+    foreach ((array) ($document['details'] ?? []) as $label => $value) {
+        if (trim((string) $value) !== '') {
+            $html .= '<p><strong>' . e(ucwords(str_replace('_', ' ', (string) $label))) . ':</strong> ' . e((string) $value) . '</p>';
+        }
+    }
+    return $html . (string) ($document['body_html'] ?? '');
+}
 ?>
 <!doctype html>
 <html lang="en">
@@ -123,7 +130,7 @@ function render_legal_document(string $markdown): string
 <body>
 <main>
     <a class="legal-back" href="../../patient-portal/patient-login.php">&larr; Back to CLINiQ Patient Portal</a>
-    <article class="legal-document"><?= render_legal_document($documentText) ?></article>
+    <article class="legal-document"><?= render_structured_legal_document($documentData) ?></article>
 </main>
 </body>
 </html>
