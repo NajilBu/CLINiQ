@@ -5,6 +5,7 @@ require_once __DIR__ . '/../config/env.php';
 require_once __DIR__ . '/../services/AuditLog.php';
 require_once __DIR__ . '/../services/ProfilePhoto.php';
 require_once __DIR__ . '/../services/SystemSettings.php';
+require_once __DIR__ . '/../helpers/mail.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     $configuredAppUrl = (string) env_value('APP_URL', '');
@@ -185,10 +186,12 @@ function begin_re_enrollment(array $account): void
     }
     session_regenerate_id(true);
     $academicYear = student_current_academic_year();
+    $studentDetails = [];
     try {
-        $yearQuery = auth_db()->prepare('SELECT academic_year FROM students WHERE person_id = ? LIMIT 1');
+        $yearQuery = auth_db()->prepare('SELECT s.academic_year, s.year_level, s.section, p.first_name, p.last_name, pt.guardian_or_contact_number, pt.secondary_contact_number FROM students s INNER JOIN people p ON p.id = s.person_id LEFT JOIN patients pt ON pt.person_id = s.person_id WHERE s.person_id = ? LIMIT 1');
         $yearQuery->execute([(int) ($account['person_id'] ?? 0)]);
-        $storedAcademicYear = trim((string) $yearQuery->fetchColumn());
+        $studentDetails = $yearQuery->fetch() ?: [];
+        $storedAcademicYear = trim((string) ($studentDetails['academic_year'] ?? ''));
         if ($storedAcademicYear !== '') {
             $academicYear = $storedAcademicYear;
         }
@@ -203,6 +206,12 @@ function begin_re_enrollment(array $account): void
         'person_id'  => (int) ($account['person_id'] ?? 0),
         'type'       => (string) ($account['account_type'] ?? 'patient'),
         'academic_year' => $academicYear,
+        'year_level' => (string) ($studentDetails['year_level'] ?? ''),
+        'section' => strtoupper(trim((string) ($studentDetails['section'] ?? ''))),
+        'first_name' => (string) ($studentDetails['first_name'] ?? ''),
+        'last_name' => (string) ($studentDetails['last_name'] ?? ''),
+        'contact_number' => (string) ($studentDetails['guardian_or_contact_number'] ?? ''),
+        'secondary_contact_number' => (string) ($studentDetails['secondary_contact_number'] ?? ''),
     ];
 }
 
@@ -235,7 +244,7 @@ function re_enrollment_context(): ?array
 /**
  * Confirm student re-enrollment and reactivate the student account.
  */
-function complete_re_enrollment(string $enrollmentStatus, string $nonEnrollmentReason = ''): void
+function complete_re_enrollment(string $enrollmentStatus, string $nonEnrollmentReason = '', string $contactNumber = '', string $contactConfirmed = '', string $yearLevel = '', string $section = ''): void
 {
     $ctx = re_enrollment_context();
     if ($ctx === null) {
@@ -257,6 +266,21 @@ function complete_re_enrollment(string $enrollmentStatus, string $nonEnrollmentR
     if ($enrollmentStatus === 'Still Enrolled') {
         $nonEnrollmentReason = '';
     }
+    $contactNumber = trim($contactNumber);
+    if ($contactNumber === '' || !preg_match('/^[0-9+() .-]{7,30}$/', $contactNumber)) {
+        throw new InvalidArgumentException('Enter a valid contact number so the clinic can reach you.');
+    }
+    if ($contactConfirmed !== '1') {
+        throw new InvalidArgumentException('Confirm that your section and contact information are correct.');
+    }
+    $yearLevel = trim($yearLevel);
+    $section = strtoupper(trim($section));
+    if (!in_array($yearLevel, ['1', '2', '3', '4'], true)) {
+        throw new InvalidArgumentException('Select a valid year level.');
+    }
+    if ($section === '' || !preg_match('/^[A-Z0-9][A-Z0-9 .-]{0,79}$/', $section)) {
+        throw new InvalidArgumentException('Enter a valid section.');
+    }
 
     $db = auth_db();
     $db->beginTransaction();
@@ -264,6 +288,8 @@ function complete_re_enrollment(string $enrollmentStatus, string $nonEnrollmentR
         $accountId = (int) $ctx['account_id'];
         $personId = (int) $ctx['person_id'];
         $academicYear = trim((string) ($ctx['academic_year'] ?? '')) ?: student_current_academic_year();
+        $db->prepare('UPDATE patients SET guardian_or_contact_number = ?, updated_at = NOW() WHERE person_id = ?')->execute([$contactNumber, $personId]);
+        $db->prepare('UPDATE students SET year_level = ?, section = ?, academic_year = ? WHERE person_id = ?')->execute([$yearLevel, $section, $academicYear, $personId]);
 
         $declaration = $db->prepare("
             INSERT INTO student_enrollment_declarations
@@ -334,7 +360,22 @@ function complete_re_enrollment(string $enrollmentStatus, string $nonEnrollmentR
         'academic_year' => (string) ($ctx['academic_year'] ?? student_current_academic_year()),
         'enrollment_status' => $enrollmentStatus,
         'non_enrollment_reason' => $nonEnrollmentReason !== '' ? $nonEnrollmentReason : null,
+        'year_level' => $yearLevel,
+        'section' => $section,
     ]);
+    // Send a best-effort confirmation after the database transaction succeeds.
+    try {
+        $emailStmt = auth_db()->prepare('SELECT a.email, p.first_name FROM accounts a INNER JOIN people p ON p.id = a.person_id WHERE a.id = ? LIMIT 1');
+        $emailStmt->execute([(int) $ctx['account_id']]);
+        $emailRow = $emailStmt->fetch();
+        if (!empty($emailRow['email'])) {
+            $clinic = clinic_profile_settings();
+            $body = cliniq_custom_email_body('Your enrollment information for ' . $academicYear . ' was confirmed. Updated year and section: Year ' . $yearLevel . ' - ' . $section . '. Your account is now active.', (string) ($clinic['system_name'] ?? 'CLINiQ Clinic'));
+            send_cliniq_email((string) $emailRow['email'], (string) ($emailRow['first_name'] ?? 'Student'), '[' . ($clinic['system_name'] ?? 'CLINiQ') . '] Enrollment information confirmed', $body);
+        }
+    } catch (Throwable $mailException) {
+        error_log('[CLINiQ Re-enrollment] Confirmation email failed: ' . $mailException->getMessage());
+    }
     unset($_SESSION['re_enrollment']);
 }
 

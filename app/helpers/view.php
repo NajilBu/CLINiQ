@@ -201,7 +201,6 @@ function render_header(string $title): void
     $nav = [
         'Dashboard' => ['url' => app_url('dashboard.php'), 'match' => 'dashboard.php', 'icon' => 'dashboard'],
         'Patients' => ['url' => app_url('patients/index.php'), 'match' => '/patients/', 'icon' => 'personal_injury'],
-        'Patient Accounts' => ['url' => app_url('patient-accounts/index.php'), 'match' => '/patient-accounts/', 'icon' => 'manage_accounts', 'roles' => ['admin', 'doctor']],
         'Visits' => ['url' => app_url('visits/index.php'), 'match' => '/visits/', 'icon' => 'clinical_notes'],
         'Alerts' => ['url' => app_url('alerts/index.php'), 'match' => '/alerts/', 'icon' => 'notification_important'],
         'Inventory' => ['url' => app_url('inventory/index.php'), 'match' => '/inventory/', 'icon' => 'inventory_2'],

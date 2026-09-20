@@ -104,6 +104,9 @@ function student_profile_from_identity(array $identity): array
             ?? $identity['personnel_department']
             ?? 'Not recorded'
         ),
+        'year_level' => (string) ($identity['year_level'] ?? ''),
+        'section' => strtoupper(trim((string) ($identity['section'] ?? ''))),
+        'academic_year' => (string) ($identity['academic_year'] ?? ''),
         'email' => $storedEmail !== ''
             ? $storedEmail
             : ($generatedEmailName !== '' ? $generatedEmailName : 'patient') . '@plpasig.edu.ph',
@@ -162,6 +165,9 @@ function student_current_profile(): ?array
             a.password_hash,
             a.email,
             pr.program_code AS program,
+            s.year_level,
+            s.section,
+            s.academic_year,
             CASE WHEN se.role_classification = "Faculty" THEN ed.department_code END AS faculty_department,
             CASE WHEN se.role_classification = "Non-Teaching Personnel" THEN ed.department_code END AS personnel_department,
             pt.blood_type,

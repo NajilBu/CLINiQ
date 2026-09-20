@@ -81,14 +81,10 @@ SELECT
     p.last_name
 FROM accounts a
 INNER JOIN people p ON p.id = a.person_id
+INNER JOIN patients pt ON pt.person_id = p.id
 WHERE p.id_number = ?
   AND LOWER(a.email) = ?
   AND a.account_status = 'active'
-  AND (
-      EXISTS (SELECT 1 FROM students s WHERE s.person_id = p.id)
-      OR EXISTS (SELECT 1 FROM school_employees se WHERE se.person_id = p.id)
-      OR EXISTS (SELECT 1 FROM patients pt WHERE pt.person_id = p.id)
-  )
 LIMIT 1
 SQL);
     $stmt->execute([$idNumber, $email]);

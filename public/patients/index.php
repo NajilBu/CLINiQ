@@ -3,11 +3,15 @@
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/CliniqPatientProfile.php';
 require_login();
+$user = current_user() ?? [];
 
 // ── Search & pagination ─────────────────────────────────────
 $search = trim($_GET['q'] ?? '');
 $filterType = trim((string) ($_GET['type'] ?? 'all'));
 $filterStatus = trim((string) ($_GET['status'] ?? 'all'));
+$filterSection = strtoupper(trim((string) ($_GET['section'] ?? 'all')));
+$filterProgram = strtoupper(trim((string) ($_GET['program'] ?? 'all')));
+$filterDepartment = strtoupper(trim((string) ($_GET['department'] ?? 'all')));
 $allowedPatientTypes = ['all', 'Student', 'Faculty', 'Personnel', 'Clinic Staff', 'Patient'];
 $allowedAccountStatuses = ['all', 'Active', 'Inactive'];
 if (!in_array($filterType, $allowedPatientTypes, true)) {
@@ -20,7 +24,13 @@ $perPage = 10;
 
 $totalRows = cliniq_patient_profile_count();
 $patients = cliniq_patient_profile_list('', max(1, $totalRows), 0);
-$patients = array_values(array_filter($patients, static function (array $patient) use ($filterType, $filterStatus): bool {
+$sectionOptions = array_values(array_unique(array_filter(array_map(static fn(array $patient): string => strtoupper(trim((string) ($patient['section'] ?? ''))), $patients))));
+$programOptions = array_values(array_unique(array_filter(array_map(static fn(array $patient): string => strtoupper(trim((string) ($patient['program_code'] ?? ''))), $patients))));
+$departmentOptions = array_values(array_unique(array_filter(array_map(static fn(array $patient): string => strtoupper(trim((string) ($patient['program_department_code'] ?? $patient['employee_department_code'] ?? $patient['staff_department_code'] ?? ''))), $patients))));
+sort($sectionOptions, SORT_NATURAL);
+sort($programOptions, SORT_NATURAL);
+sort($departmentOptions, SORT_NATURAL);
+$patients = array_values(array_filter($patients, static function (array $patient) use ($filterType, $filterStatus, $filterSection, $filterProgram, $filterDepartment): bool {
     $type = (string) ($patient['patient_type'] ?? 'Patient');
     if ($type === 'Non-Teaching Personnel') {
         $type = 'Personnel';
@@ -30,6 +40,16 @@ $patients = array_values(array_filter($patients, static function (array $patient
         return false;
     }
     if ($filterStatus !== 'all' && $status !== $filterStatus) {
+        return false;
+    }
+    if ($filterSection !== 'ALL' && strtoupper(trim((string) ($patient['section'] ?? ''))) !== $filterSection) {
+        return false;
+    }
+    if ($filterProgram !== 'ALL' && strtoupper(trim((string) ($patient['program_code'] ?? ''))) !== $filterProgram) {
+        return false;
+    }
+    $department = strtoupper(trim((string) ($patient['program_department_code'] ?? $patient['employee_department_code'] ?? $patient['staff_department_code'] ?? '')));
+    if ($filterDepartment !== 'ALL' && $department !== $filterDepartment) {
         return false;
     }
     return true;
@@ -74,7 +94,10 @@ render_header('Patients');
 <?php render_clinic_command_header(
     'Patient Registry',
     'Patients',
-    $totalRows . ' registered patient(s) in Cliniq_db. Staff profiles contain private health data.'
+    $totalRows . ' registered patient(s) in Cliniq_db. Staff profiles contain private health data.',
+    in_array($user['role'] ?? '', ['admin', 'doctor'], true)
+        ? '<a href="' . e(app_url('patient-accounts/index.php')) . '" class="btn btn-primary text-decoration-none"><span class="material-symbols-outlined">manage_accounts</span> Patient Accounts</a>'
+        : ''
 ); ?>
 
 <!-- ═══ Patient Registry ═══ -->
@@ -123,6 +146,21 @@ render_header('Patients');
                         <?php endforeach; ?>
                     </select>
                 </div>
+                <div id="patientSectionFilterField" <?= $filterType === 'Student' || $filterType === 'all' ? '' : 'hidden' ?> >
+                    <label class="clinic-label">Section</label>
+                    <select class="clinic-select" name="section" id="patientSectionFilter">
+                        <option value="all" <?= $filterSection === 'ALL' ? 'selected' : '' ?>>All sections</option>
+                        <?php foreach ($sectionOptions as $section): ?><option value="<?= e($section) ?>" <?= $filterSection === $section ? 'selected' : '' ?>><?= e($section) ?></option><?php endforeach; ?>
+                    </select>
+                </div>
+                <div id="patientProgramFilterField" <?= $filterType === 'Faculty' || $filterType === 'Personnel' || $filterType === 'Clinic Staff' ? 'hidden' : '' ?> >
+                    <label class="clinic-label">Program</label>
+                    <select class="clinic-select" name="program" id="patientProgramFilter"><option value="all">All programs</option><?php foreach ($programOptions as $program): ?><option value="<?= e($program) ?>" <?= $filterProgram === $program ? 'selected' : '' ?>><?= e($program) ?></option><?php endforeach; ?></select>
+                </div>
+                <div id="patientDepartmentFilterField" <?= $filterType === 'Student' ? 'hidden' : '' ?> >
+                    <label class="clinic-label">Department</label>
+                    <select class="clinic-select" name="department" id="patientDepartmentFilter"><option value="all">All departments</option><?php foreach ($departmentOptions as $department): ?><option value="<?= e($department) ?>" <?= $filterDepartment === $department ? 'selected' : '' ?>><?= e($department) ?></option><?php endforeach; ?></select>
+                </div>
                 <div>
                     <label class="clinic-label">Account Status</label>
                     <select class="clinic-select" name="status">
@@ -142,6 +180,30 @@ render_header('Patients');
         </div>
     </div>
     </form>
+
+    <script>
+        (() => {
+            const type = document.querySelector('#patientAdvancedFilterModal select[name="type"]');
+            const sectionField = document.getElementById('patientSectionFilterField');
+            const section = document.getElementById('patientSectionFilter');
+            const programField = document.getElementById('patientProgramFilterField');
+            const departmentField = document.getElementById('patientDepartmentFilterField');
+            const program = document.getElementById('patientProgramFilter');
+            const department = document.getElementById('patientDepartmentFilter');
+            if (!type || !sectionField || !section || !programField || !departmentField || !program || !department) return;
+            const sync = () => {
+                const isStudent = type.value === 'Student' || type.value === 'all';
+                sectionField.hidden = !isStudent;
+                programField.hidden = !isStudent;
+                departmentField.hidden = type.value === 'Student';
+                if (!isStudent) section.value = 'all';
+                if (!isStudent) program.value = 'all';
+                if (type.value === 'Student') department.value = 'all';
+            };
+            type.addEventListener('change', sync);
+            sync();
+        })();
+    </script>
 
     <?php render_ag_grid('patientsGrid', $patientColumns, $patientRows, [
         'searchInput' => 'patientsGridSearch',

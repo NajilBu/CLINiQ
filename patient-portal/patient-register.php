@@ -23,6 +23,28 @@ $step = in_array($context['step'] ?? '', ['verify', 'details'], true) ? (string)
 $error = '';
 $values = [];
 
+// A browser can keep the registration session after the verification window
+// expires. Never render Step 3 from an expired or missing verification row.
+if ($step === 'details' && !empty($context['verification_id'])) {
+    try {
+        $verificationCheck = auth_db()->prepare('SELECT verified_at, consumed_at, expires_at FROM patient_registration_verifications WHERE registration_verification_id = ? LIMIT 1');
+        $verificationCheck->execute([(int) $context['verification_id']]);
+        $verificationState = $verificationCheck->fetch();
+        if (!$verificationState || empty($verificationState['verified_at']) || !empty($verificationState['consumed_at']) || strtotime((string) $verificationState['expires_at']) <= time()) {
+            unset($_SESSION['patient_registration']);
+            $context = [];
+            $step = 'identity';
+            $error = 'Your registration session expired. Start again with your student number and email.';
+        }
+    } catch (Throwable $exception) {
+        error_log('[CLINiQ Registration] Session validation failed: ' . $exception->getMessage());
+        unset($_SESSION['patient_registration']);
+        $context = [];
+        $step = 'identity';
+        $error = 'Your registration session expired. Start again.';
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_enforce_request();
     $action = (string) ($_POST['action'] ?? '');
@@ -49,7 +71,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header('Location: patient-register.php');
         exit;
     } catch (Throwable $exception) {
-        $error = $exception->getMessage();
+        if ($exception instanceof PDOException) {
+            $error = str_starts_with((string) $exception->getCode(), '23')
+                ? 'This student number or email is already registered. Sign in or use password recovery.'
+                : 'Registration could not be completed. Please try again.';
+            error_log('[CLINiQ Registration] Database error: ' . $exception->getMessage());
+        } else {
+            $error = $exception->getMessage();
+        }
+        if ($step === 'details' && str_contains(strtolower($error), 'expired')) {
+            unset($_SESSION['patient_registration']);
+            $context = [];
+            $step = 'identity';
+        }
         $context = is_array($_SESSION['patient_registration'] ?? null) ? $_SESSION['patient_registration'] : $context;
         $step = in_array($context['step'] ?? '', ['verify', 'details'], true) ? (string) $context['step'] : 'identity';
     }

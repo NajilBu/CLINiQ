@@ -89,6 +89,13 @@ function request_patient_registration_code(string $studentNumber, string $email,
         $db->commit();
     } catch (Throwable $exception) {
         if ($db->inTransaction()) $db->rollBack();
+        if ($exception instanceof PDOException) {
+            error_log('[CLINiQ Registration] Verification request database error: ' . $exception->getMessage());
+            if (str_starts_with((string) $exception->getCode(), '23')) {
+                throw new RuntimeException('This verification request could not be created. Check the student number and email, then try again.');
+            }
+            throw new RuntimeException('The verification request could not be completed. Please try again.');
+        }
         throw $exception;
     }
 
@@ -204,6 +211,13 @@ function complete_patient_registration(int $verificationId, array $input): array
         $db->commit();
     } catch (Throwable $exception) {
         if ($db->inTransaction()) $db->rollBack();
+        if ($exception instanceof PDOException) {
+            error_log('[CLINiQ Registration] Database error while creating account: ' . $exception->getMessage());
+            if (str_starts_with((string) $exception->getCode(), '23')) {
+                throw new InvalidArgumentException('This student number or email is already registered. Sign in or use password recovery.');
+            }
+            throw new RuntimeException('Registration could not be completed. Please try again.');
+        }
         throw $exception;
     }
     audit_log_event('accounts', 'patient_self_registered', $personId, 'student', 'account', $accountId, ['access_status' => 'Applicant']);

@@ -92,10 +92,14 @@ if (re_enrollment_pending()) {
     $reEnrollError = '';
     $selectedEnrollmentStatus = trim((string) ($_POST['enrollment_status'] ?? ''));
     $selectedNonEnrollmentReason = trim((string) ($_POST['non_enrollment_reason'] ?? ''));
+    $contactNumber = trim((string) ($_POST['contact_number'] ?? ($reCtx['contact_number'] ?? '')));
+    $contactConfirmed = (string) ($_POST['contact_confirmed'] ?? '');
+    $yearLevel = trim((string) ($_POST['year_level'] ?? ($reCtx['year_level'] ?? '')));
+    $section = strtoupper(trim((string) ($_POST['section'] ?? ($reCtx['section'] ?? ''))));
     $nonEnrollmentReasons = student_non_enrollment_reasons();
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'complete_re_enrollment') {
         try {
-            complete_re_enrollment($selectedEnrollmentStatus, $selectedNonEnrollmentReason);
+            complete_re_enrollment($selectedEnrollmentStatus, $selectedNonEnrollmentReason, $contactNumber, $contactConfirmed, $yearLevel, $section);
             header('Location: patient-dashboard.php?re_enrolled=1');
             exit;
         } catch (Throwable $e) {
@@ -122,7 +126,7 @@ if (re_enrollment_pending()) {
             </span>
             <div>
                 <h2 class="student-card-title">Enrollment Declaration</h2>
-                <p class="student-card-copy">Choose the answer that describes your current enrollment for <?= student_e((string) ($reCtx['academic_year'] ?? student_current_academic_year())) ?>.</p>
+                <p class="student-card-copy">Review your updated student information and confirm your enrollment for <?= student_e((string) ($reCtx['academic_year'] ?? student_current_academic_year())) ?>.</p>
             </div>
         </div>
 
@@ -136,6 +140,12 @@ if (re_enrollment_pending()) {
         <div class="student-note student-note-warning mb-5">
             <span class="material-symbols-outlined">info</span>
             <div>Your response will be recorded and your portal access will resume immediately after submission.</div>
+        </div>
+
+        <div class="grid gap-4 sm:grid-cols-2 mb-5">
+            <div class="student-field"><label class="student-label" for="year-level">Year Level</label><select id="year-level" name="year_level" class="student-select" required><?php foreach (['1','2','3','4'] as $option): ?><option value="<?= $option ?>" <?= $yearLevel === $option ? 'selected' : '' ?>>Year <?= $option ?></option><?php endforeach; ?></select></div>
+            <div class="student-field"><label class="student-label" for="section">Section</label><input id="section" name="section" class="student-input" value="<?= student_e($section) ?>" maxlength="80" required><p class="text-xs font-bold text-slate-500 mt-1 mb-0">Review or correct the section assigned for this school year.</p></div>
+            <div class="student-field"><label class="student-label" for="contact-number">Contact Number</label><input id="contact-number" name="contact_number" class="student-input" value="<?= student_e($contactNumber) ?>" placeholder="09XXXXXXXXX" required></div>
         </div>
 
         <form method="post" id="re-enrollment-form" class="space-y-5">
@@ -157,6 +167,7 @@ if (re_enrollment_pending()) {
                     <?php endforeach; ?>
                 </select>
             </div>
+            <label class="flex items-start gap-3 text-xs font-bold text-slate-600"><input type="checkbox" name="contact_confirmed" value="1" <?= $contactConfirmed === '1' ? 'checked' : '' ?> required><span>I confirm that my year/section and contact information above are correct.</span></label>
             <button type="submit" class="student-button w-full" data-confirm-submit data-confirm-type="primary" data-confirm-title="Submit enrollment declaration?" data-confirm-message="Your response will be recorded and your account will be reactivated immediately." data-confirm-toast="Submitting...">
                 <span class="material-symbols-outlined">how_to_reg</span>
                 Submit and Continue
@@ -615,7 +626,7 @@ render_student_header('Dashboard', 'dashboard');
             </div>
             <div>
                 <span class="student-label"><?= student_e($profileDetailLabel) ?></span>
-                <p class="text-sm font-black text-[#17261d] mb-0"><?= student_e($profile['course']) ?></p>
+                <p class="text-sm font-black text-[#17261d] mb-0"><?= student_e($profile['course']) ?><?php if (($profile['account_type'] ?? '') === 'student'): ?> · Year <?= student_e($profile['year_level'] ?: '—') ?> · Section <?= student_e($profile['section'] ?: '—') ?><?php endif; ?></p>
             </div>
             <div>
                 <span class="student-label">Email</span>

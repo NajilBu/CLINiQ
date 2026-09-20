@@ -164,7 +164,7 @@ render_clinic_command_header(
     'Scheduling',
     'Appointment Requests',
     'Approve student booking requests before they become clinic schedules.',
-    '<a href="#clinic-availability" class="btn btn-primary text-decoration-none"><span class="material-symbols-outlined">calendar_month</span>Clinic Availability</a>'
+    '<a href="' . e(app_url('appointments/availability.php')) . '" class="btn btn-primary text-decoration-none"><span class="material-symbols-outlined">calendar_month</span>Clinic Availability</a>'
 );
 ?>
 
@@ -254,8 +254,6 @@ render_clinic_command_header(
     ]); ?>
     <nav id="appointmentsPagination" class="pagination" aria-label="Appointment pages"></nav>
 </section>
-
-<?php require __DIR__ . '/_availability_section.php'; ?>
 
 <div id="appointmentCancelModal" class="modal-backdrop" data-no-row-click>
     <div class="modal-content bg-white rounded-[2rem] p-8 w-full max-w-md shadow-2xl">
