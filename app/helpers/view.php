@@ -452,6 +452,7 @@ function render_footer(): void
     <script src="<?= app_url('assets/js/app.js?v=' . filemtime(__DIR__ . '/../../public/assets/js/app.js')) ?>"></script>
     <script src="<?= app_url('assets/js/ag-grid-tables.js?v=' . filemtime(__DIR__ . '/../../public/assets/js/ag-grid-tables.js')) ?>"></script>
     <script src="<?= app_url('assets/js/file-preview.js?v=ape-popup-2') ?>"></script>
+    <script src="<?= app_url('assets/js/submission-loading.js?v=1') ?>"></script>
     <script>
         const profilePhotoMotionMs = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 240;
 

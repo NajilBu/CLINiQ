@@ -1197,6 +1197,7 @@ function render_student_footer(): void
             }
         </script>
         <script src="../public/assets/js/file-preview.js?v=ape-popup-2"></script>
+        <script src="../public/assets/js/submission-loading.js?v=1"></script>
         <script>
             document.querySelectorAll('[data-student-toast]').forEach((toast) => {
                 const dismiss = () => {
@@ -1281,6 +1282,7 @@ function render_student_auth_header(string $title): void
             }
         </style>
     <script src="../public/assets/js/id-number-format.js?v=<?= filemtime(__DIR__ . '/../../public/assets/js/id-number-format.js') ?>"></script>
+    <script src="../public/assets/js/submission-loading.js?v=1"></script>
     </head>
     <body class="student-body student-auth-page">
     <?php

@@ -931,14 +931,16 @@ function reset_school_year_accounts(string $academicYear = '', array $submittedP
         throw $e;
     }
 
-    // Send re-enrollment emails.
+    // Queue re-enrollment emails. The clinic UI processes these in small batches
+    // so a large school population cannot block or time out the reset request.
     require_once __DIR__ . '/../services/SystemSettings.php';
     $clinicProfile = clinic_profile_settings();
     $clinicName    = $clinicProfile['system_name'] ?? 'CLINiQ Clinic';
     $loginUrl      = rtrim(env_value('PATIENT_PORTAL_URL', 'http://localhost/CLINiQ/patient-portal'), '/') . '/patient-login.php';
 
-    $emailed = 0;
-    $failed  = 0;
+    $queueKey = 'school_year_' . $academicYear . '_' . bin2hex(random_bytes(6));
+    $queue = $db->prepare('INSERT INTO email_queue (queue_key, recipient_email, recipient_name, subject, html_body) VALUES (?, ?, ?, ?, ?)');
+    $queued = 0;
     foreach ($notificationPatients as $patient) {
         $firstName = (string) ($patient['first_name'] ?? '');
         $notification = cliniq_notification_email('student_re_enrollment', [
@@ -947,14 +949,8 @@ function reset_school_year_accounts(string $academicYear = '', array $submittedP
         ], $loginUrl);
 
         $fullName = trim($firstName . ' ' . ($patient['last_name'] ?? ''));
-        $sent = send_cliniq_email(
-            (string) $patient['email'],
-            $fullName ?: 'Patient',
-            $notification['subject'],
-            $notification['html']
-        );
-
-        $sent ? $emailed++ : $failed++;
+        $queue->execute([$queueKey, (string) $patient['email'], $fullName ?: 'Patient', $notification['subject'], $notification['html']]);
+        $queued++;
     }
 
     return [
@@ -962,8 +958,10 @@ function reset_school_year_accounts(string $academicYear = '', array $submittedP
         'promoted' => $promoted,
         'kept' => $kept,
         'graduated' => $graduated,
-        'emailed' => $emailed,
-        'failed' => $failed,
+        'email_queue_key' => $queueKey,
+        'email_queued' => $queued,
+        'emailed' => 0,
+        'failed' => 0,
         'academic_year' => $academicYear,
     ];
 }

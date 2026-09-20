@@ -389,11 +389,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $actorPersonId
                 );
                 $msg = "School year {$result['academic_year']} prepared: {$result['promoted']} promoted, {$result['kept']} retained, and {$result['graduated']} marked graduated. {$result['reset']} student account(s) set to inactive.";
-                if ($result['emailed'] > 0) {
-                    $msg .= " {$result['emailed']} notification email(s) sent.";
-                }
-                if ($result['failed'] > 0) {
-                    $msg .= " {$result['failed']} email(s) failed (check server mail config).";
+                if (($result['email_queued'] ?? 0) > 0) {
+                    $msg .= " {$result['email_queued']} reactivation email(s) queued for delivery.";
                 }
                 flash_message('success', $msg);
             }
@@ -401,7 +398,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $e->getMessage());
         }
 
-        header('Location: index.php?tab=ape-cycle');
+        $queueParam = isset($result['email_queue_key']) ? '&email_queue=' . rawurlencode((string) $result['email_queue_key']) : '';
+        header('Location: index.php?tab=ape-cycle' . $queueParam);
         exit;
     }
 
@@ -3267,6 +3265,29 @@ render_clinic_command_header(
                 });
             };
             setupStructuredLegalEditor(); document.addEventListener('cliniq:page-content-replaced', setupStructuredLegalEditor);
+        })();
+    </script>
+
+    <script>
+        (() => {
+            const params = new URLSearchParams(window.location.search);
+            const queueKey = params.get('email_queue');
+            if (!queueKey) return;
+            const panel = document.createElement('div');
+            panel.style.cssText = 'position:fixed;right:1.25rem;bottom:1.25rem;z-index:9999;max-width:360px;padding:1rem 1.1rem;border:1px solid #b9ddc5;border-radius:14px;background:#effaf2;color:#173326;box-shadow:0 12px 35px rgba(0,0,0,.16);font-weight:700';
+            panel.innerHTML = '<div style="display:flex;gap:.55rem;align-items:center"><span class="cliniq-loading-spinner" style="display:inline-block;width:16px;height:16px;border:2px solid #c9e6d0;border-top-color:#398252;border-radius:50%;animation:cliniq-spin .8s linear infinite"></span><strong>Reactivation emails are being sent</strong></div><div data-queue-progress style="margin-top:.45rem;font-size:.82rem">Keep this window open while delivery is in progress.</div>';
+            document.body.appendChild(panel);
+            const progress = panel.querySelector('[data-queue-progress]');
+            const tick = async () => {
+                try {
+                    const response = await fetch('../api/email-queue.php?action=process&queue_key=' + encodeURIComponent(queueKey), { credentials: 'same-origin', cache: 'no-store' });
+                    const data = await response.json();
+                    progress.textContent = `${data.sent} of ${data.total} sent${data.failed ? ` · ${data.failed} failed` : ''}. ${data.complete ? 'Delivery complete.' : 'Keep this window open while delivery is in progress.'}`;
+                    if (data.complete) { panel.querySelector('.cliniq-loading-spinner')?.remove(); window.setTimeout(() => panel.remove(), 7000); return; }
+                } catch (error) { progress.textContent = 'Delivery is still running. Keep this window open and try again if it stops.'; }
+                window.setTimeout(tick, 1200);
+            };
+            tick();
         })();
     </script>
 
