@@ -57,6 +57,16 @@ $stmt = appointment_db()->prepare("
 ");
 $stmt->execute($params);
 $appointments = $stmt->fetchAll();
+$historyByPatient = [];
+$historyStmt = appointment_db()->prepare("SELECT appointment_datetime, purpose, status FROM appointments WHERE patient_id = ? ORDER BY appointment_datetime DESC, created_at DESC LIMIT 3");
+foreach ($appointments as $appointment) {
+    $patientId = (int) $appointment['patient_id'];
+    if (isset($historyByPatient[$patientId])) {
+        continue;
+    }
+    $historyStmt->execute([$patientId]);
+    $historyByPatient[$patientId] = $historyStmt->fetchAll();
+}
 
 $statusCounts = ['all' => 0];
 $countQuery = appointment_db()->query("SELECT status, COUNT(*) AS cnt FROM appointments GROUP BY status");
@@ -84,6 +94,25 @@ if (in_array($filterStatus, ['Cancelled', 'all'], true)) {
 $rows = [];
 foreach ($appointments as $appointment) {
     $fullName = trim($appointment['first_name'] . ' ' . $appointment['last_name']);
+    $patientHistory = $historyByPatient[(int) $appointment['patient_id']] ?? [];
+    $latestHistory = $patientHistory[0] ?? null;
+    $historyHtml = '<div class="mt-4 border-t border-slate-100 pt-4"><p class="text-xs font-extrabold uppercase tracking-wider text-slate-400 mb-2">Latest appointment history</p>';
+    if (!$patientHistory) {
+        $historyHtml .= '<p class="text-sm text-slate-500 mb-0">No previous appointment history.</p>';
+    } else {
+        if (count(array_filter($patientHistory, static fn(array $history): bool => $history['status'] === 'Cancelled')) > 0) {
+            $historyHtml .= '<p class="text-xs font-extrabold text-red-600 mb-2">This patient had a cancelled appointment in the last three records.</p>';
+        }
+        $historyHtml .= '<div class="grid gap-2">';
+        foreach ($patientHistory as $history) {
+            $historyHtml .= '<div class="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2">'
+                . '<span class="text-xs font-bold text-slate-600">' . e(date('M d, Y · g:i A', strtotime($history['appointment_datetime']))) . ' · ' . e($history['purpose']) . '</span>'
+                . '<span class="badge ' . e(appointment_status_badge_class((string) $history['status'])) . '">' . e($history['status']) . '</span>'
+                . '</div>';
+        }
+        $historyHtml .= '</div>';
+    }
+    $historyHtml .= '</div>';
     $status = $appointment['status'];
     $patientNote = trim((string) ($appointment['notes'] ?? ''));
     $portalNotePrefix = 'Patient requested this appointment through the patient portal. Awaiting clinic approval.';
@@ -125,7 +154,7 @@ foreach ($appointments as $appointment) {
         'created' => date('M d, g:i A', strtotime($appointment['created_at'])),
         'createdSort' => $appointment['created_at'],
         'rowActionsTitle' => 'Appointment actions — ' . $fullName,
-        'rowActionsHtml' => $actions ?: '<p class="text-sm text-slate-500">No actions available for this appointment.</p>',
+        'rowActionsHtml' => ($actions ?: '<p class="text-sm text-slate-500">No actions available for this appointment.</p>') . $historyHtml,
     ];
 }
 

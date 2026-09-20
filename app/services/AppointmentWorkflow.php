@@ -415,7 +415,8 @@ function appointment_reserved_times_for_month(DateTimeImmutable $month): array
     [$start, $end] = appointment_month_bounds($month);
     $stmt = appointment_db()->prepare("
         SELECT DATE_FORMAT(appointment_datetime, '%Y-%m-%d') AS appointment_date,
-               TIME_FORMAT(appointment_datetime, '%H:%i:%s') AS appointment_time
+               TIME_FORMAT(appointment_datetime, '%H:%i:%s') AS appointment_time,
+               purpose
         FROM appointments
         WHERE appointment_datetime BETWEEN ? AND ?
           AND status IN ('Pending', 'Scheduled', 'For Confirmation')
@@ -425,22 +426,23 @@ function appointment_reserved_times_for_month(DateTimeImmutable $month): array
 
     $timesByDate = [];
     foreach ($stmt->fetchAll() as $row) {
-        $timesByDate[$row['appointment_date']][] = $row['appointment_time'];
+        $timesByDate[$row['appointment_date']][(string) $row['purpose']][] = $row['appointment_time'];
     }
 
     return $timesByDate;
 }
 
-function appointment_slot_is_reserved(string $appointmentDatetime): bool
+function appointment_slot_is_reserved(string $appointmentDatetime, string $purpose): bool
 {
     $stmt = appointment_db()->prepare("
         SELECT appointment_id
         FROM appointments
         WHERE appointment_datetime = ?
-          AND status IN ('Pending', 'Scheduled')
+          AND purpose = ?
+          AND status IN ('Pending', 'Scheduled', 'For Confirmation')
         LIMIT 1
     ");
-    $stmt->execute([$appointmentDatetime]);
+    $stmt->execute([$appointmentDatetime, $purpose]);
 
     return (bool) $stmt->fetchColumn();
 }

@@ -185,8 +185,8 @@ function complete_patient_registration(int $verificationId, array $input): array
         $person = $db->prepare('INSERT INTO people (id_number, first_name, middle_name, last_name, birthdate, sex) VALUES (?, ?, ?, ?, ?, ?)');
         $person->execute([$studentNumber, $firstName, $middleName !== '' ? $middleName : null, $lastName, $birthdate, $sex]);
         $personId = (int) $db->lastInsertId();
-        $account = $db->prepare("UPDATE accounts SET password_hash = ?, email = ?, account_status = 'active', status_reason = NULL, activated_at = NOW() WHERE person_id = ?");
-        $account->execute([password_hash($password, PASSWORD_DEFAULT), $email, $personId]);
+        $account = $db->prepare("INSERT INTO accounts (person_id, password_hash, email, account_status, status_reason, activated_at) VALUES (?, ?, ?, 'active', NULL, NOW())");
+        $account->execute([$personId, password_hash($password, PASSWORD_DEFAULT), $email]);
         $accountLookup = $db->prepare('SELECT id FROM accounts WHERE person_id = ? LIMIT 1');
         $accountLookup->execute([$personId]);
         $accountId = (int) $accountLookup->fetchColumn();

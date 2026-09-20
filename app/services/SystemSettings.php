@@ -671,7 +671,7 @@ function default_dropdown_option_groups(): array
         'appointment_purpose' => [
             'label' => 'Appointment Purpose',
             'description' => 'Used on the student appointment request form.',
-            'options' => ['General Checkup', 'Dental Consultation', 'Medical Consultation', 'APE Follow-up', 'Clearance Submission'],
+            'options' => ['Medical Consult', 'Dental'],
         ],
         'visit_status' => [
             'label' => 'Visit Status',

@@ -138,20 +138,28 @@ function clinic_feedback_visits(PDO $db, string $identifier): array
     return $query->fetchAll();
 }
 
-function clinic_feedback_pending_active_visits(PDO $db, int $personId): array
+function clinic_feedback_pending_active_visits(PDO $db, int $personId, ?string $purpose = null): array
 {
     if ($personId < 1 || !clinic_feedback_ready($db)) {
         return [];
     }
 
+    $purposeFilter = '';
+    $params = [$personId];
+    if ($purpose !== null && trim($purpose) !== '') {
+        $purposeFilter = " AND ((? = 'Medical Consult' AND LOWER(v.visit_purpose) LIKE '%medical%') OR (? = 'Dental' AND LOWER(v.visit_purpose) LIKE '%dental%'))";
+        $params[] = $purpose;
+        $params[] = $purpose;
+    }
     $query = $db->prepare("SELECT v.visit_id, v.visit_datetime, v.visit_purpose
         FROM visits v
         LEFT JOIN clinic_feedback f ON f.visit_id = v.visit_id
         WHERE v.patient_person_id = ?
           AND v.status = 'Active'
           AND f.feedback_id IS NULL
+          {$purposeFilter}
         ORDER BY v.visit_datetime ASC, v.visit_id ASC");
-    $query->execute([$personId]);
+    $query->execute($params);
     return $query->fetchAll();
 }
 

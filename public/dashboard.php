@@ -145,6 +145,15 @@ $pendingAppointmentsStmt = appointment_db()->query("
     LIMIT 10
 ");
 $pendingAppointments = $pendingAppointmentsStmt ? $pendingAppointmentsStmt->fetchAll() : [];
+$dashboardLatestAppointments = [];
+$dashboardHistoryStmt = appointment_db()->prepare("SELECT appointment_datetime, purpose, status FROM appointments WHERE patient_id = ? ORDER BY appointment_datetime DESC, created_at DESC LIMIT 3");
+foreach ($pendingAppointments as $pendingAppointment) {
+    $pendingPatientId = (int) $pendingAppointment['patient_id'];
+    if (!isset($dashboardLatestAppointments[$pendingPatientId])) {
+        $dashboardHistoryStmt->execute([$pendingPatientId]);
+        $dashboardLatestAppointments[$pendingPatientId] = $dashboardHistoryStmt->fetchAll();
+    }
+}
 
 // Build the dashboard day view without changing the appointment schema. Appointments
 // currently store a start time only, so the dashboard reserves one hour per record.
@@ -596,6 +605,9 @@ render_header('Main Dashboard');
                         $paTime = date('g:i A', strtotime($pa['appointment_datetime']));
                         $paId = (int) $pa['appointment_id'];
                         $isConfirmation = ($pa['status'] ?? '') === 'For Confirmation';
+                        $paHistory = $dashboardLatestAppointments[(int) $pa['patient_id']] ?? [];
+                        $paLatest = $paHistory[0] ?? null;
+                        $paHadCancellation = count(array_filter($paHistory, static fn(array $history): bool => $history['status'] === 'Cancelled')) > 0;
                     ?>
                         <div class="p-4 hover:bg-slate-50 transition-colors">
                             <div class="flex items-start gap-3">
@@ -619,6 +631,8 @@ render_header('Main Dashboard');
                                     <?php if (!empty($pa['purpose'])): ?>
                                         <p class="text-xs text-slate-500 mb-3 line-clamp-1"><?= e($pa['purpose']) ?></p>
                                     <?php endif; ?>
+                                    <p class="text-[11px] font-bold text-slate-400 mb-3">Latest appointment: <?= $paLatest ? e(date('M d, Y · g:i A', strtotime($paLatest['appointment_datetime'])) . ' · ' . $paLatest['purpose'] . ' · ' . $paLatest['status']) : 'None' ?></p>
+                                    <?php if ($paHadCancellation): ?><p class="text-[11px] font-extrabold text-red-600 mb-3">Cancelled appointment in the last three records.</p><?php endif; ?>
                                     <div class="flex items-center gap-2">
                                         <form method="post" action="<?= app_url('appointments/update.php') ?>" class="flex-1">
                                             <input type="hidden" name="id" value="<?= $paId ?>">

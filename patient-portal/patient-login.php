@@ -177,7 +177,7 @@ render_student_auth_header('Patient Login');
 
             <hr class="student-auth-divider">
             <p class="text-center text-xs font-bold text-slate-500">
-                New student? <a href="patient-register.php" class="student-auth-link text-decoration-none">Create an Applicant account.</a>
+                New student? <a href="patient-register.php?start=1" class="student-auth-link text-decoration-none">Create an Applicant account.</a>
             </p>
         </div>
     </section>

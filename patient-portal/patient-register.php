@@ -8,7 +8,7 @@ if (student_current_profile() !== null) {
     header('Location: patient-dashboard.php');
     exit;
 }
-if (isset($_GET['restart'])) {
+if (isset($_GET['start']) || isset($_GET['restart'])) {
     unset($_SESSION['patient_registration']);
     csrf_rotate_token();
     header('Location: patient-register.php');
