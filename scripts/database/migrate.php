@@ -31,10 +31,12 @@ function migration_checksum_is_known_compatible(string $name, string $stored, st
         // Accept only the original migration checksum and this exact revision.
         $originalChecksums = [
             '350bc450f49dd7ade8d125a74883da1e0a07de2a770e6da6b19627756096ccbe',
+            'e9c9168c20e4ce98d3cab86a5f211919a5a38349468625a2e927cfeb4d46ddcb',
         ];
         $idempotentChecksums = [
             '6263b13984783554a45022d6c58cdf91a2152e5b53723eea69498158e70bbb1e',
             '9c0d2cb7f3b93988c021dda5c44321a9e42161f8ee29f67e48b7aa2d4b6a4814',
+            '7d5cc77b85e812565e15008a7db3283628cf853387fd2186e2c5987ef06f83bf',
             '1a1de9360978a5d0814cca8b76fc1813bbd7cd5bd7f531903338ca3e3f3475db',
         ];
 

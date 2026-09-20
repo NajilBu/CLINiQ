@@ -2,7 +2,7 @@
 (function () {
     'use strict';
 
-    const COMPLETE_PATTERN = /^(?:\d{2}-\d{5}|[A-Z]{3,10}-\d{4})$/;
+    const COMPLETE_PATTERN = /^(?:\d{7}|\d{2}-\d{5}|[A-Z]{3,10}-\d{4})$/;
 
     function format(value) {
         const compact = String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -10,6 +10,11 @@
 
         if (/^\d/.test(compact)) {
             const digits = compact.replace(/\D/g, '').slice(0, 7);
+            // Student IDs use a two-digit year prefix; employee IDs remain seven digits.
+            if (/^2\d{6}$/.test(digits)) {
+                return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+            }
+            if (!String(value).includes('-')) return digits;
             return digits.length <= 2 ? digits : `${digits.slice(0, 2)}-${digits.slice(2)}`;
         }
 
@@ -22,7 +27,7 @@
 
     function validationMessage(value) {
         if (!value || COMPLETE_PATTERN.test(value)) return '';
-        return 'Use a student ID such as 23-00262 or a prefixed ID such as FAC-0001.';
+        return 'Use 23-00262 for a student, a seven-digit employee ID, or a prefixed ID such as FAC-0001.';
     }
 
     function prepare(input) {
@@ -30,8 +35,8 @@
         input.dataset.idNumberFormatterReady = '1';
         input.maxLength = 15;
         input.autocapitalize = 'characters';
-        input.pattern = '(?:[0-9]{2}-[0-9]{5}|[A-Za-z]{3,10}-[0-9]{4})';
-        input.title = 'Use 23-00262 or FAC-0001 format.';
+        input.pattern = '(?:[0-9]{7}|[0-9]{2}-[0-9]{5}|[A-Za-z]{3,10}-[0-9]{4})';
+        input.title = 'Use 23-00262, a seven-digit employee ID, or FAC-0001 format.';
 
         const sync = () => {
             input.value = format(input.value);

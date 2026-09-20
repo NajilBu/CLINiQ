@@ -13,7 +13,7 @@ $db = appointment_db();
 $patientProfileStmt = $db->prepare('SELECT COUNT(*) FROM patients WHERE person_id = ?');
 $patientProfileStmt->execute([$patientId]);
 $hasAppointmentPatientProfile = (int) $patientProfileStmt->fetchColumn() === 1;
-$activeAppointmentStmt = $db->prepare("\n    SELECT appointment_id, appointment_datetime, purpose, status\n    FROM appointments\n    WHERE patient_id = ?\n      AND status <> 'Completed'\n    ORDER BY appointment_datetime DESC, created_at DESC\n    LIMIT 1\n");
+$activeAppointmentStmt = $db->prepare("\n    SELECT appointment_id, appointment_datetime, purpose, status\n    FROM appointments\n    WHERE patient_id = ?\n      AND status IN ('Pending', 'Scheduled', 'For Confirmation')\n    ORDER BY appointment_datetime DESC, created_at DESC\n    LIMIT 1\n");
 $activeAppointmentStmt->execute([$patientId]);
 $activeAppointment = $activeAppointmentStmt->fetch() ?: null;
 $appointmentBookingBlocked = $activeAppointment !== null;

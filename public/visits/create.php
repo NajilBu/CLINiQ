@@ -131,8 +131,12 @@ render_clinic_command_header(
                 <div id="patientLookupStatus" class="patient-lookup-status mt-2">Enter a ID number to load patient details.</div>
             </div>
             <div>
-                <label class="clinic-label">Student Name</label>
+                <label class="clinic-label">Patient Name</label>
                 <input class="record-sheet-field px-4" id="patientNameDisplay" value="<?= $preselectedPatient ? e(trim($preselectedPatient['first_name'] . ' ' . $preselectedPatient['last_name'])) : 'Enter ID number' ?>" readonly>
+            </div>
+            <div>
+                <label class="clinic-label" for="patientTypeDisplay">Patient Type</label>
+                <input class="record-sheet-field px-4" id="patientTypeDisplay" value="<?= e($preselectedPatient['patient_type'] ?? 'Enter ID number') ?>" readonly>
             </div>
             <div>
                 <label class="clinic-label">Course / Department</label>
@@ -352,6 +356,7 @@ const visitPatients = <?= json_encode(array_map(static function (array $patient)
         'name' => trim($patient['first_name'] . ' ' . $patient['last_name']),
         'course' => $patient['course_section'] ?: 'Not specified',
         'sex' => $patient['sex'] ?: 'Not specified',
+        'type' => $patient['patient_type'],
     ];
 }, $patients), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
 const visitPatientsByStudentNumber = new Map(visitPatients.map((patient) => [patient.studentNumber, patient]));
@@ -360,6 +365,7 @@ const patientIdInput = document.getElementById('patientIdInput');
 const patientNameDisplay = document.getElementById('patientNameDisplay');
 const patientCourseDisplay = document.getElementById('patientCourseDisplay');
 const patientSexDisplay = document.getElementById('patientSexDisplay');
+const patientTypeDisplay = document.getElementById('patientTypeDisplay');
 const patientLookupStatus = document.getElementById('patientLookupStatus');
 
 function normalizePatientId(value) {
@@ -377,6 +383,7 @@ function clearPatientLookup(message = 'Enter a ID number to load patient details
     patientNameDisplay.value = 'Enter ID number';
     patientCourseDisplay.value = 'Enter ID number';
     patientSexDisplay.value = 'Enter ID number';
+    patientTypeDisplay.value = 'Enter ID number';
     setLookupStatus(message, state);
 }
 
@@ -391,7 +398,11 @@ function updatePatientLookup() {
         return;
     }
 
-    const patient = visitPatientsByStudentNumber.get(formatted);
+    const digits = formatted.replace(/-/g, '');
+    const candidates = /^\d{7}$/.test(digits)
+        ? [`${digits.slice(0, 2)}-${digits.slice(2)}`, digits]
+        : [formatted];
+    const patient = candidates.map(id => visitPatientsByStudentNumber.get(id)).find(Boolean);
     if (!patient) {
         clearPatientLookup(window.CliniqIdNumber.isValid(formatted) ? 'No patient found for this ID number.' : 'Continue typing the ID number.', window.CliniqIdNumber.isValid(formatted) ? 'missing' : '');
         return;
@@ -401,6 +412,7 @@ function updatePatientLookup() {
     patientNameDisplay.value = patient.name;
     patientCourseDisplay.value = patient.course;
     patientSexDisplay.value = patient.sex;
+    patientTypeDisplay.value = patient.type;
     setLookupStatus('Patient details loaded.', 'found');
 }
 

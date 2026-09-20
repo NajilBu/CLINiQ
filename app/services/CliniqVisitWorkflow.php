@@ -56,6 +56,12 @@ function cliniq_visit_patients(string $search = '', int $limit = 500): array
             pe.last_name,
             pe.birthdate,
             pe.sex,
+            CASE
+                WHEN s.person_id IS NOT NULL THEN 'Student'
+                WHEN se.person_id IS NOT NULL THEN se.role_classification
+                WHEN cs.person_id IS NOT NULL THEN 'Staff'
+                ELSE 'Patient'
+            END AS patient_type,
             COALESCE(
                 NULLIF(TRIM(CONCAT(pr.program_code, '-', s.year_level, UPPER(s.section))) COLLATE utf8mb4_bin, _utf8mb4'' COLLATE utf8mb4_bin),
                 ed.department_code,
@@ -80,6 +86,8 @@ function cliniq_visit_patients(string $search = '', int $limit = 500): array
 
 function cliniq_visit_patient_by_id_number(string $idNumber): ?array
 {
+    require_once __DIR__ . '/../helpers/student_id.php';
+    [$preferredId, $alternateId] = visit_id_number_candidates($idNumber);
     $stmt = cliniq_visit_db()->prepare("
         SELECT pe.id AS person_id, pe.id_number, pe.first_name, pe.middle_name, pe.last_name,
                CASE
@@ -103,10 +111,11 @@ function cliniq_visit_patient_by_id_number(string $idNumber): ?array
         LEFT JOIN departments ed ON ed.id = se.department_id
         LEFT JOIN clinic_staff cs ON cs.person_id = pe.id
         LEFT JOIN departments cd ON cd.id = cs.department_id
-        WHERE pe.id_number = ?
+        WHERE pe.id_number IN (?, ?)
+        ORDER BY CASE WHEN pe.id_number = ? THEN 0 ELSE 1 END, pe.id
         LIMIT 1
     ");
-    $stmt->execute([strtoupper(trim($idNumber))]);
+    $stmt->execute([$preferredId, $alternateId, $preferredId]);
     return $stmt->fetch() ?: null;
 }
 

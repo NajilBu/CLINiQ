@@ -560,14 +560,14 @@ $theme = active_cliniq_theme();
                         <?= e($success['identifier']) ?>
                     </div>
                     <p class="text-xs text-slate-400 mt-5 mb-0">
-                        Returning to the clinic visit log form in <span id="redirectCountdown" class="font-semibold text-primary">5</span> seconds.
+                        Your submission is saved. You may stay here or return to the landing page.
                     </p>
                     <div class="mt-7 flex flex-col sm:flex-row items-center justify-center gap-3">
                         <a href="<?= app_url('visitor-registration.php') ?>" class="btn btn-primary text-decoration-none">
                             <span class="material-symbols-outlined text-[18px]">arrow_back</span>
                             Back to form now
                         </a>
-                        <a href="<?= app_url('index.php') ?>" class="btn btn-ghost text-decoration-none">Return to first page</a>
+                        <a href="<?= app_url('index.php') ?>" class="btn btn-ghost text-decoration-none">Return to Landing Page</a>
                     </div>
                 </div>
             <?php else: ?>
@@ -598,15 +598,10 @@ $theme = active_cliniq_theme();
                         </div>
 
                         <div>
-                            <label class="visit-label" for="category">Category</label>
+                            <label class="visit-label" for="category">Patient Type</label>
                             <div class="visit-field">
                                 <span class="material-symbols-outlined">group</span>
-                                <select class="visit-input <?= isset($errors['category']) ? 'input-error' : '' ?>" id="category" name="category" required>
-                                    <option value="">Select Category</option>
-                                    <?php foreach ($categoryOptions as $category): ?>
-                                        <option <?= $form['category'] === $category ? 'selected' : '' ?>><?= e($category) ?></option>
-                                    <?php endforeach; ?>
-                                </select>
+                                <input class="visit-input <?= isset($errors['category']) ? 'input-error' : '' ?>" id="category" name="category" value="<?= e($form['category']) ?>" placeholder="Loaded from your ID number" readonly>
                             </div>
                         </div>
 
@@ -871,6 +866,12 @@ $theme = active_cliniq_theme();
 
     function scheduleVisitorPatientLookup() {
         window.clearTimeout(visitorLookupTimer);
+        ++visitorLookupSequence;
+        fullName.value = '';
+        category.value = '';
+        department.value = '';
+        identifier.dataset.autofilled = '';
+        syncStudentDetail();
         visitorLookupTimer = window.setTimeout(syncVisitorPatientLookup, 250);
     }
 
@@ -887,21 +888,13 @@ $theme = active_cliniq_theme();
     syncVisitorPatientLookup();
 
     <?php if ($success): ?>
-    const redirectTarget = '<?= app_url('visitor-registration.php') ?>';
-    const countdown = document.getElementById('redirectCountdown');
-    let secondsRemaining = 5;
-
-    const redirectTimer = window.setInterval(() => {
-        secondsRemaining -= 1;
-        if (countdown) {
-            countdown.textContent = String(Math.max(secondsRemaining, 0));
-        }
-
-        if (secondsRemaining <= 0) {
-            window.clearInterval(redirectTimer);
-            window.location.href = redirectTarget;
-        }
-    }, 1000);
+    document.addEventListener('DOMContentLoaded', () => {
+        confirmAction('Return to the landing page?', 'Your submission has been saved successfully.', () => {
+            window.location.href = <?= json_encode(app_url('index.php'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+        }, 'primary');
+        document.getElementById('confirmActionBtn').textContent = 'Return to Landing Page';
+        document.querySelector('#confirmActionModal .btn-ghost').textContent = 'Stay Here';
+    });
     <?php endif; ?>
 </script>
 <script src="<?= app_url('assets/js/app.js?v=id-number-format-2') ?>"></script>
