@@ -439,6 +439,15 @@ render_header('Emergency Health Passport');
                             <?php endforeach; ?>
                         </select>
                     </div>
+                    <div class="emergency-report-field">
+                        <label class="clinic-label">Reported Urgency <small>Optional</small></label>
+                        <select class="clinic-input" name="reporter_risk_rating">
+                            <option value="">Not assessed</option>
+                            <?php foreach (['Low', 'Moderate', 'High', 'Critical'] as $option): ?>
+                                <option value="<?= e($option) ?>"><?= e($option) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
                         </div>
                     </fieldset>
 

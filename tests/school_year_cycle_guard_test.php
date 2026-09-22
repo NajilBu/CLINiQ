@@ -76,7 +76,7 @@ foreach ([
     'Still Enrolled',
     'Not Currently Enrolled',
     'name="non_enrollment_reason"',
-    'complete_re_enrollment($selectedEnrollmentStatus, $selectedNonEnrollmentReason)',
+    'complete_re_enrollment($selectedEnrollmentStatus, $selectedNonEnrollmentReason,',
 ] as $expected) {
     if (!str_contains((string) $patientDashboard, $expected)) {
         throw new RuntimeException("The student enrollment declaration form is missing: {$expected}");

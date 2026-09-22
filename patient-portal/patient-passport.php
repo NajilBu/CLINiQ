@@ -522,6 +522,14 @@ render_student_header('Emergency Health Passport', 'passport');
                             <div class="passport-modern-medical-item"><span>Emergency instructions</span><strong class="passport-modern-instructions" id="prev-instructions"><?= nl2br(student_e($passport['instructions'])) ?></strong></div>
                         </div>
                     </section>
+                    <section class="passport-modern-section" id="prev-body-measurements"<?= $passport['show_bmi'] ? '' : ' hidden' ?>>
+                        <div class="passport-modern-section-title"><span class="material-symbols-outlined">monitor_weight</span> Body measurements</div>
+                        <div class="passport-modern-personal-grid">
+                            <div class="passport-modern-personal-item"><span>Height</span><strong><?= $passport['height_cm'] !== null ? student_e(number_format((float) $passport['height_cm'], 2)) . ' cm' : 'Not recorded' ?></strong></div>
+                            <div class="passport-modern-personal-item"><span>Weight</span><strong><?= $passport['weight_kg'] !== null ? student_e(number_format((float) $passport['weight_kg'], 2)) . ' kg' : 'Not recorded' ?></strong></div>
+                            <div class="passport-modern-personal-item"><span>BMI</span><strong><?= $passport['bmi'] !== null ? student_e(number_format((float) $passport['bmi'], 2)) : 'Not recorded' ?></strong></div>
+                        </div>
+                    </section>
 
                     <div class="passport-modern-contact">
                         <div class="passport-modern-contact-icon" aria-hidden="true">

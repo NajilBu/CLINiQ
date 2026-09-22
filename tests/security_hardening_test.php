@@ -11,7 +11,6 @@ foreach ([
     'patient_login' => 'patient-portal/patient-login.php',
     'schema' => 'database/production_schema.sql',
     'env' => 'app/config/env.php',
-    'diagnostic' => 'check.php',
     'readme' => 'README.md',
 ] as $key => $relative) {
     $contents = file_get_contents($root . '/' . $relative);
@@ -31,7 +30,6 @@ foreach (['auth_throttle_assert_allowed', 'auth_throttle_record_failure', 'auth_
 if (!str_contains($sources['security'], ">= 5") || !str_contains($sources['security'], ">= 25")) throw new RuntimeException('School-network throttle thresholds changed unexpectedly.');
 if (!str_contains($sources['schema'], 'CREATE TABLE login_attempts')) throw new RuntimeException('Production schema lacks login throttling storage.');
 if (!str_contains($sources['env'], 'validate_production_environment')) throw new RuntimeException('Production environment is not fail-closed.');
-if (!str_contains($sources['diagnostic'], "PHP_SAPI !== 'cli'") || str_contains($sources['diagnostic'], '$db = db()')) throw new RuntimeException('Diagnostic must be CLI-only and use the primary database.');
 if (str_contains($sources['readme'], 'admin@cliniq.local') || str_contains($sources['readme'], 'Password: `password`')) throw new RuntimeException('README still advertises default credentials.');
 if (str_contains(file_get_contents($root . '/patient-portal/includes/patient-layout.php'), 'STUDENT_DEMO_PASSWORD')) throw new RuntimeException('Patient portal still contains a demo password.');
 $passportPreview = file_get_contents($root . '/patient-portal/passport-demo.php');

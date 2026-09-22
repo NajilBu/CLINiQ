@@ -212,12 +212,9 @@ function ape_record_queue(array $record): string
     }
 
     if (!empty($record['exam_date'])) {
-        // The examination can be recorded before digital keeping is complete,
-        // but later clinical phases must remain locked until Step 1 is verified.
-        if (!ape_digital_submission_complete($record)) {
-            return 'digital_submission';
-        }
-
+        // An examination is an irreversible workflow milestone. Outstanding
+        // regular uploads remain actionable in Final Decision; they must not
+        // send the patient back to the pre-examination Digital Keeping queue.
         if (!ape_deferred_submission_complete($record) || (int)($record['follow_up_required'] ?? 0) === 1 || in_array(($record['clearance_status'] ?? ''), ['For Follow-up', 'Submitted'], true)) {
             return 'follow_up';
         }
@@ -316,12 +313,8 @@ function ape_record_progress_percent(array $record): int
     }
 
     if (!empty($record['exam_date'])) {
-        // Keep progress on Step 1 until the required digital documents are
-        // verified, even when the clinic has already saved the examination.
-        if (!ape_digital_submission_complete($record)) {
-            return 25;
-        }
-
+        // Recording the examination completes Step 2 even while regular
+        // uploads are still outstanding in the Final Decision queue.
         return 50;
     }
 
@@ -730,11 +723,11 @@ function ape_record_select_sql(): string
     $historyCourseSection = '';
     $historyJoins = '';
     if (ape_school_year_history_available()) {
-        $historyCourseSection = "NULLIF(TRIM(CONCAT(history_program.program_code, '-', school_year_history.year_level, UPPER(school_year_history.section))) COLLATE utf8mb4_bin, _utf8mb4'' COLLATE utf8mb4_bin),";
+        $historyCourseSection = $courseSectionExpression('history_program.program_code', 'school_year_history.year_level', 'school_year_history.section') . ',';
         $historyJoins = "
         LEFT JOIN student_school_year_enrollments school_year_history
             ON school_year_history.student_person_id = p.id
-           AND school_year_history.academic_year COLLATE utf8mb4_bin = ar.academic_year COLLATE utf8mb4_bin
+            AND school_year_history.academic_year COLLATE utf8mb4_unicode_ci = ar.academic_year COLLATE utf8mb4_unicode_ci
         LEFT JOIN programs history_program ON history_program.id = school_year_history.program_id";
     }
 
@@ -764,7 +757,7 @@ function ape_record_select_sql(): string
             p.birthdate,
             COALESCE(
                 {$historyCourseSection}
-                NULLIF(TRIM(CONCAT(pr.program_code, '-', s.year_level, UPPER(s.section))), ''),
+                {$currentCourseSection},
                 ed.department_code,
                 'Patient'
             ) AS course_section,

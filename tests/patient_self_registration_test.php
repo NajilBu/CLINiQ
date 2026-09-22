@@ -17,10 +17,10 @@ $checks = [
     'codes expire and limit attempts' => str_contains($service, 'CLINIQ_PATIENT_REGISTRATION_CODE_MINUTES = 15') && str_contains($service, 'CLINIQ_PATIENT_REGISTRATION_MAX_ATTEMPTS = 5'),
     'requests are throttled' => str_contains($service, 'CLINIQ_PATIENT_REGISTRATION_MAX_REQUESTS = 3') && str_contains($service, 'requested_ip'),
     'duplicates are blocked' => str_contains($service, 'patient_registration_assert_identity_available') && str_contains($service, 'LOWER(email) = ?'),
-    'account is active Applicant' => str_contains($service, "account_status = 'active'") && str_contains($service, "'access_status' => 'Applicant'"),
+    'account is active Applicant' => str_contains($service, "VALUES (?, ?, ?, 'active'") && str_contains($service, "'access_status' => 'Applicant'"),
     'active APE cycle is assigned' => str_contains($service, "FROM ape_cycles WHERE status = 'Active'") && str_contains($service, 'ape_seed_default_requirements'),
     'CSRF is enforced' => str_contains($page, 'csrf_enforce_request()') && str_contains($page, 'name="_csrf"'),
-    'login links to registration' => str_contains($login, 'href="patient-register.php"') && str_contains($login, "\$_GET['registered']"),
+    'login links to registration' => str_contains($login, 'href="patient-register.php?start=1"') && str_contains($login, "\$_GET['registered']"),
     'schema and migration contain verification table' => str_contains($schema, 'CREATE TABLE patient_registration_verifications') && str_contains($migration, 'CREATE TABLE IF NOT EXISTS patient_registration_verifications'),
 ];
 $failures = array_keys(array_filter($checks, static fn (bool $passed): bool => !$passed));

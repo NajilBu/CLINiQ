@@ -11,9 +11,13 @@ function normalize_id_number(?string $idNumber): string
         return '';
     }
     if (ctype_digit($compact)) {
-        if (!str_contains((string) $idNumber, '-')) return $compact;
         $digits = $compact;
-        return strlen($digits) <= 2 ? $digits : substr($digits, 0, 2) . '-' . substr($digits, 2);
+        // Store and compare seven-digit student identifiers consistently,
+        // whether a student enters 99-99999 or 9999999.
+        if (strlen($digits) === 7) {
+            return substr($digits, 0, 2) . '-' . substr($digits, 2);
+        }
+        return strlen($digits) <= 2 ? $digits : (str_contains((string) $idNumber, '-') ? substr($digits, 0, 2) . '-' . substr($digits, 2) : $digits);
     }
     if (preg_match('/^([A-Z]{0,10})(\d{0,10})$/', $compact, $parts) !== 1) {
         return $compact;
