@@ -30,11 +30,9 @@ foreach (['Active' => true, 'Completed' => true, 'Unaddressed' => false, 'Cancel
 foreach (['3.999' => 'Critical', '4' => 'Satisfactory', '5.999' => 'Satisfactory', '6' => 'Excellent', '7' => 'Excellent'] as $score => $tier) {
     check_feedback(clinic_feedback_tier((float) $score) === $tier, 'Tier boundary incorrect.');
 }
-$input = ['consent' => '1', 'service_type' => clinic_feedback_services()[0], 'academic_term' => '1st Semester', 'year_level' => '1st Year', 'program' => 'BSIT', 'ratings' => $ratings];
+$input = ['consent' => '1', 'ratings' => $ratings];
 $validated = clinic_feedback_validate($input);
 check_feedback(!array_key_exists('email', $validated) && $validated['comments'] === '', 'No email or comment required.');
 rejects_feedback(fn() => clinic_feedback_validate(array_replace($input, ['consent' => '0'])), 'Missing consent accepted.');
-rejects_feedback(fn() => clinic_feedback_validate(array_replace($input, ['service_type' => 'Other'])), 'Other explanation required.');
-rejects_feedback(fn() => clinic_feedback_validate(array_replace($input, ['program' => []])), 'Array accepted for text.');
 rejects_feedback(fn() => clinic_feedback_validate(array_replace($input, ['comments' => str_repeat('a', 5001)])), 'Oversized comment accepted.');
 echo "Clinic feedback validation and scoring tests passed.\n";

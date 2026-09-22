@@ -27,10 +27,9 @@ $patientActiveTimes = array_values(array_unique(array_map(
     static fn(array $row): string => date('H:i:s', strtotime((string) $row['appointment_datetime'])),
     $activeAppointments
 )));
-$appointmentBookingBlocked = false;
-$pendingFeedbackVisits = clinic_feedback_pending_active_visits($db, $patientId);
-$feedbackRequired = false;
-$feedbackPortalUrl = '../public/clinic-feedback.php?portal=1';
+$pendingFeedbackVisits = clinic_feedback_pending_completed_visits($db, $patientId);
+$feedbackRequired = $pendingFeedbackVisits !== [];
+$feedbackPortalUrl = 'patient-feedback.php';
 
 $timeSlots = [];
 for ($hour = 7; $hour < 21; $hour++) {
@@ -86,17 +85,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!$hasAppointmentPatientProfile || 
     $blocksForPostMonth = appointment_blocks_for_month($month);
 
     $purposeAppointment = $activeAppointmentsByPurpose[$type] ?? null;
-    $purposeFeedback = clinic_feedback_pending_active_visits($db, $patientId, $type);
     $sameTimeStmt = $db->prepare("SELECT appointment_id FROM appointments WHERE patient_id = ? AND appointment_datetime = ? AND status IN ('Pending', 'Scheduled', 'For Confirmation') LIMIT 1");
     $sameTimeStmt->execute([$patientId, $datetimeStr]);
     if ($type === '' || !in_array($type, $allowedAppointmentPurposes, true)) {
         $error = 'Please choose an appointment purpose.';
+    } elseif ($feedbackRequired) {
+        $error = 'Complete all required feedback for your completed clinic visits before requesting another appointment.';
     } elseif ($purposeAppointment !== null) {
         $error = 'You already have an active ' . $type . ' appointment. Complete or cancel it before booking another one.';
     } elseif ($sameTimeStmt->fetchColumn()) {
         $error = 'You already have another active appointment at that date and time. Choose a different time.';
-    } elseif ($purposeFeedback !== []) {
-        $error = 'Complete the feedback for your previous ' . $type . ' visit before requesting another one.';
     } elseif (!$selectedDate || $selectedDate->format('Y-m-d') !== $dateStr) {
         $error = 'Please choose a valid appointment date.';
     } elseif ($dateStr < date('Y-m-d')) {
@@ -190,15 +188,11 @@ $today = date('Y-m-d');
 render_student_header('Appointments', 'appointment');
 ?>
 
-<section class="student-page-header">
+<section class="student-page-header appointment-page-header">
     <div>
-        <p class="student-eyebrow">Clinic Appointment</p>
         <h1 class="student-title">Request Appointment</h1>
+        <p class="student-subtitle appointment-page-subtitle">Requests need clinic approval before your visit.</p>
     </div>
-    <span class="student-badge student-badge-info">
-        <span class="material-symbols-outlined text-[14px]">approval</span>
-        Clinic Approval Required
-    </span>
 </section>
 
 <?php if ($success): ?>
@@ -225,13 +219,13 @@ render_student_header('Appointments', 'appointment');
         <div class="student-card-header">
             <div>
                 <h2 class="student-card-title">Preferred Schedule</h2>
-                <p class="student-card-copy">Unavailable clinic dates and hours are blocked from selection.</p>
+                <p class="student-card-copy">Choose an available date and time.</p>
             </div>
             <span class="student-badge student-badge-warning">Pending First</span>
         </div>
         <div class="student-card-pad">
             <?php if ($feedbackRequired): ?>
-                <div class="student-note student-note-danger">
+                <div class="student-note student-note-danger student-appointment-feedback-note">
                     <span class="material-symbols-outlined">rate_review</span>
                     <div>
                         <strong>Feedback required before another appointment.</strong><br>
@@ -239,19 +233,11 @@ render_student_header('Appointments', 'appointment');
                         <p class="mt-3 mb-0"><a href="<?= student_e($feedbackPortalUrl) ?>" class="student-button-danger text-decoration-none">Complete Required Feedback <span class="material-symbols-outlined">arrow_forward</span></a></p>
                     </div>
                 </div>
-            <?php elseif ($appointmentBookingBlocked): ?>
-                <div class="student-note student-note-warning">
-                    <span class="material-symbols-outlined">event_busy</span>
-                    <div>
-                        <strong>Appointment already active.</strong><br>
-                        You can only have one appointment at a time. Complete your current appointment before booking another.
-                    </div>
-                </div>
             <?php else: ?>
             <form id="booking-form" method="POST" action="?month=<?= student_e($month->format('Y-m')) ?>">
                 <input type="hidden" name="appt_date" id="appt-date-input" value="">
                 <input type="hidden" name="appt_time" id="appt-time-input" value="">
-                <div class="student-note student-note-info mb-4"><span class="material-symbols-outlined">privacy_tip</span><div>Appointment details and your note are added to your clinic record so staff can schedule and prepare for your visit. See the <a href="<?= student_e(student_legal_url('privacy')) ?>" target="_blank" rel="noopener" class="student-auth-link">Privacy Notice</a>.</div></div>
+                <p class="appointment-privacy-note"><span class="material-symbols-outlined" aria-hidden="true">privacy_tip</span><span>Your appointment details are added to your clinic record. <a href="<?= student_e(student_legal_url('privacy')) ?>" target="_blank" rel="noopener" class="student-auth-link">Privacy Notice</a></span></p>
 
                 <div class="student-field" id="appointment-calendar-panel"
                      data-availability="<?= student_e(json_encode($availabilityPayload, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)) ?>"

@@ -101,7 +101,7 @@ $recentAccountColumns = [
     ['headerName' => 'Account Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'sortField' => 'status'],
     ['headerName' => 'Portal Access', 'field' => 'accessHtml', 'cellRenderer' => 'html', 'sortField' => 'access'],
     ['headerName' => 'Created', 'field' => 'created', 'sortField' => 'created'],
-    ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortField' => 'actions', 'sortable' => false],
+    ['headerName' => 'Actions', 'field' => 'actionsHtml', 'cellRenderer' => 'html', 'sortField' => 'actions', 'sortable' => false, 'width' => 270, 'minWidth' => 270, 'flex' => 0, 'suppressSizeToFit' => true],
 ];
 $recentAccountRows = [];
 foreach ($recentAccounts as $account) {
@@ -139,7 +139,7 @@ foreach ($recentAccounts as $account) {
         'access' => strtolower($accessStatus),
         'accessHtml' => $accessHtml,
         'created' => date('M d, Y', strtotime((string) $account['created_at'])),
-        'actionsHtml' => '<div class="flex flex-wrap justify-end gap-2">' . $actionsHtml . '</div>',
+        'actionsHtml' => '<div class="patient-account-actions">' . $actionsHtml . '</div>',
     ];
 }
 

@@ -303,26 +303,68 @@ function ape_record_step_index(array $record): int
 }
 
 /**
- * Report patient-facing progress without treating incomplete digital keeping as
- * a gate that prevents the scheduled examination from advancing the workflow.
+ * Resolve the patient-facing APE checklist independently from the staff queue.
+ * Staff may work in Final Decision after an examination while the student's
+ * earliest incomplete requirement remains the only active checklist step.
+ *
+ * @return array{steps: array<int, array{number: int, key: string, done: bool, active: bool, locked: bool}>, completed_count: int, percent: int, active_step: int, stage_label: string}
+ */
+function ape_patient_progress(array $record): array
+{
+    $isCleared = in_array('Cleared', [
+        $record['workflow_status'] ?? '',
+        $record['clearance_status'] ?? '',
+    ], true);
+    $decisionRecorded = $isCleared || in_array(
+        $record['clearance_status'] ?? '',
+        ['For Follow-up', 'Submitted'],
+        true
+    );
+
+    $steps = [
+        1 => ['number' => 1, 'key' => 'digital_keeping', 'done' => $isCleared || ape_digital_submission_complete($record)],
+        2 => ['number' => 2, 'key' => 'examination', 'done' => $isCleared || !empty($record['exam_date'])],
+        3 => ['number' => 3, 'key' => 'final_decision', 'done' => $decisionRecorded],
+        4 => ['number' => 4, 'key' => 'completed', 'done' => $isCleared],
+    ];
+
+    $activeStep = 4;
+    foreach ($steps as $number => $step) {
+        if (!$step['done']) {
+            $activeStep = $number;
+            break;
+        }
+    }
+
+    $completedCount = count(array_filter($steps, static fn (array $step): bool => $step['done']));
+    foreach ($steps as $number => &$step) {
+        $step['active'] = !$step['done'] && $number === $activeStep;
+        $step['locked'] = !$step['done'] && $number > $activeStep;
+    }
+    unset($step);
+
+    $stageLabels = [
+        1 => 'Digital Keeping',
+        2 => 'Examination',
+        3 => 'Final Decision',
+        4 => $isCleared ? 'Completed' : 'Follow-up Clearance',
+    ];
+
+    return [
+        'steps' => $steps,
+        'completed_count' => $completedCount,
+        'percent' => $completedCount * 25,
+        'active_step' => $activeStep,
+        'stage_label' => $stageLabels[$activeStep],
+    ];
+}
+
+/**
+ * Backward-compatible percentage accessor for patient-facing APE progress.
  */
 function ape_record_progress_percent(array $record): int
 {
-    if (($record['workflow_status'] ?? '') === 'Cleared' || ($record['clearance_status'] ?? '') === 'Cleared') {
-        return 100;
-    }
-
-    if (!empty($record['exam_date'])) {
-        // Recording the examination completes Step 2 even while regular
-        // uploads are still outstanding in the Final Decision queue.
-        return 50;
-    }
-
-    if (ape_digital_submission_complete($record) || ape_examination_is_available($record)) {
-        return 25;
-    }
-
-    return 0;
+    return ape_patient_progress($record)['percent'];
 }
 
 function ape_schedule_is_current(array $record, ?DateTimeImmutable $now = null): bool

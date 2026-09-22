@@ -1,9 +1,10 @@
 <?php
 
+require_once __DIR__ . '/data_normalization.php';
+
 function cliniq_format_person_name(string $name): string
 {
-    $name = preg_replace('/\s+/u', ' ', trim($name)) ?? '';
-    return mb_convert_case($name, MB_CASE_TITLE, 'UTF-8');
+    return cliniq_normalize_person_name($name);
 }
 
 function cliniq_format_ph_mobile(string $number): ?string

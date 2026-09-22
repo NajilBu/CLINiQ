@@ -79,6 +79,17 @@ function patient_notification_mark_all_read(PDO $db, int $patientPersonId): int
     return $stmt->rowCount();
 }
 
+function patient_notification_mark_source_read(PDO $db, int $patientPersonId, string $sourceType, int $sourceId): int
+{
+    if ($patientPersonId < 1 || trim($sourceType) === '' || $sourceId < 1) {
+        return 0;
+    }
+
+    $stmt = $db->prepare('UPDATE patient_notifications SET read_at = COALESCE(read_at, NOW()) WHERE patient_person_id = ? AND source_type = ? AND source_id = ? AND read_at IS NULL');
+    $stmt->execute([$patientPersonId, trim($sourceType), $sourceId]);
+    return $stmt->rowCount();
+}
+
 function patient_notification_for_appointment(PDO $db, array $appointment, string $status, ?int $actorPersonId): ?int
 {
     $patientId = (int) ($appointment['patient_id'] ?? 0);
@@ -134,4 +145,39 @@ function patient_notification_for_ape_action(PDO $db, array $record, string $act
     }
 
     return patient_notification_create($db, $patientId, $actorPersonId, 'ape', $notification[0], $notification[1], 'patient-ape-status.php', 'ape', $apeId);
+}
+
+function patient_notification_for_feedback_required(PDO $db, array $visit, ?int $actorPersonId): ?int
+{
+    $patientId = (int) ($visit['patient_id'] ?? $visit['patient_person_id'] ?? 0);
+    $visitId = (int) ($visit['id'] ?? $visit['visit_id'] ?? 0);
+    if ($patientId < 1 || $visitId < 1) {
+        return null;
+    }
+
+    $student = $db->prepare('SELECT 1 FROM students s JOIN accounts a ON a.person_id = s.person_id WHERE s.person_id = ? AND a.account_status = \'active\' LIMIT 1');
+    $student->execute([$patientId]);
+    if (!$student->fetchColumn()) {
+        return null;
+    }
+
+    $existing = $db->prepare("SELECT notification_id FROM patient_notifications WHERE patient_person_id = ? AND source_type = 'clinic_feedback' AND source_id = ? LIMIT 1");
+    $existing->execute([$patientId, $visitId]);
+    $existingId = $existing->fetchColumn();
+    if ($existingId !== false) {
+        return (int) $existingId;
+    }
+
+    $purpose = trim((string) ($visit['visit_purpose'] ?? 'clinic visit')) ?: 'clinic visit';
+    return patient_notification_create(
+        $db,
+        $patientId,
+        $actorPersonId,
+        'feedback',
+        'Feedback required for your completed visit',
+        "Your {$purpose} was completed. Please complete the clinic feedback before requesting another appointment.",
+        'patient-feedback.php',
+        'clinic_feedback',
+        $visitId
+    );
 }

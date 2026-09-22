@@ -93,9 +93,10 @@ render_student_auth_header('Patient Login');
     'homeUrl' => '../public/index.php',
     'logoUrl' => $clinicLogoSrc,
     'showBack' => false,
+    'class' => 'cliniq-entry-header-mobile-hidden',
 ]); ?>
 
-<main class="student-auth-wrap">
+<main class="student-auth-wrap student-login-wrap">
     <section class="student-auth-shell">
         <aside class="student-auth-side">
             <div>
@@ -103,7 +104,8 @@ render_student_auth_header('Patient Login');
                     <img src="<?= student_e($clinicLogoSrc) ?>" alt="<?= student_e($clinicProfile['department']) ?> logo">
                 </a>
                 <p class="student-auth-brand-line"><?= student_e($clinicProfile['system_name']) ?></p>
-                <h1 class="student-auth-side-title">Patient<br>Health Portal</h1>
+                <p class="student-auth-department-line"><?= student_e($clinicProfile['department']) ?></p>
+                <h1 class="student-auth-side-title">Patient Portal</h1>
                 <p class="student-auth-side-copy">Track your APE status, upload documents, and book clinic appointments in one place.</p>
                 <svg class="student-auth-pulse" viewBox="0 0 320 40" preserveAspectRatio="none" aria-hidden="true">
                     <path d="M0 20 H100 L112 20 L120 4 L132 36 L142 20 L154 20 L162 12 L170 28 L178 20 L320 20"/>

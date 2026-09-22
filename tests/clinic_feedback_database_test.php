@@ -19,6 +19,8 @@ $db->exec("INSERT INTO visits (visit_id, patient_person_id, visit_datetime, chie
     (2, 1, '2026-09-01 09:00:00', 'Test only', 'Active'),
     (3, 1, '2026-09-01 10:00:00', 'Test only', 'Cancelled'),
     (4, 2, '2026-09-01 10:00:00', 'Test only', 'Active')");
+check_feedback(array_map('intval', array_column(clinic_feedback_pending_completed_visits($db, 1), 'visit_id')) === [1], 'Only unrated completed student visits should be pending.');
+check_feedback(clinic_feedback_pending_completed_visits($db, 2) === [], 'Nonstudent visits must not be returned as student feedback requirements.');
 check_feedback(clinic_feedback_latest($db, '99-00000') === null, 'Unknown ID should not match.');
 check_feedback(clinic_feedback_latest($db, '99-99998') === null, 'Nonstudent should not match.');
 check_feedback((int) clinic_feedback_latest($db, '9999999')['visit_id'] === 2, 'Latest noncancelled visit selection and ID normalization.');
@@ -29,6 +31,7 @@ check_feedback((int) clinic_feedback_latest($db, '99-99999')['visit_id'] === 2, 
 rejects_feedback(fn() => clinic_feedback_submit($db, $context, $input), 'Duplicate accepted.');
 $db->exec("UPDATE visits SET status = 'Completed' WHERE visit_id = 2");
 rejects_feedback(fn() => clinic_feedback_submit($db, $context, $input), 'Completion must not unlock a second response.');
+check_feedback(array_map('intval', array_column(clinic_feedback_pending_completed_visits($db, 1), 'visit_id')) === [1], 'Rated active visits must not become completed feedback requirements.');
 $db->exec("INSERT INTO visits (visit_id, patient_person_id, visit_datetime, chief_complaint, status) VALUES (5, 1, '2026-09-02 08:00:00', 'Test only', 'Unaddressed')");
 check_feedback((int) clinic_feedback_latest($db, '99-99999')['visit_id'] === 5, 'New unaddressed visit must not be skipped.');
 rejects_feedback(fn() => clinic_feedback_submit($db, $context, $input), 'Already-rated visit accepted after a newer visit.');
@@ -37,6 +40,7 @@ rejects_feedback(fn() => clinic_feedback_submit($db, $context, $input), 'Unaddre
 $db->exec("UPDATE visits SET status = 'Completed' WHERE visit_id = 5");
 clinic_feedback_submit($db, $context, $input);
 check_feedback(clinic_feedback_already_sent($db, 5), 'Completed should accept feedback.');
+check_feedback(array_map('intval', array_column(clinic_feedback_pending_completed_visits($db, 1), 'visit_id')) === [1], 'Submitting feedback must clear that completed-visit requirement.');
 $db->exec("INSERT INTO visits (visit_id, patient_person_id, visit_datetime, chief_complaint, status) VALUES (6, 1, '2026-09-02 08:00:00', 'Test only', 'Active')");
 check_feedback((int) clinic_feedback_latest($db, '99-99999')['visit_id'] === 6, 'Equal timestamps require ID tie-breaker.');
 $stored = $db->query('SELECT overall, ratings_json FROM clinic_feedback WHERE visit_id = 2')->fetch();

@@ -125,7 +125,7 @@
     margin: 1.5rem 0 1.25rem;
     color: var(--cliniq-muted-foreground);
     font-size: .875rem;
-    font-weight: 650;
+    font-weight: 600;
 }
 
 .reports-page .report-analytics-range .material-symbols-outlined {

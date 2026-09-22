@@ -112,6 +112,12 @@ if (!str_contains($patientAppointmentSource, 'slot.hidden = !isWithinHours;')
     throw new RuntimeException('Patient calendar must change months without refreshing and hide slots outside clinic hours.');
 }
 
+if (!str_contains($patientAppointmentSource, 'Requests need clinic approval before your visit.')
+    || !str_contains($patientAppointmentSource, 'Your appointment details are added to your clinic record.')
+    || str_contains($patientAppointmentSource, 'Clinic Approval Required')) {
+    throw new RuntimeException('The patient appointment page must use the compact approval and privacy guidance.');
+}
+
 $availabilitySource = file_get_contents(dirname(__DIR__) . '/public/appointments/_availability_section.php');
 $availabilityActionSource = file_get_contents(dirname(__DIR__) . '/public/appointments/availability.php');
 if (!str_contains($availabilitySource, 'data-working-hours-mode="future"')

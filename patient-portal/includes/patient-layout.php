@@ -8,6 +8,7 @@ require_once __DIR__ . '/../../app/services/SystemSettings.php';
 require_once __DIR__ . '/../../app/services/ProfilePhoto.php';
 require_once __DIR__ . '/../../app/services/PatientNotification.php';
 require_once __DIR__ . '/../../app/services/PatientAccessStatus.php';
+require_once __DIR__ . '/../../app/services/PatientRegistrationService.php';
 
 function student_start_session(): void
 {
@@ -244,8 +245,81 @@ function student_current_profile(): ?array
     return $profile;
 }
 
+/** Resolve a short-lived verified registration context, never a patient login. */
+function student_verified_onboarding_context(): ?array
+{
+    student_start_session();
+    $sessionContext = $_SESSION['patient_onboarding'] ?? null;
+    if (!is_array($sessionContext)) {
+        return null;
+    }
+
+    $verifiedContext = patient_registration_verified_onboarding_context((int) ($sessionContext['verification_id'] ?? 0));
+    if ($verifiedContext === null
+        || !hash_equals((string) $verifiedContext['student_number'], (string) ($sessionContext['student_number'] ?? ''))
+        || !hash_equals((string) $verifiedContext['email'], strtolower((string) ($sessionContext['email'] ?? '')))) {
+        unset($_SESSION['patient_onboarding'], $_SESSION['patient_registration']);
+        return null;
+    }
+
+    return $verifiedContext;
+}
+
+function student_begin_verified_onboarding(array $verifiedContext): void
+{
+    $verificationId = (int) ($verifiedContext['verification_id'] ?? 0);
+    if ($verificationId < 1) {
+        throw new InvalidArgumentException('The verified registration session is invalid. Start registration again.');
+    }
+
+    student_start_session();
+    session_regenerate_id(true);
+    unset($_SESSION['patient_legacy_id'], $_SESSION['patient_account_id'], $_SESSION['patient_person_id'], $_SESSION['student_account_id'], $_SESSION['student_person_id'], $_SESSION['first_registration'], $_SESSION['patient_registration']);
+    $_SESSION['patient_onboarding'] = [
+        'verification_id' => $verificationId,
+        'student_number' => (string) ($verifiedContext['student_number'] ?? ''),
+        'email' => strtolower((string) ($verifiedContext['email'] ?? '')),
+    ];
+    csrf_rotate_token();
+}
+
+function student_upgrade_verified_onboarding_session(array $registration): void
+{
+    student_start_session();
+    session_regenerate_id(true);
+    unset($_SESSION['patient_onboarding'], $_SESSION['patient_registration'], $_SESSION['first_registration']);
+    $_SESSION['patient_account_id'] = (int) ($registration['account_id'] ?? 0);
+    $_SESSION['patient_person_id'] = (int) ($registration['person_id'] ?? 0);
+    $_SESSION['patient_legacy_id'] = 0;
+    if ((int) $_SESSION['patient_account_id'] < 1 || (int) $_SESSION['patient_person_id'] < 1) {
+        throw new RuntimeException('The new patient session could not be created.');
+    }
+
+    student_record_successful_login((int) $_SESSION['patient_account_id']);
+    csrf_rotate_token();
+}
+
+function student_redirect_pending_onboarding(): void
+{
+    if (student_current_profile() !== null || student_verified_onboarding_context() === null) {
+        return;
+    }
+
+    $script = basename((string) ($_SERVER['SCRIPT_NAME'] ?? ''));
+    if ($script === 'patient-onboarding.php' || ($script === 'patient-register.php' && (isset($_GET['start']) || isset($_GET['restart'])))) {
+        return;
+    }
+
+    header('Location: patient-onboarding.php');
+    exit;
+}
+
 function student_require_login(): array
 {
+    if (student_verified_onboarding_context() !== null) {
+        header('Location: patient-onboarding.php');
+        exit;
+    }
     $profile = student_current_profile();
     if ($profile === null) {
         // Allow re-enrollment sessions (school-year reset) through even while account is inactive.
@@ -270,7 +344,7 @@ function student_require_login(): array
 
     if (!empty($profile['first_registration'])) {
         $script = basename((string) ($_SERVER['SCRIPT_NAME'] ?? ''));
-        if (!in_array($script, ['patient-dashboard.php', 'patient-login.php'], true)) {
+        if (!in_array($script, ['patient-dashboard.php', 'patient-help.php', 'patient-login.php'], true)) {
             header('Location: patient-dashboard.php');
             exit;
         }
@@ -278,7 +352,7 @@ function student_require_login(): array
 
     if (re_enrollment_pending()) {
         $script = basename((string) ($_SERVER['SCRIPT_NAME'] ?? ''));
-        if (!in_array($script, ['patient-dashboard.php', 'patient-login.php'], true)) {
+        if (!in_array($script, ['patient-dashboard.php', 'patient-help.php', 'patient-login.php'], true)) {
             header('Location: patient-dashboard.php');
             exit;
         }
@@ -536,7 +610,7 @@ function render_student_header(string $title, string $active = ''): void
                 }
             };
         </script>
-        <link href="../public/assets/css/app.css?v=emergency-contact-1" rel="stylesheet">
+        <link href="../public/assets/css/app.css?v=<?= filemtime(__DIR__ . '/../../public/assets/css/app.css') ?>" rel="stylesheet">
         <link href="assets/css/patient.css?v=<?= filemtime(__DIR__ . '/../assets/css/patient.css') ?>" rel="stylesheet">
         <style>
             :root {
@@ -568,13 +642,13 @@ function render_student_header(string $title, string $active = ''): void
                     </span>
                     <span class="student-brand-copy">
                         <span class="student-brand-title"><?= student_e($clinicProfile['system_name']) ?></span>
-                        <span class="student-brand-subtitle">Patient Health Portal</span>
+                        <span class="student-brand-subtitle student-brand-subtitle-mobile">Patient Health Portal</span>
                     </span>
                 </a>
 
                 <button type="button" class="student-nav-toggle" aria-expanded="false" aria-controls="student-navigation">
                     <span class="material-symbols-outlined" aria-hidden="true">menu</span>
-                    <span>Menu</span>
+                    <span class="student-nav-toggle-label">Menu</span>
                 </button>
 
                 <nav id="student-navigation" class="student-nav" aria-label="Patient navigation">
@@ -618,7 +692,7 @@ function render_student_header(string $title, string $active = ''): void
                             <span class="profile-photo-camera material-symbols-outlined" aria-hidden="true">photo_camera</span>
                         </button>
                     <?php endif; ?>
-                    <div class="student-profile-text">
+                    <div class="student-profile-text student-profile-identity">
                         <strong><?= student_e($profile['name']) ?></strong>
                         <span><?= student_e($profile['student_id']) ?></span>
                     </div>
@@ -740,7 +814,7 @@ function render_student_footer(): void
                     </a>
                 <?php endforeach; ?>
             </nav>
-            <p class="text-center text-xs font-bold text-slate-500 py-5">Your clinic portal privacy information: <?= student_legal_links() ?></p>
+            <p class="student-portal-legal-footer text-center text-xs font-bold text-slate-500 py-5">Your clinic portal privacy information: <?= student_legal_links() ?></p>
         </div>
         <?php render_student_cookie_banner(); ?>
 
@@ -1265,7 +1339,7 @@ function render_student_auth_header(string $title): void
                 }
             };
         </script>
-        <link href="../public/assets/css/app.css?v=file-preview-2" rel="stylesheet">
+        <link href="../public/assets/css/app.css?v=<?= filemtime(__DIR__ . '/../../public/assets/css/app.css') ?>" rel="stylesheet">
         <link href="assets/css/patient.css?v=<?= filemtime(__DIR__ . '/../assets/css/patient.css') ?>" rel="stylesheet">
         <style>
             :root {
@@ -1297,7 +1371,7 @@ function render_student_auth_header(string $title): void
 function render_student_auth_footer(): void
 {
     ?>
-    <p class="text-center text-xs font-bold text-slate-500 py-5"><?= student_legal_links() ?></p>
+    <p class="student-portal-legal-footer text-center text-xs font-bold text-slate-500 py-5"><?= student_legal_links() ?></p>
     <?php render_student_cookie_banner(); ?>
     <script>
         document.querySelectorAll('[data-student-toast]').forEach((toast) => {
@@ -1315,3 +1389,8 @@ function render_student_auth_footer(): void
     </html>
     <?php
 }
+
+// Enforce the verified-onboarding boundary for every patient route that loads
+// the shared layout, including lightweight endpoints that do not call the
+// normal login guard themselves.
+student_redirect_pending_onboarding();

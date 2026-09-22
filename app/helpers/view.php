@@ -6,6 +6,70 @@ require_once __DIR__ . '/brand.php';
 require_once __DIR__ . '/student_id.php';
 require_once __DIR__ . '/../services/SystemSettings.php';
 require_once __DIR__ . '/../services/ProfilePhoto.php';
+require_once __DIR__ . '/../services/ApeWorkflow.php';
+
+/**
+ * Return counts for staff navigation items that currently need attention.
+ * Counts are intentionally limited to actionable queues, not record totals.
+ *
+ * @return array<string, int>
+ */
+function staff_sidebar_action_counts(int $activeAlertCount = 0): array
+{
+    static $counts = null;
+    if ($counts !== null) {
+        return $counts;
+    }
+
+    $counts = [
+        'Alerts' => max(0, $activeAlertCount),
+        'Visits' => 0,
+        'APE' => 0,
+        'Appointments' => 0,
+        'Inventory' => 0,
+    ];
+
+    $db = auth_db();
+    try {
+        $counts['Appointments'] = (int) $db->query("SELECT COUNT(*) FROM appointments WHERE status IN ('Pending', 'For Confirmation')")->fetchColumn();
+    } catch (Throwable $e) {
+        $counts['Appointments'] = 0;
+    }
+
+    try {
+        $counts['Visits'] = (int) $db->query("SELECT COUNT(*) FROM visits WHERE status IN ('Unaddressed', 'Active')")->fetchColumn();
+    } catch (Throwable $e) {
+        $counts['Visits'] = 0;
+    }
+
+    try {
+        $inventoryCount = (int) $db->query(
+            "SELECT
+                (SELECT COUNT(*) FROM inventory_items
+                 WHERE is_active = 1 AND item_type = 'Medicine'
+                   AND (quantity <= reorder_level
+                        OR (expiration_date IS NOT NULL AND expiration_date <= DATE_ADD(CURDATE(), INTERVAL 30 DAY))))
+                + (SELECT COUNT(*) FROM equipment_loans
+                   WHERE status IN ('Borrowed', 'Overdue') AND returned_at IS NULL)"
+        )->fetchColumn();
+        $counts['Inventory'] = max(0, $inventoryCount);
+    } catch (Throwable $e) {
+        $counts['Inventory'] = 0;
+    }
+
+    try {
+        $apeRecords = ape_fetch_records();
+        foreach ($apeRecords as $record) {
+            if (ape_record_queue($record) !== 'completed') {
+                $counts['APE']++;
+            }
+        }
+    } catch (Throwable $e) {
+        $counts['APE'] = 0;
+    }
+
+    return $counts;
+}
 
 function e(?string $value): string
 {
@@ -199,25 +263,26 @@ function render_header(string $title): void
         $bodyClasses .= ' has-active-alerts';
     }
     $nav = [
-        'Dashboard' => ['url' => app_url('dashboard.php'), 'match' => 'dashboard.php', 'icon' => 'dashboard'],
-        'Patients' => ['url' => app_url('patients/index.php'), 'match' => '/patients/', 'icon' => 'personal_injury'],
-        'Patient Accounts' => ['url' => app_url('patient-accounts/index.php'), 'match' => '/patient-accounts/', 'icon' => 'manage_accounts', 'roles' => ['admin', 'doctor']],
-        'Visits' => ['url' => app_url('visits/index.php'), 'match' => '/visits/', 'icon' => 'clinical_notes'],
-        'Alerts' => ['url' => app_url('alerts/index.php'), 'match' => '/alerts/', 'icon' => 'notification_important'],
-        'Inventory' => ['url' => app_url('inventory/index.php'), 'match' => '/inventory/', 'icon' => 'inventory_2'],
-        'APE' => ['url' => app_url('ape/index.php'), 'match' => '/ape/', 'icon' => 'description'],
-        'Appointments' => ['url' => app_url('appointments/index.php'), 'match' => '/appointments/', 'icon' => 'calendar_month'],
-        'Referrals' => ['url' => app_url('referrals/index.php'), 'match' => '/referrals/', 'icon' => 'send'],
-        'Reports' => ['url' => app_url('reports/index.php'), 'match' => '/reports/', 'icon' => 'analytics'],
-        'Feedback' => ['url' => app_url('feedback/index.php'), 'match' => '/feedback/', 'icon' => 'rate_review', 'roles' => ['admin', 'doctor']],
-        'Audit Log' => ['url' => app_url('audit/index.php'), 'match' => '/audit/', 'icon' => 'history', 'roles' => ['admin']],
-        'Settings' => ['url' => app_url('settings/index.php'), 'match' => '/settings/', 'icon' => 'settings'],
+        'Dashboard' => ['group' => 'Overview', 'url' => app_url('dashboard.php'), 'match' => 'dashboard.php', 'icon' => 'dashboard'],
+        'Patients' => ['group' => 'People & Records', 'url' => app_url('patients/index.php'), 'match' => '/patients/', 'icon' => 'personal_injury'],
+        'Patient Accounts' => ['group' => 'People & Records', 'url' => app_url('patient-accounts/index.php'), 'match' => '/patient-accounts/', 'icon' => 'manage_accounts', 'roles' => ['admin', 'doctor']],
+        'Visits' => ['group' => 'Clinical Operations', 'url' => app_url('visits/index.php'), 'match' => '/visits/', 'icon' => 'clinical_notes'],
+        'Alerts' => ['group' => 'Clinical Operations', 'url' => app_url('alerts/index.php'), 'match' => '/alerts/', 'icon' => 'notification_important'],
+        'APE' => ['group' => 'Clinical Operations', 'url' => app_url('ape/index.php'), 'match' => '/ape/', 'icon' => 'description'],
+        'Appointments' => ['group' => 'Clinical Operations', 'url' => app_url('appointments/index.php'), 'match' => '/appointments/', 'icon' => 'calendar_month'],
+        'Referrals' => ['group' => 'Clinical Operations', 'url' => app_url('referrals/index.php'), 'match' => '/referrals/', 'icon' => 'send'],
+        'Inventory' => ['group' => 'Resources & Reports', 'url' => app_url('inventory/index.php'), 'match' => '/inventory/', 'icon' => 'inventory_2'],
+        'Reports' => ['group' => 'Resources & Reports', 'url' => app_url('reports/index.php'), 'match' => '/reports/', 'icon' => 'analytics'],
+        'Feedback' => ['group' => 'Resources & Reports', 'url' => app_url('feedback/index.php'), 'match' => '/feedback/', 'icon' => 'rate_review', 'roles' => ['admin', 'doctor']],
+        'Audit Log' => ['group' => 'Administration', 'url' => app_url('audit/index.php'), 'match' => '/audit/', 'icon' => 'history', 'roles' => ['admin']],
+        'Settings' => ['group' => 'Administration', 'url' => app_url('settings/index.php'), 'match' => '/settings/', 'icon' => 'settings'],
     ];
     if (first_registration_pending('staff')) {
         $nav = [
             'Dashboard' => $nav['Dashboard'],
         ];
     }
+    $sidebarActionCounts = $user ? staff_sidebar_action_counts($activeAlertCount) : [];
     ?>
     <!doctype html>
     <html class="light<?= !empty($theme['dark_mode']) ? ' dark cliniq-dark' : '' ?>" lang="en">
@@ -287,14 +352,29 @@ function render_header(string $title): void
                         <span class="app-brand-subtitle"><?= e($clinicProfile['department']) ?></span>
                     </span>
                 </a>
-                <nav class="app-nav">
+                <nav class="app-nav" aria-label="Staff navigation">
+                    <?php $navGroups = []; ?>
                     <?php foreach ($nav as $label => $item): ?>
                         <?php if (isset($item['roles']) && !in_array($user['role'] ?? '', $item['roles'], true)) continue; ?>
-                        <?php $active = str_contains($currentPath, $item['match']); ?>
-                        <a href="<?= e($item['url']) ?>" class="app-nav-link <?= $active ? 'active' : '' ?> text-decoration-none" title="<?= e($label) ?>" data-no-ajax="true">
-                            <span class="material-symbols-outlined"><?= e($item['icon']) ?></span>
-                            <span class="app-nav-label"><?= e($label) ?></span>
-                        </a>
+                        <?php $navGroups[(string) ($item['group'] ?? 'Navigation')][$label] = $item; ?>
+                    <?php endforeach; ?>
+                    <?php foreach ($navGroups as $group => $groupItems): ?>
+                        <section class="app-nav-group" aria-label="<?= e($group) ?>">
+                            <h2 class="app-nav-group-title"><?= e($group) ?></h2>
+                            <div class="app-nav-group-links">
+                                <?php foreach ($groupItems as $label => $item): ?>
+                                    <?php $active = str_contains($currentPath, $item['match']); ?>
+                                    <?php $actionCount = (int) ($sidebarActionCounts[$label] ?? 0); ?>
+                                    <a href="<?= e($item['url']) ?>" class="app-nav-link <?= $active ? 'active' : '' ?> text-decoration-none" title="<?= e($label) ?><?= $actionCount > 0 ? ' (' . $actionCount . ' action' . ($actionCount === 1 ? '' : 's') . ' required)' : '' ?>" data-no-ajax="true">
+                                        <span class="material-symbols-outlined"><?= e($item['icon']) ?></span>
+                                        <span class="app-nav-label"><?= e($label) ?></span>
+                                        <?php if ($actionCount > 0): ?>
+                                            <span class="app-nav-badge" aria-label="<?= $actionCount ?> action<?= $actionCount === 1 ? '' : 's' ?> required"><?= $actionCount > 99 ? '99+' : $actionCount ?></span>
+                                        <?php endif; ?>
+                                    </a>
+                                <?php endforeach; ?>
+                            </div>
+                        </section>
                     <?php endforeach; ?>
                 </nav>
                 <div class="app-sidebar-footer">
@@ -613,13 +693,15 @@ function render_ag_grid(string $gridId, array $columns, array $rows, array $opti
     $paginationControls = (string) ($options['paginationControls'] ?? '');
     $stateKey = preg_replace('/[^A-Za-z0-9_.:-]/', '-', (string) ($options['stateKey'] ?? '')) ?? '';
     $keyboardRows = !empty($options['keyboardRows']);
+    $normalizeStudentIdSearch = !empty($options['normalizeStudentIdSearch']);
     $rowHeight = max(40, (int) ($options['rowHeight'] ?? 70));
 
     echo '<div id="' . e($gridId) . '" class="cliniq-ag-grid ag-theme-quartz ' . $heightClass . '" data-ag-grid ' .
          ($searchInput ? 'data-search-input="' . e($searchInput) . '" ' : '') .
          ($paginationControls ? 'data-pagination-controls="' . e($paginationControls) . '" ' : '') .
          ($stateKey ? 'data-state-key="' . e($stateKey) . '" ' : '') .
-         ($keyboardRows ? 'data-keyboard-rows="true" ' : 'data-keyboard-rows="false" ') .
+          ($keyboardRows ? 'data-keyboard-rows="true" ' : 'data-keyboard-rows="false" ') .
+          ($normalizeStudentIdSearch ? 'data-normalize-student-id-search="true" ' : '') .
          ($fitColumns ? 'data-fit-columns="true" ' : 'data-fit-columns="false" ') .
          ($pagination ? 'data-pagination="true" ' : 'data-pagination="false" ') .
          'data-row-height="' . $rowHeight . '" ' .

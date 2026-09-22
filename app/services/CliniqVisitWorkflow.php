@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/CliniqInventoryWorkflow.php';
 require_once __DIR__ . '/AuditLog.php';
+require_once __DIR__ . '/PatientNotification.php';
 
 function cliniq_visit_db(): PDO
 {
@@ -388,6 +389,17 @@ function cliniq_visit_create(array $visit, array $entry = [], array $vitals = []
         cliniq_visit_insert_vitals($db, $visitId, $entryId, $vitals, $staffId);
         cliniq_inventory_dispense_medicines($db, (int) $entryId, $dispensings, $staffId);
         $db->commit();
+        if ($status === 'Completed') {
+            try {
+                patient_notification_for_feedback_required($db, [
+                    'patient_id' => $patientPersonId,
+                    'visit_id' => $visitId,
+                    'visit_purpose' => $visitPurpose,
+                ], $staffId);
+            } catch (Throwable $notificationError) {
+                error_log('Unable to create completed-visit feedback notification: ' . $notificationError->getMessage());
+            }
+        }
         $auditActorId = !empty($visit['recorded_by_person_id']) ? (int) $visit['recorded_by_person_id'] : $staffId;
         audit_log_event('visits', 'visit_created', $auditActorId, 'staff', 'visit', $visitId, [
             'patient_person_id' => $patientPersonId,

@@ -25,6 +25,9 @@
     --cliniq-danger: oklch(58% .19 25);
     --cliniq-control-font-size: 0.8125rem;
     --cliniq-control-line-height: 1.35;
+    --cliniq-font-body: Inter, sans-serif;
+    --cliniq-font-display: Manrope, sans-serif;
+    --cliniq-font-icon: 'Material Symbols Outlined';
 }
 
 html,
@@ -34,7 +37,7 @@ body {
 }
 
 body {
-    font-family: Inter, sans-serif;
+    font-family: var(--cliniq-font-body);
     font-weight: 400;
     letter-spacing: 0;
     scrollbar-color: #cbd8ce #f4fbf6;
@@ -465,7 +468,7 @@ h4,
 h5,
 h6,
 .font-headline {
-    font-family: Inter, sans-serif !important;
+    font-family: var(--cliniq-font-display) !important;
     letter-spacing: 0 !important;
 }
 
@@ -752,7 +755,7 @@ h6,
     color: #64756a;
     background: rgba(255, 255, 255, 0.68);
     font-size: 0.75rem;
-    font-weight: 900;
+    font-weight: 800;
     transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
 
@@ -812,7 +815,7 @@ h6,
     background: #ffffff;
     color: #b91c1c;
     font-size: 0.62rem;
-    font-weight: 900;
+    font-weight: 800;
     line-height: 1;
 }
 
@@ -979,7 +982,7 @@ h6,
     color: oklch(22% .03 250);
     font-size: 0.92rem;
     line-height: 1.1;
-    font-weight: 650;
+    font-weight: 600;
 }
 
 .app-brand-subtitle {
@@ -999,7 +1002,35 @@ h6,
     padding: 0.65rem;
 }
 
+.app-nav-group {
+    width: 100%;
+}
+
+.app-nav-group + .app-nav-group {
+    margin-top: 0;
+}
+
+.app-nav-group-title {
+    display: none;
+    margin: 0 0 0.3rem;
+    padding: 0 0.75rem;
+    color: color-mix(in srgb, var(--cliniq-primary) 72%, oklch(55% .025 250));
+    font-size: 0.62rem;
+    font-weight: 500;
+    letter-spacing: 0.09em;
+    line-height: 1.2;
+    text-transform: uppercase;
+}
+
+.app-nav-group-links {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    align-items: center;
+}
+
 .app-nav-link {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 0.7rem;
@@ -1022,6 +1053,26 @@ h6,
 
 .app-nav-label {
     display: none;
+}
+
+.app-nav-badge {
+    position: absolute;
+    top: -0.15rem;
+    right: -0.2rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.35rem;
+    height: 1.35rem;
+    margin-left: auto;
+    padding: 0 0.28rem;
+    border: 1px solid color-mix(in srgb, var(--cliniq-primary) 22%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--cliniq-primary) 12%, white);
+    color: var(--cliniq-primary-hover);
+    font-size: 0.66rem;
+    font-weight: 800;
+    line-height: 1;
 }
 
 .app-nav-link:hover {
@@ -1511,10 +1562,24 @@ html.cliniq-dark .app-profile-photo:focus-visible {
     position: fixed;
     top: 1.5rem;
     left: 2.5rem;
+    right: 2.5rem;
     z-index: 40;
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 1rem;
+}
+
+.cliniq-entry-header .cliniq-entry-brand {
+    order: 1;
+}
+
+.cliniq-entry-header .cliniq-entry-divider {
+    display: none;
+}
+
+.cliniq-entry-header .cliniq-entry-back {
+    order: 3;
 }
 
 .cliniq-entry-back {
@@ -1580,7 +1645,7 @@ html.cliniq-dark .app-profile-photo:focus-visible {
     display: block;
     color: #08261a;
     font-size: 0.92rem;
-    font-weight: 650;
+    font-weight: 600;
     letter-spacing: 0;
     line-height: 1.05;
 }
@@ -1654,13 +1719,45 @@ html.cliniq-dark .app-profile-photo:focus-visible {
 
     .app-nav {
         align-items: stretch;
+        gap: 0.75rem;
+        padding: 0.75rem 0.6rem;
+    }
+
+    .app-nav-group-title {
+        display: block;
+        margin-bottom: 0.35rem;
+        padding: 0 0.7rem;
+    }
+
+    .app-nav-group-links {
+        align-items: stretch;
+        gap: 0.15rem;
+    }
+
+    .app-nav-badge {
+        position: static;
+        top: auto;
+        right: auto;
     }
 
     .app-nav-link {
         justify-content: flex-start;
         width: auto;
-        min-height: 2.45rem;
-        padding: 0.55rem 0.75rem;
+        min-height: 2.3rem;
+        padding: 0.45rem 0.7rem;
+        gap: 0.65rem;
+    }
+
+    .app-nav-link .material-symbols-outlined {
+        width: 1.05rem;
+        font-size: 1rem;
+    }
+
+    .app-nav-badge {
+        min-width: 1.35rem;
+        height: 1.35rem;
+        margin-left: auto;
+        padding: 0 0.3rem;
     }
 
     .app-sidebar-footer {
@@ -1708,11 +1805,30 @@ html.cliniq-dark .app-profile-photo:focus-visible {
         align-items: center;
     }
 
+    .app-shell.sidebar-collapsed .app-nav-group-title {
+        display: none;
+    }
+
+    .app-shell.sidebar-collapsed .app-nav-group-links {
+        align-items: center;
+    }
+
     .app-shell.sidebar-collapsed .app-nav-link {
         justify-content: center;
         width: 2.75rem;
         min-height: 2.75rem;
         padding: 0.55rem;
+    }
+
+    .app-shell.sidebar-collapsed .app-nav-badge {
+        position: absolute;
+        top: -0.15rem;
+        right: -0.2rem;
+        min-width: 1rem;
+        height: 1rem;
+        padding: 0 0.18rem;
+        border-color: var(--cliniq-surface);
+        font-size: 0.57rem;
     }
 }
 
@@ -1797,7 +1913,7 @@ html.cliniq-dark .app-profile-photo:focus-visible {
 .working-hours-modal-title-row { display: flex; align-items: center; gap: 0.8rem; }
 .working-hours-modal-title-row > div { flex: 1; min-width: 0; }
 .working-hours-eyebrow { margin: 0 0 0.1rem; color: #377c52; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
-.working-hours-modal-title-row h3 { margin: 0; color: #142a1d; font-size: 1.35rem; font-weight: 850; }
+.working-hours-modal-title-row h3 { margin: 0; color: #142a1d; font-size: 1.35rem; font-weight: 800; }
 .working-hours-modal-header > p { margin: 0.8rem 0 0; color: #596e61; font-size: 0.85rem; }
 .working-hours-close { display: grid; place-items: center; flex: none; width: 2.2rem; height: 2.2rem; border: 1px solid #dbe7dd; border-radius: 0.7rem; background: #fff; color: #52665a; cursor: pointer; }
 .working-hours-close:hover { background: #eaf5ed; color: #245c38; }
@@ -1847,7 +1963,7 @@ html.cliniq-dark .app-profile-photo:focus-visible {
 .working-hours-month-preview h4 { margin: 0; color: #183325; font-size: 0.93rem; font-weight: 800; }
 .working-hours-month-preview p { margin: 0.2rem 0 0; color: #6a7c70; font-size: 0.72rem; }
 .working-hours-preview-weekdays, .working-hours-preview-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0.3rem; }
-.working-hours-preview-weekdays span { color: #94a3b8; font-size: 0.62rem; font-weight: 900; text-align: center; text-transform: uppercase; }
+.working-hours-preview-weekdays span { color: #94a3b8; font-size: 0.62rem; font-weight: 800; text-align: center; text-transform: uppercase; }
 .working-hours-preview-grid > span { min-height: 3.15rem; padding: 0.35rem; border: 1px solid transparent; border-radius: 0.65rem; color: #94a3b8; text-align: center; }
 .working-hours-preview-grid > span.is-open { border-color: #b9ddc2; background: #edf8f0; color: #245c38; }
 .working-hours-preview-grid > span.is-closed { background: #f1f5f3; color: #a1afa7; }
@@ -1930,7 +2046,7 @@ html.cliniq-dark .app-profile-photo:focus-visible {
     margin: 0 0 0.25rem;
     color: #94a3b8;
     font-size: 0.68rem;
-    font-weight: 900;
+    font-weight: 800;
     letter-spacing: 0.12em;
     text-transform: uppercase;
 }
@@ -1938,9 +2054,9 @@ html.cliniq-dark .app-profile-photo:focus-visible {
 .row-actions-modal h3 {
     margin: 0;
     color: #17261d;
-    font-family: Manrope, sans-serif;
+    font-family: var(--cliniq-font-display);
     font-size: 1.2rem;
-    font-weight: 900;
+    font-weight: 800;
 }
 
 .row-actions-close {
@@ -2155,7 +2271,7 @@ html.cliniq-dark .app-profile-photo:focus-visible {
     padding: 0.375rem 0.75rem;
     border-radius: 9999px;
     font-size: 0.625rem;
-    font-weight: 900;
+    font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 0.15em;
     white-space: nowrap;
@@ -2523,7 +2639,7 @@ html.cliniq-dark .app-profile-photo:focus-visible {
 input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
 select,
 textarea {
-    font-family: Inter, sans-serif;
+    font-family: var(--cliniq-font-body);
     font-size: var(--cliniq-control-font-size);
     line-height: var(--cliniq-control-line-height);
     border-color: oklch(92% .01 230 / .85);
@@ -2657,7 +2773,7 @@ textarea:focus {
     background: transparent;
     color: #64748b;
     font-size: 0.82rem;
-    font-weight: 900;
+    font-weight: 800;
     text-align: left;
     transition: background-color 0.16s ease, color 0.16s ease, border-color 0.16s ease;
 }
@@ -3003,7 +3119,7 @@ body.file-preview-open {
     margin-bottom: 0.1rem;
     color: #94a3b8;
     font-size: 0.62rem;
-    font-weight: 900;
+    font-weight: 800;
     letter-spacing: 0.14em;
     text-transform: uppercase;
 }
@@ -3096,7 +3212,6 @@ body.file-preview-open {
     }
 
     .file-preview-heading>.material-symbols-outlined,
-    .file-preview-download span,
     .file-preview-eyebrow {
         display: none;
     }
@@ -3108,8 +3223,15 @@ body.file-preview-open {
     }
 
     .file-preview-download::after {
-        content: "↓";
-        font-size: 1.1rem;
+        display: none;
+        content: none;
+    }
+
+    .file-preview-download .material-symbols-outlined {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
     }
 
     .file-preview-header h2 {
@@ -3359,7 +3481,7 @@ body.file-preview-open {
     align-items: center;
     justify-content: center;
     font-size: 0.9rem;
-    font-weight: 900;
+    font-weight: 800;
     overflow: hidden;
 }
 
@@ -3399,7 +3521,7 @@ body.file-preview-open {
 .settings-profile-row-copy strong {
     color: #17261d;
     font-size: 0.95rem;
-    font-weight: 900;
+    font-weight: 800;
 }
 
 .settings-profile-row-copy span {
@@ -3486,7 +3608,7 @@ body.file-preview-open {
     color: #475569;
     padding: 0.55rem 0.85rem;
     font-size: 0.82rem;
-    font-weight: 900;
+    font-weight: 800;
 }
 
 .settings-dropdown-category-link:hover,
@@ -3505,7 +3627,7 @@ body.file-preview-open {
     border-radius: 999px;
     background: rgba(15, 23, 42, 0.08);
     font-size: 0.72rem;
-    font-weight: 900;
+    font-weight: 800;
 }
 
 .settings-dropdown-category-link.active small,
@@ -3527,7 +3649,7 @@ body.file-preview-open {
 .settings-dropdown-group-heading strong {
     color: #17261d;
     font-size: 0.92rem;
-    font-weight: 900;
+    font-weight: 800;
 }
 
 .settings-dropdown-group-heading small {
@@ -3599,7 +3721,7 @@ body.file-preview-open {
     min-height: 2.75rem;
     color: #475569;
     font-size: 0.78rem;
-    font-weight: 900;
+    font-weight: 800;
     text-transform: uppercase;
 }
 
@@ -3662,7 +3784,7 @@ textarea.record-sheet-field {
     gap: 0.35rem;
     color: #94a3b8;
     font-size: 0.68rem;
-    font-weight: 900;
+    font-weight: 800;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     margin-bottom: 0.75rem;
@@ -3908,7 +4030,7 @@ textarea.record-sheet-field {
     border: 1px solid #dc2626;
     color: #ffffff;
     font-size: 0.65rem;
-    font-weight: 900;
+    font-weight: 800;
     letter-spacing: 0.08em;
     text-transform: uppercase;
 }
@@ -4111,7 +4233,7 @@ textarea.record-sheet-field {
     gap: 0.3rem;
     overflow: hidden;
     font-size: 0.64rem;
-    font-weight: 900;
+    font-weight: 800;
     white-space: nowrap;
 }
 
@@ -4212,7 +4334,7 @@ textarea.record-sheet-field {
     text-overflow: ellipsis;
     color: var(--cliniq-primary);
     font-size: 0.64rem;
-    font-weight: 900;
+    font-weight: 800;
     white-space: nowrap;
 }
 
@@ -4670,7 +4792,7 @@ textarea.record-sheet-field {
     --ag-row-hover-color: rgba(var(--cliniq-focus-rgb), 0.10);
     --ag-selected-row-background-color: rgba(var(--cliniq-focus-rgb), 0.16);
     --ag-odd-row-background-color: #ffffff;
-    --ag-font-family: Inter, sans-serif;
+    --ag-font-family: var(--cliniq-font-body);
     --ag-font-size: 13px;
     --ag-wrapper-border-radius: 0;
     --ag-cell-horizontal-padding: 14px;
@@ -4775,7 +4897,7 @@ textarea.record-sheet-field {
 .cliniq-ag-grid .ag-header-cell-label {
     color: #64748b;
     font-size: 0.625rem;
-    font-weight: 900;
+    font-weight: 800;
     letter-spacing: 0.08em;
     text-transform: uppercase;
 }
@@ -4835,7 +4957,7 @@ textarea.record-sheet-field {
     color: #17261d;
     padding: 0.7rem 0.85rem;
     font-size: 0.78rem;
-    font-weight: 750;
+    font-weight: 700;
     line-height: 1.45;
     overflow-wrap: anywhere;
     pointer-events: none;
@@ -4930,7 +5052,7 @@ textarea.record-sheet-field {
     padding: 0.25rem 0;
     color: #94a3b8;
     font-size: 0.68rem;
-    font-weight: 900;
+    font-weight: 800;
     letter-spacing: 0.08em;
     text-align: center;
     text-transform: uppercase;
@@ -4979,7 +5101,7 @@ textarea.record-sheet-field {
 
 .appointment-calendar-number {
     font-size: 1rem;
-    font-weight: 900;
+    font-weight: 800;
 }
 
 .appointment-calendar-status {
@@ -4989,7 +5111,7 @@ textarea.record-sheet-field {
     background: var(--cliniq-surface-low);
     color: var(--cliniq-primary-hover);
     font-size: 0.62rem;
-    font-weight: 900;
+    font-weight: 800;
     letter-spacing: 0.08em;
     line-height: 1;
     text-transform: uppercase;
@@ -5068,7 +5190,7 @@ body.cliniq-drag-scroll-active * {
     border-radius: 0.9rem;
     background: #ffffff;
     color: #17261d;
-    font-weight: 900;
+    font-weight: 800;
     transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
 }
 
@@ -5103,7 +5225,7 @@ body.cliniq-drag-scroll-active * {
     background: color-mix(in srgb, var(--cliniq-primary) 8%, #ffffff);
     color: var(--cliniq-primary-hover);
     font-size: 0.72rem;
-    font-weight: 900;
+    font-weight: 800;
     cursor: pointer;
 }
 
@@ -5191,7 +5313,7 @@ body.cliniq-drag-scroll-active * {
 .appointment-date-modal-toolbar strong {
     color: #17261d;
     font-size: 0.95rem;
-    font-weight: 900;
+    font-weight: 800;
 }
 
 .appointment-date-modal-weekdays,
@@ -5208,7 +5330,7 @@ body.cliniq-drag-scroll-active * {
 .appointment-date-modal-weekdays span {
     color: #94a3b8;
     font-size: 0.68rem;
-    font-weight: 900;
+    font-weight: 800;
     text-align: center;
     text-transform: uppercase;
 }
@@ -5225,7 +5347,7 @@ body.cliniq-drag-scroll-active * {
     border-radius: 0.75rem;
     background: #ffffff;
     color: #17261d;
-    font-weight: 900;
+    font-weight: 800;
     transition: background-color 140ms ease, border-color 140ms ease, transform 140ms ease;
 }
 
@@ -5289,7 +5411,7 @@ body.cliniq-drag-scroll-active * {
 .appointment-week-range strong {
     color: #17261d;
     font-size: 0.9rem;
-    font-weight: 900;
+    font-weight: 800;
 }
 
 .appointment-week-range span {
@@ -5343,7 +5465,7 @@ body.cliniq-drag-scroll-active * {
 
 .appointment-week-header span {
     font-size: 0.63rem;
-    font-weight: 900;
+    font-weight: 800;
     letter-spacing: 0.08em;
     text-transform: uppercase;
 }
@@ -5351,7 +5473,7 @@ body.cliniq-drag-scroll-active * {
 .appointment-week-header strong {
     color: #17261d;
     font-size: 0.86rem;
-    font-weight: 900;
+    font-weight: 800;
 }
 
 .appointment-week-header.is-today {
@@ -5376,7 +5498,7 @@ body.cliniq-drag-scroll-active * {
 .appointment-week-time-heading {
     border-left: 0;
     font-size: 0.65rem;
-    font-weight: 900;
+    font-weight: 800;
     letter-spacing: 0.08em;
     text-transform: uppercase;
 }
@@ -5555,7 +5677,7 @@ body.cliniq-drag-scroll-active * {
 
 .appointment-week-block strong {
     font-size: 0.68rem;
-    font-weight: 900;
+    font-weight: 800;
 }
 
 .appointment-week-block span {
@@ -5591,7 +5713,7 @@ body.cliniq-drag-scroll-active * {
 .appointment-block-row strong {
     color: #17261d;
     font-size: 0.82rem;
-    font-weight: 900;
+    font-weight: 800;
 }
 
 .appointment-block-row span {
@@ -5630,6 +5752,41 @@ body.cliniq-drag-scroll-active * {
    RESPONSIVE HELPERS
    ============================================================ */
 @media (max-width: 768px) {
+    .cliniq-entry-header-mobile-hidden {
+        display: none;
+    }
+
+    .cliniq-entry-header {
+        width: 100%;
+        box-sizing: border-box;
+        justify-content: space-between;
+    }
+
+    .cliniq-entry-header .cliniq-entry-brand {
+        order: 1;
+    }
+
+    .cliniq-entry-header .cliniq-entry-back {
+        order: 3;
+        min-height: 2.75rem;
+        padding: 0 1rem;
+        border: 1px solid #c7d9ce;
+        border-radius: 0.8rem;
+        background: #f7fbf8;
+        color: #183a29;
+    }
+
+    .cliniq-entry-header .cliniq-entry-back:hover,
+    .cliniq-entry-header .cliniq-entry-back:focus-visible {
+        border-color: #8fbea0;
+        background: #eaf5ed;
+        color: var(--cliniq-primary-hover);
+    }
+
+    .cliniq-entry-header .cliniq-entry-divider {
+        display: none;
+    }
+
     .cliniq-entry-header {
         position: static;
         padding: 1rem 1rem 0;
@@ -5816,6 +5973,12 @@ html.cliniq-dark .app-sidebar,
 html.cliniq-dark .app-content,
 html.cliniq-dark .app-main { background-color: #0d1510 !important; }
 html.cliniq-dark .app-sidebar { background-color: #0b120d !important; }
+html.cliniq-dark .app-nav-group-title { color: #94ad9b !important; }
+html.cliniq-dark .app-nav-badge {
+    border-color: #4b6d55;
+    background: #1d3a26;
+    color: #d8f0de;
+}
 html.cliniq-dark .app-brand-title,
 html.cliniq-dark .app-brand-subtitle,
 html.cliniq-dark .app-nav-link,
@@ -6616,7 +6779,7 @@ html.cliniq-dark .app-content .cliniq-ag-grid {
     --ag-odd-row-background-color: #17231b;
     --ag-row-hover-color: #244a30;
     --ag-selected-row-background-color: #284b32;
-    --ag-font-family: Inter, sans-serif;
+    --ag-font-family: var(--cliniq-font-body);
     --ag-font-size: 0.82rem;
     --ag-row-height: 4.25rem;
     --ag-header-height: 3.5rem;
@@ -7237,6 +7400,58 @@ html.cliniq-dark #confirmActionModal .btn:not(.btn-primary):not(.btn-danger):foc
 html.cliniq-dark #confirmActionModal .btn-primary,
 html.cliniq-dark #confirmActionModal .btn-danger {
     color: #ffffff !important;
+}
+
+#patientsGrid .patient-sex-indicator-header,
+#patientsGrid .patient-sex-indicator-cell {
+    --ag-cell-horizontal-border: none;
+    border-left: 0 !important;
+    border-right: 0 !important;
+    justify-content: center;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+#patientsGrid .patient-sex-indicator-header .ag-header-cell-label {
+    display: none;
+}
+
+#patientsGrid .patient-sex-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    line-height: 1;
+}
+
+#patientsGrid .patient-sex-icon-female {
+    color: #b4537b;
+}
+
+#patientsGrid .patient-sex-icon-male {
+    color: #356c9f;
+}
+
+
+/* Patient account row actions stay fully visible; narrow grids scroll instead
+   of compressing these destructive controls into clipped stacked buttons. */
+.patient-account-actions {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    min-width: max-content;
+    white-space: nowrap;
+}
+
+.patient-account-actions form {
+    display: inline-flex;
+    margin: 0;
+}
+
+.patient-account-actions .btn {
+    white-space: nowrap;
 }
 html.cliniq-dark #confirmActionModal .btn:disabled {
     background: #26382c !important;

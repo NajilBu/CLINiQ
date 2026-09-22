@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/CliniqVisitWorkflow.php';
+require_once __DIR__ . '/../../app/services/PatientNotification.php';
 require_login();
 
 $id = (int) ($_GET['id'] ?? 0);
@@ -122,6 +123,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $visitDb->commit();
             if ($newStatus === 'Completed') {
+                try {
+                    patient_notification_for_feedback_required($visitDb, $existingVisit, $staffPersonId);
+                } catch (Throwable $notificationError) {
+                    error_log('Unable to create completed-visit feedback notification: ' . $notificationError->getMessage());
+                }
                 $returnTo = 'previous';
                 flash_message('success', 'Assessment finished and visit completed.');
             } else {
@@ -166,6 +172,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $update = $visitDb->prepare("\n                    UPDATE visits\n                    SET status = ?,\n                        addressed_at = CASE WHEN ? = 1 THEN COALESCE(addressed_at, NOW()) ELSE addressed_at END,\n                        completed_at = CASE WHEN ? = 1 THEN COALESCE(completed_at, NOW()) ELSE completed_at END,\n                        attended_by_person_id = ?\n                    WHERE visit_id = ?\n                ");
                 $update->execute([$newStatus, $markAddressed ? 1 : 0, $markCompleted ? 1 : 0, $attendingPersonId, $id]);
                 $visitDb->commit();
+                if ($markCompleted && ($existingVisit['status'] ?? '') !== 'Completed') {
+                    try {
+                        patient_notification_for_feedback_required($visitDb, $existingVisit, $staffPersonId);
+                    } catch (Throwable $notificationError) {
+                        error_log('Unable to create completed-visit feedback notification: ' . $notificationError->getMessage());
+                    }
+                }
                 flash_message('success', cliniq_visit_entry_has_content($entry) ? 'Treatment information appended.' : 'Visit status updated with amendment reason.');
             } else {
                 flash_message('warning', 'Add treatment details or change the visit status before saving.');

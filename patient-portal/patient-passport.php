@@ -47,21 +47,22 @@ $passport = [
     'bmi_recorded_at' => $latestBmiRecord['bmi_recorded_at'] ?? null,
 ];
 $passportUrl = '../public/emergency.php?token=' . urlencode($passport['token']);
-$passportPreviewUrl = 'passport-demo.php?token=' . urlencode($passport['token']);
+$passportPreviewUrl = $passportUrl;
 
 $saved = false;
+$passportErrorGroup = null;
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($patientId <= 0) {
         $passportError = 'A clinical patient record is required before health-passport information can be saved.';
     } else {
     try {
-    $passport['blood_type']       = trim($_POST['blood_type'] ?? $passport['blood_type']);
-    $passport['allergies']        = trim($_POST['allergies'] ?? $passport['allergies']);
-    $passport['conditions']       = trim($_POST['conditions'] ?? $passport['conditions']);
-    $passport['medications']      = trim($_POST['medications'] ?? $passport['medications']);
-    $passport['instructions']     = trim($_POST['instructions'] ?? $passport['instructions']);
+    $passport['blood_type']       = cliniq_normalize_blood_type($_POST['blood_type'] ?? $passport['blood_type']);
+    $passport['allergies']        = cliniq_normalize_free_text($_POST['allergies'] ?? $passport['allergies']);
+    $passport['conditions']       = cliniq_normalize_free_text($_POST['conditions'] ?? $passport['conditions']);
+    $passport['medications']      = cliniq_normalize_free_text($_POST['medications'] ?? $passport['medications']);
+    $passport['instructions']     = cliniq_normalize_free_text($_POST['instructions'] ?? $passport['instructions']);
     $passport['show_bmi']         = isset($_POST['show_bmi_on_passport']);
-    $passport['guardian_name'] = trim((string) ($_POST['guardian_name'] ?? ''));
+    $passport['guardian_name'] = cliniq_normalize_person_name($_POST['guardian_name'] ?? '');
     $passport['relationship'] = trim((string) ($_POST['relationship'] ?? ''));
     $passport['primary_contact'] = trim((string) ($_POST['primary_contact'] ?? ''));
     $passport['secondary_contact'] = trim((string) ($_POST['secondary_contact'] ?? ''));
@@ -101,6 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } catch (InvalidArgumentException $e) {
         $saved = false;
         $passportError = $e->getMessage();
+        $passportErrorGroup = 'emergency';
     } catch (Throwable $e) {
         $saved = false;
         $passportError = 'The passport settings could not be saved. Please try again.';
@@ -112,17 +114,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 render_student_header('Emergency Health Passport', 'passport');
 ?>
 
-<section class="student-page-header">
+<section class="student-page-header passport-page-header">
     <div>
-        <p class="student-eyebrow">Emergency Health</p>
         <h1 class="student-title">Health Passport</h1>
+        <p class="student-subtitle">Review the information available for emergency access.</p>
     </div>
 </section>
 
 <?php if (!empty($passportError)): ?>
-<div class="student-note student-note-warning mb-4">
+<div class="student-note student-note-warning passport-save-error mb-4" role="alert">
     <span class="material-symbols-outlined">warning</span>
-    <div><?= student_e($passportError) ?></div>
+    <div>
+        <strong>Passport settings were not saved.</strong>
+        <span><?= student_e($passportError) ?></span>
+        <?php if ($passportErrorGroup === 'emergency'): ?>
+            <a class="passport-error-action" href="#passport-emergency-contact-panel" data-passport-open-group="emergency">Complete emergency contact</a>
+        <?php endif; ?>
+    </div>
 </div>
 <?php endif; ?>
 
@@ -137,19 +145,16 @@ render_student_header('Emergency Health Passport', 'passport');
 <?php endif; ?>
 
 <div class="passport-summary-row">
-    <p class="passport-privacy-summary"><span class="material-symbols-outlined" aria-hidden="true">privacy_tip</span><span>Your QR/NFC passport shares only the emergency details you choose. Keep them accurate—access is logged. <a href="<?= student_e(student_legal_url('privacy')) ?>" target="_blank" rel="noopener" class="student-auth-link">Privacy Notice</a>.</span></p>
-    <span class="student-badge passport-badge-emergency">
-        <span class="material-symbols-outlined passport-icon-sm">emergency</span>
-        Emergency Access
-    </span>
+    <p class="passport-privacy-summary"><span class="material-symbols-outlined" aria-hidden="true">privacy_tip</span><span>Review the details you choose to share in an emergency. <a href="<?= student_e(student_legal_url('privacy')) ?>" target="_blank" rel="noopener" class="student-auth-link">Privacy Notice</a></span></p>
 </div>
 
-<form method="POST" action="" id="passport-form" data-emergency-contact-form>
+<form method="POST" action="" id="passport-form" data-emergency-contact-form data-passport-error-group="<?= student_e((string) $passportErrorGroup) ?>">
 <nav class="passport-mobile-tabs" aria-label="Passport sections">
     <button type="button" class="is-active" data-passport-tab="profile">Profile</button>
     <button type="button" data-passport-tab="emergency">Emergency</button>
     <button type="button" data-passport-tab="access">Access</button>
 </nav>
+<p id="passport-mobile-save-hint" class="passport-mobile-save-hint" hidden role="alert">Complete the required Emergency Contact fields before saving your passport settings.</p>
 <div class="student-grid passport-layout">
 
     <!-- ── Left column: Settings ── -->
@@ -247,7 +252,7 @@ render_student_header('Emergency Health Passport', 'passport');
         </details>
 
         <!-- Emergency Information -->
-        <details class="patient-mobile-panel" data-mobile-accordion data-passport-group="emergency">
+        <details id="passport-emergency-contact-panel" class="patient-mobile-panel" data-mobile-accordion data-passport-group="emergency">
         <summary>Emergency information</summary>
         <section class="student-card">
             <div class="student-card-header">
@@ -588,8 +593,39 @@ render_student_header('Emergency Health Passport', 'passport');
     const isCompactViewport = window.matchMedia('(max-width: 1024px)').matches;
     if (!isCompactViewport) return;
 
-    if (isPhone) form.classList.add('passport-tab-profile');
-    document.querySelectorAll('[data-passport-tab]').forEach((tab) => {
+    if (isPhone) {
+        form.classList.add('passport-tab-profile');
+        const profilePanel = form.querySelector('[data-passport-group="profile"]');
+        if (profilePanel?.matches('details')) profilePanel.open = true;
+    }
+    const passportTabs = document.querySelectorAll('[data-passport-tab]');
+    const openPassportGroup = (group, shouldFocus = false) => {
+        const tab = form.querySelector(`[data-passport-tab="${group}"]`);
+        if (tab) tab.click();
+        const target = form.querySelector(`#passport-${group === 'emergency' ? 'emergency-contact-panel' : group}`) || form.querySelector(`[data-passport-group="${group}"]`);
+        if (target?.matches('details')) target.open = true;
+        if (shouldFocus && group === 'emergency') {
+            window.setTimeout(() => {
+                const field = form.querySelector('#guardian_name')?.value.trim() ? form.querySelector('#primary_contact') : form.querySelector('#guardian_name');
+                field?.focus({ preventScroll: true });
+            }, 120);
+        }
+    };
+    const mobileSaveHint = document.getElementById('passport-mobile-save-hint');
+    if (isPhone) {
+        form.noValidate = true;
+        form.addEventListener('submit', (event) => {
+            const requiredContactFields = ['guardian_name', 'relationship', 'primary_contact']
+                .map((id) => form.querySelector(`#${id}`))
+                .filter(Boolean);
+            const invalidField = requiredContactFields.find((field) => !field.checkValidity());
+            if (!invalidField) return;
+            event.preventDefault();
+            if (mobileSaveHint) mobileSaveHint.hidden = false;
+            openPassportGroup('emergency', true);
+        });
+    }
+    passportTabs.forEach((tab) => {
         tab.addEventListener('click', () => {
             const group = tab.dataset.passportTab;
             if (isPhone) {
@@ -604,10 +640,17 @@ render_student_header('Emergency Health Passport', 'passport');
             const header = document.querySelector('.student-topbar');
             const headerHeight = header?.getBoundingClientRect().height ?? 72;
             const tabsHeight = document.querySelector('.passport-mobile-tabs')?.getBoundingClientRect().height ?? 0;
-            const top = target.getBoundingClientRect().top + window.scrollY - headerHeight - tabsHeight - 12;
+            const hintHeight = mobileSaveHint && !mobileSaveHint.hidden ? mobileSaveHint.getBoundingClientRect().height + 8 : 0;
+            const top = target.getBoundingClientRect().top + window.scrollY - headerHeight - tabsHeight - hintHeight - 12;
             window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
         });
     });
+    document.querySelector('[data-passport-open-group]')?.addEventListener('click', (event) => {
+        event.preventDefault();
+        openPassportGroup(event.currentTarget.dataset.passportOpenGroup, true);
+    });
+    const passportErrorGroup = form.dataset.passportErrorGroup;
+    if (passportErrorGroup && isPhone) openPassportGroup(passportErrorGroup, true);
     document.querySelectorAll('[data-passport-token]').forEach((button) => {
         button.addEventListener('click', async () => {
             try { await navigator.clipboard.writeText(button.dataset.passportToken); button.title = 'Copied'; } catch (_) { button.title = 'Copy unavailable'; }

@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../helpers/data_normalization.php';
 require_once __DIR__ . '/AccountValidation.php';
 
 function ensure_system_settings_schema(): void
@@ -136,7 +137,7 @@ function create_staff_profile(array $input): void
 {
     ensure_staff_profiles_schema();
 
-    $name = trim((string) ($input['name'] ?? ''));
+    $name = cliniq_normalize_person_name($input['name'] ?? '');
     $idNumber = trim((string) ($input['id_number'] ?? $input['email'] ?? ''));
     $role = normalize_staff_profile_role((string) ($input['role'] ?? 'staff'));
     $password = (string) ($input['password'] ?? '');
@@ -213,7 +214,7 @@ function update_staff_profile(array $input): void
     ensure_staff_profiles_schema();
 
     $id = (int) ($input['user_id'] ?? 0);
-    $name = trim((string) ($input['name'] ?? ''));
+    $name = cliniq_normalize_person_name($input['name'] ?? '');
     $idNumber = trim((string) ($input['id_number'] ?? $input['email'] ?? ''));
     $role = normalize_staff_profile_role((string) ($input['role'] ?? 'staff'));
 

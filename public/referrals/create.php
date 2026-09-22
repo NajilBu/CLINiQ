@@ -19,6 +19,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         throw new InvalidArgumentException('Select a patient and complete the referral details.');
     }
 
+    $visitLookup = auth_db()->prepare('SELECT visit_id FROM visits WHERE patient_person_id = ? ORDER BY visit_datetime DESC, visit_id DESC LIMIT 1');
+    $visitLookup->execute([$patientPersonId]);
+    $visitId = (int) ($visitLookup->fetchColumn() ?: 0);
+    if ($visitId < 1) {
+        throw new InvalidArgumentException('A referral must be linked to an existing clinic visit.');
+    }
+
     $referrerPersonId = (int) ((current_user()['person_id'] ?? 0));
     if ($referrerPersonId > 0) {
         $staffCheck = auth_db()->prepare('SELECT 1 FROM clinic_staff WHERE person_id = ?');
@@ -32,10 +39,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $db->beginTransaction();
     try {
         $stmt = $db->prepare(
-            'INSERT INTO referrals (patient_person_id, referral_date, referred_to, reason, status, referred_by_person_id) VALUES (?, ?, ?, ?, "Completed", ?)'
+            'INSERT INTO referrals (patient_person_id, visit_id, referral_date, referred_to, reason, status, referred_by_person_id) VALUES (?, ?, ?, ?, ?, "Completed", ?)'
         );
         $stmt->execute([
             $patientPersonId,
+            $visitId,
             $_POST['referral_date'] ?: date('Y-m-d'),
             $referredTo,
             $reason,

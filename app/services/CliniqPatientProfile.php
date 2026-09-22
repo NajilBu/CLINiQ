@@ -1,6 +1,8 @@
 <?php
 
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../helpers/data_normalization.php';
+require_once __DIR__ . '/../helpers/emergency_contact.php';
 
 function cliniq_patient_profile_db(): PDO
 {
@@ -176,18 +178,22 @@ function cliniq_patient_profile_update(int $personId, array $data): array
     }
 
     $idNumber = strtoupper(trim((string) ($data['id_number'] ?? '')));
-    $firstName = trim((string) ($data['first_name'] ?? ''));
-    $middleName = trim((string) ($data['middle_name'] ?? ''));
-    $lastName = trim((string) ($data['last_name'] ?? ''));
+    $firstName = cliniq_normalize_person_name($data['first_name'] ?? '');
+    $middleName = cliniq_normalize_person_name($data['middle_name'] ?? '');
+    $lastName = cliniq_normalize_person_name($data['last_name'] ?? '');
     $birthdate = trim((string) ($data['birthdate'] ?? ''));
     $sex = trim((string) ($data['sex'] ?? ''));
-    $bloodType = strtoupper(trim((string) ($data['blood_type'] ?? '')));
-    $guardianName = trim((string) ($data['guardian_name'] ?? ''));
-    $guardianContact = trim((string) ($data['guardian_contact'] ?? ''));
-    $emergencyInstructions = trim((string) ($data['emergency_instructions'] ?? ''));
+    $bloodType = cliniq_normalize_blood_type($data['blood_type'] ?? '');
+    $guardianName = cliniq_normalize_person_name($data['guardian_name'] ?? '');
+    $guardianRaw = cliniq_normalize_whitespace($data['guardian_contact'] ?? '');
+    $guardianContact = $guardianRaw === '' ? '' : cliniq_normalize_phone($guardianRaw);
+    $emergencyInstructions = cliniq_normalize_free_text($data['emergency_instructions'] ?? '');
 
     if ($idNumber === '' || $firstName === '' || $lastName === '') {
         throw new InvalidArgumentException('ID number, first name, and last name are required.');
+    }
+    if ($guardianRaw !== '' && $guardianContact === null) {
+        throw new InvalidArgumentException('Enter a valid Philippine mobile number for the guardian or contact.');
     }
     if (!preg_match('/^[A-Z0-9][A-Z0-9 _\/-]{0,49}$/', $idNumber)) {
         throw new InvalidArgumentException('Enter a valid ID number.');

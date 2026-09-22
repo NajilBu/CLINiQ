@@ -425,9 +425,22 @@ $theme = active_cliniq_theme();
             padding: 0.72rem 1rem;
         }
 
-        .visit-card-footer {
-            padding: 0.75rem clamp(1.25rem, 3vw, 2.25rem);
-        }
+            .visit-card-footer {
+                padding: 0.75rem clamp(1.25rem, 3vw, 2.25rem);
+            }
+
+            .visit-success-actions {
+                display: flex;
+                justify-content: center;
+                margin-top: 1.75rem;
+            }
+
+            .visit-success-back-button {
+                min-width: 15rem;
+                min-height: 3.5rem;
+                padding: 0.85rem 1.5rem;
+                font-size: 1rem;
+            }
 
         .visit-lookup-status {
             min-height: 1rem;
@@ -531,6 +544,7 @@ $theme = active_cliniq_theme();
 <div class="visit-shell">
     <?php render_cliniq_entry_header([
         'homeUrl' => app_url('index.php'),
+        'showBack' => false,
     ]); ?>
 
     <main class="visit-main <?= $form['reason'] === VISITOR_REASON_BORROW_EQUIPMENT ? 'is-borrowing' : '' ?>">
@@ -560,14 +574,13 @@ $theme = active_cliniq_theme();
                         <?= e($success['identifier']) ?>
                     </div>
                     <p class="text-xs text-slate-400 mt-5 mb-0">
-                        Your submission is saved. You may stay here or return to the landing page.
+                        Your submission is saved. Use the button below to register another visit.
                     </p>
-                    <div class="mt-7 flex flex-col sm:flex-row items-center justify-center gap-3">
-                        <a href="<?= app_url('visitor-registration.php') ?>" class="btn btn-primary text-decoration-none">
+                    <div class="visit-success-actions">
+                        <a href="visitor-registration.php" class="visit-success-back-button btn btn-primary text-decoration-none">
                             <span class="material-symbols-outlined text-[18px]">arrow_back</span>
                             Back to form now
                         </a>
-                        <a href="<?= app_url('index.php') ?>" class="btn btn-ghost text-decoration-none">Return to Landing Page</a>
                     </div>
                 </div>
             <?php else: ?>
@@ -887,15 +900,6 @@ $theme = active_cliniq_theme();
     syncBorrowFlow();
     syncVisitorPatientLookup();
 
-    <?php if ($success): ?>
-    document.addEventListener('DOMContentLoaded', () => {
-        confirmAction('Return to the landing page?', 'Your submission has been saved successfully.', () => {
-            window.location.href = <?= json_encode(app_url('index.php'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
-        }, 'primary');
-        document.getElementById('confirmActionBtn').textContent = 'Return to Landing Page';
-        document.querySelector('#confirmActionModal .btn-ghost').textContent = 'Stay Here';
-    });
-    <?php endif; ?>
 </script>
 <script src="<?= app_url('assets/js/app.js?v=id-number-format-2') ?>"></script>
 </body>

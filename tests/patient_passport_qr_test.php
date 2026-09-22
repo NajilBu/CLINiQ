@@ -23,6 +23,7 @@ $assertions = [
     'NFC writing requires a secure context' => str_contains($script, 'window.isSecureContext'),
     'patient controls body measurements passport visibility' => str_contains($page, 'name="show_bmi_on_passport"') && str_contains($page, 'Show Body Measurements on Emergency Passport') && str_contains($page, 'height, weight, and BMI'),
     'patient preview hides or shows all body measurements together' => str_contains($page, 'id="prev-body-measurements"') && str_contains($page, 'syncBodyMeasurementsVisibility') && !str_contains($page, 'id="prev-bmi-metric"'),
+    'passport intro uses a compact privacy summary' => str_contains($page, 'passport-page-header') && str_contains($page, 'Review the details you choose to share in an emergency.') && !str_contains($page, 'Emergency Access'),
     'local QR library file exists' => is_file($library) && filesize($library) > 10000,
 ];
 

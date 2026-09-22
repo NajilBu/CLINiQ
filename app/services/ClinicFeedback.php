@@ -96,6 +96,18 @@ function clinic_feedback_default_service(string $purpose): string
     return 'Other';
 }
 
+function clinic_feedback_default_academic_term(?string $date = null): string
+{
+    $month = (int) date('n', $date ? strtotime($date) : time());
+    if ($month >= 8 || $month === 1) {
+        return '1st Semester';
+    }
+    if ($month >= 2 && $month <= 5) {
+        return '2nd Semester';
+    }
+    return 'Mid-Year Term';
+}
+
 function clinic_feedback_ready(PDO $db): bool
 {
     $query = $db->prepare('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?');
@@ -105,7 +117,7 @@ function clinic_feedback_ready(PDO $db): bool
 
 function clinic_feedback_latest(PDO $db, string $identifier, bool $lock = false): ?array
 {
-    $query = $db->prepare("SELECT v.visit_id, v.patient_person_id, v.visit_datetime, v.visit_purpose, v.status,
+    $query = $db->prepare("SELECT v.visit_id, v.patient_person_id, v.visit_datetime, v.visit_purpose, v.chief_complaint, v.status,
             s.year_level, pr.program_code
         FROM visits v
         JOIN people p ON p.id = v.patient_person_id
@@ -126,7 +138,7 @@ function clinic_feedback_already_sent(PDO $db, int $visitId): bool
 
 function clinic_feedback_visits(PDO $db, string $identifier): array
 {
-    $query = $db->prepare("SELECT v.visit_id, v.visit_datetime, v.visit_purpose, v.status,
+    $query = $db->prepare("SELECT v.visit_id, v.patient_person_id, v.visit_datetime, v.visit_purpose, v.chief_complaint, v.status,
             (f.feedback_id IS NOT NULL) AS feedback_submitted
         FROM visits v
         JOIN people p ON p.id = v.patient_person_id
@@ -138,7 +150,7 @@ function clinic_feedback_visits(PDO $db, string $identifier): array
     return $query->fetchAll();
 }
 
-function clinic_feedback_pending_active_visits(PDO $db, int $personId, ?string $purpose = null): array
+function clinic_feedback_pending_completed_visits(PDO $db, int $personId, ?string $purpose = null): array
 {
     if ($personId < 1 || !clinic_feedback_ready($db)) {
         return [];
@@ -151,11 +163,12 @@ function clinic_feedback_pending_active_visits(PDO $db, int $personId, ?string $
         $params[] = $purpose;
         $params[] = $purpose;
     }
-    $query = $db->prepare("SELECT v.visit_id, v.visit_datetime, v.visit_purpose
+
+    $query = $db->prepare("SELECT v.visit_id, v.patient_person_id, v.visit_datetime, v.visit_purpose, v.chief_complaint
         FROM visits v
         LEFT JOIN clinic_feedback f ON f.visit_id = v.visit_id
         WHERE v.patient_person_id = ?
-          AND v.status = 'Active'
+          AND v.status = 'Completed'
           AND f.feedback_id IS NULL
           {$purposeFilter}
         ORDER BY v.visit_datetime ASC, v.visit_id ASC");
@@ -165,7 +178,7 @@ function clinic_feedback_pending_active_visits(PDO $db, int $personId, ?string $
 
 function clinic_feedback_visit(PDO $db, string $identifier, int $visitId, bool $lock = false): ?array
 {
-    $query = $db->prepare("SELECT v.visit_id, v.visit_datetime, v.visit_purpose, v.status,
+    $query = $db->prepare("SELECT v.visit_id, v.patient_person_id, v.visit_datetime, v.visit_purpose, v.chief_complaint, v.status,
             s.year_level, pr.program_code
         FROM visits v
         JOIN people p ON p.id = v.patient_person_id
@@ -173,6 +186,21 @@ function clinic_feedback_visit(PDO $db, string $identifier, int $visitId, bool $
         LEFT JOIN programs pr ON pr.id = s.program_id
         WHERE p.id_number = ? AND v.visit_id = ?" . ($lock ? ' FOR UPDATE' : ''));
     $query->execute([normalize_id_number($identifier), $visitId]);
+    return $query->fetch() ?: null;
+}
+
+function clinic_feedback_visit_for_person(PDO $db, int $personId, int $visitId, bool $lock = false): ?array
+{
+    if ($personId < 1 || $visitId < 1) {
+        return null;
+    }
+    $query = $db->prepare("SELECT v.visit_id, v.patient_person_id, v.visit_datetime, v.visit_purpose, v.chief_complaint, v.status,
+            s.year_level, pr.program_code
+        FROM visits v
+        JOIN students s ON s.person_id = v.patient_person_id
+        LEFT JOIN programs pr ON pr.id = s.program_id
+        WHERE v.patient_person_id = ? AND v.visit_id = ?" . ($lock ? ' FOR UPDATE' : ''));
+    $query->execute([$personId, $visitId]);
     return $query->fetch() ?: null;
 }
 
@@ -190,31 +218,12 @@ function clinic_feedback_validate(array $input): array
     if (($input['consent'] ?? '') !== '1') {
         throw new InvalidArgumentException('Your consent is required to submit feedback.');
     }
-    $service = clinic_feedback_text($input, 'service_type', 160);
-    if (!in_array($service, clinic_feedback_services(), true)) {
-        throw new InvalidArgumentException('Select a valid service.');
-    }
-    $term = clinic_feedback_text($input, 'academic_term', 80);
-    if (!in_array($term, ['1st Semester', '2nd Semester', 'Mid-Year Term', 'Other'], true)) {
-        throw new InvalidArgumentException('Select a valid academic term.');
-    }
-    $year = clinic_feedback_text($input, 'year_level', 80);
-    if (!in_array($year, ['1st Year', '2nd Year', '3rd Year', '4th Year', 'Other'], true)) {
-        throw new InvalidArgumentException('Select a valid year level.');
-    }
     $ratings = $input['ratings'] ?? [];
     if (!is_array($ratings)) {
         throw new InvalidArgumentException('Please answer the service evaluation.');
     }
     $scores = clinic_feedback_scores($ratings);
     return [
-        'service_type' => $service,
-        'service_other' => $service === 'Other' ? clinic_feedback_text($input, 'service_other', 160) : null,
-        'academic_term' => $term,
-        'term_other' => $term === 'Other' ? clinic_feedback_text($input, 'term_other', 80) : null,
-        'year_level' => $year,
-        'year_other' => $year === 'Other' ? clinic_feedback_text($input, 'year_other', 80) : null,
-        'program' => clinic_feedback_text($input, 'program', 160),
         'comments' => clinic_feedback_text($input, 'comments', 5000, false),
         'ratings' => array_map('intval', $ratings),
         'scores' => $scores,
@@ -226,13 +235,24 @@ function clinic_feedback_submit(PDO $db, array $context, array $input): void
     $data = clinic_feedback_validate($input);
     $db->beginTransaction();
     try {
-        $visit = clinic_feedback_visit($db, (string) $context['identifier'], (int) $context['visit_id'], true);
+        $visit = !empty($context['person_id'])
+            ? clinic_feedback_visit_for_person($db, (int) $context['person_id'], (int) $context['visit_id'], true)
+            : clinic_feedback_visit($db, (string) $context['identifier'], (int) $context['visit_id'], true);
         if (!$visit || !clinic_feedback_eligible($visit['status'])) {
             throw new InvalidArgumentException('The selected visit is no longer available for feedback. Please select another visit.');
         }
         if (clinic_feedback_already_sent($db, (int) $visit['visit_id'])) {
             throw new InvalidArgumentException('Feedback has already been submitted for this visit.');
         }
+        $service = clinic_feedback_default_service((string) ($visit['visit_purpose'] ?? ''));
+        $yearLabels = [1 => '1st Year', 2 => '2nd Year', 3 => '3rd Year', 4 => '4th Year'];
+        $data['service_type'] = $service;
+        $data['service_other'] = $service === 'Other' ? (string) ($visit['visit_purpose'] ?? '') : null;
+        $data['academic_term'] = clinic_feedback_default_academic_term((string) ($visit['visit_datetime'] ?? ''));
+        $data['term_other'] = null;
+        $data['year_level'] = $yearLabels[(int) ($visit['year_level'] ?? 0)] ?? 'Other';
+        $data['year_other'] = $data['year_level'] === 'Other' ? (string) ($visit['year_level'] ?? '') : null;
+        $data['program'] = trim((string) ($visit['program_code'] ?? '')) !== '' ? (string) $visit['program_code'] : 'Not recorded';
         $stmt = $db->prepare('INSERT INTO clinic_feedback
             (visit_id, service_type, service_other, academic_term, term_other, year_level, year_other,
              program, comments, ratings_json, tangibles, reliability, responsiveness, assurance, empathy, overall)

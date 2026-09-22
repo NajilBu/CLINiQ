@@ -57,7 +57,10 @@ register_shutdown_function(function () use ($db, $case): void {
             check_feedback(substr_count($html, 'class="feedback-question"') === 22, 'Render all 22 questions.');
             check_feedback(substr_count($html, 'type="radio"') === 154, 'Render seven options per question.');
             check_feedback(!str_contains($html, 'name="email"') && !str_contains($html, 'type="password"'), 'Credentials must not be collected.');
-            check_feedback(str_contains($html, 'name="consent"') && str_contains($html, 'name="program"'), 'Survey metadata missing.');
+            check_feedback(str_contains($html, 'name="consent"')
+                && !str_contains($html, 'Student &amp; Visit Information')
+                && !str_contains($html, 'name="program"')
+                && !str_contains($html, 'name="academic_term"'), 'Repeated student details should not be shown.');
         }
         if ($case === 'submit') {
             check_feedback(clinic_feedback_already_sent($db, 6), 'Submitted to wrong visit.');

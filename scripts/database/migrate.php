@@ -44,6 +44,34 @@ function migration_checksum_is_known_compatible(string $name, string $stored, st
             && in_array(strtolower($current), $idempotentChecksums, true);
     }
 
+    $knownHistoricalPairs = [
+        '20260915_fix_faculty_ntp_numeric_id_padding.sql' => [
+            '2f635a84d8f7d0b57489a8b788ad4e81cf2f9b25339fb6549c2062b195cc1706',
+            '409fab1bf0fb1ebd2de0218dc0f3eade5b9a4c1bab35ff6473f3a72c1bbf81fa',
+        ],
+        '20260915_normalize_faculty_ntp_ids.sql' => [
+            'fc0cc0b20977770914cafc6ea9dcd3021582a724eefcd63ab43fa5023635d223',
+            'c040f4af964cb2797a4c1c58e8c79e3c032d96573c6f7ebbd378755eb3de188a',
+        ],
+        '20260915_remove_legacy_ape_vitals_workflow.sql' => [
+            '6fd531f73e42f85dcc5e641135ff724def9dd4cbaf1f0e7e5baa403686d4e00c',
+            '478c96692587dca3fffe648440452283d6f62014ecdd2e4f5e222b947daedff3',
+        ],
+        '20260918_create_student_remembered_devices.sql' => [
+            '97abefe0ce73428c0df594cce29a510f2decbe0b19e3c737d8ea22f1834378d4',
+            '8b3f4dfd81330edbe17d93383c953f4841edc597dd19b185ebaf024c08db052d',
+        ],
+        '20260918_enrollment_surge_indexes.sql' => [
+            'd94f2924ffe8c59691dc0c075ec87263cb09a60bb2bfec26cbb8a9ca6e676623',
+            'fed24f3f96c857a22cf707b6dc304f45d19061561385bfaa9c838d451d9808af',
+        ],
+    ];
+
+    if (isset($knownHistoricalPairs[$name])) {
+        [$historical, $currentRevision] = $knownHistoricalPairs[$name];
+        return strtolower($stored) === $historical && strtolower($current) === $currentRevision;
+    }
+
     if ($name !== '20260910_add_passport_bmi_visibility.sql') {
         return false;
     }

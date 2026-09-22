@@ -59,6 +59,7 @@ $filteredRows = count($patients);
 $patientColumns = [
     ['headerName' => 'No.', 'field' => 'rowNumber', 'width' => 70, 'minWidth' => 70, 'maxWidth' => 70, 'flex' => 0, 'suppressSizeToFit' => true, 'sortable' => false, 'filter' => false],
     ['headerName' => 'ID Number', 'field' => 'idNumber', 'width' => 150],
+    ['headerName' => '', 'field' => 'sexIconHtml', 'cellRenderer' => 'html', 'width' => 52, 'minWidth' => 52, 'maxWidth' => 52, 'flex' => 0, 'suppressSizeToFit' => true, 'sortable' => false, 'filter' => false, 'headerClass' => 'patient-sex-indicator-header', 'cellClass' => 'patient-sex-indicator-cell'],
     ['headerName' => 'Name', 'field' => 'nameHtml', 'cellRenderer' => 'html', 'sortField' => 'nameSort', 'minWidth' => 240],
     ['headerName' => 'Patient Type', 'field' => 'patientType', 'minWidth' => 150],
     ['headerName' => 'Program / Department', 'field' => 'courseSection', 'minWidth' => 190],
@@ -76,10 +77,17 @@ foreach ($patients as $patientIndex => $patient) {
         $avatarHtml .= e(initials($displayName));
     }
     $avatarHtml .= '</div>';
+    $sex = strtolower(trim((string) ($patient['sex'] ?? '')));
+    $sexIconHtml = match ($sex) {
+        'female', 'f' => '<span class="material-symbols-outlined patient-sex-icon patient-sex-icon-female" aria-label="Female" title="Female">female</span>',
+        'male', 'm' => '<span class="material-symbols-outlined patient-sex-icon patient-sex-icon-male" aria-label="Male" title="Male">male</span>',
+        default => '',
+    };
     $patientRows[] = [
         'rowUrl' => 'view.php?id=' . (int)$patient['id'],
         'rowNumber' => $patientIndex + 1,
         'idNumber' => $patient['id_number'],
+        'sexIconHtml' => $sexIconHtml,
         'nameSort' => trim($patient['last_name'] . ' ' . $patient['first_name'] . ' ' . ($patient['middle_name'] ?? '')),
         'nameHtml' => '<div class="flex items-center gap-3" data-tooltip-text="' . e($fullName) . '">' . $avatarHtml . '<strong class="text-sm text-slate-800">' . e($fullName) . '</strong></div>',
         'patientType' => $patient['patient_type'] === 'Non-Teaching Personnel' ? 'NTP' : $patient['patient_type'],
@@ -207,6 +215,7 @@ render_header('Patients');
 
     <?php render_ag_grid('patientsGrid', $patientColumns, $patientRows, [
         'searchInput' => 'patientsGridSearch',
+        'normalizeStudentIdSearch' => true,
         'pageSize' => $perPage,
         'pagination' => true,
         'paginationControls' => 'patientsPagination',

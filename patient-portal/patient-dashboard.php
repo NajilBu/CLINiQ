@@ -33,6 +33,7 @@ if (!empty($profile['first_registration'])) {
         <div>
             <p class="student-eyebrow">First Registration</p>
             <h1 class="student-title">Welcome, <?= student_e($profile['first_name']) ?></h1>
+            <p class="student-subtitle">Set your password to activate secure access to your clinic portal.</p>
         </div>
         <span class="student-badge student-badge-warning">
             <span class="material-symbols-outlined text-[14px]">lock</span>
@@ -112,6 +113,7 @@ if (re_enrollment_pending()) {
         <div>
             <p class="student-eyebrow">New School Year</p>
             <h1 class="student-title">Update your enrollment status</h1>
+            <p class="student-subtitle">Confirm your enrollment for the new school year.</p>
         </div>
         <span class="student-badge student-badge-warning">
             <span class="material-symbols-outlined text-[14px]">how_to_reg</span>
@@ -199,9 +201,9 @@ if (re_enrollment_pending()) {
 
 $patientId = (int) $profile['patient_id'];
 $appointmentPatientId = (int) $profile['person_id'];
-$pendingFeedbackVisits = clinic_feedback_pending_active_visits(auth_db(), $appointmentPatientId);
+$pendingFeedbackVisits = clinic_feedback_pending_completed_visits(auth_db(), $appointmentPatientId);
 $feedbackRequired = count($pendingFeedbackVisits) > 0;
-$feedbackPortalUrl = '../public/clinic-feedback.php?portal=1';
+$feedbackPortalUrl = 'patient-feedback.php';
 
 $appointmentStmt = appointment_db()->prepare("
     SELECT *
@@ -224,10 +226,11 @@ $scheduledApeBatchLabel = $hasScheduledApeBatch
     : '';
 $apeStatus = $latestApe['workflow_status'] ?? 'Not Started';
 $apeQueue = $latestApe ? ape_record_queue($latestApe) : 'digital_submission';
-$apeStep = $latestApe ? ape_record_step_index($latestApe) : 0;
+$apeProgress = ape_patient_progress($latestApe ?? []);
+$apeStep = $apeProgress['active_step'] - 1;
 $apeDigitalSubmissionComplete = ape_digital_submission_complete($latestApe ?? []);
 $apeExamCompleted = !empty($latestApe['exam_date']);
-$apePercent = $latestApe ? ape_record_progress_percent($latestApe) : 0;
+$apePercent = $apeProgress['percent'];
 $apeCompleted = $apePercent >= 100 || ($latestApe['clearance_status'] ?? '') === 'Cleared';
 $apeBadgeClass = match ($latestApe['clearance_status'] ?? '') {
     'Cleared' => 'student-badge-success',
@@ -303,6 +306,7 @@ $clinicNoteClass = static fn(string $type): string => match ($type) {
 };
 $apeActionTitle = match (true) {
     ($latestApe['clearance_status'] ?? 'Pending') === 'Cleared' => 'APE completed',
+    $latestApe && $apeProgress['active_step'] === 1 => 'Upload APE documents',
     $apeQueue === 'digital_submission' && !$apeAllDocumentsUploaded => 'Upload APE documents',
     $apeQueue === 'digital_submission' && !$apeExamCompleted => 'Attend your scheduled examination',
     $apeQueue === 'digital_submission' => 'Wait for clinic document review',
@@ -316,6 +320,9 @@ $apeActionTitle = match (true) {
 };
 $apeActionCopy = match (true) {
     ($latestApe['clearance_status'] ?? 'Pending') === 'Cleared' => 'Your APE record is already cleared by the clinic.',
+    $latestApe && $apeProgress['active_step'] === 1 => 'Complete regular uploads within seven days of examination. Follow-up documents use their separately assigned return date.',
+    $latestApe && $apeProgress['active_step'] === 3 => 'Your documents and examination are complete. The clinic will record the final clinical decision.',
+    $latestApe && $apeProgress['active_step'] === 4 => $apeNote ?: 'Complete the follow-up requirements requested by the clinic before final clearance.',
     $apeQueue === 'digital_submission' && !$apeAllDocumentsUploaded => $apeExamCompleted
         ? 'Complete regular uploads within seven days of examination. Follow-up documents use their separately assigned return date.'
         : 'Upload any available documents now. Incomplete files will not prevent attendance during your assigned examination schedule.',
@@ -333,14 +340,14 @@ $apeActionCopy = match (true) {
 };
 $apePhaseLabel = match (true) {
     !$latestApe => 'Not Started',
-    ($latestApe['clearance_status'] ?? '') === 'Cleared' => 'Completed',
-    !empty($latestApe['exam_date']) => 'Examination',
-    default => ape_record_stage_label($latestApe),
+    default => $apeProgress['stage_label'],
 };
 $apePhaseStatus = match (true) {
     !$latestApe => 'Not Started',
     ($latestApe['clearance_status'] ?? '') === 'Cleared' => 'Completed',
-    !empty($latestApe['exam_date']) => 'Completed',
+    $apeProgress['active_step'] === 1 => 'Upload Required',
+    $apeProgress['active_step'] === 3 => 'Awaiting Decision',
+    $apeProgress['active_step'] === 4 => 'Follow-up Required',
     $apeRequirementsNeedCorrection => 'Correction Needed',
     $apeStatus === 'Follow-up Required' => 'Follow-up Required',
     $apeQueue === 'digital_submission' && $apeDocumentsAwaitingReview => 'Under Clinic Review',
@@ -351,6 +358,9 @@ $apePhaseStatus = match (true) {
 $apeActionStatus = match (true) {
     !$latestApe => 'Not Started',
     ($latestApe['clearance_status'] ?? '') === 'Cleared' => 'Complete',
+    $apeProgress['active_step'] === 1 => 'Upload Required',
+    $apeProgress['active_step'] === 3 => 'Awaiting Decision',
+    $apeProgress['active_step'] === 4 => 'Follow-up Required',
     $apeRequirementsNeedCorrection => 'Needs Correction',
     $apeQueue === 'digital_submission' && !$apeAllDocumentsUploaded => 'Upload Required',
     $apeQueue === 'digital_submission' && $apeDocumentsAwaitingReview => 'Under Review',
@@ -389,6 +399,41 @@ $passportComplete = empty($passportMissing);
 $apeNeedsAction = ($latestApe['clearance_status'] ?? 'Pending') !== 'Cleared';
 $passportRequired = $isOfficialAccess && !$passportComplete;
 $requiredActionCount = ($passportRequired ? 1 : 0) + ($apeNeedsAction ? 1 : 0) + ($feedbackRequired ? 1 : 0);
+$dashboardTasks = [];
+if ($passportRequired) {
+    $dashboardTasks[] = [
+        'key' => 'passport', 'icon' => 'emergency', 'tone' => 'danger',
+        'kicker' => 'Urgent profile action', 'title' => 'Complete your Emergency Health Passport',
+        'short_copy' => 'Complete your missing emergency details.', 'href' => 'patient-passport.php', 'button' => 'Complete Passport',
+    ];
+}
+if ($apeNeedsAction) {
+    $dashboardTasks[] = [
+        'key' => 'ape', 'icon' => 'upload_file', 'tone' => 'primary',
+        'kicker' => 'APE requirement', 'title' => $apeActionTitle,
+        'short_copy' => match (true) {
+            str_contains($apeActionTitle, 'Upload') => 'Upload your required APE documents.',
+            str_contains($apeActionTitle, 'Attend') => 'Attend your scheduled examination.',
+            str_contains($apeActionTitle, 'follow-up') => 'Complete the clinic follow-up.',
+            default => 'Continue your APE requirements.',
+        },
+        'href' => 'patient-ape-status.php', 'button' => 'Continue APE',
+    ];
+}
+if ($feedbackRequired) {
+    $dashboardTasks[] = [
+        'key' => 'feedback', 'icon' => 'rate_review', 'tone' => 'danger',
+        'kicker' => 'Required clinic feedback', 'title' => 'Share feedback for your completed visit',
+        'short_copy' => 'Complete feedback before requesting another appointment.', 'href' => $feedbackPortalUrl, 'button' => 'Complete Required Feedback',
+    ];
+}
+if (!$dashboardTasks) {
+    $dashboardTasks[] = [
+        'key' => 'ready', 'icon' => 'verified', 'tone' => 'primary',
+        'kicker' => 'Ready', 'title' => 'Your clinic profile is complete',
+        'short_copy' => 'Your clinic profile is up to date.', 'href' => null, 'button' => null,
+    ];
+}
 $profileDetailLabel = match ($profile['account_type'] ?? 'patient') {
     'student' => 'Program',
     'faculty', 'school_personnel' => 'Department',
@@ -450,12 +495,16 @@ render_student_header('Dashboard', 'dashboard');
     <div>
         <p class="student-eyebrow">Patient Health Portal</p>
         <h1 class="student-title">Welcome back, <?= student_e($profile['first_name']) ?></h1>
+        <p class="student-subtitle">View your clinic tasks, updates, and records in one place.</p>
     </div>
     <span class="student-badge <?= $isOfficialAccess ? 'student-badge-success' : 'student-badge-warning' ?>">
         <span class="material-symbols-outlined text-[14px]"><?= $isOfficialAccess ? 'verified' : 'hourglass_top' ?></span>
         <?= student_e($accountBadgeLabel) ?>
     </span>
 </div>
+<?php if (!$isOfficialAccess): ?>
+    <p class="student-dashboard-applicant-hint">APE clearance unlocks Passport and appointments.</p>
+<?php endif; ?>
 <?php if ($hasScheduledApeBatch): ?>
     <a href="patient-ape-status.php" class="student-dashboard-batch-summary text-decoration-none">
         <span class="student-icon-box"><span class="material-symbols-outlined" aria-hidden="true">event_available</span></span>
@@ -466,25 +515,27 @@ render_student_header('Dashboard', 'dashboard');
 </section>
 
 <?php if (!$isOfficialAccess): ?>
-    <div class="student-note student-note-warning mb-4" role="status">
+    <div class="student-note student-note-warning student-dashboard-applicant-warning mb-4" role="status">
         <span class="material-symbols-outlined">lock_clock</span>
         <div><strong>Applicant access</strong><br>Complete your APE and receive final clinic clearance to unlock your Health Passport and appointment booking.</div>
     </div>
 <?php endif; ?>
 
+<?php if ($requiredActionCount > 0): ?>
 <section class="student-required-actions student-dashboard-next-steps mb-4" aria-label="Required student actions">
     <div class="student-required-actions-head">
         <div>
-            <p class="student-eyebrow student-eyebrow-compact">Your next steps</p>
-            <h2>Start here to keep your clinic profile ready</h2>
-            <p class="student-required-actions-copy">Complete the items below in order. The portal will unlock the next action when it is ready.</p>
+            <p class="student-eyebrow student-eyebrow-compact"><span class="student-dashboard-desktop-copy">Your next steps</span><span class="student-dashboard-mobile-copy">Your next step</span></p>
+            <h2><span class="student-dashboard-desktop-copy">Start here to keep your clinic profile ready</span><span class="student-dashboard-mobile-copy">Keep your clinic profile ready</span></h2>
+            <p class="student-required-actions-copy"><span class="student-dashboard-desktop-copy">Complete the items below in order. The portal will unlock the next action when it is ready.</span><span class="student-dashboard-mobile-copy">Complete the highlighted task first.</span></p>
         </div>
         <span class="student-badge <?= $requiredActionCount > 0 ? 'student-badge-warning' : 'student-badge-success' ?>">
-            <?= (int) $requiredActionCount ?> Pending
+            <span class="student-dashboard-desktop-copy"><?= (int) $requiredActionCount ?> Pending</span>
+            <span class="student-dashboard-mobile-copy"><?= $requiredActionCount > 0 ? (int) $requiredActionCount . ' pending' : 'Ready' ?></span>
         </span>
     </div>
 
-    <div class="student-required-action-list">
+    <div class="student-required-action-list student-dashboard-desktop-task-list">
         <?php if ($passportRequired): ?>
             <article class="student-action-card student-action-card-danger">
                 <div class="flex items-start gap-4">
@@ -537,8 +588,8 @@ render_student_header('Dashboard', 'dashboard');
                     </span>
                     <div>
                         <p class="student-action-kicker">Required clinic feedback</p>
-                        <h2>Share feedback for your active clinic visit</h2>
-                        <p><?= count($pendingFeedbackVisits) === 1 ? 'One active visit needs feedback.' : count($pendingFeedbackVisits) . ' active visits need feedback.' ?> You cannot request another clinic appointment until this required feedback is completed.</p>
+                        <h2>Share feedback for your completed visit</h2>
+                        <p><?= count($pendingFeedbackVisits) === 1 ? 'One completed visit needs feedback.' : count($pendingFeedbackVisits) . ' completed visits need feedback.' ?> You cannot request another clinic appointment until all required feedback is completed.</p>
                     </div>
                 </div>
                 <a href="<?= student_e($feedbackPortalUrl) ?>" class="student-button-danger text-decoration-none">
@@ -548,22 +599,65 @@ render_student_header('Dashboard', 'dashboard');
             </article>
         <?php endif; ?>
 
-        <?php if ($requiredActionCount === 0): ?>
-            <article class="student-action-card">
-                <div class="flex items-start gap-4">
-                    <span class="student-icon-box">
-                        <span class="material-symbols-outlined">verified</span>
-                    </span>
-                    <div>
-                        <p class="student-action-kicker student-action-kicker-primary">Ready</p>
-                        <h2>Your clinic profile is complete</h2>
-                        <p>Your passport and APE clearance records are up to date.</p>
-                    </div>
+    </div>
+
+    <?php $primaryTask = $dashboardTasks[0]; $secondaryTasks = array_slice($dashboardTasks, 1); ?>
+    <div class="student-dashboard-mobile-task-list">
+        <article class="student-action-card student-dashboard-mobile-primary-task<?= $primaryTask['tone'] === 'danger' ? ' student-action-card-danger' : '' ?>">
+            <div class="student-dashboard-mobile-task-main">
+                <span class="student-icon-box<?= $primaryTask['tone'] === 'danger' ? ' student-icon-box-danger' : '' ?>">
+                    <span class="material-symbols-outlined"><?= student_e($primaryTask['icon']) ?></span>
+                </span>
+                <div>
+                    <p class="student-action-kicker<?= $primaryTask['tone'] === 'primary' ? ' student-action-kicker-primary' : '' ?>"><?= student_e($primaryTask['kicker']) ?></p>
+                    <h2><?= student_e($primaryTask['title']) ?></h2>
+                    <p><?= student_e($primaryTask['short_copy']) ?></p>
                 </div>
-            </article>
+            </div>
+            <?php if ($primaryTask['href']): ?>
+                <a href="<?= student_e($primaryTask['href']) ?>" class="<?= $primaryTask['tone'] === 'danger' ? 'student-button-danger' : 'student-button' ?> text-decoration-none">
+                    <?= student_e($primaryTask['button']) ?>
+                    <span class="material-symbols-outlined">arrow_forward</span>
+                </a>
+            <?php endif; ?>
+        </article>
+
+        <?php if ($secondaryTasks): ?>
+            <details class="student-dashboard-more-tasks">
+                <summary>
+                    <span>More tasks</span>
+                    <span class="student-badge student-badge-info"><?= count($secondaryTasks) ?></span>
+                    <span class="material-symbols-outlined" aria-hidden="true">expand_more</span>
+                </summary>
+                <div class="student-dashboard-more-task-list">
+                    <?php foreach ($secondaryTasks as $task): ?>
+                        <a href="<?= student_e((string) $task['href']) ?>" class="student-dashboard-more-task text-decoration-none">
+                            <span class="student-icon-box<?= $task['tone'] === 'danger' ? ' student-icon-box-danger' : '' ?>"><span class="material-symbols-outlined"><?= student_e($task['icon']) ?></span></span>
+                            <span><strong><?= student_e($task['title']) ?></strong><small><?= student_e($task['short_copy']) ?></small></span>
+                            <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+            </details>
         <?php endif; ?>
     </div>
 </section>
+<?php else: ?>
+<div class="student-required-action-list student-dashboard-ready-action-list mb-4" aria-label="Student profile status">
+    <article class="student-action-card">
+        <div class="flex items-start gap-4">
+            <span class="student-icon-box">
+                <span class="material-symbols-outlined">verified</span>
+            </span>
+            <div>
+                <p class="student-action-kicker student-action-kicker-primary">Ready</p>
+                <h2>Your clinic profile is complete</h2>
+                <p>Your passport and APE clearance records are up to date.</p>
+            </div>
+        </div>
+    </article>
+</div>
+<?php endif; ?>
 
 <section class="student-dashboard-mobile-overview" aria-label="Dashboard summaries">
     <a href="patient-ape-status.php" class="student-dashboard-summary-row text-decoration-none" aria-label="View APE Status">
@@ -670,12 +764,6 @@ render_student_header('Dashboard', 'dashboard');
                     <span class="student-badge <?= student_e($apeActionBadgeClass) ?>"><?= student_e($apeActionStatus) ?></span>
                 </div>
             </div>
-            <?php if (!$hasScheduledApeBatch && $latestApe && ($latestApe['clearance_status'] ?? '') !== 'Cleared'): ?>
-                <div class="student-note student-note-warning mt-4 mb-0">
-                    <span class="material-symbols-outlined">event_busy</span>
-                    <div><strong>No active APE batch assigned yet.</strong><br>Wait for the clinic to schedule your examination.</div>
-                </div>
-            <?php endif; ?>
         </div>
     </section>
 
@@ -747,6 +835,20 @@ render_student_header('Dashboard', 'dashboard');
     </div>
 </section>
 </details>
+
+<section class="student-card student-dashboard-help mt-4" aria-labelledby="student-dashboard-help-title">
+    <div class="student-card-pad student-dashboard-help-content">
+        <span class="student-dashboard-help-icon material-symbols-outlined" aria-hidden="true">help</span>
+        <div>
+            <h2 id="student-dashboard-help-title" class="student-card-title">Need help?</h2>
+            <p class="student-card-copy">Find answers about access, APE requirements, appointments, your Health Passport, and clinic support.</p>
+        </div>
+        <a href="patient-help.php" class="student-button-secondary text-decoration-none">
+            Open Help &amp; FAQs
+            <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span>
+        </a>
+    </div>
+</section>
 
 <script>
 (function () {

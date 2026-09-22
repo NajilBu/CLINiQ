@@ -27,6 +27,8 @@ foreach ([
     'data-open-account-deactivation',
     'Deactivate account',
     'reactivate_account',
+    "'minWidth' => 270",
+    'patient-account-actions',
 ] as $expected) {
     if (!str_contains($page, $expected)) {
         throw new RuntimeException("Patient account filtering or inactive-reason display is missing: {$expected}");

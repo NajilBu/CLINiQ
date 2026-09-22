@@ -186,7 +186,7 @@ $missingItems = trim((string) ($apeRecord['missing_items'] ?? ''));
 $missingDocumentCount = $missingItems === '' ? 0 : count(array_filter(preg_split('/\s*,\s*/', $missingItems) ?: []));
 $requirementStatus = $apeRecord['requirement_status'] ?? 'Not Checked';
 $hasScheduledBatch = !empty($apeRecord['schedule_batch_id']) && ($apeRecord['batch_status'] ?? '') === 'Scheduled';
-$actionNeeded = $clearanceStatus !== 'Cleared' && $apeStatus !== 'Not Started' && $hasScheduledBatch;
+$actionNeeded = $clearanceStatus !== 'Cleared' && $apeStatus !== 'Not Started';
 $batchScheduleLabel = $hasScheduledBatch
     ? date('F j, Y', strtotime((string) $apeRecord['batch_schedule_date'])) . ' at '
         . date('g:i A', strtotime((string) $apeRecord['batch_start_time'])) . '–'
@@ -211,11 +211,13 @@ foreach ($uploadedDocuments as $uploadedDocument) {
 $allRequiredDocumentsUploaded = ape_initial_uploads_present($apeRecord ?? []);
 $documentsAwaitingReview = $allRequiredDocumentsUploaded && (int) ($apeRecord['required_unverified_count'] ?? 0) > 0;
 $digitalSubmissionComplete = ape_digital_submission_complete($apeRecord ?? []);
+$patientProgress = ape_patient_progress($apeRecord ?? []);
 $canUploadDocuments = $apeRecord
     && $clearanceStatus !== 'Cleared'
     && $apeStatus !== 'Cleared';
 $nextActionTitle = match (true) {
     $clearanceStatus === 'Cleared' => 'APE completed',
+    $patientProgress['active_step'] === 1 => 'Upload verified APE documents',
     $apeQueue === 'digital_submission' && !$allRequiredDocumentsUploaded => 'Upload APE documents',
     $apeQueue === 'digital_submission' && !$examCompleted => 'Attend your scheduled examination',
     $apeQueue === 'digital_submission' => 'Wait for clinic document review',
@@ -229,6 +231,7 @@ $nextActionTitle = match (true) {
 };
 $nextActionCopy = match (true) {
     $clearanceStatus === 'Cleared' => 'Your APE record is already cleared by the clinic.',
+    $patientProgress['active_step'] === 1 => $studentNote ?: 'Complete your regular document uploads before the clinic can finish your APE decision.',
     $apeQueue === 'digital_submission' && !$allRequiredDocumentsUploaded => $examCompleted
         ? 'Complete your regular document uploads within seven days of examination. Follow-up documents use their separately assigned return date.'
         : 'Upload any available APE documents now. Missing files will not prevent you from attending your assigned examination.',
@@ -244,13 +247,16 @@ $nextActionCopy = match (true) {
     $apeStatus === 'Reviewed' => $studentNote ?: 'Your examination and document archive are complete. The clinic will now record the final decision.',
     default => $studentNote ?: ($apeRecord ? 'Complete the current APE step shown below.' : 'No APE record has been opened by the clinic yet.'),
 };
-$currentStep = $apeRecord ? ape_record_step_index($apeRecord) + 1 : 1;
-$apePercent = $apeRecord ? ape_record_progress_percent($apeRecord) : 0;
+$currentStep = $patientProgress['active_step'];
+$apePercent = $patientProgress['percent'];
 $showFindings = $examCompleted;
 $showDocuments = (bool) $apeRecord;
 $showActivity = (bool) $apeRecord;
 $headerBadge = $clearanceStatus === 'Cleared' ? 'student-badge-success' : ($actionNeeded ? 'student-badge-warning' : 'student-badge-info');
 $actionBadgeLabel = match (true) {
+    $patientProgress['active_step'] === 1 => 'Digital Keeping',
+    $patientProgress['active_step'] === 3 => 'Final Decision Pending',
+    $patientProgress['active_step'] === 4 => 'Follow-up Required',
     $apeQueue === 'digital_submission' => $documentsAwaitingReview ? 'Under Clinic Review' : 'Digital Keeping',
     $apeQueue === 'follow_up' => 'Follow-up Required',
     $requirementsNeedCorrection => 'Correction Needed',
@@ -270,10 +276,9 @@ $flowSteps = [
             ? 'All regular documents are uploaded and approved.'
             : ($examCompleted
                 ? 'Complete regular uploads within seven days of examination.'
-                : 'Upload available documents now; incomplete files will not block examination.'),
-        'done' => $digitalSubmissionComplete,
-        'in_progress' => !$digitalSubmissionComplete && (bool) $apeRecord,
-        'current' => $apeQueue === 'digital_submission' && !ape_examination_is_available($apeRecord ?? []),
+                : 'Upload available documents now; incomplete files will not prevent attendance during your assigned examination schedule.'),
+        'done' => $patientProgress['steps'][1]['done'],
+        'current' => $patientProgress['steps'][1]['active'],
     ],
     [
         'number' => 2,
@@ -281,25 +286,27 @@ $flowSteps = [
         'title' => 'Examination',
         'copy' => $examCompleted
             ? 'Clinic recorded your examination and checked the hard copies you presented.'
-            : ($hasScheduledBatch ? "Attend {$apeRecord['batch_name']} on {$batchScheduleLabel}, even if uploads are incomplete." : 'Wait for the clinic to assign your examination batch.'),
-        'done' => $examCompleted,
-        'current' => !$examCompleted && $apeQueue === 'examination',
+            : "Attend {$apeRecord['batch_name']} on {$batchScheduleLabel}, even if uploads are incomplete.",
+        'done' => $patientProgress['steps'][2]['done'],
+        'current' => $patientProgress['steps'][2]['active'],
     ],
     [
         'number' => 3,
         'icon' => 'medical_services',
         'title' => 'Final Decision or Follow-up',
         'copy' => 'The clinic clears the record or requests treatment, clearance, or referral follow-up.',
-        'done' => $clearanceStatus === 'Cleared',
-        'current' => !$examCompleted ? false : in_array($apeQueue, ['final_decision', 'follow_up'], true),
+        'done' => $patientProgress['steps'][3]['done'],
+        'current' => $patientProgress['steps'][3]['active'],
     ],
     [
         'number' => 4,
         'icon' => 'verified_user',
-        'title' => 'Completed APE',
-        'copy' => 'Your patient clinic record is cleared.',
-        'done' => $clearanceStatus === 'Cleared',
-        'current' => false,
+        'title' => $patientProgress['steps'][4]['active'] ? 'Follow-up clearance' : 'Completed APE',
+        'copy' => $patientProgress['steps'][4]['active']
+            ? 'Complete the follow-up requirements requested by the clinic before final clearance.'
+            : 'Your patient clinic record is cleared.',
+        'done' => $patientProgress['steps'][4]['done'],
+        'current' => $patientProgress['steps'][4]['active'],
     ],
 ];
 
@@ -388,6 +395,7 @@ render_student_header('APE Status', 'ape');
     <div>
         <p class="student-eyebrow">Annual Physical Examination</p>
         <h1 class="student-title">APE Status</h1>
+        <p class="student-subtitle">Track your requirements, documents, and clinic updates.</p>
     </div>
     <span class="student-badge <?= student_e($headerBadge) ?>">
         <span class="material-symbols-outlined text-[14px]">pending_actions</span>
@@ -461,7 +469,7 @@ render_student_header('APE Status', 'ape');
 </section>
 
 <div class="student-grid student-ape-layout">
-    <section class="student-card student-span-5">
+    <section class="student-card student-span-5 student-ape-flow-card">
         <div class="student-card-header">
             <div>
                 <h2 class="student-card-title">APE Flow</h2>
@@ -495,11 +503,11 @@ render_student_header('APE Status', 'ape');
                     <?php
                     $stepNumber = (int) $step['number'];
                     $isDone = (bool) ($step['done'] ?? false);
-                    $isInProgress = (bool) ($step['in_progress'] ?? false) && !$isDone;
                     $isCurrent = (bool) ($step['current'] ?? false) && !$isDone;
-                    $stepClass = $isDone ? 'is-done' : (($isCurrent || $isInProgress) ? 'is-current' : 'is-locked');
-                    $badgeClass = $isDone ? 'student-badge-success' : (($isCurrent || $isInProgress) ? 'student-badge-warning' : 'student-badge-info');
-                    $badgeLabel = $isDone ? 'Done' : ($isCurrent ? 'Current' : ($isInProgress ? 'In Progress' : 'Next'));
+                    $isActive = $isCurrent;
+                    $stepClass = $isDone ? 'is-done' : ($isActive ? 'is-current' : 'is-locked');
+                    $badgeClass = $isDone ? 'student-badge-success' : ($isActive ? 'student-badge-warning' : 'student-badge-info');
+                    $badgeLabel = $isDone ? 'Done' : ($isActive ? ($stepNumber === 1 ? 'In Progress' : 'Current') : 'Next');
                     $stepTitle = $step['title'];
                     $stepCopy = $step['copy'];
                     ?>
@@ -515,7 +523,7 @@ render_student_header('APE Status', 'ape');
                             </div>
                             <strong><?= student_e($stepTitle) ?></strong>
                             <span><?= student_e($stepCopy) ?></span>
-                            <?php if (($isCurrent || $isInProgress) && $stepNumber === 1 && $canUploadDocuments): ?>
+                            <?php if ($isActive && $stepNumber === 1 && $canUploadDocuments): ?>
                                 <a class="student-ape-step-action" data-mobile-open-panel="ape-documents-panel" href="#ape-documents-panel">Upload APE documents <span class="material-symbols-outlined">arrow_downward</span></a>
                             <?php endif; ?>
                         </div>

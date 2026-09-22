@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../helpers/student_id.php';
+require_once __DIR__ . '/../helpers/data_normalization.php';
 require_once __DIR__ . '/ApeWorkflow.php';
 require_once __DIR__ . '/ApeCycleService.php';
 require_once __DIR__ . '/AuditLog.php';
@@ -462,9 +463,9 @@ function create_inactive_patient_account(array $input): array
     }
     $type = $normalizedType;
     $idNumber = patient_account_normalize_id_number((string) ($input['id_number'] ?? ''), $type);
-    $firstName = trim((string) ($input['first_name'] ?? ''));
-    $middleName = trim((string) ($input['middle_name'] ?? ''));
-    $lastName = trim((string) ($input['last_name'] ?? ''));
+    $firstName = cliniq_normalize_person_name($input['first_name'] ?? '');
+    $middleName = cliniq_normalize_person_name($input['middle_name'] ?? '');
+    $lastName = cliniq_normalize_person_name($input['last_name'] ?? '');
     $birthdate = trim((string) ($input['birthdate'] ?? ''));
     $rawSex = trim((string) ($input['sex'] ?? ''));
     $programDepartment = trim((string) ($input['program_or_department'] ?? ''));

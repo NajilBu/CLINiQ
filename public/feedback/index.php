@@ -70,7 +70,7 @@ try {
     $query = $db->prepare("SELECT f.service_type, COUNT(*) AS responses, {$averages} FROM clinic_feedback f WHERE {$where} GROUP BY f.service_type ORDER BY f.service_type");
     $query->execute($params);
     $groups = $query->fetchAll();
-    $query = $db->prepare("SELECT f.*, v.visit_datetime FROM clinic_feedback f JOIN visits v ON v.visit_id = f.visit_id WHERE {$where} ORDER BY f.submitted_at DESC, f.feedback_id DESC LIMIT 25 OFFSET {$offset}");
+    $query = $db->prepare("SELECT f.*, v.visit_datetime, v.visit_purpose, v.chief_complaint FROM clinic_feedback f JOIN visits v ON v.visit_id = f.visit_id WHERE {$where} ORDER BY f.submitted_at DESC, f.feedback_id DESC LIMIT 25 OFFSET {$offset}");
     $query->execute($params);
     $rows = $query->fetchAll();
 } catch (InvalidArgumentException $exception) {
@@ -81,9 +81,9 @@ try {
 }
 render_header('Clinic Feedback');
 ?>
-<link hidden rel="stylesheet" href="<?= e(app_url('assets/css/feedback.css?v=design-3')) ?>">
+<link rel="stylesheet" href="<?= e(app_url('assets/css/feedback.css?v=design-4')) ?>">
 <?php render_clinic_command_header('Service evaluation', 'Clinic Feedback', 'Student feedback for Active and Completed clinic visits.'); ?>
-<div class="feedback-page feedback-admin">
+<div class="feedback-page feedback-admin feedback-report">
     <form method="get" class="clinic-card overflow-hidden mb-6" id="feedbackFilterForm">
         <div class="p-6 border-b border-slate-100">
             <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Feedback Filters</h2>
@@ -125,7 +125,7 @@ render_header('Clinic Feedback');
             <?php foreach ($rows as $row): ?>
                 <details class="feedback-response">
                     <summary><strong><?= e($row['service_type'] === 'Other' ? 'Other: ' . $row['service_other'] : $row['service_type']) ?></strong><br><span class="feedback-muted">Submitted <?= e($row['submitted_at']) ?> · Overall <?= number_format((float) $row['overall'], 2) ?> · <?= e(clinic_feedback_tier((float) $row['overall'])) ?></span></summary>
-                    <p>Visit #<?= (int) $row['visit_id'] ?> · <?= e($row['visit_datetime']) ?><br><?= e($row['academic_term'] === 'Other' ? $row['term_other'] : $row['academic_term']) ?> · <?= e($row['year_level'] === 'Other' ? $row['year_other'] : $row['year_level']) ?> · <?= e($row['program']) ?></p>
+                    <p>Visit <?= (int) $row['visit_id'] ?> · <?= e($row['visit_datetime']) ?><br><strong>Reason for visit:</strong> <?= e($row['visit_purpose'] ?: 'Not recorded') ?><br><strong>Patient concern:</strong> <?= e($row['chief_complaint'] ?: 'Not recorded') ?><br><?= e($row['academic_term'] === 'Other' ? $row['term_other'] : $row['academic_term']) ?> · <?= e($row['year_level'] === 'Other' ? $row['year_other'] : $row['year_level']) ?> · <?= e($row['program']) ?></p>
                     <h3>Written feedback</h3><p class="feedback-comment"><?= e($row['comments'] ?: 'No written feedback provided.') ?></p>
                     <?php $ratings = json_decode($row['ratings_json'], true) ?: []; foreach (clinic_feedback_sections() as $section => $questions): ?>
                         <h3><?= e($section) ?> · <?= number_format((float) $row[strtolower($section)], 2) ?></h3>

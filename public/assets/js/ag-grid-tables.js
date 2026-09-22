@@ -409,13 +409,20 @@
         }
 
         const searchInput = grid.dataset.searchInput ? document.getElementById(grid.dataset.searchInput) : null;
+        const quickFilterText = () => {
+            const query = searchInput?.value || '';
+            if (grid.dataset.normalizeStudentIdSearch !== 'true') return query;
+            const digits = query.replace(/\D/g, '');
+            if (!/^[\d\s-]+$/.test(query) || digits.length !== 7) return query;
+            return `${query} ${digits.slice(0, 2)}-${digits.slice(2)}`;
+        };
 
         if (searchInput) {
             searchInput.addEventListener('input', () => {
                 if (api.setGridOption) {
-                    api.setGridOption('quickFilterText', searchInput.value);
+                    api.setGridOption('quickFilterText', quickFilterText());
                 } else if (api.setQuickFilter) {
-                    api.setQuickFilter(searchInput.value);
+                    api.setQuickFilter(quickFilterText());
                 }
                 if (paginationEnabled && api.paginationGoToFirstPage) {
                     api.paginationGoToFirstPage();
@@ -425,9 +432,9 @@
 
             if (searchInput.value) {
                 if (api.setGridOption) {
-                    api.setGridOption('quickFilterText', searchInput.value);
+                    api.setGridOption('quickFilterText', quickFilterText());
                 } else if (api.setQuickFilter) {
-                    api.setQuickFilter(searchInput.value);
+                    api.setQuickFilter(quickFilterText());
                 }
             }
         }

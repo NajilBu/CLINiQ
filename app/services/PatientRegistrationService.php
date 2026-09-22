@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../helpers/mail.php';
+require_once __DIR__ . '/../helpers/data_normalization.php';
 require_once __DIR__ . '/AuditLog.php';
 require_once __DIR__ . '/ApeCycleService.php';
 require_once __DIR__ . '/ApeWorkflow.php';
@@ -149,13 +150,39 @@ function verify_patient_registration_code(int $verificationId, string $code): ar
     return ['verification_id' => $verificationId, 'student_number' => (string) $verification['student_number'], 'email' => (string) $verification['email']];
 }
 
+/**
+ * Return the database-authoritative context for a verified, still-pending
+ * registration. Verification never represents an account or patient record.
+ */
+function patient_registration_verified_onboarding_context(int $verificationId): ?array
+{
+    ensure_patient_registration_schema();
+    if ($verificationId < 1) {
+        return null;
+    }
+
+    $stmt = auth_db()->prepare('SELECT registration_verification_id, student_number, email, expires_at FROM patient_registration_verifications WHERE registration_verification_id = ? AND verified_at IS NOT NULL AND consumed_at IS NULL AND expires_at > NOW() LIMIT 1');
+    $stmt->execute([$verificationId]);
+    $verification = $stmt->fetch();
+    if (!$verification) {
+        return null;
+    }
+
+    return [
+        'verification_id' => (int) $verification['registration_verification_id'],
+        'student_number' => (string) $verification['student_number'],
+        'email' => strtolower((string) $verification['email']),
+        'expires_at' => (string) $verification['expires_at'],
+    ];
+}
+
 function complete_patient_registration(int $verificationId, array $input): array
 {
     ensure_patient_registration_schema();
     ensure_ape_cycle_schema();
-    $firstName = trim((string) ($input['first_name'] ?? ''));
-    $middleName = trim((string) ($input['middle_name'] ?? ''));
-    $lastName = trim((string) ($input['last_name'] ?? ''));
+    $firstName = cliniq_normalize_person_name($input['first_name'] ?? '');
+    $middleName = cliniq_normalize_person_name($input['middle_name'] ?? '');
+    $lastName = cliniq_normalize_person_name($input['last_name'] ?? '');
     $birthdate = trim((string) ($input['birthdate'] ?? ''));
     $sex = normalize_person_sex(trim((string) ($input['sex'] ?? '')));
     $programCode = patient_account_active_program_code((string) ($input['program_code'] ?? ''));
@@ -192,8 +219,16 @@ function complete_patient_registration(int $verificationId, array $input): array
         $person = $db->prepare('INSERT INTO people (id_number, first_name, middle_name, last_name, birthdate, sex) VALUES (?, ?, ?, ?, ?, ?)');
         $person->execute([$studentNumber, $firstName, $middleName !== '' ? $middleName : null, $lastName, $birthdate, $sex]);
         $personId = (int) $db->lastInsertId();
-        $account = $db->prepare("INSERT INTO accounts (person_id, password_hash, email, account_status, status_reason, activated_at) VALUES (?, ?, ?, 'active', NULL, NOW())");
-        $account->execute([$personId, password_hash($password, PASSWORD_DEFAULT), $email]);
+        $passwordHash = password_hash($password, PASSWORD_DEFAULT);
+        $accountExists = $db->prepare('SELECT id FROM accounts WHERE person_id = ? LIMIT 1 FOR UPDATE');
+        $accountExists->execute([$personId]);
+        if ($accountExists->fetchColumn()) {
+            $account = $db->prepare("UPDATE accounts SET password_hash = ?, email = ?, account_status = 'active', status_reason = NULL, activated_at = NOW() WHERE person_id = ?");
+            $account->execute([$passwordHash, $email, $personId]);
+        } else {
+            $account = $db->prepare("INSERT INTO accounts (person_id, password_hash, email, account_status, status_reason, activated_at) VALUES (?, ?, ?, 'active', NULL, NOW())");
+            $account->execute([$personId, $passwordHash, $email]);
+        }
         $accountLookup = $db->prepare('SELECT id FROM accounts WHERE person_id = ? LIMIT 1');
         $accountLookup->execute([$personId]);
         $accountId = (int) $accountLookup->fetchColumn();
@@ -213,9 +248,10 @@ function complete_patient_registration(int $verificationId, array $input): array
         if ($db->inTransaction()) $db->rollBack();
         if ($exception instanceof PDOException) {
             error_log('[CLINiQ Registration] Database error while creating account: ' . $exception->getMessage());
-            if (str_starts_with((string) $exception->getCode(), '23')) {
+            if ((int) ($exception->errorInfo[1] ?? 0) === 1062) {
                 throw new InvalidArgumentException('This student number or email is already registered. Sign in or use password recovery.');
             }
+            error_log('[CLINiQ Registration] Integrity error while creating account: ' . $exception->getMessage());
             throw new RuntimeException('Registration could not be completed. Please try again.');
         }
         throw $exception;

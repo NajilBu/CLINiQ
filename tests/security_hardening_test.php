@@ -32,7 +32,11 @@ if (!str_contains($sources['schema'], 'CREATE TABLE login_attempts')) throw new 
 if (!str_contains($sources['env'], 'validate_production_environment')) throw new RuntimeException('Production environment is not fail-closed.');
 if (str_contains($sources['readme'], 'admin@cliniq.local') || str_contains($sources['readme'], 'Password: `password`')) throw new RuntimeException('README still advertises default credentials.');
 if (str_contains(file_get_contents($root . '/patient-portal/includes/patient-layout.php'), 'STUDENT_DEMO_PASSWORD')) throw new RuntimeException('Patient portal still contains a demo password.');
-$passportPreview = file_get_contents($root . '/patient-portal/passport-demo.php');
-if (str_contains($passportPreview, 'Sofia') || str_contains($passportPreview, 'REQUEST_METHOD')) throw new RuntimeException('Passport preview still contains a public sample workflow.');
+$passportShim = $root . '/patient-portal/passport-demo.php';
+if (is_file($passportShim)) throw new RuntimeException('Retired passport demo shim is still deployable.');
+$passportPage = file_get_contents($root . '/patient-portal/patient-passport.php');
+if ($passportPage === false || !str_contains($passportPage, 'public/emergency.php')) {
+    throw new RuntimeException('Patient Passport does not use the direct emergency route.');
+}
 
 echo "Security hardening source test passed.\n";

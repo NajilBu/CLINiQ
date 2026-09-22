@@ -6,6 +6,8 @@ require_once __DIR__ . '/../services/AuditLog.php';
 require_once __DIR__ . '/../services/ProfilePhoto.php';
 require_once __DIR__ . '/../services/SystemSettings.php';
 require_once __DIR__ . '/../helpers/mail.php';
+require_once __DIR__ . '/data_normalization.php';
+require_once __DIR__ . '/emergency_contact.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     $configuredAppUrl = (string) env_value('APP_URL', '');
@@ -266,8 +268,8 @@ function complete_re_enrollment(string $enrollmentStatus, string $nonEnrollmentR
     if ($enrollmentStatus === 'Still Enrolled') {
         $nonEnrollmentReason = '';
     }
-    $contactNumber = trim($contactNumber);
-    if ($contactNumber === '' || !preg_match('/^[0-9+() .-]{7,30}$/', $contactNumber)) {
+    $contactNumber = cliniq_normalize_phone($contactNumber);
+    if ($contactNumber === null) {
         throw new InvalidArgumentException('Enter a valid contact number so the clinic can reach you.');
     }
     if ($contactConfirmed !== '1') {

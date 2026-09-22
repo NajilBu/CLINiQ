@@ -38,9 +38,10 @@ render_student_auth_header('Recover Password');
 <?php render_cliniq_entry_header([
     'homeUrl' => '../public/index.php',
     'logoUrl' => $clinicLogoSrc,
+    'class' => 'cliniq-entry-header-mobile-hidden',
 ]); ?>
 
-<main class="student-auth-wrap">
+<main class="student-auth-wrap student-recovery-wrap">
     <section class="student-auth-shell">
         <aside class="student-auth-side">
             <div>
@@ -48,7 +49,7 @@ render_student_auth_header('Recover Password');
                     <img src="<?= student_e($clinicLogoSrc) ?>" alt="<?= student_e($clinicProfile['department']) ?> logo">
                 </a>
                 <p class="student-auth-brand-line"><?= student_e($clinicProfile['system_name']) ?></p>
-                <h1 class="student-auth-side-title">Recover<br>Access</h1>
+                <h1 class="student-auth-side-title">Recover Access</h1>
                 <p class="student-auth-side-copy">Request recovery instructions for your patient portal account.</p>
                 <svg class="student-auth-pulse" viewBox="0 0 320 40" preserveAspectRatio="none" aria-hidden="true">
                     <path d="M0 20 H100 L112 20 L120 4 L132 36 L142 20 L154 20 L162 12 L170 28 L178 20 L320 20"/>

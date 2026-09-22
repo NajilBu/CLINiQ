@@ -33,23 +33,15 @@ render_student_auth_header('Reset Password');
 <?php render_cliniq_entry_header([
     'homeUrl' => '../public/index.php',
     'logoUrl' => $clinicLogoSrc,
+    'class' => 'cliniq-entry-header-mobile-hidden',
 ]); ?>
 
 <main class="student-auth-wrap">
     <section class="student-auth-shell">
         <aside class="student-auth-side">
             <div>
-                <a href="../public/index.php" class="student-brand-mark text-decoration-none" aria-label="Go to CLINiQ access portal">
-                    <img src="<?= student_e($clinicLogoSrc) ?>" alt="<?= student_e($clinicProfile['department']) ?> logo">
-                </a>
-                <p class="student-auth-brand-line"><?= student_e($clinicProfile['system_name']) ?></p>
                 <h1 class="student-auth-side-title">Secure<br>Password Reset</h1>
-                <p class="student-auth-side-copy">Choose a new password for your patient health portal.</p>
-                <svg class="student-auth-pulse" viewBox="0 0 320 40" preserveAspectRatio="none" aria-hidden="true">
-                    <path d="M0 20 H100 L112 20 L120 4 L132 36 L142 20 L154 20 L162 12 L170 28 L178 20 L320 20"/>
-                </svg>
             </div>
-            <p class="student-auth-side-footnote">One-time links expire after <?= CLINIQ_PATIENT_RESET_EXPIRY_MINUTES ?> minutes</p>
         </aside>
 
         <div class="student-auth-form-side">
