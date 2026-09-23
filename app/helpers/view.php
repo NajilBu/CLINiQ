@@ -265,7 +265,6 @@ function render_header(string $title): void
     $nav = [
         'Dashboard' => ['group' => 'Overview', 'url' => app_url('dashboard.php'), 'match' => 'dashboard.php', 'icon' => 'dashboard'],
         'Patients' => ['group' => 'People & Records', 'url' => app_url('patients/index.php'), 'match' => '/patients/', 'icon' => 'personal_injury'],
-        'Patient Accounts' => ['group' => 'People & Records', 'url' => app_url('patient-accounts/index.php'), 'match' => '/patient-accounts/', 'icon' => 'manage_accounts', 'roles' => ['admin', 'doctor']],
         'Visits' => ['group' => 'Clinical Operations', 'url' => app_url('visits/index.php'), 'match' => '/visits/', 'icon' => 'clinical_notes'],
         'Alerts' => ['group' => 'Clinical Operations', 'url' => app_url('alerts/index.php'), 'match' => '/alerts/', 'icon' => 'notification_important'],
         'APE' => ['group' => 'Clinical Operations', 'url' => app_url('ape/index.php'), 'match' => '/ape/', 'icon' => 'description'],

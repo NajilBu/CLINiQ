@@ -35,6 +35,11 @@ $patients = array_values(array_filter($patients, static function (array $patient
     if ($type === 'Non-Teaching Personnel') {
         $type = 'Personnel';
     }
+    // Clinic staff have their own staff-management context. Keep them out of
+    // the default patient registry, but allow the explicit Clinic Staff filter.
+    if ($filterType === 'all' && $type === 'Clinic Staff') {
+        return false;
+    }
     $status = (string) ($patient['account_status'] ?? 'Inactive');
     if ($filterType !== 'all' && $type !== $filterType) {
         return false;
@@ -55,6 +60,7 @@ $patients = array_values(array_filter($patients, static function (array $patient
     return true;
 }));
 $filteredRows = count($patients);
+$totalRows = $filteredRows;
 
 $patientColumns = [
     ['headerName' => 'No.', 'field' => 'rowNumber', 'width' => 70, 'minWidth' => 70, 'maxWidth' => 70, 'flex' => 0, 'suppressSizeToFit' => true, 'sortable' => false, 'filter' => false],

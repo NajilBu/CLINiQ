@@ -93,7 +93,13 @@ $stmt->bindValue($parameterIndex, $perPage, PDO::PARAM_INT);
 $stmt->execute();
 $logs = $stmt->fetchAll();
 $auditRows = [];
+$auditDetailModals = [];
 foreach ($logs as $log) {
+    $modalId = 'auditDetailModal' . (int) $log['id'];
+    $metadata = json_decode((string) ($log['metadata'] ?? ''), true);
+    $metadataJson = is_array($metadata)
+        ? json_encode($metadata, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+        : trim((string) ($log['metadata'] ?? ''));
     $auditRows[] = [
         'created' => date('M d, Y g:i A', strtotime($log['created_at'])),
         'actor' => '<p class="audit-primary-text">' . e($log['actor_name'] ?: ucfirst((string) $log['actor_type'])) . '</p><p class="audit-secondary-text">' . e($log['actor_id_number'] ?: audit_log_module_label((string) $log['actor_type'])) . '</p>',
@@ -101,6 +107,18 @@ foreach ($logs as $log) {
         'target' => audit_log_target_label($log),
         'outcome' => '<span class="badge ' . e($log['outcome'] === 'success' ? 'badge-completed' : 'badge-high') . '">' . e($log['outcome'] === 'success' ? 'Successful' : 'Failed') . '</span>',
         'details' => '<span class="audit-detail-summary">' . e(audit_log_metadata_summary($log['metadata'] ?? null)) . '</span>',
+        'rowModalId' => $modalId,
+    ];
+    $auditDetailModals[] = [
+        'id' => $modalId,
+        'created' => date('M d, Y g:i A', strtotime($log['created_at'])),
+        'actor' => $log['actor_name'] ?: ucfirst((string) $log['actor_type']),
+        'actorId' => $log['actor_id_number'] ?: audit_log_module_label((string) $log['actor_type']),
+        'activity' => audit_log_action_label((string) $log['action']),
+        'module' => audit_log_module_label((string) $log['module']),
+        'target' => audit_log_target_label($log),
+        'outcome' => $log['outcome'] === 'success' ? 'Successful' : 'Failed',
+        'metadata' => $metadataJson !== '' ? $metadataJson : 'No additional metadata recorded.',
     ];
 }
 $auditColumns = [
@@ -155,6 +173,32 @@ render_clinic_command_header(
         'emptyTitle' => 'No audit events found',
         'emptyText' => 'No audit events match these filters.',
     ]); ?>
+    <?php foreach ($auditDetailModals as $detail): ?>
+        <div id="<?= e($detail['id']) ?>" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="<?= e($detail['id']) ?>Title">
+            <div class="modal-content bg-white rounded-[1.5rem] w-full max-w-2xl p-7 shadow-2xl border border-outline-variant/10">
+                <div class="flex items-start justify-between gap-4 mb-6">
+                    <div>
+                        <p class="text-[11px] font-black uppercase tracking-widest text-primary mb-1">Audit event details</p>
+                        <h3 id="<?= e($detail['id']) ?>Title" class="font-headline text-2xl font-extrabold text-[#17261d] mb-1"><?= e($detail['activity']) ?></h3>
+                        <p class="text-sm font-bold text-slate-500 mb-0"><?= e($detail['created']) ?></p>
+                    </div>
+                    <button type="button" class="btn btn-ghost justify-center px-3" onclick="closeModal('<?= e($detail['id']) ?>')" aria-label="Close audit event details">
+                        <span class="material-symbols-outlined text-[20px]">close</span>
+                    </button>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+                    <div class="patient-profile-field"><span class="clinic-label">Performed by</span><strong><?= e($detail['actor']) ?><br><span class="text-slate-500 font-bold text-sm"><?= e($detail['actorId']) ?></span></strong></div>
+                    <div class="patient-profile-field"><span class="clinic-label">Activity area</span><strong><?= e($detail['module']) ?></strong></div>
+                    <div class="patient-profile-field"><span class="clinic-label">Affected record</span><strong><?= e($detail['target']) ?></strong></div>
+                    <div class="patient-profile-field"><span class="clinic-label">Result</span><strong><?= e($detail['outcome']) ?></strong></div>
+                </div>
+                <div class="patient-profile-note">
+                    <span class="clinic-label">Additional information</span>
+                    <pre class="m-0 mt-2 whitespace-pre-wrap break-words text-sm font-bold text-slate-600"><?= e($detail['metadata']) ?></pre>
+                </div>
+            </div>
+        </div>
+    <?php endforeach; ?>
     <?php if ($pages > 1): ?><div class="p-4 flex items-center justify-between border-t border-slate-100"><span class="text-xs font-bold text-slate-500">Page <?= $page ?> of <?= $pages ?></span><div class="flex gap-2"><?php if ($page > 1): ?><a class="btn btn-sm btn-outline text-decoration-none" href="?<?= e(http_build_query(array_merge($_GET, ['page' => $page - 1]))) ?>">Previous</a><?php endif; ?><?php if ($page < $pages): ?><a class="btn btn-sm btn-outline text-decoration-none" href="?<?= e(http_build_query(array_merge($_GET, ['page' => $page + 1]))) ?>">Next</a><?php endif; ?></div></div><?php endif; ?>
 </section>
 </div>

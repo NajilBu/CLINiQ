@@ -4,6 +4,7 @@ require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/CliniqPatientProfile.php';
 require_once __DIR__ . '/../../app/services/CliniqVisitWorkflow.php';
 require_once __DIR__ . '/../../app/services/ApeWorkflow.php';
+require_once __DIR__ . '/../../app/services/AlertWorkflow.php';
 require_login();
 
 $id = (int) ($_GET['id'] ?? 0);
@@ -83,7 +84,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'send_
 $visits = cliniq_patient_profile_history((int) $patient['person_id']);
 
 ensure_ape_workflow_schema();
+ensure_alert_workflow_schema();
+$alertStmt = auth_db()->prepare('
+    SELECT a.*,
+           TRIM(CONCAT_WS(" ", rp.first_name, rp.middle_name, rp.last_name)) AS resolved_by_name
+    FROM nurse_alerts a
+    LEFT JOIN people rp ON rp.id = a.resolved_by
+    WHERE a.patient_id = ?
+    ORDER BY a.created_at DESC, a.id DESC
+');
+$alertStmt->execute([(int) $patient['person_id']]);
+$alertReports = $alertStmt->fetchAll();
 $apeRecords = ape_fetch_patient_records((int) $patient['person_id']);
+$latestApeRecord = $apeRecords[0] ?? null;
 $completedApeRecords = array_values(array_filter(
     $apeRecords,
     static fn(array $apeRecord): bool => ape_record_queue($apeRecord) === 'completed'
@@ -163,6 +176,20 @@ if ($patient['patient_type'] === 'Student') {
         $patient['staff_position_title'] ?? '',
     ]))) ?: 'Not specified';
 }
+$latestApeResult = $latestApeRecord ? (string) ($latestApeRecord['result_status'] ?? 'Pending') : 'No APE recorded';
+$latestApeNotes = trim((string) ($latestApeRecord['result_notes'] ?? ''));
+$latestApeDate = $latestApeRecord && !empty($latestApeRecord['exam_date'])
+    ? date('M j, Y', strtotime((string) $latestApeRecord['exam_date']))
+    : 'Not examined yet';
+$apeWorkflowLabel = $latestApeRecord
+    ? trim((string) ($latestApeRecord['clearance_status'] ?? $latestApeRecord['workflow_status'] ?? 'Pending'))
+    : 'Pending';
+$declaredHealthItems = [
+    'Allergies' => trim((string) ($patient['allergies'] ?? '')),
+    'Existing conditions' => trim((string) ($patient['existing_conditions'] ?? '')),
+    'Medications' => trim((string) ($patient['medications'] ?? '')),
+];
+$hasDeclaredHealth = (bool) array_filter($declaredHealthItems);
 
 render_header($fullName . ' - Patient Profile');
 ?>
@@ -172,6 +199,15 @@ render_header($fullName . ' - Patient Profile');
         display: grid;
         gap: 1.5rem;
     }
+
+    /* Keep the clinical review flow grouped: snapshot, summary, alerts, timeline. */
+    .patient-profile-shell > :nth-child(1) { order: 1; }
+    .patient-profile-shell > :nth-child(2) { order: 2; }
+    .patient-profile-shell > :nth-child(3) { order: 5; }
+    .patient-profile-shell > :nth-child(4) { order: 4; }
+    .patient-profile-shell > :nth-child(5) { order: 3; }
+    .patient-profile-shell > :nth-child(6) { order: 6; }
+    .patient-profile-shell > :nth-child(7) { order: 7; }
 
     .patient-profile-card {
         border: 1px solid rgba(199, 220, 205, 0.72);
@@ -421,6 +457,141 @@ render_header($fullName . ' - Patient Profile');
             <div>
                 <p class="clinic-label mb-1">Documents</p>
                 <p class="font-headline text-3xl font-extrabold text-slate-800 leading-none m-0"><?= $documentCount ?></p>
+            </div>
+        </div>
+    </section>
+
+    <section class="clinic-card overflow-hidden">
+        <div class="p-4 md:p-5 border-b border-slate-100 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center">
+                    <span class="material-symbols-outlined">notification_important</span>
+                </div>
+                <div>
+                    <h2 class="font-headline text-xl font-extrabold text-[#17261d] m-0">Alert History</h2>
+                    <p class="text-xs font-bold text-slate-500 m-0">Emergency and nurse alert reports linked to this patient.</p>
+                </div>
+            </div>
+            <span class="badge <?= $alertReports ? 'badge-critical' : 'badge-completed' ?>"><?= count($alertReports) ?> report<?= count($alertReports) === 1 ? '' : 's' ?></span>
+        </div>
+        <?php if ($alertReports): ?>
+            <div class="divide-y divide-slate-100" data-alert-history>
+                <?php foreach ($alertReports as $alert): ?>
+                    <?php
+                    $alertStatus = trim((string) ($alert['status'] ?? 'Pending')) ?: 'Pending';
+                    $alertRisk = trim((string) ($alert['risk_level'] ?? 'Not assessed')) ?: 'Not assessed';
+                    $alertDate = (string) ($alert['created_at'] ?? '');
+                    $alertTitle = trim((string) ($alert['concern'] ?? '')) ?: 'Emergency alert';
+                    ?>
+                    <article class="p-3 md:p-4" data-alert-event
+                             data-alert-date="<?= $alertDate !== '' ? e(date('M d, Y', strtotime($alertDate))) : 'Date not recorded' ?>"
+                             data-alert-time="<?= $alertDate !== '' ? e(date('g:i A', strtotime($alertDate))) : '' ?>"
+                             data-alert-reporter="<?= e(trim((string) ($alert['reporter_name'] ?? '')) ?: 'Clinic staff') ?>"
+                             data-alert-resolver="<?= $alertStatus === 'Resolved' ? e(trim((string) ($alert['resolved_by_name'] ?? ''))) : '' ?>">
+                        <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)] lg:items-start gap-4 min-h-[220px]">
+                            <div class="min-w-0">
+                                <div class="flex flex-wrap items-center gap-2 mb-2">
+                                    <span class="badge <?= e(status_badge_class($alertStatus)) ?>"><?= e($alertStatus) ?></span>
+                                    <span class="badge <?= $alertRisk === 'Critical' || $alertRisk === 'High' ? 'badge-critical' : 'badge-pending' ?>"><?= e($alertRisk) ?> risk</span>
+                                    <?php if (trim((string) ($alert['incident_type'] ?? '')) !== ''): ?>
+                                        <span class="text-[11px] font-black uppercase tracking-widest text-slate-400"><?= e($alert['incident_type']) ?></span>
+                                    <?php endif; ?>
+                                </div>
+                                <h3 class="text-base font-extrabold text-slate-900 mb-1"><?= e($alertTitle) ?></h3>
+                                <p class="text-sm font-bold text-slate-500 mb-2"><?= e(trim((string) ($alert['location'] ?? '')) ?: 'Location not recorded') ?></p>
+                            </div>
+                            <div class="min-w-0 lg:col-start-1 lg:border-t lg:border-slate-100 lg:pt-3">
+                                <?php if (trim((string) ($alert['details'] ?? '')) !== ''): ?>
+                                    <p class="text-sm text-slate-600 whitespace-pre-wrap mb-2"><?= e($alert['details']) ?></p>
+                                <?php endif; ?>
+                            </div>
+                            <div class="text-left lg:col-start-2 lg:row-start-1 lg:row-span-2">
+                                <?php if (trim((string) ($alert['resolution_report'] ?? '')) !== ''): ?>
+                                    <div class="patient-profile-note mb-3 text-left">
+                                        <span class="clinic-label">Resolution report</span>
+                                        <strong class="whitespace-pre-wrap text-slate-600"><?= e($alert['resolution_report']) ?></strong>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+            <div class="care-timeline-pagination grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-center gap-3 px-4" data-alert-footer>
+                <div class="text-center sm:text-left" data-alert-date-meta aria-live="polite"></div>
+                <nav class="pagination justify-center" data-alert-pagination aria-label="Alert history pages"></nav>
+                <div class="text-center sm:text-right" data-alert-meta aria-live="polite"></div>
+            </div>
+        <?php else: ?>
+            <div class="empty-state py-8">
+                <span class="material-symbols-outlined">notifications_off</span>
+                <p class="empty-state-title">No alert reports</p>
+                <p class="empty-state-text">No emergency or nurse alerts have been recorded for this patient.</p>
+            </div>
+        <?php endif; ?>
+    </section>
+
+    <section class="clinic-card overflow-hidden">
+        <div class="p-5 md:p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
+                    <span class="material-symbols-outlined">medical_information</span>
+                </div>
+                <div>
+                    <h2 class="font-headline text-xl font-extrabold text-[#17261d] m-0">Health Summary</h2>
+                    <p class="text-xs font-bold text-slate-500 m-0">Quick clinical view for authorized clinic staff.</p>
+                </div>
+            </div>
+            <span class="badge <?= $latestApeRecord ? ape_status_badge_class($latestApeResult) : 'badge-pending' ?>">
+                <?= e($latestApeRecord ? 'Latest APE · ' . $latestApeDate : 'No APE record') ?>
+            </span>
+        </div>
+        <div class="p-5 md:p-6 grid grid-cols-1 xl:grid-cols-2 gap-5">
+            <div class="patient-profile-card p-5">
+                <div class="flex items-center justify-between gap-3 mb-4">
+                    <div class="flex items-center gap-2">
+                        <span class="material-symbols-outlined text-primary">assignment_turned_in</span>
+                        <h3 class="font-headline text-lg font-extrabold text-slate-900 m-0">Latest APE Findings</h3>
+                    </div>
+                    <span class="badge <?= ape_status_badge_class($latestApeResult) ?>"><?= e($latestApeResult) ?></span>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div class="patient-profile-note">
+                        <span class="clinic-label">Examination date</span>
+                        <strong><?= e($latestApeDate) ?></strong>
+                    </div>
+                    <div class="patient-profile-note">
+                        <span class="clinic-label">Clearance / workflow</span>
+                        <strong><?= e($apeWorkflowLabel !== '' ? $apeWorkflowLabel : 'Pending') ?></strong>
+                    </div>
+                    <div class="patient-profile-note sm:col-span-2 <?= $latestApeResult === 'Referred' || $latestApeResult === 'With Finding' ? 'warning' : '' ?>">
+                        <span class="clinic-label">Finding / result notes</span>
+                        <strong class="whitespace-pre-wrap text-slate-600"><?= e($latestApeNotes !== '' ? $latestApeNotes : 'No APE finding has been recorded.') ?></strong>
+                    </div>
+                </div>
+            </div>
+            <div class="patient-profile-card p-5">
+                <div class="flex items-center gap-2 mb-4">
+                    <span class="material-symbols-outlined text-primary">emergency</span>
+                    <h3 class="font-headline text-lg font-extrabold text-slate-900 m-0">Declared Health Passport</h3>
+                </div>
+                <div class="grid grid-cols-1 gap-3">
+                    <div class="patient-profile-note <?= $declaredHealthItems['Allergies'] !== '' ? 'warning' : '' ?>">
+                        <span class="clinic-label">Allergies</span>
+                        <strong class="whitespace-pre-wrap text-slate-600"><?= e($declaredHealthItems['Allergies'] !== '' ? $declaredHealthItems['Allergies'] : 'None declared') ?></strong>
+                    </div>
+                    <div class="patient-profile-note">
+                        <span class="clinic-label">Existing conditions</span>
+                        <strong class="whitespace-pre-wrap text-slate-600"><?= e($declaredHealthItems['Existing conditions'] !== '' ? $declaredHealthItems['Existing conditions'] : 'None declared') ?></strong>
+                    </div>
+                    <div class="patient-profile-note">
+                        <span class="clinic-label">Medications</span>
+                        <strong class="whitespace-pre-wrap text-slate-600"><?= e($declaredHealthItems['Medications'] !== '' ? $declaredHealthItems['Medications'] : 'None declared') ?></strong>
+                    </div>
+                    <?php if (!$hasDeclaredHealth): ?>
+                        <p class="text-xs font-bold text-amber-700 mb-0">The patient has not declared any health conditions, allergies, or medications in the passport.</p>
+                    <?php endif; ?>
+                </div>
             </div>
         </div>
     </section>
@@ -927,6 +1098,64 @@ render_header($fullName . ' - Patient Profile');
     patientEmailForm?.addEventListener('submit', () => {
         closeModal('patientEmailComposerModal');
     }, true);
+
+    const alertHistory = document.querySelector('[data-alert-history]');
+    const alertPagination = document.querySelector('[data-alert-pagination]');
+    if (alertHistory && alertPagination) {
+        const alertEvents = Array.from(alertHistory.querySelectorAll('[data-alert-event]'));
+        const alertDateMeta = document.querySelector('[data-alert-date-meta]');
+        const alertMeta = document.querySelector('[data-alert-meta]');
+        let alertPage = 1;
+
+        function renderAlertPagination(totalPages) {
+            const windowStart = Math.floor((alertPage - 1) / 5) * 5 + 1;
+            const windowEnd = Math.min(totalPages, windowStart + 4);
+            let markup = `<button type="button" class="pagination-arrow${alertPage === 1 ? ' page-disabled' : ''}" data-alert-page-action="previous" aria-label="Previous alert page" ${alertPage === 1 ? 'disabled' : ''}>&lsaquo;</button>`;
+            for (let page = windowStart; page <= windowEnd; page += 1) {
+                markup += `<button type="button" data-alert-page="${page}"${page === alertPage ? ' class="page-active" aria-current="page"' : ''}>${page}</button>`;
+            }
+            markup += `<button type="button" class="pagination-arrow${alertPage === totalPages ? ' page-disabled' : ''}" data-alert-page-action="next" aria-label="Next alert page" ${alertPage === totalPages ? 'disabled' : ''}>&rsaquo;</button>`;
+            alertPagination.innerHTML = markup;
+        }
+
+        function renderAlertPage() {
+            const totalPages = Math.max(1, alertEvents.length);
+            alertPage = Math.min(Math.max(1, alertPage), totalPages);
+            alertEvents.forEach((event, index) => {
+                event.hidden = index !== alertPage - 1;
+            });
+            const activeAlert = alertEvents[alertPage - 1];
+            if (alertMeta && activeAlert) {
+                const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
+                const reporter = escapeHtml(activeAlert.dataset.alertReporter || 'Clinic staff');
+                const resolver = escapeHtml(activeAlert.dataset.alertResolver);
+                if (alertDateMeta) {
+                    alertDateMeta.innerHTML = `<p class="text-xs font-extrabold text-slate-500 mb-1">${escapeHtml(activeAlert.dataset.alertDate || 'Date not recorded')}</p>`
+                        + `<p class="text-[11px] font-bold text-slate-400 mb-0">${escapeHtml(activeAlert.dataset.alertTime || '')}</p>`;
+                }
+                if (alertMeta) {
+                    alertMeta.innerHTML = `<p class="text-[11px] font-bold text-slate-400 mb-0">Reported by ${reporter}</p>`
+                        + (resolver ? `<p class="text-[11px] font-bold text-slate-400 mb-0">Resolved by ${resolver}</p>` : '');
+                }
+            }
+            renderAlertPagination(totalPages);
+        }
+
+        alertPagination.addEventListener('click', (event) => {
+            const pageButton = event.target.closest('[data-alert-page]');
+            const actionButton = event.target.closest('[data-alert-page-action]');
+            if (pageButton) {
+                alertPage = Number(pageButton.dataset.alertPage) || 1;
+            } else if (actionButton) {
+                alertPage += actionButton.dataset.alertPageAction === 'next' ? 1 : -1;
+            } else {
+                return;
+            }
+            renderAlertPage();
+        });
+
+        renderAlertPage();
+    }
 
     const timeline = document.querySelector('[data-care-timeline]');
     if (!timeline) return;

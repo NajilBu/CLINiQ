@@ -259,6 +259,7 @@ function render_ape_final_decision_actions(array $record, bool $canRecordApeExam
 $record = fetch_ape_record($id);
 $apeUser = current_user() ?? [];
 $canRecordApeExam = in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor', 'nurse'], true);
+$canUploadApeDocument = in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor', 'nurse', 'staff', 'it_expert'], true);
 
 if (!$record) {
     flash_message('error', 'APE record not found.');
@@ -272,6 +273,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $activityLabel = null;
     $activityNotes = null;
     $apeDb = auth_db();
+    $storedClinicDocument = null;
     $clinicalActions = ['record_examination', 'save_document_review', 'save_requirements', 'save_hard_copy_review', 'mark_requirements_complete', 'mark_missing_requirements', 'finalize_exam_clear', 'finalize_exam_follow_up'];
 
     try {
@@ -280,6 +282,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if (in_array($action, $clinicalActions, true) && !$canRecordApeExam) {
             throw new RuntimeException('Only administrators, doctors, and nurses can record or finalize an APE examination.');
+        }
+        if ($action === 'upload_clinic_document' && !$canUploadApeDocument) {
+            throw new RuntimeException('Only authorized clinic staff can submit documents for a patient.');
         }
         $apeDb->beginTransaction();
         // Serialize updates for this APE, including concurrent examination saves.
@@ -304,7 +309,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new RuntimeException('Review and archive the uploaded follow-up documents before clinical clearance.');
         }
 
-        if ($action === 'review_returned_documents') {
+        if ($action === 'upload_clinic_document') {
+            if (($record['clearance_status'] ?? '') === 'Cleared' || ($record['workflow_status'] ?? '') === 'Cleared') {
+                throw new RuntimeException('Document upload is closed because this APE record is already completed.');
+            }
+            $documentType = trim((string) ($_POST['document_type'] ?? ''));
+            if ($documentType === '' || mb_strlen($documentType) > 120) {
+                throw new InvalidArgumentException('Choose a valid APE requirement for the document.');
+            }
+            $requirementLookup = $apeDb->prepare('SELECT requirement_id FROM ape_requirements WHERE ape_id = ? AND requirement_name = ? LIMIT 1');
+            $requirementLookup->execute([$id, $documentType]);
+            $requirementId = (int) ($requirementLookup->fetchColumn() ?: 0);
+            if ($requirementId <= 0) {
+                throw new InvalidArgumentException('Choose one of the requirements listed on this APE record.');
+            }
+            $latestDocument = $apeDb->prepare('SELECT verification_status FROM ape_documents WHERE ape_id = ? AND document_type = ? ORDER BY document_id DESC LIMIT 1');
+            $latestDocument->execute([$id, $documentType]);
+            $latestStatus = (string) ($latestDocument->fetchColumn() ?: '');
+            if ($latestStatus !== '' && $latestStatus !== 'Needs Correction') {
+                throw new RuntimeException($documentType . ' already has a submitted file. Request a correction before replacing it.');
+            }
+            $storedClinicDocument = ape_store_uploaded_file($_FILES['document'] ?? [], 'clinic-ape');
+            $document = $apeDb->prepare("INSERT INTO ape_documents (ape_id, document_type, original_filename, file_path, verification_status, uploaded_by_person_id) VALUES (?, ?, ?, ?, 'Pending', ?)");
+            $document->execute([$id, $documentType, $storedClinicDocument['original_filename'], $storedClinicDocument['file_path'], $staffPersonId]);
+            $requirement = $apeDb->prepare("UPDATE ape_requirements SET status = 'Submitted', remarks = NULL, checked_by_person_id = NULL, checked_at = NULL WHERE requirement_id = ? AND ape_id = ?");
+            $requirement->execute([$requirementId, $id]);
+            if (($record['workflow_status'] ?? '') !== 'Follow-up Required') {
+                $apeDb->prepare("UPDATE ape_records SET workflow_status = 'Submitted' WHERE ape_id = ? AND workflow_status NOT IN ('Cleared', 'Follow-up Required')")->execute([$id]);
+            }
+            $activityLabel = 'Submitted APE document for patient';
+            $activityNotes = $documentType . ': ' . $storedClinicDocument['original_filename'];
+        } elseif ($action === 'review_returned_documents') {
             // Old open tabs must never unlock the saved checklist.
             throw new RuntimeException('Review Returned Documents has moved to the uploaded-file panel. Refresh this page to view and archive the files.');
         } elseif (in_array($action, ['save_document_review', 'save_requirements', 'save_hard_copy_review', 'mark_requirements_complete', 'mark_missing_requirements'], true)) {
@@ -670,6 +705,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } catch (Throwable $e) {
         if ($apeDb->inTransaction()) {
             $apeDb->rollBack();
+        }
+        if ($storedClinicDocument && !empty($storedClinicDocument['absolute_path']) && is_file($storedClinicDocument['absolute_path'])) {
+            @unlink($storedClinicDocument['absolute_path']);
         }
         flash_message('error', $e->getMessage());
     }
@@ -1425,7 +1463,7 @@ render_header('APE Record - ' . $fullName);
                 <?php if (!$requirementsLocked): ?>
                 <div class="ape-checklist-list">
                     <?php foreach ($requirements as $requirement): ?>
-                        <div class="ape-checklist-row">
+                        <div class="ape-checklist-row <?= $canUploadApeDocument && !$apeIsCompleted ? 'cursor-pointer' : '' ?>" <?= $canUploadApeDocument && !$apeIsCompleted ? 'data-clinic-upload-row data-requirement-name="' . e($requirement['requirement_name']) . '" tabindex="0" role="button"' : '' ?>>
                             <div class="ape-checklist-meta">
                                 <strong><?= e($requirement['requirement_name']) ?></strong>
                                 <?php if ($requirement['checked_at']): ?>
@@ -1434,6 +1472,11 @@ render_header('APE Record - ' . $fullName);
                             </div>
                             <div class="ape-checklist-update">
                                 <div class="flex items-center gap-2">
+                                    <?php if ($canUploadApeDocument && !$apeIsCompleted): ?>
+                                        <button type="button" class="btn btn-sm btn-outline text-decoration-none shrink-0" data-clinic-upload-trigger data-requirement-name="<?= e($requirement['requirement_name']) ?>">
+                                            <span class="material-symbols-outlined text-[14px]">upload_file</span> Upload
+                                        </button>
+                                    <?php endif; ?>
                                     <select class="clinic-select ape-requirement-status" disabled data-requirement-preview="<?= (int) $requirement['requirement_id'] ?>" data-requirement-status data-status="<?= e($requirement['status'] ?? 'Missing') ?>" aria-label="Status preview for <?= e($requirement['requirement_name']) ?>">
                                         <?php foreach (['Missing', 'Submitted', 'Verified', 'Needs Correction'] as $status): ?>
                                             <option value="<?= e($status) ?>" <?= ($requirement['status'] ?? '') === $status ? 'selected' : '' ?>><?= e($status) ?></option>
@@ -1502,6 +1545,41 @@ render_header('APE Record - ' . $fullName);
                 </div>
                 <?php endif; ?>
                 </fieldset>
+                <?php if ($canUploadApeDocument && !$apeIsCompleted && $requirements): ?>
+                    <div class="modal-backdrop" id="apeClinicUploadModal" style="display:none;" data-clinic-upload-modal>
+                        <div class="modal-content bg-white rounded-[1.75rem] border border-outline-variant/20 p-6 sm:p-8 w-full max-w-xl shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="apeClinicUploadTitle">
+                            <div class="flex items-start justify-between gap-4 mb-3">
+                                <div>
+                                    <p class="clinic-label text-primary mb-1">Clinic document upload</p>
+                                    <h3 class="font-headline text-xl font-extrabold text-[#17261d] mb-0" id="apeClinicUploadTitle">Submit file</h3>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-ghost" data-clinic-upload-close aria-label="Close upload dialog"><span class="material-symbols-outlined">close</span></button>
+                            </div>
+                            <form method="post" enctype="multipart/form-data" class="space-y-4" data-clinic-upload-form>
+                                <input type="hidden" name="action" value="upload_clinic_document">
+                                <input type="hidden" name="document_type" data-clinic-upload-type>
+                                <div class="rounded-xl border border-primary/20 bg-primary-fixed p-4">
+                                    <p class="clinic-label text-primary mb-1">Requirement</p>
+                                    <strong class="text-sm text-[#17261d]" data-clinic-upload-requirement></strong>
+                                </div>
+                                <div>
+                                    <label class="clinic-label" for="clinicApeDocumentFile">File (PDF, JPG, JPEG, or PNG; max 2 MB)</label>
+                                    <input class="clinic-input" id="clinicApeDocumentFile" name="document" type="file" accept=".pdf,.jpg,.jpeg,.png" required data-clinic-upload-file>
+                                </div>
+                                <div class="hidden rounded-xl border border-slate-200 bg-slate-50 p-3" data-clinic-upload-preview-wrap>
+                                    <p class="clinic-label mb-2">Preview before saving</p>
+                                    <div class="rounded-lg bg-white border border-slate-200 overflow-hidden" data-clinic-upload-preview></div>
+                                    <p class="text-xs font-bold text-slate-500 mt-2 mb-0" data-clinic-upload-filename></p>
+                                </div>
+                                <p class="text-xs font-bold text-slate-500 mb-0">The file will be stored on this student’s APE record as Pending for clinic review.</p>
+                                <div class="flex flex-wrap gap-3 justify-end">
+                                    <button type="button" class="btn btn-ghost" data-clinic-upload-close>Cancel</button>
+                                    <button type="submit" class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Submit this document?" data-confirm-message="The previewed file will be added to this student’s APE record." data-confirm-toast="Uploading document..."><span class="material-symbols-outlined text-[18px]">upload_file</span> Submit File</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                <?php endif; ?>
             </section>
             <?php else: ?>
 
@@ -1625,5 +1703,83 @@ render_header('APE Record - ' . $fullName);
         <?php endif; ?>
     </section>
 </div>
+
+<?php if ($canUploadApeDocument && !$apeIsCompleted && $requirements): ?>
+<script>
+(() => {
+    const modal = document.querySelector('[data-clinic-upload-modal]');
+    const form = document.querySelector('[data-clinic-upload-form]');
+    if (!modal || !form) return;
+    const typeInput = form.querySelector('[data-clinic-upload-type]');
+    const requirementLabel = form.querySelector('[data-clinic-upload-requirement]');
+    const fileInput = form.querySelector('[data-clinic-upload-file]');
+    const previewWrap = form.querySelector('[data-clinic-upload-preview-wrap]');
+    const preview = form.querySelector('[data-clinic-upload-preview]');
+    const filename = form.querySelector('[data-clinic-upload-filename]');
+
+    const close = () => {
+        modal.style.display = 'none';
+        form.reset();
+        typeInput.value = '';
+        requirementLabel.textContent = '';
+        preview.innerHTML = '';
+        filename.textContent = '';
+        previewWrap.classList.add('hidden');
+    };
+    const open = (requirementName) => {
+        typeInput.value = requirementName;
+        requirementLabel.textContent = requirementName;
+        modal.style.display = 'flex';
+        fileInput.focus();
+    };
+    document.querySelectorAll('[data-clinic-upload-trigger]').forEach((button) => {
+        button.addEventListener('click', (event) => {
+            event.stopPropagation();
+            open(button.dataset.requirementName || '');
+        });
+    });
+    document.querySelectorAll('[data-clinic-upload-row]').forEach((row) => {
+        const activate = () => open(row.dataset.requirementName || '');
+        row.addEventListener('click', (event) => {
+            if (event.target.closest('button, a, input, select, textarea, form')) return;
+            activate();
+        });
+        row.addEventListener('keydown', (event) => {
+            if ((event.key === 'Enter' || event.key === ' ') && event.target === row) {
+                event.preventDefault();
+                activate();
+            }
+        });
+    });
+    document.querySelectorAll('[data-clinic-upload-close]').forEach((button) => button.addEventListener('click', close));
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal) close();
+    });
+    fileInput.addEventListener('change', () => {
+        const file = fileInput.files && fileInput.files[0];
+        preview.innerHTML = '';
+        previewWrap.classList.add('hidden');
+        filename.textContent = '';
+        if (!file) return;
+        filename.textContent = `${file.name} · ${(file.size / 1024 / 1024).toFixed(2)} MB`;
+        if (file.size > 2 * 1024 * 1024) {
+            filename.textContent += ' · File exceeds the 2 MB limit';
+            return;
+        }
+        const objectUrl = URL.createObjectURL(file);
+        if (file.type === 'application/pdf') {
+            preview.innerHTML = `<embed src="${objectUrl}" type="application/pdf" style="width:100%;height:18rem;">`;
+        } else if (file.type === 'image/jpeg' || file.type === 'image/png') {
+            preview.innerHTML = `<img src="${objectUrl}" alt="Selected document preview" style="display:block;max-height:18rem;width:100%;object-fit:contain;">`;
+        } else {
+            URL.revokeObjectURL(objectUrl);
+            filename.textContent += ' · Unsupported file type';
+            return;
+        }
+        previewWrap.classList.remove('hidden');
+    });
+})();
+</script>
+<?php endif; ?>
 
 <?php render_footer(); ?>
