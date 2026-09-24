@@ -124,7 +124,14 @@ if (!str_contains($availabilitySource, 'data-working-hours-mode="future"')
     || !str_contains($availabilitySource, 'workingHoursMonthPreview')
     || !str_contains($availabilitySource, 'monthlySchedules')
     || !str_contains($availabilityActionSource, "save_month_schedule")
-    || !str_contains($availabilityActionSource, 'appointment_save_monthly_schedule')) {
+    || !str_contains($availabilityActionSource, 'appointment_save_monthly_schedule')
+    || !str_contains($availabilityActionSource, "\$action === 'add'")
+    || !str_contains($availabilityActionSource, "\$action === 'update'")
+    || !str_contains($availabilityActionSource, "\$action === 'delete_group'")
+    || !str_contains($availabilityActionSource, "\$action === 'delete'")
+    || !str_contains($availabilityActionSource, 'appointment_range_is_open')
+    || !str_contains($availabilityActionSource, 'appointment_active_conflicts_for_range')
+    || str_contains($availabilityActionSource, "\$start < '08:00'")) {
     throw new RuntimeException('Future-month working-hours controls are not connected to appointment scheduling.');
 }
 

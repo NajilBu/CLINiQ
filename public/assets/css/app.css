@@ -1097,9 +1097,14 @@ h6,
     position: absolute !important;
     width: 1px !important;
     height: 1px !important;
+    margin: -1px !important;
+    padding: 0 !important;
+    border: 0 !important;
     overflow: hidden !important;
+    clip: rect(0 0 0 0) !important;
+    clip-path: inset(50%) !important;
     opacity: 0 !important;
-    pointer-events: none !important;
+    white-space: nowrap !important;
 }
 
 .app-profile-photo-form {
@@ -1172,8 +1177,10 @@ h6,
 }
 
 .profile-photo-dialog {
-    width: min(100%, 30rem);
-    padding: 1.4rem;
+    width: min(100%, 42rem);
+    max-height: min(92vh, 42rem);
+    overflow-y: auto;
+    padding: 1.75rem;
     border: 1px solid var(--cliniq-outline);
     border-radius: 1.25rem;
     background: #fff;
@@ -1270,7 +1277,7 @@ h6,
     overflow: hidden;
     width: 11rem;
     height: 11rem;
-    margin: 1.5rem auto 0.8rem;
+    margin: 0.75rem auto 0.8rem;
     border: 4px solid #fff;
     border-radius: 50%;
     color: #fff;
@@ -1284,6 +1291,121 @@ h6,
     width: 100%;
     height: 100%;
     object-fit: cover;
+}
+
+.profile-photo-editor-layout {
+    display: grid;
+    grid-template-columns: minmax(11rem, 0.85fr) minmax(0, 1.15fr);
+    gap: 1rem;
+    margin-top: 1.35rem;
+}
+
+.profile-photo-visual-panel,
+.profile-photo-upload-card,
+.profile-photo-rules {
+    border: 1px solid #dce8df;
+    border-radius: 1rem;
+    background: #f8fbf9;
+}
+
+.profile-photo-visual-panel {
+    display: flex;
+    min-height: 17rem;
+    flex-direction: column;
+    justify-content: center;
+    padding: 1rem;
+}
+
+.profile-photo-panel-label {
+    color: #6d8575;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.profile-photo-preview-caption {
+    max-width: 14rem;
+    margin: 0 auto;
+    color: #6d8173;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.4;
+    text-align: center;
+}
+
+.profile-photo-upload-panel {
+    display: grid;
+    align-content: center;
+    gap: 0.75rem;
+}
+
+.profile-photo-upload-card {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: 0.7rem;
+    padding: 1.1rem;
+    background: #fff;
+}
+
+.profile-photo-upload-icon {
+    display: grid;
+    width: 2.35rem;
+    height: 2.35rem;
+    place-items: center;
+    border-radius: 0.7rem;
+    color: #2f7b4a;
+    background: #e7f4eb;
+}
+
+.profile-photo-upload-card h4 {
+    margin: 0.1rem 0 0.25rem;
+    color: #17261d;
+    font-size: 0.95rem;
+    font-weight: 800;
+}
+
+.profile-photo-upload-card p {
+    margin: 0;
+    color: #6d8173;
+    font-size: 0.78rem;
+    font-weight: 600;
+    line-height: 1.45;
+}
+
+.profile-photo-upload-card .profile-photo-choose {
+    grid-column: 1 / -1;
+    justify-content: center;
+    width: 100%;
+}
+
+.profile-photo-selected-file {
+    grid-column: 1 / -1;
+    overflow: hidden;
+    color: #2f7b4a !important;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.profile-photo-rules {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.75rem 0.9rem;
+    color: #607568;
+}
+
+.profile-photo-rules .material-symbols-outlined {
+    font-size: 1.05rem;
+    color: #6b8f77;
+}
+
+.profile-photo-rules p {
+    margin: 0;
+    font-size: 0.72rem;
+    font-weight: 700;
 }
 
 .profile-photo-help {
@@ -1309,6 +1431,25 @@ h6,
 }
 
 @media (max-width: 640px) {
+    .profile-photo-dialog {
+        width: min(100%, 30rem);
+        padding: 1.15rem;
+        border-radius: 1rem;
+    }
+
+    .profile-photo-editor-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .profile-photo-visual-panel {
+        min-height: 0;
+    }
+
+    .profile-photo-preview-frame {
+        width: 9rem;
+        height: 9rem;
+    }
+
     .profile-photo-dialog-actions > * {
         flex: 1 1 100%;
         justify-content: center;
@@ -1347,6 +1488,41 @@ html.cliniq-dark .profile-photo-confirmation h4 {
 
 html.cliniq-dark .profile-photo-eyebrow {
     color: #67b77d;
+}
+
+html.cliniq-dark .profile-photo-dialog-subtitle,
+html.cliniq-dark .profile-photo-preview-caption,
+html.cliniq-dark .profile-photo-upload-card p {
+    color: #b5c9ba;
+}
+
+html.cliniq-dark .profile-photo-visual-panel,
+html.cliniq-dark .profile-photo-upload-card,
+html.cliniq-dark .profile-photo-rules {
+    border-color: #365742;
+    background: #1d3828;
+}
+
+html.cliniq-dark .profile-photo-upload-card {
+    background: #172a20;
+}
+
+html.cliniq-dark .profile-photo-panel-label,
+html.cliniq-dark .profile-photo-rules {
+    color: #b5c9ba;
+}
+
+html.cliniq-dark .profile-photo-upload-card h4 {
+    color: #e6f2e9;
+}
+
+html.cliniq-dark .profile-photo-upload-icon {
+    color: #d9f2e3;
+    background: #285239;
+}
+
+html.cliniq-dark .profile-photo-selected-file {
+    color: #72c38a !important;
 }
 
 html.cliniq-dark .profile-photo-close {
@@ -1918,6 +2094,19 @@ html.cliniq-dark .app-profile-photo:focus-visible {
 .working-hours-close { display: grid; place-items: center; flex: none; width: 2.2rem; height: 2.2rem; border: 1px solid #dbe7dd; border-radius: 0.7rem; background: #fff; color: #52665a; cursor: pointer; }
 .working-hours-close:hover { background: #eaf5ed; color: #245c38; }
 .working-hours-modal-body { flex: 1; min-height: 0; overflow-y: auto; padding: 1.25rem 1.5rem; }
+.working-hours-flow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .45rem; margin: 0 0 1.15rem; padding: 0; list-style: none; }
+.working-hours-flow li { display: grid; grid-template-columns: 1.45rem minmax(0, 1fr); column-gap: .4rem; align-items: center; min-width: 0; padding: .55rem; border: 1px solid #e1eae3; border-radius: .7rem; background: #fbfdfb; color: #718078; }
+.working-hours-flow li > span { display: grid; grid-row: span 2; place-items: center; width: 1.45rem; height: 1.45rem; border-radius: 999px; color: #627168; background: #e9efea; font-size: .66rem; font-weight: 800; }
+.working-hours-flow strong, .working-hours-flow small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.working-hours-flow strong { color: #53645a; font-size: .68rem; font-weight: 800; }
+.working-hours-flow small { margin-top: .05rem; font-size: .58rem; font-weight: 700; }
+.working-hours-flow .is-current { border-color: #91c7a1; background: #eef9f1; }
+.working-hours-flow .is-current > span { color: #fff; background: #347a51; }
+.working-hours-flow .is-current strong { color: #245c38; }
+.working-hours-section-heading { display: flex; align-items: flex-start; gap: .55rem; margin: 0 0 .65rem; }
+.working-hours-section-heading > span, .working-hours-step-label { display: inline-flex; align-items: center; width: max-content; padding: .18rem .42rem; border-radius: 999px; color: #347a51; background: #e8f5eb; font-size: .61rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.working-hours-section-heading h4 { margin: 0; color: #183325; font-size: .88rem; font-weight: 800; }
+.working-hours-section-heading p { margin: .14rem 0 0; color: #6a7c70; font-size: .72rem; line-height: 1.35; }
 .working-hours-mode-switch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.65rem; margin-bottom: 1rem; }
 .working-hours-mode-switch button { display: flex; align-items: center; gap: 0.65rem; min-width: 0; padding: 0.8rem; border: 1px solid #dfe8e1; border-radius: 0.9rem; background: #fff; color: #617268; text-align: left; cursor: pointer; }
 .working-hours-mode-switch button.is-active { border-color: #85ba96; background: #edf8f0; color: #245c38; box-shadow: inset 0 0 0 1px rgba(52, 122, 81, 0.08); }
@@ -1945,6 +2134,7 @@ html.cliniq-dark .app-profile-photo:focus-visible {
 .working-hours-quick-controls label { display: grid; gap: 0.25rem; min-width: 0; color: #41604b; font-size: 0.72rem; font-weight: 800; }
 .working-hours-select { box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; }
 .working-hours-days-heading { display: flex; align-items: end; justify-content: space-between; gap: 0.5rem; margin: 1.35rem 0 0.65rem; }
+.working-hours-step-label { margin-bottom: .3rem; }
 .working-hours-open-days { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: 0.5rem; }
 .working-hours-open-day { display: flex; align-items: center; gap: 0.5rem; min-height: 2.75rem; margin: 0; padding: 0.55rem 0.7rem; border: 1px solid #e0e9e1; border-radius: 0.8rem; background: #fafcfa; color: #63756a; font-size: 0.8rem; font-weight: 800; cursor: pointer; }
 .working-hours-open-day:has(input:checked) { border-color: #a7d1b3; background: #edf8f0; color: #245c38; }
@@ -1972,9 +2162,11 @@ html.cliniq-dark .app-profile-photo:focus-visible {
 .working-hours-preview-grid small { margin-top: 0.18rem; font-size: 0.55rem; font-weight: 800; line-height: 1.2; }
 .working-hours-safety-note { display: flex; align-items: flex-start; gap: 0.45rem; margin: 1rem 0 0; color: #63776a; font-size: 0.75rem; }
 .working-hours-safety-note .material-symbols-outlined { font-size: 1rem; color: #398157; }
-.working-hours-modal-footer { display: flex; justify-content: flex-end; gap: 0.6rem; flex: none; padding: 0.9rem 1.5rem; border-top: 1px solid #e4ece5; background: #fff; }
+.working-hours-modal-footer { display: flex; align-items: center; justify-content: flex-end; gap: 0.6rem; flex: none; padding: 0.9rem 1.5rem; border-top: 1px solid #e4ece5; background: #fff; }
 .working-hours-delete-month { margin-right: auto; color: #b42318; border-color: #f2c8c4; }
 .working-hours-modal-footer .btn { display: inline-flex; align-items: center; gap: 0.4rem; }
+.working-hours-footer-note { display: inline-flex; align-items: center; gap: .32rem; margin-right: auto; color: #66796d; font-size: .7rem; font-weight: 700; }
+.working-hours-footer-note .material-symbols-outlined { color: #398157; font-size: 1rem; }
 
 @media (max-width: 620px) {
     .working-hours-summary { align-items: flex-start; flex-wrap: wrap; margin: 0.85rem; padding: 0.85rem; }
@@ -1984,13 +2176,15 @@ html.cliniq-dark .app-profile-photo:focus-visible {
     .working-hours-modal-card { max-height: calc(100dvh - 1rem); border-radius: 1rem; }
     .working-hours-modal-header { padding: 1rem; }
     .working-hours-modal-body { padding: 1rem; }
+    .working-hours-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .working-hours-future-picker { grid-template-columns: 1fr; }
     .working-hours-open-days { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .working-hours-override-heading .btn { width: 100%; justify-content: center; }
     .working-hours-override { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .working-hours-override label:first-child { grid-column: 1 / -1; }
     .working-hours-remove-override { grid-column: 2; justify-self: end; }
-    .working-hours-modal-footer { padding: 0.75rem 1rem; }
+    .working-hours-modal-footer { flex-wrap: wrap; padding: 0.75rem 1rem; }
+    .working-hours-footer-note { width: 100%; margin-right: 0; }
 }
 
 #apeBatchModal .modal-content {
@@ -4590,7 +4784,7 @@ textarea.record-sheet-field {
 
 @media (min-width: 1280px) {
     .ape-queue-map-grid {
-        grid-template-columns: repeat(5, minmax(0, 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
     }
 }
 
@@ -5297,6 +5491,46 @@ body.cliniq-drag-scroll-active * {
     grid-template-columns: minmax(0, 1fr) 22.5rem;
     min-width: 0;
 }
+
+/* Guided clinic-availability flow: keeps every scheduling control in one sequence. */
+.appointment-availability-guide { border-left: 1px solid #e2e8f0; }
+.appointment-availability-form-card.appointment-availability-flow-card { padding: 1.35rem; border-bottom: 0; }
+.appointment-availability-eyebrow { margin: 0 0 0.25rem; color: #43855b; font-size: 0.67rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+.availability-flow-steps { display: grid; gap: .45rem; margin: 1rem 0 1.25rem; padding: 0; list-style: none; }
+.availability-flow-steps li { display: flex; align-items: center; gap: .65rem; padding: .55rem .65rem; border: 1px solid #e2e8f0; border-radius: .75rem; color: #64748b; background: #fff; }
+.availability-flow-steps li > span { display: grid; place-items: center; width: 1.45rem; height: 1.45rem; border-radius: 999px; color: #64748b; background: #eaf0f5; font-size: .7rem; font-weight: 800; }
+.availability-flow-steps strong, .availability-flow-steps small { display: block; }
+.availability-flow-steps strong { color: #475569; font-size: .76rem; font-weight: 800; }
+.availability-flow-steps small { margin-top: .08rem; font-size: .66rem; font-weight: 700; }
+.availability-flow-steps .is-current { border-color: color-mix(in srgb, var(--cliniq-primary) 42%, #dbe5df); background: color-mix(in srgb, var(--cliniq-primary) 7%, #fff); }
+.availability-flow-steps .is-current > span, .availability-flow-steps .is-complete > span { color: #fff; background: var(--cliniq-primary); }
+.availability-flow-steps .is-current strong, .availability-flow-steps .is-complete strong { color: #245c38; }
+.availability-mode-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem; }
+.availability-mode-choice { display: flex; gap: .5rem; align-items: flex-start; min-width: 0; padding: .7rem; border: 1px solid #dbe5df; border-radius: .75rem; color: #4b5563; background: #fff; text-align: left; }
+.availability-mode-choice > .material-symbols-outlined { color: #6b8f77; font-size: 1.2rem; }
+.availability-mode-choice strong, .availability-mode-choice small { display: block; }
+.availability-mode-choice strong { color: #334155; font-size: .74rem; font-weight: 800; }
+.availability-mode-choice small { margin-top: .12rem; color: #64748b; font-size: .64rem; font-weight: 600; line-height: 1.2; }
+.availability-mode-choice.is-selected { border-color: var(--cliniq-primary); background: color-mix(in srgb, var(--cliniq-primary) 8%, #fff); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cliniq-primary) 24%, transparent); }
+.availability-mode-choice.is-selected > .material-symbols-outlined, .availability-mode-choice.is-selected strong { color: #245c38; }
+.availability-native-toggle { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.availability-selection-review { display: grid; gap: .4rem; padding: .8rem; border: 1px solid #e2e8f0; border-radius: .75rem; background: #f8fafc; }
+.availability-selection-review p { margin: 0; color: #64748b; font-size: .72rem; font-weight: 700; line-height: 1.4; }
+.availability-selection-review .appointment-selected-time-slots { margin-top: .1rem; }
+.appointment-availability-timeline { border-top: 1px solid #e2e8f0; background: #fbfdff; }
+.appointment-timeline-heading { display: flex; align-items: center; justify-content: space-between; padding: 1.2rem 1.35rem .8rem; }
+.appointment-timeline-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: .75rem; padding: 0 1.35rem 1.35rem; }
+.appointment-block-row { width: 100%; padding: .8rem; text-align: left; cursor: pointer; transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease; }
+.appointment-block-row:hover, .appointment-block-row:focus-visible { border-color: color-mix(in srgb, var(--cliniq-primary) 45%, #dbe5df); box-shadow: 0 8px 20px rgba(15, 23, 42, .08); outline: none; transform: translateY(-1px); }
+.appointment-timeline-marker { display: grid !important; place-items: center; width: 2rem; height: 2rem; margin: 0 !important; border-radius: .6rem; color: #c7372f !important; background: #fff0f0; font-size: 1.1rem !important; }
+.appointment-block-row-copy { flex: 1; min-width: 0; }
+.appointment-block-row-action { display: inline-flex !important; align-items: center; gap: .1rem; margin: 0 !important; color: #377c52 !important; white-space: nowrap; }
+.appointment-block-row-action .material-symbols-outlined { font-size: 1rem; }
+.appointment-timeline-empty { display: flex; align-items: center; gap: .7rem; grid-column: 1 / -1; padding: 1rem; border: 1px dashed #cbd8d0; border-radius: .8rem; color: #64748b; background: #fff; }
+.appointment-timeline-empty > .material-symbols-outlined { color: #43855b; }
+.appointment-timeline-empty strong, .appointment-timeline-empty span { display: block; }
+.appointment-timeline-empty strong { color: #334155; font-size: .8rem; }
+.appointment-timeline-empty div span { margin-top: .16rem; font-size: .71rem; font-weight: 600; }
 
 #clinic-availability {
     scroll-margin-top: 1.5rem;
@@ -7921,4 +8155,468 @@ html.cliniq-dark .settings-shell .settings-dropdown-group-link small {
 html.cliniq-dark .settings-shell .settings-profile-row-arrow,
 html.cliniq-dark .settings-shell .settings-dropdown-group-link .material-symbols-outlined {
     color: #8ed6a0 !important;
+}
+
+/* Phase 1 stays visually separate from the clinical examination workspace. */
+.ape-initial-documents-panel {
+    border: 1px solid #d8e7dc;
+    border-radius: 1.25rem;
+    background: #fbfdfb;
+    overflow: hidden;
+}
+
+.ape-initial-documents-details > summary {
+    list-style: none;
+}
+
+.ape-initial-documents-details > summary::-webkit-details-marker {
+    display: none;
+}
+
+.ape-initial-documents-summary {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    min-height: 5.5rem;
+    padding: 1rem 1.25rem;
+    cursor: pointer;
+}
+
+.ape-initial-documents-summary:hover {
+    background: #f3f8f4;
+}
+
+.ape-initial-documents-icon {
+    display: grid;
+    width: 2.5rem;
+    height: 2.5rem;
+    place-items: center;
+    border-radius: .85rem;
+    background: #e8f5eb;
+    color: #2c7446;
+}
+
+.ape-initial-documents-summary strong,
+.ape-initial-documents-summary small {
+    display: block;
+}
+
+.ape-initial-documents-summary strong {
+    color: #17261d;
+    font-weight: 800;
+}
+
+.profile-photo-dialog-subtitle {
+    max-width: 30rem;
+    margin: 0.35rem 0 0;
+    color: #64756a;
+    font-size: 0.8rem;
+    font-weight: 600;
+    line-height: 1.45;
+}
+
+.ape-initial-documents-summary small {
+    margin-top: .18rem;
+    color: #64748b;
+    font-size: .75rem;
+    font-weight: 700;
+}
+
+.ape-initial-documents-chevron {
+    color: #64748b;
+    transition: transform .18s ease;
+}
+
+.ape-initial-documents-details[open] .ape-initial-documents-chevron {
+    transform: rotate(180deg);
+}
+
+.ape-initial-documents-body {
+    border-top: 1px solid #d8e7dc;
+    padding: 1.25rem;
+}
+
+.ape-initial-documents-intro {
+    margin-bottom: 1rem;
+}
+
+.ape-initial-document-list {
+    display: grid;
+    gap: .65rem;
+}
+
+.ape-initial-document-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 1rem;
+    padding: .9rem 1rem;
+    border: 1px solid #e2e8f0;
+    border-radius: .9rem;
+    background: #fff;
+}
+
+.ape-initial-document-state,
+.ape-initial-document-actions {
+    display: flex;
+    align-items: center;
+    gap: .55rem;
+}
+
+.ape-initial-document-actions {
+    justify-content: flex-end;
+}
+
+html.cliniq-dark .app-content .ape-initial-documents-panel {
+    background: #14271b;
+    border-color: #3b5945;
+}
+
+html.cliniq-dark .app-content .ape-initial-documents-summary:hover {
+    background: #1a3322;
+}
+
+html.cliniq-dark .app-content .ape-initial-documents-icon {
+    color: #baf1c9;
+    background: #1d4a31;
+}
+
+html.cliniq-dark .app-content .ape-initial-documents-summary strong {
+    color: #e7f4ea;
+}
+
+html.cliniq-dark .app-content .ape-initial-documents-summary small,
+html.cliniq-dark .app-content .ape-initial-documents-chevron,
+html.cliniq-dark .app-content .ape-initial-document-state span,
+html.cliniq-dark .app-content .ape-checklist-meta span {
+    color: #a9c0b0;
+}
+
+html.cliniq-dark .app-content .ape-initial-documents-body {
+    border-color: #3b5945;
+}
+
+html.cliniq-dark .app-content .ape-initial-document-row {
+    background: #14271b;
+    border-color: #3b5945;
+}
+
+/* Phase 3 document review: one decision surface, with support actions kept secondary. */
+.ape-review-context-note {
+    display: flex;
+    align-items: flex-start;
+    gap: .65rem;
+    padding: .9rem 1rem;
+    border: 1px solid #fde2a1;
+    border-radius: .9rem;
+    background: #fffaf0;
+    color: #7c4a03;
+}
+
+.ape-review-context-note .material-symbols-outlined {
+    margin-top: .05rem;
+    color: #b7791f;
+}
+
+.ape-review-context-note p {
+    font-size: .8rem;
+    font-weight: 700;
+}
+
+.ape-review-group-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+}
+
+.ape-review-group-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    min-height: 2.8rem;
+    padding: .55rem .8rem;
+    border: 1px solid #d7e4db;
+    border-radius: .75rem;
+    background: #fff;
+    color: #435a4a;
+    font-size: .8rem;
+    font-weight: 800;
+    text-decoration: none;
+}
+
+.ape-review-group-tab:hover {
+    border-color: #77a888;
+    color: #256b42;
+}
+
+.ape-review-group-tab.is-active {
+    border-color: #3f8757;
+    background: #e9f5ec;
+    color: #1e6a3f;
+}
+
+.ape-review-group-tab .material-symbols-outlined {
+    font-size: 1.15rem;
+}
+
+.ape-review-group-tab-count {
+    display: inline-grid;
+    min-width: 1.35rem;
+    height: 1.35rem;
+    place-items: center;
+    border-radius: 999px;
+    background: rgba(63, 135, 87, .12);
+    font-size: .68rem;
+}
+
+.ape-review-waiting-state {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 1rem;
+    padding: 1.15rem;
+    border: 1px solid #f7d77d;
+    border-radius: 1rem;
+    background: #fffbeb;
+}
+
+.ape-review-waiting-icon {
+    display: grid;
+    width: 2.5rem;
+    height: 2.5rem;
+    place-items: center;
+    border-radius: .8rem;
+    background: #fff1bd;
+    color: #9a5c00;
+}
+
+.ape-review-workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(20rem, .85fr);
+    gap: 1rem;
+    align-items: start;
+}
+
+.ape-review-file-panel,
+.ape-review-action-panel {
+    min-width: 0;
+    border: 1px solid #dfe9e2;
+    border-radius: 1rem;
+    background: #fff;
+}
+
+.ape-review-file-panel {
+    padding: 1.25rem;
+}
+
+.ape-review-action-panel {
+    display: grid;
+    gap: 1rem;
+    padding: 1.25rem;
+    background: #fcfefd;
+}
+
+.ape-review-mode-selector {
+    display: grid;
+    gap: .55rem;
+}
+
+.ape-review-mode-button {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: .7rem;
+    width: 100%;
+    padding: .8rem .9rem;
+    border: 1px solid #d8e3dc;
+    border-radius: .8rem;
+    background: #fff;
+    color: #31473a;
+    text-align: left;
+}
+
+.ape-review-mode-button:hover {
+    border-color: #7bae8a;
+    background: #f7fbf8;
+}
+
+.ape-review-mode-button.is-active {
+    border-color: #3f8757;
+    background: #eaf6ed;
+    color: #1f6a3f;
+    box-shadow: 0 0 0 2px rgba(63, 135, 87, .09);
+}
+
+.ape-review-mode-button > .material-symbols-outlined {
+    font-size: 1.25rem;
+}
+
+.ape-review-mode-button strong,
+.ape-review-mode-button small {
+    display: block;
+}
+
+.ape-review-mode-button strong {
+    font-size: .85rem;
+}
+
+.ape-review-mode-button small {
+    margin-top: .08rem;
+    color: #718376;
+    font-size: .71rem;
+    font-weight: 700;
+}
+
+.ape-review-clinic-upload {
+    padding: .85rem;
+    border: 1px solid #dfe8e2;
+    border-radius: .8rem;
+    background: #f6faf7;
+}
+
+.ape-review-clinic-upload summary {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    cursor: pointer;
+    color: #365342;
+    font-size: .78rem;
+    font-weight: 800;
+}
+
+.ape-review-clinic-upload > p {
+    margin: .6rem 0 .75rem;
+    color: #64748b;
+    font-size: .75rem;
+    font-weight: 700;
+}
+
+.ape-review-decision-copy {
+    display: flex;
+    align-items: flex-start;
+    gap: .55rem;
+    padding: .75rem .8rem;
+    border-radius: .75rem;
+    font-size: .77rem;
+    font-weight: 700;
+}
+
+.ape-review-decision-copy.is-archive {
+    background: #eff9f1;
+    color: #27633b;
+}
+
+.ape-review-decision-copy.is-return {
+    background: #fff8e8;
+    color: #8a5100;
+}
+
+.ape-review-decision-copy .material-symbols-outlined {
+    font-size: 1.05rem;
+}
+
+.ape-review-validation-copy {
+    margin: 0;
+    color: #9a5c00;
+    font-size: .75rem;
+    font-weight: 800;
+}
+
+.ape-review-notification-copy {
+    display: flex;
+    align-items: flex-start;
+    gap: .4rem;
+    margin: 0;
+    color: #64748b;
+    font-size: .73rem;
+    font-weight: 700;
+}
+
+.ape-review-notification-copy .material-symbols-outlined {
+    font-size: 1rem;
+}
+
+.ape-review-return-submit {
+    color: #a14d00;
+    border-color: rgba(180, 83, 9, .25);
+}
+
+html.cliniq-dark .app-content .ape-review-file-panel,
+html.cliniq-dark .app-content .ape-review-action-panel {
+    border-color: #3b5945;
+    background: #14271b;
+}
+
+html.cliniq-dark .app-content .ape-review-group-tab {
+    border-color: #3b5945;
+    background: #14271b;
+    color: #b9cebe;
+}
+
+html.cliniq-dark .app-content .ape-review-group-tab.is-active,
+html.cliniq-dark .app-content .ape-review-mode-button.is-active {
+    border-color: #5ba974;
+    background: #1b4229;
+    color: #c7f1d2;
+}
+
+html.cliniq-dark .app-content .ape-review-mode-button {
+    border-color: #3b5945;
+    background: #14271b;
+    color: #d8e9dc;
+}
+
+html.cliniq-dark .app-content .ape-review-mode-button small,
+html.cliniq-dark .app-content .ape-review-clinic-upload > p,
+html.cliniq-dark .app-content .ape-review-notification-copy {
+    color: #a9c0b0;
+}
+
+html.cliniq-dark .app-content .ape-review-clinic-upload {
+    border-color: #3b5945;
+    background: #1a3322;
+}
+
+html.cliniq-dark .app-content .ape-review-clinic-upload summary {
+    color: #c7e5ce;
+}
+
+@media (max-width: 760px) {
+    .ape-initial-documents-summary {
+        align-items: flex-start;
+        min-height: 0;
+        padding: 1rem;
+    }
+
+    .ape-initial-documents-summary .badge {
+        display: none;
+    }
+
+    .ape-initial-documents-body {
+        padding: 1rem;
+    }
+
+    .ape-initial-document-row {
+        grid-template-columns: 1fr;
+        gap: .7rem;
+    }
+
+    .ape-initial-document-state,
+    .ape-initial-document-actions {
+        justify-content: space-between;
+        flex-wrap: wrap;
+    }
+
+    .ape-review-workspace {
+        grid-template-columns: 1fr;
+    }
+
+    .ape-review-file-panel,
+    .ape-review-action-panel {
+        padding: 1rem;
+    }
+
+    .ape-review-waiting-state {
+        grid-template-columns: 1fr;
+        gap: .7rem;
+    }
 }

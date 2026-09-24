@@ -31,10 +31,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('Appointment not found.');
             }
 
+            if ((string) $appointment['status'] !== $status
+                && !appointment_status_transition_is_allowed((string) $appointment['status'], $status)) {
+                throw new InvalidArgumentException('This appointment cannot be moved from ' . $appointment['status'] . ' to ' . $status . '.');
+            }
+
             if ($status === 'Scheduled') {
                 $appointmentDatetime = (string) $appointment['appointment_datetime'];
-                if (!appointment_slot_is_open(substr($appointmentDatetime, 0, 10), substr($appointmentDatetime, 11, 8))) {
+                $appointmentDate = substr($appointmentDatetime, 0, 10);
+                if (!appointment_slot_is_open($appointmentDate, substr($appointmentDatetime, 11, 8))) {
                     throw new InvalidArgumentException('This request is outside the clinic working days or hours. Choose a valid time before approving it.');
+                }
+                $blocks = appointment_blocks_for_month(appointment_month_from_request(substr($appointmentDate, 0, 7)));
+                if (appointment_time_is_blocked($appointmentDate, substr($appointmentDatetime, 11, 8), $blocks)) {
+                    throw new InvalidArgumentException('This request falls within an unavailable clinic period. Remove the block or choose another appointment time before approving it.');
                 }
                 $apeConflict = appointment_ape_batch_conflict($appointmentDatetime);
                 if ($apeConflict !== null) {

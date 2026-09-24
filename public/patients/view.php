@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../app/services/CliniqVisitWorkflow.php';
 require_once __DIR__ . '/../../app/services/ApeWorkflow.php';
 require_once __DIR__ . '/../../app/services/AlertWorkflow.php';
 require_once __DIR__ . '/../../app/services/PatientEmail.php';
+require_once __DIR__ . '/../../app/services/AppointmentWorkflow.php';
 require_login();
 
 $id = (int) ($_GET['id'] ?? 0);
@@ -118,6 +119,33 @@ $refStmt = auth_db()->prepare('
 $refStmt->execute([(int) $patient['person_id']]);
 $referrals = $refStmt->fetchAll();
 
+ensure_appointment_schema();
+$appointmentStmt = appointment_db()->prepare('
+    SELECT appointment_id, appointment_datetime, purpose, status, notes, cancellation_reason, created_at
+    FROM appointments
+    WHERE patient_id = ?
+    ORDER BY appointment_datetime ASC, created_at DESC
+');
+$appointmentStmt->execute([(int) $patient['person_id']]);
+$appointments = $appointmentStmt->fetchAll();
+$nowTimestamp = time();
+$upcomingAppointments = [];
+$appointmentHistory = [];
+foreach ($appointments as $appointment) {
+    $appointmentTimestamp = strtotime((string) ($appointment['appointment_datetime'] ?? '')) ?: 0;
+    $isPastStatus = in_array((string) ($appointment['status'] ?? ''), ['Completed', 'Cancelled', 'No Show'], true);
+    if (!$isPastStatus && $appointmentTimestamp >= $nowTimestamp) {
+        $upcomingAppointments[] = $appointment;
+    } else {
+        $appointmentHistory[] = $appointment;
+    }
+}
+usort($appointmentHistory, static function (array $left, array $right): int {
+    return (strtotime((string) ($right['appointment_datetime'] ?? '')) ?: 0)
+        <=> (strtotime((string) ($left['appointment_datetime'] ?? '')) ?: 0);
+});
+$nextAppointment = $upcomingAppointments[0] ?? null;
+
 $latestVisit = null;
 foreach ($visits as $visit) {
     if (!$latestVisit || strtotime($visit['visit_datetime']) > strtotime($latestVisit['visit_datetime'])) {
@@ -178,7 +206,8 @@ if ($patient['patient_type'] === 'Student') {
         $patient['staff_position_title'] ?? '',
     ]))) ?: 'Not specified';
 }
-$latestApeResult = $latestApeRecord ? (string) ($latestApeRecord['result_status'] ?? 'Pending') : 'No APE recorded';
+$latestApeStoredResult = $latestApeRecord ? (string) ($latestApeRecord['result_status'] ?? 'Pending') : 'No APE recorded';
+$latestApeResult = in_array($latestApeStoredResult, ['Normal', 'With Finding'], true) ? 'Examined' : $latestApeStoredResult;
 $latestApeNotes = trim((string) ($latestApeRecord['result_notes'] ?? ''));
 $latestApeDate = $latestApeRecord && !empty($latestApeRecord['exam_date'])
     ? date('M j, Y', strtotime((string) $latestApeRecord['exam_date']))
@@ -202,14 +231,61 @@ render_header($fullName . ' - Patient Profile');
         gap: 1.5rem;
     }
 
-    /* Keep the clinical review flow grouped: snapshot, summary, alerts, timeline. */
-    .patient-profile-shell > :nth-child(1) { order: 1; }
-    .patient-profile-shell > :nth-child(2) { order: 2; }
-    .patient-profile-shell > :nth-child(3) { order: 5; }
-    .patient-profile-shell > :nth-child(4) { order: 4; }
-    .patient-profile-shell > :nth-child(5) { order: 3; }
-    .patient-profile-shell > :nth-child(6) { order: 6; }
-    .patient-profile-shell > :nth-child(7) { order: 7; }
+    .patient-profile-tabs {
+        display: flex;
+        gap: 0.45rem;
+        overflow-x: auto;
+        padding: 0.35rem;
+        border: 1px solid rgba(199, 220, 205, 0.75);
+        border-radius: 1rem;
+        background: #f8fbf9;
+        scrollbar-width: thin;
+    }
+
+    .patient-profile-tab {
+        flex: 0 0 auto;
+        min-height: 2.7rem;
+        padding: 0.65rem 1rem;
+        border: 0;
+        border-radius: 0.75rem;
+        background: transparent;
+        color: #64748b;
+        font-size: 0.78rem;
+        font-weight: 900;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        cursor: pointer;
+    }
+
+    .patient-profile-tab:hover,
+    .patient-profile-tab:focus-visible {
+        color: var(--cliniq-primary-hover);
+        outline: 2px solid color-mix(in srgb, var(--cliniq-primary) 28%, transparent);
+        outline-offset: 2px;
+    }
+
+    .patient-profile-tab[aria-selected="true"] {
+        background: var(--cliniq-primary);
+        color: #fff;
+        box-shadow: 0 5px 12px rgba(63, 125, 82, 0.2);
+    }
+
+    [data-profile-panel][hidden] {
+        display: none !important;
+    }
+
+    .profile-appointment-card {
+        border: 1px solid rgba(199, 220, 205, 0.75);
+        border-radius: 0.9rem;
+        background: #fbfdfb;
+        padding: 1rem;
+    }
+
+    .profile-appointment-card + .profile-appointment-card {
+        border-top-left-radius: 0;
+        border-top-right-radius: 0;
+        margin-top: -1px;
+    }
 
     .patient-profile-card {
         border: 1px solid rgba(199, 220, 205, 0.72);
@@ -403,6 +479,11 @@ render_header($fullName . ' - Patient Profile');
                     <p class="text-sm font-bold text-slate-500 mt-1">
                         <?= e($patient['id_number']) ?> &bull; <?= e($courseLabel) ?>
                     </p>
+                    <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs font-bold text-slate-500">
+                        <span><?= e($emailLabel) ?></span>
+                        <span><?= e(ucfirst((string) ($patient['account_status'] ?: 'Status not specified'))) ?></span>
+                        <span>Emergency: <?= e($patient['guardian_name'] ?: 'Not specified') ?></span>
+                    </div>
                 </div>
             </div>
             <div class="flex flex-wrap gap-3">
@@ -424,7 +505,72 @@ render_header($fullName . ' - Patient Profile');
         </div>
     </section>
 
-    <section class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+    <nav class="patient-profile-tabs" aria-label="Student profile sections" role="tablist">
+        <?php foreach ([
+            'overview' => ['Overview', 'dashboard'],
+            'appointments' => ['Appointments', 'event'],
+            'clinical' => ['Clinical', 'medical_information'],
+            'history' => ['History', 'history'],
+        ] as $tabId => [$tabLabel, $tabIcon]): ?>
+            <button type="button" class="patient-profile-tab" role="tab" id="profile-tab-<?= e($tabId) ?>" aria-controls="profile-panel-<?= e($tabId) ?>" aria-selected="<?= $tabId === 'overview' ? 'true' : 'false' ?>" tabindex="<?= $tabId === 'overview' ? '0' : '-1' ?>" data-profile-tab="<?= e($tabId) ?>">
+                <span class="material-symbols-outlined text-[17px] align-middle mr-1" aria-hidden="true"><?= e($tabIcon) ?></span><?= e($tabLabel) ?>
+            </button>
+        <?php endforeach; ?>
+    </nav>
+
+    <section id="profile-panel-overview" role="tabpanel" aria-labelledby="profile-tab-overview" data-profile-panel="overview" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div class="patient-profile-card p-5 flex items-center gap-4">
+            <div class="w-12 h-12 rounded-2xl bg-primary-fixed text-primary flex items-center justify-center shrink-0"><span class="material-symbols-outlined">clinical_notes</span></div>
+            <div><p class="clinic-label mb-1">Total Visits</p><p class="font-headline text-3xl font-extrabold text-slate-800 leading-none m-0"><?= count($visits) ?></p></div>
+        </div>
+        <div class="patient-profile-card p-5 flex items-center gap-4">
+            <div class="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined">schedule</span></div>
+            <div class="min-w-0"><p class="clinic-label mb-1">Latest Visit</p><p class="text-sm font-extrabold text-slate-800 leading-snug m-0"><?= e($lastVisitLabel) ?></p></div>
+        </div>
+        <div class="patient-profile-card p-5 flex items-center gap-4">
+            <div class="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined">priority_high</span></div>
+            <div><p class="clinic-label mb-1">Needs Attention</p><p class="font-headline text-3xl font-extrabold text-slate-800 leading-none m-0"><?= $attentionVisitCount + count(array_filter($alertReports, static fn(array $alert): bool => ($alert['status'] ?? '') !== 'Resolved')) ?></p></div>
+        </div>
+        <div class="patient-profile-card p-5 flex items-center gap-4">
+            <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined">folder_open</span></div>
+            <div><p class="clinic-label mb-1">APE Documents</p><p class="font-headline text-3xl font-extrabold text-slate-800 leading-none m-0"><?= $documentCount ?></p></div>
+        </div>
+        <div class="patient-profile-card p-5 sm:col-span-2 xl:col-span-4">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="patient-profile-note <?= $latestApeRecord ? '' : 'warning' ?>"><span class="clinic-label">APE status</span><strong><?= e($latestApeRecord ? $apeWorkflowLabel : 'No APE record') ?></strong></div>
+                <div class="patient-profile-note"><span class="clinic-label">Upcoming appointment</span><strong><?= $nextAppointment ? e(date('M j, Y g:i A', strtotime($nextAppointment['appointment_datetime']))) : 'None scheduled' ?></strong></div>
+                <div class="patient-profile-note"><span class="clinic-label">Current referrals</span><strong><?= count($referrals) ?> record<?= count($referrals) === 1 ? '' : 's' ?></strong></div>
+            </div>
+        </div>
+    </section>
+
+    <section id="profile-panel-appointments" role="tabpanel" aria-labelledby="profile-tab-appointments" data-profile-panel="appointments" hidden class="clinic-card overflow-hidden">
+        <div class="p-5 md:p-6 border-b border-slate-100">
+            <p class="clinic-label mb-1">Read-only schedule</p>
+            <h2 class="font-headline text-2xl font-extrabold text-[#17261d] m-0">Appointments</h2>
+            <p class="text-sm font-bold text-slate-500 mt-1 mb-0">View this student's clinic schedule. Appointment changes remain in the Appointments module.</p>
+        </div>
+        <div class="p-5 md:p-6">
+            <h3 class="font-headline text-lg font-extrabold text-slate-900 mb-3">Next appointment</h3>
+            <?php if ($nextAppointment): ?>
+                <article class="profile-appointment-card mb-6">
+                    <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+                        <div><p class="text-lg font-extrabold text-slate-900 mb-1"><?= e($nextAppointment['purpose']) ?></p><p class="text-sm font-bold text-slate-600 mb-1"><?= e(date('l, F j, Y · g:i A', strtotime($nextAppointment['appointment_datetime']))) ?></p><p class="text-xs font-bold text-slate-500 mb-0">Location: Clinic</p></div>
+                        <span class="badge <?= e(appointment_status_badge_class((string) $nextAppointment['status'])) ?>"><?= e($nextAppointment['status']) ?></span>
+                    </div>
+                    <?php if (trim((string) ($nextAppointment['notes'] ?? '')) !== ''): ?><p class="text-sm text-slate-600 mt-4 mb-0"><strong>Notes:</strong> <?= e($nextAppointment['notes']) ?></p><?php endif; ?>
+                </article>
+            <?php else: ?>
+                <div class="empty-state mb-6"><span class="material-symbols-outlined">event_busy</span><p class="empty-state-title">No upcoming appointments</p><p class="empty-state-text">There is no upcoming clinic appointment for this student.</p></div>
+            <?php endif; ?>
+            <h3 class="font-headline text-lg font-extrabold text-slate-900 mb-3">Appointment history</h3>
+            <?php if ($appointmentHistory): ?>
+                <div><?php foreach ($appointmentHistory as $appointment): ?><article class="profile-appointment-card"><div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3"><div><p class="text-sm font-extrabold text-slate-900 mb-1"><?= e($appointment['purpose']) ?></p><p class="text-xs font-bold text-slate-500 mb-0"><?= e(date('M j, Y · g:i A', strtotime($appointment['appointment_datetime']))) ?> · Clinic</p></div><span class="badge <?= e(appointment_status_badge_class((string) $appointment['status'])) ?>"><?= e($appointment['status']) ?></span></div><?php if ((string) ($appointment['status'] ?? '') === 'Cancelled' && trim((string) ($appointment['cancellation_reason'] ?? '')) !== ''): ?><p class="text-xs text-red-700 mt-3 mb-0"><strong>Cancellation reason:</strong> <?= e($appointment['cancellation_reason']) ?></p><?php endif; ?><?php if (trim((string) ($appointment['notes'] ?? '')) !== ''): ?><p class="text-xs text-slate-600 mt-3 mb-0"><strong>Notes:</strong> <?= e($appointment['notes']) ?></p><?php endif; ?></article><?php endforeach; ?></div>
+            <?php else: ?><div class="empty-state"><span class="material-symbols-outlined">history</span><p class="empty-state-title">No appointment history</p><p class="empty-state-text">Past, cancelled, and missed appointments will appear here.</p></div><?php endif; ?>
+        </div>
+    </section>
+
+    <section class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 hidden" aria-hidden="true">
         <div class="patient-profile-card p-5 flex items-center gap-4">
             <div class="w-12 h-12 rounded-2xl bg-primary-fixed text-primary flex items-center justify-center shrink-0">
                 <span class="material-symbols-outlined">clinical_notes</span>
@@ -463,7 +609,7 @@ render_header($fullName . ' - Patient Profile');
         </div>
     </section>
 
-    <section class="clinic-card overflow-hidden">
+    <section class="clinic-card overflow-hidden" data-profile-panel="history" hidden>
         <div class="p-4 md:p-5 border-b border-slate-100 flex items-center justify-between gap-3">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center">
@@ -480,40 +626,63 @@ render_header($fullName . ' - Patient Profile');
             <div class="divide-y divide-slate-100" data-alert-history>
                 <?php foreach ($alertReports as $alert): ?>
                     <?php
+                    $alertRecordId = (int) ($alert['id'] ?? $alert['alert_id'] ?? 0);
                     $alertStatus = trim((string) ($alert['status'] ?? 'Pending')) ?: 'Pending';
                     $alertRisk = trim((string) ($alert['risk_level'] ?? 'Not assessed')) ?: 'Not assessed';
                     $alertDate = (string) ($alert['created_at'] ?? '');
                     $alertTitle = trim((string) ($alert['concern'] ?? '')) ?: 'Emergency alert';
                     ?>
-                    <article class="p-3 md:p-4" data-alert-event
+                    <article class="p-3 md:p-4 cursor-pointer" tabindex="0" data-alert-event
                              data-alert-date="<?= $alertDate !== '' ? e(date('M d, Y', strtotime($alertDate))) : 'Date not recorded' ?>"
                              data-alert-time="<?= $alertDate !== '' ? e(date('g:i A', strtotime($alertDate))) : '' ?>"
                              data-alert-reporter="<?= e(trim((string) ($alert['reporter_name'] ?? '')) ?: 'Clinic staff') ?>"
                              data-alert-resolver="<?= $alertStatus === 'Resolved' ? e(trim((string) ($alert['resolved_by_name'] ?? ''))) : '' ?>">
-                        <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)] lg:items-start gap-4 min-h-[220px]">
-                            <div class="min-w-0">
-                                <div class="flex flex-wrap items-center gap-2 mb-2">
-                                    <span class="badge <?= e(status_badge_class($alertStatus)) ?>"><?= e($alertStatus) ?></span>
-                                    <span class="badge <?= $alertRisk === 'Critical' || $alertRisk === 'High' ? 'badge-critical' : 'badge-pending' ?>"><?= e($alertRisk) ?> risk</span>
-                                    <?php if (trim((string) ($alert['incident_type'] ?? '')) !== ''): ?>
-                                        <span class="text-[11px] font-black uppercase tracking-widest text-slate-400"><?= e($alert['incident_type']) ?></span>
+                        <button type="button" class="w-full rounded-2xl border border-slate-200 bg-white p-4 text-left transition hover:border-emerald-300 hover:bg-emerald-50/30 focus:outline-none focus:ring-2 focus:ring-emerald-500/30" data-alert-toggle aria-expanded="false" aria-controls="alert-details-<?= $alertRecordId ?>">
+                            <span class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                <span class="min-w-0">
+                                    <span class="mb-2 flex flex-wrap items-center gap-2">
+                                        <span class="badge <?= e(status_badge_class($alertStatus)) ?>"><?= e($alertStatus) ?></span>
+                                        <span class="badge <?= $alertRisk === 'Critical' || $alertRisk === 'High' ? 'badge-critical' : 'badge-pending' ?>"><?= e($alertRisk) ?> risk</span>
+                                        <?php if (trim((string) ($alert['incident_type'] ?? '')) !== ''): ?>
+                                            <span class="text-[11px] font-black uppercase tracking-widest text-slate-400"><?= e($alert['incident_type']) ?></span>
+                                        <?php endif; ?>
+                                    </span>
+                                    <strong class="block truncate text-base font-extrabold text-slate-900"><?= e($alertTitle) ?></strong>
+                                    <span class="mt-1 block text-sm font-bold text-slate-500"><?= e(trim((string) ($alert['location'] ?? '')) ?: 'Location not recorded') ?></span>
+                                </span>
+                                <span class="flex shrink-0 items-center gap-2 text-xs font-extrabold text-emerald-700">
+                                    <span data-alert-toggle-label>View report</span>
+                                    <span class="material-symbols-outlined transition-transform" data-alert-toggle-icon aria-hidden="true">expand_more</span>
+                                </span>
+                            </span>
+                        </button>
+                        <div id="alert-details-<?= $alertRecordId ?>" class="mt-3 hidden rounded-2xl bg-slate-50 p-4" data-alert-details>
+                            <div class="mb-4 flex justify-end">
+                                <a href="<?= e(app_url('alerts/view.php?id=' . $alertRecordId . '&from=profile')) ?>" class="btn btn-sm btn-outline text-decoration-none" data-alert-open-report>
+                                    <span class="material-symbols-outlined text-[16px]">open_in_new</span>
+                                    Open full report
+                                </a>
+                            </div>
+                            <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                                <div>
+                                    <p class="clinic-label mb-2">Report details</p>
+                                    <?php if (trim((string) ($alert['details'] ?? '')) !== ''): ?>
+                                        <p class="whitespace-pre-wrap text-sm text-slate-600 mb-0"><?= e($alert['details']) ?></p>
+                                    <?php else: ?>
+                                        <p class="text-sm font-bold text-slate-400 mb-0">No additional details were recorded.</p>
                                     <?php endif; ?>
                                 </div>
-                                <h3 class="text-base font-extrabold text-slate-900 mb-1"><?= e($alertTitle) ?></h3>
-                                <p class="text-sm font-bold text-slate-500 mb-2"><?= e(trim((string) ($alert['location'] ?? '')) ?: 'Location not recorded') ?></p>
-                            </div>
-                            <div class="min-w-0 lg:col-start-1 lg:border-t lg:border-slate-100 lg:pt-3">
-                                <?php if (trim((string) ($alert['details'] ?? '')) !== ''): ?>
-                                    <p class="text-sm text-slate-600 whitespace-pre-wrap mb-2"><?= e($alert['details']) ?></p>
-                                <?php endif; ?>
-                            </div>
-                            <div class="text-left lg:col-start-2 lg:row-start-1 lg:row-span-2">
-                                <?php if (trim((string) ($alert['resolution_report'] ?? '')) !== ''): ?>
-                                    <div class="patient-profile-note mb-3 text-left">
-                                        <span class="clinic-label">Resolution report</span>
-                                        <strong class="whitespace-pre-wrap text-slate-600"><?= e($alert['resolution_report']) ?></strong>
-                                    </div>
-                                <?php endif; ?>
+                                <div>
+                                    <?php if (trim((string) ($alert['resolution_report'] ?? '')) !== ''): ?>
+                                        <div class="patient-profile-note text-left">
+                                            <span class="clinic-label">Resolution report</span>
+                                            <strong class="whitespace-pre-wrap text-slate-600"><?= e($alert['resolution_report']) ?></strong>
+                                        </div>
+                                    <?php else: ?>
+                                        <p class="clinic-label mb-2">Resolution report</p>
+                                        <p class="text-sm font-bold text-slate-400 mb-0">No resolution has been recorded.</p>
+                                    <?php endif; ?>
+                                </div>
                             </div>
                         </div>
                     </article>
@@ -533,7 +702,7 @@ render_header($fullName . ' - Patient Profile');
         <?php endif; ?>
     </section>
 
-    <section class="clinic-card overflow-hidden">
+    <section class="clinic-card overflow-hidden" data-profile-panel="clinical" hidden>
         <div class="p-5 md:p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
@@ -544,9 +713,12 @@ render_header($fullName . ' - Patient Profile');
                     <p class="text-xs font-bold text-slate-500 m-0">Quick clinical view for authorized clinic staff.</p>
                 </div>
             </div>
-            <span class="badge <?= $latestApeRecord ? ape_status_badge_class($latestApeResult) : 'badge-pending' ?>">
-                <?= e($latestApeRecord ? 'Latest APE · ' . $latestApeDate : 'No APE record') ?>
-            </span>
+                    <span class="flex items-center gap-2">
+                        <?php if ($latestApeRecord): ?><a class="text-xs font-black text-primary text-decoration-none" href="<?= e(app_url('ape/view.php?id=' . (int) $latestApeRecord['id'])) ?>">Open APE</a><?php endif; ?>
+                        <span class="badge <?= $latestApeRecord ? ape_status_badge_class($latestApeResult) : 'badge-pending' ?>">
+                            <?= e($latestApeRecord ? 'Latest APE · ' . $latestApeDate : 'No APE record') ?>
+                        </span>
+                    </span>
         </div>
         <div class="p-5 md:p-6 grid grid-cols-1 xl:grid-cols-2 gap-5">
             <div class="patient-profile-card p-5">
@@ -566,10 +738,16 @@ render_header($fullName . ' - Patient Profile');
                         <span class="clinic-label">Clearance / workflow</span>
                         <strong><?= e($apeWorkflowLabel !== '' ? $apeWorkflowLabel : 'Pending') ?></strong>
                     </div>
-                    <div class="patient-profile-note sm:col-span-2 <?= $latestApeResult === 'Referred' || $latestApeResult === 'With Finding' ? 'warning' : '' ?>">
+                    <div class="patient-profile-note sm:col-span-2 <?= $latestApeStoredResult === 'Referred' || $latestApeStoredResult === 'With Finding' ? 'warning' : '' ?>">
                         <span class="clinic-label">Finding / result notes</span>
                         <strong class="whitespace-pre-wrap text-slate-600"><?= e($latestApeNotes !== '' ? $latestApeNotes : 'No APE finding has been recorded.') ?></strong>
                     </div>
+                    <?php if ($latestApeRecord): ?>
+                    <div class="patient-profile-note sm:col-span-2">
+                        <span class="clinic-label">Recorded vitals and BMI</span>
+                        <strong class="text-slate-600">Height: <?= $latestApeRecord['patient_height_cm'] !== null ? e($latestApeRecord['patient_height_cm']) . ' cm' : '—' ?> · Weight: <?= $latestApeRecord['patient_weight_kg'] !== null ? e($latestApeRecord['patient_weight_kg']) . ' kg' : '—' ?> · BMI: <?= $latestApeRecord['patient_bmi'] !== null ? e($latestApeRecord['patient_bmi']) : '—' ?> · Temp: <?= $latestApeRecord['patient_temperature'] !== null ? e($latestApeRecord['patient_temperature']) . ' °C' : '—' ?> · BP: <?= e($latestApeRecord['patient_blood_pressure'] ?: '—') ?> · Pulse: <?= $latestApeRecord['patient_pulse_rate'] !== null ? e($latestApeRecord['patient_pulse_rate']) . ' bpm' : '—' ?></strong>
+                    </div>
+                    <?php endif; ?>
                 </div>
             </div>
             <div class="patient-profile-card p-5">
@@ -583,12 +761,16 @@ render_header($fullName . ' - Patient Profile');
                         <strong class="whitespace-pre-wrap text-slate-600"><?= e($declaredHealthItems['Allergies'] !== '' ? $declaredHealthItems['Allergies'] : 'None declared') ?></strong>
                     </div>
                     <div class="patient-profile-note">
-                        <span class="clinic-label">Existing conditions</span>
+                        <span class="clinic-label">Doctor-confirmed medical conditions</span>
                         <strong class="whitespace-pre-wrap text-slate-600"><?= e($declaredHealthItems['Existing conditions'] !== '' ? $declaredHealthItems['Existing conditions'] : 'None declared') ?></strong>
                     </div>
                     <div class="patient-profile-note">
-                        <span class="clinic-label">Medications</span>
+                        <span class="clinic-label">Current medications recorded during APE</span>
                         <strong class="whitespace-pre-wrap text-slate-600"><?= e($declaredHealthItems['Medications'] !== '' ? $declaredHealthItems['Medications'] : 'None declared') ?></strong>
+                    </div>
+                    <div class="patient-profile-note">
+                        <span class="clinic-label">Clinic-recorded blood type</span>
+                        <strong class="text-slate-600"><?= e($patient['blood_type'] ?: 'Not recorded') ?></strong>
                     </div>
                     <?php if (!$hasDeclaredHealth): ?>
                         <p class="text-xs font-bold text-amber-700 mb-0">The patient has not declared any health conditions, allergies, or medications in the passport.</p>
@@ -598,7 +780,7 @@ render_header($fullName . ' - Patient Profile');
         </div>
     </section>
 
-    <section class="clinic-card overflow-hidden">
+    <section class="clinic-card overflow-hidden" data-profile-panel="clinical" hidden>
         <div class="p-5 md:p-6 border-b border-slate-100 flex items-center justify-between gap-3">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-xl bg-primary-fixed text-primary flex items-center justify-center">
@@ -729,7 +911,7 @@ render_header($fullName . ' - Patient Profile');
         </div>
     </section>
 
-    <section class="clinic-card overflow-hidden">
+    <section class="clinic-card overflow-hidden" data-profile-panel="history" hidden>
         <div class="p-5 md:p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-xl bg-primary-fixed text-primary flex items-center justify-center">
@@ -789,7 +971,8 @@ render_header($fullName . ' - Patient Profile');
                         (string) json_encode($visit['entries'] ?? [], JSON_UNESCAPED_UNICODE),
                     ]));
                     ?>
-                    <article class="patient-profile-event <?= $visitIndex === 0 ? '' : 'is-collapsed' ?>"
+                    <article class="patient-profile-event <?= $visitIndex === 0 ? '' : 'is-collapsed' ?> cursor-pointer"
+                             tabindex="0"
                              data-care-event
                              data-care-search-text="<?= e($visitSearchText) ?>"
                              data-care-status-value="<?= e(strtolower((string) $visitStatus)) ?>"
@@ -938,7 +1121,7 @@ render_header($fullName . ' - Patient Profile');
         <?php endif; ?>
     </section>
 
-    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6" data-profile-panel="history" hidden>
         <section class="clinic-card overflow-hidden">
             <div class="p-5 md:p-6 border-b border-slate-100 flex items-center justify-between gap-3">
                 <div class="flex items-center gap-3">
@@ -1088,6 +1271,46 @@ render_header($fullName . ' - Patient Profile');
 
 <script>
 (function () {
+    const profileTabs = Array.from(document.querySelectorAll('[data-profile-tab]'));
+    const profilePanels = Array.from(document.querySelectorAll('[data-profile-panel]'));
+    const validProfileTabs = new Set(profileTabs.map((tab) => tab.dataset.profileTab));
+
+    function activateProfileTab(tabName, updateUrl = true) {
+        const activeName = validProfileTabs.has(tabName) ? tabName : 'overview';
+        profileTabs.forEach((tab) => {
+            const isActive = tab.dataset.profileTab === activeName;
+            tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+            tab.tabIndex = isActive ? 0 : -1;
+        });
+        profilePanels.forEach((panel) => {
+            panel.hidden = panel.dataset.profilePanel !== activeName;
+        });
+        if (updateUrl) {
+            const url = new URL(window.location.href);
+            url.hash = `profile-${activeName}`;
+            window.history.replaceState({}, '', url);
+        }
+    }
+
+    profileTabs.forEach((tab, index) => {
+        tab.addEventListener('click', () => activateProfileTab(tab.dataset.profileTab));
+        tab.addEventListener('keydown', (event) => {
+            if (!['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+            event.preventDefault();
+            let nextIndex = index;
+            if (event.key === 'Home') nextIndex = 0;
+            else if (event.key === 'End') nextIndex = profileTabs.length - 1;
+            else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') nextIndex = (index + 1) % profileTabs.length;
+            else nextIndex = (index - 1 + profileTabs.length) % profileTabs.length;
+            const nextTab = profileTabs[nextIndex];
+            nextTab.focus();
+            activateProfileTab(nextTab.dataset.profileTab);
+        });
+    });
+
+    const requestedTab = window.location.hash.replace('#profile-', '');
+    activateProfileTab(validProfileTabs.has(requestedTab) ? requestedTab : 'overview', false);
+
     const openEmailComposer = document.getElementById('openPatientEmailComposerButton');
     const closeEmailComposer = document.getElementById('closePatientEmailComposerButton');
     const cancelEmailComposer = document.getElementById('cancelPatientEmailComposerButton');
@@ -1142,6 +1365,40 @@ render_header($fullName . ' - Patient Profile');
             }
             renderAlertPagination(totalPages);
         }
+
+        function toggleAlertReport(toggle) {
+            const details = document.getElementById(toggle.getAttribute('aria-controls'));
+            if (!details) return;
+            const expanded = toggle.getAttribute('aria-expanded') === 'true';
+            toggle.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+            details.classList.toggle('hidden', expanded);
+            const label = toggle.querySelector('[data-alert-toggle-label]');
+            const icon = toggle.querySelector('[data-alert-toggle-icon]');
+            if (label) label.textContent = expanded ? 'View report' : 'Hide report';
+            if (icon) icon.style.transform = expanded ? '' : 'rotate(180deg)';
+        }
+
+        alertHistory.addEventListener('click', (event) => {
+            const toggle = event.target.closest('[data-alert-toggle]');
+            const alertEvent = event.target.closest('[data-alert-event]');
+            if (toggle) {
+                toggleAlertReport(toggle);
+                return;
+            }
+            if (alertEvent && !event.target.closest('a, button, input, textarea, select')) {
+                const reportToggle = alertEvent.querySelector('[data-alert-toggle]');
+                if (reportToggle) toggleAlertReport(reportToggle);
+            }
+        });
+
+        alertHistory.addEventListener('keydown', (event) => {
+            if (!['Enter', ' '].includes(event.key) || event.target.closest('button, a, input, textarea, select')) return;
+            const alertEvent = event.target.closest('[data-alert-event]');
+            const reportToggle = alertEvent?.querySelector('[data-alert-toggle]');
+            if (!reportToggle) return;
+            event.preventDefault();
+            toggleAlertReport(reportToggle);
+        });
 
         alertPagination.addEventListener('click', (event) => {
             const pageButton = event.target.closest('[data-alert-page]');
@@ -1219,17 +1476,32 @@ render_header($fullName . ' - Patient Profile');
         searchInput.addEventListener('input', resetToFirstPage);
     }
 
-    timeline.addEventListener('click', (event) => {
-        const toggle = event.target.closest('[data-care-toggle]');
-        if (!toggle) return;
-
-        const visit = toggle.closest('[data-care-event]');
+    function toggleCareVisit(visit) {
         if (!visit) return;
 
         const collapsed = visit.classList.toggle('is-collapsed');
+        const toggle = visit.querySelector('[data-care-toggle]');
+        if (!toggle) return;
         toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
         const label = toggle.querySelector('[data-care-toggle-label]');
         if (label) label.textContent = collapsed ? 'Expand' : 'Collapse';
+    }
+
+    timeline.addEventListener('click', (event) => {
+        const toggle = event.target.closest('[data-care-toggle]');
+        const visit = event.target.closest('[data-care-event]');
+        if (!visit) return;
+        if (toggle || !event.target.closest('a, button, input, textarea, select')) {
+            toggleCareVisit(visit);
+        }
+    });
+
+    timeline.addEventListener('keydown', (event) => {
+        if (!['Enter', ' '].includes(event.key) || event.target.closest('button, a, input, textarea, select')) return;
+        const visit = event.target.closest('[data-care-event]');
+        if (!visit) return;
+        event.preventDefault();
+        toggleCareVisit(visit);
     });
 
     if (pagination) {

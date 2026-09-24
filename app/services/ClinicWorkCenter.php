@@ -24,7 +24,7 @@ function clinic_work_center_items(array $filters = [], int $limit = 1000): array
         'age' => (string) ($filters['age'] ?? ''),
     ];
     $items = [];
-    $sentPatientContactKeys = [];
+    $workflowEmailKeys = [];
     foreach (workflow_attention_items($workflowFilters, $limit) as $item) {
         if (!empty($item['email_relevant']) && (string) ($item['email_event_type'] ?? '') !== '' && (int) ($item['email_source_id'] ?? 0) > 0) {
             $emailCheck = auth_db()->prepare('SELECT status FROM email_queue WHERE patient_person_id = ? AND event_type = ? AND source_type = ? AND source_id = ? AND status <> \'cancelled\' ORDER BY id DESC LIMIT 1');
@@ -37,11 +37,6 @@ function clinic_work_center_items(array $filters = [], int $limit = 1000): array
             $emailStatus = (string) ($emailCheck->fetchColumn() ?: '');
             $item['email_status'] = $emailStatus !== '' ? $emailStatus : 'not_queued';
             if ($emailStatus === 'sent') {
-                $followUpType = in_array((string) ($item['type'] ?? ''), ['ape_overdue_requirement', 'ape_follow_up'], true);
-                if (!$followUpType) continue;
-                $contactKey = (string) ($item['email_source_type'] ?? $item['source_type'] ?? '') . ':' . (int) ($item['email_source_id'] ?? $item['source_id'] ?? 0);
-                if (isset($sentPatientContactKeys[$contactKey])) continue;
-                $sentPatientContactKeys[$contactKey] = true;
                 $item['title'] = 'Patient has not completed the required APE action';
                 $item['explanation'] = 'An automatic email was sent, but the APE requirement is still overdue. Review the patient response and contact them again if needed.';
                 $item['action_label'] = 'Review patient upload status';
@@ -88,6 +83,9 @@ function clinic_work_center_items(array $filters = [], int $limit = 1000): array
             };
         }
         $items[] = $item;
+        if (!empty($item['email_relevant']) && (string) ($item['email_event_type'] ?? '') !== '') {
+            $workflowEmailKeys[implode(':', [(int) ($item['patient_person_id'] ?? 0), (string) ($item['email_source_type'] ?? $item['source_type'] ?? ''), (int) ($item['email_source_id'] ?? $item['source_id'] ?? 0), (string) $item['email_event_type']])] = true;
+        }
     }
 
     foreach (patient_email_attention_items(100) as $email) {
@@ -97,10 +95,12 @@ function clinic_work_center_items(array $filters = [], int $limit = 1000): array
         $sourceType = (string) ($email['source_type'] ?? '');
         $sourceId = (int) ($email['source_id'] ?? 0);
         $patientId = (int) ($email['patient_person_id'] ?? 0);
+        $eventType = (string) ($email['event_type'] ?? '');
+        if (isset($workflowEmailKeys[implode(':', [$patientId, $sourceType, $sourceId, $eventType])])) continue;
         $actionType = match ($action) {
             'retry' => 'retry_email',
             'open_patient' => 'open_patient',
-            'process' => 'cancel_email',
+            'process' => 'view_email',
             default => 'view_email',
         };
         $sourceUrl = $patientId > 0 ? '../patients/view.php?id=' . $patientId : '';
@@ -125,7 +125,7 @@ function clinic_work_center_items(array $filters = [], int $limit = 1000): array
             'patient_person_id' => $patientId,
             'email_id' => (int) ($email['email_id'] ?? 0),
             'action_type' => $actionType,
-            'action_label' => $actionType === 'retry_email' ? 'Retry email' : ($actionType === 'open_patient' ? 'Open patient' : ($actionType === 'cancel_email' ? 'Cancel email' : 'View details')),
+            'action_label' => $actionType === 'retry_email' ? 'Retry email' : ($actionType === 'open_patient' ? 'Open patient' : 'View email details'),
             'source_url' => $sourceUrl,
         ];
     }
@@ -179,8 +179,8 @@ function clinic_work_center_export(array $items): void
 }
 
 /**
- * Return the manual clinic-reminder history for one patient/workflow cycle.
- * Automatic messages are deliberately excluded from this history.
+ * Return all delivery history for one patient/workflow cycle. A matching
+ * automatic email is just as important as a manual one when preventing spam.
  */
 function clinic_work_center_reminder_history(int $patientId, string $sourceType, int $sourceId, string $eventType): array
 {
@@ -190,7 +190,7 @@ function clinic_work_center_reminder_history(int $patientId, string $sourceType,
     $stmt = auth_db()->prepare("SELECT id, status, created_at, sent_at
         FROM email_queue
         WHERE patient_person_id = ? AND source_type = ? AND source_id = ?
-          AND event_type = ? AND origin = 'manual' AND status <> 'cancelled'
+           AND event_type = ? AND status <> 'cancelled'
         ORDER BY id DESC");
     $stmt->execute([$patientId, $sourceType, $sourceId, $eventType]);
     $rows = $stmt->fetchAll();
@@ -205,6 +205,8 @@ function clinic_work_center_reminder_history(int $patientId, string $sourceType,
 
 function clinic_work_center_reminder_deadline(array $item): ?string
 {
+    $itemDue = trim((string) ($item['due_at'] ?? ''));
+    if ($itemDue !== '') return substr($itemDue, 0, 10);
     $db = auth_db();
     $sourceType = (string) ($item['source_type'] ?? $item['email_source_type'] ?? '');
     $sourceId = (int) ($item['source_id'] ?? $item['email_source_id'] ?? 0);
@@ -243,13 +245,19 @@ function clinic_work_center_extend_reminder_deadline(array $item, string $newDat
     $eventType = (string) ($item['email_event_type'] ?? '');
     $updated = false;
     try {
-        if (in_array($eventType, ['ape_follow_up_required', 'ape_follow_up_overdue'], true) && $sourceId > 0) {
+        $requirementIds = array_values(array_filter(array_map('intval', (array) ($item['requirement_ids'] ?? []))));
+        if ($requirementIds !== []) {
+            $placeholders = implode(',', array_fill(0, count($requirementIds), '?'));
+            $stmt = $db->prepare("UPDATE ape_requirements SET upload_due_date = ? WHERE requirement_id IN ({$placeholders}) AND status IN ('Missing', 'Needs Correction')");
+            $stmt->execute([$newDate, ...$requirementIds]);
+            $updated = $stmt->rowCount() > 0;
+        } elseif (in_array($eventType, ['ape_follow_up_required', 'ape_follow_up_overdue'], true) && $sourceId > 0) {
             $stmt = $db->prepare('UPDATE ape_records SET follow_up_due_date = ? WHERE ape_id = ?');
             $stmt->execute([$newDate, $sourceId]);
             $updated = $stmt->rowCount() > 0;
         } elseif ($eventType === 'ape_documents_overdue' && (int) ($item['email_source_id'] ?? 0) > 0) {
             $stmt = $db->prepare("UPDATE ape_requirements SET upload_due_date = ?
-                WHERE ape_id = ? AND status <> 'Verified'");
+                WHERE ape_id = ? AND status IN ('Missing', 'Needs Correction')");
             $stmt->execute([$newDate, (int) $item['email_source_id']]);
             $updated = $stmt->rowCount() > 0;
         } elseif ($sourceType === 'ape_requirement' && $sourceId > 0) {
@@ -306,9 +314,9 @@ function clinic_work_center_reminder_candidates(): array
         if (isset($candidateKeys[$candidateKey])) continue;
         $history = clinic_work_center_reminder_history($patientId, $sourceType, $sourceId, $eventType);
         $deadline = clinic_work_center_reminder_deadline($item);
-        $hasActiveQueue = in_array($history['last_status'], ['pending', 'processing'], true);
+        $hasExistingDelivery = $history['count'] > 0;
         $withinWindow = $deadline !== null && $deadline >= $today;
-        $recentlyReminded = $hasActiveQueue || ($history['count'] > 0 && $withinWindow);
+        $recentlyReminded = $hasExistingDelivery;
         $recipientStmt = auth_db()->prepare("SELECT a.email
             FROM accounts a INNER JOIN patients pt ON pt.person_id = a.person_id
             WHERE a.person_id = ? AND a.account_status = 'active' LIMIT 1");

@@ -86,7 +86,6 @@ function send_cliniq_email_result(string $toEmail, string $toName, string $subje
         $mail->SMTPSecure = $encryption === 'ssl' ? PHPMailer::ENCRYPTION_SMTPS : PHPMailer::ENCRYPTION_STARTTLS;
         $mail->Port       = $port;
         $mail->Timeout    = 10;
-        $mail->Timelimit  = 10;
 
         $mail->setFrom($fromEmail, $fromName);
         $mail->addAddress($toEmail, $toName);

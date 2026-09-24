@@ -59,5 +59,13 @@ expect_document_storage(
     (new ReflectionFunction('ape_assert_documents_available'))->getNumberOfParameters() === 4,
     'APE workflow must expose a storage-integrity guard for approval transitions.'
 );
+expect_document_storage(
+    ape_document_download_name('23-00211', 'UHS Consent Form', 'original-upload.JPG') === '23-00211_UHS-Consent-Form.jpg',
+    'APE downloads must use the student ID and document type while preserving a safe extension.'
+);
+expect_document_storage(
+    ape_document_storage_name('23-00211', 'UHS Consent Form', 'original-upload.JPG', '20260924-224500', 'a1b2c3d4') === '23-00211_UHS-Consent-Form_20260924-224500_a1b2c3d4.jpg',
+    'New APE uploads must use readable, collision-safe protected filenames.'
+);
 
 echo "APE protected document storage tests passed.\n";

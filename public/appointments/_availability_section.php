@@ -131,15 +131,8 @@ foreach ($weeklySchedule as $dayNumber => $hours) {
     }
 }
 $availabilityCalendarDayCount = count($availabilityWeekDays);
-$availabilityUrlForWeek = static function (string $week) use ($filterStatus, $dateFrom, $dateTo): string {
-    $query = ['status' => $filterStatus, 'week' => $week];
-    if ($dateFrom !== '') {
-        $query['date_from'] = $dateFrom;
-    }
-    if ($dateTo !== '') {
-        $query['date_to'] = $dateTo;
-    }
-    return 'index.php?' . http_build_query($query) . '#clinic-availability';
+$availabilityUrlForWeek = static function (string $week): string {
+    return 'availability.php?' . http_build_query(['week' => $week]) . '#clinic-availability';
 };
 ?>
 
@@ -148,7 +141,7 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
         <div>
             <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Scheduling</p>
             <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Clinic Availability</h2>
-            <p class="text-xs font-bold text-slate-500 mb-0">Click or drag across an open hour to mark one-time unavailability.</p>
+            <p class="text-xs font-bold text-slate-500 mb-0">Follow the three steps to block a full day or selected clinic hours.</p>
         </div>
         <div class="flex items-center gap-2">
             <a href="<?= e($availabilityUrlForWeek($availabilityPrevWeek)) ?>" class="btn btn-sm btn-ghost text-decoration-none" title="Previous week" data-no-ajax="true" data-availability-week-nav>
@@ -186,8 +179,8 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
     <div class="appointment-availability-layout">
         <div class="appointment-availability-calendar-panel">
             <div class="appointment-week-range">
-                <strong><?= e($availabilityWeek->format('M j')) ?>–<?= e($availabilityWeekEnd->format('M j, Y')) ?></strong>
-                <span>Unavailable periods appear in red; APE examinations appear in green.</span>
+                <strong>Step 2 — Select time in <?= e($availabilityWeek->format('M j')) ?>–<?= e($availabilityWeekEnd->format('M j, Y')) ?></strong>
+                <span>Choose a day header for a full-day block, or click and drag open hours. Unavailable periods are red; APE examinations are green.</span>
             </div>
 
             <div class="appointment-week-scroll">
@@ -267,10 +260,17 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
             </div>
         </div>
 
-        <aside class="appointment-availability-sidebar">
-            <section class="appointment-availability-form-card">
-                <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Add Unavailable Time</h3>
-                <p class="text-xs font-bold text-slate-500 mb-4">Choose a whole day or a specific time range.</p>
+        <aside class="appointment-availability-sidebar appointment-availability-guide">
+            <section class="appointment-availability-form-card appointment-availability-flow-card">
+                <p class="appointment-availability-eyebrow">One-time change</p>
+                <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Block clinic time</h3>
+                <p class="text-xs font-bold text-slate-500 mb-4">Complete the steps in order. Your working hours remain unchanged.</p>
+
+                <ol class="availability-flow-steps" aria-label="Block clinic time steps">
+                    <li data-availability-step="mode" class="is-current"><span>1</span><div><strong>Choose block type</strong><small>Full day or selected hours</small></div></li>
+                    <li data-availability-step="select"><span>2</span><div><strong>Select date and time</strong><small>Use the calendar beside this panel</small></div></li>
+                    <li data-availability-step="review"><span>3</span><div><strong>Review and save</strong><small>Add a reason, then confirm</small></div></li>
+                </ol>
 
                 <form method="POST" action="availability.php" class="grid gap-4" id="availabilityForm" data-no-ajax="true">
                     <input type="hidden" name="action" value="add">
@@ -280,7 +280,18 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
                     </div>
                     <div id="availabilitySelectedSlots"></div>
                     <div class="grid gap-2">
-                        <span class="text-[11px] font-black uppercase tracking-widest text-slate-400">Date(s)</span>
+                        <span class="text-[11px] font-black uppercase tracking-widest text-slate-400">1. What needs to be blocked?</span>
+                        <div class="availability-mode-choices" role="group" aria-label="Block type">
+                            <button type="button" class="availability-mode-choice is-selected" data-availability-mode="day" aria-pressed="true"><span class="material-symbols-outlined" aria-hidden="true">calendar_today</span><span><strong>Full day</strong><small>Close an entire open day</small></span></button>
+                            <button type="button" class="availability-mode-choice" data-availability-mode="hours" aria-pressed="false"><span class="material-symbols-outlined" aria-hidden="true">schedule</span><span><strong>Selected hours</strong><small>Block one or more open hours</small></span></button>
+                        </div>
+                        <label class="availability-native-toggle">
+                            <input type="checkbox" name="all_day" id="allDayToggle" checked>
+                            Whole day unavailable
+                        </label>
+                    </div>
+                    <div class="grid gap-2">
+                        <span class="text-[11px] font-black uppercase tracking-widest text-slate-400">2. Choose dates</span>
                         <input type="hidden" name="block_date" id="blockDateInput" value="<?= e($availabilityDefaultDate) ?>" required>
                         <button type="button" class="appointment-date-picker-trigger" id="openAvailabilityDateModal">
                             <span class="material-symbols-outlined">calendar_month</span>
@@ -288,13 +299,13 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
                         </button>
                         <div class="appointment-selected-dates" id="availabilitySelectedDateSummary" aria-live="polite"></div>
                     </div>
-                    <label class="flex items-center gap-3 text-sm font-bold text-slate-700">
-                        <input type="checkbox" name="all_day" id="allDayToggle" checked>
-                        Whole day unavailable
-                    </label>
-                    <div class="appointment-selected-time-slots" id="availabilitySelectedSlotSummary" aria-live="polite"></div>
+                    <div class="availability-selection-review" aria-live="polite">
+                        <span class="text-[11px] font-black uppercase tracking-widest text-slate-400">Selection</span>
+                        <p id="availabilitySelectionPrompt">Choose a date, then select a full day or open hours on the calendar.</p>
+                        <div class="appointment-selected-time-slots" id="availabilitySelectedSlotSummary" aria-live="polite"></div>
+                    </div>
                     <label class="grid gap-1">
-                        <span class="text-[11px] font-black uppercase tracking-widest text-slate-400">Reason</span>
+                        <span class="text-[11px] font-black uppercase tracking-widest text-slate-400">3. Reason (optional)</span>
                         <textarea name="reason" class="form-textarea" rows="3" placeholder="Staff meeting, campus event, maintenance..."></textarea>
                     </label>
                     <button class="btn btn-primary w-full" data-confirm-submit data-confirm-type="primary" data-confirm-title="Add unavailable block?" data-confirm-message="Patients will not be able to request appointments for this blocked date or time." data-confirm-toast="Saving availability...">
@@ -304,33 +315,36 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
                 </form>
             </section>
 
-            <section class="appointment-availability-block-list">
-                <div class="p-5 border-b border-slate-100">
-                    <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">This Week's Blocks</h3>
-                    <p class="text-xs font-bold text-slate-500 mb-0"><?= array_sum(array_map('count', $availabilityBlocksByDate)) ?> unavailable block(s)</p>
-                </div>
-                <div class="p-4 grid gap-3 max-h-[420px] overflow-y-auto">
-                    <?php if (empty($availabilityDisplayBlocks)): ?>
-                        <div class="text-sm font-bold text-slate-500 p-4 rounded-xl bg-slate-50">No unavailable times for this week.</div>
-                    <?php else: ?>
-                        <?php foreach ($availabilityDisplayBlocks as $block): ?>
-                                <div class="appointment-block-row" data-edit-availability-block
-                                    data-ids="<?= e(implode(',', array_map('intval', $block['ids']))) ?>"
-                                    data-date="<?= e($block['date']) ?>"
-                                    data-start="<?= e($block['start_time'] ? substr($block['start_time'], 0, 5) : '') ?>"
-                                    data-end="<?= e($block['end_time'] ? substr($block['end_time'], 0, 5) : '') ?>"
-                                    data-reason="<?= e($block['reason']) ?>">
-                                    <div>
-                                        <strong><?= e(date('M d, Y', strtotime($block['date']))) ?></strong>
-                                        <span><?= e(appointment_format_block_time($block)) ?><?= $block['reason'] ? ' — ' . e($block['reason']) : '' ?></span>
-                                    </div>
-                                </div>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </div>
-            </section>
         </aside>
     </div>
+
+    <section class="appointment-availability-block-list appointment-availability-timeline">
+        <div class="appointment-timeline-heading">
+            <div>
+                <p class="appointment-availability-eyebrow">Review this week</p>
+                <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Scheduled unavailability</h3>
+                <p class="text-xs font-bold text-slate-500 mb-0"><?= array_sum(array_map('count', $availabilityBlocksByDate)) ?> unavailable block(s). Select one to edit or remove it.</p>
+            </div>
+        </div>
+        <div class="appointment-timeline-list">
+            <?php if (empty($availabilityDisplayBlocks)): ?>
+                <div class="appointment-timeline-empty"><span class="material-symbols-outlined" aria-hidden="true">event_available</span><div><strong>No unavailable times this week</strong><span>Use the steps above when the clinic needs to close time.</span></div></div>
+            <?php else: ?>
+                <?php foreach ($availabilityDisplayBlocks as $block): ?>
+                    <button type="button" class="appointment-block-row" data-edit-availability-block
+                        data-ids="<?= e(implode(',', array_map('intval', $block['ids']))) ?>"
+                        data-date="<?= e($block['date']) ?>"
+                        data-start="<?= e($block['start_time'] ? substr($block['start_time'], 0, 5) : '') ?>"
+                        data-end="<?= e($block['end_time'] ? substr($block['end_time'], 0, 5) : '') ?>"
+                        data-reason="<?= e($block['reason']) ?>">
+                        <span class="appointment-timeline-marker material-symbols-outlined" aria-hidden="true">block</span>
+                        <span class="appointment-block-row-copy"><strong><?= e(date('M d, Y', strtotime($block['date']))) ?></strong><span><?= e(appointment_format_block_time($block)) ?><?= $block['reason'] ? ' — ' . e($block['reason']) : '' ?></span></span>
+                        <span class="appointment-block-row-action">Manage <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></span>
+                    </button>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
+    </section>
 
     <div id="workingHoursModal" class="modal-backdrop working-hours-modal" role="dialog" aria-modal="true" aria-labelledby="workingHoursModalTitle" aria-describedby="workingHoursModalDescription">
         <form method="POST" action="availability.php" class="modal-content working-hours-modal-card" id="clinicWorkingHoursForm" data-no-ajax="true">
@@ -351,6 +365,17 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
             </header>
 
             <div class="working-hours-modal-body">
+                <ol class="working-hours-flow" aria-label="Working hours setup steps">
+                    <li class="is-current"><span>1</span><strong>Schedule</strong><small>Choose its scope</small></li>
+                    <li><span>2</span><strong>Hours</strong><small>Set the normal range</small></li>
+                    <li><span>3</span><strong>Days</strong><small>Choose when open</small></li>
+                    <li><span>4</span><strong>Exceptions</strong><small>Only if needed</small></li>
+                </ol>
+
+                <div class="working-hours-section-heading">
+                    <span>Step 1</span>
+                    <div><h4>Where should this schedule apply?</h4><p>Use the regular schedule for every week, or create a one-month exception.</p></div>
+                </div>
                 <div class="working-hours-mode-switch" role="tablist" aria-label="Schedule type">
                     <button type="button" class="is-active" role="tab" aria-selected="true" data-working-hours-mode="regular">
                         <span class="material-symbols-outlined" aria-hidden="true">event_repeat</span>
@@ -381,7 +406,8 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
 
                 <section class="working-hours-quick-set" aria-labelledby="workingHoursQuickTitle">
                     <div>
-                        <h4 id="workingHoursQuickTitle">Standard hours</h4>
+                        <span class="working-hours-step-label">Step 2</span>
+                        <h4 id="workingHoursQuickTitle">Set the standard hours</h4>
                         <p>These hours apply to every selected day unless you add a day-specific range.</p>
                     </div>
                     <div class="working-hours-quick-controls">
@@ -395,7 +421,7 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
                 </section>
 
                 <div class="working-hours-days-heading">
-                    <div><h4>Open days</h4><p>Unselected days are hidden from the weekly calendar and cannot be booked.</p></div>
+                    <div><span class="working-hours-step-label">Step 3</span><h4>Choose open days</h4><p>Unselected days are hidden from the weekly calendar and cannot be booked.</p></div>
                 </div>
                 <div class="working-hours-open-days" role="group" aria-label="Days open for appointments">
                     <?php foreach (['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as $index => $dayName):
@@ -409,7 +435,7 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
                 </div>
 
                 <div class="working-hours-override-heading">
-                    <div><h4>Day-specific hours</h4><p>Only add a row if one open day differs from the standard hours.</p></div>
+                    <div><span class="working-hours-step-label">Step 4 · Optional</span><h4>Add a day-specific exception</h4><p>Only add a row if one open day differs from the standard hours.</p></div>
                     <button type="button" class="btn btn-outline" id="addWorkingHoursOverride"><span class="material-symbols-outlined" aria-hidden="true">add</span> Add specific day</button>
                 </div>
                 <div id="workingHoursOverrides" class="working-hours-override-list" data-initial-overrides="<?= e(json_encode($workingHoursOverrides)) ?>"></div>
@@ -445,6 +471,7 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
                 <button type="submit" class="btn btn-outline working-hours-delete-month" id="deleteWorkingHoursMonth" name="action" value="delete_month_schedule" hidden data-confirm-submit data-confirm-type="danger" data-confirm-title="Remove this future arrangement?" data-confirm-message="This month will return to the regular weekly schedule.">
                     <span class="material-symbols-outlined" aria-hidden="true">delete</span> Remove arrangement
                 </button>
+                <span class="working-hours-footer-note"><span class="material-symbols-outlined" aria-hidden="true">task_alt</span>Review the steps above, then save.</span>
                 <button type="button" class="btn btn-ghost" data-close-working-hours-modal>Cancel</button>
                 <button type="submit" class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save clinic working hours?" data-confirm-message="Patient booking times will immediately follow these hours.">
                     <span class="material-symbols-outlined" aria-hidden="true">save</span> Save changes
@@ -1231,7 +1258,33 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
         });
         syncSelectedDateSummary();
         syncSelectedSlotSummary();
+        syncAvailabilityFlow();
         renderDateModal();
+    };
+
+    const syncAvailabilityFlow = () => {
+        const elements = liveElements();
+        const isWholeDay = Boolean(elements.allDay?.checked);
+        const hasDates = selectedCalendarDates.size > 0;
+        const hasHours = selectedTimeSlots.size > 0;
+        document.querySelectorAll('[data-availability-mode]').forEach(button => {
+            const selected = button.dataset.availabilityMode === (isWholeDay ? 'day' : 'hours');
+            button.classList.toggle('is-selected', selected);
+            button.setAttribute('aria-pressed', String(selected));
+        });
+        document.querySelectorAll('[data-availability-step]').forEach(step => {
+            const name = step.dataset.availabilityStep;
+            const complete = name === 'mode' || (name === 'select' && hasDates) || (name === 'review' && hasDates && (isWholeDay || hasHours));
+            step.classList.toggle('is-complete', complete);
+            step.classList.toggle('is-current', name === (hasDates && (isWholeDay || hasHours) ? 'review' : hasDates ? 'select' : 'mode'));
+        });
+        const prompt = document.getElementById('availabilitySelectionPrompt');
+        if (prompt) {
+            prompt.textContent = !hasDates ? 'Choose a date, then select a full day or open hours on the calendar.'
+                : isWholeDay ? 'Full-day block selected. Review the date above, then save.'
+                : hasHours ? 'Selected hours are ready to review. Add a reason if helpful, then save.'
+                : 'Select one or more open hours on the calendar to continue.';
+        }
     };
 
     const selectAvailabilityDate = (date, replaceSelection = true) => {
@@ -1443,6 +1496,19 @@ $availabilityUrlForWeek = static function (string $week) use ($filterStatus, $da
             sortedSelectedSlots().forEach(slot => {
                 if (parseSlotKey(slot).date === date) selectedTimeSlots.delete(slot);
             });
+            syncPartialFields();
+            return;
+        }
+        const availabilityMode = event.target.closest('[data-availability-mode]');
+        if (availabilityMode) {
+            const elements = liveElements();
+            if (!elements.allDay) return;
+            const shouldUseWholeDay = availabilityMode.dataset.availabilityMode === 'day';
+            if (elements.allDay.checked !== shouldUseWholeDay) {
+                elements.allDay.checked = shouldUseWholeDay;
+                if (shouldUseWholeDay) selectedTimeSlots.clear();
+                else { selectedCalendarDates.clear(); selectedTimeSlots.clear(); }
+            }
             syncPartialFields();
             return;
         }

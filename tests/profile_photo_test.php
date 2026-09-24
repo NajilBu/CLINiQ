@@ -25,7 +25,17 @@ profile_photo_assert(str_contains((string) $service, "'image/jpeg'"), 'JPEG vali
 profile_photo_assert(str_contains((string) $service, "'image/png'"), 'PNG validation is missing.');
 profile_photo_assert(str_contains((string) $service, "'image/webp'"), 'WebP validation is missing.');
 profile_photo_assert(str_contains((string) $patientLayout, 'patient-profile-photo-input'), 'Patient photo picker is missing.');
+profile_photo_assert(str_contains((string) $patientLayout, 'for="patient-profile-photo-input"'), 'Patient photo picker must use a native label association.');
+profile_photo_assert(str_contains((string) $patientLayout, 'data-profile-photo-save>'), 'Patient review action must remain usable when JavaScript is unavailable.');
+profile_photo_assert(!str_contains((string) $patientLayout, 'data-profile-photo-save disabled'), 'Patient review action must not be disabled before a file is selected.');
+profile_photo_assert(str_contains((string) $patientLayout, 'data-profile-photo-form data-no-loading'), 'Patient profile-photo confirmation must not trigger the global loading overlay.');
+profile_photo_assert(str_contains((string) $patientLayout, 'name="_csrf" value="<?= student_e(csrf_token()) ?>"'), 'Patient photo form must include a server-rendered CSRF token.');
 profile_photo_assert(str_contains((string) $staffLayout, 'staff-profile-photo-input'), 'Staff photo picker is missing.');
+profile_photo_assert(str_contains((string) $staffLayout, 'data-no-ajax="true"'), 'Staff profile-photo upload must use a normal multipart form submission.');
+profile_photo_assert(str_contains((string) $staffLayout, 'for="staff-profile-photo-input"'), 'Staff photo picker must use a native label association.');
+profile_photo_assert(str_contains((string) $staffLayout, 'data-profile-photo-save>'), 'Staff review action must remain usable when JavaScript is unavailable.');
+profile_photo_assert(str_contains((string) $staffLayout, 'data-profile-photo-form data-no-ajax="true" data-no-loading'), 'Staff profile-photo confirmation must not trigger the global loading overlay.');
+profile_photo_assert(str_contains((string) $staffLayout, 'name="_csrf" value="<?= e(csrf_token()) ?>"'), 'Staff photo form must include a server-rendered CSRF token.');
 profile_photo_assert(str_contains((string) $patientLayout, 'data-profile-photo-preview'), 'Patient photo preview is missing.');
 profile_photo_assert(str_contains((string) $staffLayout, 'data-profile-photo-preview'), 'Staff photo preview is missing.');
 profile_photo_assert(str_contains((string) $patientLayout, 'data-profile-photo-confirmation'), 'Patient custom upload confirmation is missing.');

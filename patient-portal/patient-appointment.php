@@ -238,6 +238,7 @@ render_student_header('Appointments', 'appointment');
                 <input type="hidden" name="appt_date" id="appt-date-input" value="">
                 <input type="hidden" name="appt_time" id="appt-time-input" value="">
                 <p class="appointment-privacy-note"><span class="material-symbols-outlined" aria-hidden="true">privacy_tip</span><span>Your appointment details are added to your clinic record. <a href="<?= student_e(student_legal_url('privacy')) ?>" target="_blank" rel="noopener" class="student-auth-link">Privacy Notice</a></span></p>
+                <p class="student-card-copy mt-2"><span class="material-symbols-outlined" aria-hidden="true">schedule</span> Appointments may begin up to 15 minutes late while the clinic prepares for the next patient.</p>
 
                 <div class="student-field" id="appointment-calendar-panel"
                      data-availability="<?= student_e(json_encode($availabilityPayload, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)) ?>"

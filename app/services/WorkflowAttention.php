@@ -72,46 +72,17 @@ function workflow_attention_items(array $filters = [], int $limit = 500): array
             $item['email_relevant'] = $missedExamination || !empty($item['email_relevant']);
             $item['email_event_type'] = $missedExamination ? 'ape_exam_missed' : (string) ($item['email_event_type'] ?? '');
             $item['email_source_type'] = $missedExamination ? 'ape' : ($item['email_source_type'] ?? $item['source_type'] ?? 'ape');
-            $item['email_source_id'] = $missedExamination ? (int) ($record['id'] ?? 0) : ($item['email_source_id'] ?? $item['source_id'] ?? 0);
+            $item['email_source_id'] = $missedExamination ? (int) ($record['ape_id'] ?? $record['id'] ?? 0) : ($item['email_source_id'] ?? $item['source_id'] ?? 0);
             $add($items, $item);
         }
-    }
-
-    try {
-        $requirements = $db->query("SELECT r.requirement_id, r.ape_id, r.requirement_name, r.upload_due_date,
-                ar.patient_id, ar.exam_date, p.first_name, p.last_name
-            FROM ape_requirements r
-            INNER JOIN ape_records ar ON ar.ape_id = r.ape_id
-            INNER JOIN people p ON p.id = ar.patient_id
-            WHERE r.status <> 'Verified'
-              AND ar.exam_date IS NOT NULL
-              AND COALESCE(r.upload_due_date, DATE_ADD(ar.exam_date, INTERVAL 7 DAY)) < CURDATE()
-            ORDER BY COALESCE(r.upload_due_date, DATE_ADD(ar.exam_date, INTERVAL 7 DAY)), r.requirement_id")->fetchAll();
-        foreach ($requirements as $row) {
-            $add($items, [
-                'type' => 'ape_overdue_requirement',
-                'label' => 'APE overdue document',
-                'title' => 'Review and contact patient',
-                'explanation' => 'The required APE document is overdue and needs clinic follow-up.',
-                'patient_name' => trim((string) $row['first_name'] . ' ' . (string) $row['last_name']) ?: 'Patient',
-                'priority' => 'overdue',
-                'status' => 'Overdue',
-                'area' => 'APE',
-                'created_at' => date('Y-m-d H:i:s'),
-                'due_at' => (string) ($row['upload_due_date'] ?: $row['exam_date']),
-                'source_type' => 'ape_requirement',
-                'source_id' => (int) $row['requirement_id'],
-                'patient_person_id' => (int) $row['patient_id'],
-                'action_label' => 'Review and contact patient',
-                'source_url' => '../ape/view.php?id=' . (int) $row['ape_id'],
-                'email_relevant' => true,
-                'email_event_type' => 'ape_documents_overdue',
-                'email_source_type' => 'ape',
-                'email_source_id' => (int) $row['ape_id'],
-            ]);
+        foreach (ape_patient_document_action_summaries($record) as $action) {
+            if (($action['priority'] ?? '') !== 'overdue') continue;
+            $action['patient_name'] = trim((string) ($record['first_name'] ?? '') . ' ' . (string) ($record['last_name'] ?? '')) ?: 'Patient';
+            $action['patient_email'] = '';
+            $action['created_at'] = (string) ($record['created_at'] ?? date('Y-m-d H:i:s'));
+            $action['action_label'] = 'Review and contact patient';
+            $add($items, $action);
         }
-    } catch (Throwable $e) {
-        // Optional workflow tables must not prevent the work queue from loading.
     }
 
     $appointmentRows = $db->query("SELECT a.appointment_id, a.patient_id, a.appointment_datetime, a.status, a.purpose,

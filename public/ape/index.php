@@ -28,7 +28,8 @@ $populationScope = ($_SESSION['ape_population_scope'] ?? 'students') === 'facult
     ? 'faculty_ntp'
     : 'students';
 $queues = ape_work_queues();
-if ($activeQueue !== 'all' && !isset($queues[$activeQueue])) {
+$combinedFinalDecisionQueue = 'final_decision_or_follow_up';
+if ($activeQueue !== 'all' && $activeQueue !== $combinedFinalDecisionQueue && !isset($queues[$activeQueue])) {
     $activeQueue = 'digital_submission';
 }
 
@@ -81,18 +82,6 @@ if ($selectedBatchId !== null) {
 $_SESSION['ape_work_queue_state'] = $persistedApeState;
 
 $overallRecords = ape_fetch_records();
-$activeCycleId = (int) ($activeApeCycle['ape_cycle_id'] ?? 0);
-$clearanceComplianceRecords = $activeCycleId > 0
-    ? array_values(array_filter($overallRecords, static fn(array $record): bool => (int) ($record['ape_cycle_id'] ?? 0) === $activeCycleId))
-    : [];
-$clearanceComplianceCompleted = count(array_filter(
-    $clearanceComplianceRecords,
-    static fn(array $record): bool => ape_work_queue_stage($record) === 'completed'
-));
-$clearanceComplianceTotal = count($clearanceComplianceRecords);
-$clearanceComplianceRate = $clearanceComplianceTotal > 0
-    ? (int) round(($clearanceComplianceCompleted / $clearanceComplianceTotal) * 100)
-    : 0;
 $scopeRecords = ape_fetch_records($search, null, null, $selectedBatchId);
 $scopeRecords = array_values(array_filter($scopeRecords, static function (array $record) use ($populationScope): bool {
     $isClinicManual = ($record['entry_mode'] ?? '') === 'Clinic Manual';
@@ -100,6 +89,14 @@ $scopeRecords = array_values(array_filter($scopeRecords, static function (array 
 }));
 $batchProgress = ape_batch_progress($schoolYearBatches === [] ? [] : $overallRecords);
 $allRecords = $scopeRecords;
+$clearanceComplianceCompleted = count(array_filter(
+    $allRecords,
+    static fn(array $record): bool => ape_staff_queue_stage($record) === 'completed'
+));
+$clearanceComplianceTotal = count($allRecords);
+$clearanceComplianceRate = $clearanceComplianceTotal > 0
+    ? (int) round(($clearanceComplianceCompleted / $clearanceComplianceTotal) * 100)
+    : 0;
 $batchIndicator = $selectedBatch !== null
     ? sprintf(
         '%s • %s, %s–%s',
@@ -121,12 +118,25 @@ $batchQuerySuffix = $populationScope === 'faculty_ntp'
 
 $recordsByQueue = array_fill_keys(array_keys($queues), []);
 foreach ($allRecords as $record) {
-    $recordsByQueue[ape_work_queue_stage($record)][] = $record;
+    $recordsByQueue[ape_staff_queue_stage($record)][] = $record;
 }
 
+$flowQueues = [
+    'digital_submission' => $queues['digital_submission'],
+    'examination' => $queues['examination'],
+    $combinedFinalDecisionQueue => [
+        'title' => 'Final Decision or Follow-up',
+        'short_title' => 'Final Decision or Follow-up',
+        'description' => 'Review completed examinations, archive documents, or manage any required follow-up.',
+        'icon' => 'clinical_notes',
+        'source_queues' => ['final_decision', 'follow_up'],
+    ],
+    'completed' => $queues['completed'],
+];
+
 $visibleQueues = $activeQueue === 'all'
-    ? array_keys($queues)
-    : (isset($queues[$activeQueue]) ? [$activeQueue] : array_keys($queues));
+    ? array_keys($flowQueues)
+    : (isset($flowQueues[$activeQueue]) ? [$activeQueue] : array_keys($flowQueues));
 
 $needsAction = 0;
 foreach (['examination', 'digital_submission', 'final_decision', 'follow_up'] as $key) {
@@ -150,8 +160,14 @@ $appointmentsToday = (int)($appointmentsStmt->fetch()['total'] ?? 0);
 $overdueRecords = [];
 foreach ($allRecords as $rec) {
     $priority = ape_priority_badge($rec);
-    if (in_array($priority['label'], ['Missed', 'Overdue'], true)) {
-        $overdueRecords[] = $rec;
+    if ($priority['label'] === 'Missed' && ape_record_queue($rec) === 'examination') {
+        $overdueRecords[] = ['record' => $rec, 'attention' => ['kind' => 'missed']];
+        continue;
+    }
+    foreach (ape_patient_document_action_summaries($rec) as $action) {
+        if (($action['priority'] ?? '') !== 'overdue') continue;
+        $overdueRecords[] = ['record' => $rec, 'attention' => ['kind' => 'overdue', 'action' => $action]];
+        break;
     }
 }
 
@@ -206,26 +222,22 @@ render_clinic_command_header(
         </span>
     </summary>
     <div class="divide-y divide-red-100/50">
-        <?php foreach (array_slice($overdueRecords, 0, 5) as $rec): 
+        <?php foreach (array_slice($overdueRecords, 0, 5) as $urgentItem): $rec = $urgentItem['record']; $attention = $urgentItem['attention'];
             $fullName = trim($rec['first_name'] . ' ' . $rec['last_name']);
             $next = ape_next_action($rec);
-            $priority = ape_priority_badge($rec);
-            $deadline = ape_deadline_status($rec);
-            $days = (int) ($deadline['days'] ?? 0);
-            $warningClass = in_array($priority['label'], ['Missed', 'Overdue'], true) ? 'text-red-600' : 'text-amber-600';
-            $badgeIcon = $priority['label'] === 'Missed' ? 'event_busy' : 'error';
-            $deadlineText = match ($priority['label']) {
-                'Missed' => 'Assigned batch was missed',
-                'Overdue' => $priority['label'] . ' - ' . $days . 'd',
-                default => 'Review required',
-            };
+            $isMissed = ($attention['kind'] ?? '') === 'missed';
+            $dueDate = (string) ($attention['action']['due_at'] ?? '');
+            $days = $dueDate === '' ? 0 : max(0, (int) ((new DateTimeImmutable('today'))->diff(new DateTimeImmutable($dueDate))->format('%r%a') * -1));
+            $warningClass = 'text-red-600';
+            $badgeIcon = $isMissed ? 'event_busy' : 'error';
+            $deadlineText = $isMissed ? 'Assigned batch was missed' : 'Overdue - ' . $days . 'd';
             $canExamineNow = empty($rec['exam_date']) && ape_examination_is_available($rec);
         ?>
             <div class="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-red-100/30 transition-colors">
                 <div>
                     <h3 class="font-bold text-slate-800 text-base mb-1"><?= e($fullName) ?></h3>
                     <p class="text-xs font-bold text-slate-500 m-0">
-                        <?= e($rec['id_number']) ?> &bull; <?= e($rec['course_section'] ?: 'No course') ?> &bull; <?= e($next['label']) ?> &mdash; <?= strtolower(e($priority['label'])) ?>
+                        <?= e($rec['id_number']) ?> &bull; <?= e($rec['course_section'] ?: 'No course') ?> &bull; <?= e($next['label']) ?> &mdash; <?= $isMissed ? 'missed' : 'overdue' ?>
                     </p>
                 </div>
                 <div class="flex items-center gap-6 shrink-0">
@@ -296,11 +308,12 @@ render_clinic_command_header(
     </div>
     </form>
     <div class="ape-queue-map-grid">
-        <?php foreach ($queues as $key => $queue): ?>
+        <?php foreach ($flowQueues as $key => $queue): ?>
+            <?php $queueCount = array_sum(array_map(static fn(string $sourceQueue): int => count($recordsByQueue[$sourceQueue] ?? []), $queue['source_queues'] ?? [$key])); ?>
             <a href="?queue=<?= urlencode($key) ?><?= $search !== '' ? '&q=' . urlencode($search) : '' ?><?= e($batchQuerySuffix) ?>" class="ape-queue-map-card rounded-2xl border <?= $activeQueue === $key ? 'border-primary bg-primary-fixed' : 'border-outline-variant bg-white' ?> p-3 text-decoration-none hover:bg-primary-fixed transition-colors">
                 <div class="flex items-center justify-between gap-2">
                     <span class="w-8 h-8 rounded-xl bg-white text-primary border border-outline-variant flex items-center justify-center material-symbols-outlined text-[16px]"><?= e($queue['icon']) ?></span>
-                    <strong class="font-headline text-xl text-[#17261d]"><?= count($recordsByQueue[$key]) ?></strong>
+                    <strong class="font-headline text-xl text-[#17261d]"><?= $queueCount ?></strong>
                 </div>
                 <p class="ape-queue-map-label"><?= e($queue['short_title'] ?? $queue['title']) ?></p>
             </a>
@@ -319,8 +332,12 @@ render_clinic_command_header(
 
 <div class="grid grid-cols-1 gap-6">
     <?php foreach ($visibleQueues as $queueKey):
-        $queue = $queues[$queueKey];
-        $records = $recordsByQueue[$queueKey];
+        $queue = $flowQueues[$queueKey];
+        $sourceQueues = $queue['source_queues'] ?? [$queueKey];
+        $records = [];
+        foreach ($sourceQueues as $sourceQueue) {
+            $records = array_merge($records, $recordsByQueue[$sourceQueue] ?? []);
+        }
         $shownRecords = $records;
         $scopeEmptyText = $search !== ''
             ? 'No records match your search in this queue.'
@@ -340,7 +357,7 @@ render_clinic_command_header(
                             <p class="text-xs font-bold text-slate-500 mb-0"><?= e($queue['description']) ?></p>
                         </div>
                     </div>
-                    <span class="badge <?= $queueKey === 'completed' ? 'badge-completed' : ($queueKey === 'follow_up' ? 'badge-high' : 'badge-in-progress') ?>">
+                    <span class="badge <?= $queueKey === 'completed' ? 'badge-completed' : ($queueKey === $combinedFinalDecisionQueue ? 'badge-high' : 'badge-in-progress') ?>">
                         <?= count($records) ?> record(s)
                     </span>
                 </div>
@@ -363,7 +380,7 @@ render_clinic_command_header(
                 $scheduleHtml = $hasBatch
                     ? '<strong class="text-sm text-slate-800 block">' . e($rec['batch_name']) . '</strong><span class="text-xs font-bold text-slate-500">' . e(date('M j, Y', strtotime($rec['batch_schedule_date']))) . ' &bull; ' . e(date('g:i A', strtotime($rec['batch_start_time']))) . '–' . e(date('g:i A', strtotime($rec['batch_end_time']))) . '</span>'
                     : '<span class="badge badge-pending">Unscheduled</span>';
-                if (ape_work_queue_stage($rec) === 'follow_up' && !empty($rec['follow_up_due_date'])) {
+                if (ape_staff_queue_stage($rec) === 'follow_up' && !empty($rec['follow_up_due_date'])) {
                     $scheduleSort = $rec['follow_up_due_date'];
                     $scheduleHtml = '<strong class="text-sm text-slate-800 block">Return Date</strong><span class="text-xs font-bold text-slate-500">'
                         . e(date('M j, Y', strtotime($rec['follow_up_due_date']))) . '</span>';

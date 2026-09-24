@@ -11,7 +11,7 @@ if ($documentId <= 0) {
     exit('Document not found.');
 }
 
-$stmt = auth_db()->prepare('SELECT document_id, original_filename, file_path FROM ape_documents WHERE document_id = ? LIMIT 1');
+$stmt = auth_db()->prepare('SELECT d.document_id, d.original_filename, d.file_path, d.document_type, p.id_number FROM ape_documents d JOIN ape_records ar ON ar.ape_id = d.ape_id JOIN people p ON p.id = ar.patient_id WHERE d.document_id = ? LIMIT 1');
 $stmt->execute([$documentId]);
 $document = $stmt->fetch();
 if (!$document) {
@@ -29,11 +29,11 @@ $detectedType = (new finfo(FILEINFO_MIME_TYPE))->file($absolutePath) ?: 'applica
 $allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
 $mimeType = in_array($detectedType, $allowedTypes, true) ? $detectedType : 'application/octet-stream';
 $originalName = trim((string) ($document['original_filename'] ?? '')) ?: basename($absolutePath);
-$fallbackName = preg_replace('/[^A-Za-z0-9._-]+/', '_', $originalName) ?: 'document';
+$downloadName = ape_document_download_name((string) ($document['id_number'] ?? ''), (string) ($document['document_type'] ?? ''), $originalName);
 
 header('Content-Type: ' . $mimeType);
 header('Content-Length: ' . (string) filesize($absolutePath));
-header('Content-Disposition: inline; filename="' . $fallbackName . '"; filename*=UTF-8\'\'' . rawurlencode($originalName));
+header('Content-Disposition: inline; filename="' . $downloadName . '"; filename*=UTF-8\'\'' . rawurlencode($downloadName));
 header('Cache-Control: private, no-store, max-age=0');
 header('Pragma: no-cache');
 header('X-Content-Type-Options: nosniff');

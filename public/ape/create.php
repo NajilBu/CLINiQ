@@ -73,7 +73,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        $storedFile = ape_store_uploaded_file($_FILES['document'], 'ape');
+        $patientIdentity = $apeDb->prepare('SELECT id_number FROM people WHERE id = ? LIMIT 1');
+        $patientIdentity->execute([$patientId]);
+        $idNumber = (string) ($patientIdentity->fetchColumn() ?: 'patient-' . $patientId);
+        $documentType = trim((string) ($_POST['document_type'] ?? 'APE Form')) ?: 'APE Form';
+        $storedFile = ape_store_uploaded_file($_FILES['document'], $idNumber, $documentType);
         if ($followUpRequired) {
             $workflowStatus = 'Follow-up Required';
             $clearanceStatus = 'For Follow-up';
@@ -119,7 +123,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ");
             $document->execute([
                 $apeId,
-                trim((string) ($_POST['document_type'] ?? 'APE Form')) ?: 'APE Form',
+                $documentType,
                 $storedFile['original_filename'],
                 $storedFile['file_path'],
                 $verificationStatus,

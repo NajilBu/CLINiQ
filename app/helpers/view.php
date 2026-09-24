@@ -7,6 +7,7 @@ require_once __DIR__ . '/student_id.php';
 require_once __DIR__ . '/../services/SystemSettings.php';
 require_once __DIR__ . '/../services/ProfilePhoto.php';
 require_once __DIR__ . '/../services/ApeWorkflow.php';
+require_once __DIR__ . '/../services/AppointmentWorkflow.php';
 
 /**
  * Return counts for staff navigation items that currently need attention.
@@ -31,7 +32,11 @@ function staff_sidebar_action_counts(int $activeAlertCount = 0): array
 
     $db = auth_db();
     try {
-        $counts['Appointments'] = (int) $db->query("SELECT COUNT(*) FROM appointments WHERE status IN ('Pending', 'For Confirmation')")->fetchColumn();
+        $statuses = appointment_actionable_statuses();
+        $placeholders = implode(',', array_fill(0, count($statuses), '?'));
+        $stmt = $db->prepare("SELECT COUNT(*) FROM appointments WHERE status IN ({$placeholders})");
+        $stmt->execute($statuses);
+        $counts['Appointments'] = (int) $stmt->fetchColumn();
     } catch (Throwable $e) {
         $counts['Appointments'] = 0;
     }
@@ -60,14 +65,10 @@ function staff_sidebar_action_counts(int $activeAlertCount = 0): array
     try {
         $apeRecords = ape_fetch_records();
         foreach ($apeRecords as $record) {
-            // The sidebar badge is an attention indicator, not an APE workload
-            // total. Digital Keeping entries commonly wait for a student upload
-            // and should remain visible in APE without becoming a notification.
-            foreach (ape_normalized_action_items($record) as $item) {
-                if (in_array((string) ($item['priority'] ?? ''), ['urgent', 'overdue', 'clinic_action'], true)) {
-                    $counts['APE']++;
-                    break;
-                }
+            // Routine clinic work remains visible in APE, but only immediate
+            // corrections, overdue work, or missed examinations get a badge.
+            if (ape_has_urgent_action($record)) {
+                $counts['APE']++;
             }
         }
     } catch (Throwable $e) {
@@ -277,6 +278,7 @@ function render_header(string $title): void
     $nav = [
         'Dashboard' => ['group' => 'Overview', 'url' => app_url('dashboard.php'), 'match' => 'dashboard.php', 'icon' => 'dashboard'],
         'Patients' => ['group' => 'People & Records', 'url' => app_url('patients/index.php'), 'match' => '/patients/', 'icon' => 'personal_injury'],
+        'Patient Accounts' => ['group' => 'People & Records', 'url' => app_url('patient-accounts/index.php'), 'match' => '/patient-accounts/', 'icon' => 'manage_accounts', 'roles' => ['admin', 'doctor']],
         'Visits' => ['group' => 'Clinical Operations', 'url' => app_url('visits/index.php'), 'match' => '/visits/', 'icon' => 'clinical_notes'],
         'Alerts' => ['group' => 'Clinical Operations', 'url' => app_url('alerts/index.php'), 'match' => '/alerts/', 'icon' => 'notification_important'],
         'APE' => ['group' => 'Clinical Operations', 'url' => app_url('ape/index.php'), 'match' => '/ape/', 'icon' => 'description'],
@@ -501,27 +503,48 @@ function render_footer(): void
                     <div>
                         <p class="profile-photo-eyebrow">Clinic profile</p>
                         <h3 id="staff-profile-photo-title">Change profile picture</h3>
+                        <p class="profile-photo-dialog-subtitle">Update the photo shown on your staff profile and clinic pages.</p>
                     </div>
                     <button type="button" class="profile-photo-close" data-profile-photo-close aria-label="Close profile-picture dialog">
                         <span class="material-symbols-outlined">close</span>
                     </button>
                 </div>
-                <form action="<?= app_url('profile-photo-update.php') ?>" method="post" enctype="multipart/form-data" class="profile-photo-preview-form" data-profile-photo-form>
+                <form action="<?= app_url('profile-photo-update.php') ?>" method="post" enctype="multipart/form-data" class="profile-photo-preview-form" data-profile-photo-form data-no-ajax="true" data-no-loading>
+                    <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
                     <input type="hidden" name="return_to" value="<?= e($returnTo) ?>">
                     <div class="profile-photo-stage is-active" data-profile-photo-editor>
-                        <div class="profile-photo-preview-frame">
-                            <img data-profile-photo-preview src="<?= e($photoUrl ?? '') ?>" alt="Selected profile-picture preview" <?= $photoUrl === null ? 'hidden' : '' ?>>
-                            <span data-profile-photo-fallback <?= $photoUrl !== null ? 'hidden' : '' ?>><?= e(initials((string) ($user['name'] ?? 'Staff'))) ?></span>
+                        <div class="profile-photo-editor-layout">
+                            <div class="profile-photo-visual-panel">
+                                <span class="profile-photo-panel-label">Current preview</span>
+                                <div class="profile-photo-preview-frame">
+                                    <img data-profile-photo-preview src="<?= e($photoUrl ?? '') ?>" alt="Selected profile-picture preview" <?= $photoUrl === null ? 'hidden' : '' ?>>
+                                    <span data-profile-photo-fallback <?= $photoUrl !== null ? 'hidden' : '' ?>><?= e(initials((string) ($user['name'] ?? 'Staff'))) ?></span>
+                                </div>
+                                <p class="profile-photo-preview-caption">This is how your profile image will appear to clinic staff.</p>
+                            </div>
+                            <div class="profile-photo-upload-panel">
+                                <div class="profile-photo-upload-card">
+                                    <span class="material-symbols-outlined profile-photo-upload-icon" aria-hidden="true">add_a_photo</span>
+                                    <div>
+                                        <h4>Choose a new photo</h4>
+                                        <p>Select a clear headshot. You can review it before saving.</p>
+                                    </div>
+                                    <label for="staff-profile-photo-input" class="btn btn-outline profile-photo-choose">
+                                        <span class="material-symbols-outlined" aria-hidden="true">image</span>
+                                        Choose photo
+                                    </label>
+                                    <p class="profile-photo-selected-file" data-profile-photo-selected>No new photo selected</p>
+                                </div>
+                                <div class="profile-photo-rules" aria-label="Photo requirements">
+                                    <span class="material-symbols-outlined" aria-hidden="true">info</span>
+                                    <p>JPG, PNG, or WebP · maximum 5 MB</p>
+                                </div>
+                            </div>
                         </div>
-                        <p class="profile-photo-help">Choose a clear JPG, PNG, or WebP image up to 5 MB.</p>
                         <input id="staff-profile-photo-input" class="profile-photo-input" type="file" name="profile_photo" accept="image/jpeg,image/png,image/webp" required data-profile-photo-input>
                         <div class="profile-photo-dialog-actions">
-                            <label for="staff-profile-photo-input" class="btn btn-ghost profile-photo-choose">
-                                <span class="material-symbols-outlined">image</span>
-                                Choose Photo
-                            </label>
                             <button type="button" class="btn btn-ghost" data-profile-photo-close>Cancel</button>
-                            <button type="submit" class="btn btn-primary" data-profile-photo-save disabled>Review Photo</button>
+                            <button type="submit" class="btn btn-primary" data-profile-photo-save><span class="material-symbols-outlined" aria-hidden="true">visibility</span> Review photo</button>
                         </div>
                     </div>
                     <div class="profile-photo-stage profile-photo-confirmation" data-profile-photo-confirmation aria-hidden="true">
@@ -617,12 +640,16 @@ function render_footer(): void
                 const preview = form.querySelector('[data-profile-photo-preview]');
                 const fallback = form.querySelector('[data-profile-photo-fallback]');
                 const save = form.querySelector('[data-profile-photo-save]');
+                const selectedFile = form.querySelector('[data-profile-photo-selected]');
+                if (selectedFile) selectedFile.textContent = file.name;
+                if (save) save.disabled = false;
                 const reader = new FileReader();
                 reader.addEventListener('load', () => {
-                    preview.src = String(reader.result || '');
-                    preview.hidden = false;
+                    if (preview) {
+                        preview.src = String(reader.result || '');
+                        preview.hidden = false;
+                    }
                     if (fallback) fallback.hidden = true;
-                    if (save) save.disabled = false;
                     setProfilePhotoConfirmation(form, false);
                 });
                 reader.readAsDataURL(file);

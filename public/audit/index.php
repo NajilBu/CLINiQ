@@ -8,21 +8,29 @@ require_once __DIR__ . '/../../app/services/ClinicWorkCenter.php';
 require_login();
 $user = current_user();
 $tab = ($_GET['tab'] ?? 'audit') === 'email' ? 'email' : 'audit';
+$emailRoles = ['admin', 'doctor', 'it_expert'];
 if ($tab === 'audit' && ($user['role'] ?? '') !== 'admin') {
     http_response_code(403);
     exit('You are not authorized to view the audit log.');
+}
+if ($tab === 'email' && !in_array((string) ($user['role'] ?? ''), $emailRoles, true)) {
+    http_response_code(403);
+    exit('You are not authorized to use Email Center.');
 }
 ensure_audit_log_schema();
 
 if ($tab === 'email') {
     $actorPersonId = (int) ($user['person_id'] ?? 0) ?: null;
     $emailRole = (string) ($user['role'] ?? '');
-    $canManageEmailOperations = in_array($emailRole, ['admin', 'doctor', 'it_expert'], true);
-    $emailOpsActions = ['process', 'process_now', 'retry_blocked', 'resend', 'automation', 'custom_send', 'pause_queue', 'resume_queue', 'reschedule', 'edit_pending', 'assign_follow_up', 'send_clinic_reminders'];
+    $canManageEmailOperations = in_array($emailRole, $emailRoles, true);
+    $emailOpsActions = ['process', 'process_now', 'retry', 'retry_blocked', 'cancel', 'resend', 'follow_up', 'resolve_follow_up', 'add_note', 'automation', 'custom_send', 'pause_queue', 'resume_queue', 'reschedule', 'edit_pending', 'assign_follow_up', 'send_clinic_reminders'];
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $emailAction = (string) ($_POST['email_action'] ?? '');
         try {
-            if (in_array($emailAction, $emailOpsActions, true) && !$canManageEmailOperations) {
+            if (!in_array($emailAction, $emailOpsActions, true)) {
+                throw new InvalidArgumentException('Unknown email action.');
+            }
+            if (!$canManageEmailOperations) {
                 throw new RuntimeException('This email action requires an administrator, doctor, or IT expert.');
             }
             if ($emailAction === 'process') {
@@ -695,6 +703,22 @@ $printQuery = http_build_query(array_filter([
     'date_to' => $dateTo,
 ], static fn ($value): bool => $value !== ''));
 
+$apeReviewFlags = [];
+try {
+    foreach (ape_fetch_records() as $apeRecord) {
+        $recordFlags = ape_data_quality_flags($apeRecord);
+        if ($recordFlags) {
+            $apeReviewFlags[] = [
+                'record' => $apeRecord,
+                'flags' => $recordFlags,
+            ];
+        }
+    }
+} catch (Throwable $e) {
+    // The audit log must remain available even if an optional APE review query fails.
+    $apeReviewFlags = [];
+}
+
 render_header('Audit Log');
 render_clinic_command_header(
     'Governance',
@@ -710,6 +734,46 @@ render_clinic_command_header(
     <a class="btn w-full justify-center btn-primary text-decoration-none" href="index.php?tab=audit">Audit Log</a>
     <a class="btn w-full justify-center btn-outline text-decoration-none" href="index.php?tab=email">Email Center</a>
 </nav>
+<section class="clinic-card overflow-hidden mb-6" aria-labelledby="apeDataQualityHeading">
+    <div class="p-6 border-b border-slate-100">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+                <p class="text-[11px] font-black uppercase tracking-widest text-primary mb-1">Read-only review</p>
+                <h2 id="apeDataQualityHeading" class="font-headline text-xl font-extrabold text-[#17261d] mb-1">APE data-quality flags</h2>
+                <p class="text-xs font-bold text-slate-500 mb-0">These records need staff inspection. Nothing here changes live workflow data automatically.</p>
+            </div>
+            <span class="badge <?= $apeReviewFlags ? 'badge-high' : 'badge-completed' ?>"><?= number_format(count($apeReviewFlags)) ?> record<?= count($apeReviewFlags) === 1 ? '' : 's' ?> flagged</span>
+        </div>
+    </div>
+    <?php if (!$apeReviewFlags): ?>
+        <div class="p-6 text-sm font-bold text-slate-500">No APE data-quality inconsistencies were detected.</div>
+    <?php else: ?>
+        <div class="divide-y divide-slate-100">
+            <?php foreach ($apeReviewFlags as $review):
+                $reviewRecord = $review['record'];
+                $reviewName = trim((string) ($reviewRecord['patient_name'] ?? '')) ?: 'Unnamed patient';
+                $reviewId = trim((string) ($reviewRecord['id_number'] ?? ''));
+                $reviewUrl = app_url('ape/view.php?id=' . (int) ($reviewRecord['ape_id'] ?? 0));
+            ?>
+                <div class="p-6 flex flex-col lg:flex-row lg:items-start lg:justify-between gap-5">
+                    <div class="min-w-0">
+                        <div class="flex flex-wrap items-center gap-2 mb-2">
+                            <h3 class="font-headline text-base font-extrabold text-[#17261d] mb-0"><?= e($reviewName) ?></h3>
+                            <?php if ($reviewId !== ''): ?><span class="text-xs font-bold text-slate-500"><?= e($reviewId) ?></span><?php endif; ?>
+                            <span class="badge badge-high"><?= count($review['flags']) ?> flag<?= count($review['flags']) === 1 ? '' : 's' ?></span>
+                        </div>
+                        <ul class="m-0 pl-5 space-y-1 text-sm font-bold text-slate-600">
+                            <?php foreach ($review['flags'] as $flag): ?>
+                                <li><span class="text-slate-800"><?= e($flag['title']) ?>:</span> <?= e($flag['detail']) ?></li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </div>
+                    <a class="btn btn-outline text-decoration-none whitespace-nowrap" href="<?= e($reviewUrl) ?>">Open APE record</a>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+</section>
 <section class="clinic-card overflow-hidden mb-6">
     <div class="p-6 border-b border-slate-100"><h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Audit Filters</h2><p class="text-xs font-bold text-slate-500 mb-0">Filter sensitive system activity by module, actor, result, or date.</p></div>
     <form method="get" class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

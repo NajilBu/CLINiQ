@@ -18,9 +18,12 @@ function ensure_appointment_schema(): void
         }
     }
 
-    $db->exec("ALTER TABLE appointments MODIFY status VARCHAR(40) NOT NULL DEFAULT 'Pending'");
-
     $ready = true;
+}
+
+function appointment_actionable_statuses(): array
+{
+    return ['Pending', 'For Confirmation'];
 }
 
 function appointment_status_badge_class(string $status): string
@@ -355,6 +358,16 @@ function appointment_range_is_open_for_schedule(array $schedule, string $date, s
     return !empty($hours['enabled']) && $start >= $hours['start'] && $end <= $hours['end'];
 }
 
+function appointment_range_is_open(string $date, string $startTime, string $endTime): bool
+{
+    return appointment_range_is_open_for_schedule(
+        appointment_schedule_for_date($date),
+        $date,
+        $startTime,
+        $endTime
+    );
+}
+
 function appointment_weekly_hour_bounds(array $schedule): array
 {
     $starts = [];
@@ -447,6 +460,30 @@ function appointment_slot_is_reserved(string $appointmentDatetime, string $purpo
     return (bool) $stmt->fetchColumn();
 }
 
+function appointment_active_conflicts_for_range(string $date, string $startTime, string $endTime): array
+{
+    $start = DateTimeImmutable::createFromFormat('!Y-m-d H:i', $date . ' ' . substr($startTime, 0, 5));
+    $end = DateTimeImmutable::createFromFormat('!Y-m-d H:i', $date . ' ' . substr($endTime, 0, 5));
+    if (!$start || !$end || $start >= $end) {
+        return [];
+    }
+
+    $stmt = appointment_db()->prepare("\n        SELECT appointment_id, patient_id, appointment_datetime, purpose, status\n        FROM appointments\n        WHERE status IN ('Pending', 'Scheduled', 'For Confirmation')\n          AND appointment_datetime < ?\n          AND DATE_ADD(appointment_datetime, INTERVAL " . appointment_duration_minutes() . " MINUTE) > ?\n        ORDER BY appointment_datetime ASC, appointment_id ASC\n    ");
+    $stmt->execute([$end->format('Y-m-d H:i:s'), $start->format('Y-m-d H:i:s')]);
+
+    return $stmt->fetchAll();
+}
+
+function appointment_status_transition_is_allowed(string $currentStatus, string $nextStatus): bool
+{
+    return in_array($nextStatus, match ($currentStatus) {
+        'Pending' => ['Scheduled', 'Cancelled'],
+        'Scheduled' => ['For Confirmation', 'Cancelled'],
+        'For Confirmation' => ['Completed', 'No Show'],
+        default => [],
+    }, true);
+}
+
 function appointment_ape_batches_for_range(string $startDate, string $endDate): array
 {
     $stmt = appointment_db()->prepare("
@@ -527,20 +564,39 @@ function appointment_is_full_day_blocked(array $blocks): bool
 
 function appointment_time_is_blocked(string $date, string $time, array $blocksByDate): bool
 {
+    $slotStart = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $date . ' ' . $time);
+    if (!$slotStart || $slotStart->format('Y-m-d') !== $date) {
+        return false;
+    }
+
+    return appointment_range_is_blocked(
+        $date,
+        $slotStart->format('H:i:s'),
+        $slotStart->modify('+' . appointment_duration_minutes() . ' minutes')->format('H:i:s'),
+        $blocksByDate
+    );
+}
+
+function appointment_range_is_blocked(string $date, string $startTime, string $endTime, array $blocksByDate): bool
+{
     $blocks = $blocksByDate[$date] ?? [];
     if (appointment_is_full_day_blocked($blocks)) {
         return true;
     }
 
-    $slot = strtotime($date . ' ' . $time);
+    $start = strtotime($date . ' ' . $startTime);
+    $end = strtotime($date . ' ' . $endTime);
+    if ($start === false || $end === false || $end <= $start) {
+        return false;
+    }
     foreach ($blocks as $block) {
         if (empty($block['start_time']) || empty($block['end_time'])) {
             return true;
         }
 
-        $start = strtotime($date . ' ' . $block['start_time']);
-        $end = strtotime($date . ' ' . $block['end_time']);
-        if ($slot >= $start && $slot < $end) {
+        $blockStart = strtotime($date . ' ' . $block['start_time']);
+        $blockEnd = strtotime($date . ' ' . $block['end_time']);
+        if ($blockStart !== false && $blockEnd !== false && $start < $blockEnd && $end > $blockStart) {
             return true;
         }
     }

@@ -56,10 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $passportError = 'A clinical patient record is required before health-passport information can be saved.';
     } else {
     try {
-    $passport['blood_type']       = cliniq_normalize_blood_type($_POST['blood_type'] ?? $passport['blood_type']);
     $passport['allergies']        = cliniq_normalize_free_text($_POST['allergies'] ?? $passport['allergies']);
-    $passport['conditions']       = cliniq_normalize_free_text($_POST['conditions'] ?? $passport['conditions']);
-    $passport['medications']      = cliniq_normalize_free_text($_POST['medications'] ?? $passport['medications']);
     $passport['instructions']     = cliniq_normalize_free_text($_POST['instructions'] ?? $passport['instructions']);
     $passport['show_bmi']         = isset($_POST['show_bmi_on_passport']);
     $passport['guardian_name'] = cliniq_normalize_person_name($_POST['guardian_name'] ?? '');
@@ -74,16 +71,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $stmt = auth_db()->prepare("
             UPDATE patients
-            SET blood_type = ?, allergies = ?, existing_conditions = ?, medications = ?, emergency_instructions = ?,
+            SET allergies = ?, emergency_instructions = ?,
                 guardian_or_contact_name = ?, guardian_or_contact_number = ?,
                 guardian_relationship = ?, secondary_contact_number = ?, show_bmi_on_passport = ?
             WHERE person_id = ?
         ");
         $stmt->execute([
-            $passport['blood_type'],
             $passport['allergies'],
-            $passport['conditions'],
-            $passport['medications'],
             $passport['instructions'],
             $passport['guardian_name'],
             $passport['primary_contact'],
@@ -93,7 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $patientId,
         ]);
         $saved = true;
-        audit_log_event('passport', 'passport_profile_updated', $patientId, 'student', 'patient', $patientId, ['fields' => ['blood_type', 'allergies', 'conditions', 'medications', 'instructions', 'emergency_contacts', 'show_bmi_on_passport']]);
+        audit_log_event('passport', 'passport_profile_updated', $patientId, 'student', 'patient', $patientId, ['fields' => ['allergies', 'instructions', 'emergency_contacts', 'show_bmi_on_passport']]);
         $passport['last_updated'] = date('F j, Y');
         student_start_session();
         $_SESSION['student_flash_success'] = 'Passport settings saved. Your Emergency Health Passport has been updated.';
@@ -193,15 +187,9 @@ render_student_header('Emergency Health Passport', 'passport');
                         <div class="passport-readonly-field"><?= student_e($passport['sex']) ?></div>
                     </div>
                     <div class="student-span-12 student-field passport-field-compact">
-                        <label class="student-label" for="blood_type">Blood Type <span class="passport-editable-tag">Editable</span></label>
-                        <select id="blood_type" name="blood_type" class="student-select">
-                            <?php
-                            $types = dropdown_options('blood_type');
-                            foreach ($types as $t):
-                            ?>
-                                <option value="<?= student_e($t) ?>" <?= $passport['blood_type'] === $t ? 'selected' : '' ?>><?= student_e($t) ?></option>
-                            <?php endforeach; ?>
-                        </select>
+                        <label class="student-label">Blood Type <span class="passport-readonly-tag">Clinic-managed</span></label>
+                        <div class="passport-readonly-field"><?= student_e($passport['blood_type'] ?: 'Not recorded') ?></div>
+                        <p class="passport-hint">Updated only by authorized clinic staff during APE.</p>
                     </div>
                 </div>
             </div>
@@ -284,29 +272,21 @@ render_student_header('Emergency Health Passport', 'passport');
                 </div>
 
                 <div class="student-field">
-                    <label class="student-label" for="conditions">
+                    <label class="student-label">
                         <span class="passport-dot passport-dot-amber"></span>
                         Existing Medical Conditions
                     </label>
-                    <textarea
-                        id="conditions"
-                        name="conditions"
-                        class="student-textarea passport-textarea-md"
-                        placeholder="e.g. Asthma (mild), Iron-deficiency anaemia"
-                    ><?= student_e($passport['conditions']) ?></textarea>
+                    <div class="passport-readonly-field whitespace-pre-wrap"><?= student_e($passport['conditions'] ?: 'None recorded') ?></div>
+                    <p class="passport-hint">Doctor-confirmed and maintained by clinic staff during APE.</p>
                 </div>
 
                 <div class="student-field">
-                    <label class="student-label" for="medications">
+                    <label class="student-label">
                         <span class="passport-dot passport-dot-green"></span>
                         Current Medications
                     </label>
-                    <textarea
-                        id="medications"
-                        name="medications"
-                        class="student-textarea passport-textarea-sm"
-                        placeholder="e.g. Salbutamol inhaler (as needed), Ferrous sulfate 325 mg daily"
-                    ><?= student_e($passport['medications']) ?></textarea>
+                    <div class="passport-readonly-field whitespace-pre-wrap"><?= student_e($passport['medications'] ?: 'None recorded') ?></div>
+                    <p class="passport-hint">Current medications recorded by clinic staff during APE.</p>
                 </div>
 
                 <div class="student-field passport-field-compact">
@@ -677,14 +657,6 @@ render_student_header('Emergency Health Passport', 'passport');
 
     function nl2br(s) {
         return escHtml(s).replace(/\n/g, '<br>');
-    }
-
-    // Blood type
-    const bloodSel = $('blood_type');
-    if (bloodSel) {
-        bloodSel.addEventListener('change', () => {
-            $('prev-blood').textContent = bloodSel.value;
-        });
     }
 
     // Allergies → tags

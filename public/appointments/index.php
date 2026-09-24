@@ -131,7 +131,6 @@ foreach ($appointments as $appointment) {
             . '</div>';
     } elseif ($status === 'Scheduled') {
         $actions = '<div class="row-actions-list">'
-            . '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['appointment_id'] . '"><input type="hidden" name="status" value="No Show"><button class="btn btn-sm btn-ghost" title="Mark no-show" data-confirm-submit data-confirm-type="danger" data-confirm-title="Mark as no-show?" data-confirm-message="This confirms the patient did not attend the appointment." data-confirm-toast="Marking no-show..."><span class="material-symbols-outlined text-[14px]">person_cancel</span> No Show</button></form>'
             . '<button type="button" class="btn btn-sm btn-ghost" title="Cancel appointment" aria-label="Cancel appointment" data-cancel-appointment data-cancel-id="' . (int)$appointment['appointment_id'] . '" data-cancel-title="Cancel scheduled appointment"><span class="material-symbols-outlined text-[14px]">cancel</span> Cancel</button>'
             . '</div>';
     } elseif ($status === 'For Confirmation') {

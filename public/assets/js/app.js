@@ -1692,57 +1692,6 @@ function initApeExamResultFields(root = document) {
     result.addEventListener('change', () => syncExamResultFields(true));
 }
 
-function initApeHardCopyReview(root = document) {
-    root.querySelectorAll('[data-hard-copy-review]').forEach((panel) => {
-        const status = panel.querySelector('[name="hard_copy_status"]');
-        const targets = panel.querySelector('[data-hard-copy-targets]');
-        const targetLabel = panel.querySelector('[data-hard-copy-target-label]');
-        const instructionLabel = panel.querySelector('[data-hard-copy-instruction-label]');
-        const instructions = panel.querySelector('[name="missing_items"]');
-        const checkboxes = Array.from(panel.querySelectorAll('[name="requirement_ids[]"]'));
-        const checklist = panel.closest('[data-ape-requirements]');
-        if (!status || !targets || !instructions) return;
-        // Preserve the server-rendered saved values; never preview or re-enable locked controls.
-        if (checklist?.dataset.locked === 'true') return;
-
-        const sync = () => {
-            const needsDocuments = ['correction', 'follow_up'].includes(status.value);
-            const isFollowUp = status.value === 'follow_up';
-            targets.classList.toggle('hidden', !needsDocuments);
-            if (targetLabel) targetLabel.textContent = isFollowUp ? 'Documents to provide later' : 'Documents needing correction';
-            if (instructionLabel) instructionLabel.textContent = isFollowUp ? 'Follow-up instructions' : 'Correction instructions';
-            instructions.disabled = !needsDocuments;
-            instructions.required = needsDocuments;
-            panel.querySelectorAll('[data-return-schedule]').forEach((field) => {
-                field.disabled = !needsDocuments;
-                field.required = needsDocuments;
-            });
-            instructions.setCustomValidity(needsDocuments && checkboxes.length === 0 ? 'Add documents to the Requirements Checklist first.' : '');
-            checkboxes.forEach((checkbox) => {
-                checkbox.disabled = !needsDocuments;
-                checkbox.setCustomValidity('');
-            });
-            if (checkboxes[0] && needsDocuments && !checkboxes.some((checkbox) => checkbox.checked)) {
-                checkboxes[0].setCustomValidity('Select at least one document.');
-            }
-            const selectedIds = new Set(checkboxes.filter((checkbox) => checkbox.checked && needsDocuments).map((checkbox) => checkbox.value));
-            checklist?.querySelectorAll('[data-requirement-preview]').forEach((preview) => {
-                const selected = selectedIds.has(preview.dataset.requirementPreview);
-                const nextStatus = selected ? (isFollowUp ? 'Missing' : 'Needs Correction') : 'Verified';
-                if (['complete', 'correction', 'follow_up'].includes(status.value)) {
-                    preview.value = nextStatus;
-                    preview.dataset.status = nextStatus;
-                }
-            });
-        };
-        sync();
-        if (panel.dataset.hardCopyReady === 'true') return;
-        panel.dataset.hardCopyReady = 'true';
-        status.addEventListener('change', sync);
-        checkboxes.forEach((checkbox) => checkbox.addEventListener('change', sync));
-    });
-}
-
 function cliniqAfterContentSwap(root) {
     if (typeof window.cliniqInitAgGrids === 'function') {
         window.cliniqInitAgGrids(root || document);
@@ -1755,7 +1704,6 @@ function cliniqAfterContentSwap(root) {
     initConfirmedPasswordForms(root || document);
     initRequirementStatusColors(root || document);
     initApeExamResultFields(root || document);
-    initApeHardCopyReview(root || document);
     if (typeof window.initRecentPatientAccountPagination === 'function') {
         window.initRecentPatientAccountPagination();
     }
@@ -1867,7 +1815,6 @@ async function cliniqSubmitFormAjax(form, submitter) {
             }
         });
         initApeExamResultFields(document);
-        initApeHardCopyReview(document);
     }
 }
 
@@ -2136,7 +2083,6 @@ document.addEventListener('DOMContentLoaded', () => {
     initConfirmedPasswordForms();
     initRequirementStatusColors();
     initApeExamResultFields();
-    initApeHardCopyReview();
 
     // Keep emergency alerts and the continuous alarm live without page refreshes.
     initContinuousAlertMonitor();

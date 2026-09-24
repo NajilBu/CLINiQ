@@ -824,27 +824,48 @@ function render_student_footer(): void
                     <div>
                         <p class="profile-photo-eyebrow">Patient profile</p>
                         <h3 id="patient-profile-photo-title">Change profile picture</h3>
+                        <p class="profile-photo-dialog-subtitle">Update the photo shown on your student profile and portal.</p>
                     </div>
                     <button type="button" class="profile-photo-close" data-profile-photo-close aria-label="Close profile-picture dialog">
                         <span class="material-symbols-outlined">close</span>
                     </button>
                 </div>
-                <form action="update-profile-photo.php" method="post" enctype="multipart/form-data" class="profile-photo-preview-form" data-profile-photo-form>
+                <form action="update-profile-photo.php" method="post" enctype="multipart/form-data" class="profile-photo-preview-form" data-profile-photo-form data-no-loading>
+                    <input type="hidden" name="_csrf" value="<?= student_e(csrf_token()) ?>">
                     <input type="hidden" name="return_to" value="<?= student_e($returnTo) ?>">
                     <div class="profile-photo-stage is-active" data-profile-photo-editor>
-                        <div class="profile-photo-preview-frame">
-                            <img data-profile-photo-preview src="<?= student_e($photoSrc ?? '') ?>" alt="Selected profile-picture preview" <?= $photoSrc === null ? 'hidden' : '' ?>>
-                            <span data-profile-photo-fallback <?= $photoSrc !== null ? 'hidden' : '' ?>><?= student_e(student_initials($profile['name'] ?? 'Patient')) ?></span>
+                        <div class="profile-photo-editor-layout">
+                            <div class="profile-photo-visual-panel">
+                                <span class="profile-photo-panel-label">Current preview</span>
+                                <div class="profile-photo-preview-frame">
+                                    <img data-profile-photo-preview src="<?= student_e($photoSrc ?? '') ?>" alt="Selected profile-picture preview" <?= $photoSrc === null ? 'hidden' : '' ?>>
+                                    <span data-profile-photo-fallback <?= $photoSrc !== null ? 'hidden' : '' ?>><?= student_e(student_initials($profile['name'] ?? 'Patient')) ?></span>
+                                </div>
+                                <p class="profile-photo-preview-caption">This is how your profile image will appear in the student portal.</p>
+                            </div>
+                            <div class="profile-photo-upload-panel">
+                                <div class="profile-photo-upload-card">
+                                    <span class="material-symbols-outlined profile-photo-upload-icon" aria-hidden="true">add_a_photo</span>
+                                    <div>
+                                        <h4>Choose a new photo</h4>
+                                        <p>Select a clear headshot. You can review it before saving.</p>
+                                    </div>
+                                    <label for="patient-profile-photo-input" class="student-button profile-photo-choose">
+                                        <span class="material-symbols-outlined" aria-hidden="true">image</span>
+                                        Choose photo
+                                    </label>
+                                    <p class="profile-photo-selected-file" data-profile-photo-selected>No new photo selected</p>
+                                </div>
+                                <div class="profile-photo-rules" aria-label="Photo requirements">
+                                    <span class="material-symbols-outlined" aria-hidden="true">info</span>
+                                    <p>JPG, PNG, or WebP · maximum 5 MB</p>
+                                </div>
+                            </div>
                         </div>
-                        <p class="profile-photo-help">Choose a clear JPG, PNG, or WebP image up to 5 MB.</p>
                         <input id="patient-profile-photo-input" class="profile-photo-input" type="file" name="profile_photo" accept="image/jpeg,image/png,image/webp" required data-profile-photo-input>
                         <div class="profile-photo-dialog-actions">
-                            <label for="patient-profile-photo-input" class="student-button profile-photo-choose">
-                                <span class="material-symbols-outlined">image</span>
-                                Choose Photo
-                            </label>
                             <button type="button" class="student-button profile-photo-cancel" data-profile-photo-close>Cancel</button>
-                        <button type="submit" class="student-button" data-profile-photo-save disabled hidden>Review Photo</button>
+                            <button type="submit" class="student-button" data-profile-photo-save><span class="material-symbols-outlined" aria-hidden="true">visibility</span> Review photo</button>
                         </div>
                     </div>
                     <div class="profile-photo-stage profile-photo-confirmation" data-profile-photo-confirmation aria-hidden="true">
@@ -1197,15 +1218,19 @@ function render_student_footer(): void
                     const preview = form.querySelector('[data-profile-photo-preview]');
                     const fallback = form.querySelector('[data-profile-photo-fallback]');
                     const save = form.querySelector('[data-profile-photo-save]');
+                    const selectedFile = form.querySelector('[data-profile-photo-selected]');
+                    if (selectedFile) selectedFile.textContent = file.name;
+                    if (save) {
+                        save.disabled = false;
+                        save.hidden = false;
+                    }
                     const reader = new FileReader();
                     reader.addEventListener('load', () => {
-                        preview.src = String(reader.result || '');
-                        preview.hidden = false;
-                        if (fallback) fallback.hidden = true;
-                        if (save) {
-                            save.disabled = false;
-                            save.hidden = false;
+                        if (preview) {
+                            preview.src = String(reader.result || '');
+                            preview.hidden = false;
                         }
+                        if (fallback) fallback.hidden = true;
                         setProfilePhotoConfirmation(form, false);
                     });
                     reader.readAsDataURL(file);

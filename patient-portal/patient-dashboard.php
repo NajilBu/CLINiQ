@@ -226,7 +226,7 @@ $scheduledApeBatchLabel = $hasScheduledApeBatch
     : '';
 $apeStatus = $latestApe['workflow_status'] ?? 'Not Started';
 $apeQueue = $latestApe ? ape_record_queue($latestApe) : 'digital_submission';
-$apeProgress = ape_patient_progress($latestApe ?? []);
+$apeProgress = ape_student_progress($latestApe ?? []);
 $apeStep = $apeProgress['active_step'] - 1;
 $apeDigitalSubmissionComplete = ape_digital_submission_complete($latestApe ?? []);
 $apeExamCompleted = !empty($latestApe['exam_date']);
@@ -250,6 +250,7 @@ $apeRequirementsVerified = $apeRequirementStatus === 'Checked' || in_array($apeS
 $apeRequirementsNeedCorrection = $apeRequirementStatus === 'Needs Correction';
 $apeAllDocumentsUploaded = ape_initial_uploads_present($latestApe ?? []);
 $apeDocumentsAwaitingReview = $apeAllDocumentsUploaded && (int) ($latestApe['required_unverified_count'] ?? 0) > 0;
+$apeDocumentsNeedCorrection = ($latestApe['verification_status'] ?? '') === 'Needs Correction';
 $clinicNotes = [];
 if (!$latestApe) {
     $clinicNotes[] = ['type' => 'info', 'icon' => 'info', 'text' => 'No APE record has been opened by the clinic yet.'];
@@ -306,6 +307,7 @@ $clinicNoteClass = static fn(string $type): string => match ($type) {
 };
 $apeActionTitle = match (true) {
     ($latestApe['clearance_status'] ?? 'Pending') === 'Cleared' => 'APE completed',
+    $apeDocumentsNeedCorrection => 'Replace returned APE documents',
     $latestApe && $apeProgress['active_step'] === 1 => 'Upload APE documents',
     $apeQueue === 'digital_submission' && !$apeAllDocumentsUploaded => 'Upload APE documents',
     $apeQueue === 'digital_submission' && !$apeExamCompleted => 'Attend your scheduled examination',
@@ -320,8 +322,9 @@ $apeActionTitle = match (true) {
 };
 $apeActionCopy = match (true) {
     ($latestApe['clearance_status'] ?? 'Pending') === 'Cleared' => 'Your APE record is already cleared by the clinic.',
+    $apeDocumentsNeedCorrection => $apeNote ?: 'The clinic returned one or more documents. Upload the requested replacement files to continue.',
     $latestApe && $apeProgress['active_step'] === 1 => 'Complete regular uploads within seven days of examination. Follow-up documents use their separately assigned return date.',
-    $latestApe && $apeProgress['active_step'] === 3 => 'Your documents and examination are complete. The clinic will record the final clinical decision.',
+    $latestApe && $apeProgress['active_step'] === 3 => 'Your documents and examination are complete. The clinic is reviewing your record now; no action is needed from you.',
     $latestApe && $apeProgress['active_step'] === 4 => $apeNote ?: 'Complete the follow-up requirements requested by the clinic before final clearance.',
     $apeQueue === 'digital_submission' && !$apeAllDocumentsUploaded => $apeExamCompleted
         ? 'Complete regular uploads within seven days of examination. Follow-up documents use their separately assigned return date.'
@@ -345,6 +348,7 @@ $apePhaseLabel = match (true) {
 $apePhaseStatus = match (true) {
     !$latestApe => 'Not Started',
     ($latestApe['clearance_status'] ?? '') === 'Cleared' => 'Completed',
+    $apeDocumentsNeedCorrection => 'Correction Needed',
     $apeProgress['active_step'] === 1 => 'Upload Required',
     $apeProgress['active_step'] === 3 => 'Awaiting Decision',
     $apeProgress['active_step'] === 4 => 'Follow-up Required',
@@ -358,6 +362,7 @@ $apePhaseStatus = match (true) {
 $apeActionStatus = match (true) {
     !$latestApe => 'Not Started',
     ($latestApe['clearance_status'] ?? '') === 'Cleared' => 'Complete',
+    $apeDocumentsNeedCorrection => 'Needs Correction',
     $apeProgress['active_step'] === 1 => 'Upload Required',
     $apeProgress['active_step'] === 3 => 'Awaiting Decision',
     $apeProgress['active_step'] === 4 => 'Follow-up Required',
@@ -396,7 +401,13 @@ if (empty($profile['emergency_instructions'])) {
     $passportMissing[] = 'emergency instructions';
 }
 $passportComplete = empty($passportMissing);
-$apeNeedsAction = ($latestApe['clearance_status'] ?? 'Pending') !== 'Cleared';
+$apeNeedsAction = $latestApe
+    && ($latestApe['clearance_status'] ?? 'Pending') !== 'Cleared'
+    && (
+        $apeDocumentsNeedCorrection
+        || $apeRequirementsNeedCorrection
+        || in_array((int) $apeProgress['active_step'], [1, 2, 4], true)
+    );
 $passportRequired = $isOfficialAccess && !$passportComplete;
 $requiredActionCount = ($passportRequired ? 1 : 0) + ($apeNeedsAction ? 1 : 0) + ($feedbackRequired ? 1 : 0);
 $dashboardTasks = [];

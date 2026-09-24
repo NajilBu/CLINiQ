@@ -7,6 +7,7 @@ require_once __DIR__ . '/../helpers/mail.php';
 require_once __DIR__ . '/../services/AuditLog.php';
 require_once __DIR__ . '/../services/SystemSettings.php';
 require_once __DIR__ . '/../services/PatientNotification.php';
+require_once __DIR__ . '/ApeWorkflow.php';
 
 const CLINIQ_EMAIL_AUTOMATION_DEFAULTS = [
     'appointment_reminders' => true,
@@ -20,7 +21,35 @@ const CLINIQ_EMAIL_AUTOMATION_DEFAULTS = [
 
 const CLINIQ_EMAIL_MAX_ATTEMPTS = 5;
 const CLINIQ_EMAIL_INITIAL_SAFETY_CAPACITY = 3;
+const CLINIQ_EMAIL_MAX_ADAPTIVE_CAPACITY = 500;
+const CLINIQ_EMAIL_CAPACITY_GROWTH = 1;
 const CLINIQ_EMAIL_CAPACITY_WINDOW_SECONDS = 86400;
+
+function patient_email_capacity_config(string $key, int $default, int $minimum, int $maximum): int
+{
+    $value = (int) env_value($key, (string) $default);
+    return max($minimum, min($maximum, $value));
+}
+
+function patient_email_initial_capacity(): int
+{
+    return patient_email_capacity_config(
+        'MAIL_CAPACITY_INITIAL',
+        CLINIQ_EMAIL_INITIAL_SAFETY_CAPACITY,
+        1,
+        patient_email_max_capacity()
+    );
+}
+
+function patient_email_max_capacity(): int
+{
+    return patient_email_capacity_config('MAIL_CAPACITY_MAX', CLINIQ_EMAIL_MAX_ADAPTIVE_CAPACITY, 1, 100000);
+}
+
+function patient_email_capacity_growth(): int
+{
+    return patient_email_capacity_config('MAIL_CAPACITY_GROWTH', CLINIQ_EMAIL_CAPACITY_GROWTH, 1, patient_email_max_capacity());
+}
 
 function patient_email_provider_identifier(): string
 {
@@ -36,8 +65,8 @@ function patient_email_capacity_state(): array
         'window_started_at' => date('c'),
         'window_duration_seconds' => CLINIQ_EMAIL_CAPACITY_WINDOW_SECONDS,
         'accepted_count' => 0,
-        'observed_capacity' => CLINIQ_EMAIL_INITIAL_SAFETY_CAPACITY,
-        'initial_safety_capacity' => CLINIQ_EMAIL_INITIAL_SAFETY_CAPACITY,
+        'observed_capacity' => patient_email_initial_capacity(),
+        'initial_safety_capacity' => patient_email_initial_capacity(),
         'capacity_source' => 'initial_safety',
         'last_quota_rejection_at' => null,
         'last_quota_error' => null,
@@ -64,11 +93,23 @@ function patient_email_capacity_snapshot(?PDO $db = null): array
     $windowSeconds = max(60, (int) ($state['window_duration_seconds'] ?? CLINIQ_EMAIL_CAPACITY_WINDOW_SECONDS));
     $sent = (int) $db->query("SELECT COUNT(*) FROM email_queue WHERE status = 'sent' AND delivery_state = 'smtp_accepted' AND sent_at >= DATE_SUB(NOW(), INTERVAL {$windowSeconds} SECOND)")->fetchColumn();
     $reserved = (int) $db->query("SELECT COUNT(*) FROM email_queue WHERE status = 'processing' AND locked_at >= DATE_SUB(NOW(), INTERVAL 15 MINUTE)")->fetchColumn();
-    $capacity = max(0, (int) ($state['observed_capacity'] ?? CLINIQ_EMAIL_INITIAL_SAFETY_CAPACITY));
+    $capacity = max(1, min(patient_email_max_capacity(), (int) ($state['observed_capacity'] ?? patient_email_initial_capacity())));
     $remaining = max(0, $capacity - $sent - $reserved);
+    $lastQuotaRejection = strtotime((string) ($state['last_quota_rejection_at'] ?? '')) ?: 0;
+    $quotaRecentlyRejected = $lastQuotaRejection > (time() - $windowSeconds);
+    if ($remaining <= 0 && !$quotaRecentlyRejected) {
+        // A successful window at the current estimate gets one controlled probe.
+        // The next accepted message raises the estimate; a provider rejection lowers it.
+        $remaining = 1;
+    }
     $state['accepted_count'] = $sent;
     $state['window_started_at'] = date('c', time() - $windowSeconds);
-    return $state + ['accepted_count' => $sent, 'reserved_count' => $reserved, 'remaining_capacity' => $remaining, 'capacity_status' => $remaining > 0 ? 'available' : 'reached'];
+    return array_merge($state, [
+        'accepted_count' => $sent,
+        'reserved_count' => $reserved,
+        'remaining_capacity' => $remaining,
+        'capacity_status' => $remaining > 0 ? ($sent + $reserved >= $capacity ? 'probe' : 'available') : 'reached',
+    ]);
 }
 
 function patient_email_capacity_claim(PDO $db): array
@@ -92,14 +133,34 @@ function patient_email_record_quota_rejection(PDO $db, string $error): void
 {
     $state = patient_email_capacity_state();
     $snapshot = patient_email_capacity_snapshot($db);
-    $capacity = min((int) ($state['observed_capacity'] ?? CLINIQ_EMAIL_INITIAL_SAFETY_CAPACITY), (int) ($snapshot['accepted_count'] ?? 0));
-    $state['observed_capacity'] = max(0, $capacity);
+    $current = max(1, min(patient_email_max_capacity(), (int) ($state['observed_capacity'] ?? patient_email_initial_capacity())));
+    $accepted = max(0, (int) ($snapshot['accepted_count'] ?? 0));
+    $capacity = max(1, min($current, max($accepted, (int) floor($current / 2))));
+    $state['observed_capacity'] = $capacity;
     $state['capacity_source'] = 'provider_confirmed';
     $state['last_quota_rejection_at'] = date('c');
     $state['last_quota_error'] = substr($error, 0, 500);
     $state['last_capacity_update_at'] = date('c');
     cliniq_setting_write('mail.capacity.' . sha1(patient_email_provider_identifier()), $state, null);
     audit_log_event('email', 'email_capacity_reduced', null, 'system', 'email', null, ['observed_capacity' => $state['observed_capacity'], 'error' => $state['last_quota_error']], 'failure');
+}
+
+function patient_email_record_success(PDO $db): void
+{
+    $state = patient_email_capacity_state();
+    $current = max(1, min(patient_email_max_capacity(), (int) ($state['observed_capacity'] ?? patient_email_initial_capacity())));
+    $next = min(patient_email_max_capacity(), $current + patient_email_capacity_growth());
+    if ($next === $current) return;
+
+    $state['observed_capacity'] = $next;
+    $state['capacity_source'] = 'adaptive_success';
+    $state['last_capacity_update_at'] = date('c');
+    cliniq_setting_write('mail.capacity.' . sha1(patient_email_provider_identifier()), $state, null);
+    audit_log_event('email', 'email_capacity_increased', null, 'system', 'email', null, [
+        'previous_capacity' => $current,
+        'observed_capacity' => $next,
+        'provider' => patient_email_provider_identifier(),
+    ], 'success');
 }
 
 function patient_email_event_catalog(): array
@@ -467,6 +528,7 @@ function patient_email_process_queue(?string $queueKey = null, int $limit = 5, ?
         if ($result['ok']) {
             $done = $db->prepare("UPDATE email_queue SET status = 'sent', sent_at = NOW(), last_error = NULL, failed_at = NULL, retryable = 0, locked_at = NULL, locked_by = NULL, provider_message_id = ?, delivery_state = 'smtp_accepted', delivery_state_updated_at = NOW() WHERE id = ? AND status = 'processing' AND locked_by = ?");
             $done->execute([$result['provider_message_id'], (int) $row['id'], $workerId]);
+            patient_email_record_success($db);
             $sent++;
             audit_log_event('email', 'email_sent', (int) ($row['created_by_person_id'] ?? 0) ?: null, 'system', 'email', (int) $row['id'], ['event_type' => $row['event_type'], 'recipient' => $row['recipient_email'], 'provider_message_id' => $result['provider_message_id']], 'success');
             continue;
@@ -668,29 +730,40 @@ function patient_email_due_automations(): void
             patient_email_queue_notification((int) $appointment['patient_id'], 'appointment_reminder', 'appointment_reminders', 'Appointment reminder', "This is a reminder that your clinic appointment is scheduled for {$when}.", 'appointment', (int) $appointment['appointment_id'], null, null, 'reminder', true);
         }
     }
-    $rows = $db->query("SELECT ar.ape_id, ar.patient_id, ar.follow_up_due_date, ar.exam_date,
-        ar.follow_up_required, ar.clearance_status, ar.workflow_status,
-        EXISTS (SELECT 1 FROM ape_requirements r
-            WHERE r.ape_id = ar.ape_id
-              AND COALESCE(r.upload_group, 'initial') = 'initial'
-              AND r.status <> 'Verified'
-              AND COALESCE(r.upload_due_date, DATE_ADD(ar.exam_date, INTERVAL 7 DAY)) < CURDATE()
-        ) AS documents_overdue
-        FROM ape_records ar WHERE ar.workflow_status <> 'Cleared' AND ar.clearance_status <> 'Cleared'")->fetchAll();
     $today = date('Y-m-d');
-    foreach ($rows as $row) {
-        $due = trim((string) ($row['follow_up_due_date'] ?: ''));
-        if ($due !== '' && (int) $row['follow_up_required'] === 1) {
-            $reminderDate = date('Y-m-d', strtotime($due . ' -1 day'));
-            if ($reminderDate === $today) {
-                patient_email_queue_notification((int) $row['patient_id'], 'ape_follow_up_reminder', 'ape_follow_up_reminders', 'APE follow-up due tomorrow', 'Your APE follow-up is due tomorrow. Please submit the required document or contact the clinic if you need assistance.', 'ape', (int) $row['ape_id'], null, null, 'reminder', true);
+    foreach (ape_fetch_records() as $record) {
+        foreach (ape_patient_document_action_summaries($record) as $action) {
+            $due = trim((string) ($action['due_at'] ?? ''));
+            $eventType = trim((string) ($action['email_event_type'] ?? ''));
+            $apeId = (int) ($action['email_source_id'] ?? $record['ape_id'] ?? 0);
+            $patientId = (int) ($action['patient_person_id'] ?? $record['patient_id'] ?? 0);
+            if ($due === '' || $eventType === '' || $apeId < 1 || $patientId < 1) continue;
+
+            // A document due tomorrow receives one follow-up reminder. Corrections
+            // are queued by the return workflow itself and are never duplicated here.
+            if (($action['requirement_group'] ?? '') === 'follow_up'
+                && ($action['priority'] ?? '') === 'waiting_on_patient'
+                && date('Y-m-d', strtotime($due . ' -1 day')) === $today) {
+                patient_email_queue_notification($patientId, 'ape_follow_up_reminder', 'ape_follow_up_reminders', 'APE follow-up due tomorrow', 'Your APE follow-up is due tomorrow. Please submit the requested document or contact the clinic if you need assistance.', 'ape', $apeId, null, null, 'reminder', true);
             }
-            if ($due < $today) {
-                patient_email_queue_notification((int) $row['patient_id'], 'ape_follow_up_overdue', 'ape_overdue', 'APE follow-up is overdue', 'Your APE follow-up is overdue. Please submit the required document or contact the clinic as soon as possible.', 'ape', (int) $row['ape_id'], null, null, 'overdue', true);
-            }
-        }
-        if (!empty($row['exam_date']) && (int) $row['documents_overdue'] === 1) {
-            patient_email_queue_notification((int) $row['patient_id'], 'ape_documents_overdue', 'ape_overdue', 'APE documents are overdue', 'Your remaining APE documents are overdue. Please upload the outstanding documents or contact the clinic.', 'ape', (int) $row['ape_id'], null, null, 'documents_overdue', true);
+
+            if (($action['priority'] ?? '') !== 'overdue') continue;
+            $isFollowUp = ($action['requirement_group'] ?? '') !== 'initial';
+            patient_email_queue_notification(
+                $patientId,
+                $eventType,
+                $isFollowUp ? 'ape_follow_up_overdue' : 'ape_overdue',
+                $isFollowUp ? 'APE follow-up is overdue' : 'APE documents are overdue',
+                $isFollowUp
+                    ? 'Your APE follow-up is overdue. Please submit the requested document or contact the clinic as soon as possible.'
+                    : 'Your remaining APE documents are overdue. Please upload the outstanding documents or contact the clinic.',
+                'ape',
+                $apeId,
+                null,
+                null,
+                $isFollowUp ? 'overdue' : 'documents_overdue',
+                true
+            );
         }
     }
 }
@@ -776,6 +849,7 @@ function patient_email_attention_items(int $limit = 12): array
             'status' => (string) $row['status'],
             'created_at' => (string) $row['created_at'],
             'available_at' => (string) $row['available_at'],
+            'event_type' => (string) ($row['event_type'] ?? ''),
             'action' => $isBlocked ? 'retry_blocked' : ($isFailed ? 'retry' : 'process'),
             'action_label' => $isBlocked ? 'Recheck recipient' : ($isFailed ? 'Retry email' : 'Review and send'),
         ];
