@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/env.php';
 require_once __DIR__ . '/../helpers/mail.php';
+require_once __DIR__ . '/PatientEmail.php';
 
 const CLINIQ_PATIENT_RESET_EXPIRY_MINUTES = 60;
 const CLINIQ_PATIENT_RESET_MAX_REQUESTS = 3;
@@ -76,6 +77,7 @@ function request_patient_password_reset(string $idNumber, string $email, ?string
     $stmt = $db->prepare(<<<'SQL'
 SELECT
     a.id AS account_id,
+    p.id AS person_id,
     a.email,
     p.first_name,
     p.last_name
@@ -127,17 +129,19 @@ SQL);
         'expiry_minutes' => (string) CLINIQ_PATIENT_RESET_EXPIRY_MINUTES,
     ], patient_password_reset_url($token));
 
-    try {
-        $sent = send_cliniq_email(
-            (string) $account['email'],
-            trim((string) $account['first_name'] . ' ' . (string) $account['last_name']) ?: 'Patient',
-            $message['subject'],
-            $message['html']
-        );
-    } catch (Throwable $exception) {
-        error_log('[CLINiQ Password Reset] Delivery failed: ' . $exception->getMessage());
-        $sent = false;
-    }
+    $emailId = patient_email_dispatch_event([
+        'patient_person_id' => (int) $account['person_id'],
+        'event_type' => 'password_reset',
+        'origin' => 'system',
+        'source_type' => 'password_reset',
+        'source_id' => $resetId,
+        'subject' => $message['subject'],
+        'html_body' => $message['html'],
+        'deliver_now' => true,
+    ]);
+    $statusQuery = $db->prepare('SELECT status FROM email_queue WHERE id = ? LIMIT 1');
+    $statusQuery->execute([$emailId]);
+    $sent = (string) $statusQuery->fetchColumn() === 'sent';
     if (!$sent) {
         $delete = $db->prepare('DELETE FROM patient_password_resets WHERE id = ?');
         $delete->execute([$resetId]);

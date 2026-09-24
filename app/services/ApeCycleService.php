@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/PatientNotification.php';
+require_once __DIR__ . '/PatientEmail.php';
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../helpers/mail.php';
@@ -855,6 +856,7 @@ function reset_school_year_accounts(string $academicYear = '', array $submittedP
             a.id AS account_id,
             a.email,
             p.first_name,
+            p.middle_name,
             p.last_name,
             s.person_id,
             s.program_id,
@@ -918,9 +920,7 @@ function reset_school_year_accounts(string $academicYear = '', array $submittedP
             $deactivate->execute(['New school year enrollment status required', (int) $student['account_id']]);
             $saveYear->execute([$personId, $academicYear, $student['program_id'], $target, $targetSection, 'Pending Confirmation', null, $source, $actorPersonId]);
             (int) $target > (int) $currentYearLevel ? $promoted++ : $kept++;
-            if (trim((string) ($student['email'] ?? '')) !== '') {
-                $notificationPatients[] = $student;
-            }
+            $notificationPatients[] = $student;
         }
 
         $db->commit();
@@ -939,7 +939,6 @@ function reset_school_year_accounts(string $academicYear = '', array $submittedP
     $loginUrl      = rtrim(env_value('PATIENT_PORTAL_URL', 'http://localhost/CLINiQ/patient-portal'), '/') . '/patient-login.php';
 
     $queueKey = 'school_year_' . $academicYear . '_' . bin2hex(random_bytes(6));
-    $queue = $db->prepare('INSERT INTO email_queue (queue_key, recipient_email, recipient_name, subject, html_body) VALUES (?, ?, ?, ?, ?)');
     $queued = 0;
     foreach ($notificationPatients as $patient) {
         $firstName = (string) ($patient['first_name'] ?? '');
@@ -948,9 +947,31 @@ function reset_school_year_accounts(string $academicYear = '', array $submittedP
             'clinic_name' => $clinicName,
         ], $loginUrl);
 
-        $fullName = trim($firstName . ' ' . ($patient['last_name'] ?? ''));
-        $queue->execute([$queueKey, (string) $patient['email'], $fullName ?: 'Patient', $notification['subject'], $notification['html']]);
-        $queued++;
+        $personId = (int) ($patient['person_id'] ?? 0);
+        $emailId = patient_email_dispatch_event([
+            'patient_person_id' => $personId,
+            'event_type' => 'student_re_enrollment',
+            'automation_key' => 'school_year_enrollment',
+            'source_type' => 'student_school_year_enrollment',
+            'source_id' => $personId,
+            'dedupe_suffix' => $academicYear,
+            'queue_key' => $queueKey,
+            'origin' => 'automatic',
+            'created_by_person_id' => $actorPersonId,
+            'subject' => $notification['subject'],
+            'html_body' => $notification['html'],
+            'message' => strip_tags((string) $notification['html']),
+            'notification' => [
+                'enabled' => true,
+                'category' => 'enrollment',
+                'title' => $notification['subject'],
+                'message' => 'Please confirm your enrollment for the new school year.',
+                'target_url' => 'patient-dashboard.php',
+            ],
+        ]);
+        if ($emailId > 0) {
+            $queued++;
+        }
     }
 
     return [

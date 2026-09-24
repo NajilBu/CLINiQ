@@ -64,5 +64,22 @@ date_default_timezone_set($appTimezone);
 
 function app_url(string $path = ''): string
 {
-    return rtrim(env_value('APP_URL', '/cliniq/public'), '/') . '/' . ltrim($path, '/');
+    $configuredBase = rtrim((string) env_value('APP_URL', '/cliniq/public'), '/');
+    $host = strtolower((string) ($_SERVER['HTTP_HOST'] ?? ''));
+
+    // The deployed URL is correct for queued emails and external links, but a
+    // locally opened staff/visitor portal must never send a browser back out
+    // through the public gateway. Only the known local hosts may override it.
+    if (preg_match('/^(localhost|127\\.0\\.0\\.1)(?::\\d+)?$/', $host) === 1) {
+        $forwardedProtocol = strtolower(trim(explode(',', (string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''))[0] ?? ''));
+        $scheme = (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off') || $forwardedProtocol === 'https'
+            ? 'https'
+            : 'http';
+        $configuredPath = (string) (parse_url($configuredBase, PHP_URL_PATH) ?? '/public');
+        $basePath = '/' . trim($configuredPath, '/');
+
+        return $scheme . '://' . $host . $basePath . '/' . ltrim($path, '/');
+    }
+
+    return $configuredBase . '/' . ltrim($path, '/');
 }

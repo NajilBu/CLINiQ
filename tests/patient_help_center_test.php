@@ -49,11 +49,12 @@ foreach (['.patient-help-grid', '.patient-help-accordion > summary', '.patient-h
     }
 }
 
-if (strrpos($styles, '.patient-help-header-icon,') === false
-    || strrpos($styles, '.patient-help-header-icon,') < strpos($styles, '.patient-help-header-icon,')) {
+$normalizedStyles = str_replace("\r\n", "\n", $styles);
+if (strrpos($normalizedStyles, '.patient-help-header-icon,') === false
+    || strrpos($normalizedStyles, '.patient-help-header-icon,') < strpos($normalizedStyles, '.patient-help-header-icon,')) {
     throw new RuntimeException('The final Help Center icon rule must override the decorative icon rule.');
 }
-if (!str_ends_with(trim($styles), '.patient-help-category-icon {' . "\n" . '    display: none !important;' . "\n" . '}')) {
+if (!str_ends_with(trim($normalizedStyles), '.patient-help-category-icon {' . "\n" . '    display: none !important;' . "\n" . '}')) {
     throw new RuntimeException('The final Help Center icon rule must force decorative icons off.');
 }
 

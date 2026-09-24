@@ -40,7 +40,7 @@ function migration_checksum_is_known_compatible(string $name, string $stored, st
             '1a1de9360978a5d0814cca8b76fc1813bbd7cd5bd7f531903338ca3e3f3475db',
         ];
 
-        return in_array(strtolower($stored), $originalChecksums, true)
+        return in_array(strtolower($stored), array_merge($originalChecksums, $idempotentChecksums), true)
             && in_array(strtolower($current), $idempotentChecksums, true);
     }
 

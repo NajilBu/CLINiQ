@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/AppointmentWorkflow.php';
 require_once __DIR__ . '/../../app/services/PatientNotification.php';
+require_once __DIR__ . '/../../app/services/PatientEmail.php';
 require_login();
 ensure_appointment_schema();
 
@@ -56,6 +57,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $appointment['cancellation_reason'] = null;
                 }
                 patient_notification_for_appointment($db, $appointment, $status, $reviewedByPersonId);
+                $patientId = (int) ($appointment['patient_id'] ?? 0);
+                $when = date('F j, Y \a\t g:i A', strtotime((string) $appointment['appointment_datetime']));
+                if ($patientId > 0 && in_array($status, ['Scheduled', 'For Confirmation'], true)) {
+                    patient_email_queue_notification($patientId, $status === 'Scheduled' ? 'appointment_confirmed' : 'appointment_confirmation_required', 'appointment_reminders', $status === 'Scheduled' ? 'Appointment confirmed' : 'Appointment needs confirmation', $status === 'Scheduled' ? "Your clinic appointment for {$when} has been confirmed." : "Your clinic appointment for {$when} needs your confirmation.", 'appointment', (int) $appointment['appointment_id'], $reviewedByPersonId, null, $status);
+                }
+                if ($patientId > 0 && in_array($status, ['Cancelled', 'No Show'], true)) {
+                    $reason = trim((string) ($appointment['cancellation_reason'] ?? ''));
+                    patient_email_queue_notification($patientId, 'appointment_' . strtolower(str_replace(' ', '_', $status)), 'appointment_changes', 'Appointment update', "Your clinic appointment for {$when} was marked {$status}." . ($reason !== '' ? " Reason: {$reason}" : ''), 'appointment', (int) $appointment['appointment_id'], $reviewedByPersonId, null, $status);
+                }
             }
             $db->commit();
 

@@ -4418,6 +4418,93 @@ textarea.record-sheet-field {
     gap: 0.55rem;
 }
 
+.ape-work-queue-toolbar-shell {
+    display: grid;
+    gap: 1rem;
+}
+
+.ape-work-queue-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+}
+
+.ape-work-queue-toolbar-actions {
+    display: flex;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.ape-work-queue-scheduling,
+.ape-work-queue-population,
+.ape-work-queue-batch,
+.ape-work-queue-search {
+    min-height: 3.125rem;
+}
+
+.ape-work-queue-scheduling {
+    white-space: nowrap;
+}
+
+.ape-work-queue-population {
+    flex: 0 0 auto;
+}
+
+.ape-work-queue-population > a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 3.125rem;
+}
+
+.ape-work-queue-batch {
+    flex: 0 1 16rem;
+    min-width: 13.5rem;
+}
+
+.ape-work-queue-search {
+    flex: 0 1 25rem;
+    min-width: 14rem;
+    margin-left: auto;
+}
+
+@media (max-width: 900px) {
+    .ape-work-queue-toolbar {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .ape-work-queue-toolbar-actions {
+        width: 100%;
+    }
+
+    .ape-work-queue-search {
+        width: 100%;
+        margin-left: 0;
+    }
+}
+
+@media (max-width: 560px) {
+    .ape-work-queue-toolbar-actions,
+    .ape-work-queue-population,
+    .ape-work-queue-batch,
+    .ape-work-queue-scheduling {
+        width: 100%;
+    }
+
+    .ape-work-queue-population > a {
+        flex: 1 1 50%;
+        justify-content: center;
+    }
+
+    .ape-work-queue-batch {
+        min-width: 0;
+    }
+}
+
 .ape-queue-map-card {
     display: flex;
     flex-direction: column;

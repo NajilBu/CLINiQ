@@ -5,6 +5,7 @@ require_once __DIR__ . '/../../app/services/CliniqPatientProfile.php';
 require_once __DIR__ . '/../../app/services/CliniqVisitWorkflow.php';
 require_once __DIR__ . '/../../app/services/ApeWorkflow.php';
 require_once __DIR__ . '/../../app/services/AlertWorkflow.php';
+require_once __DIR__ . '/../../app/services/PatientEmail.php';
 require_login();
 
 $id = (int) ($_GET['id'] ?? 0);
@@ -53,19 +54,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'send_
             throw new InvalidArgumentException('Enter a message containing no more than 10,000 characters.');
         }
 
-        require_once __DIR__ . '/../../app/helpers/mail.php';
-        $profile = clinic_profile_settings();
-        try {
-            $sent = send_cliniq_email(
-                trim((string) $patient['email']),
-                $fullName !== '' ? $fullName : 'CLINiQ Patient',
-                $subject,
-                cliniq_custom_email_body($message, (string) ($profile['system_name'] ?? 'CLINiQ'))
-            );
-        } catch (Throwable $e) {
-            error_log('[CLINiQ Mail] Patient profile email failed: ' . $e->getMessage());
-            $sent = false;
-        }
+        $emailId = patient_email_dispatch_event([
+            'patient_person_id' => (int) $patient['person_id'],
+            'event_type' => 'manual_patient_email',
+            'origin' => 'manual',
+            'created_by_person_id' => (int) ($user['person_id'] ?? 0),
+            'subject' => $subject,
+            'message' => $message,
+            'deliver_now' => true,
+        ]);
+        $result = $emailId > 0 ? auth_db()->prepare('SELECT status FROM email_queue WHERE id = ? LIMIT 1') : null;
+        if ($result) { $result->execute([$emailId]); }
+        $status = $result ? (string) $result->fetchColumn() : 'blocked';
+        $sent = $status === 'sent';
+        audit_log_event('email', $sent ? 'email_sent_manually' : 'email_manual_send_failed', (int) ($user['person_id'] ?? 0) ?: null, 'staff', 'patient', (int) $patient['person_id'], ['email_id' => $emailId], $sent ? 'success' : 'failure');
         flash_message(
             $sent ? 'success' : 'error',
             $sent ? 'Email sent to ' . $fullName . '.' : 'The email could not be delivered. Check the SMTP configuration.'

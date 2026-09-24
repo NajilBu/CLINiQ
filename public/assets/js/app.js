@@ -1139,6 +1139,8 @@ function cliniqSetAlertConnectionState(connected) {
 function cliniqRenderLiveAlertState(data) {
     const pendingCount = Number(data.pending_count || 0);
     const criticalCount = Number(data.critical_count || 0);
+    const activeCount = Number(data.active_count ?? pendingCount);
+    const activeCriticalCount = Number(data.active_critical_count ?? criticalCount);
     const latestAlertId = Number(data.latest_alert_id || 0);
     const selectedSound = cliniqNormalizeAlertSound(data.alert_sound || cliniqAlertMonitor.soundId);
     const selectedSoundUrl = selectedSound === 'custom' ? String(data.alert_sound_url || '') : '';
@@ -1158,8 +1160,8 @@ function cliniqRenderLiveAlertState(data) {
 
     if (document.body) {
         document.body.classList.toggle('has-active-alerts', pendingCount > 0);
-        document.body.dataset.activeAlertCount = String(pendingCount);
-        document.body.dataset.criticalAlertCount = String(criticalCount);
+        document.body.dataset.activeAlertCount = String(activeCount);
+        document.body.dataset.criticalAlertCount = String(activeCriticalCount);
     }
 
     document.querySelectorAll('[data-live-alert-link]').forEach((link) => {
@@ -1167,7 +1169,7 @@ function cliniqRenderLiveAlertState(data) {
         link.classList.toggle('has-alerts', pendingCount > 0);
         link.classList.toggle('has-active-alerts', pendingCount > 0);
         if (data.alert_url) link.href = data.alert_url;
-        link.title = pendingCount === 1 ? 'Open the pending emergency alert' : `View ${pendingCount} pending emergency alerts`;
+        link.title = pendingCount === 1 ? 'Open the active emergency alert' : `View ${pendingCount} active emergency alerts`;
         const badge = link.querySelector('.app-alert-badge');
         if (badge) badge.textContent = pendingCount > 99 ? '99+' : String(pendingCount);
     });
@@ -1229,7 +1231,7 @@ async function refreshAlerts() {
 function initContinuousAlertMonitor() {
     if (cliniqAlertMonitor.initialized || !document.body?.dataset.alertStatusUrl) return;
     cliniqAlertMonitor.initialized = true;
-    cliniqAlertMonitor.pendingCount = Number(document.body.dataset.activeAlertCount || 0);
+    cliniqAlertMonitor.pendingCount = Number(document.body.dataset.pendingAlertCount || 0);
     cliniqAlertMonitor.muted = false;
     cliniqAlertMonitor.soundId = cliniqNormalizeAlertSound(document.body.dataset.alertSound);
     cliniqAlertMonitor.soundUrl = cliniqAlertMonitor.soundId === 'custom'

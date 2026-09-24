@@ -36,20 +36,29 @@ $summary = auth_db()->query("
     FROM nurse_alerts
     WHERE status = 'Pending'
 ")->fetch();
+$activeSummary = auth_db()->query("
+    SELECT
+        COUNT(*) AS total,
+        SUM(CASE WHEN risk_level = 'Critical' THEN 1 ELSE 0 END) AS critical_total
+    FROM nurse_alerts
+    WHERE status IN ('Pending', 'In Progress')
+")->fetch();
 $count = $summary['total'] ?? 0;
 $criticalCount = $summary['critical_total'] ?? 0;
 $pendingCount = (int) $count;
+$activeCount = (int) ($activeSummary['total'] ?? 0);
+$activeCriticalCount = (int) ($activeSummary['critical_total'] ?? 0);
 $latestAlert = $alerts[0] ?? null;
 $latestAlertId = (int) ($latestAlert['id'] ?? 0);
-$alertUrl = $pendingCount === 1 && $latestAlertId > 0
-    ? app_url('alerts/view.php?id=' . $latestAlertId)
-    : app_url('alerts/index.php?status=pending');
+$alertUrl = app_url('alerts/index.php?status=active');
 $clinicProfile = clinic_profile_settings();
 $customAlertSoundPath = clinic_profile_alert_sound_path($clinicProfile);
 
 echo json_encode([
     'pending_count' => $pendingCount,
     'critical_count' => (int) $criticalCount,
+    'active_count' => $activeCount,
+    'active_critical_count' => $activeCriticalCount,
     'latest_alert_id' => $latestAlertId,
     'latest_alert' => $latestAlert,
     'alert_url' => $alertUrl,

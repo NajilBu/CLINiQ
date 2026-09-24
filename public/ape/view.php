@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/ApeWorkflow.php';
 require_once __DIR__ . '/../../app/services/PatientNotification.php';
+require_once __DIR__ . '/../../app/services/PatientEmail.php';
 require_once __DIR__ . '/../../app/services/PatientAccessStatus.php';
 require_login();
 ensure_ape_workflow_schema();
@@ -223,11 +224,23 @@ function render_ape_final_decision_actions(array $record, bool $canRecordApeExam
                 <span class="badge badge-pending">Final Decision Required</span>
             </div>
         </div>
-        <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div class="ape-decision-actions" data-ape-decision-actions>
+            <div class="ape-decision-action-bar">
+                <button type="button" class="ape-decision-action ape-decision-action-clear <?= $digitalSubmissionComplete ? 'is-selected' : '' ?>" data-decision-target="clear">
+                    <span class="ape-decision-action-icon material-symbols-outlined" aria-hidden="true">verified</span>
+                    <span class="ape-decision-action-copy"><strong>Clear patient</strong><span><?= $digitalSubmissionComplete ? 'Ready for final clearance' : 'Documents still needed' ?></span></span>
+                    <span class="badge <?= $digitalSubmissionComplete ? 'badge-completed' : 'badge-pending' ?>"><?= $digitalSubmissionComplete ? 'Ready' : 'Not ready' ?></span>
+                </button>
+                <button type="button" class="ape-decision-action ape-decision-action-follow-up <?= !$digitalSubmissionComplete ? 'is-selected' : '' ?>" data-decision-target="follow-up">
+                    <span class="ape-decision-action-icon material-symbols-outlined" aria-hidden="true">medical_information</span>
+                    <span class="ape-decision-action-copy"><strong>Require follow-up</strong><span>Keep the APE open for a required action</span></span>
+                    <span class="badge badge-pending">Follow-up</span>
+                </button>
+            </div>
+            <div class="ape-decision-form" data-decision-form="clear" <?= $digitalSubmissionComplete ? '' : 'hidden' ?>>
             <form method="post" class="ape-flow-action space-y-3">
                 <input type="hidden" name="action" value="finalize_exam_clear">
                 <div>
-                    <span class="material-symbols-outlined text-emerald-600 mb-2">verified</span>
                     <h3 class="font-headline text-base font-extrabold text-[#17261d] mb-1">Clear Patient</h3>
                     <p class="text-xs font-bold text-slate-500 mb-3"><?= $digitalSubmissionComplete ? 'Use only when the examination is complete and no follow-up is required.' : 'Complete and archive every regular digital document before clearing this patient.' ?></p>
                     <label class="clinic-label">Patient-Visible Note</label>
@@ -235,22 +248,33 @@ function render_ape_final_decision_actions(array $record, bool $canRecordApeExam
                 </div>
                 <button class="btn btn-primary w-full" <?= $digitalSubmissionComplete ? '' : 'disabled' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Clear this patient?" data-confirm-message="This will complete the annual APE record." data-confirm-toast="Clearing APE record..."><span class="material-symbols-outlined text-[18px]">check_circle</span> Clear Patient</button>
             </form>
-            <form method="post" class="ape-flow-action muted space-y-3">
+            </div>
+            <div class="ape-decision-form" data-decision-form="follow-up" <?= $digitalSubmissionComplete ? 'hidden' : '' ?>>
+            <form method="post" class="space-y-4">
                 <input type="hidden" name="action" value="finalize_exam_follow_up">
-                <div>
-                    <span class="material-symbols-outlined text-amber-700 mb-2">medical_information</span>
-                    <h3 class="font-headline text-base font-extrabold text-amber-900 mb-1">Require Follow-up</h3>
-                    <label class="clinic-label">Required Follow-up</label>
-                    <textarea class="clinic-textarea" name="follow_up_notes" rows="3" placeholder="Treatment, repeat test, clearance, or other follow-up..." required></textarea>
-                    <div class="mt-3">
-                        <label class="clinic-label">Due Date</label>
-                        <input class="clinic-input" type="date" name="follow_up_due_date">
+                <div class="ape-follow-up-plan-header">
+                    <div>
+                        <h3 class="font-headline text-base font-extrabold text-[#17261d] mb-1">Follow-up plan</h3>
+                        <p class="ape-follow-up-plan-help mb-0">Record what the patient must complete before the APE can be cleared.</p>
                     </div>
-                    <label class="clinic-label mt-3">Patient Instructions</label>
-                    <textarea class="clinic-textarea" name="patient_visible_note" rows="2" placeholder="Instructions visible to the patient..."></textarea>
                 </div>
-                <button class="btn btn-outline w-full" style="color:#b45309;border-color:rgba(180,83,9,0.2);" data-confirm-submit data-confirm-type="danger" data-confirm-title="Require patient follow-up?" data-confirm-message="The APE record will remain open until follow-up is cleared." data-confirm-toast="Opening follow-up..."><span class="material-symbols-outlined text-[18px]">schedule</span> Require Follow-up</button>
+                <div>
+                    <label class="clinic-label" for="apeFollowUpNotes">Clinic plan</label>
+                    <textarea class="clinic-textarea" id="apeFollowUpNotes" name="follow_up_notes" rows="3" placeholder="Treatment, repeat test, clearance, or other follow-up..." required></textarea>
+                    <p class="ape-follow-up-plan-help mt-2 mb-0">This note is kept in the clinic record and used to track the required action.</p>
+                </div>
+                <div>
+                    <label class="clinic-label" for="apeFollowUpDueDate">Due date <span class="normal-case font-semibold text-slate-400">(optional)</span></label>
+                    <input class="clinic-input" id="apeFollowUpDueDate" type="date" name="follow_up_due_date">
+                </div>
+                <div>
+                    <label class="clinic-label" for="apePatientInstructions">Patient instructions <span class="normal-case font-semibold text-slate-400">(optional)</span></label>
+                    <textarea class="clinic-textarea" id="apePatientInstructions" name="patient_visible_note" rows="3" placeholder="Explain what the patient should do next..."></textarea>
+                    <p class="ape-follow-up-plan-help mt-2 mb-0">This message will be visible to the patient in the student portal.</p>
+                </div>
+                <button class="btn btn-outline w-full" style="color:#b45309;border-color:rgba(180,83,9,0.2);" data-confirm-submit data-confirm-type="danger" data-confirm-title="Save follow-up plan?" data-confirm-message="The APE record will remain open until the follow-up is cleared." data-confirm-toast="Saving follow-up plan..."><span class="material-symbols-outlined text-[18px]">save</span> Save follow-up plan</button>
             </form>
+            </div>
         </div>
     <?php endif; ?>
     <?php
@@ -452,7 +476,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$documentIds) {
                 throw new InvalidArgumentException('Select at least one uploaded document that needs correction.');
             }
-            $missingItems = trim((string) ($_POST['missing_items'] ?? '')) ?: 'Please upload a corrected copy.';
+            $missingItems = trim((string) ($_POST['missing_items'] ?? ''));
+            if ($missingItems === '') {
+                throw new InvalidArgumentException('Enter the reason the student must correct and resubmit the selected document(s).');
+            }
             $documentPlaceholders = implode(',', array_fill(0, count($documentIds), '?'));
             $selectedDocuments = $apeDb->prepare("
                 SELECT d.document_id, d.document_type
@@ -480,7 +507,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $apeDb->prepare("UPDATE ape_records SET workflow_status = CASE WHEN follow_up_required = 1 THEN 'Follow-up Required' ELSE 'Submitted' END, reviewed_by_person_id = ? WHERE ape_id = ?")
                 ->execute([$staffPersonId, $id]);
-            $activityLabel = 'Requested document correction';
+            $activityLabel = 'Returned document(s) for resubmission';
             $activityNotes = implode(', ', $selectedTypes) . ': ' . $missingItems;
         } elseif ($action === 'record_examination') {
             if (!empty($record['exam_date'])) {
@@ -699,6 +726,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($action !== 'save_notes' || $patientNoteChanged) {
                 patient_notification_for_ape_action($apeDb, $updatedRecord, $action, $staffPersonId);
             }
+            if (in_array($action, ['request_document_correction', 'return_clearance'], true)) {
+                $emailMessage = $action === 'return_clearance'
+                    ? 'Your submitted APE clearance needs correction. Please open your APE status for the clinic instructions.'
+                    : 'One or more APE documents need correction. Please open your APE status and submit the requested documents.';
+                patient_email_queue_notification((int) $updatedRecord['patient_id'], $action === 'return_clearance' ? 'ape_clearance_correction' : 'ape_document_correction_required', 'ape_corrections', $action === 'return_clearance' ? 'APE clearance correction required' : 'APE document correction required', $emailMessage, 'ape', $id, $staffPersonId);
+            }
+            if (in_array($action, ['save_document_review', 'save_requirements', 'save_hard_copy_review', 'mark_missing_requirements'], true)
+                && ($updatedRecord['requirement_status'] ?? '') === 'Needs Correction') {
+                patient_email_queue_notification(
+                    (int) $updatedRecord['patient_id'],
+                    'ape_hard_copy_correction_required',
+                    'ape_corrections',
+                    'APE hard-copy correction required',
+                    'One or more APE hard-copy requirements need correction. Please open your APE status for the clinic instructions.',
+                    'ape',
+                    $id,
+                    $staffPersonId
+                );
+            }
+            if (in_array($action, ['finalize_exam_follow_up', 'keep_follow_up_open'], true)) {
+                patient_email_queue_notification((int) $updatedRecord['patient_id'], 'ape_follow_up_required', 'ape_follow_up_reminders', 'APE follow-up required', 'The clinic requires follow-up for your APE. Please open your APE status for the required action and due date.', 'ape', $id, $staffPersonId);
+            }
             flash_message('success', $activityLabel . '.');
         }
         $apeDb->commit();
@@ -721,9 +770,26 @@ $fullName = trim($record['first_name'] . ' ' . $record['last_name']);
 $queueKey = ape_record_queue($record);
 $queue = ape_work_queues()[$queueKey];
 $next = ape_next_action($record);
-$currentStep = ape_record_step_index($record);
+$patientProgress = ape_patient_progress($record);
+$currentStep = $patientProgress['active_step'];
 $digitalSubmissionComplete = ape_digital_submission_complete($record);
 $actionCard = ape_next_action_card($record);
+$adminStateBadge = match ($patientProgress['active_step']) {
+    1 => 'DOCUMENTS STILL NEEDED',
+    2 => 'EXAMINATION PENDING',
+    3 => 'FINAL DECISION PENDING',
+    4 => $patientProgress['steps'][4]['done'] ? 'APE COMPLETED' : 'FOLLOW-UP REQUIRED',
+    default => 'APE IN PROGRESS',
+};
+$adminStateExplanation = match ($patientProgress['active_step']) {
+    1 => 'The examination is recorded, but the student still needs to complete the required digital documents.',
+    2 => 'The student is ready for the clinical examination.',
+    3 => 'The examination and documents are complete. Record the final clinical decision.',
+    4 => $patientProgress['steps'][4]['done']
+        ? 'The APE record is complete.'
+        : 'The clinic requested follow-up before final clearance.',
+    default => 'Complete the current APE step.',
+};
 
 $requirements = ape_requirements_for_record($id);
 $pendingRequirements = array_values(array_filter(
@@ -868,6 +934,111 @@ render_header('APE Record - ' . $fullName);
     .ape-flow-action.muted {
         background: #fffbeb;
         border-color: #fde68a;
+    }
+    .ape-follow-up-plan {
+        border-color: rgba(180, 83, 9, 0.2);
+        box-shadow: 0 8px 24px rgba(180, 83, 9, 0.05);
+    }
+    .ape-follow-up-plan-header {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        margin-bottom: 1.25rem;
+    }
+    .ape-follow-up-plan-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.5rem;
+        height: 2.5rem;
+        flex: 0 0 auto;
+        border-radius: 0.75rem;
+        background: #fff7ed;
+        color: #c2410c;
+    }
+    .ape-follow-up-plan-help {
+        color: #64748b;
+        font-size: 0.8rem;
+        font-weight: 700;
+        line-height: 1.45;
+    }
+    .ape-decision-action-bar {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.75rem;
+        margin-bottom: 0.9rem;
+    }
+    .ape-decision-action {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        min-width: 0;
+        padding: 0.9rem 1rem;
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        border-radius: 0.8rem;
+        background: #ffffff;
+        color: #17261d;
+        text-align: left;
+        cursor: pointer;
+        transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .ape-decision-action:hover,
+    .ape-decision-action:focus-visible {
+        border-color: rgba(61, 128, 82, 0.5);
+        box-shadow: 0 6px 16px rgba(23, 38, 29, 0.06);
+        outline: none;
+    }
+    .ape-decision-action.is-selected {
+        border-color: #3d8052;
+        background: #f0fdf4;
+        box-shadow: 0 6px 16px rgba(61, 128, 82, 0.1);
+    }
+    .ape-decision-action-follow-up.is-selected {
+        border-color: #d97706;
+        background: #fffbeb;
+        box-shadow: 0 6px 16px rgba(180, 83, 9, 0.08);
+    }
+    .ape-decision-action-icon {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        justify-content: center;
+        width: 2.25rem;
+        height: 2.25rem;
+        flex: 0 0 auto;
+        border-radius: 0.7rem;
+        background: #f0fdf4;
+        color: #3d8052;
+    }
+    .ape-decision-action-follow-up .ape-decision-action-icon {
+        background: #fff7ed;
+        color: #c2410c;
+    }
+    .ape-decision-action-copy {
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+    .ape-decision-action-copy strong,
+    .ape-decision-action-copy span {
+        display: block;
+    }
+    .ape-decision-action-copy strong {
+        color: #17261d;
+        font-size: 0.98rem;
+    }
+    .ape-decision-action-copy span {
+        margin-top: 0.15rem;
+        color: #64748b;
+        font-size: 0.78rem;
+        font-weight: 700;
+    }
+    .ape-decision-form[hidden] {
+        display: none;
+    }
+    @media (max-width: 767px) {
+        .ape-decision-action-bar {
+            grid-template-columns: 1fr;
+        }
     }
     .ape-flow-activity {
         max-height: 18rem;
@@ -1021,15 +1192,51 @@ render_header('APE Record - ' . $fullName);
         .ape-document-review-card {
             grid-template-columns: auto minmax(0, 1fr);
         }
-        .ape-document-review-card .ape-document-view-button {
+    .ape-document-review-card .ape-document-view-button {
             grid-column: 2;
             width: fit-content;
         }
     }
+    .ape-record-header {
+        position: sticky;
+        top: 0;
+        z-index: 25;
+        background: #ffffff;
+        isolation: isolate;
+        box-shadow: 0 8px 24px rgba(23, 38, 29, 0.06);
+    }
+    .ape-secondary-panel {
+        position: relative;
+    }
+    .ape-secondary-panel > :not(.ape-secondary-heading) {
+        display: none;
+    }
+    .ape-secondary-panel.is-open > :not(.ape-secondary-heading) {
+        display: block;
+    }
+    .ape-secondary-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+    }
+    .ape-secondary-toggle {
+        flex: 0 0 auto;
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        border-radius: 0.75rem;
+        padding: 0.45rem 0.7rem;
+        background: #fff;
+        color: var(--cliniq-primary);
+        font-size: 0.72rem;
+        font-weight: 800;
+    }
+    .ape-secondary-toggle:hover {
+        background: #f0fdf4;
+    }
 </style>
 
 <div class="ape-flow-shell space-y-6">
-    <div class="clinic-card p-5 md:p-6">
+    <div class="clinic-card p-5 md:p-6 ape-record-header">
         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div class="flex items-center gap-4 min-w-0">
                 <div class="avatar <?= e(avatar_color($fullName)) ?> w-14 h-14 text-lg"><?= e(initials($fullName)) ?></div>
@@ -1040,7 +1247,7 @@ render_header('APE Record - ' . $fullName);
                 </div>
             </div>
             <div class="flex flex-wrap gap-2">
-                <span class="badge <?= ape_priority_badge($record)['class'] ?>"><?= e($next['label']) ?></span>
+                <span class="badge <?= ape_priority_badge($record)['class'] ?>"><?= e($adminStateBadge) ?></span>
                 <span class="badge <?= ape_priority_badge($record)['class'] ?>"><?= e(ape_waiting_label($record)) ?></span>
                 <a class="btn btn-ghost text-decoration-none" href="<?= app_url('patients/view.php?id=' . (int)$record['patient_id']) ?>">
                     <span class="material-symbols-outlined text-[18px]">folder_shared</span> Patient
@@ -1053,7 +1260,9 @@ render_header('APE Record - ' . $fullName);
     $hasApeBatch = !empty($record['schedule_batch_id']) && ($record['batch_status'] ?? '') !== 'Cancelled';
     $batchHasPassed = $hasApeBatch && strtotime((string) $record['batch_end_at']) < time();
     $batchWasMissed = $batchHasPassed && empty($record['exam_date']);
-    $batchDisplayStatus = !$hasApeBatch ? 'Unscheduled' : ($batchWasMissed ? 'Missed' : ($batchHasPassed ? 'Completed' : 'Scheduled'));
+    $batchDisplayStatus = !$hasApeBatch
+        ? 'Unscheduled'
+        : ($batchWasMissed ? 'Missed' : ($examSaved ? 'Examination Completed' : ($batchHasPassed ? 'Schedule Passed' : 'Scheduled')));
     $batchStatusClass = !$hasApeBatch ? 'badge-pending' : ($batchWasMissed ? 'badge-critical' : ($batchHasPassed ? 'badge-completed' : 'badge-in-progress'));
     ?>
     <section class="clinic-card p-5 md:p-6">
@@ -1089,19 +1298,16 @@ render_header('APE Record - ' . $fullName);
 
     <section class="clinic-card p-5 md:p-6 space-y-6">
         <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-            <?php foreach (ape_workflow_steps() as $i => $step):
-                $done = match ($i) {
-                    0 => $digitalSubmissionComplete,
-                    1 => $examSaved,
-                    2, 3 => $queueKey === 'completed',
-                    default => false,
-                };
-                $active = !$done && match ($i) {
-                    0 => $queueKey === 'digital_submission',
-                    1 => $queueKey === 'examination',
-                    2 => in_array($queueKey, ['final_decision', 'follow_up'], true),
-                    default => false,
-                };
+            <?php
+            $workflowSteps = ape_workflow_steps();
+            if ($patientProgress['active_step'] === 4 && !$patientProgress['steps'][4]['done']) {
+                $workflowSteps[3] = 'Follow-up Clearance';
+            }
+            foreach ($workflowSteps as $i => $step):
+                $stepNumber = $i + 1;
+                $stepState = $patientProgress['steps'][$stepNumber];
+                $done = $stepState['done'];
+                $active = $stepState['active'];
             ?>
                 <div class="ape-flow-step rounded-xl border <?= $active ? 'border-primary bg-primary-fixed' : ($done ? 'border-emerald-100 bg-emerald-50/60' : 'border-outline-variant bg-slate-50/60') ?> p-3">
                     <span class="ape-flow-step-index <?= $done ? 'bg-emerald-600 text-white' : ($active ? 'bg-primary text-white' : 'bg-white text-slate-400') ?>">
@@ -1116,8 +1322,8 @@ render_header('APE Record - ' . $fullName);
         </div>
 
         <?php if ($examSaved): ?>
-        <section class="ape-flow-panel" aria-labelledby="savedApeExamTitle">
-            <div class="flex items-center justify-between gap-3 mb-4">
+        <section class="ape-flow-panel ape-secondary-panel" aria-labelledby="savedApeExamTitle">
+            <div class="ape-secondary-heading flex items-center justify-between gap-3 mb-4">
                 <div>
                     <h2 class="font-headline text-lg font-extrabold mb-1" id="savedApeExamTitle">Examination</h2>
                     <p class="text-xs font-bold text-slate-500 mb-0">Saved examination. Document review is handled separately below.</p>
@@ -1155,7 +1361,7 @@ render_header('APE Record - ' . $fullName);
                 <div class="min-w-0 flex-1">
                     <p class="text-[10px] font-black text-primary uppercase tracking-widest mb-2"><?= e($queue['title']) ?></p>
                     <h2 class="font-headline text-xl md:text-2xl font-extrabold text-[#17261d] mb-1"><?= e($next['label']) ?></h2>
-                    <p class="text-sm font-bold text-slate-500 mb-0 max-w-3xl"><?= e($actionCard['body']) ?></p>
+                    <p class="text-sm font-bold text-slate-500 mb-0 max-w-3xl"><?= e($adminStateExplanation) ?></p>
                 </div>
                 <span class="badge <?= ape_priority_badge($record)['class'] ?> shrink-0">
                     <?php if ($displayPendingRequirements): ?>
@@ -1237,7 +1443,7 @@ render_header('APE Record - ' . $fullName);
                             <div class="flex items-center justify-between gap-3 mb-3">
                                 <div>
                                     <p class="clinic-label mb-1"><?= $reviewUploadGroup === 'follow_up' ? 'Uploaded Follow-up Documents' : 'Submitted Documents' ?></p>
-                                    <p class="text-xs font-bold text-slate-500 mb-0">Select only the files that must be corrected.</p>
+                                    <p class="text-xs font-bold text-slate-500 mb-0">Select only the files to return. The original upload stays in the audit history; the student receives a replacement-upload task.</p>
                                 </div>
                                 <span class="badge badge-in-progress"><?= count($reviewDocuments) ?> File<?= count($reviewDocuments) === 1 ? '' : 's' ?></span>
                             </div>
@@ -1246,7 +1452,7 @@ render_header('APE Record - ' . $fullName);
                                     <?php $canRequestCorrection = ($document['verification_status'] ?? '') === 'Pending'; ?>
                                     <div class="ape-document-review-card">
                                         <?php if ($canRequestCorrection): ?>
-                                            <input type="checkbox" name="document_ids[]" value="<?= (int) $document['document_id'] ?>" form="apeCorrectionForm" aria-label="Select <?= e($document['document_type']) ?> for correction">
+                                            <input type="checkbox" name="document_ids[]" value="<?= (int) $document['document_id'] ?>" form="apeCorrectionForm" aria-label="Return <?= e($document['document_type']) ?> for resubmission">
                                         <?php else: ?>
                                             <span class="material-symbols-outlined text-slate-400" aria-hidden="true">description</span>
                                         <?php endif; ?>
@@ -1275,10 +1481,11 @@ render_header('APE Record - ' . $fullName);
                             </form>
                             <form method="post" class="ape-flow-action muted space-y-3" id="apeCorrectionForm">
                                 <input type="hidden" name="action" value="request_document_correction">
-                                <label class="clinic-label">Correction Needed</label>
-                                <p class="text-xs font-bold text-amber-800 mb-0">Check the affected files in the submitted-document list, then explain what must be corrected.</p>
-                                <textarea class="clinic-textarea" name="missing_items" rows="3" placeholder="What should the patient correct or resubmit online?"></textarea>
-                                <button class="btn btn-outline w-full" style="color:#b45309;border-color:rgba(180,83,9,0.2);" <?= !$examSaved || !$pendingReviewDocuments ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="danger" data-confirm-title="Request selected document resubmission?" data-confirm-message="Only the selected files will be returned to the patient for correction." data-confirm-toast="Requesting resubmission..."><span class="material-symbols-outlined text-[18px]">edit_note</span> Request Selected Resubmission</button>
+                                <h3 class="font-headline text-base font-extrabold text-amber-900 mb-1">Return for resubmission</h3>
+                                <label class="clinic-label" for="apeResubmissionReason">Required correction instructions</label>
+                                <p class="text-xs font-bold text-amber-800 mb-0">Select the affected files, then tell the student exactly what to correct. They will see a replacement-upload task and receive the correction notification/email when enabled.</p>
+                                <textarea class="clinic-textarea" id="apeResubmissionReason" name="missing_items" rows="3" placeholder="Example: Please upload a clearer copy with your full name and signature visible." required></textarea>
+                                <button class="btn btn-outline w-full" style="color:#b45309;border-color:rgba(180,83,9,0.2);" <?= !$examSaved || !$pendingReviewDocuments ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="danger" data-confirm-title="Return selected file(s) for resubmission?" data-confirm-message="The selected uploads will be marked Needs Correction. Their originals remain in history, and the student must upload replacement files." data-confirm-toast="Returning files for resubmission..."><span class="material-symbols-outlined text-[18px]">assignment_return</span> Return Selected File(s)</button>
                             </form>
                         </div>
                     </div>
@@ -1440,8 +1647,8 @@ render_header('APE Record - ' . $fullName);
 
         <div class="grid grid-cols-1 gap-4">
             <?php if (!$apeIsCompleted): ?>
-            <section class="ape-flow-panel" id="apeRequirementsChecklist" data-ape-requirements data-locked="<?= $requirementsLocked ? 'true' : 'false' ?>">
-                <div class="flex items-center justify-between gap-3 mb-4">
+            <section class="ape-flow-panel <?= in_array($queueKey, ['digital_submission', 'document_review'], true) ? '' : 'ape-secondary-panel' ?>" id="apeRequirementsChecklist" data-ape-requirements data-locked="<?= $requirementsLocked ? 'true' : 'false' ?>">
+                <div class="ape-secondary-heading flex items-center justify-between gap-3 mb-4">
                     <div>
                         <h2 class="font-headline text-lg font-extrabold text-[#17261d] mb-1"><?= $requirementsLocked ? 'Saved Document Review' : 'Requirements Checklist' ?></h2>
                         <p class="text-xs font-bold text-slate-500 mb-0"><?= $requirementsLocked ? 'Saved and locked. The outcome, selected documents, instructions, and return date are preserved.' : ($examSaved ? 'Choose the document outcome, then use Save Document Review. The original examination stays locked.' : 'Document choices are unsaved previews. Statuses, return date, and queue movement take effect only after Save Examination succeeds.') ?></p>
@@ -1583,8 +1790,8 @@ render_header('APE Record - ' . $fullName);
             </section>
             <?php else: ?>
 
-            <section class="ape-flow-panel">
-                <div class="flex items-center justify-between gap-3 mb-4">
+            <section class="ape-flow-panel ape-secondary-panel">
+                <div class="ape-secondary-heading flex items-center justify-between gap-3 mb-4">
                     <div>
                         <h2 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Uploaded Documents</h2>
                         <p class="text-xs font-bold text-slate-500 mb-0">Archived patient and clinic uploads with verification details.</p>
@@ -1625,8 +1832,8 @@ render_header('APE Record - ' . $fullName);
         </div>
 
         <?php if (!empty($record['exam_date'])): ?>
-        <section class="ape-flow-panel">
-            <div class="flex items-center justify-between gap-3 mb-4">
+        <section class="ape-flow-panel ape-secondary-panel">
+            <div class="ape-secondary-heading flex items-center justify-between gap-3 mb-4">
                 <div>
                     <h2 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Clinical Findings</h2>
                     <p class="text-xs font-bold text-slate-500 mb-0">Individual examination findings recorded by authorized clinic staff.</p>
@@ -1653,8 +1860,8 @@ render_header('APE Record - ' . $fullName);
         </section>
         <?php endif; ?>
         <div class="grid grid-cols-1 lg:grid-cols-[0.95fr_1.05fr] gap-4">
-            <section class="ape-flow-panel">
-                <h2 class="font-headline text-lg font-extrabold text-[#17261d] mb-4">Additional Notes</h2>
+            <section class="ape-flow-panel ape-secondary-panel">
+                <div class="ape-secondary-heading mb-4"><h2 class="font-headline text-lg font-extrabold text-[#17261d] mb-0">Additional Notes</h2></div>
                 <form method="post" class="space-y-4">
                     <input type="hidden" name="action" value="save_notes">
                     <div>
@@ -1665,8 +1872,8 @@ render_header('APE Record - ' . $fullName);
                 </form>
             </section>
 
-            <section class="ape-flow-panel overflow-hidden">
-                <div class="p-5 border-b border-slate-100">
+            <section class="ape-flow-panel overflow-hidden ape-secondary-panel">
+                <div class="p-5 border-b border-slate-100 ape-secondary-heading">
                     <div>
                         <h2 class="font-headline text-lg font-extrabold text-[#17261d] m-0">Activity History</h2>
                         <p class="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1 mb-0">APE #<?= (int) $record['ape_id'] ?> &bull; Patient ID <?= e($record['id_number']) ?></p>
@@ -1781,5 +1988,38 @@ render_header('APE Record - ' . $fullName);
 })();
 </script>
 <?php endif; ?>
+<script>
+    (() => {
+        document.querySelectorAll('.ape-secondary-panel').forEach((panel) => {
+            const heading = panel.querySelector(':scope > .ape-secondary-heading');
+            if (!heading || heading.querySelector('.ape-secondary-toggle')) return;
+            const toggle = document.createElement('button');
+            toggle.type = 'button';
+            toggle.className = 'ape-secondary-toggle';
+            toggle.textContent = 'View details';
+            toggle.setAttribute('aria-expanded', 'false');
+            heading.append(toggle);
+            toggle.addEventListener('click', () => {
+                const open = panel.classList.toggle('is-open');
+                toggle.textContent = open ? 'Hide details' : 'View details';
+                toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            });
+        });
+
+        document.querySelectorAll('[data-ape-decision-actions]').forEach((group) => {
+            const buttons = group.querySelectorAll('[data-decision-target]');
+            const forms = group.querySelectorAll('[data-decision-form]');
+            buttons.forEach((button) => {
+                button.addEventListener('click', () => {
+                    const target = button.dataset.decisionTarget;
+                    buttons.forEach((other) => other.classList.toggle('is-selected', other === button));
+                    forms.forEach((form) => {
+                        form.hidden = form.dataset.decisionForm !== target;
+                    });
+                });
+            });
+        });
+    })();
+</script>
 
 <?php render_footer(); ?>
