@@ -1276,7 +1276,7 @@ function render_student_footer(): void
                 }
             }
         </script>
-        <script src="../public/assets/js/file-preview.js?v=ape-popup-2"></script>
+        <script src="../public/assets/js/file-preview.js?v=ape-popup-9"></script>
         <script src="../public/assets/js/submission-loading.js?v=1"></script>
         <script>
             document.querySelectorAll('[data-student-toast]').forEach((toast) => {

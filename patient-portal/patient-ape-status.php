@@ -329,11 +329,16 @@ foreach ($requirements as $requirement) {
     $uploadedDocument = $latestDocumentByType[$name] ?? null;
     if ($uploadedDocument) {
         $verification = $uploadedDocument['verification_status'];
+        $fileExtension = strtolower(pathinfo((string) ($uploadedDocument['original_filename'] ?? ''), PATHINFO_EXTENSION));
+        $previewType = in_array($fileExtension, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'], true)
+            ? 'image'
+            : ($fileExtension === 'pdf' ? 'pdf' : 'file');
         $documents[] = [
             'name' => $name,
             'key' => $documentKey,
             'document_id' => (int) ($uploadedDocument['document_id'] ?? 0),
             'preview_url' => 'patient-ape-document.php?id=' . (int) ($uploadedDocument['document_id'] ?? 0),
+            'preview_type' => $previewType,
             'icon' => $icon,
             'status' => $verification,
             'badge' => match ($verification) {
@@ -546,7 +551,7 @@ render_student_header('APE Status', 'ape');
             <span class="student-badge <?= student_e($headerBadge) ?>"><?= student_e($clearanceStatus) ?></span>
         </div>
         <div class="student-card-pad">
-            <form method="post" enctype="multipart/form-data" id="ape-batch-upload-form">
+            <form method="post" enctype="multipart/form-data" id="ape-batch-upload-form" data-no-loading>
                 <input type="hidden" name="action" value="upload_ape_documents">
                 <p class="ape-document-guidance"><span class="material-symbols-outlined" aria-hidden="true">lock</span><span>Upload clinic-requested files only. <a href="<?= student_e(student_legal_url('privacy')) ?>" target="_blank" rel="noopener" class="student-auth-link">Privacy Notice</a></span></p>
             <?php if ($missingItems !== ''): ?>
@@ -571,7 +576,7 @@ render_student_header('APE Status', 'ape');
                             <p><?= student_e($doc['detail']) ?></p>
                             <?php if (!$doc['disabled']): ?><p class="student-document-mobile-staged hidden" id="ape-mobile-file-name-<?= student_e($doc['key']) ?>"></p><?php endif; ?>
                             <?php if ($doc['disabled']): ?>
-                                <?php if (!empty($doc['document_id'])): ?><a class="student-button-secondary text-decoration-none" href="<?= student_e($doc['preview_url']) ?>" data-file-preview data-preview-title="<?= student_e($doc['name']) ?>"><span class="material-symbols-outlined">visibility</span> View document</a><?php endif; ?>
+                                <?php if (!empty($doc['document_id'])): ?><a class="student-button-secondary text-decoration-none" href="<?= student_e($doc['preview_url']) ?>" data-file-preview data-preview-type="<?= student_e($doc['preview_type']) ?>" data-preview-title="<?= student_e($doc['name']) ?>"><span class="material-symbols-outlined">visibility</span> View document</a><?php endif; ?>
                              <?php else: ?>
                                  <button class="<?= student_e($doc['button']) ?>" type="button" onclick="selectApeFile('<?= student_e($doc['key']) ?>')"><span class="material-symbols-outlined">upload</span> Choose file</button>
                                  <button class="student-button-secondary ape-mobile-remove-file hidden" id="ape-mobile-remove-<?= student_e($doc['key']) ?>" type="button" onclick="removeApeFile('<?= student_e($doc['key']) ?>')"><span class="material-symbols-outlined">delete</span> Remove selected file(s)</button>
@@ -604,7 +609,7 @@ render_student_header('APE Status', 'ape');
                         <?php if ($doc['disabled']): ?>
                             <div class="student-appointment-actions">
                                 <?php if (!empty($doc['document_id'])): ?>
-                                    <a class="student-button-secondary text-decoration-none" href="<?= student_e($doc['preview_url']) ?>" data-file-preview data-preview-title="<?= student_e($doc['name']) ?>">
+                                    <a class="student-button-secondary text-decoration-none" href="<?= student_e($doc['preview_url']) ?>" data-file-preview data-preview-type="<?= student_e($doc['preview_type']) ?>" data-preview-title="<?= student_e($doc['name']) ?>">
                                         <span class="material-symbols-outlined">visibility</span> Preview
                                     </a>
                                 <?php endif; ?>
@@ -640,12 +645,16 @@ render_student_header('APE Status', 'ape');
                 <div class="ape-batch-submit-bar">
                     <div>
                         <strong id="ape-selected-summary">No files selected</strong>
-                        <span>Select up to 3 files per requirement. If you have more, combine them into one PDF first. You can change or remove files before submitting; each PDF, JPG/JPEG, or PNG file must be 2 MB or smaller.</span>
+                        <span>Select up to 3 files per requirement. Images are optimized in your browser before upload; PDFs must be 2 MB or smaller.</span>
                     </div>
                     <button class="student-button" id="ape-submit-all" type="submit" disabled>
                         <span class="material-symbols-outlined">cloud_upload</span>
                         Submit All Documents <span id="ape-selected-count"></span>
                     </button>
+                    <div id="ape-upload-progress" class="hidden w-full" aria-live="polite">
+                        <div class="flex items-center justify-between gap-3 text-xs font-bold text-slate-500"><span id="ape-upload-progress-label">Preparing files…</span><span id="ape-upload-progress-percent">0%</span></div>
+                        <progress id="ape-upload-progress-bar" class="w-full mt-2" max="100" value="0">0%</progress>
+                    </div>
                 </div>
             <?php endif; ?>
             </form>
@@ -769,6 +778,7 @@ render_student_header('APE Status', 'ape');
 
     function handleApeFileSelected(input) {
         const maxFileSize = 2 * 1024 * 1024;
+        const maxClientImageSize = 12 * 1024 * 1024;
         const maxFilesPerRequirement = 3;
         const allowedTypes = { pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png' };
         const selectedFiles = Array.from(input.files || []);
@@ -779,9 +789,17 @@ render_student_header('APE Status', 'ape');
             refreshApeBatchSummary();
             return;
         }
-        const oversizedFile = selectedFiles.find((file) => file.size > maxFileSize);
+        const oversizedFile = selectedFiles.find((file) => file.size > maxFileSize && !file.type.startsWith('image/'));
         if (oversizedFile) {
             window.alert(`${oversizedFile.name} is larger than 2 MB. Please choose files that are 2 MB or smaller.`);
+            input.value = '';
+            updateApeFileRow(input);
+            refreshApeBatchSummary();
+            return;
+        }
+        const oversizedImage = selectedFiles.find((file) => file.size > maxClientImageSize && file.type.startsWith('image/'));
+        if (oversizedImage) {
+            window.alert(`${oversizedImage.name} is too large to optimize safely in the browser. Please choose an image smaller than 12 MB.`);
             input.value = '';
             updateApeFileRow(input);
             refreshApeBatchSummary();
@@ -903,6 +921,86 @@ render_student_header('APE Status', 'ape');
     const apeUploadConfirmModal = document.getElementById('ape-upload-confirm-modal');
     const apeCancelUploadConfirm = document.getElementById('ape-cancel-upload-confirm');
     const apeConfirmUploadSubmit = document.getElementById('ape-confirm-upload-submit');
+    const apeUploadProgress = document.getElementById('ape-upload-progress');
+    const apeUploadProgressBar = document.getElementById('ape-upload-progress-bar');
+    const apeUploadProgressLabel = document.getElementById('ape-upload-progress-label');
+    const apeUploadProgressPercent = document.getElementById('ape-upload-progress-percent');
+
+    function setApeUploadProgress(percent, label) {
+        const value = Math.max(0, Math.min(100, Math.round(percent)));
+        if (apeUploadProgress) apeUploadProgress.classList.toggle('hidden', !label);
+        if (apeUploadProgressBar) apeUploadProgressBar.value = value;
+        if (apeUploadProgressLabel) apeUploadProgressLabel.textContent = label || '';
+        if (apeUploadProgressPercent) apeUploadProgressPercent.textContent = `${value}%`;
+    }
+
+    function optimizeApeImage(file) {
+        if (!file.type.startsWith('image/') || file.size <= 600 * 1024) return Promise.resolve(file);
+        return new Promise((resolve) => {
+            const objectUrl = URL.createObjectURL(file);
+            const image = new Image();
+            let settled = false;
+            const finish = (result) => {
+                if (settled) return;
+                settled = true;
+                window.clearTimeout(fallbackTimer);
+                URL.revokeObjectURL(objectUrl);
+                resolve(result);
+            };
+            const fallbackTimer = window.setTimeout(() => finish(file), 15000);
+            image.onload = () => {
+                const maxDimension = 1800;
+                const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
+                const canvas = document.createElement('canvas');
+                canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+                canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+                const context = canvas.getContext('2d', { alpha: false });
+                if (!context) {
+                    finish(file);
+                    return;
+                }
+                context.fillStyle = '#ffffff';
+                context.fillRect(0, 0, canvas.width, canvas.height);
+                context.drawImage(image, 0, 0, canvas.width, canvas.height);
+                canvas.toBlob((blob) => {
+                    if (!blob || blob.size >= file.size) {
+                        finish(file);
+                        return;
+                    }
+                    const baseName = file.name.replace(/\.[^.]+$/, '') || 'ape-document';
+                    finish(new File([blob], `${baseName}.jpg`, { type: 'image/jpeg', lastModified: file.lastModified }));
+                }, 'image/jpeg', 0.82);
+            };
+            image.onerror = () => finish(file);
+            image.src = objectUrl;
+        });
+    }
+
+    async function prepareApeUploadFiles() {
+        const inputs = Array.from(document.querySelectorAll('.ape-document-input'));
+        let changed = false;
+        const filesToPrepare = inputs.flatMap((input) => Array.from(input.files || []).map((file) => ({ input, file })));
+        for (let fileIndex = 0; fileIndex < filesToPrepare.length; fileIndex += 1) {
+            const { input, file } = filesToPrepare[fileIndex];
+            setApeUploadProgress(
+                5,
+                `Preparing ${fileIndex + 1} of ${filesToPrepare.length}: ${file.name}`
+            );
+            const files = Array.from(input.files || []);
+            const optimized = [];
+            for (const candidate of files) {
+                optimized.push(candidate === file ? await optimizeApeImage(candidate) : candidate);
+            }
+            if (optimized.some((candidate, index) => candidate !== files[index])) {
+                const transfer = new DataTransfer();
+                optimized.forEach((candidate) => transfer.items.add(candidate));
+                input.files = transfer.files;
+                updateApeFileRow(input);
+                changed = true;
+            }
+        }
+        if (changed) refreshApeBatchSummary();
+    }
 
     function openApeUploadConfirm() {
         if (!apeUploadConfirmModal) return;
@@ -939,7 +1037,7 @@ render_student_header('APE Status', 'ape');
         }
     });
 
-    apeUploadForm?.addEventListener('submit', (event) => {
+    apeUploadForm?.addEventListener('submit', async (event) => {
         const submitButton = document.getElementById('ape-submit-all');
         if (!submitButton || submitButton.disabled) {
             event.preventDefault();
@@ -950,8 +1048,50 @@ render_student_header('APE Status', 'ape');
             openApeUploadConfirm();
             return;
         }
+        event.preventDefault();
         submitButton.disabled = true;
         submitButton.innerHTML = '<span class="material-symbols-outlined">progress_activity</span> Uploading Documents...';
+        try {
+            if (!window.XMLHttpRequest || !window.FormData) {
+                apeUploadForm.submit();
+                return;
+            }
+            setApeUploadProgress(5, 'Optimizing images…');
+            await prepareApeUploadFiles();
+            const result = await new Promise((resolve, reject) => {
+                const request = new XMLHttpRequest();
+                request.open('POST', apeUploadForm.getAttribute('action') || window.location.href, true);
+                request.timeout = 180000;
+                request.upload.addEventListener('progress', (progressEvent) => {
+                    if (!progressEvent.lengthComputable) return;
+                    setApeUploadProgress(5 + (progressEvent.loaded / progressEvent.total) * 95, 'Uploading documents…');
+                });
+                request.addEventListener('load', () => {
+                    if (request.status >= 200 && request.status < 400) {
+                        resolve({ responseURL: request.responseURL, responseText: request.responseText });
+                        return;
+                    }
+                    reject(new Error('The upload could not be completed.'));
+                });
+                request.addEventListener('error', () => reject(new Error('The upload connection was interrupted.')));
+                request.addEventListener('timeout', () => reject(new Error('The upload took too long. Please try again on a stronger connection.')));
+                request.send(new FormData(apeUploadForm));
+            });
+            if (!result.responseURL.includes('uploaded=')) {
+                document.open();
+                document.write(result.responseText);
+                document.close();
+                return;
+            }
+            setApeUploadProgress(100, 'Upload complete.');
+            window.location.assign(result.responseURL || `${window.location.pathname}?uploaded=1`);
+        } catch (error) {
+            apeUploadForm.dataset.uploadConfirmed = '0';
+            submitButton.disabled = false;
+            submitButton.innerHTML = '<span class="material-symbols-outlined">cloud_upload</span> Try Upload Again';
+            setApeUploadProgress(0, '');
+            window.alert(error?.message || 'The upload could not be completed. Please try again.');
+        }
     });
 
     let apeHistoryRequest = null;

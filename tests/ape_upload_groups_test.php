@@ -12,6 +12,13 @@ $seed = $db->query('SELECT * FROM ape_records ORDER BY ape_id LIMIT 1')->fetch()
 expect((bool) $seed, 'One existing APE identity is needed for read-only join fixtures.');
 $seed = array_replace($seed, ['exam_date'=>'2026-09-03', 'patient_vitals_status'=>'Confirmed', 'workflow_status'=>'Follow-up Required', 'clearance_status'=>'For Follow-up', 'follow_up_required'=>1, 'requirement_status'=>'Not Checked', 'requirements_saved_at'=>'2026-09-03 14:00:00', 'follow_up_due_date'=>'2026-09-15']);
 $apeId = (int) $seed['ape_id'];
+$fixturePath = tempnam(ape_document_storage_root(), 'ape-test-');
+expect($fixturePath !== false, 'A temporary APE document fixture is required.');
+file_put_contents($fixturePath, "%PDF-1.4\nfixture\n");
+$fixtureRelativePath = 'storage/documents/ape/' . basename($fixturePath);
+register_shutdown_function(static function () use ($fixturePath): void {
+    if (is_file($fixturePath)) unlink($fixturePath);
+});
 $requirements = [];
 foreach (['Custom Initial A', 'Custom Initial B', 'Deferred TB Cert'] as $i => $name) {
     $requirements[] = ['requirement_id'=>$i+1, 'ape_id'=>$apeId, 'requirement_name'=>$name, 'status'=>$i===2?'Missing':'Verified', 'remarks'=>$i===2?'Return certificate':null, 'upload_group'=>$i===2?'follow_up':'initial', 'upload_due_date'=>$i===2?'2026-09-15':'2026-09-10'];
@@ -27,8 +34,8 @@ function cteRows(array $rows): string {
     return implode(' UNION ALL ', $selects);
 }
 function upload(int $id, string $name, string $status): array {
-    global $apeId;
-    return ['document_id'=>$id,'ape_id'=>$apeId,'document_type'=>$name,'verification_status'=>$status,'file_path'=>'fixture-only','uploaded_at'=>'2026-09-04 08:00:00','verified_at'=>null,'verified_by_person_id'=>null];
+    global $apeId, $fixtureRelativePath;
+    return ['document_id'=>$id,'ape_id'=>$apeId,'document_type'=>$name,'verification_status'=>$status,'file_path'=>$fixtureRelativePath,'uploaded_at'=>'2026-09-04 08:00:00','verified_at'=>null,'verified_by_person_id'=>null];
 }
 function fixtureRecord(array $requirements, array $documents=[], array $overrides=[]): array {
     global $db,$seed;
@@ -202,6 +209,9 @@ $dom->loadHTML($partial); libxml_clear_errors();
 $xpath=new DOMXPath($dom);
 expect(str_contains($partial,'View File') && $xpath->query('//form[input[@value="approve_documents"]]/button[@disabled]')->length===1,'Partial uploads remain previewable but cannot archive prematurely.');
 $portal=file_get_contents(__DIR__.'/../patient-portal/patient-ape-status.php');
+expect(str_contains($portal, 'optimizeApeImage') && str_contains($portal, 'XMLHttpRequest'), 'Student uploads optimize images and report upload progress without waiting on a blank page.');
+expect(str_contains($portal, 'ape-upload-progress-bar') && str_contains($portal, 'Uploading documents'), 'Student upload progress UI is present.');
+expect(str_contains($portal, "'preview_type' => \$previewType") && str_contains($portal, 'data-preview-type="<?= student_e($doc[\'preview_type\']) ?>"'), 'Patient document previews explicitly identify images and PDFs for the shared preview dialog.');
 $cardStart=strpos($portal,'$requirementByName = array_column($requirements');
 $cardEnd=strpos($portal,'$uploadableDocumentCount =',$cardStart);
 $documents=[['name'=>'Custom Initial A'],['name'=>'Deferred TB Cert']];

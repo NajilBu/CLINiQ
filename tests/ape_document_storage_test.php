@@ -55,5 +55,9 @@ expect_document_storage(
     ape_document_relative_name('storage/documents/ape/../../database.php') === null,
     'Traversal segments must remain rejected after legacy normalization.'
 );
+expect_document_storage(
+    (new ReflectionFunction('ape_assert_documents_available'))->getNumberOfParameters() === 4,
+    'APE workflow must expose a storage-integrity guard for approval transitions.'
+);
 
 echo "APE protected document storage tests passed.\n";

@@ -445,6 +445,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $nextClearance = (int) ($record['follow_up_required'] ?? 0) === 1 ? 'For Follow-up' : 'Pending';
             // Archive review verifies the latest required uploads, not the outstanding hard-copy follow-up.
             $requiredDocumentIds = array_map(static fn(string $type): int => (int) $currentByType[$type]['document_id'], $requiredTypes);
+            ape_assert_documents_available($apeDb, $id, $requiredDocumentIds);
             $documentPlaceholders = implode(',', array_fill(0, count($requiredDocumentIds), '?'));
             $verified = $apeDb->prepare("UPDATE ape_documents SET verification_status = 'Verified', verified_by_person_id = ?, verified_at = NOW() WHERE ape_id = ? AND document_id IN ({$documentPlaceholders})");
             $verified->execute(array_merge([$staffPersonId, $id], $requiredDocumentIds));
@@ -581,6 +582,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!ape_digital_submission_complete($record)) {
                 throw new RuntimeException('Complete and archive every regular digital document before clearing the patient.');
             }
+            ape_assert_documents_available($apeDb, $id, [], true);
             $documents = $apeDb->prepare("UPDATE ape_documents SET verification_status = 'Verified', verified_by_person_id = ?, verified_at = NOW() WHERE ape_id = ? AND document_type <> 'Clearance' AND verification_status = 'Pending'");
             $documents->execute([$staffPersonId, $id]);
             $requirements = $apeDb->prepare("UPDATE ape_requirements SET status = 'Verified', remarks = NULL, checked_by_person_id = ?, checked_at = NOW() WHERE ape_id = ? AND status = 'Submitted'");
@@ -598,6 +600,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (ape_record_queue($record) !== 'final_decision') {
                 throw new RuntimeException('The examination and document archive must be complete before requiring follow-up.');
             }
+            ape_assert_documents_available($apeDb, $id, [], true);
             $documents = $apeDb->prepare("UPDATE ape_documents SET verification_status = 'Verified', verified_by_person_id = ?, verified_at = NOW() WHERE ape_id = ? AND document_type <> 'Clearance' AND verification_status = 'Pending'");
             $documents->execute([$staffPersonId, $id]);
             $requirements = $apeDb->prepare("UPDATE ape_requirements SET status = 'Verified', remarks = NULL, checked_by_person_id = ?, checked_at = NOW() WHERE ape_id = ? AND status = 'Submitted'");
@@ -625,6 +628,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!ape_deferred_submission_complete($record)) {
                 throw new RuntimeException('Upload and archive the deferred checklist documents before final clearance.');
             }
+            ape_assert_documents_available($apeDb, $id);
             $stmt = $apeDb->prepare("UPDATE ape_records SET clearance_status = 'Cleared', follow_up_required = 0, workflow_status = 'Cleared', reviewed_by_person_id = ? WHERE ape_id = ?");
             $stmt->execute([$staffPersonId, $id]);
             $document = $apeDb->prepare("UPDATE ape_documents SET verification_status = 'Verified', verified_by_person_id = ?, verified_at = NOW() WHERE ape_id = ? AND document_type = 'Clearance'");

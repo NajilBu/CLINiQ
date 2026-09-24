@@ -44,6 +44,11 @@ foreach (['Audit Log', 'Email Center', 'email_action', 'retry', 'cancel', 'resen
         throw new RuntimeException("Email Center UI is missing {$expected}.");
     }
 }
+foreach (['collapseWorkItems', 'Clinic work actions', 'One warning for this issue type', 'Correct online documents'] as $expected) {
+    if (!str_contains($audit, $expected)) {
+        throw new RuntimeException("Grouped Email Center UI is missing {$expected}.");
+    }
+}
 foreach (['clinic_work_center_reminder_history', 'clinic_work_center_reminder_candidates', 'clinic_work_center_send_reminders', 'send_clinic_reminders', 'clinicReminderReviewModal', 'recently-reminded', 'Review first'] as $expected) {
     if (!str_contains($audit . $workCenter, $expected)) {
         throw new RuntimeException("Clinic reminder flow is missing {$expected}.");

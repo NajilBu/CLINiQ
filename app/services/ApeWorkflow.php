@@ -1407,6 +1407,52 @@ function ape_document_absolute_path(string $storedPath): ?string
     return ape_document_lookup($storedPath)['absolute_path'];
 }
 
+/**
+ * Prevent workflow transitions from approving database rows whose files are
+ * no longer present in protected or legacy storage.
+ *
+ * Only the latest upload for each document type is checked. Older replaced
+ * uploads are historical records and must not block a valid current upload.
+ */
+function ape_assert_documents_available(PDO $db, int $apeId, array $documentIds = [], bool $excludeClearance = false): void
+{
+    $params = [$apeId];
+    $conditions = [
+        'd.ape_id = ?',
+        'd.document_id = (
+            SELECT MAX(latest.document_id)
+            FROM ape_documents latest
+            WHERE latest.ape_id = d.ape_id
+              AND latest.document_type = d.document_type
+        )',
+    ];
+    if ($excludeClearance) {
+        $conditions[] = "d.document_type <> 'Clearance'";
+    }
+    if ($documentIds !== []) {
+        $documentIds = array_values(array_unique(array_filter(array_map('intval', $documentIds), static fn(int $id): bool => $id > 0)));
+        if ($documentIds === []) {
+            throw new InvalidArgumentException('Select at least one APE document.');
+        }
+        $placeholders = implode(',', array_fill(0, count($documentIds), '?'));
+        $conditions[] = "d.document_id IN ({$placeholders})";
+        $params = array_merge($params, $documentIds);
+    }
+
+    $stmt = $db->prepare('SELECT d.document_id, d.document_type, d.file_path FROM ape_documents d WHERE ' . implode(' AND ', $conditions));
+    $stmt->execute($params);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $missing = [];
+    foreach ($rows as $row) {
+        if (ape_document_lookup((string) $row['file_path'])['status'] !== 'available') {
+            $missing[] = (string) $row['document_type'];
+        }
+    }
+    if ($missing !== []) {
+        throw new RuntimeException('Cannot approve APE documents because these files are missing from clinic storage: ' . implode(', ', array_unique($missing)) . '. Restore the document volume or request a new upload.');
+    }
+}
+
 function ape_store_uploaded_file(array $file, string $prefix): array
 {
     if (empty($file['name']) || (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {

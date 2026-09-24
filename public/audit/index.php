@@ -317,7 +317,42 @@ if ($tab === 'email') {
                         <a class="clinic-card min-w-0 p-4 text-decoration-none transition-all <?= $isCardActive ? 'ring-2 ring-primary border-primary bg-[#f4fbf5]' : 'hover:shadow-md hover:-translate-y-0.5' ?>" href="<?= e($cardUrl) ?>" data-table-filter-link aria-label="Show <?= e(strtolower($label)) ?> work" <?= $isCardActive ? 'aria-current="page"' : '' ?>><span class="material-symbols-outlined text-primary text-[20px]"><?= e($icon) ?></span><div class="flex items-end justify-between gap-2"><p class="font-headline text-2xl font-extrabold text-[#17261d] mb-0 mt-2"><?= number_format((int) $workSummary[$key]) ?></p><?php if ($isCardActive): ?><span class="text-[10px] font-black uppercase tracking-widest text-primary">Selected</span><?php endif; ?></div><p class="text-[10px] font-black uppercase tracking-widest leading-tight text-slate-400 mb-0 mt-1 break-words"><?= e($label) ?></p></a>
                     <?php endforeach; ?>
                 </div>
-                <p class="text-xs font-bold text-slate-400 mb-0">Showing <?= number_format(count($workItems)) ?> of <?= number_format(count($allWorkItems)) ?> email-related clinic items</p>
+                <?php
+                $collapseWorkItems = static function (array $items): array {
+                    $collapsed = [];
+                    foreach ($items as $item) {
+                        $patientId = (int) ($item['patient_person_id'] ?? 0);
+                        $eventType = (string) ($item['email_event_type'] ?? '');
+                        $sourceType = (string) ($item['email_source_type'] ?? $item['source_type'] ?? 'patient');
+                        $sourceId = (int) ($item['email_source_id'] ?? $item['source_id'] ?? 0);
+                        $key = implode(':', [$patientId, $eventType, $sourceType, $sourceId]);
+                        if (!isset($collapsed[$key])) {
+                            $item['collapsed_count'] = 1;
+                            $item['collapsed_titles'] = [(string) ($item['title'] ?? '')];
+                            $collapsed[$key] = $item;
+                            continue;
+                        }
+                        $collapsed[$key]['collapsed_count']++;
+                        $collapsed[$key]['collapsed_titles'][] = (string) ($item['title'] ?? '');
+                    }
+                    foreach ($collapsed as &$item) {
+                        $count = (int) ($item['collapsed_count'] ?? 1);
+                        if ($count < 2) continue;
+                        $item['title'] = match ((string) ($item['email_event_type'] ?? '')) {
+                            'ape_document_correction_required' => 'Correct online documents',
+                            'ape_hard_copy_correction_required' => 'Review hard-copy corrections',
+                            default => (string) ($item['title'] ?? 'Clinic action required'),
+                        } . " ({$count})";
+                        $item['explanation'] = $count . ' related items need attention. Open the source record to review the details.';
+                    }
+                    unset($item);
+                    return array_values($collapsed);
+                };
+                $displayWorkItems = $collapseWorkItems($workItems);
+                $displayAllWorkItems = $collapseWorkItems($allWorkItems);
+                $workSummary = clinic_work_center_summary($displayAllWorkItems);
+                ?>
+                <p class="text-xs font-bold text-slate-400 mb-0">Showing <?= number_format(count($displayWorkItems)) ?> of <?= number_format(count($displayAllWorkItems)) ?> email-related clinic warnings</p>
                  <form method="get" class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end" data-table-filter="email-clinic-work" data-filter-region="email-clinic-work"><input type="hidden" name="tab" value="email"><?php if ($workFilters['priority'] !== ''): ?><input type="hidden" name="work_priority" value="<?= e($workFilters['priority']) ?>"><?php endif; ?><div><label class="clinic-label">Search clinic work</label><input class="clinic-input" name="work_search" value="<?= e($workFilters['search']) ?>" placeholder="Patient or task" aria-label="Search clinic work"></div><div><label class="clinic-label">Age / due status</label><select class="clinic-select" name="work_age" onchange="this.form.submit()"><option value="">All work</option><?php foreach(['overdue', 'due_today', 'due_soon', 'older_than_7_days', 'no_due_date'] as $value): ?><option value="<?= e($value) ?>" <?= $workFilters['age'] === $value ? 'selected' : '' ?>><?= e($workLabel($value)) ?></option><?php endforeach; ?></select></div><div><label class="clinic-label">Area</label><select class="clinic-select" name="work_area" onchange="this.form.submit()"><option value="">All areas</option><?php foreach($workAreas as $value): ?><option value="<?= e($value) ?>" <?= $workFilters['area'] === $value ? 'selected' : '' ?>><?= e($value) ?></option><?php endforeach; ?></select></div><div class="md:col-span-3 flex flex-wrap items-center justify-between gap-3"><span class="text-xs text-slate-400">Priority is selected above. Age and due status update automatically.</span><div class="flex items-center gap-2"><a class="btn btn-sm btn-outline text-decoration-none" href="index.php?tab=email#needs-attention" data-table-filter-link>Clear</a><?php if ($canManageEmailOperations): ?><button type="button" class="btn btn-primary px-4 py-2 text-sm shadow-md" onclick="showModal('clinicReminderReviewModal')"><span class="material-symbols-outlined text-[17px] align-middle">mail</span> Send clinic reminders <span class="ml-1 rounded-full bg-white/20 px-2 py-0.5 text-xs font-black"><?= number_format(count($needsReminderItems)) ?> ready</span></button><?php endif; ?></div></div></form>
             </div>
             <?php if (!$workItems): ?>
@@ -325,15 +360,13 @@ if ($tab === 'email') {
             <?php else: ?>
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm" aria-label="Clinic work actions">
-                        <thead class="bg-slate-50 text-left text-[10px] uppercase tracking-widest text-slate-500">
-                            <tr><th class="px-5 py-3 font-black">Priority</th><th class="px-5 py-3 font-black">Patient</th><th class="px-5 py-3 font-black">What needs attention</th><th class="px-5 py-3 font-black">Category / source</th><th class="px-5 py-3 font-black">When</th><th class="sticky right-0 z-10 bg-slate-50 px-5 py-3 font-black text-right min-w-[170px]">Action</th></tr>
-                        </thead>
+                        <thead class="bg-slate-50 text-left text-[10px] uppercase tracking-widest text-slate-500"><tr><th class="px-5 py-3 font-black">Priority</th><th class="px-5 py-3 font-black">Patient</th><th class="px-5 py-3 font-black">What needs attention</th><th class="px-5 py-3 font-black">Category / source</th><th class="px-5 py-3 font-black">When</th><th class="sticky right-0 z-10 bg-slate-50 px-5 py-3 font-black text-right min-w-[170px]">Action</th></tr></thead>
                         <tbody class="divide-y divide-slate-100">
-                            <?php foreach ($workItems as $item): ?>
+                            <?php foreach ($displayWorkItems as $item): ?>
                                 <tr class="align-top hover:bg-slate-50/70">
                                     <td class="px-5 py-4 whitespace-nowrap"><span class="badge <?= e($workBadge((string) $item['priority'])) ?>"><?= e($workLabel((string) $item['priority'])) ?></span></td>
                                     <td class="px-5 py-4 min-w-[180px]"><strong class="block text-[#17261d]"><?= e($item['patient_name']) ?></strong><?php if ((int) $item['patient_person_id'] > 0): ?><a class="text-xs text-primary font-bold text-decoration-none" href="../patients/view.php?id=<?= (int) $item['patient_person_id'] ?>">Open patient</a><?php endif; ?><?php if (($item['patient_email'] ?? '') !== ''): ?><span class="block text-xs text-slate-500 mt-1"><?= e($item['patient_email']) ?></span><?php endif; ?></td>
-                                    <td class="px-5 py-4 min-w-[260px]"><strong class="block text-[#17261d]"><?= e($item['title']) ?></strong><span class="block text-xs text-slate-600 mt-1"><?= e($item['explanation']) ?></span><?php if ((int) ($item['reminder_count'] ?? 0) > 0): ?><span class="block text-xs font-bold text-amber-700 mt-2">Reminded <?= (int) $item['reminder_count'] ?> time<?= (int) $item['reminder_count'] === 1 ? '' : 's' ?><?= !empty($item['last_reminded_at']) ? ' · last ' . e(date('M j, Y', strtotime((string) $item['last_reminded_at']))) : '' ?></span><?php endif; ?></td>
+                                    <td class="px-5 py-4 min-w-[260px]"><strong class="block text-[#17261d]"><?= e($item['title']) ?></strong><span class="block text-xs text-slate-600 mt-1"><?= e($item['explanation']) ?></span><?php if ((int) ($item['collapsed_count'] ?? 1) > 1): ?><span class="block text-xs font-bold text-slate-500 mt-2">One warning for this issue type; details remain in the source record.</span><?php endif; ?></td>
                                     <td class="px-5 py-4 min-w-[150px]"><span class="badge badge-outline"><?= e($item['category']) ?></span><span class="block text-xs text-slate-500 mt-2"><?= e($item['label']) ?></span></td>
                                     <td class="px-5 py-4 whitespace-nowrap text-xs font-bold text-slate-500"><?= e($item['due_at'] !== '' ? 'Due ' . $item['due_at'] : 'Created ' . $ageLabel((string) $item['created_at'])) ?></td>
                                     <td class="sticky right-0 z-[1] bg-white px-5 py-4 min-w-[170px]"><div class="flex flex-wrap justify-end gap-2"><?php if ($item['action_type'] === 'retry_email'): ?><form method="post"><input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>"><input type="hidden" name="email_action" value="retry"><input type="hidden" name="id" value="<?= (int) $item['email_id'] ?>"><button class="btn btn-sm btn-primary whitespace-nowrap" data-confirm-submit data-confirm-title="Retry email?" data-confirm-message="This will attempt delivery again to the patient.">Retry email</button></form><?php elseif ($item['action_type'] === 'cancel_email'): ?><form method="post"><input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>"><input type="hidden" name="email_action" value="cancel"><input type="hidden" name="id" value="<?= (int) $item['email_id'] ?>"><button class="btn btn-sm btn-primary whitespace-nowrap" data-confirm-submit data-confirm-title="Cancel email?" data-confirm-message="This queued email will not be delivered.">Cancel email</button></form><?php elseif ($item['action_type'] === 'view_email'): ?><a class="btn btn-sm btn-primary text-decoration-none whitespace-nowrap" href="#all-email">View details</a><?php elseif ($item['action_type'] === 'compose_email' && $canManageEmailOperations && isset($patientEmailIds[(int) $item['patient_person_id']])): ?><button type="button" class="btn btn-sm btn-primary whitespace-nowrap" data-open-patient-email data-patient-id="<?= (int) $item['patient_person_id'] ?>" data-subject="<?= e((string) ($item['email_subject'] ?? 'Patient follow-up')) ?>" data-message="<?= e((string) ($item['email_message'] ?? 'Please review the outstanding clinic action and contact the clinic if you need assistance.')) ?>">Send email</button><?php if ($item['source_url'] !== ''): ?><a class="btn btn-sm btn-outline text-decoration-none whitespace-nowrap" href="<?= e($item['source_url']) ?>">Open source</a><?php endif; ?><?php elseif ($item['source_url'] !== ''): ?><a class="btn btn-sm btn-primary text-decoration-none whitespace-nowrap" href="<?= e($item['source_url']) ?>"><?= e($item['action_label']) ?></a><?php endif; ?></div></td>
