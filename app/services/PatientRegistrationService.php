@@ -10,6 +10,7 @@ require_once __DIR__ . '/ApeCycleService.php';
 require_once __DIR__ . '/ApeWorkflow.php';
 require_once __DIR__ . '/PatientAccountService.php';
 require_once __DIR__ . '/SystemSettings.php';
+require_once __DIR__ . '/PatientEmail.php';
 
 const CLINIQ_PATIENT_REGISTRATION_CODE_MINUTES = 15;
 const CLINIQ_PATIENT_REGISTRATION_MAX_ATTEMPTS = 5;
@@ -102,12 +103,20 @@ function request_patient_registration_code(string $studentNumber, string $email,
 
     $clinicName = (string) (clinic_profile_settings()['system_name'] ?? 'CLINiQ Clinic');
     $message = cliniq_custom_email_body("Your student-account verification code is {$code}. It expires in 15 minutes. Do not share this code.", $clinicName);
-    try {
-        $sent = send_cliniq_email($email, 'Student Applicant', "[{$clinicName}] Verify your student account", $message);
-    } catch (Throwable $exception) {
-        error_log('[CLINiQ Registration] Verification delivery failed: ' . $exception->getMessage());
-        $sent = false;
-    }
+    $emailId = patient_email_queue([
+        'queue_key' => 'patient_email',
+        'event_type' => 'registration_verification',
+        'origin' => 'system',
+        'source_type' => 'registration',
+        'source_id' => $verificationId,
+        'recipient_email' => $email,
+        'recipient_name' => 'Student Applicant',
+        'subject' => "[{$clinicName}] Verify your student account",
+        'html_body' => $message,
+    ]);
+    $result = $emailId > 0 ? patient_email_process_queue('patient_email', 1, null, $emailId) : ['sent' => 0];
+    $sent = $emailId > 0 && (int) ($result['sent'] ?? 0) === 1;
+    audit_log_event('email', $sent ? 'email_registration_verification_sent' : 'email_registration_verification_failed', null, 'guest', 'email', $emailId, ['student_number' => $studentNumber], $sent ? 'success' : 'failure');
     if (!$sent) {
         $db->prepare('DELETE FROM patient_registration_verifications WHERE registration_verification_id = ?')->execute([$verificationId]);
         throw new RuntimeException('The verification email could not be sent. Check the address or contact the clinic.');

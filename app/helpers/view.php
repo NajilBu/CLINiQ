@@ -60,8 +60,14 @@ function staff_sidebar_action_counts(int $activeAlertCount = 0): array
     try {
         $apeRecords = ape_fetch_records();
         foreach ($apeRecords as $record) {
-            if (ape_record_queue($record) !== 'completed') {
-                $counts['APE']++;
+            // The sidebar badge is an attention indicator, not an APE workload
+            // total. Digital Keeping entries commonly wait for a student upload
+            // and should remain visible in APE without becoming a notification.
+            foreach (ape_normalized_action_items($record) as $item) {
+                if (in_array((string) ($item['priority'] ?? ''), ['urgent', 'overdue', 'clinic_action'], true)) {
+                    $counts['APE']++;
+                    break;
+                }
             }
         }
     } catch (Throwable $e) {
@@ -224,44 +230,50 @@ function render_header(string $title): void
     $staffPhotoUrl = $staffPhotoPath !== null ? app_url($staffPhotoPath) : null;
     $activeAlertCount = 0;
     $criticalAlertCount = 0;
-    $pendingAlertUrl = app_url('alerts/index.php?status=pending');
-    $pendingAlertTitle = 'View pending alerts';
+    $pendingAlertCount = 0;
+    $pendingAlertUrl = app_url('alerts/index.php?status=active');
+    $pendingAlertTitle = 'View active alerts';
     if ($user) {
         try {
             $alertSummary = auth_db()->query("
                 SELECT
                     COUNT(*) AS total,
-                    SUM(CASE WHEN risk_level = 'Critical' THEN 1 ELSE 0 END) AS critical_total
+                    SUM(CASE WHEN risk_level = 'Critical' THEN 1 ELSE 0 END) AS critical_total,
+                    SUM(CASE WHEN status = 'Pending' THEN 1 ELSE 0 END) AS pending_total
                 FROM nurse_alerts
-                WHERE status = 'Pending'
+                WHERE status IN ('Pending', 'In Progress')
             ")->fetch();
             $activeAlertCount = (int) ($alertSummary['total'] ?? 0);
             $criticalAlertCount = (int) ($alertSummary['critical_total'] ?? 0);
+            $pendingAlertCount = (int) ($alertSummary['pending_total'] ?? 0);
 
             if ($activeAlertCount === 1) {
-                $latestAlert = auth_db()->query("SELECT id FROM nurse_alerts WHERE status = 'Pending' ORDER BY created_at DESC, id DESC LIMIT 1")->fetch();
+                $latestAlert = auth_db()->query("SELECT id FROM nurse_alerts WHERE status IN ('Pending', 'In Progress') ORDER BY created_at DESC, id DESC LIMIT 1")->fetch();
                 $latestAlertId = (int) ($latestAlert['id'] ?? 0);
                 if ($latestAlertId > 0) {
                     $pendingAlertUrl = app_url('alerts/view.php?id=' . $latestAlertId);
-                    $pendingAlertTitle = 'Open pending alert #' . $latestAlertId;
+                    $pendingAlertTitle = 'Open active alert #' . $latestAlertId;
                 }
             } elseif ($activeAlertCount > 1) {
-                $pendingAlertTitle = 'View ' . $activeAlertCount . ' pending alerts';
+                $pendingAlertTitle = 'View ' . $activeAlertCount . ' active alerts';
             }
         } catch (Throwable $e) {
             $activeAlertCount = 0;
             $criticalAlertCount = 0;
-            $pendingAlertUrl = app_url('alerts/index.php?status=pending');
-            $pendingAlertTitle = 'View pending alerts';
+            $pendingAlertCount = 0;
+            $pendingAlertUrl = app_url('alerts/index.php?status=active');
+            $pendingAlertTitle = 'View active alerts';
         }
     }
     $bodyClasses = 'bg-surface font-body text-on-surface min-h-screen overflow-x-hidden';
     if ($isElectronRuntime) {
         $bodyClasses .= ' is-electron-runtime';
     }
-    if ($activeAlertCount > 0) {
+    if ($pendingAlertCount > 0) {
         $bodyClasses .= ' has-active-alerts';
     }
+    $governanceUrl = app_url('audit/index.php' . (($user['role'] ?? '') === 'admin' ? '?tab=audit' : '?tab=email'));
+    $governanceLabel = ($user['role'] ?? '') === 'admin' ? 'Audit Log' : 'Email Center';
     $nav = [
         'Dashboard' => ['group' => 'Overview', 'url' => app_url('dashboard.php'), 'match' => 'dashboard.php', 'icon' => 'dashboard'],
         'Patients' => ['group' => 'People & Records', 'url' => app_url('patients/index.php'), 'match' => '/patients/', 'icon' => 'personal_injury'],
@@ -274,7 +286,7 @@ function render_header(string $title): void
         'Inventory' => ['group' => 'Resources & Reports', 'url' => app_url('inventory/index.php'), 'match' => '/inventory/', 'icon' => 'inventory_2'],
         'Reports' => ['group' => 'Resources & Reports', 'url' => app_url('reports/index.php'), 'match' => '/reports/', 'icon' => 'analytics'],
         'Feedback' => ['group' => 'Resources & Reports', 'url' => app_url('feedback/index.php'), 'match' => '/feedback/', 'icon' => 'rate_review', 'roles' => ['admin', 'doctor']],
-        'Audit Log' => ['group' => 'Administration', 'url' => app_url('audit/index.php'), 'match' => '/audit/', 'icon' => 'history', 'roles' => ['admin']],
+        $governanceLabel => ['group' => 'Administration', 'url' => $governanceUrl, 'match' => '/audit/', 'icon' => 'history'],
         'Settings' => ['group' => 'Administration', 'url' => app_url('settings/index.php'), 'match' => '/settings/', 'icon' => 'settings'],
     ];
     if (first_registration_pending('staff')) {
@@ -339,7 +351,7 @@ function render_header(string $title): void
         </style>
     <script src="<?= app_url('assets/js/id-number-format.js?v=' . filemtime(__DIR__ . '/../../public/assets/js/id-number-format.js')) ?>"></script>
     </head>
-    <body class="<?= e($bodyClasses) ?>" data-cliniq-runtime="<?= $isElectronRuntime ? 'electron' : 'browser' ?>" data-cliniq-app-url="<?= e(app_url()) ?>" data-cliniq-patient-portal-url="<?= e($patientPortalUrl) ?>"<?php if ($user): ?> data-alert-status-url="<?= e(app_url('api/alerts.php')) ?>" data-active-alert-count="<?= (int) $activeAlertCount ?>" data-critical-alert-count="<?= (int) $criticalAlertCount ?>" data-alert-sound="<?= e((string) ($clinicProfile['alert_sound'] ?? 'urgent-pulse')) ?>" data-alert-sound-url="<?= e($customAlertSoundUrl) ?>"<?php endif; ?>>
+    <body class="<?= e($bodyClasses) ?>" data-cliniq-runtime="<?= $isElectronRuntime ? 'electron' : 'browser' ?>" data-cliniq-app-url="<?= e(app_url()) ?>" data-cliniq-patient-portal-url="<?= e($patientPortalUrl) ?>"<?php if ($user): ?> data-alert-status-url="<?= e(app_url('api/alerts.php')) ?>" data-active-alert-count="<?= (int) $activeAlertCount ?>" data-pending-alert-count="<?= (int) $pendingAlertCount ?>" data-critical-alert-count="<?= (int) $criticalAlertCount ?>" data-alert-sound="<?= e((string) ($clinicProfile['alert_sound'] ?? 'urgent-pulse')) ?>" data-alert-sound-url="<?= e($customAlertSoundUrl) ?>"<?php endif; ?>>
     <?php if ($user): ?>
         <div class="app-shell">
             <aside class="app-sidebar">
@@ -423,10 +435,10 @@ function render_header(string $title): void
                             <span class="material-symbols-outlined" data-alert-sound-icon aria-hidden="true">volume_up</span>
                             <span data-alert-sound-label>Mute alarm</span>
                         </button>
-                        <a href="<?= e($pendingAlertUrl) ?>" class="app-alert-link <?= $activeAlertCount > 0 ? 'has-alerts has-active-alerts' : '' ?> text-decoration-none" title="<?= e($pendingAlertTitle) ?>" data-live-alert-link data-no-ajax="true" <?= $activeAlertCount > 0 ? '' : 'hidden' ?>>
+                        <a href="<?= e($pendingAlertUrl) ?>" class="app-alert-link <?= $pendingAlertCount > 0 ? 'has-alerts has-active-alerts' : '' ?> text-decoration-none" title="<?= e($pendingAlertTitle) ?>" data-live-alert-link data-no-ajax="true" <?= $pendingAlertCount > 0 ? '' : 'hidden' ?>>
                             <span class="material-symbols-outlined">notification_important</span>
-                            <span class="app-alert-label">Pending Alerts</span>
-                            <span class="app-alert-badge" id="pending-alert-count" aria-live="polite"><?= $activeAlertCount > 99 ? '99+' : $activeAlertCount ?></span>
+                            <span class="app-alert-label">Active Alerts</span>
+                            <span class="app-alert-badge" id="pending-alert-count" aria-live="polite"><?= $pendingAlertCount > 99 ? '99+' : $pendingAlertCount ?></span>
                         </a>
                         <span><?= e(date('l, F j')) ?></span>
                         <button type="button" class="app-profile-photo" data-profile-photo-open="staff-profile-photo-modal" title="Change profile picture" aria-label="Change profile picture">
@@ -530,6 +542,7 @@ function render_footer(): void
         <?php endif; ?>
     <?php render_flash_toasts(); ?>
     <script src="<?= app_url('assets/js/app.js?v=' . filemtime(__DIR__ . '/../../public/assets/js/app.js')) ?>"></script>
+    <script src="<?= app_url('assets/js/table-filters.js?v=' . filemtime(__DIR__ . '/../../public/assets/js/table-filters.js')) ?>"></script>
     <script src="<?= app_url('assets/js/ag-grid-tables.js?v=' . filemtime(__DIR__ . '/../../public/assets/js/ag-grid-tables.js')) ?>"></script>
     <script src="<?= app_url('assets/js/file-preview.js?v=ape-popup-2') ?>"></script>
     <script src="<?= app_url('assets/js/submission-loading.js?v=1') ?>"></script>

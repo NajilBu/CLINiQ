@@ -74,8 +74,8 @@ foreach (['/public/login.php', '/public/visitor-registration.php', '/public/sett
         throw new RuntimeException("Public gateway must not expose {$forbiddenPublicRoute}.");
     }
 }
-if (substr_count($compose, 'MARIADB_ROOT_PASSWORD: ""') !== 2) {
-    throw new RuntimeException('The web and scheduler containers must not receive the MariaDB root password.');
+if (substr_count($compose, 'MARIADB_ROOT_PASSWORD: ""') !== 3) {
+    throw new RuntimeException('The web, backup, and email-worker containers must not receive the MariaDB root password.');
 }
 if (!str_contains($backup, "tempnam(sys_get_temp_dir(), 'cliniq-restore-')")) {
     throw new RuntimeException('Restore credentials must be created in temporary storage, not the backup volume.');

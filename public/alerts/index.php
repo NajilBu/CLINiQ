@@ -6,13 +6,13 @@ require_login();
 ensure_alert_workflow_schema();
 
 $allowedStatuses = [
-    'pending' => 'Pending',
+    'active' => 'Pending',
     'in progress' => 'In Progress',
     'resolved' => 'Resolved',
 ];
-$filterKey = strtolower(trim($_GET['status'] ?? 'pending'));
+$filterKey = strtolower(trim($_GET['status'] ?? 'active'));
 if (!isset($allowedStatuses[$filterKey])) {
-    $filterKey = 'pending';
+    $filterKey = 'active';
 }
 $filterStatus = $allowedStatuses[$filterKey];
 $allowedRisks = ['all', 'Critical', 'High', 'Moderate', 'Low', 'Not assessed'];
@@ -61,6 +61,7 @@ $statusCounts = [];
 foreach ($statusCountQuery->fetchAll() as $sc) {
     $statusCounts[strtolower($sc['status'])] = (int)$sc['cnt'];
 }
+$statusCounts['active'] = $statusCounts['pending'] ?? 0;
 
 $alertColumns = [
     ['headerName' => 'Status', 'field' => 'statusHtml', 'cellRenderer' => 'html', 'sortField' => 'statusSort', 'sortType' => 'number', 'width' => 150],
@@ -145,14 +146,14 @@ render_clinic_command_header(
         <div class="flex items-center gap-2 mt-4 border-t border-slate-100 pt-4 overflow-x-auto scrollbar-hide">
             <?php
             $statusTabs = [
-                'pending' => 'Pending',
+                'active' => 'Active',
                 'in progress' => 'In Progress',
                 'resolved' => 'Resolved',
             ];
             foreach ($statusTabs as $key => $label):
-                $isActive = strtolower($filterStatus) === $key;
+                $isActive = $filterKey === $key;
                 $count = $statusCounts[$key] ?? 0;
-                $href = $key === 'pending' ? '?' : '?status=' . urlencode($key);
+                $href = '?status=' . urlencode($key);
             ?>
                 <a href="<?= $href ?>" class="status-tab <?= $isActive ? 'active' : '' ?> text-decoration-none">
                     <?= $label ?>

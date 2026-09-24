@@ -248,7 +248,7 @@ function ape_batch_progress(array $records): array
         }
         $summary = &$summaries[$batchId];
         $summary['total']++;
-        $queue = ape_record_queue($record);
+        $queue = ape_work_queue_stage($record);
         $summary[$queue]++;
         if (!in_array($queue, ['examination', 'completed'], true)) {
             if (trim((string) ($record['missing_items'] ?? '')) !== '') $summary['incomplete']++;
@@ -280,6 +280,266 @@ function ape_next_action(array $record): array
         'completed' => ['label' => 'Completed', 'icon' => 'check_circle'],
         default => ['label' => 'Review Record', 'icon' => 'visibility'],
     };
+}
+
+/**
+ * Resolve the visible Work Queue Map phase from the same progress calculation
+ * shown to the student. Operational actions still use ape_record_queue(),
+ * which can keep a saved examination actionable while the student finishes an
+ * earlier checklist step.
+ */
+function ape_work_queue_stage(array $record): string
+{
+    $progress = ape_patient_progress($record);
+
+    return match ((int) ($progress['active_step'] ?? 1)) {
+        1 => 'digital_submission',
+        2 => 'examination',
+        3 => 'final_decision',
+        4 => !empty($progress['steps'][4]['done']) ? 'completed' : 'follow_up',
+        default => 'digital_submission',
+    };
+}
+
+/**
+ * Return the concrete APE action(s) currently required for a record.
+ * Queue classification remains intentionally separate from this display/action model.
+ *
+ * @return array<int, array<string, mixed>>
+ */
+function ape_normalized_action_items(array $record, ?array $requirements = null, ?array $documents = null): array
+{
+    $apeId = (int) ($record['id'] ?? $record['ape_id'] ?? 0);
+    $patientId = (int) ($record['patient_id'] ?? 0);
+    $sourceUrl = '../ape/view.php?id=' . $apeId;
+    $items = [];
+    $add = static function (array &$items, array $item) use ($apeId, $patientId, $sourceUrl): void {
+        $actionType = (string) ($item['action_type'] ?? 'open_source');
+        $sourceType = (string) ($item['source_type'] ?? 'ape');
+        $sourceId = (int) ($item['source_id'] ?? $apeId);
+        $item['action_type'] = $actionType;
+        $item['owner'] = in_array(($item['owner'] ?? 'clinic'), ['clinic', 'patient', 'shared'], true) ? $item['owner'] : 'clinic';
+        $item['source_type'] = $sourceType;
+        $item['source_id'] = $sourceId;
+        $item['patient_person_id'] = (int) ($item['patient_person_id'] ?? $patientId);
+        $item['source_url'] = (string) ($item['source_url'] ?? $sourceUrl);
+        $item['email_relevant'] = !empty($item['email_relevant']);
+        $item['email_event_type'] = trim((string) ($item['email_event_type'] ?? ''));
+        $item['email_source_type'] = (string) ($item['email_source_type'] ?? $sourceType);
+        $item['email_source_id'] = (int) ($item['email_source_id'] ?? $sourceId);
+        $item['deduplication_key'] = (string) ($item['deduplication_key'] ?? ($sourceType . ':' . $sourceId . ':' . $actionType));
+        $item['type'] = (string) ($item['type'] ?? 'ape_' . $actionType);
+        $item['label'] = (string) ($item['label'] ?? 'APE workflow');
+        $item['title'] = (string) ($item['title'] ?? ($item['action_label'] ?? 'Review APE action'));
+        $item['action_label'] = (string) ($item['action_label'] ?? 'Open source');
+        $item['description'] = (string) ($item['description'] ?? 'This APE action needs review.');
+        $item['priority'] = in_array(($item['priority'] ?? 'clinic_action'), ['urgent', 'overdue', 'clinic_action', 'waiting_on_patient', 'scheduled'], true)
+            ? $item['priority'] : 'clinic_action';
+        $item['status'] = (string) ($item['status'] ?? 'Pending');
+        $item['area'] = 'APE';
+        $item['created_at'] = (string) ($item['created_at'] ?? ($record['created_at'] ?? date('Y-m-d H:i:s')));
+        $item['due_at'] = (string) ($item['due_at'] ?? '');
+        $items[$item['deduplication_key']] = $item;
+    };
+
+    if (($record['workflow_status'] ?? '') === 'Cleared' || ($record['clearance_status'] ?? '') === 'Cleared') {
+        return [];
+    }
+
+    $requirements ??= ape_requirements_for_record($apeId);
+    $documents ??= ape_documents_for_record($apeId);
+    $latestDocuments = [];
+    foreach ($documents as $document) {
+        $type = strtolower(trim((string) ($document['document_type'] ?? '')));
+        if ($type !== '' && !isset($latestDocuments[$type])) $latestDocuments[$type] = $document;
+    }
+
+    foreach ($latestDocuments as $document) {
+        if (($document['verification_status'] ?? '') !== 'Needs Correction') continue;
+        $documentId = (int) ($document['document_id'] ?? 0);
+        $add($items, [
+            'action_type' => 'online_document_correction',
+            'label' => 'APE document correction',
+            'title' => 'Correct online document',
+            'action_label' => 'Review correction',
+            'description' => (string) ($document['verification_remarks'] ?? $document['remarks'] ?? 'This uploaded APE document needs correction.'),
+            'owner' => 'patient',
+            'priority' => 'urgent',
+            'status' => 'Needs Correction',
+            'source_type' => 'ape_document',
+            'source_id' => $documentId,
+            'source_url' => '../ape/document.php?id=' . $documentId,
+            'email_relevant' => true,
+            'email_event_type' => 'ape_document_correction_required',
+            'email_source_type' => 'ape',
+            'email_source_id' => $apeId,
+            'deduplication_key' => 'ape_document:' . $documentId . ':online_document_correction',
+        ]);
+    }
+
+    foreach ($requirements as $requirement) {
+        if (($requirement['status'] ?? '') !== 'Needs Correction') continue;
+        $requirementId = (int) ($requirement['requirement_id'] ?? 0);
+        $add($items, [
+            'action_type' => 'hard_copy_correction',
+            'label' => 'APE hard-copy correction',
+            'title' => 'Review hard-copy correction',
+            'action_label' => 'Review correction',
+            'description' => (string) ($requirement['remarks'] ?? 'This hard-copy requirement needs correction.'),
+            'owner' => 'patient',
+            'priority' => 'urgent',
+            'status' => 'Needs Correction',
+            'source_type' => 'ape_requirement',
+            'source_id' => $requirementId,
+            'source_url' => $sourceUrl,
+            'email_relevant' => true,
+            'email_event_type' => 'ape_hard_copy_correction_required',
+            'email_source_type' => 'ape',
+            'email_source_id' => $apeId,
+            'deduplication_key' => 'ape_requirement:' . $requirementId . ':hard_copy_correction',
+        ]);
+    }
+
+    $resultStatus = (string) ($record['result_status'] ?? '');
+    if ($resultStatus === 'Referred') {
+        $add($items, [
+            'action_type' => 'review_referral',
+            'label' => 'APE referral',
+            'title' => 'Review referral',
+            'action_label' => 'Review referral',
+            'description' => 'The examination created a referral that needs clinic review.',
+            'owner' => 'clinic',
+            'priority' => 'clinic_action',
+            'status' => 'Referred',
+            'source_type' => 'ape',
+            'source_id' => $apeId,
+        ]);
+    }
+
+    $followUpRequired = (int) ($record['follow_up_required'] ?? 0) === 1
+        || ($record['clearance_status'] ?? '') === 'For Follow-up';
+    if ($followUpRequired) {
+        $hasSubmittedFollowUp = (int) ($record['deferred_document_count'] ?? 0) > 0
+            || ($record['clearance_status'] ?? '') === 'Submitted';
+        $add($items, [
+            'action_type' => $hasSubmittedFollowUp
+                ? 'review_follow_up_documents'
+                : (($record['clearance_status'] ?? '') === 'Submitted' ? 'review_follow_up' : 'require_follow_up'),
+            'label' => 'APE follow-up',
+            'title' => $hasSubmittedFollowUp ? 'Review follow-up documents' : 'Review follow-up',
+            'action_label' => $hasSubmittedFollowUp
+                ? 'Review follow-up documents'
+                : (($record['clearance_status'] ?? '') === 'Submitted' ? 'Review follow-up' : 'Require follow-up'),
+            'description' => $hasSubmittedFollowUp
+                ? 'Follow-up documents were submitted and need clinic review.'
+                : 'The patient has an outstanding treatment, clearance, or referral follow-up requirement.',
+            'owner' => $hasSubmittedFollowUp || ($record['clearance_status'] ?? '') === 'Submitted' ? 'clinic' : 'patient',
+            'priority' => $hasSubmittedFollowUp || ($record['clearance_status'] ?? '') === 'Submitted' ? 'clinic_action' : 'urgent',
+            'status' => (string) ($record['clearance_status'] ?? 'For Follow-up'),
+            'due_at' => (string) ($record['follow_up_due_date'] ?? ''),
+            'email_relevant' => !$hasSubmittedFollowUp && ($record['clearance_status'] ?? '') !== 'Submitted',
+            'email_event_type' => $hasSubmittedFollowUp || ($record['clearance_status'] ?? '') === 'Submitted' ? '' : 'ape_follow_up_required',
+        ]);
+    }
+
+    if (!empty($record['exam_date'])) {
+        if (!$followUpRequired && ape_patient_progress($record)['active_step'] === 3 && ape_digital_submission_complete($record)) {
+            $add($items, [
+                'action_type' => 'record_final_decision',
+                'label' => 'APE final decision',
+                'title' => 'Record final decision',
+                'action_label' => 'Record final decision',
+                'description' => 'The examination and required documents are complete. Record the final clinical decision.',
+                'owner' => 'clinic',
+                'priority' => 'clinic_action',
+                'status' => 'Pending',
+            ]);
+        } elseif (!$followUpRequired && !ape_digital_submission_complete($record)) {
+            if ((int) ($record['required_unverified_count'] ?? 0) > 0) {
+                $add($items, [
+                    'action_type' => 'review_patient_upload',
+                    'label' => 'APE document review',
+                    'title' => 'Review patient uploads',
+                    'action_label' => 'Review uploaded documents',
+                    'description' => 'Submitted documents need clinic verification before they can be archived.',
+                    'owner' => 'clinic',
+                    'priority' => 'clinic_action',
+                    'status' => 'Pending',
+                ]);
+            } else {
+                $add($items, [
+                    'action_type' => 'wait_for_patient_upload',
+                    'label' => 'APE document upload',
+                    'title' => 'Wait for patient upload',
+                    'action_label' => 'Review patient uploads',
+                    'description' => 'The student still needs to complete the required regular APE documents.',
+                    'owner' => 'patient',
+                    'priority' => 'waiting_on_patient',
+                    'status' => 'Pending',
+                ]);
+            }
+        }
+        return array_values($items);
+    }
+
+    if (ape_examination_is_available($record)) {
+        $add($items, [
+            'action_type' => 'record_examination',
+            'label' => 'APE examination',
+            'title' => 'Record examination',
+            'action_label' => 'Record examination',
+            'description' => 'The assigned examination window is available for authorized clinic staff.',
+            'owner' => 'clinic',
+            'priority' => 'clinic_action',
+            'status' => 'Ready',
+        ]);
+    } elseif (empty($record['schedule_batch_id'])) {
+        $add($items, [
+            'action_type' => 'assign_schedule',
+            'label' => 'APE scheduling',
+            'title' => 'Assign APE schedule',
+            'action_label' => 'Assign APE schedule',
+            'description' => 'This patient does not have an assigned APE schedule.',
+            'owner' => 'clinic',
+            'priority' => 'clinic_action',
+            'status' => 'Unscheduled',
+        ]);
+    } elseif (!ape_initial_uploads_present($record)) {
+        $add($items, [
+            'action_type' => 'wait_for_patient_upload',
+            'label' => 'APE document upload',
+            'title' => 'Wait for patient upload',
+            'action_label' => 'Review patient uploads',
+            'description' => 'The student has not completed the required initial APE documents.',
+            'owner' => 'patient',
+            'priority' => 'waiting_on_patient',
+            'status' => 'Pending',
+        ]);
+    } elseif ((int) ($record['required_unverified_count'] ?? 0) > 0 || (int) ($record['initial_unverified_count'] ?? 0) > 0) {
+        $add($items, [
+            'action_type' => 'review_patient_upload',
+            'label' => 'APE document review',
+            'title' => 'Review patient uploads',
+            'action_label' => 'Review uploaded documents',
+            'description' => 'Patient uploads are ready for clinic review.',
+            'owner' => 'clinic',
+            'priority' => 'clinic_action',
+            'status' => 'Pending',
+        ]);
+    } else {
+        $add($items, [
+            'action_type' => 'wait_for_schedule',
+            'label' => 'APE scheduling',
+            'title' => 'Wait for assigned schedule',
+            'action_label' => 'Open APE record',
+            'description' => 'The patient has a scheduled APE batch that has not started yet.',
+            'owner' => 'shared',
+            'priority' => 'scheduled',
+            'status' => 'Scheduled',
+        ]);
+    }
+
+    return array_values($items);
 }
 
 function ape_record_stage_label(array $record): string

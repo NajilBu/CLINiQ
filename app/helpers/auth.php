@@ -6,15 +6,14 @@ require_once __DIR__ . '/../services/AuditLog.php';
 require_once __DIR__ . '/../services/ProfilePhoto.php';
 require_once __DIR__ . '/../services/SystemSettings.php';
 require_once __DIR__ . '/../helpers/mail.php';
+require_once __DIR__ . '/../services/PatientEmail.php';
 require_once __DIR__ . '/data_normalization.php';
 require_once __DIR__ . '/emergency_contact.php';
 
 if (session_status() === PHP_SESSION_NONE) {
-    $configuredAppUrl = (string) env_value('APP_URL', '');
     $forwardedProtocol = strtolower(trim(explode(',', (string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''))[0] ?? ''));
     $requestUsesHttps = (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off')
-        || $forwardedProtocol === 'https'
-        || str_starts_with(strtolower($configuredAppUrl), 'https://');
+        || $forwardedProtocol === 'https';
     $secureCookieSetting = strtolower((string) env_value('SESSION_SECURE_COOKIE', 'auto'));
     $secureCookie = $secureCookieSetting === 'true'
         || ($secureCookieSetting !== 'false' && $requestUsesHttps);
@@ -367,14 +366,17 @@ function complete_re_enrollment(string $enrollmentStatus, string $nonEnrollmentR
     ]);
     // Send a best-effort confirmation after the database transaction succeeds.
     try {
-        $emailStmt = auth_db()->prepare('SELECT a.email, p.first_name FROM accounts a INNER JOIN people p ON p.id = a.person_id WHERE a.id = ? LIMIT 1');
-        $emailStmt->execute([(int) $ctx['account_id']]);
-        $emailRow = $emailStmt->fetch();
-        if (!empty($emailRow['email'])) {
-            $clinic = clinic_profile_settings();
-            $body = cliniq_custom_email_body('Your enrollment information for ' . $academicYear . ' was confirmed. Updated year and section: Year ' . $yearLevel . ' - ' . $section . '. Your account is now active.', (string) ($clinic['system_name'] ?? 'CLINiQ Clinic'));
-            send_cliniq_email((string) $emailRow['email'], (string) ($emailRow['first_name'] ?? 'Student'), '[' . ($clinic['system_name'] ?? 'CLINiQ') . '] Enrollment information confirmed', $body);
-        }
+        $clinic = clinic_profile_settings();
+        patient_email_dispatch_event([
+            'patient_person_id' => (int) $ctx['person_id'],
+            'event_type' => 'enrollment_confirmation',
+            'origin' => 'system',
+            'source_type' => 'account',
+            'source_id' => (int) $ctx['account_id'],
+            'subject' => '[' . ($clinic['system_name'] ?? 'CLINiQ') . '] Enrollment information confirmed',
+            'message' => 'Your enrollment information for ' . $academicYear . ' was confirmed. Updated year and section: Year ' . $yearLevel . ' - ' . $section . '. Your account is now active.',
+            'deliver_now' => true,
+        ]);
     } catch (Throwable $mailException) {
         error_log('[CLINiQ Re-enrollment] Confirmation email failed: ' . $mailException->getMessage());
     }

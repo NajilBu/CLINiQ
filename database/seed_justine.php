@@ -6,7 +6,7 @@ if (PHP_SAPI !== 'cli') {
 }
 
 require_once __DIR__ . '/../app/config/database.php';
-require_once __DIR__ . '/../app/services/VisitWorkflow.php';
+require_once __DIR__ . '/../app/services/CliniqVisitWorkflow.php';
 require_once __DIR__ . '/../app/services/AlertWorkflow.php';
 
 $db = auth_db();

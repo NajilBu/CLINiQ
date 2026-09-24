@@ -81,6 +81,18 @@ if ($selectedBatchId !== null) {
 $_SESSION['ape_work_queue_state'] = $persistedApeState;
 
 $overallRecords = ape_fetch_records();
+$activeCycleId = (int) ($activeApeCycle['ape_cycle_id'] ?? 0);
+$clearanceComplianceRecords = $activeCycleId > 0
+    ? array_values(array_filter($overallRecords, static fn(array $record): bool => (int) ($record['ape_cycle_id'] ?? 0) === $activeCycleId))
+    : [];
+$clearanceComplianceCompleted = count(array_filter(
+    $clearanceComplianceRecords,
+    static fn(array $record): bool => ape_work_queue_stage($record) === 'completed'
+));
+$clearanceComplianceTotal = count($clearanceComplianceRecords);
+$clearanceComplianceRate = $clearanceComplianceTotal > 0
+    ? (int) round(($clearanceComplianceCompleted / $clearanceComplianceTotal) * 100)
+    : 0;
 $scopeRecords = ape_fetch_records($search, null, null, $selectedBatchId);
 $scopeRecords = array_values(array_filter($scopeRecords, static function (array $record) use ($populationScope): bool {
     $isClinicManual = ($record['entry_mode'] ?? '') === 'Clinic Manual';
@@ -109,7 +121,7 @@ $batchQuerySuffix = $populationScope === 'faculty_ntp'
 
 $recordsByQueue = array_fill_keys(array_keys($queues), []);
 foreach ($allRecords as $record) {
-    $recordsByQueue[ape_record_queue($record)][] = $record;
+    $recordsByQueue[ape_work_queue_stage($record)][] = $record;
 }
 
 $visibleQueues = $activeQueue === 'all'
@@ -160,8 +172,7 @@ if ($populationScope === 'students') {
 render_header('APE Work Queues');
 
 $apeDisplayName = trim((string) ($apeUser['name'] ?? '')) ?: 'Nurse';
-$apeHeaderActions = ''
-    . '<div class="bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-4 min-w-[140px]">'
+$apeHeaderActions = '<div class="bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-4 min-w-[140px]">'
     . '<span class="material-symbols-outlined text-slate-400 text-[28px]">group</span>'
     . '<div><p class="font-headline text-2xl font-extrabold text-[#17261d] leading-none mb-1">' . (int) $activePatients . '</p>'
     . '<p class="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">' . e($scopeCountLabel) . '</p></div></div>'
@@ -186,7 +197,13 @@ render_clinic_command_header(
 <details class="bg-red-50 border border-red-200 rounded-2xl mb-8 group" data-ape-persistent-details="attention">
     <summary class="px-5 py-4 text-red-700 flex items-center justify-between gap-3 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
         <span class="flex items-center gap-2"><span class="material-symbols-outlined text-[18px]">error</span><h2 class="font-headline font-extrabold text-sm m-0"><?= count($overdueRecords) ?> patient(s) need immediate attention</h2></span>
-        <span class="material-symbols-outlined text-[20px] transition-transform group-open:rotate-180">expand_more</span>
+        <span class="flex items-center gap-3">
+            <a href="../audit/index.php?tab=email#needs-attention" class="inline-flex items-center gap-2 rounded-lg bg-[#3f8155] px-3 py-2 text-xs font-extrabold text-white no-underline shadow-sm hover:bg-[#347047]" onclick="event.stopPropagation();">
+                <span class="material-symbols-outlined text-[16px]">mail</span>
+                Remind students
+            </a>
+            <span class="material-symbols-outlined text-[20px] transition-transform group-open:rotate-180">expand_more</span>
+        </span>
     </summary>
     <div class="divide-y divide-red-100/50">
         <?php foreach (array_slice($overdueRecords, 0, 5) as $rec): 
@@ -226,21 +243,22 @@ render_clinic_command_header(
 </details>
 <?php endif; ?>
 
-<section class="clinic-card p-6">
-    <form method="get">
-    <div class="flex flex-col gap-4 mb-5">
-        <div class="min-w-0">
+<section class="clinic-card p-6" data-filter-region="ape-work-queue" aria-live="polite">
+    <form method="get" data-table-filter="ape-work-queue" data-filter-region="ape-work-queue">
+    <div class="ape-work-queue-toolbar-shell mb-5">
+        <div class="ape-work-queue-heading min-w-0">
             <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Work Queue Map</h2>
             <p class="text-xs font-bold text-slate-500 mb-0"><?= e($scopeDescription) ?></p>
         </div>
-        <div class="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 w-full">
+        <div class="ape-work-queue-toolbar">
+            <div class="ape-work-queue-toolbar-actions">
             <?php if (in_array($apeUser['role'] ?? '', ['admin', 'doctor'], true)): ?>
-                <a href="scheduling.php" class="btn btn-outline w-full sm:w-auto justify-center text-decoration-none">
+                <a href="scheduling.php" class="btn btn-outline ape-work-queue-scheduling text-decoration-none">
                     <span class="material-symbols-outlined text-[18px]">calendar_month</span>
                     Manage Scheduling
                 </a>
             <?php endif; ?>
-            <div class="flex rounded-xl border border-outline-variant overflow-hidden w-full sm:w-auto" role="group" aria-label="APE population">
+            <div class="ape-work-queue-population flex rounded-xl border border-outline-variant overflow-hidden" role="group" aria-label="APE population">
                 <?php
                 $studentScopeQuery = ['queue' => $activeQueue, 'population' => 'students'];
                 if ($search !== '') $studentScopeQuery['q'] = $search;
@@ -252,7 +270,7 @@ render_clinic_command_header(
                 <a href="?<?= e(http_build_query($studentScopeQuery)) ?>" class="px-4 py-3 text-sm font-extrabold text-decoration-none whitespace-nowrap <?= $populationScope === 'students' ? 'bg-primary text-white' : 'bg-white text-slate-700 hover:bg-slate-50' ?>">Students</a>
                 <a href="?<?= e(http_build_query($employeeScopeQuery)) ?>" class="px-4 py-3 text-sm font-extrabold text-decoration-none whitespace-nowrap border-l border-outline-variant <?= $populationScope === 'faculty_ntp' ? 'bg-primary text-white' : 'bg-white text-slate-700 hover:bg-slate-50' ?>">Faculty &amp; NTP</a>
             </div>
-            <button type="button" onclick="showModal('apeBatchPickerModal')" class="w-full sm:w-auto min-h-12 px-4 py-2 rounded-xl border border-outline-variant bg-primary-fixed flex items-center gap-3 text-left hover:border-primary transition-colors" title="<?= e($selectedBatch !== null ? 'All queues are filtered to this batch. Choose another batch or Overall.' : 'Overall view includes records from every batch.') ?>">
+            <button type="button" onclick="showModal('apeBatchPickerModal')" class="ape-work-queue-batch min-h-12 px-4 py-2 rounded-xl border border-outline-variant bg-primary-fixed flex items-center gap-3 text-left hover:border-primary transition-colors" title="<?= e($selectedBatch !== null ? 'All queues are filtered to this batch. Choose another batch or Overall.' : 'Overall view includes records from every batch.') ?>">
                 <span class="material-symbols-outlined text-primary text-[20px]">event_available</span>
                 <div class="min-w-0">
                     <p class="text-[9px] font-black uppercase tracking-widest text-primary mb-0">Scheduled Batch</p>
@@ -260,7 +278,8 @@ render_clinic_command_header(
                 </div>
                 <span class="material-symbols-outlined text-primary text-[18px]">expand_more</span>
             </button>
-            <div class="search-input-wrap w-full sm:w-80">
+            </div>
+            <div class="ape-work-queue-search search-input-wrap">
                 <span class="search-icon material-symbols-outlined">search</span>
                 <input type="text" name="q" value="<?= e($search) ?>" placeholder="Search APE records..." class="search-input">
             </div>
@@ -286,6 +305,15 @@ render_clinic_command_header(
                 <p class="ape-queue-map-label"><?= e($queue['short_title'] ?? $queue['title']) ?></p>
             </a>
         <?php endforeach; ?>
+    </div>
+    <div class="mt-5 border-t border-slate-100 pt-5" aria-label="Overall active APE cycle clearance compliance">
+        <div class="mb-2 flex flex-wrap items-center justify-between gap-2 text-sm font-bold text-slate-700">
+            <span>Clearance compliance</span>
+            <span><?= $clearanceComplianceRate ?>% &bull; <?= $clearanceComplianceCompleted ?> of <?= $clearanceComplianceTotal ?> patient(s)</span>
+        </div>
+        <div class="h-3 overflow-hidden rounded-full bg-slate-200" role="progressbar" aria-label="Clearance compliance" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<?= $clearanceComplianceRate ?>">
+            <div class="h-full rounded-full bg-[#3f8256] transition-all duration-300" style="width: <?= $clearanceComplianceRate ?>%"></div>
+        </div>
     </div>
 </section>
 
@@ -322,14 +350,20 @@ render_clinic_command_header(
             $apeRows = [];
             foreach ($shownRecords as $rec) {
                 $fullName = trim($rec['first_name'] . ' ' . $rec['last_name']);
-                $next = ape_next_action($rec);
+                $normalizedActions = ape_normalized_action_items($rec);
+                $legacyNext = ape_next_action($rec);
+                $next = $normalizedActions[0] ?? [
+                    'title' => $legacyNext['label'],
+                    'action_label' => $legacyNext['label'],
+                    'description' => ape_missing_item($rec),
+                ];
                 $priority = ape_priority_badge($rec);
                 $hasBatch = !empty($rec['schedule_batch_id']) && ($rec['batch_status'] ?? '') !== 'Cancelled';
                 $scheduleSort = $hasBatch ? (string) $rec['batch_schedule_date'] . ' ' . (string) $rec['batch_start_time'] : '9999-12-31 23:59:59';
                 $scheduleHtml = $hasBatch
                     ? '<strong class="text-sm text-slate-800 block">' . e($rec['batch_name']) . '</strong><span class="text-xs font-bold text-slate-500">' . e(date('M j, Y', strtotime($rec['batch_schedule_date']))) . ' &bull; ' . e(date('g:i A', strtotime($rec['batch_start_time']))) . '–' . e(date('g:i A', strtotime($rec['batch_end_time']))) . '</span>'
                     : '<span class="badge badge-pending">Unscheduled</span>';
-                if (ape_record_queue($rec) === 'follow_up' && !empty($rec['follow_up_due_date'])) {
+                if (ape_work_queue_stage($rec) === 'follow_up' && !empty($rec['follow_up_due_date'])) {
                     $scheduleSort = $rec['follow_up_due_date'];
                     $scheduleHtml = '<strong class="text-sm text-slate-800 block">Return Date</strong><span class="text-xs font-bold text-slate-500">'
                         . e(date('M j, Y', strtotime($rec['follow_up_due_date']))) . '</span>';
@@ -344,8 +378,8 @@ render_clinic_command_header(
                     'programHtml' => '<p class="text-sm font-bold text-slate-700 mb-1">' . e($rec['course_section'] ?: 'No course set') . '</p><p class="text-xs font-bold text-slate-400 mb-0">' . e($rec['document_type'] ?: 'APE documents') . '</p>',
                     'waiting' => ape_waiting_label($rec),
                     'waitingSort' => ape_waiting_days($rec),
-                    'nextActionSort' => $next['label'],
-                    'nextActionHtml' => '<div class="flex items-center gap-2"><span class="material-symbols-outlined text-primary text-[18px]">' . e($next['icon']) . '</span><div><strong class="block text-sm text-slate-800">' . e($next['label']) . '</strong><span class="block text-xs font-bold text-slate-400">' . e(ape_missing_item($rec)) . '</span></div></div>',
+                    'nextActionSort' => (string) ($next['action_label'] ?? $next['title'] ?? ''),
+                    'nextActionHtml' => '<div class="flex items-center gap-2"><span class="material-symbols-outlined text-primary text-[18px]">task_alt</span><div><strong class="block text-sm text-slate-800">' . e((string) ($next['action_label'] ?? $next['title'] ?? 'Review APE record')) . '</strong><span class="block text-xs font-bold text-slate-400">' . e((string) ($next['description'] ?? ape_missing_item($rec))) . '</span></div></div>',
                 ];
                 if ($populationScope === 'students') {
                     $apeRows[array_key_last($apeRows)]['scheduleSort'] = $scheduleSort;

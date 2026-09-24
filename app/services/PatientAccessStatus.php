@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/AuditLog.php';
 require_once __DIR__ . '/PatientNotification.php';
+require_once __DIR__ . '/PatientEmail.php';
 
 function patient_access_statuses(): array
 {
@@ -75,6 +76,9 @@ function patient_access_status_set(
         'patient_access',
         $personId
     );
+    if ($status === 'Applicant') {
+        patient_email_queue_notification($personId, 'patient_access_restricted', 'access_restrictions', 'Your patient portal access changed', 'Your patient portal access is currently restricted while your clinic account is under Applicant review. Please contact the clinic if you need assistance.', 'patient_access', $personId, $actorPersonId, null, $status);
+    }
     audit_log_event(
         'accounts',
         $isOfficial ? 'patient_access_promoted' : 'patient_access_changed_to_applicant',

@@ -48,10 +48,12 @@ function cliniq_email_logo_mime_type(string $logoPath): ?string
 }
 
 /**
- * Send an HTML email via SMTP.
+ * Send an HTML email via SMTP and retain operational delivery details.
  * Config is read from the DB (mail_settings()) first; falls back to .env values.
+ *
+ * @return array{ok:bool,error:?string,provider_message_id:?string,smtp_code:?string}
  */
-function send_cliniq_email(string $toEmail, string $toName, string $subject, string $htmlBody): bool
+function send_cliniq_email_result(string $toEmail, string $toName, string $subject, string $htmlBody): array
 {
     // Prefer DB-stored settings; fall back to .env.
     $dbSettings  = mail_settings_configured() ? mail_settings() : [];
@@ -69,8 +71,9 @@ function send_cliniq_email(string $toEmail, string $toName, string $subject, str
         || trim((string) $pass) === ''
         || !filter_var($fromEmail, FILTER_VALIDATE_EMAIL)
     ) {
-        error_log('[CLINiQ Mail] Delivery skipped because the SMTP configuration is incomplete.');
-        return false;
+        $error = 'SMTP configuration is incomplete.';
+        error_log('[CLINiQ Mail] ' . $error);
+        return ['ok' => false, 'error' => $error, 'provider_message_id' => null, 'smtp_code' => null];
     }
 
     $mail = new PHPMailer(true);
@@ -111,11 +114,29 @@ function send_cliniq_email(string $toEmail, string $toName, string $subject, str
         );
 
         $mail->send();
-        return true;
+        return [
+            'ok' => true,
+            'error' => null,
+            'provider_message_id' => method_exists($mail, 'getLastMessageID') ? (string) $mail->getLastMessageID() : null,
+            'smtp_code' => null,
+        ];
     } catch (MailException $e) {
-        error_log('[CLINiQ Mail] Failed to send to ' . $toEmail . ': ' . $mail->ErrorInfo);
-        return false;
+        $error = trim((string) ($mail->ErrorInfo ?: $e->getMessage())) ?: 'SMTP delivery failed.';
+        error_log('[CLINiQ Mail] Failed to send to ' . $toEmail . ': ' . $error);
+        return ['ok' => false, 'error' => substr($error, 0, 500), 'provider_message_id' => null, 'smtp_code' => null];
+    } catch (Throwable $e) {
+        $error = trim($e->getMessage()) ?: 'SMTP delivery failed.';
+        error_log('[CLINiQ Mail] Failed to send to ' . $toEmail . ': ' . $error);
+        return ['ok' => false, 'error' => substr($error, 0, 500), 'provider_message_id' => null, 'smtp_code' => null];
     }
+}
+
+/**
+ * Backwards-compatible boolean mail helper for non-queue legacy callers.
+ */
+function send_cliniq_email(string $toEmail, string $toName, string $subject, string $htmlBody): bool
+{
+    return send_cliniq_email_result($toEmail, $toName, $subject, $htmlBody)['ok'];
 }
 
 function cliniq_custom_email_body(string $message, string $clinicName): string

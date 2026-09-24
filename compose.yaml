@@ -50,6 +50,20 @@ services:
     networks:
       - cliniq_internal
 
+  email-worker:
+    image: cliniq-app:latest
+    restart: unless-stopped
+    command: ["/var/www/html/scripts/email/worker.sh"]
+    env_file:
+      - docker/.env
+    environment:
+      MARIADB_ROOT_PASSWORD: ""
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - cliniq_internal
+
   restore-test:
     image: cliniq-app:latest
     profiles: ["maintenance"]

@@ -5,6 +5,7 @@ require_once __DIR__ . '/../../app/services/SystemSettings.php';
 require_once __DIR__ . '/../../app/services/RiskSettings.php';
 require_once __DIR__ . '/../../app/services/ApeCycleService.php';
 require_once __DIR__ . '/../../app/services/AuditLog.php';
+require_once __DIR__ . '/../../app/services/PatientEmail.php';
 require_once __DIR__ . '/../../app/services/BackupService.php';
 
 require_login();
@@ -494,21 +495,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             header('Location: index.php?tab=email');
             exit;
         }
-        require_once __DIR__ . '/../../app/helpers/mail.php';
         $toEmail = trim((string) ($_POST['test_email'] ?? ($user['email'] ?? '')));
         if (!filter_var($toEmail, FILTER_VALIDATE_EMAIL)) {
             flash_message('error', 'Enter a valid email address to send the test to.');
         } else {
             $profile = clinic_profile_settings();
-            $sent = send_cliniq_email(
-                $toEmail,
-                'CLINiQ Admin',
-                '[CLINiQ] SMTP Test Email',
-                cliniq_custom_email_body(
+            $emailId = patient_email_queue([
+                'queue_key' => 'patient_email',
+                'event_type' => 'smtp_test',
+                'origin' => 'manual',
+                'created_by_person_id' => $updatedBy,
+                'recipient_email' => $toEmail,
+                'recipient_name' => 'CLINiQ Admin',
+                'subject' => '[CLINiQ] SMTP Test Email',
+                'html_body' => cliniq_custom_email_body(
                     'Your CLINiQ SMTP configuration is working correctly. This is a test message.',
                     (string) ($profile['system_name'] ?? 'CLINiQ')
-                )
-            );
+                ),
+            ]);
+            $result = $emailId > 0 ? patient_email_process_queue('patient_email', 1, null, $emailId) : ['sent' => 0];
+            $sent = $emailId > 0 && (int) ($result['sent'] ?? 0) === 1;
+            audit_log_event('email', $sent ? 'email_smtp_test_sent' : 'email_smtp_test_failed', $updatedBy, 'staff', 'email', $emailId, ['recipient' => $toEmail], $sent ? 'success' : 'failure');
             if ($sent) {
                 flash_message('success', "Test email sent to {$toEmail}. Check the inbox.");
             } else {
@@ -560,19 +567,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new InvalidArgumentException('The selected accounts do not have valid email addresses.');
             }
 
-            require_once __DIR__ . '/../../app/helpers/mail.php';
             $profile = clinic_profile_settings();
             $body = cliniq_custom_email_body($message, (string) ($profile['system_name'] ?? 'CLINiQ'));
             $sentCount = 0;
             $failedCount = 0;
             foreach ($recipients as $recipient) {
                 try {
-                    $sent = send_cliniq_email(
-                        (string) $recipient['email'],
-                        (string) ($recipient['name'] ?: 'CLINiQ Recipient'),
-                        $subject,
-                        $body
-                    );
+                    $emailId = patient_email_queue([
+                        'queue_key' => 'patient_email',
+                        'event_type' => 'custom_account_email',
+                        'origin' => 'manual',
+                        'created_by_person_id' => $updatedBy,
+                        'source_type' => 'account',
+                        'source_id' => (int) $recipient['account_id'],
+                        'recipient_email' => $recipient['email'],
+                        'recipient_name' => (string) ($recipient['name'] ?: 'CLINiQ Recipient'),
+                        'subject' => $subject,
+                        'html_body' => $body,
+                    ]);
+                    $result = $emailId > 0 ? patient_email_process_queue('patient_email', 1, null, $emailId) : ['sent' => 0];
+                    $sent = $emailId > 0 && (int) ($result['sent'] ?? 0) === 1;
                 } catch (Throwable $e) {
                     error_log('[CLINiQ Mail] Custom email failed: ' . $e->getMessage());
                     $sent = false;
