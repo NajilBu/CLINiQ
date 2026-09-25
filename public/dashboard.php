@@ -81,7 +81,7 @@ appointment_sync_overdue_confirmations();
 // --- 1. Metrics & Analytics ---
 $metrics = [
     'visits_today' => (int) (cliniq_visit_db()->query("SELECT COUNT(*) AS total FROM visits WHERE DATE(visit_datetime) = CURDATE() AND TIME(visit_datetime) BETWEEN '08:00:00' AND '17:00:00'")->fetch()['total'] ?? 0),
-    'patients_in_clinic' => (int) (cliniq_visit_db()->query("SELECT COUNT(DISTINCT patient_person_id) AS total FROM visits WHERE DATE(visit_datetime) = CURDATE() AND TIME(visit_datetime) BETWEEN '08:00:00' AND '17:00:00' AND status IN ('Unaddressed', 'Active')")->fetch()['total'] ?? 0),
+    'patients_in_clinic' => (int) (cliniq_visit_db()->query("SELECT COUNT(*) AS total FROM visits WHERE DATE(visit_datetime) = CURDATE() AND TIME(visit_datetime) BETWEEN '08:00:00' AND '17:00:00' AND status IN ('Unaddressed', 'Active')")->fetch()['total'] ?? 0),
     'pending_alerts' => (int) (auth_db()->query("SELECT COUNT(*) AS total FROM nurse_alerts WHERE status = 'Pending'")->fetch()['total'] ?? 0),
     'low_stock' => (int) (cliniq_inventory_db()->query('SELECT COUNT(*) AS total FROM inventory_items WHERE is_active = 1 AND quantity <= reorder_level')->fetch()['total'] ?? 0),
     'appointment_requests' => (int) (appointment_db()->query("SELECT COUNT(*) AS total FROM appointments WHERE status IN ('Pending', 'For Confirmation')")->fetch()['total'] ?? 0),
@@ -271,8 +271,8 @@ $visitorLogs = cliniq_visit_db()->query("
     SELECT v.*, v.visit_id AS id, p.first_name, p.last_name, p.id_number,
            COALESCE(NULLIF(TRIM(CONCAT(pr.program_code, '-', s.year_level, UPPER(s.section))), ''), ed.department_code, 'Patient') AS course_section
     FROM visits v
-    JOIN patients pt ON pt.person_id = v.patient_person_id
-    JOIN people p ON p.id = pt.person_id
+    LEFT JOIN patients pt ON pt.person_id = v.patient_person_id
+    LEFT JOIN people p ON p.id = pt.person_id
     LEFT JOIN students s ON s.person_id = p.id
     LEFT JOIN programs pr ON pr.id = s.program_id
     LEFT JOIN school_employees se ON se.person_id = p.id
@@ -321,7 +321,9 @@ $visitorColumns = [
 ];
 $visitorRows = [];
 foreach ($visitorLogs as $visit) {
-    $fullName = trim($visit['first_name'] . ' ' . $visit['last_name']);
+    $fullName = trim((string) ($visit['first_name'] ?? '') . ' ' . (string) ($visit['last_name'] ?? ''));
+    $fullName = $fullName !== '' ? $fullName : (trim((string) ($visit['guest_name'] ?? '')) ?: 'Visitor / Guest');
+    $idLabel = trim((string) ($visit['id_number'] ?? '')) ?: 'No ID required';
     $visitStatus = $visit['status'] ?: 'Unaddressed';
     $dashboardVisitUrl = app_url('visits/view.php?id=' . (int) $visit['id'] . '&from=dashboard' . ($visitStatus === 'Unaddressed' ? '&begin=1' : ''));
     $visitorRows[] = [
@@ -332,8 +334,8 @@ foreach ($visitorLogs as $visit) {
         'addressedTime' => $visit['addressed_at'] ? date('h:i A', strtotime($visit['addressed_at'])) : '-',
         'completedSort' => $visit['completed_at'],
         'completedTime' => $visit['completed_at'] ? date('h:i A', strtotime($visit['completed_at'])) : '-',
-        'patientSort' => trim($visit['last_name'] . ' ' . $visit['first_name']),
-        'patientHtml' => '<div class="font-bold text-slate-800 text-sm">' . e($fullName) . '</div><div class="text-[10px] text-slate-400">' . e($visit['id_number']) . '</div>',
+        'patientSort' => $fullName,
+        'patientHtml' => '<div class="font-bold text-slate-800 text-sm">' . e($fullName) . '</div><div class="text-[10px] text-slate-400">' . e($idLabel) . '</div>',
         'complaint' => $visit['chief_complaint'],
         'statusHtml' => '<span class="badge ' . e(status_badge_class($visitStatus)) . ' text-[9px]">' . e($visitStatus) . '</span>',
         'statusSort' => array_search($visitStatus, ['Unaddressed', 'Active', 'Completed', 'Cancelled'], true),

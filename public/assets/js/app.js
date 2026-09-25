@@ -64,7 +64,7 @@ document.addEventListener('click', (event) => {
     if (!bridge || event.defaultPrevented || event.button !== 0) return;
 
     const link = event.target.closest('a[href]');
-    if (!link || link.hasAttribute('download')) return;
+    if (!link || link.hasAttribute('download') || link.matches('[data-internal-navigation]')) return;
 
     let targetUrl;
     try {

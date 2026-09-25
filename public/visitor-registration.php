@@ -18,6 +18,7 @@ $equipmentItems = cliniq_inventory_db()->query("
 ")->fetchAll();
 
 $form = [
+    'subject_type' => 'registered',
     'full_name' => '',
     'identifier' => '',
     'category' => '',
@@ -79,9 +80,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $form['identifier'] = normalize_id_number($form['identifier']);
+    $form['subject_type'] = ($form['subject_type'] ?? 'registered') === 'guest' ? 'guest' : 'registered';
+    $isGuest = $form['subject_type'] === 'guest';
 
     $isBorrowingEquipment = $form['reason'] === VISITOR_REASON_BORROW_EQUIPMENT;
-    $requiredFields = ['full_name', 'identifier', 'category', 'department', 'reason'];
+    $requiredFields = $isGuest ? ['reason'] : ['full_name', 'identifier', 'category', 'department', 'reason'];
     if (!$isBorrowingEquipment) {
         $requiredFields[] = 'chief_complaint';
     }
@@ -93,7 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $matchedPatient = null;
-    if ($form['identifier'] !== '') {
+    if (!$isGuest && $form['identifier'] !== '') {
         $matchedPatient = cliniq_visit_patient_by_id_number($form['identifier']);
         if ($matchedPatient) {
             $form['full_name'] = trim($matchedPatient['first_name'] . ' ' . $matchedPatient['last_name']);
@@ -108,16 +111,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    if ($form['category'] !== '' && !in_array($form['category'], $categoryOptions, true)) {
+    if (!$isGuest && $form['category'] !== '' && !in_array($form['category'], $categoryOptions, true)) {
         $errors['category'] = 'Select a valid category.';
     }
 
-    if (!is_valid_id_number($form['identifier'])) {
+    if (!$isGuest && !is_valid_id_number($form['identifier'])) {
         $errors['identifier'] = 'Use ' . ID_NUMBER_FORMAT_LABEL . '.';
     }
 
-    if (!$matchedPatient) {
+    if (!$isGuest && !$matchedPatient) {
         $errors['identifier'] = 'This ID number is not in the Cliniq_db patient list.';
+    }
+
+    if ($isGuest) {
+        $form['category'] = 'Visitor / Guest';
+        $form['department'] = '';
+        if ($isBorrowingEquipment) {
+            $errors['reason'] = 'Guest equipment loans require a registered patient ID.';
+        }
     }
 
     if ($isBorrowingEquipment) {
@@ -132,7 +143,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (!$errors) {
-        [$firstName, $lastName] = split_visitor_name($form['full_name']);
         if ($isBorrowingEquipment) {
             $db = cliniq_inventory_db();
             $borrowedQuantity = max(1, (int) $form['borrowed_quantity']);
@@ -207,7 +217,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$errors && !$success) {
         $patientConcern = trim((string) $form['chief_complaint']);
         cliniq_visit_create([
-            'patient_person_id' => (int) $matchedPatient['person_id'],
+            'patient_person_id' => $isGuest ? 0 : (int) $matchedPatient['person_id'],
+            'guest_name' => $isGuest ? $form['full_name'] : null,
             'chief_complaint' => mb_substr($patientConcern, 0, 255),
             'status' => 'Unaddressed',
             'visit_purpose' => normalize_visit_purpose($form['reason']),
@@ -565,19 +576,19 @@ $theme = active_cliniq_theme();
                             Thank you, <?= e($success['name']) ?>. <?= e($success['quantity'] . ' ' . $success['unit'] . ' of ' . $success['item']) ?> was recorded as borrowed at <?= e($success['time']) ?>.
                             Please return the item to the clinic when finished.
                         <?php else: ?>
-                            Thank you, <?= e($success['name']) ?>. Your clinic visit was recorded at <?= e($success['time']) ?>.
+                            <?= $success['name'] !== '' ? 'Thank you, ' . e($success['name']) . '. ' : 'Thank you. ' ?>Your clinic visit was recorded at <?= e($success['time']) ?>.
                             Please wait nearby and listen for your name to be called by the clinic staff.
                         <?php endif; ?>
                     </p>
                     <div class="inline-flex items-center gap-2 rounded-xl bg-slate-50 border border-slate-100 px-4 py-3 text-xs font-black text-slate-500 uppercase tracking-widest">
                         <span class="material-symbols-outlined text-primary text-[16px]">badge</span>
-                        <?= e($success['identifier']) ?>
+                        <?= $success['identifier'] !== '' ? e($success['identifier']) : 'Guest / Visitor' ?>
                     </div>
                     <p class="text-xs text-slate-400 mt-5 mb-0">
                         Your submission is saved. Use the button below to register another visit.
                     </p>
                     <div class="visit-success-actions">
-                        <a href="visitor-registration.php" class="visit-success-back-button btn btn-primary text-decoration-none">
+                        <a href="visitor-registration.php" data-internal-navigation class="visit-success-back-button btn btn-primary text-decoration-none">
                             <span class="material-symbols-outlined text-[18px]">arrow_back</span>
                             Back to form now
                         </a>
@@ -586,6 +597,7 @@ $theme = active_cliniq_theme();
             <?php else: ?>
                 <form method="post" class="visit-card-form space-y-4">
                     <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
+                    <input type="hidden" name="subject_type" id="subjectType" value="<?= e($form['subject_type']) ?>">
                     <?php if ($errors): ?>
                         <div class="rounded-xl bg-red-50 border border-red-100 text-red-700 px-4 py-3 text-sm font-bold">
                             Please complete the required fields before registering your visit.
@@ -594,10 +606,10 @@ $theme = active_cliniq_theme();
 
                     <div class="visit-form-grid grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-5">
                         <div>
-                            <label class="visit-label" for="identifier">ID Number</label>
+                            <div class="flex items-center justify-between gap-2"><label class="visit-label mb-0" for="identifier">ID Number</label><button type="button" class="btn btn-ghost text-xs min-h-0 px-3 py-1.5" id="guestVisitorButton"><span class="material-symbols-outlined text-[16px]">person_pin</span>Guest / Visitor</button></div>
                             <div class="visit-field">
                                 <span class="material-symbols-outlined">badge</span>
-                                <input class="visit-input <?= isset($errors['identifier']) ? 'input-error' : '' ?>" id="identifier" name="identifier" value="<?= e($form['identifier']) ?>" placeholder="Enter ID number" data-id-number-format autocomplete="off" required>
+                                <input class="visit-input <?= isset($errors['identifier']) ? 'input-error' : '' ?>" id="identifier" name="identifier" value="<?= e($form['identifier']) ?>" placeholder="Enter ID number" data-id-number-format autocomplete="off" <?= $form['subject_type'] === 'guest' ? 'disabled' : 'required' ?>>
                             </div>
                             <div id="visitorLookupStatus" class="visit-lookup-status">Type your ID to load the existing patient details from Cliniq_db.</div>
                         </div>
@@ -606,7 +618,7 @@ $theme = active_cliniq_theme();
                             <label class="visit-label" for="full_name">Full Name</label>
                             <div class="visit-field">
                                 <span class="material-symbols-outlined">person_outline</span>
-                                <input class="visit-input <?= isset($errors['full_name']) ? 'input-error' : '' ?>" id="full_name" name="full_name" value="<?= e($form['full_name']) ?>" placeholder="e.g. Juan dela Cruz" required>
+                                <input class="visit-input <?= isset($errors['full_name']) ? 'input-error' : '' ?>" id="full_name" name="full_name" value="<?= e($form['full_name']) ?>" placeholder="e.g. Juan dela Cruz" <?= $form['subject_type'] === 'guest' ? '' : 'required' ?>>
                             </div>
                         </div>
 
@@ -732,6 +744,8 @@ $theme = active_cliniq_theme();
 <script src="<?= app_url('assets/js/id-number-format.js?v=' . filemtime(__DIR__ . '/assets/js/id-number-format.js')) ?>"></script>
 <script>
     const identifier = document.getElementById('identifier');
+    const subjectType = document.getElementById('subjectType');
+    const guestVisitorButton = document.getElementById('guestVisitorButton');
     const fullName = document.getElementById('full_name');
     const category = document.getElementById('category');
     const reason = document.getElementById('reason');
@@ -749,6 +763,31 @@ $theme = active_cliniq_theme();
     const lookupStatus = document.getElementById('visitorLookupStatus');
     let visitorLookupSequence = 0;
     let visitorLookupTimer = null;
+
+    function syncGuestVisitorMode() {
+        const isGuest = subjectType?.value === 'guest';
+        if (identifier) {
+            identifier.disabled = isGuest;
+            identifier.required = !isGuest;
+            identifier.closest('div')?.classList.toggle('opacity-60', isGuest);
+        }
+        if (fullName) {
+            fullName.required = !isGuest;
+            fullName.placeholder = isGuest ? 'Optional guest name' : 'e.g. Juan dela Cruz';
+        }
+        if (category) category.value = isGuest ? 'Visitor / Guest' : '';
+        if (department) {
+            department.required = !isGuest;
+            department.disabled = isGuest;
+            department.value = isGuest ? '' : department.value;
+        }
+        if (guestVisitorButton) {
+            guestVisitorButton.textContent = isGuest ? 'Registered Patient' : 'Guest / Visitor';
+            guestVisitorButton.classList.toggle('btn-primary', isGuest);
+            guestVisitorButton.classList.toggle('btn-ghost', !isGuest);
+        }
+        if (lookupStatus) setVisitorLookupStatus(isGuest ? 'Guest / Visitor mode: ID number is not required.' : 'Type your ID number to load your registered details.');
+    }
 
     function setVisitorLookupStatus(message, state = '') {
         if (!lookupStatus) return;
@@ -896,6 +935,18 @@ $theme = active_cliniq_theme();
     borrowedQuantity?.addEventListener('input', syncBorrowEquipmentStatus);
     identifier?.addEventListener('input', scheduleVisitorPatientLookup);
     identifier?.addEventListener('change', syncVisitorPatientLookup);
+    guestVisitorButton?.addEventListener('click', () => {
+        subjectType.value = subjectType.value === 'guest' ? 'registered' : 'guest';
+        if (subjectType.value === 'guest') {
+            ++visitorLookupSequence;
+            window.clearTimeout(visitorLookupTimer);
+            identifier.value = '';
+            fullName.value = '';
+            department.value = '';
+        }
+        syncGuestVisitorMode();
+    });
+    syncGuestVisitorMode();
     syncStudentDetail();
     syncBorrowFlow();
     syncVisitorPatientLookup();

@@ -847,6 +847,19 @@ render_student_header('Dashboard', 'dashboard');
 </section>
 </details>
 
+<section class="student-card mt-4" aria-label="Clinic feedback">
+    <div class="student-card-pad flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+            <h2 class="student-card-title mb-1">Share your clinic experience</h2>
+            <p class="student-card-copy mb-0">Tell us how your recent clinic visit went.</p>
+        </div>
+        <a href="patient-feedback.php" class="student-button-secondary text-decoration-none">
+            Give feedback
+            <span class="material-symbols-outlined" aria-hidden="true">rate_review</span>
+        </a>
+    </div>
+</section>
+
 <section class="student-card student-dashboard-help mt-4" aria-labelledby="student-dashboard-help-title">
     <div class="student-card-pad student-dashboard-help-content">
         <span class="student-dashboard-help-icon material-symbols-outlined" aria-hidden="true">help</span>
