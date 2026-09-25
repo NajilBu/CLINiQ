@@ -70,7 +70,7 @@ try {
     $query = $db->prepare("SELECT f.service_type, COUNT(*) AS responses, {$averages} FROM clinic_feedback f WHERE {$where} GROUP BY f.service_type ORDER BY f.service_type");
     $query->execute($params);
     $groups = $query->fetchAll();
-    $query = $db->prepare("SELECT f.*, v.visit_datetime, v.visit_purpose, v.chief_complaint FROM clinic_feedback f JOIN visits v ON v.visit_id = f.visit_id WHERE {$where} ORDER BY f.submitted_at DESC, f.feedback_id DESC LIMIT 25 OFFSET {$offset}");
+    $query = $db->prepare("SELECT f.*, v.visit_datetime, v.visit_purpose, v.chief_complaint FROM clinic_feedback f LEFT JOIN visits v ON v.visit_id = f.visit_id WHERE {$where} ORDER BY f.submitted_at DESC, f.feedback_id DESC LIMIT 25 OFFSET {$offset}");
     $query->execute($params);
     $rows = $query->fetchAll();
 } catch (InvalidArgumentException $exception) {
@@ -124,8 +124,8 @@ render_header('Clinic Feedback');
             <?php if (!$rows): ?><div class="empty-state"><p class="empty-state-title">No student responses</p><p class="empty-state-text">Responses matching your filters will appear here.</p></div><?php endif; ?>
             <?php foreach ($rows as $row): ?>
                 <details class="feedback-response">
-                    <summary><strong><?= e($row['service_type'] === 'Other' ? 'Other: ' . $row['service_other'] : $row['service_type']) ?></strong><br><span class="feedback-muted">Submitted <?= e($row['submitted_at']) ?> · Overall <?= number_format((float) $row['overall'], 2) ?> · <?= e(clinic_feedback_tier((float) $row['overall'])) ?></span></summary>
-                    <p>Visit <?= (int) $row['visit_id'] ?> · <?= e($row['visit_datetime']) ?><br><strong>Reason for visit:</strong> <?= e($row['visit_purpose'] ?: 'Not recorded') ?><br><strong>Patient concern:</strong> <?= e($row['chief_complaint'] ?: 'Not recorded') ?><br><?= e($row['academic_term'] === 'Other' ? $row['term_other'] : $row['academic_term']) ?> · <?= e($row['year_level'] === 'Other' ? $row['year_other'] : $row['year_level']) ?> · <?= e($row['program']) ?></p>
+                    <summary><strong><?= e($row['service_type'] === 'Other' ? 'Other: ' . $row['service_other'] : $row['service_type']) ?></strong><br><span class="feedback-muted">Submitted <?= e($row['submitted_at']) ?> · Overall <?= number_format((float) $row['overall'], 2) ?> · <?= e(clinic_feedback_tier((float) $row['overall'])) ?> · <?= !empty($row['is_anonymous']) ? 'Anonymous' : 'Identified' ?></span></summary>
+                    <p><?= $row['visit_id'] ? 'Visit ' . (int) $row['visit_id'] . ' · ' . e($row['visit_datetime']) : 'General feedback (not linked to a visit)' ?><br><strong>Reason for visit:</strong> <?= e($row['visit_purpose'] ?: 'Not recorded') ?><br><strong>Patient concern:</strong> <?= e($row['chief_complaint'] ?: 'Not recorded') ?><br><?= e($row['academic_term'] === 'Other' ? $row['term_other'] : $row['academic_term']) ?> · <?= e($row['year_level'] === 'Other' ? $row['year_other'] : $row['year_level']) ?> · <?= e($row['program']) ?></p>
                     <h3>Written feedback</h3><p class="feedback-comment"><?= e($row['comments'] ?: 'No written feedback provided.') ?></p>
                     <?php $ratings = json_decode($row['ratings_json'], true) ?: []; foreach (clinic_feedback_sections() as $section => $questions): ?>
                         <h3><?= e($section) ?> · <?= number_format((float) $row[strtolower($section)], 2) ?></h3>
