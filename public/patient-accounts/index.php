@@ -153,6 +153,7 @@ render_clinic_command_header(
 
 ?>
 <div class="patient-accounts-page">
+    <a class="btn btn-primary mb-5" href="<?= e(app_url('patient-accounts/duplicates.php')) ?>">Review duplicates / Export</a>
     <section class="settings-panel">
         <div class="settings-panel-body">
 
