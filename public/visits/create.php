@@ -19,9 +19,13 @@ foreach ($patients as $patient) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
+        $subjectType = ($_POST['visit_subject_type'] ?? 'registered') === 'guest' ? 'guest' : 'registered';
         $postedStudentNumber = normalize_id_number(trim($_POST['id_number'] ?? ''));
         $patientId = 0;
-        if ($postedStudentNumber !== '') {
+        $guestName = null;
+        if ($subjectType === 'guest') {
+            $guestName = trim((string) ($_POST['guest_name'] ?? '')) ?: null;
+        } elseif ($postedStudentNumber !== '') {
             if (!is_valid_id_number($postedStudentNumber)) {
                 throw new InvalidArgumentException(id_number_validation_message());
             }
@@ -35,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        if ($patientId <= 0) {
+        if ($subjectType !== 'guest' && $patientId <= 0) {
             throw new InvalidArgumentException('Please enter a valid ID number before saving the visit.');
         }
 
@@ -50,6 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $dispensings = cliniq_inventory_dispensing_rows($_POST);
         $visitId = cliniq_visit_create([
             'patient_person_id' => $patientId,
+            'guest_name' => $guestName,
             'chief_complaint' => trim($_POST['chief_complaint'] ?? ''),
             'status' => 'Completed',
             'visit_purpose' => $purpose,
@@ -119,6 +124,13 @@ render_clinic_command_header(
                 Patient Information
             </h2>
             <div>
+                <label class="clinic-label" for="visitSubjectType">Visit For</label>
+                <select class="record-sheet-field px-4" id="visitSubjectType" name="visit_subject_type" required>
+                    <option value="registered">Registered Patient</option>
+                    <option value="guest">Visitor / Guest</option>
+                </select>
+            </div>
+            <div>
                 <label class="clinic-label" for="studentIdLookup">ID Number</label>
                 <input class="record-sheet-field px-4" id="studentIdLookup" name="id_number" list="studentIdOptions" placeholder="Enter ID number" value="<?= e($preselectedPatient['id_number'] ?? '') ?>" autocomplete="off" data-id-number-format required>
                 <input type="hidden" name="patient_id" id="patientIdInput" value="<?= $preselectedPatient ? (int) $preselectedPatient['id'] : '' ?>">
@@ -131,7 +143,8 @@ render_clinic_command_header(
                 <div id="patientLookupStatus" class="patient-lookup-status mt-2">Enter a ID number to load patient details.</div>
             </div>
             <div>
-                <label class="clinic-label">Patient Name</label>
+                <label class="clinic-label" for="patientNameDisplay">Patient / Guest Name</label>
+                <input type="hidden" name="guest_name" id="guestNameInput">
                 <input class="record-sheet-field px-4" id="patientNameDisplay" value="<?= $preselectedPatient ? e(trim($preselectedPatient['first_name'] . ' ' . $preselectedPatient['last_name'])) : 'Enter ID number' ?>" readonly>
             </div>
             <div>
@@ -367,6 +380,9 @@ const patientCourseDisplay = document.getElementById('patientCourseDisplay');
 const patientSexDisplay = document.getElementById('patientSexDisplay');
 const patientTypeDisplay = document.getElementById('patientTypeDisplay');
 const patientLookupStatus = document.getElementById('patientLookupStatus');
+const visitSubjectType = document.getElementById('visitSubjectType');
+const guestNameInput = document.getElementById('guestNameInput');
+const idField = document.getElementById('studentIdLookup');
 
 function normalizePatientId(value) {
     return window.CliniqIdNumber.format(value);
@@ -388,6 +404,17 @@ function clearPatientLookup(message = 'Enter a ID number to load patient details
 }
 
 function updatePatientLookup() {
+    if (visitSubjectType?.value === 'guest') {
+        patientIdInput.value = '';
+        patientNameDisplay.readOnly = false;
+        patientNameDisplay.value = guestNameInput.value;
+        patientCourseDisplay.value = 'Visitor / Guest';
+        patientSexDisplay.value = 'Not specified';
+        patientTypeDisplay.value = 'Visitor / Guest';
+        setLookupStatus('Guest visit: ID number is not required. Name is optional.');
+        return;
+    }
+    patientNameDisplay.readOnly = true;
     const formatted = normalizePatientId(studentIdLookup.value);
     if (studentIdLookup.value !== formatted) {
         studentIdLookup.value = formatted;
@@ -416,12 +443,38 @@ function updatePatientLookup() {
     setLookupStatus('Patient details loaded.', 'found');
 }
 
+function syncVisitSubjectType() {
+    const isGuest = visitSubjectType?.value === 'guest';
+    idField.required = !isGuest;
+    idField.disabled = isGuest;
+    idField.closest('div')?.classList.toggle('opacity-60', isGuest);
+    guestNameInput.value = isGuest && patientNameDisplay.value !== 'Enter ID number' ? patientNameDisplay.value : '';
+    patientNameDisplay.placeholder = isGuest ? 'Optional guest name' : '';
+    if (isGuest) {
+        patientNameDisplay.readOnly = false;
+        patientNameDisplay.value = guestNameInput.value;
+        updatePatientLookup();
+    } else {
+        patientNameDisplay.readOnly = true;
+        updatePatientLookup();
+    }
+}
+
 studentIdLookup?.addEventListener('input', updatePatientLookup);
 studentIdLookup?.addEventListener('change', updatePatientLookup);
+patientNameDisplay?.addEventListener('input', () => {
+    if (visitSubjectType?.value === 'guest') guestNameInput.value = patientNameDisplay.value;
+});
+visitSubjectType?.addEventListener('change', syncVisitSubjectType);
 updatePatientLookup();
+syncVisitSubjectType();
 
 document.getElementById('visitForm')?.addEventListener('submit', (event) => {
     updatePatientLookup();
+    if (visitSubjectType?.value === 'guest') {
+        guestNameInput.value = patientNameDisplay.value.trim();
+        return;
+    }
     if (!patientIdInput.value) {
         event.preventDefault();
         studentIdLookup.focus();

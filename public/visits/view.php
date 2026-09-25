@@ -230,7 +230,10 @@ $entryDispensings = cliniq_inventory_entry_dispensings(array_column($entries, 'i
 $medicineInventory = cliniq_inventory_available_medicines();
 $equipmentInventory = cliniq_inventory_db()->query("SELECT item_id AS id, item_name, quantity, unit FROM inventory_items WHERE item_type = 'Equipment' AND is_active = 1 ORDER BY item_name")->fetchAll();
 
-$fullName = trim($visit['first_name'] . ' ' . $visit['last_name']);
+$isGuestVisit = empty($visit['patient_id']);
+$fullName = trim((string) ($visit['first_name'] ?? '') . ' ' . (string) ($visit['last_name'] ?? ''));
+$fullName = $fullName !== '' ? $fullName : (trim((string) ($visit['guest_name'] ?? '')) ?: 'Visitor / Guest');
+$idLabel = trim((string) ($visit['id_number'] ?? '')) ?: 'No ID required';
 $status = $visit['status'] ?: 'Unaddressed';
 $isProfileMode = $entryPoint === 'profile';
 $showLogbookSheet = !$isProfileMode;
@@ -302,7 +305,7 @@ $disabledAttr = $isReadOnlyLogbook ? ' disabled' : '';
 $pageTitle = $canAddressFromLogbook ? 'Address Clinic Visit' : 'Visit Treatment';
 $patientProfileUrl = (int) ($visit['patient_id'] ?? 0) > 0
     ? app_url('patients/view.php?id=' . (int) $visit['patient_id'])
-    : app_url('patients/index.php');
+    : app_url('visits/index.php');
 $visitBackUrl = $isProfileMode ? $patientProfileUrl : ($entryPoint === 'dashboard' ? app_url('dashboard.php') : 'index.php');
 set_page_back_link($visitBackUrl, $isProfileMode ? 'Profile' : ($entryPoint === 'dashboard' ? 'Dashboard' : 'Logbook'));
 render_header($pageTitle);
@@ -1259,3 +1262,4 @@ exit;
 ?>
 <?php endif;
 ?>
+

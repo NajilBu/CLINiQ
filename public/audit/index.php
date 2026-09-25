@@ -8,7 +8,7 @@ require_once __DIR__ . '/../../app/services/ClinicWorkCenter.php';
 require_login();
 $user = current_user();
 $tab = ($_GET['tab'] ?? 'audit') === 'email' ? 'email' : 'audit';
-$emailRoles = ['admin', 'doctor', 'it_expert'];
+$emailRoles = ['admin', 'doctor', 'nurse'];
 if ($tab === 'audit' && ($user['role'] ?? '') !== 'admin') {
     http_response_code(403);
     exit('You are not authorized to view the audit log.');

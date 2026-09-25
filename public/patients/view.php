@@ -27,7 +27,7 @@ if (!$patient) {
 }
 
 $user = current_user() ?? [];
-$canEmailPatient = in_array($user['role'] ?? '', ['admin', 'doctor', 'it_expert'], true)
+$canEmailPatient = in_array($user['role'] ?? '', ['admin', 'doctor', 'nurse'], true)
     && filter_var(trim((string) ($patient['email'] ?? '')), FILTER_VALIDATE_EMAIL);
 $patientMailConfigured = mail_settings_configured();
 

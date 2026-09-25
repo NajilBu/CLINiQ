@@ -31,9 +31,9 @@ $buildWhere = function (bool $includeStatus = true) use ($filters): array {
     $params = [];
 
     if ($filters['q'] !== '') {
-        $where[] = "(p.first_name LIKE ? OR p.last_name LIKE ? OR p.id_number LIKE ? OR v.chief_complaint LIKE ? OR EXISTS (SELECT 1 FROM visit_entries se WHERE se.visit_id = v.visit_id AND se.symptoms LIKE ?) OR v.action_taken LIKE ? OR v.visit_purpose LIKE ? OR EXISTS (SELECT 1 FROM people attending WHERE attending.id = v.attended_by_person_id AND TRIM(CONCAT_WS(' ', attending.first_name, attending.middle_name, attending.last_name)) LIKE ?))";
+        $where[] = "(p.first_name LIKE ? OR p.last_name LIKE ? OR p.id_number LIKE ? OR v.guest_name LIKE ? OR v.chief_complaint LIKE ? OR EXISTS (SELECT 1 FROM visit_entries se WHERE se.visit_id = v.visit_id AND se.symptoms LIKE ?) OR v.action_taken LIKE ? OR v.visit_purpose LIKE ? OR EXISTS (SELECT 1 FROM people attending WHERE attending.id = v.attended_by_person_id AND TRIM(CONCAT_WS(' ', attending.first_name, attending.middle_name, attending.last_name)) LIKE ?))";
         $like = '%' . $filters['q'] . '%';
-        array_push($params, $like, $like, $like, $like, $like, $like, $like, $like);
+        array_push($params, $like, $like, $like, $like, $like, $like, $like, $like, $like);
     }
 
     if ($includeStatus && $filters['status'] !== 'all') {
@@ -66,7 +66,7 @@ $buildWhere = function (bool $includeStatus = true) use ($filters): array {
 
 [$whereSQL, $params] = $buildWhere();
 
-$countStmt = cliniq_visit_db()->prepare("SELECT COUNT(*) AS total FROM visits v JOIN people p ON p.id = v.patient_person_id WHERE {$whereSQL}");
+$countStmt = cliniq_visit_db()->prepare("SELECT COUNT(*) AS total FROM visits v LEFT JOIN people p ON p.id = v.patient_person_id WHERE {$whereSQL}");
 $countStmt->execute($params);
 $totalRows = (int) $countStmt->fetch()['total'];
 
@@ -75,8 +75,8 @@ $stmt = cliniq_visit_db()->prepare("
            COALESCE(NULLIF(TRIM(CONCAT(pr.program_code, '-', s.year_level, UPPER(s.section))), ''), ed.department_code, 'Patient') AS course_section,
            TRIM(CONCAT_WS(' ', au.first_name, au.middle_name, au.last_name)) AS attended_by_name
     FROM visits v
-    JOIN patients pt ON pt.person_id = v.patient_person_id
-    JOIN people p ON p.id = pt.person_id
+    LEFT JOIN patients pt ON pt.person_id = v.patient_person_id
+    LEFT JOIN people p ON p.id = pt.person_id
     LEFT JOIN students s ON s.person_id = p.id
     LEFT JOIN programs pr ON pr.id = s.program_id
     LEFT JOIN school_employees se ON se.person_id = p.id
@@ -99,7 +99,7 @@ $statusCounts = ['all' => 0, 'Unaddressed' => 0, 'Active' => 0, 'Completed' => 0
 $statusCountQuery = cliniq_visit_db()->prepare("
     SELECT v.status, COUNT(*) AS cnt
     FROM visits v
-    JOIN people p ON p.id = v.patient_person_id
+    LEFT JOIN people p ON p.id = v.patient_person_id
     WHERE {$statusWhereSQL}
     GROUP BY v.status
 ");
@@ -133,15 +133,17 @@ $visitColumns = [
 
 $visitRows = [];
 foreach ($visits as $visit) {
-    $fullName = trim($visit['first_name'] . ' ' . $visit['last_name']);
+    $fullName = trim((string) ($visit['first_name'] ?? '') . ' ' . (string) ($visit['last_name'] ?? ''));
+    $fullName = $fullName !== '' ? $fullName : (trim((string) ($visit['guest_name'] ?? '')) ?: 'Visitor / Guest');
+    $idLabel = trim((string) ($visit['id_number'] ?? '')) ?: 'No ID required';
     $visitStatus = $visit['status'] ?? 'Unaddressed';
 
     $visitRows[] = [
         'rowUrl' => app_url('visits/view.php?id=' . (int) $visit['id'] . '&from=logbook'),
         'dateTimeSort' => $visit['visit_datetime'],
         'dateTimeHtml' => '<p class="text-sm font-bold text-slate-700 mb-0">' . e(date('M d, Y', strtotime($visit['visit_datetime']))) . '</p><p class="text-xs font-bold text-slate-400 mb-0">' . e(date('g:i A', strtotime($visit['visit_datetime']))) . '</p>',
-        'patientSort' => trim($visit['last_name'] . ' ' . $visit['first_name']),
-        'patientHtml' => '<div class="flex items-center gap-3"><div class="avatar ' . e(avatar_color($fullName)) . '">' . e(initials($fullName)) . '</div><div><strong class="text-sm text-slate-800">' . e($fullName) . '</strong><div class="text-xs font-bold text-slate-400">' . e($visit['id_number']) . '</div></div></div>',
+        'patientSort' => $fullName,
+        'patientHtml' => '<div class="flex items-center gap-3"><div class="avatar ' . e(avatar_color($fullName)) . '">' . e(initials($fullName)) . '</div><div><strong class="text-sm text-slate-800">' . e($fullName) . '</strong><div class="text-xs font-bold text-slate-400">' . e($idLabel) . '</div></div></div>',
         'complaint' => $visit['chief_complaint'],
         'statusHtml' => '<span class="badge ' . e(visit_status_badge_class($visitStatus)) . '">' . e($visitStatus) . '</span>',
         'statusSort' => array_search($visitStatus, ['Unaddressed', 'Active', 'Completed', 'Cancelled'], true),

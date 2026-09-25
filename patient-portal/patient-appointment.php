@@ -240,12 +240,24 @@ render_student_header('Appointments', 'appointment');
                 <p class="appointment-privacy-note"><span class="material-symbols-outlined" aria-hidden="true">privacy_tip</span><span>Your appointment details are added to your clinic record. <a href="<?= student_e(student_legal_url('privacy')) ?>" target="_blank" rel="noopener" class="student-auth-link">Privacy Notice</a></span></p>
                 <p class="student-card-copy mt-2"><span class="material-symbols-outlined" aria-hidden="true">schedule</span> Appointments may begin up to 15 minutes late while the clinic prepares for the next patient.</p>
 
+                <div class="student-field mb-5">
+                    <label class="student-label" for="appt-type">1. Appointment Purpose</label>
+                    <select id="appt-type" name="appt_type" class="student-select" required>
+                        <option value="" disabled selected>Select appointment purpose first...</option>
+                        <?php foreach ($availableAppointmentPurposes as $purpose): ?>
+                            <option value="<?= student_e($purpose) ?>"><?= student_e($purpose) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <p class="student-card-copy mt-2 mb-0" id="appointment-purpose-hint">Choose a purpose to see the clinic dates and times available for that service.</p>
+                </div>
+
                 <div class="student-field" id="appointment-calendar-panel"
+                     hidden
                      data-availability="<?= student_e(json_encode($availabilityPayload, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)) ?>"
                      data-weekly-schedule="<?= student_e(json_encode($weeklySchedule, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)) ?>"
                      data-current-month="<?= student_e($month->format('Y-m')) ?>">
                     <div class="student-month-row">
-                        <label class="student-label mb-0">Preferred Date</label>
+                        <label class="student-label mb-0">2. Preferred Date</label>
                         <div class="student-month-nav">
                             <a href="?month=<?= student_e($prevMonth) ?>" aria-label="Previous month" data-appointment-month-link>
                                 <span class="material-symbols-outlined">chevron_left</span>
@@ -300,6 +312,7 @@ render_student_header('Appointments', 'appointment');
                             <button type="button"
                                     class="<?= student_e(implode(' ', $classes)) ?>"
                                     data-date="<?= student_e($date) ?>"
+                                    data-base-disabled="<?= $disabled ? 'true' : 'false' ?>"
                                     aria-controls="time-selection-panel"
                                     aria-expanded="false"
                                     <?= $disabled ? 'disabled' : '' ?>>
@@ -327,16 +340,6 @@ render_student_header('Appointments', 'appointment');
                         <div><p>Appointment details</p><strong>Finish your request</strong></div>
                         <button type="button" data-close-booking-sheet aria-label="Close appointment details"><span class="material-symbols-outlined">close</span></button>
                     </div>
-                <div class="student-field">
-                    <label class="student-label" for="appt-type">Appointment Purpose</label>
-                    <select id="appt-type" name="appt_type" class="student-select" required>
-                        <option value="" disabled selected>Select appointment purpose...</option>
-                        <?php foreach ($availableAppointmentPurposes as $purpose): ?>
-                            <option value="<?= student_e($purpose) ?>"><?= student_e($purpose) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-
                 <div class="student-field student-selected-schedule" id="selected-schedule-summary" hidden aria-live="polite">
                     <span class="student-icon-box">
                         <span class="material-symbols-outlined">event_available</span>
@@ -539,6 +542,8 @@ render_student_header('Appointments', 'appointment');
     const selectedScheduleSummary = document.getElementById('selected-schedule-summary');
     const selectedScheduleText = document.getElementById('selected-schedule-text');
     const bookingSheet = document.getElementById('appointment-booking-sheet');
+    const purposeSelect = document.getElementById('appt-type');
+    const purposeHint = document.getElementById('appointment-purpose-hint');
     const mobileBookingSheet = window.matchMedia('(max-width: 640px)').matches;
     const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
 
@@ -571,10 +576,9 @@ render_student_header('Appointments', 'appointment');
             const isReserved = reservedTimes.includes(slot.dataset.time);
             const medicalReserved = !allowedPurposes.includes('Medical Consult') || (reservedByPurpose['Medical Consult'] || []).includes(slot.dataset.time);
             const dentalReserved = !allowedPurposes.includes('Dental') || (reservedByPurpose['Dental'] || []).includes(slot.dataset.time);
-            const purposeAvailable = !medicalReserved || !dentalReserved;
             const isApeBlocked = apeTimes.includes(slot.dataset.time);
             const patientHasTime = patientTimes.includes(slot.dataset.time);
-            const isUnavailable = !isWithinHours || isClinicBlocked || isApeBlocked || !purposeAvailable || patientHasTime;
+            const isUnavailable = !purpose || !isWithinHours || isClinicBlocked || isApeBlocked || isReserved || patientHasTime;
             slot.hidden = !isWithinHours;
             slot.classList.toggle('disabled', isUnavailable);
             slot.classList.toggle('is-blocked', isClinicBlocked || isApeBlocked);
@@ -589,16 +593,16 @@ render_student_header('Appointments', 'appointment');
                 ? 'You already have an appointment at this time'
                 : (isApeBlocked
                     ? 'Reserved for APE examinations'
-                    : (!purposeAvailable
-                        ? 'Both appointment purposes are reserved'
+                    : (isReserved
+                        ? 'Reserved for this purpose'
                         : (isClinicBlocked ? 'This time is unavailable' : ''))));
-            slot.querySelector('.student-calendar-time-status').textContent = patientHasTime
-                ? 'Your appointment'
-                : (isApeBlocked
-                    ? 'APE Examination'
-                    : (!purposeAvailable
-                        ? 'Reserved'
-                        : (isClinicBlocked ? 'Unavailable' : purposeStatus)));
+            slot.querySelector('.student-calendar-time-status').textContent = !purpose
+                ? 'Select purpose'
+                : (patientHasTime
+                    ? 'Your appointment'
+                    : (isApeBlocked
+                        ? 'APE Examination'
+                        : (isReserved ? 'Reserved for this purpose' : (isClinicBlocked ? 'Unavailable' : purposeStatus))));
 
             if (isUnavailable && slot.classList.contains('selected')) {
                 slot.classList.remove('selected');
@@ -606,6 +610,38 @@ render_student_header('Appointments', 'appointment');
             }
         });
         syncPurposeOptions(date, timeInput.value);
+    }
+
+    function applyPurposeToCalendar() {
+        const purpose = purposeSelect?.value || '';
+        const currentCalendarPanel = document.getElementById('appointment-calendar-panel');
+        if (currentCalendarPanel) currentCalendarPanel.hidden = !purpose;
+        if (purposeHint) purposeHint.textContent = purpose
+            ? `Showing clinic availability for ${purpose}.`
+            : 'Choose a purpose to see the clinic dates and times available for that service.';
+        if (!purpose) return;
+        document.querySelectorAll('.student-date-btn').forEach((button) => {
+            const date = button.dataset.date || '';
+            const data = availability[date] || {};
+            const blocked = data.blockedTimes || [];
+            const reserved = (data.reservedTimesByPurpose || {})[purpose] || [];
+            const ape = data.apeTimes || [];
+            const patientTimesForDate = data.patientTimes || [];
+            const [year, month, day] = date.split('-').map(Number);
+            const weekday = new Date(year, month - 1, day).getDay() || 7;
+            const hours = weeklySchedule[weekday];
+            const hasOpenPurposeSlot = <?= json_encode($allowedTimes) ?>.some((value) => {
+                const start = value.slice(0, 5);
+                const end = String(Number(start.slice(0, 2)) + 1).padStart(2, '0') + ':00';
+                return Boolean(hours?.enabled) && start >= hours.start && end <= hours.end
+                    && !blocked.includes(value) && !ape.includes(value)
+                    && !reserved.includes(value) && !patientTimesForDate.includes(value);
+            });
+            const disabled = button.dataset.baseDisabled === 'true' || !hasOpenPurposeSlot;
+            button.disabled = disabled;
+            button.classList.toggle('disabled', disabled);
+            button.classList.toggle('available', !disabled);
+        });
     }
 
     function syncPurposeOptions(date, time) {
@@ -687,6 +723,15 @@ render_student_header('Appointments', 'appointment');
         });
     }
     bindCalendarButtons();
+    purposeSelect?.addEventListener('change', () => {
+        dateInput.value = '';
+        timeInput.value = '';
+        selectedScheduleSummary.hidden = true;
+        closeTimeModal();
+        closeBookingSheet();
+        applyPurposeToCalendar();
+    });
+    applyPurposeToCalendar();
 
     let monthLoadController = null;
     document.addEventListener('click', async (event) => {
@@ -724,6 +769,7 @@ render_student_header('Appointments', 'appointment');
             closeTimeModal();
             closeBookingSheet();
             bindCalendarButtons();
+            applyPurposeToCalendar();
             history.pushState({ appointmentMonth: replacement.dataset.currentMonth }, '', link.href);
             replacement.querySelector('[data-appointment-calendar-status]').textContent = '';
         } catch (error) {

@@ -7,7 +7,7 @@ require_login();
 ensure_ape_cycle_schema();
 
 $user = current_user() ?? [];
-$canManageApeSchedules = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
+$canManageApeSchedules = ($user['role'] ?? '') === 'admin';
 if (!$canManageApeSchedules) {
     flash_message('error', 'Only administrators and doctors can manage APE scheduling.');
     header('Location: index.php');

@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/ClinicFeedback.php';
 require_login();
-if (!in_array(current_user()['role'] ?? '', ['admin', 'doctor'], true)) {
+if (!in_array(current_user()['role'] ?? '', ['admin', 'doctor', 'nurse'], true)) {
     http_response_code(403);
     exit('Only clinic administrators and doctors can view feedback.');
 }

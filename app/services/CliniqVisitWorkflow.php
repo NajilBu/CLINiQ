@@ -336,7 +336,12 @@ function cliniq_visit_create(array $visit, array $entry = [], array $vitals = []
 {
     $db = cliniq_visit_db();
     $patientPersonId = (int) ($visit['patient_person_id'] ?? 0);
-    if ($patientPersonId < 1 || !cliniq_visit_patient_exists($patientPersonId)) {
+    $patientPersonId = $patientPersonId > 0 ? $patientPersonId : null;
+    $guestName = trim((string) ($visit['guest_name'] ?? '')) ?: null;
+    if ($patientPersonId === null && !array_key_exists('guest_name', $visit)) {
+        throw new InvalidArgumentException('Select a patient that exists in Cliniq_db.');
+    }
+    if ($patientPersonId !== null && !cliniq_visit_patient_exists($patientPersonId)) {
         throw new InvalidArgumentException('Select a patient that exists in Cliniq_db.');
     }
 
@@ -357,14 +362,15 @@ function cliniq_visit_create(array $visit, array $entry = [], array $vitals = []
         $db->beginTransaction();
         $stmt = $db->prepare('
             INSERT INTO visits (
-                patient_person_id, visit_datetime, addressed_at, completed_at,
+                patient_person_id, guest_name, visit_datetime, addressed_at, completed_at,
                 chief_complaint, status,
                 visit_purpose, visit_source, action_taken,
                 recorded_by_person_id, attended_by_person_id
-            ) VALUES (?, COALESCE(?, NOW()), IF(?, NOW(), NULL), IF(?, NOW(), NULL), ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, COALESCE(?, NOW()), IF(?, NOW(), NULL), IF(?, NOW(), NULL), ?, ?, ?, ?, ?, ?, ?)
         ');
         $stmt->execute([
             $patientPersonId,
+            $guestName,
             ($visit['visit_datetime'] ?? null) ?: null,
             $markAddressed ? 1 : 0,
             $markCompleted ? 1 : 0,
@@ -391,11 +397,13 @@ function cliniq_visit_create(array $visit, array $entry = [], array $vitals = []
         $db->commit();
         if ($status === 'Completed') {
             try {
-                patient_notification_for_feedback_required($db, [
-                    'patient_id' => $patientPersonId,
-                    'visit_id' => $visitId,
-                    'visit_purpose' => $visitPurpose,
-                ], $staffId);
+                if ($patientPersonId !== null) {
+                    patient_notification_for_feedback_required($db, [
+                        'patient_id' => $patientPersonId,
+                        'visit_id' => $visitId,
+                        'visit_purpose' => $visitPurpose,
+                    ], $staffId);
+                }
             } catch (Throwable $notificationError) {
                 error_log('Unable to create completed-visit feedback notification: ' . $notificationError->getMessage());
             }
@@ -403,6 +411,7 @@ function cliniq_visit_create(array $visit, array $entry = [], array $vitals = []
         $auditActorId = !empty($visit['recorded_by_person_id']) ? (int) $visit['recorded_by_person_id'] : $staffId;
         audit_log_event('visits', 'visit_created', $auditActorId, 'staff', 'visit', $visitId, [
             'patient_person_id' => $patientPersonId,
+            'guest_name' => $guestName,
             'attended_by_person_id' => $staffId,
             'source' => $visit['visit_source'] ?? 'Staff Recorded',
         ]);
@@ -421,6 +430,7 @@ function cliniq_visit_fetch(int $visitId): ?array
         SELECT
             v.visit_id AS id,
             v.patient_person_id AS patient_id,
+            v.guest_name,
             v.visit_datetime,
             v.chief_complaint,
             le.symptoms,
@@ -457,8 +467,8 @@ function cliniq_visit_fetch(int $visitId): ?array
             TRIM(CONCAT_WS(' ', rp.first_name, rp.middle_name, rp.last_name)) AS recorded_by_name,
             TRIM(CONCAT_WS(' ', ap.first_name, ap.middle_name, ap.last_name)) AS attended_by_name
         FROM visits v
-        JOIN patients pt ON pt.person_id = v.patient_person_id
-        JOIN people pe ON pe.id = pt.person_id
+        LEFT JOIN patients pt ON pt.person_id = v.patient_person_id
+        LEFT JOIN people pe ON pe.id = pt.person_id
         LEFT JOIN students s ON s.person_id = pe.id
         LEFT JOIN programs pr ON pr.id = s.program_id
         LEFT JOIN school_employees se ON se.person_id = pe.id

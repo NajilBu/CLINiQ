@@ -11,7 +11,7 @@ require_once __DIR__ . '/AccountValidation.php';
 
 function can_manage_patient_accounts(?array $user): bool
 {
-    return in_array($user['role'] ?? '', ['admin', 'doctor'], true);
+    return ($user['role'] ?? '') === 'admin';
 }
 
 function patient_account_type(string $value): string

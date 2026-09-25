@@ -122,7 +122,7 @@ function render_ape_final_decision_actions(array $record, bool $canRecordApeExam
 $record = fetch_ape_record($id);
 $apeUser = current_user() ?? [];
 $canRecordApeExam = in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor', 'nurse'], true);
-$canUploadApeDocument = in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor', 'nurse', 'staff', 'it_expert'], true);
+$canUploadApeDocument = in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor', 'nurse'], true);
 
 if (!$record) {
     flash_message('error', 'APE record not found.');

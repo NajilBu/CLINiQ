@@ -13,11 +13,13 @@ ensure_system_settings_schema();
 ensure_dropdown_options_schema();
 
 $user = current_user() ?? [];
-$canManageSettings = in_array($user['role'] ?? '', ['admin', 'doctor', 'it_expert'], true);
+$canManageSettings = in_array($user['role'] ?? '', ['admin', 'doctor', 'nurse'], true);
+$canManageAdminSettings = ($user['role'] ?? '') === 'admin';
+$canManageEmailSettings = ($user['role'] ?? '') === 'admin';
 $canManageBackups = ($user['role'] ?? '') === 'admin';
-$canManageStaffProfiles = in_array($user['role'] ?? '', ['admin', 'doctor', 'it_expert'], true);
-$canManagePatientAccounts = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
-$canManageApeCycles = in_array($user['role'] ?? '', ['admin', 'doctor'], true);
+$canManageStaffProfiles = ($user['role'] ?? '') === 'admin';
+$canManagePatientAccounts = ($user['role'] ?? '') === 'admin';
+$canManageApeCycles = ($user['role'] ?? '') === 'admin';
 $dropdownCategoryLabels = [
     'students' => 'Students & Visitors',
     'visits' => 'Clinic Visits',
@@ -124,7 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'save_legal_documents') {
-        if (!$canManageSettings) {
+        if (!$canManageAdminSettings) {
             flash_message('error', 'You do not have permission to update the Terms of Use or Privacy Notice.');
             header('Location: index.php?tab=general');
             exit;
@@ -329,7 +331,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (in_array($action, ['run_backup', 'verify_backup', 'run_semester_backup'], true)) {
-        if (!$canManageSettings) {
+        if (!$canManageBackups) {
             flash_message('error', 'Only authorized clinic administrators can manage system backups.');
             header('Location: index.php?tab=backup');
             exit;
@@ -452,8 +454,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'save_mail_settings') {
-        if (!$canManageSettings) {
-            flash_message('error', 'Only administrators, doctors, or IT experts can update mail settings.');
+        if (!$canManageEmailSettings) {
+            flash_message('error', 'Only administrators can update mail settings.');
             header('Location: index.php?tab=email');
             exit;
         }
@@ -468,8 +470,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'save_mail_template' || $action === 'reset_mail_template') {
-        if (!$canManageSettings) {
-            flash_message('error', 'Only administrators, doctors, or IT experts can update email notification formats.');
+        if (!$canManageEmailSettings) {
+            flash_message('error', 'Only administrators can update email notification formats.');
             header('Location: index.php?tab=email');
             exit;
         }
@@ -490,8 +492,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'send_test_email') {
-        if (!$canManageSettings) {
-            flash_message('error', 'Only administrators, doctors, or IT experts can send test emails.');
+        if (!$canManageEmailSettings) {
+            flash_message('error', 'Only administrators can send test emails.');
             header('Location: index.php?tab=email');
             exit;
         }
@@ -527,8 +529,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'send_custom_email') {
-        if (!$canManageSettings) {
-            flash_message('error', 'Only administrators, doctors, or IT experts can send custom emails.');
+        if (!$canManageEmailSettings) {
+            flash_message('error', 'Only administrators can send custom emails.');
             header('Location: index.php?tab=email');
             exit;
         }
@@ -764,7 +766,7 @@ render_clinic_command_header(
 
 <?php if (!$canManageSettings): ?>
     <div class="rounded-2xl bg-red-50 border border-red-100 text-red-700 px-5 py-4 font-bold">
-        Clinic configuration can be changed only by administrators, doctors, or IT experts. You can still update your own password.
+        Clinic configuration can be changed only by administrators. You can still update your own password.
     </div>
 <?php endif; ?>
 

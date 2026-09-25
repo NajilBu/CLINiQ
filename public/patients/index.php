@@ -109,7 +109,7 @@ render_header('Patients');
     'Patient Registry',
     'Patients',
     $totalRows . ' registered patient(s) in Cliniq_db. Staff profiles contain private health data.',
-    in_array($user['role'] ?? '', ['admin', 'doctor'], true)
+    ($user['role'] ?? '') === 'admin'
         ? '<a href="' . e(app_url('patient-accounts/index.php')) . '" class="btn btn-primary text-decoration-none"><span class="material-symbols-outlined">manage_accounts</span> Patient Accounts</a>'
         : ''
 ); ?>

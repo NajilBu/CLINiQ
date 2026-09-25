@@ -95,15 +95,13 @@ function staff_profile_roles(): array
     return [
         'doctor' => 'Doctor',
         'nurse' => 'Nurse',
-        'staff' => 'Clinic Staff',
         'admin' => 'Administrator',
-        'it_expert' => 'IT Expert',
     ];
 }
 
 function normalize_staff_profile_role(string $role): string
 {
-    return array_key_exists($role, staff_profile_roles()) ? $role : 'staff';
+    return array_key_exists($role, staff_profile_roles()) ? $role : 'nurse';
 }
 
 function staff_profiles(): array
@@ -124,7 +122,7 @@ function staff_profiles(): array
         FROM clinic_staff cs
         JOIN people pe ON pe.id = cs.person_id
         JOIN accounts a ON a.person_id = pe.id
-        ORDER BY FIELD(cs.staff_role, "doctor", "nurse", "staff", "admin", "it_expert"), pe.last_name, pe.first_name, pe.id_number
+        ORDER BY FIELD(cs.staff_role, "doctor", "nurse", "admin"), pe.last_name, pe.first_name, pe.id_number
     ')->fetchAll();
 }
 

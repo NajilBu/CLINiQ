@@ -28,9 +28,11 @@ $lowStockKeys = array_fill_keys(array_keys(array_filter($medicineStockGroups, fn
 $expiring = array_values(array_filter($medicineItems, fn(array $item): bool => $item['expiration_date'] && strtotime($item['expiration_date']) <= strtotime('+30 days')));
 $outOfStock = array_values(array_filter($medicineItems, fn(array $item): bool => (int) $item['quantity'] === 0));
 $medicineRestockOptions = [];
+$equipmentRestockOptions = [];
 foreach ($activeItems as $item) {
     $category = (string) ($item['category'] ?? '');
     if (str_contains(strtolower($category), 'equipment')) {
+        $equipmentRestockOptions[(int) $item['id']] = $item;
         continue;
     }
 
@@ -374,7 +376,7 @@ render_clinic_command_header(
     'Medicines',
     'Inventory & Tracking',
     'Manage clinic medicines, expiring stock, equipment loans, and archived records.',
-    '<button onclick="openAddMedicineModal()" class="btn btn-primary justify-center"><span class="material-symbols-outlined text-[20px]">medication</span>+ Medicine</button><button onclick="showModal(\'addEquipmentModal\')" class="btn btn-outline justify-center"><span class="material-symbols-outlined text-[20px]">medical_services</span>+ Equipment</button>'
+    '<button onclick="openAddMedicineModal()" class="btn btn-primary justify-center"><span class="material-symbols-outlined text-[20px]">medication</span>+ Medicine</button><button onclick="showModal(\'addEquipmentModal\')" class="btn btn-outline justify-center"><span class="material-symbols-outlined text-[20px]">medical_services</span>+ Equipment</button><button onclick="showModal(\'inventoryImportModal\')" class="btn btn-outline justify-center"><span class="material-symbols-outlined text-[20px]">upload_file</span>Import Excel</button>'
 );
 ?>
 
@@ -793,34 +795,35 @@ render_clinic_command_header(
                 Restock Existing
             </button>
         </div>
-        <form method="post" action="create.php" data-inventory-form>
+        <form method="post" action="create.php" data-inventory-form data-inventory-draft="inventory-medicine-new">
             <input type="hidden" name="category" value="Medicine">
-            <div data-medicine-panel="new" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div data-medicine-panel="new" data-inventory-row class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                     <label class="clinic-label">Item Name</label>
-                    <input class="clinic-input" name="item_name" required placeholder="e.g. Paracetamol 500mg">
+                    <input class="clinic-input" name="item_name[]" required placeholder="e.g. Paracetamol 500mg">
                 </div>
                 <div class="md:col-span-2">
                     <label class="clinic-label">Description</label>
-                    <input class="clinic-input" name="description" placeholder="Optional medicine description">
+                    <input class="clinic-input" name="description[]" placeholder="Optional medicine description">
                 </div>
                 <div>
                     <label class="clinic-label">Unit</label>
-                    <input class="clinic-input" name="unit" value="pcs" required placeholder="e.g. Tablets, Capsules">
+                    <input class="clinic-input" name="unit[]" value="pcs" required placeholder="e.g. Tablets, Capsules">
                 </div>
                 <div>
                     <label class="clinic-label">Quantity</label>
-                    <input class="clinic-input" name="quantity" type="number" min="0" required value="0">
+                    <input class="clinic-input" name="quantity[]" type="number" min="0" required value="0">
                 </div>
                 <div>
                     <label class="clinic-label">Reorder Level</label>
-                    <input class="clinic-input" name="reorder_level" type="number" min="0" required value="10">
+                    <input class="clinic-input" name="reorder_level[]" type="number" min="0" required value="10">
                 </div>
                 <div class="md:col-span-2">
                     <label class="clinic-label">Expiration Date</label>
-                    <input class="clinic-input" name="expiration_date" type="date">
+                    <input class="clinic-input" name="expiration_date[]" type="date">
                 </div>
             </div>
+            <button type="button" class="btn btn-outline mt-4" data-add-inventory-row="new-medicine"><span class="material-symbols-outlined text-[18px]">add</span>Add another medicine</button>
             <div class="mt-6 flex justify-end gap-3">
                 <button type="button" onclick="closeModal('addMedicineModal')" class="btn btn-ghost">Cancel</button>
                 <button type="submit" class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Add this medicine?" data-confirm-message="This will save the new medicine to active inventory." data-confirm-toast="Adding medicine...">
@@ -829,11 +832,11 @@ render_clinic_command_header(
                 </button>
             </div>
         </form>
-        <form method="post" action="restock.php" data-inventory-form class="hidden">
-            <div data-medicine-panel="restock" class="space-y-4">
+        <form method="post" action="restock.php" data-inventory-form data-inventory-draft="inventory-medicine-restock" class="hidden">
+            <div data-medicine-panel="restock" data-inventory-row class="space-y-4">
                 <div>
                     <label class="clinic-label">Medicine</label>
-                    <select class="clinic-select" name="source_id" id="restockMedicineSource" required>
+                    <select class="clinic-select" name="source_id[]" id="restockMedicineSource" required>
                         <option value="">Select medicine</option>
                         <?php foreach ($medicineRestockOptions as $option): ?>
                             <option value="<?= (int) $option['id'] ?>">
@@ -845,15 +848,16 @@ render_clinic_command_header(
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label class="clinic-label">Received Quantity</label>
-                        <input class="clinic-input" name="quantity" type="number" min="1" required value="1">
+                        <input class="clinic-input" name="quantity[]" type="number" min="1" required value="1">
                     </div>
                     <div>
                         <label class="clinic-label">Batch Expiration Date</label>
-                        <input class="clinic-input" name="expiration_date" type="date" required>
+                        <input class="clinic-input" name="expiration_date[]" type="date" required>
                         <p class="settings-help mt-2 mb-0">Each restock is saved as a separate batch so existing expiry dates and quantities remain unchanged.</p>
                     </div>
                 </div>
             </div>
+            <button type="button" class="btn btn-outline mt-4" data-add-inventory-row="restock-medicine"><span class="material-symbols-outlined text-[18px]">add</span>Add another restock</button>
             <div class="mt-6 flex justify-end gap-3">
                 <button type="button" onclick="closeModal('addMedicineModal')" class="btn btn-ghost">Cancel</button>
                 <button type="submit" class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Create this medicine batch?" data-confirm-message="This will save the received stock as a separate batch with its own expiration date." data-confirm-toast="Creating medicine batch...">
@@ -873,36 +877,95 @@ render_clinic_command_header(
                 <span class="material-symbols-outlined">close</span>
             </button>
         </div>
-        <form method="post" action="create.php" data-inventory-form>
+        <form method="post" action="create.php" data-inventory-form data-inventory-draft="inventory-equipment-new">
             <input type="hidden" name="category" value="Equipment">
             <input type="hidden" name="expiration_date" value="">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4" data-inventory-row data-equipment-panel="new">
                 <div>
                     <label class="clinic-label">Equipment Name</label>
-                    <input class="clinic-input" name="item_name" required placeholder="e.g. Pulse Oximeter">
+                    <input class="clinic-input" name="item_name[]" required placeholder="e.g. Pulse Oximeter">
                 </div>
                 <div class="md:col-span-2">
                     <label class="clinic-label">Description</label>
-                    <input class="clinic-input" name="description" placeholder="Optional equipment description">
+                    <input class="clinic-input" name="description[]" placeholder="Optional equipment description">
                 </div>
                 <div>
                     <label class="clinic-label">Unit</label>
-                    <input class="clinic-input" name="unit" value="unit" required placeholder="e.g. unit, set, pcs">
+                    <input class="clinic-input" name="unit[]" value="unit" required placeholder="e.g. unit, set, pcs">
                 </div>
                 <div>
                     <label class="clinic-label">Available Quantity</label>
-                    <input class="clinic-input" name="quantity" type="number" min="0" required value="0">
+                    <input class="clinic-input" name="quantity[]" type="number" min="0" required value="0">
                 </div>
                 <div class="md:col-span-2">
                     <label class="clinic-label">Minimum Available</label>
-                    <input class="clinic-input" name="reorder_level" type="number" min="0" required value="1">
+                    <input class="clinic-input" name="reorder_level[]" type="number" min="0" required value="1">
                 </div>
             </div>
+            <button type="button" class="btn btn-outline mt-4" data-add-inventory-row="new-equipment"><span class="material-symbols-outlined text-[18px]">add</span>Add another equipment</button>
             <div class="mt-6 flex justify-end gap-3">
                 <button type="button" onclick="closeModal('addEquipmentModal')" class="btn btn-ghost">Cancel</button>
                 <button type="submit" class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Add this equipment?" data-confirm-message="This will save the equipment item to active inventory." data-confirm-toast="Adding equipment...">
                     <span class="material-symbols-outlined text-[18px]">add</span>
                     Add Equipment
+                </button>
+            </div>
+        </form>
+        <div class="border-t border-slate-100 mt-6 pt-6">
+            <h4 class="font-headline text-lg font-extrabold text-[#1c2a59] mb-1">Restock Existing Equipment</h4>
+            <p class="text-xs font-bold text-slate-500 mb-4">Add one or more received equipment batches without changing existing history.</p>
+            <form method="post" action="restock.php" data-inventory-form data-inventory-draft="inventory-equipment-restock">
+                <div data-inventory-row data-equipment-panel="restock" class="space-y-4">
+                    <div>
+                        <label class="clinic-label">Equipment</label>
+                        <select class="clinic-select" name="source_id[]" required>
+                            <option value="">Select equipment</option>
+                            <?php foreach ($equipmentRestockOptions as $option): ?>
+                                <option value="<?= (int) $option['id'] ?>"><?= e($option['item_name']) ?> (<?= e($option['unit']) ?>)</option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="clinic-label">Received Quantity</label>
+                        <input class="clinic-input" name="quantity[]" type="number" min="1" required value="1">
+                    </div>
+                    <input type="hidden" name="expiration_date[]" value="">
+                </div>
+                <button type="button" class="btn btn-outline mt-4" data-add-inventory-row="restock-equipment"><span class="material-symbols-outlined text-[18px]">add</span>Add another restock</button>
+                <div class="mt-6 flex justify-end gap-3">
+                    <button type="button" onclick="closeModal('addEquipmentModal')" class="btn btn-ghost">Cancel</button>
+                    <button type="submit" class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Restock equipment?" data-confirm-message="This will create the selected equipment stock batches." data-confirm-toast="Restocking equipment...">
+                        <span class="material-symbols-outlined text-[18px]">add_box</span>Restock Equipment
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div id="inventoryImportModal" class="modal-backdrop">
+    <div class="modal-content bg-white rounded-[2rem] p-8 w-full max-w-lg shadow-2xl">
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h3 class="font-headline text-xl font-extrabold text-[#1c2a59]">Import Inventory Spreadsheet</h3>
+                <p class="text-sm text-slate-500 mt-1 mb-0">Import medicines or equipment in bulk from Excel or CSV.</p>
+            </div>
+            <button onclick="closeModal('inventoryImportModal')" class="btn-icon btn-icon-slate" aria-label="Close import dialog"><span class="material-symbols-outlined">close</span></button>
+        </div>
+        <form method="post" action="import.php" enctype="multipart/form-data" data-inventory-form>
+            <div class="mt-5">
+                <label class="clinic-label" for="inventoryImportFile">Excel or CSV file</label>
+                <input id="inventoryImportFile" name="import_file" type="file" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="clinic-input" required>
+                <p class="settings-help mt-2 mb-0">Use the template columns: Action (ADD or RESTOCK), Inventory Type (Medicine or Equipment), Item ID or Item Name, Description, Unit, Quantity, Reorder Level, and Expiration Date.</p>
+                <a href="template.php" class="btn btn-outline mt-3 inline-flex text-decoration-none"><span class="material-symbols-outlined text-[18px]">download</span>Download Excel Template</a>
+            </div>
+            <div class="mt-6 rounded-xl bg-slate-50 border border-slate-100 p-4 text-xs font-bold text-slate-600">
+                Up to 5,000 rows per import. No rows are saved if validation fails.
+            </div>
+            <div class="mt-6 flex justify-end gap-3">
+                <button type="button" onclick="closeModal('inventoryImportModal')" class="btn btn-ghost">Cancel</button>
+                <button type="submit" class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Import this spreadsheet?" data-confirm-message="The file will be validated and saved as one transaction. Invalid files will not change inventory." data-confirm-toast="Importing inventory spreadsheet...">
+                    <span class="material-symbols-outlined text-[18px]">upload_file</span>Import Inventory
                 </button>
             </div>
         </form>
@@ -1089,6 +1152,85 @@ function openBorrowItem(id, name, available, unit) {
     document.getElementById('borrowEquipmentSummary').textContent = `${name} has ${available} ${unit || 'unit'} available.`;
     showModal('borrowEquipmentModal');
 }
+
+(function () {
+    const draftForms = Array.from(document.querySelectorAll('[data-inventory-draft]'));
+
+    function readDraft(form) {
+        try {
+            const saved = JSON.parse(localStorage.getItem('cliniq:' + form.dataset.inventoryDraft) || 'null');
+            if (!saved || typeof saved !== 'object') return;
+            const desiredRows = Math.max(1, ...Object.values(saved).map((values) => Array.isArray(values) ? values.length : 1));
+            const addButton = form.querySelector('[data-add-inventory-row]');
+            while (addButton && form.querySelectorAll('[data-inventory-row]').length < desiredRows) addButton.click();
+            Object.entries(saved).forEach(([name, values]) => {
+                const fields = Array.from(form.querySelectorAll(`[name="${CSS.escape(name)}"]`));
+                (Array.isArray(values) ? values : [values]).forEach((value, index) => {
+                    const field = fields[index];
+                    if (!field) return;
+                    if (field.type === 'checkbox') field.checked = value === '1';
+                    else field.value = value;
+                });
+            });
+        } catch (error) { /* Ignore invalid drafts. */ }
+    }
+
+    function saveDraft(form) {
+        const draft = {};
+        new FormData(form).forEach((value, name) => {
+            if (value instanceof File) return;
+            if (!draft[name]) draft[name] = [];
+            draft[name].push(String(value));
+        });
+        localStorage.setItem('cliniq:' + form.dataset.inventoryDraft, JSON.stringify(draft));
+    }
+
+    function resetClonedRow(row) {
+        row.querySelectorAll('input, select, textarea').forEach((field) => {
+            if (field.type === 'hidden') field.value = '';
+            else if (field.tagName === 'SELECT') field.selectedIndex = 0;
+            else if (field.type === 'number') field.value = field.name.includes('quantity') ? '1' : '0';
+            else field.value = '';
+        });
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'btn btn-ghost justify-self-end';
+        remove.dataset.removeInventoryRow = 'true';
+        remove.innerHTML = '<span class="material-symbols-outlined text-[18px]">delete</span>Remove row';
+        row.appendChild(remove);
+    }
+
+    document.addEventListener('click', (event) => {
+        const addButton = event.target.closest('[data-add-inventory-row]');
+        if (addButton) {
+            const form = addButton.closest('form');
+            const rows = form ? form.querySelectorAll('[data-inventory-row]') : [];
+            const source = rows.length ? rows[rows.length - 1] : null;
+            if (!form || !source) return;
+            const clone = source.cloneNode(true);
+            clone.querySelectorAll('[data-remove-inventory-row]').forEach((button) => button.remove());
+            resetClonedRow(clone);
+            form.insertBefore(clone, addButton);
+            saveDraft(form);
+            return;
+        }
+        const removeButton = event.target.closest('[data-remove-inventory-row]');
+        if (removeButton) {
+            const row = removeButton.closest('[data-inventory-row]');
+            const form = removeButton.closest('form');
+            if (row && form && form.querySelectorAll('[data-inventory-row]').length > 1) {
+                row.remove();
+                saveDraft(form);
+            }
+        }
+    });
+
+    setTimeout(() => draftForms.forEach((form) => {
+        readDraft(form);
+        form.addEventListener('input', () => saveDraft(form));
+        form.addEventListener('change', () => saveDraft(form));
+    }), 0);
+})();
 
 </script>
 
