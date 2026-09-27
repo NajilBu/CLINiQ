@@ -41,6 +41,11 @@ if (appointment_actionable_statuses() !== ['Pending', 'For Confirmation']) {
     throw new RuntimeException('Sidebar appointment counts must use the shared actionable appointment statuses.');
 }
 
+if (appointment_status_display_label('For Confirmation') !== 'For Completion'
+    || appointment_status_display_label('Scheduled') !== 'Scheduled') {
+    throw new RuntimeException('Only overdue appointments should use the For Completion display label.');
+}
+
 $staffUpdate = file_get_contents(dirname(__DIR__) . '/public/appointments/update.php');
 $patientBooking = file_get_contents(dirname(__DIR__) . '/patient-portal/patient-appointment.php');
 if (!str_contains($staffUpdate, 'appointment_status_transition_is_allowed')

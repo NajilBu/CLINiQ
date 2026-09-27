@@ -472,13 +472,13 @@ $appointmentIcon = match ($appointmentStatus) {
 $appointmentSummary = match ($appointmentStatus) {
     'Pending' => 'Your request was sent to the clinic. Please wait for approval before going to the clinic.',
     'Scheduled' => 'Please arrive 10 minutes before your scheduled time.',
-    'For Confirmation' => 'Your appointment time has passed. Please wait for clinic staff to confirm if it was completed.',
+    'For Confirmation' => 'Your appointment time has passed. Clinic staff will mark it completed or no-show.',
     'Completed' => 'This appointment has been completed.',
     'Cancelled' => 'This appointment was cancelled.',
     'No Show' => 'This appointment was marked as no-show by the clinic.',
     default => 'Manage your appointment request from the appointment page.',
 };
-$appointmentDisplayStatus = $appointmentStatus === 'For Confirmation' ? 'Awaiting clinic confirmation' : $appointmentStatus;
+$appointmentDisplayStatus = appointment_status_display_label($appointmentStatus);
 $appointmentCtaLabel = in_array($appointmentStatus, ['Cancelled', 'No Show'], true) ? 'Book New Appointment' : 'Manage Appointment';
 $appointmentCtaIcon = in_array($appointmentStatus, ['Cancelled', 'No Show'], true) ? 'calendar_add_on' : 'schedule';
 

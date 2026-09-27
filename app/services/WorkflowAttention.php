@@ -96,8 +96,8 @@ function workflow_attention_items(array $filters = [], int $limit = 500): array
         $add($items, [
             'type' => 'appointment_' . strtolower(str_replace(' ', '_', $status)),
             'label' => 'Appointment',
-            'title' => $status === 'Scheduled' ? ($isPast ? 'Appointment needs review' : 'Upcoming appointment') : 'Appointment request needs review',
-            'explanation' => $status === 'Scheduled' ? 'This appointment is scheduled and remains visible for clinic coordination.' : 'This appointment is waiting for clinic confirmation.',
+            'title' => $status === 'Scheduled' ? ($isPast ? 'Appointment needs review' : 'Upcoming appointment') : ($status === 'For Confirmation' ? 'Appointment needs completion review' : 'Appointment request needs review'),
+            'explanation' => $status === 'Scheduled' ? 'This appointment is scheduled and remains visible for clinic coordination.' : ($status === 'For Confirmation' ? 'This appointment time has passed and is waiting for completion review.' : 'This appointment request is waiting for clinic approval.'),
             'patient_name' => (string) ($row['patient_name'] ?: 'Patient'),
             'priority' => $isPast ? 'overdue' : ($status === 'Scheduled' ? 'scheduled' : 'clinic_action'),
             'status' => $status,

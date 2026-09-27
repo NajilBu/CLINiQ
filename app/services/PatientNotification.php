@@ -104,7 +104,7 @@ function patient_notification_for_appointment(PDO $db, array $appointment, strin
     $reason = trim((string) ($appointment['cancellation_reason'] ?? ''));
     [$title, $message] = match ($status) {
         'Scheduled' => ['Appointment approved', "Your clinic appointment for {$when} has been approved."],
-        'For Confirmation' => ['Appointment needs confirmation', "Your appointment for {$when} is awaiting clinic confirmation."],
+        'For Confirmation' => ['Appointment awaiting completion', "Your appointment for {$when} has passed. The clinic will mark it completed or no-show."],
         'Completed' => ['Appointment completed', "Your clinic appointment for {$when} was marked completed."],
         'Cancelled' => ['Appointment cancelled', "Your clinic appointment for {$when} was cancelled." . ($reason !== '' ? " Reason: {$reason}" : '')],
         'No Show' => ['Appointment marked no-show', "Your clinic appointment for {$when} was marked as a no-show."],

@@ -488,7 +488,7 @@ render_student_header('Appointments', 'appointment');
                 };
                 $displayStatus = match ($status) {
                     'Pending' => 'Awaiting Clinic',
-                    'For Confirmation' => 'Awaiting Clinic Confirmation',
+                    'For Confirmation' => 'For Completion',
                     default => $status,
                 };
                 ?>
@@ -503,7 +503,7 @@ render_student_header('Appointments', 'appointment');
                         </div>
                         <p><?= student_e(date('F j, Y \a\t g:i A', strtotime($appointment['appointment_datetime']))) ?></p>
                         <?php if ($status === 'For Confirmation'): ?>
-                            <p><strong>Status:</strong> Your appointment time has passed. Please wait for clinic staff to confirm if it was completed.</p>
+                            <p><strong>Status:</strong> Your appointment time has passed. Clinic staff will mark it completed or no-show.</p>
                         <?php endif; ?>
                         <?php if ($status === 'Cancelled' && trim((string) ($appointment['cancellation_reason'] ?? '')) !== ''): ?>
                             <p><strong>Reason:</strong> <?= student_e($appointment['cancellation_reason']) ?></p>

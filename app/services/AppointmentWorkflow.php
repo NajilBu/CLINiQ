@@ -26,6 +26,11 @@ function appointment_actionable_statuses(): array
     return ['Pending', 'For Confirmation'];
 }
 
+function appointment_status_display_label(string $status): string
+{
+    return $status === 'For Confirmation' ? 'For Completion' : $status;
+}
+
 function appointment_status_badge_class(string $status): string
 {
     return match ($status) {

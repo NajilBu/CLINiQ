@@ -70,7 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $patientId = (int) ($appointment['patient_id'] ?? 0);
                 $when = date('F j, Y \a\t g:i A', strtotime((string) $appointment['appointment_datetime']));
                 if ($patientId > 0 && in_array($status, ['Scheduled', 'For Confirmation'], true)) {
-                    patient_email_queue_notification($patientId, $status === 'Scheduled' ? 'appointment_confirmed' : 'appointment_confirmation_required', 'appointment_reminders', $status === 'Scheduled' ? 'Appointment confirmed' : 'Appointment needs confirmation', $status === 'Scheduled' ? "Your clinic appointment for {$when} has been confirmed." : "Your clinic appointment for {$when} needs your confirmation.", 'appointment', (int) $appointment['appointment_id'], $reviewedByPersonId, null, $status);
+                    patient_email_queue_notification($patientId, $status === 'Scheduled' ? 'appointment_confirmed' : 'appointment_confirmation_required', 'appointment_reminders', $status === 'Scheduled' ? 'Appointment confirmed' : 'Appointment awaiting completion', $status === 'Scheduled' ? "Your clinic appointment for {$when} has been confirmed." : "Your clinic appointment for {$when} has passed and is awaiting clinic completion review.", 'appointment', (int) $appointment['appointment_id'], $reviewedByPersonId, null, $status);
                 }
                 if ($patientId > 0 && in_array($status, ['Cancelled', 'No Show'], true)) {
                     $reason = trim((string) ($appointment['cancellation_reason'] ?? ''));
@@ -81,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $message = match ($status) {
                 'Scheduled' => 'Appointment request approved and added to the clinic schedule.',
-                'For Confirmation' => 'Appointment moved to clinic confirmation.',
+                'For Confirmation' => 'Appointment is awaiting completion review.',
                 'Cancelled' => 'Appointment request cancelled.',
                 'Completed' => 'Appointment marked as completed.',
                 'No Show' => 'Appointment marked as no-show.',

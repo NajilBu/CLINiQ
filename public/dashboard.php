@@ -598,7 +598,7 @@ render_header('Main Dashboard');
                             <span class="material-symbols-outlined text-[26px]">event_available</span>
                         </div>
                         <p class="text-sm font-bold text-slate-500 mb-0">No appointments need action</p>
-                        <p class="text-xs text-slate-400 mt-1">New requests and completion confirmations will appear here.</p>
+                        <p class="text-xs text-slate-400 mt-1">New requests and appointments awaiting completion will appear here.</p>
                     </div>
                 <?php else: ?>
                     <?php foreach ($pendingAppointments as $pa):
@@ -633,7 +633,7 @@ render_header('Main Dashboard');
                                     <?php if (!empty($pa['purpose'])): ?>
                                         <p class="text-xs text-slate-500 mb-3 line-clamp-1"><?= e($pa['purpose']) ?></p>
                                     <?php endif; ?>
-                                    <p class="text-[11px] font-bold text-slate-400 mb-3">Latest appointment: <?= $paLatest ? e(date('M d, Y · g:i A', strtotime($paLatest['appointment_datetime'])) . ' · ' . $paLatest['purpose'] . ' · ' . $paLatest['status']) : 'None' ?></p>
+                                    <p class="text-[11px] font-bold text-slate-400 mb-3">Latest appointment: <?= $paLatest ? e(date('M d, Y · g:i A', strtotime($paLatest['appointment_datetime'])) . ' · ' . $paLatest['purpose'] . ' · ' . appointment_status_display_label((string) $paLatest['status'])) : 'None' ?></p>
                                     <?php if ($paHadCancellation): ?><p class="text-[11px] font-extrabold text-red-600 mb-3">Cancelled appointment in the last three records.</p><?php endif; ?>
                                     <div class="flex items-center gap-2">
                                         <form method="post" action="<?= app_url('appointments/update.php') ?>" class="flex-1">
@@ -762,7 +762,7 @@ render_header('Main Dashboard');
                                                 <span><?= e($apt['id_number']) ?> &bull; <?= e($apt['purpose']) ?></span>
                                             </div>
                                             <?php if (($apt['status'] ?? '') === 'For Confirmation'): ?>
-                                                <span class="dashboard-calendar-event-status badge badge-pending">For Confirmation</span>
+                                                <span class="dashboard-calendar-event-status badge badge-pending">For Completion</span>
                                             <?php endif; ?>
                                         </div>
                                     </article>

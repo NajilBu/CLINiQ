@@ -107,7 +107,7 @@ foreach ($appointments as $appointment) {
         foreach ($patientHistory as $history) {
             $historyHtml .= '<div class="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2">'
                 . '<span class="text-xs font-bold text-slate-600">' . e(date('M d, Y · g:i A', strtotime($history['appointment_datetime']))) . ' · ' . e($history['purpose']) . '</span>'
-                . '<span class="badge ' . e(appointment_status_badge_class((string) $history['status'])) . '">' . e($history['status']) . '</span>'
+                . '<span class="badge ' . e(appointment_status_badge_class((string) $history['status'])) . '">' . e(appointment_status_display_label((string) $history['status'])) . '</span>'
                 . '</div>';
         }
         $historyHtml .= '</div>';
@@ -146,7 +146,7 @@ foreach ($appointments as $appointment) {
         'studentSort' => trim($appointment['last_name'] . ' ' . $appointment['first_name']),
         'studentHtml' => '<div class="flex items-center gap-3"><div class="avatar ' . e(avatar_color($fullName)) . '">' . e(initials($fullName)) . '</div><div><strong class="text-sm text-slate-800">' . e($fullName) . '</strong><div class="text-xs font-bold text-slate-400">' . e($appointment['id_number']) . ' · ' . e($appointment['course_section'] ?: 'No course') . '</div></div></div>',
         'purpose' => $appointment['purpose'],
-        'statusHtml' => '<span class="badge ' . e(appointment_status_badge_class($status)) . '">' . e($status) . '</span>',
+        'statusHtml' => '<span class="badge ' . e(appointment_status_badge_class($status)) . '">' . e(appointment_status_display_label($status)) . '</span>',
         'statusSort' => array_search($status, ['Pending', 'Scheduled', 'For Confirmation', 'Completed', 'No Show', 'Cancelled'], true),
         'notes' => $patientNote !== '' ? $patientNote : '—',
         'cancelReason' => $appointment['cancellation_reason'] ?: '-',
@@ -192,7 +192,7 @@ render_clinic_command_header(
             $tabs = [
                 'Pending' => 'For Approval',
                 'Scheduled' => 'Approved',
-                'For Confirmation' => 'For Confirmation',
+                'For Confirmation' => 'For Completion',
                 'Completed' => 'Completed',
                 'Cancelled' => 'Cancelled',
                 'No Show' => 'No Show',
