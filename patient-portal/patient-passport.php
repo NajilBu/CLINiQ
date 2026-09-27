@@ -545,8 +545,21 @@ render_student_header('Emergency Health Passport', 'passport');
 </div><!-- /student-grid -->
 </form>
 
+<dialog id="passport-nfc-overwrite-dialog" class="passport-nfc-dialog" aria-labelledby="passport-nfc-overwrite-title" aria-describedby="passport-nfc-overwrite-description">
+    <h2 id="passport-nfc-overwrite-title">Overwrite this NFC tag?</h2>
+    <p id="passport-nfc-overwrite-description">This tag already contains data. Replacing it will remove its current contents. Confirm with your current account password, then tap the same tag again.</p>
+    <label class="student-label" id="passport-nfc-password-label" for="passport-nfc-password">Current password</label>
+    <input id="passport-nfc-password" class="student-input" type="password" autocomplete="current-password" required>
+    <p id="passport-nfc-overwrite-error" class="passport-nfc-overwrite-error" role="alert" hidden></p>
+    <p id="passport-nfc-overwrite-ready" role="status" hidden>Password confirmed. Tap the button below, then hold the same tag against your phone.</p>
+    <div class="passport-nfc-dialog-actions">
+        <button type="button" class="student-button-secondary" id="passport-nfc-overwrite-cancel">Cancel</button>
+        <button type="button" class="student-button" id="passport-nfc-overwrite-confirm">Confirm overwrite</button>
+    </div>
+</dialog>
+
 <script src="../public/assets/vendor/qrcode/qrcode.min.js?v=1.0.0"></script>
-<script src="../public/assets/js/patient-passport-qr.js?v=2"></script>
+<script src="../public/assets/js/patient-passport-qr.js?v=3"></script>
 <?php render_student_footer(); ?>
 
 <script src="../public/assets/js/emergency-contact.js?v=1"></script>

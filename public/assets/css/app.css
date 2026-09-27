@@ -689,6 +689,64 @@ h6,
     font-size: 1rem;
 }
 
+.cliniq-floating-back {
+    position: fixed !important;
+    top: calc(1.25rem + env(safe-area-inset-top, 0px));
+    right: calc(1.25rem + env(safe-area-inset-right, 0px));
+    left: auto;
+    z-index: 60;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    max-width: calc(100vw - 2.5rem);
+    min-height: 2.75rem;
+    padding: 0.65rem 0.9rem;
+    border: 1px solid var(--cliniq-outline, #cbdccf);
+    border-radius: 0.75rem;
+    background: var(--cliniq-surface, #fff);
+    color: var(--cliniq-accent-foreground, #183a29);
+    box-shadow: 0 8px 24px rgba(23, 38, 29, 0.16);
+    font-weight: 700;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.cliniq-floating-back--staff,
+.cliniq-floating-back--patient {
+    top: calc(5.25rem + env(safe-area-inset-top, 0px));
+}
+
+.cliniq-floating-back--staff {
+    right: calc(3rem + env(safe-area-inset-right, 0px));
+}
+
+.cliniq-floating-back--entry {
+    top: calc(1.5rem + env(safe-area-inset-top, 0px));
+    right: calc(2.5rem + env(safe-area-inset-right, 0px));
+}
+
+.cliniq-floating-back:hover,
+.cliniq-floating-back:focus-visible {
+    background: var(--cliniq-surface-low, #eef5ef);
+    color: var(--cliniq-primary-hover, #236b45);
+}
+
+@media print {
+    .cliniq-floating-back { display: none !important; }
+}
+
+@media (max-width: 640px) {
+    .cliniq-floating-back,
+    .cliniq-floating-back--entry {
+        right: calc(0.75rem + env(safe-area-inset-right, 0px));
+    }
+
+    .cliniq-floating-back--staff {
+        right: calc(2.5rem + env(safe-area-inset-right, 0px));
+    }
+}
+
 .app-search .material-symbols-outlined {
     position: absolute;
     left: 1rem;
@@ -741,6 +799,11 @@ h6,
     color: #64756a;
     font-size: 0.75rem;
     font-weight: 500;
+}
+
+.app-header-clock {
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
 }
 
 .app-alert-link {
@@ -949,7 +1012,9 @@ h6,
     align-items: center;
     gap: 0.7rem;
     justify-content: center;
-    padding: 1.1rem 0.7rem;
+    min-height: 4.25rem;
+    box-sizing: border-box;
+    padding: 0.75rem 0.7rem;
     border-bottom: 1px solid oklch(92% .01 230 / .72);
 }
 
@@ -1091,6 +1156,15 @@ h6,
 
 .app-sidebar-footer {
     display: none;
+}
+
+.app-sidebar-footer .app-profile-photo {
+    flex: 0 0 auto;
+}
+
+.app-sidebar-footer .app-user-menu {
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 .profile-photo-input {
@@ -1880,7 +1954,7 @@ html.cliniq-dark .app-profile-photo:focus-visible {
 
     .app-brand {
         justify-content: flex-start;
-        padding: 1.25rem 1rem;
+        padding: 0.75rem 1rem;
     }
 
     .app-brand-copy {
@@ -1937,7 +2011,9 @@ html.cliniq-dark .app-profile-photo:focus-visible {
     }
 
     .app-sidebar-footer {
-        display: block;
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
         margin-top: auto;
         padding: 1rem;
         border-top: 1px solid oklch(92% .01 230 / .72);
@@ -6131,6 +6207,14 @@ body.cliniq-drag-scroll-active * {
         display: none;
     }
 
+    .cliniq-entry-header-mobile-hidden:has(.cliniq-entry-back) {
+        display: contents;
+    }
+
+    .cliniq-entry-header-mobile-hidden .cliniq-entry-brand {
+        display: none;
+    }
+
     .cliniq-entry-header {
         width: 100%;
         box-sizing: border-box;
@@ -7864,13 +7948,16 @@ html.cliniq-dark .student-modal .btn-outline:focus-visible {
     border-color: #66b77a !important;
 }
 /* Alert detail dark-mode contract and aligned response actions. */
-html.cliniq-dark .app-content .app-page-back {
+html.cliniq-dark .app-content .app-page-back,
+html.cliniq-dark .app-main > .app-page-back {
     background: #1b2c21 !important;
     color: #dcebe0 !important;
     border-color: #4b6d55 !important;
 }
 html.cliniq-dark .app-content .app-page-back:hover,
-html.cliniq-dark .app-content .app-page-back:focus-visible {
+html.cliniq-dark .app-content .app-page-back:focus-visible,
+html.cliniq-dark .app-main > .app-page-back:hover,
+html.cliniq-dark .app-main > .app-page-back:focus-visible {
     background: #284b32 !important;
     color: #ffffff !important;
     border-color: #66b77a !important;

@@ -21,7 +21,7 @@ function render_cliniq_entry_header(array $options = []): void
     ?>
     <header class="<?= cliniq_brand_e($class) ?>" aria-label="CLINiQ navigation">
         <?php if ($showBack): ?>
-            <a href="<?= cliniq_brand_e($homeUrl) ?>" class="cliniq-entry-back">
+            <a href="<?= cliniq_brand_e($homeUrl) ?>" class="cliniq-entry-back cliniq-floating-back cliniq-floating-back--entry">
                 <span class="material-symbols-outlined">arrow_back</span>
                 Back
             </a>

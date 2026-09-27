@@ -115,7 +115,8 @@ function render_structured_legal_document(array $document): string
         body { margin: 0; padding: 2rem 1rem 4rem; background: linear-gradient(180deg, color-mix(in srgb, <?= e($theme['surface']) ?> 92%, #fff), #f7faf8); }
         main { max-width: 850px; margin: 0 auto; background: #fff; border: 1px solid <?= e($theme['outline_variant']) ?>; border-radius: 20px; padding: clamp(1.5rem, 4vw, 3.25rem); box-shadow: 0 20px 50px rgba(23, 38, 29, .08); }
         a { color: <?= e($theme['primary']) ?>; font-weight: 700; }
-        .legal-back { display: inline-block; margin-bottom: 1.5rem; text-decoration: none; }
+        .legal-back { position: fixed; top: calc(1rem + env(safe-area-inset-top, 0px)); right: calc(1rem + env(safe-area-inset-right, 0px)); z-index: 10; display: inline-flex; align-items: center; max-width: calc(100vw - 2rem); padding: .75rem 1rem; border: 1px solid <?= e($theme['outline_variant']) ?>; border-radius: 12px; background: #fff; box-shadow: 0 8px 24px rgba(23, 38, 29, .16); text-decoration: none; }
+        main { margin-top: 3.5rem; }
         .legal-document { color: #30443a; overflow-wrap: anywhere; font: 1rem/1.75 Inter, Arial, sans-serif; }
         .legal-document h1, .legal-document h2, .legal-document h3 { color: #17261d; font-weight: 800; line-height: 1.25; margin: 2rem 0 .7rem; }
         .legal-document h1 { font-size: clamp(1.7rem, 4vw, 2.35rem); margin-top: 0; }
@@ -125,6 +126,7 @@ function render_structured_legal_document(array $document): string
         .legal-document ul, .legal-document ol { margin: 0 0 1.1rem 1.35rem; padding: 0; }
         .legal-document li { margin: .35rem 0; padding-left: .25rem; }
         .legal-document strong { color: #17261d; }
+        @media print { .legal-back { display: none; } main { margin-top: 0; } }
     </style>
 </head>
 <body>

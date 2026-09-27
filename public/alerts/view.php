@@ -42,7 +42,7 @@ if (!$alert) {
         <span class="material-symbols-outlined">notification_important</span>
         <p class="empty-state-title">Alert not found</p>
         <p class="empty-state-text">The alert report you're looking for does not exist.</p>
-        <a href="index.php" class="btn btn-primary mt-4 text-decoration-none">Back to Alerts</a>
+        <a href="index.php" class="btn btn-primary cliniq-floating-back cliniq-floating-back--staff text-decoration-none">Back to Alerts</a>
     </div>
     <?php
     render_footer();

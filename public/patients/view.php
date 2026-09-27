@@ -19,7 +19,7 @@ if (!$patient) {
         <span class="material-symbols-outlined">person_off</span>
         <p class="empty-state-title">Patient not found</p>
         <p class="empty-state-text">The patient record you're looking for doesn't exist.</p>
-        <a href="index.php" class="btn btn-primary mt-4 text-decoration-none">Back to Patients</a>
+        <a href="index.php" class="btn btn-primary cliniq-floating-back cliniq-floating-back--staff text-decoration-none">Back to Patients</a>
     </div>
     <?php
     render_footer();
@@ -222,6 +222,7 @@ $declaredHealthItems = [
 ];
 $hasDeclaredHealth = (bool) array_filter($declaredHealthItems);
 
+set_page_back_link('index.php', 'Patients');
 render_header($fullName . ' - Patient Profile');
 ?>
 

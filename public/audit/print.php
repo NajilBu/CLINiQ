@@ -137,6 +137,7 @@ if (!$filterLabels) {
         .toolbar-actions { display: flex; gap: 10px; }
         .toolbar a, .toolbar button { border: 1px solid #bfd2c5; border-radius: 10px; padding: 10px 16px; color: var(--ink); background: white; font: inherit; font-weight: 700; text-decoration: none; cursor: pointer; }
         .toolbar button { color: white; border-color: var(--green); background: var(--green); }
+        .toolbar .floating-back { position: fixed; top: 4.5rem; right: 1rem; z-index: 3; box-shadow: 0 8px 24px rgba(23,38,29,.16); }
         .document { width: min(1200px, calc(100% - 32px)); margin: 28px auto; padding: 34px; background: white; border-radius: 18px; box-shadow: 0 18px 45px rgba(23,38,29,.10); }
         .report-header { display: flex; justify-content: space-between; gap: 24px; padding-bottom: 20px; border-bottom: 3px solid var(--green); }
         .report-brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
@@ -187,7 +188,7 @@ if (!$filterLabels) {
 <div class="toolbar">
     <div><strong>Audit Log Print Preview</strong><span>All activities matching the selected filters are included.</span></div>
     <div class="toolbar-actions">
-        <a href="index.php<?= $backQuery !== '' ? '?' . e($backQuery) : '' ?>">Back to Audit Log</a>
+        <a class="floating-back" href="index.php<?= $backQuery !== '' ? '?' . e($backQuery) : '' ?>">Back to Audit Log</a>
         <button type="button" onclick="window.print()">Print</button>
     </div>
 </div>

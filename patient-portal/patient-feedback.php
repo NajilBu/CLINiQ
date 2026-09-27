@@ -136,7 +136,7 @@ render_student_header('Give Feedback', 'dashboard');
             <span class="material-symbols-outlined" aria-hidden="true">check_circle</span>
             <h2>Feedback submitted</h2>
             <p>Thank you. Your response has been recorded and your next clinic actions are updated.</p>
-            <a class="student-button" href="patient-dashboard.php">Back to dashboard</a>
+            <a class="student-button cliniq-floating-back cliniq-floating-back--patient" href="patient-dashboard.php">Back to dashboard</a>
         </section>
     <?php else: ?>
         <?php if (count($pendingVisits) > 1): ?>

@@ -31,8 +31,7 @@ render_header('Staff Emergency Profile');
 render_clinic_command_header(
     'Staff Only',
     'Emergency Profile',
-    'Emergency details stored in Cliniq_db for authorized clinic staff.',
-    '<a class="px-5 py-3 bg-slate-100 text-primary rounded-2xl text-sm font-bold text-decoration-none" href="' . e(app_url('patients/view.php?id=' . $personId)) . '">Back to Profile</a>'
+    'Emergency details stored in Cliniq_db for authorized clinic staff.'
 );
 ?>
 

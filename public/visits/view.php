@@ -218,7 +218,7 @@ if (!$visit) {
         <span class="material-symbols-outlined">clinical_notes</span>
         <p class="empty-state-title">Visit not found</p>
         <p class="empty-state-text">The clinic visit record you're looking for doesn't exist.</p>
-        <a href="index.php" class="btn btn-primary mt-4 text-decoration-none">Back to Clinic Logbook</a>
+        <a href="index.php" class="btn btn-primary cliniq-floating-back cliniq-floating-back--staff text-decoration-none">Back to Clinic Logbook</a>
     </div>
     <?php
     render_footer();

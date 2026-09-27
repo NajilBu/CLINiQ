@@ -30,10 +30,10 @@ try {
 $accounts = patient_duplicate_accounts($db);
 $pairs = patient_duplicate_pairs($accounts);
 $byId = array_column($accounts, null, 'account_id');
+set_page_back_link(app_url('patient-accounts/index.php'), 'Back to Patient Accounts');
 render_header('Duplicate Patient Accounts');
 render_clinic_command_header('Account Administration', 'Duplicate Patient Accounts',
-    'Matches are suggestions. Verify identity before merging; a matching name alone does not prove duplication.',
-    '<a class="btn btn-outline" href="' . e(app_url('patient-accounts/index.php')) . '">Back to Patient Accounts</a>');
+    'Matches are suggestions. Verify identity before merging; a matching name alone does not prove duplication.');
 ?>
 <?php if ($error): ?><div class="clinic-card p-5 mb-5" role="alert"><?= e($error) ?> <a href="<?= e(app_url('patient-accounts/duplicates.php')) ?>">Return to duplicate review</a></div><?php endif; ?>
 <?php if ($review): ?>

@@ -64,6 +64,13 @@ $toolbarStyles = <<<'CSS'
 .print-toolbar-actions form {
     margin: 0;
 }
+.print-toolbar-actions .floating-back {
+    position: fixed;
+    top: 4.5rem;
+    right: 1rem;
+    z-index: 21;
+    box-shadow: 0 8px 24px rgba(23, 38, 29, .16);
+}
 .print-toolbar button,
 .print-toolbar a {
     display: inline-flex;
@@ -270,7 +277,7 @@ $toolbar = '
             <span>' . (count($report['sections']) + 1) . ' pages shown in the printable page layout.</span>
         </div>
         <div class="print-toolbar-actions">
-            <a href="preview.php?' . system_report_escape($backQuery) . '">Back to Preview</a>
+            <a class="floating-back" href="preview.php?' . system_report_escape($backQuery) . '">Back to Preview</a>
             <button type="button" id="reportPreviewLayoutToggle" aria-pressed="true">Single Page View</button>
             <button type="button" class="secondary" onclick="window.print()">Print</button>
             <form method="post" action="download.php">

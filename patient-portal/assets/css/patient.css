@@ -3212,6 +3212,31 @@ body.student-time-modal-open {
     font-size: 1rem;
 }
 
+.passport-nfc-dialog {
+    box-sizing: border-box;
+    width: min(440px, calc(100% - 32px));
+    max-height: calc(100dvh - 32px);
+    margin: auto;
+    padding: 24px;
+    overflow: auto;
+    border: 1px solid var(--student-border-soft);
+    border-radius: 18px;
+    background: var(--student-surface, #fff);
+    color: var(--student-fg);
+    box-shadow: 0 24px 64px rgba(23, 38, 29, .24);
+}
+
+.passport-nfc-dialog::backdrop {
+    background: rgba(15, 23, 42, .55);
+    backdrop-filter: blur(3px);
+}
+
+.passport-nfc-dialog h2 { margin: 0 0 10px; font-size: 1.25rem; font-weight: 800; }
+.passport-nfc-dialog p { margin: 0 0 20px; line-height: 1.5; }
+.passport-nfc-dialog .student-input { width: 100%; margin: 8px 0 0; }
+.passport-nfc-overwrite-error { margin: 10px 0 0 !important; color: #b42318; font-weight: 700; }
+.passport-nfc-dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+
 .passport-qr-svg,
 .passport-qr-wrap canvas,
 .passport-qr-wrap img {

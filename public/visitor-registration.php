@@ -84,7 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $isGuest = $form['subject_type'] === 'guest';
 
     $isBorrowingEquipment = $form['reason'] === VISITOR_REASON_BORROW_EQUIPMENT;
-    $requiredFields = $isGuest ? ['reason'] : ['full_name', 'identifier', 'category', 'department', 'reason'];
+    $requiredFields = $isGuest ? ['full_name', 'reason'] : ['full_name', 'identifier', 'category', 'department', 'reason'];
     if (!$isBorrowingEquipment) {
         $requiredFields[] = 'chief_complaint';
     }
@@ -274,7 +274,7 @@ $theme = active_cliniq_theme();
             }
         };
     </script>
-    <link href="<?= app_url('assets/css/app.css?v=cancel-icon-1') ?>" rel="stylesheet">
+    <link href="<?= app_url('assets/css/app.css?v=' . filemtime(__DIR__ . '/assets/css/app.css')) ?>" rel="stylesheet">
     <style>
         :root {
             --cliniq-primary: <?= e($theme['primary']) ?>;
@@ -585,14 +585,12 @@ $theme = active_cliniq_theme();
                         <?= $success['identifier'] !== '' ? e($success['identifier']) : 'Guest / Visitor' ?>
                     </div>
                     <p class="text-xs text-slate-400 mt-5 mb-0">
-                        Your submission is saved. Use the button below to register another visit.
+                        Your submission is saved. Use Back to form at the top right to register another visit.
                     </p>
-                    <div class="visit-success-actions">
-                        <a href="visitor-registration.php" data-internal-navigation class="visit-success-back-button btn btn-primary text-decoration-none">
-                            <span class="material-symbols-outlined text-[18px]">arrow_back</span>
-                            Back to form now
-                        </a>
-                    </div>
+                    <a href="visitor-registration.php" data-internal-navigation class="visit-success-back-button btn btn-primary cliniq-floating-back text-decoration-none">
+                        <span class="material-symbols-outlined text-[18px]">arrow_back</span>
+                        Back to form now
+                    </a>
                 </div>
             <?php else: ?>
                 <form method="post" class="visit-card-form space-y-4">
@@ -618,7 +616,7 @@ $theme = active_cliniq_theme();
                             <label class="visit-label" for="full_name">Full Name</label>
                             <div class="visit-field">
                                 <span class="material-symbols-outlined">person_outline</span>
-                                <input class="visit-input <?= isset($errors['full_name']) ? 'input-error' : '' ?>" id="full_name" name="full_name" value="<?= e($form['full_name']) ?>" placeholder="e.g. Juan dela Cruz" <?= $form['subject_type'] === 'guest' ? '' : 'required' ?>>
+                                <input class="visit-input <?= isset($errors['full_name']) ? 'input-error' : '' ?>" id="full_name" name="full_name" value="<?= e($form['full_name']) ?>" placeholder="e.g. Juan dela Cruz" required>
                             </div>
                         </div>
 
@@ -772,8 +770,8 @@ $theme = active_cliniq_theme();
             identifier.closest('div')?.classList.toggle('opacity-60', isGuest);
         }
         if (fullName) {
-            fullName.required = !isGuest;
-            fullName.placeholder = isGuest ? 'Optional guest name' : 'e.g. Juan dela Cruz';
+            fullName.required = true;
+            fullName.placeholder = isGuest ? 'Enter visitor / guest name' : 'e.g. Juan dela Cruz';
         }
         if (category) category.value = isGuest ? 'Visitor / Guest' : '';
         if (department) {

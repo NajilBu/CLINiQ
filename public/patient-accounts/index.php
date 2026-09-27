@@ -143,12 +143,12 @@ foreach ($recentAccounts as $account) {
     ];
 }
 
+set_page_back_link(app_url('patients/index.php'), 'Back to Patients');
 render_header('Patient Accounts');
 render_clinic_command_header(
     'Account Administration',
     'Patient Accounts',
-    'Create inactive patient accounts individually or import an official list from Excel.',
-    '<a href="' . e(app_url('patients/index.php')) . '" class="btn btn-outline text-decoration-none"><span class="material-symbols-outlined text-[18px]">arrow_back</span> Back to Patients</a>'
+    'Create inactive patient accounts individually or import an official list from Excel.'
 );
 
 ?>

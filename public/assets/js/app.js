@@ -1340,6 +1340,18 @@ function cliniqReplaceTopbarState(doc) {
     }
 }
 
+function cliniqReplaceFloatingBack(doc) {
+    const currentBack = document.querySelector('.app-main > [data-cliniq-floating-back]');
+    const nextBack = doc.querySelector('.app-main > [data-cliniq-floating-back]');
+    if (currentBack && nextBack) {
+        currentBack.replaceWith(nextBack);
+    } else if (currentBack) {
+        currentBack.remove();
+    } else if (nextBack) {
+        document.querySelector('.app-main > .app-topbar')?.after(nextBack);
+    }
+}
+
 function cliniqCloseOpenModals() {
     document.querySelectorAll('.modal-backdrop.show').forEach((modal) => {
         if (modal.id === 'confirmActionModal') {
@@ -1726,6 +1738,7 @@ function cliniqRenderFetchedPage(html, finalUrl, options = {}) {
 
     currentContent.replaceWith(nextContent);
     cliniqReplaceTopbarState(doc);
+    cliniqReplaceFloatingBack(doc);
     cliniqShowFetchedFlashes(doc);
     cliniqCloseOpenModals();
     cliniqRemoveStaleConfirmModal();
@@ -2050,6 +2063,17 @@ function initDragScrolling(root = document) {
 // ============================================================
 
 document.addEventListener('DOMContentLoaded', () => {
+    const updateHeaderClock = () => {
+        const clock = document.querySelector('[data-app-clock]');
+        if (!clock) return;
+        const now = new Date();
+        clock.textContent = new Intl.DateTimeFormat(undefined, {
+            weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit'
+        }).format(now);
+        clock.dateTime = now.toISOString();
+    };
+    updateHeaderClock();
+    window.setInterval(updateHeaderClock, 30_000);
     // Sidebar open/close control
     initSidebarToggle();
 

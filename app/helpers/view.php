@@ -390,6 +390,14 @@ function render_header(string $title): void
                     <?php endforeach; ?>
                 </nav>
                 <div class="app-sidebar-footer">
+                    <button type="button" class="app-profile-photo" data-profile-photo-open="staff-profile-photo-modal" title="Change profile picture" aria-label="Change profile picture">
+                        <?php if ($staffPhotoUrl !== null): ?>
+                            <img src="<?= e($staffPhotoUrl) ?>" alt="<?= e($user['name']) ?> profile picture">
+                        <?php else: ?>
+                            <span><?= e(initials((string) $user['name'])) ?></span>
+                        <?php endif; ?>
+                        <span class="profile-photo-camera material-symbols-outlined" aria-hidden="true">photo_camera</span>
+                    </button>
                     <details class="app-user-menu">
                         <summary class="app-user-menu-trigger">
                         <span class="app-user-copy">
@@ -440,27 +448,17 @@ function render_header(string $title): void
                             <span class="app-alert-label">Active Alerts</span>
                             <span class="app-alert-badge" id="pending-alert-count" aria-live="polite"><?= $pendingAlertCount > 99 ? '99+' : $pendingAlertCount ?></span>
                         </a>
-                        <span><?= e(date('l, F j')) ?></span>
-                        <button type="button" class="app-profile-photo" data-profile-photo-open="staff-profile-photo-modal" title="Change profile picture" aria-label="Change profile picture">
-                            <?php if ($staffPhotoUrl !== null): ?>
-                                <img src="<?= e($staffPhotoUrl) ?>" alt="<?= e($user['name']) ?> profile picture">
-                            <?php else: ?>
-                                <span><?= e(initials((string) $user['name'])) ?></span>
-                            <?php endif; ?>
-                            <span class="profile-photo-camera material-symbols-outlined" aria-hidden="true">photo_camera</span>
-                        </button>
+                        <time class="app-header-clock" data-app-clock><?= e(date('l, F j · g:i A')) ?></time>
                     </div>
                 </header>
+                <?php if ($pageBackLink): ?>
+                    <a href="<?= e($pageBackLink['url']) ?>" class="app-page-back cliniq-floating-back cliniq-floating-back--staff text-decoration-none" data-cliniq-floating-back>
+                        <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+                        <span><?= e($pageBackLink['label']) ?></span>
+                    </a>
+                <?php endif; ?>
                 <main class="app-content">
                     <div class="max-w-7xl mx-auto w-full space-y-6 pb-14" id="cliniqPageContent" data-cliniq-page-content>
-                        <?php if ($pageBackLink): ?>
-                            <div class="app-page-back-row">
-                                <a href="<?= e($pageBackLink['url']) ?>" class="app-page-back text-decoration-none">
-                                    <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>
-                                    <span><?= e($pageBackLink['label']) ?></span>
-                                </a>
-                            </div>
-                        <?php endif; ?>
     <?php else: ?>
         <main class="auth-main">
             <div class="auth-wrap">

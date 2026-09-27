@@ -12,12 +12,12 @@ $moduleLabels = system_report_module_labels();
 $report = build_system_report($dateFrom, $dateTo, array_keys($moduleLabels));
 $adjustQuery = http_build_query(['from' => $report['date_from'], 'to' => $report['date_to']]);
 
+set_page_back_link('index.php?' . $adjustQuery, 'Back to Reports');
 render_header('Report Preview');
 render_clinic_command_header(
     'Reports',
     'Report Preview',
-    'Choose the sections to export, add optional remarks, and review the final report.',
-    '<a class="btn btn-outline text-decoration-none" data-no-ajax="true" href="index.php?' . e($adjustQuery) . '"><span class="material-symbols-outlined text-[18px]">arrow_back</span>Back to Reports</a>'
+    'Choose the sections to export, add optional remarks, and review the final report.'
 );
 ?>
 <link rel="stylesheet" href="<?= e(app_url('assets/css/reports.css?v=3')) ?>">

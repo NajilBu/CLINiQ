@@ -25,6 +25,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $guestName = null;
         if ($subjectType === 'guest') {
             $guestName = trim((string) ($_POST['guest_name'] ?? '')) ?: null;
+            if ($guestName === null) {
+                throw new InvalidArgumentException('Enter the visitor / guest name before saving the visit.');
+            }
         } elseif ($postedStudentNumber !== '') {
             if (!is_valid_id_number($postedStudentNumber)) {
                 throw new InvalidArgumentException(id_number_validation_message());
@@ -411,7 +414,7 @@ function updatePatientLookup() {
         patientCourseDisplay.value = 'Visitor / Guest';
         patientSexDisplay.value = 'Not specified';
         patientTypeDisplay.value = 'Visitor / Guest';
-        setLookupStatus('Guest visit: ID number is not required. Name is optional.');
+        setLookupStatus('Guest visit: ID number is not required. Visitor / guest name is required.');
         return;
     }
     patientNameDisplay.readOnly = true;
@@ -449,7 +452,8 @@ function syncVisitSubjectType() {
     idField.disabled = isGuest;
     idField.closest('div')?.classList.toggle('opacity-60', isGuest);
     guestNameInput.value = isGuest && patientNameDisplay.value !== 'Enter ID number' ? patientNameDisplay.value : '';
-    patientNameDisplay.placeholder = isGuest ? 'Optional guest name' : '';
+    patientNameDisplay.placeholder = isGuest ? 'Enter visitor / guest name' : '';
+    patientNameDisplay.required = isGuest;
     if (isGuest) {
         patientNameDisplay.readOnly = false;
         patientNameDisplay.value = guestNameInput.value;
@@ -473,6 +477,11 @@ document.getElementById('visitForm')?.addEventListener('submit', (event) => {
     updatePatientLookup();
     if (visitSubjectType?.value === 'guest') {
         guestNameInput.value = patientNameDisplay.value.trim();
+        if (!guestNameInput.value) {
+            event.preventDefault();
+            patientNameDisplay.focus();
+            setLookupStatus('Enter the visitor / guest name before saving the visit.', 'missing');
+        }
         return;
     }
     if (!patientIdInput.value) {

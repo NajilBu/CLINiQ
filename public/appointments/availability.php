@@ -185,12 +185,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
+set_page_back_link(app_url('appointments/index.php'), 'Back to Appointments');
 render_header('Clinic Availability');
 render_clinic_command_header(
     'Scheduling',
     'Clinic Availability',
-    'Manage working hours, future schedules, and unavailable appointment periods.',
-    '<a href="' . e(app_url('appointments/index.php')) . '" class="btn btn-outline text-decoration-none"><span class="material-symbols-outlined">arrow_back</span> Back to Appointments</a>'
+    'Manage working hours, future schedules, and unavailable appointment periods.'
 );
 require __DIR__ . '/_availability_section.php';
 render_footer();

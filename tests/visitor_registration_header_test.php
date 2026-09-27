@@ -22,8 +22,8 @@ if (!str_contains($brand, 'class="cliniq-entry-brand"')) {
     throw new RuntimeException('Shared entry header must continue rendering the CLINiQ brand.');
 }
 
-if (!str_contains($visitor, 'class="visit-success-back-button btn btn-primary text-decoration-none"')) {
-    throw new RuntimeException('The success state must provide the enlarged Back to form action.');
+if (!str_contains($visitor, 'class="visit-success-back-button btn btn-primary cliniq-floating-back text-decoration-none"')) {
+    throw new RuntimeException('The success state must provide a floating Back to form action.');
 }
 
 if (!str_contains($visitor, 'href="visitor-registration.php"')) {

@@ -341,6 +341,9 @@ function cliniq_visit_create(array $visit, array $entry = [], array $vitals = []
     if ($patientPersonId === null && !array_key_exists('guest_name', $visit)) {
         throw new InvalidArgumentException('Select a patient that exists in Cliniq_db.');
     }
+    if ($patientPersonId === null && $guestName === null) {
+        throw new InvalidArgumentException('Visitor / guest name is required.');
+    }
     if ($patientPersonId !== null && !cliniq_visit_patient_exists($patientPersonId)) {
         throw new InvalidArgumentException('Select a patient that exists in Cliniq_db.');
     }
