@@ -101,6 +101,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!$hasAppointmentPatientProfile || 
         $error = 'Please choose a future clinic date.';
     } elseif (!appointment_date_is_clinic_day($dateStr)) {
         $error = 'The clinic is closed on the selected day.';
+    } elseif (!appointment_purpose_has_doctor_on_date($type, $dateStr)) {
+        $error = 'No doctor is assigned to this consultation on the selected day. Please choose another day.';
     } elseif (!in_array($timeStr, $allowedTimes, true) || !appointment_slot_is_open($dateStr, $timeStr)) {
         $error = 'Please choose one of the available appointment times.';
     } elseif (appointment_time_is_blocked($dateStr, $timeStr, $blocksForPostMonth)) {
@@ -115,16 +117,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!$hasAppointmentPatientProfile || 
             $notes .= ' Patient note: ' . $note;
         }
 
-        try {
-            $stmt = $db->prepare("INSERT INTO appointments (patient_id, appointment_datetime, purpose, status, request_source, notes) VALUES (?, ?, ?, 'Pending', 'Patient Portal', ?)");
-            $stmt->execute([$patientId, $datetimeStr, $type, $notes]);
-            $success = true;
-            $successMessage = 'Appointment request sent. Please wait for clinic approval before going to the clinic.';
-        } catch (PDOException $exception) {
-            if ($exception->getCode() === '23000' && (int) ($exception->errorInfo[1] ?? 0) === 1062) {
-                $error = 'That appointment time was just taken. Please choose another hour.';
-            } else {
-                throw $exception;
+        $lockName = 'cliniq_appointment_' . sha1($datetimeStr);
+        $lockStmt = $db->prepare('SELECT GET_LOCK(?, 5)');
+        $lockStmt->execute([$lockName]);
+        if ((int) $lockStmt->fetchColumn() !== 1) {
+            $error = 'That appointment time is being requested. Please try again.';
+        } else {
+            try {
+                if (appointment_slot_is_reserved($datetimeStr, $type)) {
+                    $error = 'That appointment time was just taken. Please choose another hour.';
+                } else {
+                    $stmt = $db->prepare("INSERT INTO appointments (patient_id, appointment_datetime, purpose, status, request_source, notes) VALUES (?, ?, ?, 'Pending', 'Patient Portal', ?)");
+                    $stmt->execute([$patientId, $datetimeStr, $type, $notes]);
+                    $success = true;
+                    $successMessage = 'Appointment request sent. Please wait for clinic approval before going to the clinic.';
+                }
+            } catch (PDOException $exception) {
+                if ($exception->getCode() === '23000' && (int) ($exception->errorInfo[1] ?? 0) === 1062) {
+                    $error = 'That appointment time was just taken. Please choose another hour.';
+                } else {
+                    throw $exception;
+                }
+            } finally {
+                $releaseStmt = $db->prepare('SELECT RELEASE_LOCK(?)');
+                $releaseStmt->execute([$lockName]);
             }
         }
     }
@@ -145,7 +161,12 @@ $monthEnd = $month->modify('last day of this month')->format('Y-m-d');
 $apeBatchesByDate = appointment_ape_batches_for_range($monthStart, $monthEnd);
 
 $availabilityPayload = [];
-$availabilityDates = array_values(array_unique(array_merge(array_keys($blocksByDate), array_keys($reservedTimesByDate), array_keys($apeBatchesByDate))));
+$doctorSchedule = appointment_doctor_schedule();
+$activeDoctorIds = array_map(static fn (array $doctor): int => (int) $doctor['id'], appointment_active_doctors());
+$availabilityDates = [];
+foreach (new DatePeriod(new DateTimeImmutable($monthStart), new DateInterval('P1D'), (new DateTimeImmutable($monthEnd))->modify('+1 day')) as $calendarDay) {
+    $availabilityDates[] = $calendarDay->format('Y-m-d');
+}
 foreach ($availabilityDates as $date) {
     $blocks = $blocksByDate[$date] ?? [];
     $blockedTimes = [];
@@ -163,6 +184,11 @@ foreach ($availabilityDates as $date) {
         'fullDay' => appointment_is_full_day_blocked($blocks),
         'blockedTimes' => $blockedTimes,
         'reservedTimesByPurpose' => $reservedTimesByDate[$date] ?? [],
+        'doctorAvailable' => array_combine(
+            appointment_consult_purposes(),
+            array_map(static fn (string $purpose): bool => empty($doctorSchedule[$purpose]['configured'])
+                || appointment_doctor_ids_for_weekday($doctorSchedule, $purpose, (int) (new DateTimeImmutable($date))->format('N'), $activeDoctorIds) !== [], appointment_consult_purposes())
+        ),
         'patientTimes' => $patientActiveTimes,
         'apeTimes' => $apeTimes,
     ];
@@ -563,6 +589,7 @@ render_student_header('Appointments', 'appointment');
         const patientTimes = availability[date]?.patientTimes || [];
         const allowedPurposes = <?= json_encode($availableAppointmentPurposes, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
         const reservedTimes = reservedByPurpose[purpose] || [];
+        const doctorAvailable = availability[date]?.doctorAvailable?.[purpose] !== false;
         const apeTimes = availability[date]?.apeTimes || [];
         const [year, month, day] = date.split('-').map(Number);
         const weekday = new Date(year, month - 1, day).getDay() || 7;
@@ -578,7 +605,7 @@ render_student_header('Appointments', 'appointment');
             const dentalReserved = !allowedPurposes.includes('Dental') || (reservedByPurpose['Dental'] || []).includes(slot.dataset.time);
             const isApeBlocked = apeTimes.includes(slot.dataset.time);
             const patientHasTime = patientTimes.includes(slot.dataset.time);
-            const isUnavailable = !purpose || !isWithinHours || isClinicBlocked || isApeBlocked || isReserved || patientHasTime;
+            const isUnavailable = !purpose || !doctorAvailable || !isWithinHours || isClinicBlocked || isApeBlocked || isReserved || patientHasTime;
             slot.hidden = !isWithinHours;
             slot.classList.toggle('disabled', isUnavailable);
             slot.classList.toggle('is-blocked', isClinicBlocked || isApeBlocked);
@@ -589,20 +616,21 @@ render_student_header('Appointments', 'appointment');
                 : dentalReserved && !medicalReserved
                     ? 'Medical Consult available'
                     : '';
-            slot.title = !isWithinHours ? '' : (patientHasTime
+            slot.title = !isWithinHours ? '' : (!doctorAvailable ? 'No doctor assigned for this service today' : (patientHasTime
                 ? 'You already have an appointment at this time'
                 : (isApeBlocked
                     ? 'Reserved for APE examinations'
                     : (isReserved
                         ? 'Reserved for this purpose'
-                        : (isClinicBlocked ? 'This time is unavailable' : ''))));
+                        : (isClinicBlocked ? 'This time is unavailable' : '')))));
             slot.querySelector('.student-calendar-time-status').textContent = !purpose
                 ? 'Select purpose'
+                : (!doctorAvailable ? 'No doctor assigned'
                 : (patientHasTime
                     ? 'Your appointment'
                     : (isApeBlocked
                         ? 'APE Examination'
-                        : (isReserved ? 'Reserved for this purpose' : (isClinicBlocked ? 'Unavailable' : purposeStatus))));
+                        : (isReserved ? 'Reserved for this purpose' : (isClinicBlocked ? 'Unavailable' : purposeStatus)))));
 
             if (isUnavailable && slot.classList.contains('selected')) {
                 slot.classList.remove('selected');
@@ -633,7 +661,7 @@ render_student_header('Appointments', 'appointment');
             const hasOpenPurposeSlot = <?= json_encode($allowedTimes) ?>.some((value) => {
                 const start = value.slice(0, 5);
                 const end = String(Number(start.slice(0, 2)) + 1).padStart(2, '0') + ':00';
-                return Boolean(hours?.enabled) && start >= hours.start && end <= hours.end
+                return Boolean(hours?.enabled) && data.doctorAvailable?.[purpose] !== false && start >= hours.start && end <= hours.end
                     && !blocked.includes(value) && !ape.includes(value)
                     && !reserved.includes(value) && !patientTimesForDate.includes(value);
             });
@@ -650,11 +678,12 @@ render_student_header('Appointments', 'appointment');
         const reservedByPurpose = availability[date]?.reservedTimesByPurpose || {};
         Array.from(purposeSelect.options).forEach((option) => {
             if (!option.value) return;
-            const unavailable = (reservedByPurpose[option.value] || []).includes(time);
+            const unavailable = (reservedByPurpose[option.value] || []).includes(time)
+                || availability[date]?.doctorAvailable?.[option.value] === false;
             option.disabled = unavailable;
             const base = option.dataset.baseLabel || option.textContent.replace(/ — (Available|Reserved)/, '');
             option.dataset.baseLabel = base;
-            option.textContent = `${base} — ${unavailable ? 'Reserved' : 'Available'}`;
+            option.textContent = `${base} — ${unavailable ? 'Unavailable' : 'Available'}`;
         });
         if (purposeSelect.selectedOptions[0]?.disabled) purposeSelect.value = '';
     }

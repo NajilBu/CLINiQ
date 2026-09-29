@@ -7,6 +7,7 @@ require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../helpers/mail.php';
 require_once __DIR__ . '/ApeWorkflow.php';
 require_once __DIR__ . '/AppointmentWorkflow.php';
+require_once __DIR__ . '/GraduationService.php';
 
 function ensure_ape_cycle_schema(): void
 {
@@ -131,10 +132,9 @@ function next_school_year_from_cycle(?array $cycle): string
     return $endYear . '-' . ($endYear + 1);
 }
 
-function school_year_default_promotion(string $yearLevel): string
+function school_year_default_promotion(string $yearLevel, bool $graduationCleared = false): string
 {
-    $year = (int) trim($yearLevel);
-    return $year >= 4 ? 'graduated' : (string) max(1, $year + 1);
+    return graduation_default_promotion($yearLevel, $graduationCleared);
 }
 
 function school_year_promotion_preview(?array $currentCycle = null): array
@@ -147,19 +147,23 @@ function school_year_promotion_preview(?array $currentCycle = null): array
     $academicYear = next_school_year_from_cycle($currentCycle);
     $duplicate = auth_db()->prepare('SELECT COUNT(*) FROM student_school_year_enrollments WHERE academic_year = ?');
     $duplicate->execute([$academicYear]);
-    $students = auth_db()->query("
+    $batchYear = graduation_batch_year((string) $currentCycle['academic_year']);
+    $studentsStmt = auth_db()->prepare("
         SELECT s.person_id, s.program_id, s.year_level, s.section, s.academic_year,
                p.id_number, TRIM(CONCAT_WS(' ', p.first_name, p.middle_name, p.last_name)) AS student_name,
-               pr.program_code
+               pr.program_code, gc.clearance_id AS graduation_clearance_id
         FROM students s
         INNER JOIN people p ON p.id = s.person_id
         INNER JOIN patients pt ON pt.person_id = s.person_id
         INNER JOIN accounts a ON a.person_id = s.person_id AND a.account_status = 'active'
         LEFT JOIN programs pr ON pr.id = s.program_id
+        LEFT JOIN graduation_clearances gc ON gc.student_person_id = s.person_id AND gc.batch_year = ? AND gc.revoked_at IS NULL
         ORDER BY pr.program_code, CAST(s.year_level AS UNSIGNED), s.section, p.last_name, p.first_name
-    ")->fetchAll();
+    ");
+    $studentsStmt->execute([$batchYear]);
+    $students = $studentsStmt->fetchAll();
     foreach ($students as &$student) {
-        $student['default_promotion'] = school_year_default_promotion((string) ($student['year_level'] ?? ''));
+        $student['default_promotion'] = school_year_default_promotion((string) ($student['year_level'] ?? ''), !empty($student['graduation_clearance_id']));
     }
     unset($student);
     return [
@@ -843,6 +847,7 @@ function reset_school_year_accounts(string $academicYear = '', array $submittedP
     }
 
     $db = auth_db();
+    $batchYear = graduation_batch_year((string) $currentCycle['academic_year']);
     $db->beginTransaction();
     try {
         $alreadyProcessed = $db->prepare('SELECT enrollment_id FROM student_school_year_enrollments WHERE academic_year = ? LIMIT 1 FOR UPDATE');
@@ -862,11 +867,13 @@ function reset_school_year_accounts(string $academicYear = '', array $submittedP
             s.program_id,
             s.year_level,
             s.section,
-            s.academic_year
+            s.academic_year,
+            gc.clearance_id AS graduation_clearance_id
         FROM accounts a
         INNER JOIN patients pt ON pt.person_id = a.person_id
         INNER JOIN people p ON p.id = a.person_id
         INNER JOIN students s ON s.person_id = p.id
+        LEFT JOIN graduation_clearances gc ON gc.student_person_id = s.person_id AND gc.batch_year = {$batchYear} AND gc.revoked_at IS NULL
         WHERE a.account_status = 'active'
         FOR UPDATE
         ");
@@ -892,11 +899,18 @@ function reset_school_year_accounts(string $academicYear = '', array $submittedP
         foreach ($students as $student) {
             $personId = (int) $student['person_id'];
             $currentYearLevel = (string) ($student['year_level'] ?? '');
+            $graduationCleared = !empty($student['graduation_clearance_id']);
             $choice = (array) ($submittedPromotions[$personId] ?? []);
-            $target = trim((string) ($choice['year_level'] ?? school_year_default_promotion($currentYearLevel)));
+            $target = trim((string) ($choice['year_level'] ?? school_year_default_promotion($currentYearLevel, $graduationCleared)));
             $targetSection = strtoupper(trim((string) ($choice['section'] ?? $student['section'] ?? '')));
             if (!in_array($target, ['1', '2', '3', '4', 'graduated'], true)) {
                 throw new InvalidArgumentException('Choose a valid promoted year level for every student.');
+            }
+            if ($graduationCleared && $target !== 'graduated') {
+                throw new InvalidArgumentException('Revoke graduation clearance before retaining a cleared student.');
+            }
+            if ($target === 'graduated' && (!$graduationCleared || trim($currentYearLevel) !== '4')) {
+                throw new InvalidArgumentException('Only cleared fourth-year students can be marked graduated.');
             }
             if ($target !== 'graduated' && ($targetSection === '' || mb_strlen($targetSection) > 80)) {
                 throw new InvalidArgumentException('Enter a valid section for every continuing student.');
@@ -904,7 +918,7 @@ function reset_school_year_accounts(string $academicYear = '', array $submittedP
 
             $previousAcademicYear = trim((string) ($student['academic_year'] ?? '')) ?: (string) $currentCycle['academic_year'];
             $saveYear->execute([$personId, $previousAcademicYear, $student['program_id'], $currentYearLevel, $student['section'], 'Enrolled', null, 'Snapshot', $actorPersonId]);
-            $source = $target === school_year_default_promotion($currentYearLevel)
+            $source = $target === school_year_default_promotion($currentYearLevel, $graduationCleared)
                 && $targetSection === strtoupper(trim((string) ($student['section'] ?? '')))
                 ? 'Automatic' : 'Manual';
 

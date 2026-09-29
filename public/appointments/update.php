@@ -42,6 +42,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!appointment_slot_is_open($appointmentDate, substr($appointmentDatetime, 11, 8))) {
                     throw new InvalidArgumentException('This request is outside the clinic working days or hours. Choose a valid time before approving it.');
                 }
+                if (!appointment_purpose_has_doctor_on_date((string) $appointment['purpose'], $appointmentDate)) {
+                    throw new InvalidArgumentException('No doctor is assigned to this consultation on the selected day. Assign a doctor before approving it.');
+                }
                 $blocks = appointment_blocks_for_month(appointment_month_from_request(substr($appointmentDate, 0, 7)));
                 if (appointment_time_is_blocked($appointmentDate, substr($appointmentDatetime, 11, 8), $blocks)) {
                     throw new InvalidArgumentException('This request falls within an unavailable clinic period. Remove the block or choose another appointment time before approving it.');

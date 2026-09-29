@@ -16,7 +16,8 @@ foreach ([null, [], ['status' => 'Active'], ['status' => 'Archived']] as $cycle)
 if (next_school_year_from_cycle(['academic_year' => '2026-2027']) !== '2027-2028'
     || school_year_default_promotion('1') !== '2'
     || school_year_default_promotion('3') !== '4'
-    || school_year_default_promotion('4') !== 'graduated') {
+    || school_year_default_promotion('4') !== '4'
+    || school_year_default_promotion('4', true) !== 'graduated') {
     throw new RuntimeException('School-year progression defaults are incorrect.');
 }
 
@@ -35,6 +36,7 @@ foreach ([
     "cliniq_notification_email('student_re_enrollment'",
     'Faculty, school personnel, clinic staff, and other patients remain active.',
     'student_school_year_enrollments',
+    'graduation_clearances',
     'Student promotion for school year',
 ] as $expected) {
     if (!str_contains($cycleService, $expected)) {
@@ -46,10 +48,15 @@ if (str_contains($cycleService, "SET a.account_status = 'inactive',\n           
     throw new RuntimeException('The school-year reset must preserve activation history so students enter re-enrollment instead of first registration.');
 }
 
+if (!str_contains($cycleService, "if (\$target === 'graduated' && (!\$graduationCleared")
+    || !str_contains($cycleService, "\$notificationPatients[] = \$student;")) {
+    throw new RuntimeException('Graduation must require clearance and skip the re-enrollment email path.');
+}
+
 foreach ([
     'active student patient accounts only',
     'Faculty, personnel, clinic staff, and other patient accounts remain active.',
-    'Students must submit their current enrollment status on their next login.',
+    'Continuing students must submit their current enrollment status on their next login;',
     'Review Student Promotion',
     'data-promotion-year',
     'Confirm New School Year',

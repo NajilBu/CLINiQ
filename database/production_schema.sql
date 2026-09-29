@@ -170,6 +170,21 @@ CREATE TABLE student_school_year_enrollments (
   INDEX idx_student_school_year_program (program_id, academic_year)
 );
 
+CREATE TABLE graduation_clearances (
+  clearance_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  student_person_id BIGINT UNSIGNED NOT NULL,
+  batch_year SMALLINT UNSIGNED NOT NULL,
+  cleared_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  cleared_by_person_id BIGINT UNSIGNED NOT NULL,
+  revoked_at TIMESTAMP NULL,
+  revoked_by_person_id BIGINT UNSIGNED NULL,
+  FOREIGN KEY (student_person_id) REFERENCES students(person_id) ON DELETE CASCADE,
+  FOREIGN KEY (cleared_by_person_id) REFERENCES people(id),
+  FOREIGN KEY (revoked_by_person_id) REFERENCES people(id),
+  UNIQUE INDEX uq_graduation_clearance_student_batch (student_person_id, batch_year),
+  INDEX idx_graduation_clearance_batch_active (batch_year, revoked_at)
+);
+
 CREATE TABLE school_employees (
   person_id BIGINT UNSIGNED PRIMARY KEY,
   department_id BIGINT UNSIGNED NULL,
@@ -563,7 +578,7 @@ CREATE TABLE appointments (
   INDEX idx_appointments_status_datetime (status, appointment_datetime),
   INDEX idx_appointments_datetime (appointment_datetime),
   INDEX idx_appointments_reviewed_by (reviewed_by_person_id),
-  UNIQUE INDEX uq_appointments_reserved_slot (reserved_slot)
+  UNIQUE INDEX uq_appointments_reserved_slot (reserved_slot, purpose)
 );
 
 CREATE TABLE appointment_availability_blocks (

@@ -7,6 +7,7 @@ require_once __DIR__ . '/../../app/services/ApeWorkflow.php';
 require_once __DIR__ . '/../../app/services/AlertWorkflow.php';
 require_once __DIR__ . '/../../app/services/PatientEmail.php';
 require_once __DIR__ . '/../../app/services/AppointmentWorkflow.php';
+require_once __DIR__ . '/../../app/services/GraduationService.php';
 require_login();
 
 $id = (int) ($_GET['id'] ?? 0);
@@ -83,6 +84,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'send_
     header('Location: view.php?id=' . (int) $patient['person_id']);
     exit;
 }
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'graduation_clearance') {
+    try {
+        if (!csrf_request_is_valid() || !in_array($user['role'] ?? '', ['admin', 'doctor', 'nurse'], true)) {
+            throw new InvalidArgumentException('You do not have permission to change graduation clearance.');
+        }
+        $clear = (string) ($_POST['decision'] ?? '') === 'clear';
+        if (!$clear && (string) ($_POST['decision'] ?? '') !== 'revoke') {
+            throw new InvalidArgumentException('Choose a valid graduation clearance decision.');
+        }
+        $actorPersonId = (int) ($user['person_id'] ?? $user['id'] ?? 0);
+        graduation_set_clearance((int) $patient['person_id'], $actorPersonId, $clear);
+        audit_log_event('patients', $clear ? 'graduation_clearance_granted' : 'graduation_clearance_revoked', $actorPersonId, 'staff', 'patient', (int) $patient['person_id']);
+        flash_message('success', $clear ? 'Student cleared for graduation.' : 'Graduation clearance revoked.');
+    } catch (Throwable $e) {
+        flash_message('error', $e instanceof InvalidArgumentException ? $e->getMessage() : 'Graduation clearance could not be updated.');
+    }
+    header('Location: view.php?id=' . (int) $patient['person_id']);
+    exit;
+}
+
+$isFourthYearStudent = ($patient['patient_type'] ?? '') === 'Student' && trim((string) ($patient['year_level'] ?? '')) === '4';
+$isGraduated = $isFourthYearStudent && graduation_is_graduated((int) $patient['person_id']);
+$graduationBatchYear = null;
+if ($isFourthYearStudent) {
+    try { $graduationBatchYear = graduation_student_batch_year((string) ($patient['academic_year'] ?? '')); } catch (InvalidArgumentException $e) { /* Wait for a current APE cycle or update the student record. */ }
+}
+$graduationClearance = $graduationBatchYear !== null ? graduation_clearance((int) $patient['person_id'], $graduationBatchYear) : null;
 
 $visits = cliniq_patient_profile_history((int) $patient['person_id']);
 
@@ -483,6 +512,7 @@ render_header($fullName . ' - Patient Profile');
                     <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs font-bold text-slate-500">
                         <span><?= e($emailLabel) ?></span>
                         <span><?= e(ucfirst((string) ($patient['account_status'] ?: 'Status not specified'))) ?></span>
+                        <?php if ($isGraduated): ?><span class="text-emerald-700">Graduated</span><?php elseif ($graduationClearance): ?><span class="text-emerald-700">Cleared for Graduation · Batch <?= (int) $graduationClearance['batch_year'] ?></span><?php endif; ?>
                         <span>Emergency: <?= e($patient['guardian_name'] ?: 'Not specified') ?></span>
                     </div>
                 </div>
@@ -497,6 +527,20 @@ render_header($fullName . ' - Patient Profile');
                         <span class="material-symbols-outlined text-[18px]">mail</span>
                         Email Patient
                     </button>
+                <?php endif; ?>
+                <?php if ($isFourthYearStudent && !$isGraduated && ($patient['account_status'] ?? '') === 'active' && $graduationBatchYear !== null && in_array($user['role'] ?? '', ['admin', 'doctor', 'nurse'], true)): ?>
+                    <form method="post" class="m-0">
+                        <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
+                        <input type="hidden" name="action" value="graduation_clearance">
+                        <input type="hidden" name="decision" value="<?= $graduationClearance ? 'revoke' : 'clear' ?>">
+                        <button class="btn <?= $graduationClearance ? 'btn-outline' : 'btn-primary' ?>" data-confirm-submit data-confirm-title="<?= $graduationClearance ? 'Revoke graduation clearance?' : 'Clear for graduation?' ?>" data-confirm-message="<?= $graduationClearance ? 'This will remove the student from the cleared list until reviewed again.' : 'Confirm that this fourth-year student is ready for graduation. This does not mark them graduated yet.' ?>">
+                            <span class="material-symbols-outlined text-[18px]">verified</span>
+                            <?= $graduationClearance ? 'Revoke Clearance' : 'Clear for Graduation' ?>
+                        </button>
+                    </form>
+                <?php endif; ?>
+                <?php if ($isFourthYearStudent && !$isGraduated && $graduationBatchYear === null): ?>
+                    <span class="text-xs font-bold text-amber-700 self-center">Set a valid school year or start an APE cycle to enable graduation clearance.</span>
                 <?php endif; ?>
                 <a class="btn btn-primary text-decoration-none" href="<?= app_url('visits/create.php?patient_id=' . $id) ?>">
                     <span class="material-symbols-outlined text-[18px]">add_notes</span>

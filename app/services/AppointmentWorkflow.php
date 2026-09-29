@@ -48,6 +48,144 @@ function appointment_duration_minutes(): int
     return 60;
 }
 
+function appointment_consult_purposes(): array
+{
+    return ['Medical Consult', 'Dental'];
+}
+
+function appointment_active_doctors(): array
+{
+    return auth_db()->query("SELECT cs.person_id AS id, TRIM(CONCAT_WS(' ', p.first_name, p.middle_name, p.last_name)) AS name
+        FROM clinic_staff cs JOIN people p ON p.id = cs.person_id
+        JOIN accounts a ON a.person_id = cs.person_id
+        WHERE cs.staff_role = 'doctor' AND a.account_status = 'active'
+        ORDER BY p.last_name, p.first_name, p.id_number")->fetchAll();
+}
+
+function appointment_doctor_schedule(): array
+{
+    $stored = cliniq_setting_read('appointment_doctor_schedule', []);
+    $schedule = [];
+    foreach (appointment_consult_purposes() as $purpose) {
+        $entry = (array) ($stored[$purpose] ?? []);
+        $assignedDoctors = [];
+        foreach ((array) ($entry['doctors'] ?? []) as $doctorId => $assignment) {
+            if ((int) $doctorId <= 0 || !is_array($assignment)) {
+                continue;
+            }
+            $days = array_values(array_unique(array_filter(array_map('intval', (array) ($assignment['days'] ?? [])),
+                static fn (int $day): bool => $day >= 1 && $day <= 7)));
+            $assignedDoctors[(int) $doctorId] = ['days' => $days];
+        }
+        $schedule[$purpose] = ['configured' => !empty($entry['configured']), 'doctors' => $assignedDoctors];
+    }
+    return $schedule;
+}
+
+function appointment_doctor_ids_for_weekday(array $schedule, string $purpose, int $weekday, array $activeDoctorIds): array
+{
+    $ids = [];
+    foreach ((array) ($schedule[$purpose]['doctors'] ?? []) as $doctorId => $assignment) {
+        $days = (array) ($assignment['days'] ?? []);
+        if (in_array((int) $doctorId, $activeDoctorIds, true) && (!$days || in_array($weekday, $days, true))) {
+            $ids[] = (int) $doctorId;
+        }
+    }
+    return $ids;
+}
+
+function appointment_doctor_for_date(string $purpose, string $date): ?int
+{
+    $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+    if (!$parsed || $parsed->format('Y-m-d') !== $date) {
+        return null;
+    }
+    $schedule = appointment_doctor_schedule();
+    $activeDoctorIds = array_map(static fn (array $doctor): int => (int) $doctor['id'], appointment_active_doctors());
+    return appointment_doctor_ids_for_weekday($schedule, $purpose, (int) $parsed->format('N'), $activeDoctorIds)[0] ?? null;
+}
+
+function appointment_purpose_has_doctor_on_date(string $purpose, string $date): bool
+{
+    $schedule = appointment_doctor_schedule();
+    return empty($schedule[$purpose]['configured']) || appointment_doctor_for_date($purpose, $date) !== null;
+}
+
+function appointment_services_can_share_time(string $date): bool
+{
+    $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+    if (!$parsed || $parsed->format('Y-m-d') !== $date) {
+        return false;
+    }
+    $schedule = appointment_doctor_schedule();
+    if (empty($schedule['Medical Consult']['configured']) || empty($schedule['Dental']['configured'])) {
+        return false;
+    }
+    $activeDoctorIds = array_map(static fn (array $doctor): int => (int) $doctor['id'], appointment_active_doctors());
+    $weekday = (int) $parsed->format('N');
+    $medical = appointment_doctor_ids_for_weekday($schedule, 'Medical Consult', $weekday, $activeDoctorIds);
+    $dental = appointment_doctor_ids_for_weekday($schedule, 'Dental', $weekday, $activeDoctorIds);
+    foreach ($medical as $medicalId) {
+        foreach ($dental as $dentalId) {
+            if ($medicalId !== $dentalId) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+function appointment_normalize_doctor_selection(array $selectedPurposes, array $submittedDays): array
+{
+    $purposes = array_values(array_unique(array_filter(
+        array_map('strval', $selectedPurposes),
+        static fn (string $purpose): bool => in_array($purpose, appointment_consult_purposes(), true)
+    )));
+    if (!$purposes) {
+        $purposes = appointment_consult_purposes();
+    }
+    $days = array_values(array_unique(array_map('intval', $submittedDays)));
+    if (array_filter($days, static fn (int $day): bool => $day < 1 || $day > 7)) {
+        throw new InvalidArgumentException('Choose valid weekdays for the doctor.');
+    }
+    sort($days);
+    return ['purposes' => $purposes, 'days' => $days];
+}
+
+function appointment_save_doctor_days(int $doctorId, array $selectedPurposes, array $submittedDays, ?int $updatedBy, bool $remove = false): void
+{
+    $doctors = appointment_active_doctors();
+    if (!in_array($doctorId, array_map(static fn (array $doctor): int => (int) $doctor['id'], $doctors), true)) {
+        throw new InvalidArgumentException('Choose an active doctor.');
+    }
+    $selection = $remove ? ['purposes' => [], 'days' => []] : appointment_normalize_doctor_selection($selectedPurposes, $submittedDays);
+    $schedule = appointment_doctor_schedule();
+    foreach (appointment_consult_purposes() as $purpose) {
+        if (in_array($purpose, $selection['purposes'], true)) {
+            $schedule[$purpose]['doctors'][$doctorId] = ['days' => $selection['days']];
+            $schedule[$purpose]['configured'] = true;
+        } else {
+            unset($schedule[$purpose]['doctors'][$doctorId]);
+        }
+        ksort($schedule[$purpose]['doctors']);
+    }
+    $upcoming = appointment_db()->query("SELECT appointment_datetime, purpose FROM appointments
+        WHERE status IN ('Pending', 'Scheduled') AND appointment_datetime >= NOW()")->fetchAll();
+    $activeDoctorIds = array_map(static fn (array $doctor): int => (int) $doctor['id'], $doctors);
+    foreach ($upcoming as $appointment) {
+        $purpose = (string) $appointment['purpose'];
+        if (empty($schedule[$purpose]['configured'])) {
+            continue;
+        }
+        $date = substr((string) $appointment['appointment_datetime'], 0, 10);
+        $day = (int) (new DateTimeImmutable($date))->format('N');
+        if (!appointment_doctor_ids_for_weekday($schedule, $purpose, $day, $activeDoctorIds)) {
+            throw new InvalidArgumentException('An upcoming ' . $purpose . ' appointment on ' . $date . ' would have no doctor. Reassign that day before saving.');
+        }
+    }
+    cliniq_setting_write('appointment_doctor_schedule', $schedule, $updatedBy);
+}
+
 /**
  * Combine touching or overlapping unavailable periods when their reasons match.
  * Each item must contain normalized _start_minute and _end_minute values.
@@ -444,7 +582,16 @@ function appointment_reserved_times_for_month(DateTimeImmutable $month): array
 
     $timesByDate = [];
     foreach ($stmt->fetchAll() as $row) {
-        $timesByDate[$row['appointment_date']][(string) $row['purpose']][] = $row['appointment_time'];
+        $date = (string) $row['appointment_date'];
+        $purpose = (string) $row['purpose'];
+        $timesByDate[$date][$purpose][] = $row['appointment_time'];
+        if (!appointment_services_can_share_time($date)) {
+            foreach (appointment_consult_purposes() as $otherPurpose) {
+                if ($otherPurpose !== $purpose) {
+                    $timesByDate[$date][$otherPurpose][] = $row['appointment_time'];
+                }
+            }
+        }
     }
 
     return $timesByDate;
@@ -452,15 +599,16 @@ function appointment_reserved_times_for_month(DateTimeImmutable $month): array
 
 function appointment_slot_is_reserved(string $appointmentDatetime, string $purpose): bool
 {
+    $canShare = appointment_services_can_share_time(substr($appointmentDatetime, 0, 10));
     $stmt = appointment_db()->prepare("
         SELECT appointment_id
         FROM appointments
         WHERE appointment_datetime = ?
-          AND purpose = ?
+          AND (purpose = ? OR ? = 0)
           AND status IN ('Pending', 'Scheduled', 'For Confirmation')
         LIMIT 1
     ");
-    $stmt->execute([$appointmentDatetime, $purpose]);
+    $stmt->execute([$appointmentDatetime, $purpose, $canShare ? 1 : 0]);
 
     return (bool) $stmt->fetchColumn();
 }

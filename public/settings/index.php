@@ -391,7 +391,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     (array) ($_POST['promotions'] ?? []),
                     $actorPersonId
                 );
-                $msg = "School year {$result['academic_year']} prepared: {$result['promoted']} promoted, {$result['kept']} retained, and {$result['graduated']} marked graduated. {$result['reset']} student account(s) set to inactive.";
+                $msg = "School year {$result['academic_year']} prepared: {$result['promoted']} promoted, {$result['kept']} retained, and {$result['graduated']} cleared students marked graduated. {$result['reset']} student account(s) set to inactive. Graduates were not sent re-enrollment email.";
                 if (($result['email_queued'] ?? 0) > 0) {
                     $msg .= " {$result['email_queued']} reactivation email(s) queued for delivery.";
                 }
@@ -1744,7 +1744,7 @@ render_clinic_command_header(
                     <section class="settings-section border-2 border-red-200 bg-red-50 space-y-4">
                         <div>
                             <h3 class="font-headline text-lg font-extrabold text-red-800 mb-1">Start New School Year</h3>
-                            <p class="settings-help mb-0 text-red-700">Preview and confirm section promotion for <strong>active student patient accounts only</strong>. Faculty, personnel, clinic staff, and other patient accounts remain active. Students must submit their current enrollment status on their next login.</p>
+                            <p class="settings-help mb-0 text-red-700">Preview and confirm section promotion for <strong>active student patient accounts only</strong>. Faculty, personnel, clinic staff, and other patient accounts remain active. Continuing students must submit their current enrollment status on their next login; cleared graduates remain inactive and receive no re-enrollment email.</p>
                         </div>
                         <div class="flex flex-wrap items-center gap-3">
                             <button type="button" class="btn btn-danger justify-center" id="openSchoolYearPromotion" <?= empty($schoolYearPromotionPreview['students']) || !empty($schoolYearPromotionPreview['already_processed']) ? 'disabled' : '' ?>>
@@ -2879,7 +2879,7 @@ render_clinic_command_header(
                 <div>
                     <p class="clinic-label mb-1">School Year Promotion</p>
                     <h3 class="font-headline text-2xl font-extrabold text-[#17261d] mb-1" id="schoolYearPromotionTitle">Prepare <?= e((string) $schoolYearPromotionPreview['academic_year']) ?></h3>
-                    <p class="text-sm font-bold text-slate-500 mb-0">Review each proposed year and section. Keep the same year for irregular students or choose Graduated when appropriate.</p>
+                    <p class="text-sm font-bold text-slate-500 mb-0">Only fourth-year students cleared in their profile can graduate. Other fourth-year students remain in year four by default.</p>
                 </div>
                 <button type="button" class="btn btn-ghost" data-close-school-year-promotion aria-label="Close promotion preview"><span class="material-symbols-outlined">close</span></button>
             </header>
@@ -2892,14 +2892,15 @@ render_clinic_command_header(
                         $currentYearLevel = (string) ($promotionStudent['year_level'] ?? '');
                         $defaultPromotion = (string) $promotionStudent['default_promotion'];
                         $programCode = (string) ($promotionStudent['program_code'] ?? 'Program');
+                        $graduationCleared = !empty($promotionStudent['graduation_clearance_id']);
                     ?>
                         <tr data-promotion-row data-current-year="<?= e($currentYearLevel) ?>">
-                            <td><strong><?= e((string) $promotionStudent['student_name']) ?></strong><small class="block text-slate-500 font-bold mt-1"><?= e((string) $promotionStudent['id_number']) ?></small></td>
+                            <td><strong><?= e((string) $promotionStudent['student_name']) ?></strong><small class="block text-slate-500 font-bold mt-1"><?= e((string) $promotionStudent['id_number']) ?></small><?php if ($graduationCleared): ?><small class="block text-emerald-700 font-bold mt-1">Cleared for Graduation</small><?php endif; ?></td>
                             <td><strong><?= e($programCode . '-' . $currentYearLevel . strtoupper((string) ($promotionStudent['section'] ?? ''))) ?></strong></td>
                             <td>
                                 <select class="settings-input" name="promotions[<?= $personId ?>][year_level]" data-promotion-year required>
-                                    <?php foreach (['1', '2', '3', '4'] as $year): ?><option value="<?= $year ?>" <?= $defaultPromotion === $year ? 'selected' : '' ?>>Year <?= $year ?><?= $year === $currentYearLevel ? ' (keep current)' : '' ?></option><?php endforeach; ?>
-                                    <option value="graduated" <?= $defaultPromotion === 'graduated' ? 'selected' : '' ?>>Graduated</option>
+                                    <?php foreach (['1', '2', '3', '4'] as $year): ?><option value="<?= $year ?>" <?= $graduationCleared ? 'disabled' : '' ?> <?= $defaultPromotion === $year ? 'selected' : '' ?>>Year <?= $year ?><?= $year === $currentYearLevel ? ' (keep current)' : '' ?></option><?php endforeach; ?>
+                                    <option value="graduated" <?= !$graduationCleared ? 'disabled' : '' ?> <?= $defaultPromotion === 'graduated' ? 'selected' : '' ?>>Graduated</option>
                                 </select>
                             </td>
                             <td><input class="settings-input" name="promotions[<?= $personId ?>][section]" value="<?= e(strtoupper((string) ($promotionStudent['section'] ?? ''))) ?>" maxlength="80" data-promotion-section <?= $defaultPromotion === 'graduated' ? 'disabled' : 'required' ?>></td>
@@ -2910,7 +2911,7 @@ render_clinic_command_header(
                 </table>
             </div>
             <footer class="p-5 border-t border-slate-200 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <p class="text-xs font-bold text-slate-500 mb-0"><span data-promotion-count><?= count($schoolYearPromotionPreview['students']) ?></span> student(s) will be processed. Student accounts become inactive until enrollment confirmation.</p>
+                <p class="text-xs font-bold text-slate-500 mb-0"><span data-promotion-count><?= count($schoolYearPromotionPreview['students']) ?></span> student(s) will be processed. Cleared graduates remain inactive and receive no re-enrollment email.</p>
                 <div class="flex gap-3 justify-end">
                     <button type="button" class="btn btn-secondary" data-close-school-year-promotion>Cancel</button>
                     <button type="submit" class="btn btn-danger" data-confirm-submit data-confirm-type="danger" data-confirm-title="Start the new school year?" data-confirm-message="The reviewed student assignments will be saved, graduating students will be marked, and continuing student accounts will require enrollment confirmation. This school year cannot be processed twice." data-confirm-toast="Promoting student sections...">

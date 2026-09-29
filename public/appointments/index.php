@@ -162,7 +162,7 @@ render_clinic_command_header(
     'Scheduling',
     'Appointment Requests',
     'Approve student booking requests before they become clinic schedules.',
-    '<a href="' . e(app_url('appointments/availability.php')) . '" class="btn btn-primary text-decoration-none"><span class="material-symbols-outlined">calendar_month</span>Clinic Availability</a>'
+    '<div class="flex flex-wrap gap-2"><a href="' . e(app_url('appointments/doctors.php')) . '" class="btn btn-outline text-decoration-none"><span class="material-symbols-outlined">stethoscope</span>Assign Doctors</a><a href="' . e(app_url('appointments/availability.php')) . '" class="btn btn-primary text-decoration-none"><span class="material-symbols-outlined">calendar_month</span>Clinic Availability</a></div>'
 );
 ?>
 
