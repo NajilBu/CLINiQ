@@ -82,8 +82,9 @@ try {
 render_header('Clinic Feedback');
 ?>
 <link rel="stylesheet" href="<?= e(app_url('assets/css/feedback.css?v=design-4')) ?>">
-<?php render_clinic_command_header('Service evaluation', 'Clinic Feedback', 'Student feedback for Active and Completed clinic visits.'); ?>
+<?php render_clinic_command_header('Service evaluation', 'Clinic Feedback', 'Review clinic feedback, including responses not linked to a visit.'); ?>
 <div class="feedback-page feedback-admin feedback-report">
+    <div class="feedback-actions mb-6"><a class="btn btn-primary" href="<?= e(app_url('clinic-feedback.php?general=1')) ?>"><span class="material-symbols-outlined" aria-hidden="true">add_comment</span> Create feedback</a></div>
     <form method="get" class="clinic-card overflow-hidden mb-6" id="feedbackFilterForm">
         <div class="p-6 border-b border-slate-100">
             <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Feedback Filters</h2>
@@ -114,14 +115,14 @@ render_header('Clinic Feedback');
             <p class="feedback-muted">Excellent: 6–7 · Satisfactory: 4–below 6 · Critical: 1–below 4. Scores display two decimals; tiers use unrounded scores.</p>
         </section>
         <section class="clinic-card feedback-section"><h2>Scores by service</h2>
-            <?php if (!$groups): ?><div class="empty-state"><span class="material-symbols-outlined" aria-hidden="true">rate_review</span><p class="empty-state-title">No feedback to summarize</p><p class="empty-state-text">Try clearing the filters or return after students submit feedback.</p></div><?php else: ?>
+            <?php if (!$groups): ?><div class="empty-state"><span class="material-symbols-outlined" aria-hidden="true">rate_review</span><p class="empty-state-title">No feedback to summarize</p><p class="empty-state-text">Try clearing the filters or return after feedback is submitted.</p></div><?php else: ?>
             <div class="feedback-table-wrap" tabindex="0" role="region" aria-label="Service score comparison"><table class="feedback-table"><caption class="feedback-sr-only">Average feedback scores by service, rated from 1 to 7.</caption><thead><tr><th scope="col">Service</th><th scope="col">Responses</th><?php foreach ($columns as $column): ?><th scope="col"><?= e(ucfirst($column)) ?></th><?php endforeach; ?><th scope="col">Performance</th></tr></thead><tbody>
             <?php foreach ($groups as $group): ?><tr><td><?= e($group['service_type']) ?></td><td><?= (int) $group['responses'] ?></td><?php foreach ($columns as $column): ?><td><?= number_format((float) $group[$column], 2) ?></td><?php endforeach; ?><td><?= e(clinic_feedback_tier((float) $group['overall'])) ?></td></tr><?php endforeach; ?>
             <tr><th scope="row">Grand total</th><td><?= $total ?></td><?php foreach ($columns as $column): ?><td><?= number_format((float) $summary[$column], 2) ?></td><?php endforeach; ?><td><?= e(clinic_feedback_tier((float) $summary['overall'])) ?></td></tr>
             </tbody></table></div><?php endif; ?>
         </section>
-        <section class="clinic-card feedback-section"><h2>Student responses</h2><p class="feedback-muted">Confidential · For authorized clinic evaluation only. Names and student IDs are omitted from this view.</p>
-            <?php if (!$rows): ?><div class="empty-state"><p class="empty-state-title">No student responses</p><p class="empty-state-text">Responses matching your filters will appear here.</p></div><?php endif; ?>
+        <section class="clinic-card feedback-section"><h2>Feedback responses</h2><p class="feedback-muted">Confidential · For authorized clinic evaluation only. Names and student IDs are omitted from this view.</p>
+            <?php if (!$rows): ?><div class="empty-state"><p class="empty-state-title">No feedback responses</p><p class="empty-state-text">Responses matching your filters will appear here.</p></div><?php endif; ?>
             <?php foreach ($rows as $row): ?>
                 <details class="feedback-response">
                     <summary><strong><?= e($row['service_type'] === 'Other' ? 'Other: ' . $row['service_other'] : $row['service_type']) ?></strong><br><span class="feedback-muted">Submitted <?= e($row['submitted_at']) ?> · Overall <?= number_format((float) $row['overall'], 2) ?> · <?= e(clinic_feedback_tier((float) $row['overall'])) ?> · <?= !empty($row['is_anonymous']) ? 'Anonymous' : 'Identified' ?></span></summary>

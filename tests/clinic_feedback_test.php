@@ -24,7 +24,7 @@ foreach ([0, 8, '1.5', '7abc', [], null, true] as $invalid) {
 $missing = $ratings; unset($missing['E5']);
 rejects_feedback(fn() => clinic_feedback_scores($missing), 'Missing answer accepted.');
 rejects_feedback(fn() => clinic_feedback_scores($ratings + ['X1' => 7]), 'Unknown answer accepted.');
-foreach (['Active' => true, 'Completed' => true, 'Unaddressed' => false, 'Cancelled' => false] as $status => $expected) {
+foreach (['Active' => false, 'Completed' => true, 'Unaddressed' => false, 'Cancelled' => false] as $status => $expected) {
     check_feedback(clinic_feedback_eligible($status) === $expected, 'Wrong visit eligibility.');
 }
 foreach (['3.999' => 'Critical', '4' => 'Satisfactory', '5.999' => 'Satisfactory', '6' => 'Excellent', '7' => 'Excellent'] as $score => $tier) {

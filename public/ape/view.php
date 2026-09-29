@@ -1847,7 +1847,7 @@ render_header(($isClinicManagedApe ? 'Faculty & NTP APE Record - ' : 'APE Record
                         </div>
                 <div class="ape-initial-document-list">
                     <?php foreach ($requirements as $requirement): ?>
-                            <div class="ape-initial-document-row">
+                            <div class="ape-initial-document-row" data-ape-requirement-name="<?= e($requirement['requirement_name']) ?>">
                             <div class="ape-checklist-meta">
                                 <strong><?= e($requirement['requirement_name']) ?></strong>
                                 <span><?= !empty($requirement['_latest_document']['document_id']) ? ($isClinicManagedApe ? 'A file is attached and pending clinic review.' : 'A file is attached and will be reviewed in Phase 3.') : 'No file has been attached yet.' ?></span>
@@ -1857,7 +1857,7 @@ render_header(($isClinicManagedApe ? 'Faculty & NTP APE Record - ' : 'APE Record
                                 <span class="text-xs font-bold text-slate-400"><?= $isClinicManagedApe ? 'Clinic review follows upload' : 'Review happens in Phase 3' ?></span>
                             </div>
                             <div class="ape-initial-document-actions">
-                                    <?php if ($canClinicUploadBeforeStudentSubmission): ?>
+                                    <?php if ($canClinicUploadBeforeStudentSubmission && !in_array($requirement['_latest_document']['verification_status'] ?? '', ['Pending', 'Verified'], true)): ?>
                                         <button type="button" class="btn btn-sm btn-outline text-decoration-none shrink-0" data-clinic-upload-trigger data-requirement-name="<?= e($requirement['requirement_name']) ?>">
                                             <span class="material-symbols-outlined text-[14px]">upload_file</span> Upload
                                         </button>
@@ -1920,7 +1920,7 @@ render_header(($isClinicManagedApe ? 'Faculty & NTP APE Record - ' : 'APE Record
                                 </div>
                                 <button type="button" class="btn btn-sm btn-ghost" data-clinic-upload-close aria-label="Close upload dialog"><span class="material-symbols-outlined">close</span></button>
                             </div>
-                            <form method="post" enctype="multipart/form-data" class="space-y-4" data-clinic-upload-form>
+                            <form method="post" enctype="multipart/form-data" class="space-y-4" data-clinic-upload-form data-no-loading>
                                 <input type="hidden" name="action" value="upload_clinic_document">
                                 <input type="hidden" name="document_type" data-clinic-upload-type>
                                 <div class="rounded-xl border border-primary/20 bg-primary-fixed p-4">
@@ -2082,15 +2082,18 @@ render_header(($isClinicManagedApe ? 'Faculty & NTP APE Record - ' : 'APE Record
     const modal = document.querySelector('[data-clinic-upload-modal]');
     const form = document.querySelector('[data-clinic-upload-form]');
     if (!modal || !form) return;
+    document.body.appendChild(modal);
     const typeInput = form.querySelector('[data-clinic-upload-type]');
-    const requirementLabel = form.querySelector('[data-clinic-upload-requirement]');
+    const requirementLabel = modal.querySelector('[data-clinic-upload-requirement]');
     const fileInput = form.querySelector('[data-clinic-upload-file]');
     const previewWrap = form.querySelector('[data-clinic-upload-preview-wrap]');
     const preview = form.querySelector('[data-clinic-upload-preview]');
     const filename = form.querySelector('[data-clinic-upload-filename]');
+    const submitButton = form.querySelector('button[type="submit"]');
+    let uploading = false;
 
     const close = () => {
-        modal.style.display = 'none';
+        closeModal(modal.id);
         form.reset();
         typeInput.value = '';
         requirementLabel.textContent = '';
@@ -2099,17 +2102,23 @@ render_header(($isClinicManagedApe ? 'Faculty & NTP APE Record - ' : 'APE Record
         previewWrap.classList.add('hidden');
     };
     const open = (requirementName) => {
+        form.reset();
+        preview.innerHTML = '';
+        filename.textContent = '';
+        previewWrap.classList.add('hidden');
         typeInput.value = requirementName;
         requirementLabel.textContent = requirementName;
-        modal.style.display = 'flex';
+        showModal(modal.id);
         fileInput.focus();
     };
-    document.querySelectorAll('[data-clinic-upload-trigger]').forEach((button) => {
+    const bindUploadButton = (button) => {
+        if (!button) return;
         button.addEventListener('click', (event) => {
             event.stopPropagation();
             open(button.dataset.requirementName || '');
         });
-    });
+    };
+    document.querySelectorAll('[data-clinic-upload-trigger]').forEach(bindUploadButton);
     document.querySelectorAll('[data-clinic-upload-row]').forEach((row) => {
         const activate = () => open(row.dataset.requirementName || '');
         row.addEventListener('click', (event) => {
@@ -2124,8 +2133,56 @@ render_header(($isClinicManagedApe ? 'Faculty & NTP APE Record - ' : 'APE Record
         });
     });
     document.querySelectorAll('[data-clinic-upload-close]').forEach((button) => button.addEventListener('click', close));
-    modal.addEventListener('click', (event) => {
-        if (event.target === modal) close();
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (uploading) return;
+        const requirementName = typeInput.value;
+        const selectedFile = fileInput.files?.[0];
+        if (!requirementName || !selectedFile) {
+            showToast('Choose a requirement and file before uploading.', 'error');
+            return;
+        }
+        if (selectedFile.size > 2 * 1024 * 1024) {
+            showToast('The file must be 2 MB or smaller.', 'error');
+            return;
+        }
+
+        uploading = true;
+        submitButton.disabled = true;
+        try {
+            const response = await fetch(window.location.href, {
+                method: 'POST',
+                body: new FormData(form),
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'fetch' },
+            });
+            if (!response.ok) throw new Error('The upload could not be completed. Please try again.');
+            if (new URL(response.url).pathname !== window.location.pathname) {
+                window.location.assign(response.url);
+                return;
+            }
+
+            const updatedPage = new DOMParser().parseFromString(await response.text(), 'text/html');
+            const flash = updatedPage.querySelector('#flash-toasts [data-flash]');
+            if (flash?.dataset.flash === 'error') {
+                throw new Error(flash.dataset.message || 'The upload could not be completed.');
+            }
+            const findRow = (root) => Array.from(root.querySelectorAll('[data-ape-requirement-name]'))
+                .find((row) => row.dataset.apeRequirementName === requirementName);
+            const currentRow = findRow(document);
+            const updatedRow = findRow(updatedPage);
+            if (!currentRow || !updatedRow) throw new Error('The document was saved, but its row could not be updated. Reopen this record to verify it.');
+
+            currentRow.innerHTML = updatedRow.innerHTML;
+            bindUploadButton(currentRow.querySelector('[data-clinic-upload-trigger]'));
+            close();
+            showToast(flash?.dataset.message || 'APE document uploaded.', 'success');
+        } catch (error) {
+            showToast(error?.message || 'The upload could not be completed.', 'error');
+        } finally {
+            uploading = false;
+            submitButton.disabled = false;
+        }
     });
     fileInput.addEventListener('change', () => {
         const file = fileInput.files && fileInput.files[0];

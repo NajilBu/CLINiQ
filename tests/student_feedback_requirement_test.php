@@ -9,11 +9,13 @@ $feedbackPage = file_get_contents($root . '/public/clinic-feedback.php');
 $dashboard = file_get_contents($root . '/patient-portal/patient-dashboard.php');
 $appointment = file_get_contents($root . '/patient-portal/patient-appointment.php');
 $feedbackEntry = file_get_contents($root . '/patient-portal/patient-feedback.php');
+$feedbackConsent = file_get_contents($root . '/patient-portal/patient-feedback-consent.php');
+$clinicSurvey = file_get_contents($root . '/public/clinic-feedback-survey.php');
 $notification = file_get_contents($root . '/app/services/PatientNotification.php');
 $feedbackReport = file_get_contents($root . '/public/feedback/index.php');
 $feedbackCss = file_get_contents($root . '/public/assets/css/feedback.css');
 
-foreach (compact('visitView', 'visitWorkflow', 'feedbackPage', 'feedbackEntry', 'dashboard', 'appointment', 'notification', 'feedbackReport', 'feedbackCss') as $name => $contents) {
+foreach (compact('visitView', 'visitWorkflow', 'feedbackPage', 'feedbackEntry', 'feedbackConsent', 'clinicSurvey', 'dashboard', 'appointment', 'notification', 'feedbackReport', 'feedbackCss') as $name => $contents) {
     if ($contents === false) {
         throw new RuntimeException("Unable to read {$name} feedback workflow source.");
     }
@@ -34,10 +36,19 @@ if (!str_contains($feedbackEntry, 'student_require_login()')
 }
 if (!str_contains($feedbackEntry, 'Reason for visit')
     || !str_contains($feedbackEntry, 'Patient concern')
-    || !str_contains($feedbackEntry, 'RA 10173')
-    || !str_contains($feedbackEntry, '<details>')
+    || !str_contains($feedbackConsent, 'RA 10173')
+    || !str_contains($feedbackConsent, '<details>')
+    || !str_contains($feedbackEntry, 'student_feedback_consented')
+    || !str_contains($clinicSurvey, 'clinic-feedback.php')
     || str_contains($feedbackEntry, 'Visit #')) {
-    throw new RuntimeException('Portal feedback context or RA 10173 privacy notice is incomplete, or exposes an internal visit number.');
+    throw new RuntimeException('Portal feedback context, consent gate, or privacy notice is incomplete, or exposes an internal visit number.');
+}
+if (!str_contains($feedbackConsent, 'name="feedback_target"')
+    || !str_contains($feedbackConsent, 'value="general"')
+    || !str_contains($feedbackEntry, 'name="start_token"')
+    || !str_contains($feedbackEntry, 'student_feedback_selected_visit_id')
+    || str_contains($feedbackEntry, 'name="participate"')) {
+    throw new RuntimeException('Patient feedback must choose a target and confirm consent on its separate page before showing the survey.');
 }
 if (str_contains($feedbackEntry, 'About you')
     || str_contains($feedbackEntry, 'name="program"')
@@ -62,7 +73,7 @@ if (str_contains($feedbackPage, 'Visit #')) {
 }
 if (!str_contains($feedbackPage, 'RA 10173')
     || !str_contains($feedbackPage, 'class="feedback-privacy"')
-    || !str_contains($feedbackPage, 'I have read the RA 10173 notice')) {
+    || !str_contains($feedbackPage, 'I have read the RA 10173 privacy notice')) {
     throw new RuntimeException('Public feedback is missing the collapsible RA 10173 notice and agreement.');
 }
 if (!str_contains($dashboard, 'clinic_feedback_pending_completed_visits')

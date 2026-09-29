@@ -83,7 +83,7 @@ function clinic_feedback_tier(float $score): string
 
 function clinic_feedback_eligible(string $status): bool
 {
-    return in_array($status, ['Active', 'Completed'], true);
+    return $status === 'Completed';
 }
 
 function clinic_feedback_default_service(string $purpose): string
@@ -144,7 +144,7 @@ function clinic_feedback_visits(PDO $db, string $identifier): array
         JOIN people p ON p.id = v.patient_person_id
         JOIN students s ON s.person_id = p.id
         LEFT JOIN clinic_feedback f ON f.visit_id = v.visit_id
-        WHERE p.id_number = ? AND v.status IN ('Active', 'Completed')
+        WHERE p.id_number = ? AND v.status = 'Completed'
         ORDER BY v.visit_datetime DESC, v.visit_id DESC");
     $query->execute([normalize_id_number($identifier)]);
     return $query->fetchAll();
@@ -256,7 +256,9 @@ function clinic_feedback_submit(PDO $db, array $context, array $input): void
         }
         $yearLabels = [1 => '1st Year', 2 => '2nd Year', 3 => '3rd Year', 4 => '4th Year'];
         $data['service_type'] = $service;
-        $data['service_other'] = $service === 'Other' ? trim((string) ($input['service_other'] ?? ($visit['visit_purpose'] ?? ''))) : null;
+        $data['service_other'] = $service === 'Other'
+            ? ($visit ? trim((string) ($visit['visit_purpose'] ?? '')) : clinic_feedback_text($input, 'service_other', 160))
+            : null;
         $data['academic_term'] = $visit ? clinic_feedback_default_academic_term((string) $visit['visit_datetime']) : clinic_feedback_default_academic_term();
         $data['term_other'] = null;
         $data['year_level'] = $visit ? ($yearLabels[(int) ($visit['year_level'] ?? 0)] ?? 'Other') : 'Not provided';
