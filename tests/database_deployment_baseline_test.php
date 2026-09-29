@@ -48,6 +48,9 @@ if (!str_contains($runner, 'Existing database is not a complete CLINiQ baseline'
 if (!str_contains($runner, 'migration_post_baseline_tables')) {
     throw new RuntimeException('Existing databases must be checked before post-baseline tables are migrated.');
 }
+if (!str_contains($runner, "'20260923_z_email_center_operations.sql'")) {
+    throw new RuntimeException('Migration runner must recognize the verified historical email-center checksum.');
+}
 if (!str_contains($envLoader, 'getenv($key)')) {
     throw new RuntimeException('Container environment variables must override local .env values.');
 }

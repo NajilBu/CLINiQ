@@ -67,5 +67,15 @@ expect_document_storage(
     ape_document_storage_name('23-00211', 'UHS Consent Form', 'original-upload.JPG', '20260924-224500', 'a1b2c3d4') === '23-00211_UHS-Consent-Form_20260924-224500_a1b2c3d4.jpg',
     'New APE uploads must use readable, collision-safe protected filenames.'
 );
+expect_document_storage(
+    (new ReflectionFunction('ape_stream_document'))->getNumberOfParameters() === 1,
+    'APE document responses must share one protected streaming helper.'
+);
+foreach (['public/ape/document.php', 'patient-portal/patient-ape-document.php'] as $route) {
+    expect_document_storage(
+        str_contains((string) file_get_contents(dirname(__DIR__) . '/' . $route), 'ape_stream_document($document)'),
+        $route . ' must use the shared protected streaming helper.'
+    );
+}
 
 echo "APE protected document storage tests passed.\n";

@@ -18,10 +18,14 @@
     function shouldShow(form) {
         if (!(form instanceof HTMLFormElement)) return false;
         if (form.dataset.noLoading === 'true' || form.hasAttribute('data-no-loading')) return false;
-        return form.enctype === 'multipart/form-data' ||
-            form.matches('[data-email-action], [data-loading-form]') ||
-            !!form.querySelector('input[type="file"]') ||
-            !!form.querySelector('input[name="action"][value*="code"], input[name="action"][value*="email"]');
+        if ((form.getAttribute('method') || 'get').toUpperCase() !== 'POST') return false;
+        if (form.target && form.target !== '_self') return false;
+
+        try {
+            return new URL(form.getAttribute('action') || window.location.href, window.location.href).origin === window.location.origin;
+        } catch (_) {
+            return false;
+        }
     }
 
     document.addEventListener('submit', function (event) {

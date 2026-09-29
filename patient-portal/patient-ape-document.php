@@ -19,24 +19,7 @@ if (!$document) {
     http_response_code(404);
     exit('Document record not found.');
 }
-$documentLookup = ape_document_lookup((string) $document['file_path']);
-$absolutePath = $documentLookup['absolute_path'];
-if ($absolutePath === null) {
+if (!ape_stream_document($document)) {
     http_response_code(404);
     exit('The uploaded document file is missing from clinic storage. Please contact the clinic so it can be restored or uploaded again.');
 }
-
-$detectedType = (new finfo(FILEINFO_MIME_TYPE))->file($absolutePath) ?: 'application/octet-stream';
-$allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
-$mimeType = in_array($detectedType, $allowedTypes, true) ? $detectedType : 'application/octet-stream';
-$originalName = trim((string) ($document['original_filename'] ?? '')) ?: basename($absolutePath);
-$downloadName = ape_document_download_name((string) ($document['id_number'] ?? ''), (string) ($document['document_type'] ?? ''), $originalName);
-
-header('Content-Type: ' . $mimeType);
-header('Content-Length: ' . (string) filesize($absolutePath));
-header('Content-Disposition: inline; filename="' . $downloadName . '"; filename*=UTF-8\'\'' . rawurlencode($downloadName));
-header('Cache-Control: private, no-store, max-age=0');
-header('Pragma: no-cache');
-header('X-Content-Type-Options: nosniff');
-
-readfile($absolutePath);

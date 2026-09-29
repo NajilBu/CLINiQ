@@ -889,7 +889,7 @@ render_clinic_command_header(
                             </div>
                         </div>
                         <div class="flex justify-end">
-                            <button class="btn btn-primary" <?= !$canManageSettings ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Save clinic profile?" data-confirm-message="This updates the shared clinic identity and emergency alert sound used by CLINiQ." data-confirm-toast="Saving clinic profile...">
+                            <button class="btn btn-primary" <?= !$canManageSettings ? 'disabled' : '' ?>>
                                 <span class="material-symbols-outlined text-[18px]">save</span>
                                 Save Profile
                             </button>
@@ -940,7 +940,7 @@ render_clinic_command_header(
                             <p class="settings-help mb-0">Current version: <?= e((string) $legalDocuments['version']) ?></p>
                             <div class="flex gap-3">
                                 <button type="button" class="btn btn-ghost" onclick="closeModal('studentLegalDocumentsModal')">Cancel</button>
-                                <button class="btn btn-primary" <?= !$canManageSettings ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Save student legal documents?" data-confirm-message="This changes the legal text displayed to students and used for future acknowledgements." data-confirm-toast="Saving legal documents...">
+                                <button class="btn btn-primary" <?= !$canManageSettings ? 'disabled' : '' ?>>
                                     <span class="material-symbols-outlined text-[18px]">save</span>
                                     Save Changes
                                 </button>
@@ -979,7 +979,7 @@ render_clinic_command_header(
                             <p class="settings-logo-file-name" data-logo-file-name>No new image selected.</p>
                             <div class="flex flex-wrap justify-end gap-3">
                                 <button type="button" class="btn btn-ghost hidden" data-logo-reset>Reset Preview</button>
-                                <button type="submit" form="clinicProfileForm" name="save_intent" value="logo" class="btn btn-primary is-locked" <?= !$canManageSettings ? 'disabled' : '' ?> aria-disabled="true" data-logo-ready="0" data-logo-save data-confirm-submit data-confirm-type="primary" data-confirm-title="Save system logo?" data-confirm-message="This will update the logo used across the staff and patient screens." data-confirm-toast="Saving logo...">
+                            <button type="submit" form="clinicProfileForm" name="save_intent" value="logo" class="btn btn-primary is-locked" <?= !$canManageSettings ? 'disabled' : '' ?> aria-disabled="true" data-logo-ready="0" data-logo-save>
                                     <span class="material-symbols-outlined text-[18px]">save</span>
                                     Save Logo
                                 </button>
@@ -1032,7 +1032,7 @@ render_clinic_command_header(
                             <span class="settings-theme-switch" aria-hidden="true"><span class="settings-theme-switch-thumb"></span></span>
                         </label>
                         <div class="flex justify-end mt-5">
-                            <button class="btn btn-primary" <?= !$canManageSettings ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Apply color theme?" data-confirm-message="This will update the CLINiQ interface theme for all pages using the shared shell." data-confirm-toast="Applying theme...">
+                            <button class="btn btn-primary" <?= !$canManageSettings ? 'disabled' : '' ?>>
                                 <span class="material-symbols-outlined text-[18px]">palette</span>
                                 Apply Theme
                             </button>
@@ -1142,7 +1142,7 @@ render_clinic_command_header(
                                 </div>
                                 <p class="settings-help mb-0">Password must contain uppercase, lowercase, a number, and a special character.</p>
                                 <div class="flex justify-end">
-                                    <button class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Create staff profile?" data-confirm-message="This staff member will be able to sign in and create records under their own name." data-confirm-toast="Creating staff profile...">
+                                    <button class="btn btn-primary">
                                         <span class="material-symbols-outlined text-[18px]">person_add</span>
                                         Create Profile
                                     </button>
@@ -1205,7 +1205,7 @@ render_clinic_command_header(
                                             </div>
                                         </div>
                                         <div class="flex justify-end mt-5">
-                                            <button class="btn btn-primary" <?= !$canManageStaffProfiles ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Update staff profile?" data-confirm-message="This updates the staff member name, email, login ID, or role used by CLINiQ." data-confirm-toast="Updating profile...">
+                                            <button class="btn btn-primary" <?= !$canManageStaffProfiles ? 'disabled' : '' ?>>
                                                 <span class="material-symbols-outlined text-[18px]">save</span>
                                                 Save Changes
                                             </button>
@@ -1548,7 +1548,7 @@ render_clinic_command_header(
 
                     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2">
                         <p class="settings-help mb-0">Saved changes apply to newly submitted incident alerts. Existing alert badges remain as originally recorded.</p>
-                        <button class="btn btn-primary justify-center" <?= !$canManageSettings ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Save incident risk settings?" data-confirm-message="This will change how future incident alerts are classified." data-confirm-toast="Saving incident risk settings...">
+                        <button class="btn btn-primary justify-center" <?= !$canManageSettings ? 'disabled' : '' ?>>
                             <span class="material-symbols-outlined text-[18px]">save</span>
                             Save Incident Risk Settings
                         </button>
@@ -1610,7 +1610,7 @@ render_clinic_command_header(
                                     <span class="material-symbols-outlined text-[18px]">add</span>
                                     Add Document
                                 </button>
-                                <button class="btn btn-primary justify-center" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save required APE documents?" data-confirm-message="New records will use this list. Only unlocked and untouched items in the active cycle will be synchronized." data-confirm-toast="Saving required documents...">
+                                <button class="btn btn-primary justify-center">
                                     <span class="material-symbols-outlined text-[18px]">save</span>
                                     Save Required Documents
                                 </button>
@@ -1965,7 +1965,7 @@ render_clinic_command_header(
                         <input type="hidden" name="action" value="run_external_backup">
                     </form>
                     <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                        <button type="submit" form="runExternalBackupForm" class="btn btn-secondary w-full justify-center sm:w-auto" <?= !$canManageBackups || !$externalBackupSettings['enabled'] || !$externalBackupAvailable ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Back up to the external drive?" data-confirm-message="This creates a fresh backup now and copies it to the selected external folder. The process may take a few minutes." data-confirm-toast="Preparing external backup..." data-loading-label="Backing up to external drive..." data-action-label>
+                        <button type="submit" form="runExternalBackupForm" class="btn btn-secondary w-full justify-center sm:w-auto" <?= !$canManageBackups || !$externalBackupSettings['enabled'] || !$externalBackupAvailable ? 'disabled' : '' ?> data-loading-label="Backing up to external drive..." data-action-label>
                             <span class="material-symbols-outlined text-[18px]">usb</span>
                             <span data-action-label>Back Up Now</span>
                         </button>
@@ -2010,13 +2010,13 @@ render_clinic_command_header(
                         </form>
                         <form method="post" data-no-ajax="true">
                             <input type="hidden" name="action" value="run_semester_backup">
-                            <button class="btn btn-secondary w-full justify-center" <?= !$canManageSettings ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Create semester archive?" data-confirm-message="This creates a permanent full database and document snapshot." data-confirm-toast="Creating semester archive...">
+                            <button class="btn btn-secondary w-full justify-center" <?= !$canManageSettings ? 'disabled' : '' ?>>
                                 <span class="material-symbols-outlined text-[18px]">archive</span> Semester Archive
                             </button>
                         </form>
                         <form method="post" data-no-ajax="true">
                             <input type="hidden" name="action" value="run_backup">
-                            <button class="btn btn-primary w-full justify-center" <?= !$canManageSettings ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Run backup now?" data-confirm-message="This creates today's internal database and document backup if one has not already completed." data-confirm-toast="Running backup...">
+                            <button class="btn btn-primary w-full justify-center" <?= !$canManageSettings ? 'disabled' : '' ?>>
                                 <span class="material-symbols-outlined text-[18px]">backup</span> Run Backup Now
                             </button>
                         </form>
@@ -2390,7 +2390,7 @@ render_clinic_command_header(
 
                 <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
                     <button type="button" class="btn btn-secondary justify-center" id="cancelEmailComposerButton">Cancel</button>
-                    <button type="submit" class="btn btn-primary justify-center" <?= !$mailConfigured ? 'disabled' : '' ?> title="<?= !$mailConfigured ? 'Configure email before sending' : 'Send this email' ?>" data-confirm-submit data-confirm-type="primary" data-confirm-title="Send custom email?" data-confirm-message="Each selected account will receive a separate private copy of this message." data-confirm-toast="Sending email...">
+                    <button type="submit" class="btn btn-primary justify-center" <?= !$mailConfigured ? 'disabled' : '' ?> title="<?= !$mailConfigured ? 'Configure email before sending' : 'Send this email' ?>">
                         <span class="material-symbols-outlined text-[18px]">send</span>
                         Send Email
                     </button>
@@ -3068,13 +3068,17 @@ render_clinic_command_header(
                 list.appendChild(row);
                 refreshRows();
                 row.querySelector('input').focus();
+                if (typeof showToast === 'function') showToast('Document added. Save Required Documents to apply it.', 'success');
             });
 
             list.addEventListener('click', (event) => {
                 const row = event.target.closest('[data-ape-document-row]');
                 if (!row) return;
                 if (event.target.closest('[data-remove-ape-document]')) {
-                    if (list.querySelectorAll('[data-ape-document-row]').length > 1) row.remove();
+                    if (list.querySelectorAll('[data-ape-document-row]').length > 1) {
+                        row.remove();
+                        if (typeof showToast === 'function') showToast('Document removed. Save Required Documents to apply the change.', 'warning');
+                    }
                 }
                 refreshRows();
             });

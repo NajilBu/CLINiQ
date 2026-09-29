@@ -951,5 +951,6 @@ $theme = active_cliniq_theme();
 
 </script>
 <script src="<?= app_url('assets/js/app.js?v=id-number-format-2') ?>"></script>
+<script src="<?= app_url('assets/js/submission-loading.js?v=2') ?>"></script>
 </body>
 </html>

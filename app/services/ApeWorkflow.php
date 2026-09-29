@@ -1893,6 +1893,29 @@ function ape_document_download_name(string $idNumber, string $documentType, stri
     return $baseName . $extension;
 }
 
+function ape_stream_document(array $document): bool
+{
+    $absolutePath = ape_document_lookup((string) ($document['file_path'] ?? ''))['absolute_path'];
+    if ($absolutePath === null) {
+        return false;
+    }
+
+    $detectedType = (new finfo(FILEINFO_MIME_TYPE))->file($absolutePath) ?: 'application/octet-stream';
+    $mimeType = in_array($detectedType, ['application/pdf', 'image/jpeg', 'image/png'], true) ? $detectedType : 'application/octet-stream';
+    $originalName = trim((string) ($document['original_filename'] ?? '')) ?: basename($absolutePath);
+    $downloadName = ape_document_download_name((string) ($document['id_number'] ?? ''), (string) ($document['document_type'] ?? ''), $originalName);
+
+    header('Content-Type: ' . $mimeType);
+    header('Content-Length: ' . (string) filesize($absolutePath));
+    header('Content-Disposition: inline; filename="' . $downloadName . '"; filename*=UTF-8\'\'' . rawurlencode($downloadName));
+    header('Cache-Control: private, no-store, max-age=0');
+    header('Pragma: no-cache');
+    header('X-Content-Type-Options: nosniff');
+
+    readfile($absolutePath);
+    exit;
+}
+
 function ape_document_name_base(string $idNumber, string $documentType): string
 {
     $safeId = preg_replace('/[^A-Za-z0-9-]+/', '-', trim($idNumber)) ?: 'student';

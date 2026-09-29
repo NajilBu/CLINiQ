@@ -65,6 +65,10 @@ function migration_checksum_is_known_compatible(string $name, string $stored, st
             'd94f2924ffe8c59691dc0c075ec87263cb09a60bb2bfec26cbb8a9ca6e676623',
             'fed24f3f96c857a22cf707b6dc304f45d19061561385bfaa9c838d451d9808af',
         ],
+        '20260923_z_email_center_operations.sql' => [
+            '9aa273ebb9766dccfc5eeb5974685b5ad6b2ba9f7143b348a2f4a9f7a2ce4642',
+            '752df0d243d5f109f293ce3fc5803f33659fb8c4c64b564d6c3313491ea730b9',
+        ],
     ];
 
     if (isset($knownHistoricalPairs[$name])) {
