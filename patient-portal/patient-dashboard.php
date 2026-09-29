@@ -227,6 +227,7 @@ $scheduledApeBatchLabel = $hasScheduledApeBatch
 $apeStatus = $latestApe['workflow_status'] ?? 'Not Started';
 $apeQueue = $latestApe ? ape_record_queue($latestApe) : 'digital_submission';
 $apeProgress = ape_student_progress($latestApe ?? []);
+$apeInitialUploadPhaseOpen = ape_initial_upload_phase_is_open($latestApe ?? []);
 $apeStep = $apeProgress['active_step'] - 1;
 $apeDigitalSubmissionComplete = ape_digital_submission_complete($latestApe ?? []);
 $apeExamCompleted = !empty($latestApe['exam_date']);
@@ -307,6 +308,7 @@ $clinicNoteClass = static fn(string $type): string => match ($type) {
 };
 $apeActionTitle = match (true) {
     ($latestApe['clearance_status'] ?? 'Pending') === 'Cleared' => 'APE completed',
+    $latestApe && !$apeInitialUploadPhaseOpen => 'Wait for your examination schedule',
     $apeDocumentsNeedCorrection => 'Replace returned APE documents',
     $latestApe && $apeProgress['active_step'] === 1 => 'Upload APE documents',
     $apeQueue === 'digital_submission' && !$apeAllDocumentsUploaded => 'Upload APE documents',
@@ -322,6 +324,7 @@ $apeActionTitle = match (true) {
 };
 $apeActionCopy = match (true) {
     ($latestApe['clearance_status'] ?? 'Pending') === 'Cleared' => 'Your APE record is already cleared by the clinic.',
+    $latestApe && !$apeInitialUploadPhaseOpen => 'Document uploads open after the clinic assigns you to a scheduled APE examination batch.',
     $apeDocumentsNeedCorrection => $apeNote ?: 'The clinic returned one or more documents. Upload the requested replacement files to continue.',
     $latestApe && $apeProgress['active_step'] === 1 => 'Complete regular uploads within seven days of examination. Follow-up documents use their separately assigned return date.',
     $latestApe && $apeProgress['active_step'] === 3 => 'Your documents and examination are complete. The clinic is reviewing your record now; no action is needed from you.',
@@ -348,6 +351,7 @@ $apePhaseLabel = match (true) {
 $apePhaseStatus = match (true) {
     !$latestApe => 'Not Started',
     ($latestApe['clearance_status'] ?? '') === 'Cleared' => 'Completed',
+    !$apeInitialUploadPhaseOpen => 'Waiting for Schedule',
     $apeDocumentsNeedCorrection => 'Correction Needed',
     $apeProgress['active_step'] === 1 => 'Upload Required',
     $apeProgress['active_step'] === 3 => 'Awaiting Decision',
@@ -362,6 +366,7 @@ $apePhaseStatus = match (true) {
 $apeActionStatus = match (true) {
     !$latestApe => 'Not Started',
     ($latestApe['clearance_status'] ?? '') === 'Cleared' => 'Complete',
+    !$apeInitialUploadPhaseOpen => 'Waiting for Schedule',
     $apeDocumentsNeedCorrection => 'Needs Correction',
     $apeProgress['active_step'] === 1 => 'Upload Required',
     $apeProgress['active_step'] === 3 => 'Awaiting Decision',

@@ -15,7 +15,10 @@ foreach ($apeStateKeys as $apeStateKey) {
     }
 }
 if (!$hasExplicitApeState && is_array($_SESSION['ape_work_queue_state'] ?? null)) {
-    $_GET = array_merge($_GET, $_SESSION['ape_work_queue_state']);
+    $_GET = array_merge($_GET, array_intersect_key(
+        $_SESSION['ape_work_queue_state'],
+        array_flip(['queue', 'q', 'population'])
+    ));
 }
 
 $activeQueue = $_GET['queue'] ?? 'digital_submission';
@@ -51,17 +54,30 @@ usort($schoolYearBatches, static function (array $left, array $right): int {
     $rightSchedule = (string) $right['schedule_date'] . ' ' . (string) $right['start_time'];
     return strcmp($leftSchedule, $rightSchedule) ?: ((int) $left['batch_id'] <=> (int) $right['batch_id']);
 });
-$earliestUpcomingBatch = ape_earliest_upcoming_batch($schoolYearBatches);
-$overallRequested = strtolower(trim((string) ($_GET['scope'] ?? ''))) === 'overall';
+$defaultScheduledBatch = ape_default_scheduled_batch($schoolYearBatches);
+$overallRequested = ape_overall_view_requested($_GET);
 $requestedBatchId = filter_var($_GET['batch'] ?? null, FILTER_VALIDATE_INT, [
     'options' => ['min_range' => 1],
 ]);
 $selectedBatchId = null;
-if ($populationScope === 'students' && !$overallRequested) {
-    if ($requestedBatchId && isset($scheduledBatchesById[(int) $requestedBatchId])) {
-        $selectedBatchId = (int) $requestedBatchId;
-    } elseif ($earliestUpcomingBatch !== null) {
-        $selectedBatchId = (int) $earliestUpcomingBatch['batch_id'];
+if ($populationScope === 'students') {
+    $savedBatchSelection = is_array($_SESSION['ape_batch_selection_v2'] ?? null)
+        ? $_SESSION['ape_batch_selection_v2']
+        : null;
+    $resolvedBatchSelection = ape_resolve_batch_selection(
+        $scheduledBatchesById,
+        $defaultScheduledBatch,
+        $requestedBatchId ? (int) $requestedBatchId : null,
+        $overallRequested,
+        $savedBatchSelection
+    );
+    $selectedBatchId = $resolvedBatchSelection['batch_id'];
+    if ($selectedBatchId !== null) {
+        $_SESSION['ape_batch_selection_v2'] = ['type' => 'batch', 'batch_id' => $selectedBatchId];
+    } elseif ($resolvedBatchSelection['overall_selected']) {
+        $_SESSION['ape_batch_selection_v2'] = ['type' => 'overall'];
+    } else {
+        unset($_SESSION['ape_batch_selection_v2']);
     }
 }
 $selectedBatch = $selectedBatchId !== null ? $scheduledBatchesById[$selectedBatchId] : null;
@@ -73,11 +89,6 @@ $persistedApeState = [
 ];
 if ($search !== '') {
     $persistedApeState['q'] = $search;
-}
-if ($selectedBatchId !== null) {
-    $persistedApeState['batch'] = (string) $selectedBatchId;
-} else {
-    $persistedApeState['scope'] = 'overall';
 }
 $_SESSION['ape_work_queue_state'] = $persistedApeState;
 
@@ -98,13 +109,7 @@ $clearanceComplianceRate = $clearanceComplianceTotal > 0
     ? (int) round(($clearanceComplianceCompleted / $clearanceComplianceTotal) * 100)
     : 0;
 $batchIndicator = $selectedBatch !== null
-    ? sprintf(
-        '%s • %s, %s–%s',
-        (string) $selectedBatch['batch_name'],
-        date('M j', strtotime((string) $selectedBatch['schedule_date'])),
-        date('g:i A', strtotime((string) $selectedBatch['start_time'])),
-        date('g:i A', strtotime((string) $selectedBatch['end_time']))
-    )
+    ? (string) $selectedBatch['batch_name']
     : 'Overall';
 $scopeDescription = $selectedBatch !== null
     ? 'All queues and totals show only patients assigned to ' . (string) $selectedBatch['batch_name'] . '. Choose Overall to show every batch.'
@@ -114,7 +119,7 @@ $scopeDescription = $selectedBatch !== null
 $scopeCountLabel = $populationScope === 'faculty_ntp' ? 'Faculty & NTP records' : ($selectedBatch !== null ? 'Selected batch' : 'Student records');
 $batchQuerySuffix = $populationScope === 'faculty_ntp'
     ? '&scope=overall&population=faculty_ntp'
-    : ($selectedBatchId !== null ? '&batch=' . $selectedBatchId : '&scope=overall');
+    : ($selectedBatchId !== null ? '&batch=' . $selectedBatchId : '&scope=overall&selection=overall');
 
 $recordsByQueue = array_fill_keys(array_keys($queues), []);
 foreach ($allRecords as $record) {
@@ -275,7 +280,10 @@ render_clinic_command_header(
                 $studentScopeQuery = ['queue' => $activeQueue, 'population' => 'students'];
                 if ($search !== '') $studentScopeQuery['q'] = $search;
                 if ($selectedBatchId !== null) $studentScopeQuery['batch'] = $selectedBatchId;
-                else $studentScopeQuery['scope'] = 'overall';
+                elseif ($populationScope === 'students' && $overallRequested) {
+                    $studentScopeQuery['scope'] = 'overall';
+                    $studentScopeQuery['selection'] = 'overall';
+                }
                 $employeeScopeQuery = ['queue' => 'examination', 'scope' => 'overall', 'population' => 'faculty_ntp'];
                 if ($search !== '') $employeeScopeQuery['q'] = $search;
                 ?>
@@ -303,6 +311,9 @@ render_clinic_command_header(
                 <input type="hidden" name="batch" value="<?= (int) $selectedBatchId ?>">
             <?php else: ?>
                 <input type="hidden" name="scope" value="overall">
+                <?php if ($populationScope === 'students'): ?>
+                    <input type="hidden" name="selection" value="overall">
+                <?php endif; ?>
             <?php endif; ?>
         </div>
     </div>
@@ -437,7 +448,7 @@ document.querySelectorAll('[data-ape-persistent-details]').forEach((details) => 
                 <div>
                     <h3 class="font-headline text-2xl font-extrabold text-[#17261d] mb-1">Scheduled APE Batches</h3>
                     <p class="text-sm font-bold text-slate-500 mb-0">
-                        <?= e((string) ($activeApeCycle['academic_year'] ?? 'Current school year')) ?> &bull; The earliest upcoming batch is selected automatically. Choose Overall to show every batch.
+                        <?= e((string) ($activeApeCycle['academic_year'] ?? 'Current school year')) ?> &bull; The next upcoming batch is selected automatically, or the most recent batch when none are upcoming. Choose Overall to show every batch.
                     </p>
                 </div>
             </div>
@@ -447,7 +458,7 @@ document.querySelectorAll('[data-ape-persistent-details]').forEach((details) => 
         </div>
 
         <?php
-        $defaultQuery = ['queue' => $activeQueue, 'scope' => 'overall', 'population' => $populationScope];
+        $defaultQuery = ['queue' => $activeQueue, 'scope' => 'overall', 'selection' => 'overall', 'population' => $populationScope];
         if ($search !== '') {
             $defaultQuery['q'] = $search;
         }

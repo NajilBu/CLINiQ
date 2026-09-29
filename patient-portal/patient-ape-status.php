@@ -22,6 +22,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
         if (($apeRecord['clearance_status'] ?? '') === 'Cleared' || ($apeRecord['workflow_status'] ?? '') === 'Cleared') {
             throw new RuntimeException('Document upload is closed because this APE record is already completed.');
         }
+        if (!ape_initial_upload_phase_is_open($apeRecord)) {
+            throw new RuntimeException('Document uploads open after the clinic assigns you to a scheduled APE examination batch.');
+        }
 
         $uploadRequirements = ape_requirements_for_record((int) $apeRecord['ape_id']);
         $documentTypesByKey = [];
@@ -183,6 +186,7 @@ $missingDocumentCount = 0;
 $missingDocumentNames = [];
 $requirementStatus = $apeRecord['requirement_status'] ?? 'Not Checked';
 $hasScheduledBatch = !empty($apeRecord['schedule_batch_id']) && ($apeRecord['batch_status'] ?? '') === 'Scheduled';
+$initialUploadPhaseOpen = ape_initial_upload_phase_is_open($apeRecord ?? []);
 $actionNeeded = $clearanceStatus !== 'Cleared' && $apeStatus !== 'Not Started';
 $batchScheduleLabel = $hasScheduledBatch
     ? date('F j, Y', strtotime((string) $apeRecord['batch_schedule_date'])) . ' at '
@@ -228,9 +232,11 @@ $studentDocumentsStillNeeded = $examCompleted
     && (!ape_initial_uploads_present($apeRecord ?? []) || ape_follow_up_document_request_active($apeRecord ?? []));
 $canUploadDocuments = $apeRecord
     && $clearanceStatus !== 'Cleared'
-    && $apeStatus !== 'Cleared';
+    && $apeStatus !== 'Cleared'
+    && $initialUploadPhaseOpen;
 $nextActionTitle = match (true) {
     $clearanceStatus === 'Cleared' => 'APE completed',
+    !$initialUploadPhaseOpen => 'Wait for your examination schedule',
     $documentsNeedCorrection => 'Replace returned APE documents',
     $stepThreeDocumentUploadRequired => 'Submit required follow-up documents',
     $studentDocumentsStillNeeded => 'Submit outstanding APE documents',
@@ -249,6 +255,7 @@ $nextActionTitle = match (true) {
 };
 $nextActionCopy = match (true) {
     $clearanceStatus === 'Cleared' => 'Your APE record is already cleared by the clinic.',
+    !$initialUploadPhaseOpen => 'The clinic must assign you to a scheduled APE examination batch before document uploading begins.',
     $documentsNeedCorrection => $studentNote ?: 'The clinic returned one or more documents. Upload the requested replacement files to continue.',
     $stepThreeDocumentUploadRequired => $studentNote ?: 'The clinic requested one or more follow-up documents. Submit the required files below; your APE remains in Final Decision or Follow-up while the clinic reviews them.',
     $studentDocumentsStillNeeded => $studentNote ?: 'The clinic still needs one or more initial or follow-up documents. Upload the outstanding files below; your APE stays in Final Decision or Follow-up while the clinic reviews them.',
@@ -277,6 +284,7 @@ $showDocuments = (bool) $apeRecord;
 $showActivity = (bool) $apeRecord;
 $headerBadge = $clearanceStatus === 'Cleared' ? 'student-badge-success' : ($actionNeeded ? 'student-badge-warning' : 'student-badge-info');
 $actionBadgeLabel = match (true) {
+    !$initialUploadPhaseOpen && $clearanceStatus !== 'Cleared' => 'Waiting for Schedule',
     $documentsNeedCorrection => 'Correction Needed',
     $studentDocumentsStillNeeded => 'Documents Needed',
     $studentProgress['active_step'] === 1 => 'Digital Keeping',
@@ -300,13 +308,15 @@ $flowSteps = [
         'title' => 'Digital document keeping',
         'copy' => $documentsNeedCorrection
             ? 'The clinic returned one or more documents. Upload the requested replacements to continue.'
+            : (!$initialUploadPhaseOpen
+                ? 'Document uploads will open after the clinic assigns your examination schedule.'
             : ($studentProgress['steps'][1]['submitted']
                 ? 'All regular documents are submitted. The clinic will review them before finalizing your APE.'
                 : ($digitalSubmissionComplete
                     ? 'All regular documents are uploaded and approved.'
             : ($examCompleted
                 ? 'Complete regular uploads within seven days of examination.'
-                : 'Upload available documents now; incomplete files will not prevent attendance during your assigned examination schedule.'))),
+                : 'Upload available documents now; incomplete files will not prevent attendance during your assigned examination schedule.')))),
         'done' => $studentProgress['steps'][1]['done'],
         'submitted' => $studentProgress['steps'][1]['submitted'],
         'current' => $studentProgress['steps'][1]['active'],
@@ -315,9 +325,11 @@ $flowSteps = [
         'number' => 2,
         'icon' => 'stethoscope',
         'title' => 'Examination',
-        'copy' => $examCompleted
+        'copy' => !$hasScheduledBatch && !$examCompleted
+            ? 'The clinic will assign an examination schedule before document uploads begin.'
+            : ($examCompleted
             ? 'Clinic recorded your examination and checked the hard copies you presented.'
-            : "Attend {$apeRecord['batch_name']} on {$batchScheduleLabel}, even if uploads are incomplete.",
+            : "Attend {$apeRecord['batch_name']} on {$batchScheduleLabel}, even if uploads are incomplete."),
         'done' => $studentProgress['steps'][2]['done'],
         'submitted' => false,
         'current' => $studentProgress['steps'][2]['active'],
@@ -390,8 +402,8 @@ foreach ($requirements as $requirement) {
                 default => 'Uploaded and waiting for clinic verification.',
             },
             'action' => $verification === 'Needs Correction' ? 'Replace' : ($verification === 'Verified' ? 'Verified' : 'Under Review'),
-            'button' => $verification === 'Needs Correction' ? 'student-button' : 'student-button-secondary student-button-disabled',
-            'disabled' => $verification !== 'Needs Correction',
+            'button' => $verification === 'Needs Correction' && $canUploadDocuments ? 'student-button' : 'student-button-secondary student-button-disabled',
+            'disabled' => $verification !== 'Needs Correction' || !$canUploadDocuments,
         ];
     } elseif ($canUploadDocuments) {
         $documents[] = [
@@ -433,7 +445,7 @@ unset($documentCard);
 $studentActionStatuses = ['Ready to Upload', 'Needs Correction'];
 $studentActionDocuments = array_values(array_filter(
     $documents,
-    static fn(array $document): bool => in_array((string) ($document['status'] ?? ''), $studentActionStatuses, true)
+    static fn(array $document): bool => !($document['disabled'] ?? false) && in_array((string) ($document['status'] ?? ''), $studentActionStatuses, true)
 ));
 $missingDocumentCount = count($studentActionDocuments);
 $missingDocumentNames = array_values(array_map(
@@ -563,17 +575,18 @@ render_student_header('APE Status', 'ape');
                     $isCurrent = (bool) ($step['current'] ?? false) && !$isDone;
                     $isInProgress = $isSubmitted && !$isDone;
                     $uploadsRemainOpen = $stepNumber === 1 && !$isDone && $studentProgress['active_step'] === 2;
-                    $isActive = $isCurrent;
+                    $waitingForSchedule = $stepNumber === 1 && !$isDone && !$initialUploadPhaseOpen;
+                    $isActive = $isCurrent && !$waitingForSchedule;
                     $stepClass = $isDone ? 'is-done' : ($isActive ? 'is-current' : 'is-locked');
                     $badgeClass = ($isDone || $isSubmitted) ? 'student-badge-success' : ($isActive ? 'student-badge-warning' : 'student-badge-info');
-                    $badgeLabel = $isSubmitted ? 'Submitted' : ($isDone ? 'Done' : ($isActive ? ($stepNumber === 1 ? 'In Progress' : 'Current') : ($uploadsRemainOpen ? 'Uploads open' : 'Next')));
+                    $badgeLabel = $waitingForSchedule ? 'Waiting for schedule' : ($isSubmitted ? 'Submitted' : ($isDone ? 'Done' : ($isActive ? ($stepNumber === 1 ? 'In Progress' : 'Current') : ($uploadsRemainOpen ? 'Uploads open' : 'Next'))));
                     $stepTitle = $step['title'];
                     $stepCopy = $step['copy'];
                     ?>
                     <div class="student-ape-step <?= student_e($stepClass) ?>">
                         <span class="student-ape-step-rail" aria-hidden="true"></span>
                         <span class="student-ape-step-index">
-                            <span class="material-symbols-outlined"><?= student_e($isDone ? 'check' : (($isCurrent || $isInProgress) ? 'pending_actions' : $step['icon'])) ?></span>
+                            <span class="material-symbols-outlined"><?= student_e($isDone ? 'check' : (($isActive || $isInProgress) ? 'pending_actions' : $step['icon'])) ?></span>
                         </span>
                         <div class="student-ape-step-body" data-mobile-step-label="<?= student_e($step['title']) ?>">
                             <div class="student-ape-step-top">

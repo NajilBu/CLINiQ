@@ -640,13 +640,13 @@ function ape_normalized_action_items(array $record, ?array $requirements = null,
             'priority' => 'clinic_action',
             'status' => 'Ready',
         ]);
-    } elseif (empty($record['schedule_batch_id'])) {
+    } elseif (!ape_initial_upload_phase_is_open($record)) {
         $add($items, [
             'action_type' => 'assign_schedule',
             'label' => 'APE scheduling',
             'title' => 'Assign APE schedule',
             'action_label' => 'Assign APE schedule',
-            'description' => 'This patient does not have an assigned APE schedule.',
+            'description' => 'Assign this patient to a scheduled APE batch before initial document uploads begin.',
             'owner' => 'clinic',
             'priority' => 'clinic_action',
             'status' => 'Unscheduled',
@@ -816,6 +816,10 @@ function ape_has_urgent_action(array $record): bool
 
 function ape_record_stage_label(array $record): string
 {
+    if (!ape_initial_upload_phase_is_open($record)
+        && !in_array('Cleared', [$record['workflow_status'] ?? '', $record['clearance_status'] ?? ''], true)) {
+        return 'Waiting for Schedule';
+    }
     $queueKey = ape_record_queue($record);
     $queues = ape_work_queues();
 
@@ -1011,7 +1015,7 @@ function ape_student_progress(array $record): array
         'percent' => $completedCount * 25,
         'active_step' => $activeStep,
         'stage_label' => match ($activeStep) {
-            1 => 'Digital Keeping',
+            1 => ape_initial_upload_phase_is_open($record) ? 'Digital Keeping' : 'Waiting for Schedule',
             2 => 'Examination',
             3 => 'Final Decision or Follow-up',
             4 => 'Completed',
@@ -1087,6 +1091,66 @@ function ape_earliest_upcoming_batch(array $batches, ?DateTimeImmutable $now = n
     });
 
     return $scheduled[0] ?? null;
+}
+
+function ape_initial_upload_phase_is_open(array $record): bool
+{
+    return ($record['entry_mode'] ?? '') === 'Clinic Manual'
+        || !empty($record['exam_date'])
+        || (!empty($record['schedule_batch_id']) && ($record['batch_status'] ?? '') === 'Scheduled');
+}
+
+function ape_default_scheduled_batch(array $batches, ?DateTimeImmutable $now = null): ?array
+{
+    $upcoming = ape_earliest_upcoming_batch($batches, $now);
+    if ($upcoming !== null) {
+        return $upcoming;
+    }
+
+    $scheduled = array_values(array_filter($batches, static fn (array $batch): bool => ($batch['status'] ?? '') === 'Scheduled'));
+    usort($scheduled, static function (array $left, array $right): int {
+        $leftSchedule = (string) ($left['schedule_date'] ?? '') . ' ' . (string) ($left['start_time'] ?? '');
+        $rightSchedule = (string) ($right['schedule_date'] ?? '') . ' ' . (string) ($right['start_time'] ?? '');
+        return strcmp($rightSchedule, $leftSchedule) ?: ((int) ($right['batch_id'] ?? 0) <=> (int) ($left['batch_id'] ?? 0));
+    });
+
+    return $scheduled[0] ?? null;
+}
+
+function ape_overall_view_requested(array $query): bool
+{
+    return strtolower(trim((string) ($query['scope'] ?? ''))) === 'overall'
+        && strtolower(trim((string) ($query['selection'] ?? ''))) === 'overall';
+}
+
+/**
+ * @return array{batch_id: ?int, overall_selected: bool}
+ */
+function ape_resolve_batch_selection(
+    array $scheduledBatchesById,
+    ?array $defaultBatch,
+    ?int $requestedBatchId,
+    bool $overallRequested,
+    ?array $savedSelection
+): array {
+    if ($overallRequested) {
+        return ['batch_id' => null, 'overall_selected' => true];
+    }
+    if ($requestedBatchId !== null && isset($scheduledBatchesById[$requestedBatchId])) {
+        return ['batch_id' => $requestedBatchId, 'overall_selected' => false];
+    }
+    if (($savedSelection['type'] ?? null) === 'overall') {
+        return ['batch_id' => null, 'overall_selected' => true];
+    }
+    $savedBatchId = (int) ($savedSelection['batch_id'] ?? 0);
+    if (($savedSelection['type'] ?? null) === 'batch' && $savedBatchId > 0 && isset($scheduledBatchesById[$savedBatchId])) {
+        return ['batch_id' => $savedBatchId, 'overall_selected' => false];
+    }
+
+    return [
+        'batch_id' => $defaultBatch !== null ? (int) $defaultBatch['batch_id'] : null,
+        'overall_selected' => false,
+    ];
 }
 
 function ape_waiting_days(array $record): int
@@ -1242,10 +1306,17 @@ function ape_waiting_label(array $record): string
 
 function ape_next_action_card(array $record): array
 {
+    if (!ape_initial_upload_phase_is_open($record)) {
+        return [
+            'title' => 'Assign an examination schedule',
+            'body' => 'Initial document uploads open after this patient is assigned to a scheduled APE batch.',
+        ];
+    }
+
     return match (ape_record_queue($record)) {
         'examination' => [
             'title' => ape_examination_is_available($record) ? 'Record the examination' : 'Assign this patient to an APE batch',
-            'body' => ape_examination_is_available($record) ? 'Enter the examination result even if digital documents are incomplete, and check any hard copies the patient brings.' : 'Digital uploads may continue while the patient waits for an assigned examination schedule.',
+            'body' => ape_examination_is_available($record) ? 'Enter the examination result even if digital documents are incomplete, and check any hard copies the patient brings.' : 'Initial uploads are available after an examination batch is assigned.',
         ],
         'digital_submission' => !ape_initial_uploads_present($record)
             ? [

@@ -32,6 +32,19 @@ $fixedSchedule = array_replace($waiting, [
     'batch_start_at' => '2026-09-15 08:00:00',
     'batch_end_at' => '2026-09-15 12:00:00',
 ]);
+$unscheduledUpload = array_replace($waiting, ['schedule_batch_id' => null, 'batch_status' => null]);
+expect_four_step(!ape_initial_upload_phase_is_open($unscheduledUpload), 'Initial uploads must wait for an assigned examination batch.');
+expect_four_step(ape_initial_upload_phase_is_open($waiting), 'Initial uploads must open when a future examination batch is scheduled.');
+expect_four_step(!ape_initial_upload_phase_is_open(array_replace($waiting, ['batch_status' => 'Cancelled'])), 'A cancelled batch must close pre-examination uploads.');
+expect_four_step(ape_initial_upload_phase_is_open(array_replace($unscheduledUpload, ['exam_date' => '2026-09-15'])), 'Post-examination document corrections must remain available.');
+expect_four_step(ape_initial_upload_phase_is_open(array_replace($unscheduledUpload, ['entry_mode' => 'Clinic Manual'])), 'Clinic-manual APEs must remain exempt from batch scheduling.');
+expect_four_step(ape_student_progress($unscheduledUpload)['stage_label'] === 'Waiting for Schedule', 'An unscheduled student must not be shown as already in Digital Keeping.');
+$patientUploadSource = file_get_contents(__DIR__ . '/../patient-portal/patient-ape-status.php');
+$staffUploadSource = file_get_contents(__DIR__ . '/../public/ape/view.php');
+expect_four_step(str_contains($patientUploadSource, 'if (!ape_initial_upload_phase_is_open($apeRecord))'), 'The patient upload endpoint must enforce the batch gate.');
+expect_four_step(str_contains($patientUploadSource, '&& $initialUploadPhaseOpen;'), 'The patient upload form must enforce the batch gate.');
+expect_four_step(str_contains($staffUploadSource, 'if (!ape_initial_upload_phase_is_open($record))'), 'The clinic upload endpoint must enforce the batch gate.');
+expect_four_step(str_contains($staffUploadSource, '&& ape_initial_upload_phase_is_open($record);'), 'The clinic upload form must enforce the batch gate.');
 
 expect_four_step(
     ape_schedule_is_current($fixedSchedule, new DateTimeImmutable('2026-09-15 10:00:00')),
@@ -246,9 +259,23 @@ $batches = [
 ];
 expect_four_step((ape_earliest_upcoming_batch($batches, $batchNow)['batch_id'] ?? 0) === 2, 'Default APE scope must select the earliest non-ended scheduled batch.');
 expect_four_step(ape_earliest_upcoming_batch([$batches[0]], $batchNow) === null, 'No upcoming batch must allow the page to fall back to Overall.');
+expect_four_step((ape_default_scheduled_batch($batches, $batchNow)['batch_id'] ?? 0) === 2, 'APE must default to the next upcoming scheduled batch.');
+expect_four_step((ape_default_scheduled_batch([$batches[0], ['batch_id' => 5, 'status' => 'Scheduled', 'schedule_date' => '2026-09-13', 'start_time' => '09:00:00', 'end_time' => '10:00:00']], $batchNow)['batch_id'] ?? 0) === 1, 'APE must default to the most recent scheduled batch when none are upcoming.');
+expect_four_step(ape_default_scheduled_batch([$batches[3]], $batchNow) === null, 'Cancelled batches must not become the default.');
+expect_four_step(!ape_overall_view_requested(['scope' => 'overall']), 'An old Overall URL must not override the default scheduled batch.');
+expect_four_step(ape_overall_view_requested(['scope' => 'overall', 'selection' => 'overall']), 'Choosing Overall in the batch picker must remain available.');
+$scheduledById = [1 => $batches[0], 2 => $batches[2], 3 => $batches[1]];
+$nextBatch = $batches[2];
+expect_four_step(ape_resolve_batch_selection($scheduledById, $nextBatch, null, false, null)['batch_id'] === 2, 'A first visit must use the next upcoming batch.');
+expect_four_step(ape_resolve_batch_selection($scheduledById, $nextBatch, null, false, ['type' => 'batch', 'batch_id' => 3])['batch_id'] === 3, 'A manually selected batch must survive a return visit.');
+expect_four_step(ape_resolve_batch_selection($scheduledById, $nextBatch, 1, false, ['type' => 'batch', 'batch_id' => 3])['batch_id'] === 1, 'A new batch choice must replace the saved one.');
+expect_four_step(ape_resolve_batch_selection($scheduledById, $nextBatch, null, false, ['type' => 'overall'])['overall_selected'], 'A manually selected Overall view must survive a return visit.');
+expect_four_step(ape_resolve_batch_selection($scheduledById, $nextBatch, null, true, ['type' => 'batch', 'batch_id' => 3])['overall_selected'], 'Choosing Overall must replace a saved batch.');
+expect_four_step(ape_resolve_batch_selection($scheduledById, $nextBatch, 3, false, ['type' => 'overall'])['batch_id'] === 3, 'Choosing a batch must replace saved Overall.');
+expect_four_step(ape_resolve_batch_selection($scheduledById, $nextBatch, null, false, ['type' => 'batch', 'batch_id' => 4])['batch_id'] === 2, 'A cancelled saved batch must fall back to the scheduled default.');
 
 $indexSource = file_get_contents(__DIR__ . '/../public/ape/index.php');
-expect_four_step(str_contains($indexSource, "['queue' => \$activeQueue, 'scope' => 'overall', 'population' => \$populationScope]"), 'Overall selection must remain explicit in its population-aware link.');
+expect_four_step(str_contains($indexSource, "['queue' => \$activeQueue, 'scope' => 'overall', 'selection' => 'overall', 'population' => \$populationScope]"), 'Overall selection must remain explicit in its population-aware link.');
 expect_four_step(str_contains($indexSource, "name=\"scope\" value=\"overall\""), 'Search must preserve the explicit Overall scope.');
 expect_four_step(str_contains($indexSource, "'Examine Patient'"), 'Missed-patient alerts must provide an examination action.');
 expect_four_step(str_contains($indexSource, 'ape_normalized_action_items($rec)'), 'APE Work Queues must render normalized actions.');

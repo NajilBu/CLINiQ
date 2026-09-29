@@ -7,8 +7,12 @@ $view = file_get_contents(__DIR__ . '/../app/helpers/view.php');
 $grid = file_get_contents(__DIR__ . '/../public/assets/js/ag-grid-tables.js');
 
 $checks = [
-    'restores the last page-level APE state' => str_contains($page, "\$_SESSION['ape_work_queue_state']"),
-    'persists an explicit overall selection' => str_contains($page, "['scope'] = 'overall'"),
+    'restores queue and search without retaining an old batch choice' => str_contains($page, "array_flip(['queue', 'q', 'population'])"),
+    'stores deliberate batch selections separately from legacy queue state' => str_contains($page, "\$_SESSION['ape_batch_selection_v2']")
+        && str_contains($page, 'ape_resolve_batch_selection('),
+    'keeps overall as an explicit selection' => str_contains($page, "['queue' => \$activeQueue, 'scope' => 'overall', 'selection' => 'overall', 'population' => \$populationScope]"),
+    'shows only the selected batch name in the picker button' => str_contains($page, "? (string) \$selectedBatch['batch_name']")
+        && !str_contains($page, "'%s • %s, %s–%s'"),
     'preserves search when population changes' => str_contains($page, "\$employeeScopeQuery['q'] = \$search"),
     'assigns stable state keys to APE grids' => str_contains($page, "'stateKey' => 'ape-work-queue-'"),
     'renders grid state keys' => str_contains($view, 'data-state-key='),

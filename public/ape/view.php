@@ -173,6 +173,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (($record['clearance_status'] ?? '') === 'Cleared' || ($record['workflow_status'] ?? '') === 'Cleared') {
                 throw new RuntimeException('Document upload is closed because this APE record is already completed.');
             }
+            if (!ape_initial_upload_phase_is_open($record)) {
+                throw new RuntimeException('Assign the patient to a scheduled APE examination batch before uploading initial documents.');
+            }
             $documentType = trim((string) ($_POST['document_type'] ?? ''));
             if ($documentType === '' || mb_strlen($documentType) > 120) {
                 throw new InvalidArgumentException('Choose a valid APE requirement for the document.');
@@ -648,14 +651,16 @@ $currentStep = $staffProgress['active_step'];
 $digitalSubmissionComplete = ape_digital_submission_complete($record);
 $actionCard = ape_next_action_card($record);
 $adminStateBadge = match ($staffProgress['active_step']) {
-    1 => 'DOCUMENTS STILL NEEDED',
+    1 => ape_initial_upload_phase_is_open($record) ? 'DOCUMENTS STILL NEEDED' : 'WAITING FOR SCHEDULE',
     2 => 'EXAMINATION PENDING',
     3 => 'FINAL DECISION PENDING',
     4 => $patientProgress['steps'][4]['done'] ? 'APE COMPLETED' : 'FOLLOW-UP REQUIRED',
     default => 'APE IN PROGRESS',
 };
 $adminStateExplanation = match ($staffProgress['active_step']) {
-    1 => 'The student may upload documents before the assigned examination schedule starts.',
+    1 => ape_initial_upload_phase_is_open($record)
+        ? 'The student may upload documents before the assigned examination schedule starts.'
+        : 'Assign the student to a scheduled APE examination batch before document uploads begin.',
     2 => 'The assigned examination schedule is active. Record the examination while document uploads remain available.',
     3 => 'Review submitted initial or follow-up documents, return any that need correction, then complete the APE when all work is resolved.',
     4 => $patientProgress['steps'][4]['done']
@@ -736,7 +741,9 @@ $pendingReviewDocuments = array_values(array_filter($reviewDocuments, static fn(
 $reviewAwaitingCount = count($pendingReviewDocuments);
 $reviewWorkspaceActive = $examSaved && !$apeIsCompleted && $reviewUploadGroup !== null;
 $showRequirementsChecklist = !$apeIsCompleted && !$examSaved;
-$canClinicUploadBeforeStudentSubmission = $canUploadApeDocument && !$apeIsCompleted;
+$canClinicUploadBeforeStudentSubmission = $canUploadApeDocument
+    && !$apeIsCompleted
+    && ape_initial_upload_phase_is_open($record);
 $headerWaitingLabel = ape_waiting_label($record);
 if ($studentDocumentSubmitted && !$apeIsCompleted && $reviewDocuments) {
     $adminStateBadge = $reviewAwaitingCount > 0
