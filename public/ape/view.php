@@ -33,6 +33,7 @@ function ape_follow_up_due_date_from_post(): ?string
 function render_ape_final_decision_actions(array $record, bool $canRecordApeExam, bool $digitalSubmissionComplete): void
 {
     $canComplete = ape_can_complete_record($record);
+    $clinicManaged = ($record['entry_mode'] ?? '') === 'Clinic Manual';
     ?>
     <?php if (!$canRecordApeExam): ?>
         <div class="ape-flow-action muted">
@@ -94,22 +95,22 @@ function render_ape_final_decision_actions(array $record, bool $canRecordApeExam
                 <div>
                     <label class="clinic-label" for="apeFollowUpNotes">Clinic plan</label>
                     <textarea class="clinic-textarea" id="apeFollowUpNotes" name="follow_up_notes" rows="3" placeholder="Treatment, repeat test, clearance, or other follow-up..." required></textarea>
-                    <p class="ape-follow-up-plan-help mt-2 mb-0">Clinic-only context for treatment, repeat testing, referral, or another clinical action. Add a follow-up document below when the student must upload a specific file; that document carries the student instructions and due date.</p>
+                    <p class="ape-follow-up-plan-help mt-2 mb-0"><?= $clinicManaged ? 'Clinic-only context for treatment, repeat testing, referral, or another clinical action. Add a follow-up document below when clinic staff need to retain a specific file.' : 'Clinic-only context for treatment, repeat testing, referral, or another clinical action. Add a follow-up document below when the student must upload a specific file; that document carries the student instructions and due date.' ?></p>
                 </div>
                 <button class="btn btn-outline w-full" style="color:#b45309;border-color:rgba(180,83,9,0.2);" data-confirm-submit data-confirm-type="danger" data-confirm-title="Save follow-up plan?" data-confirm-message="The APE record will remain open until the follow-up is cleared." data-confirm-toast="Saving follow-up plan..."><span class="material-symbols-outlined text-[18px]">save</span> Save follow-up plan</button>
             </form>
             <details class="ape-inline-document-requirement">
-                <summary><span class="material-symbols-outlined" aria-hidden="true">upload_file</span><span><strong>Request a document from the student</strong><small>Optional — use only when a specific file is needed.</small></span></summary>
+                <summary><span class="material-symbols-outlined" aria-hidden="true">upload_file</span><span><strong><?= $clinicManaged ? 'Add a clinic-managed document requirement' : 'Request a document from the student' ?></strong><small>Optional — use only when a specific file is needed.</small></span></summary>
                 <div class="ape-inline-document-requirement-body">
-                    <p class="ape-follow-up-plan-help mt-0 mb-3">The document title, student instructions, and due date are saved as one upload task in Follow-up. Leave this closed when the clinical plan does not require a file.</p>
+                    <p class="ape-follow-up-plan-help mt-0 mb-3"><?= $clinicManaged ? 'The document title, instructions, and due date are saved as one clinic-managed requirement. Leave this closed when the clinical plan does not require a file.' : 'The document title, student instructions, and due date are saved as one upload task in Follow-up. Leave this closed when the clinical plan does not require a file.' ?></p>
                     <form method="post" class="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <input type="hidden" name="action" value="add_requirement">
                         <input type="hidden" name="requirement_item_status" value="Missing">
                         <div><label class="clinic-label" for="apeDecisionFollowUpDocumentName">Document title</label><input class="clinic-input" id="apeDecisionFollowUpDocumentName" name="requirement_name" maxlength="160" placeholder="e.g. Specialist clearance certificate" required></div>
                         <div><label class="clinic-label" for="apeDecisionFollowUpDocumentDueDate">Due date</label><input class="clinic-input" id="apeDecisionFollowUpDocumentDueDate" name="requirement_due_date" type="date" min="<?= e(date('Y-m-d')) ?>" required></div>
-                        <div class="md:col-span-2"><label class="clinic-label" for="apeDecisionFollowUpDocumentInstructions">Patient instructions</label><textarea class="clinic-textarea" id="apeDecisionFollowUpDocumentInstructions" name="requirement_instructions" rows="2" placeholder="Explain exactly what the student must submit." required></textarea></div>
+                        <div class="md:col-span-2"><label class="clinic-label" for="apeDecisionFollowUpDocumentInstructions"><?= $clinicManaged ? 'Requirement instructions' : 'Patient instructions' ?></label><textarea class="clinic-textarea" id="apeDecisionFollowUpDocumentInstructions" name="requirement_instructions" rows="2" placeholder="<?= $clinicManaged ? 'Describe the file clinic staff need to retain.' : 'Explain exactly what the student must submit.' ?>" required></textarea></div>
                         <div><label class="clinic-label" for="apeDecisionFollowUpDocumentRemark">Clinic-only remark (optional)</label><input class="clinic-input" id="apeDecisionFollowUpDocumentRemark" name="requirement_remarks" placeholder="Internal context"></div>
-                        <div class="flex items-end"><button class="btn btn-outline w-full" data-confirm-submit data-confirm-title="Add follow-up requirement?" data-confirm-message="The student will receive an upload task in Final Decision or Follow-up." data-confirm-toast="Adding follow-up requirement..."><span class="material-symbols-outlined text-[18px]">playlist_add</span> Add follow-up document</button></div>
+                        <div class="flex items-end"><button class="btn btn-outline w-full" data-confirm-submit data-confirm-title="Add follow-up requirement?" data-confirm-message="<?= $clinicManaged ? 'This will add a clinic-managed follow-up document requirement.' : 'The student will receive an upload task in Final Decision or Follow-up.' ?>" data-confirm-toast="Adding follow-up requirement..."><span class="material-symbols-outlined text-[18px]">playlist_add</span> Add follow-up document</button></div>
                     </form>
                 </div>
             </details>
@@ -288,7 +289,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $missingItems = trim((string) ($_POST['missing_items'] ?? ''));
             if ($missingItems === '') {
-                throw new InvalidArgumentException('Enter the reason the student must correct and resubmit the selected document(s).');
+                throw new InvalidArgumentException(($record['entry_mode'] ?? '') === 'Clinic Manual'
+                    ? 'Enter the correction needed before clinic staff replace the selected document(s).'
+                    : 'Enter the reason the student must correct and resubmit the selected document(s).');
             }
             $returnSchedule = ape_return_schedule((string) ($_POST['follow_up_due_date'] ?? ''));
             $requirementsForReview = ape_requirements_for_record($id);
@@ -642,6 +645,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $record = fetch_ape_record($id);
 $fullName = trim($record['first_name'] . ' ' . $record['last_name']);
+$isClinicManagedApe = ($record['entry_mode'] ?? '') === 'Clinic Manual';
 $queueKey = ape_record_queue($record);
 $queue = ape_work_queues()[$queueKey];
 $next = ape_next_action($record);
@@ -668,6 +672,15 @@ $adminStateExplanation = match ($staffProgress['active_step']) {
         : 'The APE remains in Final Decision or Follow-up until clinic work is resolved.',
     default => 'Complete the current APE step.',
 };
+if ($isClinicManagedApe) {
+    $adminStateExplanation = match ($staffProgress['active_step']) {
+        1 => 'Clinic staff can upload and review the required documents for this record.',
+        2 => 'Record the examination and complete the clinic-managed requirements.',
+        3 => 'Review clinic-held documents and resolve any clinical follow-up before completing the APE.',
+        4 => $patientProgress['steps'][4]['done'] ? 'The APE record is complete.' : 'Resolve the outstanding clinic work before completing the APE.',
+        default => 'Complete the outstanding clinic work for this APE record.',
+    };
+}
 
 $requirements = ape_requirements_for_record($id);
 $pendingRequirements = array_values(array_filter(
@@ -749,7 +762,9 @@ if ($studentDocumentSubmitted && !$apeIsCompleted && $reviewDocuments) {
     $adminStateBadge = $reviewAwaitingCount > 0
         ? $reviewAwaitingCount . ' DOCUMENT' . ($reviewAwaitingCount === 1 ? '' : 'S') . ' AWAITING REVIEW'
         : 'DOCUMENT REVIEW IN PROGRESS';
-    $adminStateExplanation = 'Student documents are ready for one clinic decision: archive the complete submission or return selected files for correction.';
+    $adminStateExplanation = $isClinicManagedApe
+        ? 'Clinic-held documents are ready for review: archive the complete submission or return selected files for correction.'
+        : 'Student documents are ready for one clinic decision: archive the complete submission or return selected files for correction.';
     $headerWaitingLabel = 'REVIEW SUBMISSION';
 }
 $showExamForm = !$examSaved && !$apeIsCompleted && $canRecordApeExam && ape_examination_is_available($record);
@@ -795,7 +810,7 @@ $clearanceUrl = $clearanceDocument
     : null;
 
 set_page_back_link('index.php', 'Queues');
-render_header('APE Record - ' . $fullName);
+render_header(($isClinicManagedApe ? 'Faculty & NTP APE Record - ' : 'APE Record - ') . $fullName);
 ?>
 
 <style>
@@ -1236,7 +1251,7 @@ render_header('APE Record - ' . $fullName);
             <div class="flex items-center gap-4 min-w-0">
                 <div class="avatar <?= e(avatar_color($fullName)) ?> w-14 h-14 text-lg"><?= e(initials($fullName)) ?></div>
                 <div class="min-w-0">
-                    <p class="text-[10px] font-black text-primary uppercase tracking-widest mb-1">APE Review Station</p>
+                    <p class="text-[10px] font-black text-primary uppercase tracking-widest mb-1"><?= $isClinicManagedApe ? 'Faculty & NTP APE Record' : 'APE Review Station' ?></p>
                     <h1 class="font-headline text-2xl md:text-3xl font-extrabold text-[#17261d] truncate"><?= e($fullName) ?></h1>
                     <p class="text-sm font-bold text-slate-500 mt-1"><?= e($record['id_number']) ?><?= $record['course_section'] ? ' - ' . e($record['course_section']) : '' ?></p>
                 </div>
@@ -1289,6 +1304,7 @@ render_header('APE Record - ' . $fullName);
         : ($batchWasMissed ? 'Missed' : ($examSaved ? 'Examination Completed' : ($batchHasPassed ? 'Schedule Passed' : 'Scheduled')));
     $batchStatusClass = !$hasApeBatch ? 'badge-pending' : ($batchWasMissed ? 'badge-critical' : ($batchHasPassed ? 'badge-completed' : 'badge-in-progress'));
     ?>
+    <?php if (!$isClinicManagedApe): ?>
     <section class="clinic-card p-5 md:p-6">
         <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
             <div class="flex items-start gap-4">
@@ -1319,8 +1335,10 @@ render_header('APE Record - ' . $fullName);
             <?php endif; ?>
         </div>
     </section>
+    <?php endif; ?>
 
     <section class="clinic-card p-5 md:p-6 space-y-6">
+        <?php if (!$isClinicManagedApe): ?>
         <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
             <?php
             $workflowSteps = ape_workflow_steps();
@@ -1342,6 +1360,7 @@ render_header('APE Record - ' . $fullName);
                 </div>
             <?php endforeach; ?>
         </div>
+        <?php endif; ?>
 
         <?php if ($examSaved): ?>
         <section class="ape-flow-panel ape-secondary-panel" aria-labelledby="savedApeExamTitle">
@@ -1463,7 +1482,7 @@ render_header('APE Record - ' . $fullName);
                 <?php if ((int) ($record['follow_up_required'] ?? 0) === 1): ?>
                     <div class="ape-review-context-note mb-4">
                         <span class="material-symbols-outlined" aria-hidden="true">info</span>
-                        <p class="mb-0">Follow-up documents use their assigned return date. Archive every file that is ready now; missing or returned requirements stay open for the student separately.</p>
+                        <p class="mb-0">Follow-up documents use their assigned return date. Archive every file that is ready now; missing or returned requirements stay open <?= $isClinicManagedApe ? 'for clinic staff' : 'for the student' ?> separately.</p>
                     </div>
                 <?php endif; ?>
                 <?php if (count($phaseThreeGroups) > 1): ?>
@@ -1481,7 +1500,7 @@ render_header('APE Record - ' . $fullName);
                     <div class="ape-review-waiting-state">
                         <div class="ape-review-waiting-icon"><span class="material-symbols-outlined" aria-hidden="true">hourglass_empty</span></div>
                         <div>
-                            <p class="clinic-label text-amber-800 mb-1">Still waiting on the student</p>
+                            <p class="clinic-label text-amber-800 mb-1"><?= $isClinicManagedApe ? 'Clinic documents still needed' : 'Still waiting on the student' ?></p>
                             <h3 class="font-headline text-base font-extrabold text-amber-950 mb-1"><?= count($reviewWaitingRequirements) ?> required file<?= count($reviewWaitingRequirements) === 1 ? '' : 's' ?> not submitted</h3>
                             <p class="text-sm font-bold text-amber-900 mb-4">The files below are not ready yet. Any submitted files are listed separately and can be reviewed now.</p>
                             <div class="flex flex-wrap gap-2" aria-label="Files still needed">
@@ -1492,12 +1511,12 @@ render_header('APE Record - ' . $fullName);
                             <?php if ($canClinicUploadBeforeStudentSubmission && $reviewWaitingNames): ?>
                                 <details class="ape-review-clinic-upload mt-4">
                                     <summary><span class="material-symbols-outlined" aria-hidden="true">upload_file</span> Upload a retained clinic copy</summary>
-                                    <p>Use this only when clinic staff are submitting the missing file on the student’s behalf. The upload will remain pending review.</p>
+                                    <p><?= $isClinicManagedApe ? 'Upload the missing clinic-held file. It will remain pending review.' : 'Use this only when clinic staff are submitting the missing file on the student’s behalf. The upload will remain pending review.' ?></p>
                                     <form method="post" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2">
                                         <input type="hidden" name="action" value="upload_clinic_document">
                                         <select class="clinic-select" name="document_type" aria-label="Requirement to upload" required><?php foreach ($reviewWaitingNames as $type): ?><option value="<?= e($type) ?>"><?= e($type) ?></option><?php endforeach; ?></select>
                                         <input class="clinic-input" name="document" type="file" accept=".pdf,.jpg,.jpeg,.png" required aria-label="Document file">
-                                        <button class="btn btn-outline" data-confirm-submit data-confirm-title="Submit document for student?" data-confirm-message="This will be recorded as a clinic upload and remain pending clinic review." data-confirm-toast="Uploading document..."><span class="material-symbols-outlined text-[18px]">upload_file</span> Upload file</button>
+                                        <button class="btn btn-outline" data-confirm-submit data-confirm-title="<?= $isClinicManagedApe ? 'Submit clinic document?' : 'Submit document for student?' ?>" data-confirm-message="This will be recorded as a clinic upload and remain pending clinic review." data-confirm-toast="Uploading document..."><span class="material-symbols-outlined text-[18px]">upload_file</span> Upload file</button>
                                     </form>
                                 </details>
                             <?php endif; ?>
@@ -1560,7 +1579,7 @@ render_header('APE Record - ' . $fullName);
                                     <input type="hidden" name="action" value="upload_clinic_document">
                                     <div><label class="clinic-label" for="apeClinicPhaseThreeDocument">Requirement</label><select class="clinic-select" id="apeClinicPhaseThreeDocument" name="document_type" required><?php foreach ($reviewWaitingRequirements as $requirement): ?><option value="<?= e($requirement['requirement_name']) ?>"><?= e($requirement['requirement_name']) ?></option><?php endforeach; ?></select></div>
                                     <div><label class="clinic-label" for="apeClinicPhaseThreeFile">File</label><input class="clinic-input" id="apeClinicPhaseThreeFile" name="document" type="file" accept=".pdf,.jpg,.jpeg,.png" required></div>
-                                    <button class="btn btn-outline w-full" data-confirm-submit data-confirm-title="Submit document for student?" data-confirm-message="This file will be recorded as a clinic upload and remain pending Phase 3 review." data-confirm-toast="Uploading document..."><span class="material-symbols-outlined text-[18px]">upload_file</span> Add file for review</button>
+                                    <button class="btn btn-outline w-full" data-confirm-submit data-confirm-title="<?= $isClinicManagedApe ? 'Submit clinic document?' : 'Submit document for student?' ?>" data-confirm-message="<?= $isClinicManagedApe ? 'This file will be recorded as a clinic upload and remain pending review.' : 'This file will be recorded as a clinic upload and remain pending Phase 3 review.' ?>" data-confirm-toast="Uploading document..."><span class="material-symbols-outlined text-[18px]">upload_file</span> Add file for review</button>
                                 </form>
                             </details>
                             <?php endif; ?>
@@ -1570,7 +1589,7 @@ render_header('APE Record - ' . $fullName);
                                     <input type="hidden" name="review_group" value="<?= e($reviewUploadGroup) ?>">
                                     <div class="ape-review-decision-copy is-archive">
                                         <span class="material-symbols-outlined" aria-hidden="true">task_alt</span>
-                                        <p class="mb-0">This accepts and archives the <?= count($reviewDocuments) ?> submitted file<?= count($reviewDocuments) === 1 ? '' : 's' ?> ready for review. Any missing requirement stays open for the student.</p>
+                                        <p class="mb-0">This accepts and archives the <?= count($reviewDocuments) ?> submitted file<?= count($reviewDocuments) === 1 ? '' : 's' ?> ready for review. Any missing requirement stays open <?= $isClinicManagedApe ? 'for clinic staff' : 'for the student' ?>.</p>
                                     </div>
                                     <?php if (!$reviewDocuments): ?><p class="ape-review-validation-copy">No submitted file is ready for archive review yet.</p><?php endif; ?>
                                     <button class="btn btn-primary w-full" <?= !$examSaved || !$reviewDocuments || ($reviewUploadGroup === 'follow_up' && !$canRecordApeExam) ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="primary" data-confirm-title="Archive these documents?" data-confirm-message="This approves the submitted files that are ready now. Other missing or returned requirements will remain open." data-confirm-toast="Archiving documents..."><span class="material-symbols-outlined text-[18px]">inventory_2</span> Archive ready file<?= count($reviewDocuments) === 1 ? '' : 's' ?></button>
@@ -1580,13 +1599,13 @@ render_header('APE Record - ' . $fullName);
                                 <form method="post" class="space-y-3" id="apeCorrectionForm">
                                     <input type="hidden" name="action" value="request_document_correction">
                                     <input type="hidden" name="review_group" value="<?= e($reviewUploadGroup) ?>">
-                                    <div class="ape-review-decision-copy is-return"><span class="material-symbols-outlined" aria-hidden="true">assignment_return</span><p class="mb-0">Select at least one pending file in the list, then give the student clear instructions and a due date.</p></div>
+                                    <div class="ape-review-decision-copy is-return"><span class="material-symbols-outlined" aria-hidden="true">assignment_return</span><p class="mb-0">Select at least one pending file in the list, then <?= $isClinicManagedApe ? 'record clear correction instructions' : 'give the student clear instructions' ?> and a due date.</p></div>
                                     <label class="clinic-label" for="apeResubmissionReason">Required correction instructions</label>
                                     <textarea class="clinic-textarea" id="apeResubmissionReason" name="missing_items" rows="3" placeholder="Example: Please upload a clearer copy with your full name and signature visible." required></textarea>
                                     <label class="clinic-label" for="apeResubmissionDueDate">Return due date</label>
                                     <input class="clinic-input" id="apeResubmissionDueDate" name="follow_up_due_date" type="date" min="<?= e(date('Y-m-d')) ?>" required>
-                                    <p class="ape-review-notification-copy"><span class="material-symbols-outlined" aria-hidden="true">mail</span>The student receives a correction notification and an email when delivery is enabled.</p>
-                                    <button class="btn btn-outline w-full ape-review-return-submit" <?= !$examSaved || !$pendingReviewDocuments ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="danger" data-confirm-title="Return selected file(s) for resubmission?" data-confirm-message="The selected uploads will be marked Needs Correction. Their originals remain in history, and the student must upload replacement files." data-confirm-toast="Returning files for resubmission..."><span class="material-symbols-outlined text-[18px]">assignment_return</span> Return selected files</button>
+                                    <?php if (!$isClinicManagedApe): ?><p class="ape-review-notification-copy"><span class="material-symbols-outlined" aria-hidden="true">mail</span>The student receives a correction notification and an email when delivery is enabled.</p><?php endif; ?>
+                                    <button class="btn btn-outline w-full ape-review-return-submit" <?= !$examSaved || !$pendingReviewDocuments ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="danger" data-confirm-title="Return selected file(s) for resubmission?" data-confirm-message="<?= $isClinicManagedApe ? 'The selected uploads will be marked Needs Correction. Their originals remain in history, and clinic staff must add replacement files.' : 'The selected uploads will be marked Needs Correction. Their originals remain in history, and the student must upload replacement files.' ?>" data-confirm-toast="Returning files for resubmission..."><span class="material-symbols-outlined text-[18px]">assignment_return</span> Return selected files</button>
                                 </form>
                             </div>
                         </aside>
@@ -1654,7 +1673,7 @@ render_header('APE Record - ' . $fullName);
                                 <p class="clinic-label text-primary mb-3">Doctor-confirmed health information</p>
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     <div><label class="clinic-label" for="apeBloodType">Blood type</label><select class="clinic-select" id="apeBloodType" name="blood_type"><option value="">Not recorded</option><?php foreach (dropdown_options('blood_type') as $type): ?><option value="<?= e($type) ?>" <?= ($record['patient_blood_type'] ?? '') === $type ? 'selected' : '' ?>><?= e($type) ?></option><?php endforeach; ?></select></div>
-                                    <div><label class="clinic-label">Student-reported allergies</label><div class="passport-readonly-field"><?= e($record['patient_allergies'] ?: 'None reported') ?></div></div>
+                                    <div><label class="clinic-label"><?= $isClinicManagedApe ? 'Reported allergies' : 'Student-reported allergies' ?></label><div class="passport-readonly-field"><?= e($record['patient_allergies'] ?: 'None reported') ?></div></div>
                                     <div class="md:col-span-2" data-clinical-pairs>
                                         <label class="clinic-label">Doctor-confirmed conditions and current medications</label>
                                         <p class="text-xs font-bold text-slate-500 mb-2">Use one row for a condition and its current medication. Leave either field blank when it does not apply.</p>
@@ -1687,17 +1706,17 @@ render_header('APE Record - ' . $fullName);
                             </div>
                             <div class="md:col-span-2 rounded-xl border border-amber-200 bg-amber-50 p-4">
                                 <p class="clinic-label text-amber-800 mb-1">Optional follow-up document</p>
-                                <p class="text-xs font-bold text-amber-800 mb-3">Add this only when the examination finding requires another document, such as a specialist clearance. The student will submit it in Final Decision or Follow-up after this examination is saved.</p>
+                                <p class="text-xs font-bold text-amber-800 mb-3"><?= $isClinicManagedApe ? 'Add this only when the examination finding requires another document, such as a specialist clearance. Clinic staff can attach it after saving the examination.' : 'Add this only when the examination finding requires another document, such as a specialist clearance. The student will submit it in Final Decision or Follow-up after this examination is saved.' ?></p>
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    <div><label class="clinic-label" for="apeFollowUpRequirementName">Document title</label><input class="clinic-input" id="apeFollowUpRequirementName" name="follow_up_requirement_name" maxlength="160" placeholder="e.g. TB clearance certificate"><p class="ape-follow-up-plan-help mt-2 mb-0">Name the exact file the student must submit.</p></div>
+                                    <div><label class="clinic-label" for="apeFollowUpRequirementName">Document title</label><input class="clinic-input" id="apeFollowUpRequirementName" name="follow_up_requirement_name" maxlength="160" placeholder="e.g. TB clearance certificate"><p class="ape-follow-up-plan-help mt-2 mb-0">Name the exact file <?= $isClinicManagedApe ? 'clinic staff need to retain' : 'the student must submit' ?>.</p></div>
                                     <div><label class="clinic-label" for="apeFollowUpRequirementDueDate">Due date</label><input class="clinic-input" id="apeFollowUpRequirementDueDate" name="follow_up_requirement_due_date" type="date" min="<?= e(date('Y-m-d')) ?>"></div>
-                                    <div class="md:col-span-2"><label class="clinic-label" for="apeFollowUpRequirementInstructions">Patient instructions</label><textarea class="clinic-textarea" id="apeFollowUpRequirementInstructions" name="follow_up_requirement_instructions" rows="2" placeholder="Explain exactly what the student needs to submit."></textarea></div>
+                                    <div class="md:col-span-2"><label class="clinic-label" for="apeFollowUpRequirementInstructions"><?= $isClinicManagedApe ? 'Requirement instructions' : 'Patient instructions' ?></label><textarea class="clinic-textarea" id="apeFollowUpRequirementInstructions" name="follow_up_requirement_instructions" rows="2" placeholder="<?= $isClinicManagedApe ? 'Describe the file clinic staff need to retain.' : 'Explain exactly what the student needs to submit.' ?>"></textarea></div>
                                     <div class="md:col-span-2"><label class="clinic-label" for="apeFollowUpRequirementRemark">Clinic-only remark (optional)</label><input class="clinic-input" id="apeFollowUpRequirementRemark" name="follow_up_requirement_remark" placeholder="Internal context for the clinic team"></div>
                                 </div>
                             </div>
                             <div class="md:col-span-2 hidden rounded-xl border border-amber-200 bg-amber-50 p-4" id="apeReferralDetails">
                                 <p class="clinic-label text-amber-800 mb-1">Immediate Referral (only when result is Referred)</p>
-                                <p class="text-xs font-bold text-amber-700 mb-3">A referral is created immediately with this examination; it will not wait for a separate decision step.</p>
+                                <p class="text-xs font-bold text-amber-700 mb-3">A referral is created immediately with this examination<?= $isClinicManagedApe ? '.' : '; it will not wait for a separate decision step.' ?></p>
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     <div>
                                         <label class="clinic-label" for="apeReferralDestination">Facility / Specialist</label>
@@ -1790,17 +1809,17 @@ render_header('APE Record - ' . $fullName);
             <div class="ape-secondary-heading mb-4">
                 <div>
                     <h2 class="font-headline text-lg font-extrabold text-[#17261d] mb-1" id="apeAddFollowUpDocumentTitle">Add follow-up document requirement</h2>
-                    <p class="text-xs font-bold text-slate-500 mb-0">Use this only for a document required after examination. The student will receive the task in Final Decision or Follow-up.</p>
+                    <p class="text-xs font-bold text-slate-500 mb-0"><?= $isClinicManagedApe ? 'Use this only for a clinic-managed document required after examination.' : 'Use this only for a document required after examination. The student will receive the task in Final Decision or Follow-up.' ?></p>
                 </div>
             </div>
             <form method="post" class="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <input type="hidden" name="action" value="add_requirement">
                 <input type="hidden" name="requirement_item_status" value="Missing">
-                <div><label class="clinic-label" for="apeFollowUpDocumentName">Document title</label><input class="clinic-input" id="apeFollowUpDocumentName" name="requirement_name" maxlength="160" placeholder="e.g. Specialist clearance certificate" required><p class="ape-follow-up-plan-help mt-2 mb-0">Name the exact file the student must submit.</p></div>
+                <div><label class="clinic-label" for="apeFollowUpDocumentName">Document title</label><input class="clinic-input" id="apeFollowUpDocumentName" name="requirement_name" maxlength="160" placeholder="e.g. Specialist clearance certificate" required><p class="ape-follow-up-plan-help mt-2 mb-0">Name the exact file <?= $isClinicManagedApe ? 'clinic staff need to retain' : 'the student must submit' ?>.</p></div>
                 <div><label class="clinic-label" for="apeFollowUpDocumentDueDate">Due date</label><input class="clinic-input" id="apeFollowUpDocumentDueDate" name="requirement_due_date" type="date" min="<?= e(date('Y-m-d')) ?>" required></div>
-                <div class="md:col-span-2"><label class="clinic-label" for="apeFollowUpDocumentInstructions">Patient instructions</label><textarea class="clinic-textarea" id="apeFollowUpDocumentInstructions" name="requirement_instructions" rows="2" placeholder="Explain exactly what the student must submit." required></textarea></div>
+                <div class="md:col-span-2"><label class="clinic-label" for="apeFollowUpDocumentInstructions"><?= $isClinicManagedApe ? 'Requirement instructions' : 'Patient instructions' ?></label><textarea class="clinic-textarea" id="apeFollowUpDocumentInstructions" name="requirement_instructions" rows="2" placeholder="<?= $isClinicManagedApe ? 'Describe the file clinic staff need to retain.' : 'Explain exactly what the student must submit.' ?>" required></textarea></div>
                 <div><label class="clinic-label" for="apeFollowUpDocumentRemark">Clinic-only remark (optional)</label><input class="clinic-input" id="apeFollowUpDocumentRemark" name="requirement_remarks" placeholder="Internal context"></div>
-                <div class="flex items-end"><button class="btn btn-outline w-full" data-confirm-submit data-confirm-title="Add follow-up requirement?" data-confirm-message="The student will receive an upload task in Final Decision or Follow-up." data-confirm-toast="Adding follow-up requirement..."><span class="material-symbols-outlined text-[18px]">playlist_add</span> Add follow-up document</button></div>
+                <div class="flex items-end"><button class="btn btn-outline w-full" data-confirm-submit data-confirm-title="Add follow-up requirement?" data-confirm-message="<?= $isClinicManagedApe ? 'This will add a clinic-managed follow-up document requirement.' : 'The student will receive an upload task in Final Decision or Follow-up.' ?>" data-confirm-toast="Adding follow-up requirement..."><span class="material-symbols-outlined text-[18px]">playlist_add</span> Add follow-up document</button></div>
             </form>
         </section>
         <?php endif; ?>
@@ -1821,9 +1840,9 @@ render_header('APE Record - ' . $fullName);
                     <div class="ape-initial-documents-body">
                         <div class="ape-initial-documents-intro">
                             <div>
-                                <p class="clinic-label text-primary mb-1">Phase 1 · Document Keeping</p>
+                                <p class="clinic-label text-primary mb-1"><?= $isClinicManagedApe ? 'Clinic-managed documents' : 'Phase 1 · Document Keeping' ?></p>
                                 <h2 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Upload a retained clinic copy when needed</h2>
-                                <p class="text-xs font-bold text-slate-500 mb-0">Use this only when clinic staff are submitting an initial file for the student. Do not approve or return files here—those decisions happen in Final Decision or Follow-up.</p>
+                                <p class="text-xs font-bold text-slate-500 mb-0"><?= $isClinicManagedApe ? 'Clinic staff can attach initial files here. Review and correction decisions are handled separately below.' : 'Use this only when clinic staff are submitting an initial file for the student. Do not approve or return files here—those decisions happen in Final Decision or Follow-up.' ?></p>
                             </div>
                         </div>
                 <div class="ape-initial-document-list">
@@ -1831,11 +1850,11 @@ render_header('APE Record - ' . $fullName);
                             <div class="ape-initial-document-row">
                             <div class="ape-checklist-meta">
                                 <strong><?= e($requirement['requirement_name']) ?></strong>
-                                <span><?= !empty($requirement['_latest_document']['document_id']) ? 'A file is attached and will be reviewed in Phase 3.' : 'No file has been attached yet.' ?></span>
+                                <span><?= !empty($requirement['_latest_document']['document_id']) ? ($isClinicManagedApe ? 'A file is attached and pending clinic review.' : 'A file is attached and will be reviewed in Phase 3.') : 'No file has been attached yet.' ?></span>
                             </div>
                             <div class="ape-initial-document-state">
                                 <span class="badge <?= ape_status_badge_class($requirement['status'] ?? 'Missing') ?>"><?= e($requirement['status'] ?? 'Missing') ?></span>
-                                <span class="text-xs font-bold text-slate-400">Review happens in Phase 3</span>
+                                <span class="text-xs font-bold text-slate-400"><?= $isClinicManagedApe ? 'Clinic review follows upload' : 'Review happens in Phase 3' ?></span>
                             </div>
                             <div class="ape-initial-document-actions">
                                     <?php if ($canClinicUploadBeforeStudentSubmission): ?>
@@ -1917,10 +1936,10 @@ render_header('APE Record - ' . $fullName);
                                     <div class="rounded-lg bg-white border border-slate-200 overflow-hidden" data-clinic-upload-preview></div>
                                     <p class="text-xs font-bold text-slate-500 mt-2 mb-0" data-clinic-upload-filename></p>
                                 </div>
-                                <p class="text-xs font-bold text-slate-500 mb-0">The file will be stored on this student’s APE record as Pending for clinic review.</p>
+                                <p class="text-xs font-bold text-slate-500 mb-0">The file will be stored on this <?= $isClinicManagedApe ? 'faculty or NTP' : 'student' ?> APE record as Pending for clinic review.</p>
                                 <div class="flex flex-wrap gap-3 justify-end">
                                     <button type="button" class="btn btn-ghost" data-clinic-upload-close>Cancel</button>
-                                    <button type="submit" class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Submit this document?" data-confirm-message="The previewed file will be added to this student’s APE record." data-confirm-toast="Uploading document..."><span class="material-symbols-outlined text-[18px]">upload_file</span> Submit File</button>
+                                    <button type="submit" class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Submit this document?" data-confirm-message="The previewed file will be added to this <?= $isClinicManagedApe ? 'faculty or NTP' : 'student' ?> APE record." data-confirm-toast="Uploading document..."><span class="material-symbols-outlined text-[18px]">upload_file</span> Submit File</button>
                                 </div>
                             </form>
                         </div>
@@ -2048,7 +2067,7 @@ render_header('APE Record - ' . $fullName);
                     <p class="clinic-label text-primary mb-1">What happens next</p>
                     <p class="text-sm font-bold text-slate-700 mb-0">The clinical examination will lock. All document uploads and document decisions continue in Final Decision or Follow-up.</p>
                 </div>
-                <p class="text-sm font-bold text-slate-500 mb-3">Saving does not accept or archive any document. The student may still submit outstanding initial or follow-up requirements.</p>
+                <p class="text-sm font-bold text-slate-500 mb-3">Saving does not accept or archive any document. <?= $isClinicManagedApe ? 'Clinic staff can still attach outstanding initial or follow-up requirements.' : 'The student may still submit outstanding initial or follow-up requirements.' ?></p>
                 <button type="submit" form="apeExaminationForm" class="btn btn-primary w-full" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save and lock examination?" data-confirm-message="This saves and locks the clinical result, then moves the record to Final Decision or Follow-up for document review." data-confirm-toast="Saving examination...">
                     <span class="material-symbols-outlined text-[18px]">clinical_notes</span> Save Examination
                 </button>
