@@ -122,23 +122,22 @@ foreach ($appointments as $appointment) {
             $patientNote = trim(substr($patientNote, strlen('Patient note:')));
         }
     }
-    $actions = '';
+    $actions = '<div class="row-actions-list">';
+    if ($filterStatus === 'Completed' && $status === 'Completed') {
+        $recordUrl = app_url('appointments/view.php?id=' . (int) $appointment['appointment_id'] . '&status=' . rawurlencode($filterStatus));
+        $actions .= '<a href="' . e($recordUrl) . '" class="btn btn-sm btn-outline text-decoration-none" title="View read-only appointment record"><span class="material-symbols-outlined text-[14px]">description</span> View Record</a>';
+    }
 
     if ($status === 'Pending') {
-        $actions = '<div class="row-actions-list">'
-            . '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['appointment_id'] . '"><input type="hidden" name="status" value="Scheduled"><button class="btn btn-sm btn-primary" title="Approve appointment" data-confirm-submit data-confirm-type="primary" data-confirm-title="Approve this appointment?" data-confirm-message="This will schedule the appointment request." data-confirm-toast="Approving appointment..."><span class="material-symbols-outlined text-[14px]">event_available</span> Approve</button></form>'
-            . '<button type="button" class="btn btn-sm btn-ghost" title="Cancel request" aria-label="Cancel request" data-cancel-appointment data-cancel-id="' . (int)$appointment['appointment_id'] . '" data-cancel-title="Cancel appointment request"><span class="material-symbols-outlined text-[14px]">cancel</span> Cancel</button>'
-            . '</div>';
+        $actions .= '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['appointment_id'] . '"><input type="hidden" name="status" value="Scheduled"><button class="btn btn-sm btn-primary" title="Approve appointment" data-confirm-submit data-confirm-type="primary" data-confirm-title="Approve this appointment?" data-confirm-message="This will schedule the appointment request." data-confirm-toast="Approving appointment..."><span class="material-symbols-outlined text-[14px]">event_available</span> Approve</button></form>'
+            . '<button type="button" class="btn btn-sm btn-ghost" title="Cancel request" aria-label="Cancel request" data-cancel-appointment data-cancel-id="' . (int)$appointment['appointment_id'] . '" data-cancel-title="Cancel appointment request"><span class="material-symbols-outlined text-[14px]">cancel</span> Cancel</button>';
     } elseif ($status === 'Scheduled') {
-        $actions = '<div class="row-actions-list">'
-            . '<button type="button" class="btn btn-sm btn-ghost" title="Cancel appointment" aria-label="Cancel appointment" data-cancel-appointment data-cancel-id="' . (int)$appointment['appointment_id'] . '" data-cancel-title="Cancel scheduled appointment"><span class="material-symbols-outlined text-[14px]">cancel</span> Cancel</button>'
-            . '</div>';
+        $actions .= '<button type="button" class="btn btn-sm btn-ghost" title="Cancel appointment" aria-label="Cancel appointment" data-cancel-appointment data-cancel-id="' . (int)$appointment['appointment_id'] . '" data-cancel-title="Cancel scheduled appointment"><span class="material-symbols-outlined text-[14px]">cancel</span> Cancel</button>';
     } elseif ($status === 'For Confirmation') {
-        $actions = '<div class="row-actions-list">'
-            . '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['appointment_id'] . '"><input type="hidden" name="status" value="Completed"><button class="btn btn-sm btn-outline" title="Confirm completed" data-confirm-submit data-confirm-type="primary" data-confirm-title="Confirm appointment completed?" data-confirm-message="This confirms the patient attended and the passed appointment is completed." data-confirm-toast="Completing appointment..."><span class="material-symbols-outlined text-[14px]">check</span> Confirm Completed</button></form>'
-            . '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['appointment_id'] . '"><input type="hidden" name="status" value="No Show"><button class="btn btn-sm btn-ghost" title="Mark no-show" data-confirm-submit data-confirm-type="danger" data-confirm-title="Mark as no-show?" data-confirm-message="This confirms the patient did not attend the appointment." data-confirm-toast="Marking no-show..."><span class="material-symbols-outlined text-[14px]">person_cancel</span> No Show</button></form>'
-            . '</div>';
+        $actions .= '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['appointment_id'] . '"><input type="hidden" name="status" value="Completed"><button class="btn btn-sm btn-outline" title="Confirm completed" data-confirm-submit data-confirm-type="primary" data-confirm-title="Confirm appointment completed?" data-confirm-message="This confirms the patient attended and the passed appointment is completed." data-confirm-toast="Completing appointment..."><span class="material-symbols-outlined text-[14px]">check</span> Confirm Completed</button></form>'
+            . '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['appointment_id'] . '"><input type="hidden" name="status" value="No Show"><button class="btn btn-sm btn-ghost" title="Mark no-show" data-confirm-submit data-confirm-type="danger" data-confirm-title="Mark as no-show?" data-confirm-message="This confirms the patient did not attend the appointment." data-confirm-toast="Marking no-show..."><span class="material-symbols-outlined text-[14px]">person_cancel</span> No Show</button></form>';
     }
+    $actions .= '</div>';
 
     $rows[] = [
         'slotSort' => $appointment['appointment_datetime'],
@@ -153,7 +152,7 @@ foreach ($appointments as $appointment) {
         'created' => date('M d, g:i A', strtotime($appointment['created_at'])),
         'createdSort' => $appointment['created_at'],
         'rowActionsTitle' => 'Appointment actions — ' . $fullName,
-        'rowActionsHtml' => ($actions ?: '<p class="text-sm text-slate-500">No actions available for this appointment.</p>') . $historyHtml,
+        'rowActionsHtml' => $actions . $historyHtml,
     ];
 }
 
