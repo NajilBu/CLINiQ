@@ -46,6 +46,9 @@ function cliniq_inventory_db(): PDO
 function cliniq_inventory_staff_person_id(?array $user = null): int
 {
     $user ??= current_user();
+    if (!in_array((string) ($user['role'] ?? ''), ['admin', 'doctor', 'nurse'], true)) {
+        throw new RuntimeException('Only authorized clinic staff can manage inventory.');
+    }
     $personId = (int) ($user['person_id'] ?? 0);
     if ($personId < 1) {
         throw new RuntimeException('The logged-in staff account is not linked to Cliniq_db.');
@@ -107,7 +110,9 @@ function cliniq_inventory_available_medicines(): array
         SELECT item_id AS id, item_id, item_name, item_type AS category,
                quantity, unit, reorder_level, expiration_date
         FROM inventory_items
-        WHERE item_type = 'Medicine' AND is_active = 1
+        WHERE item_type = 'Medicine'
+          AND is_active = 1
+          AND (expiration_date IS NULL OR expiration_date >= CURDATE())
         ORDER BY item_name, expiration_date IS NULL, expiration_date, item_id
     ");
     return $stmt->fetchAll();
@@ -221,13 +226,16 @@ function cliniq_inventory_dispense_medicines(
         $itemStmt = $db->prepare("
             SELECT item_id, item_name, quantity, unit, item_type
             FROM inventory_items
-            WHERE item_id = ? AND item_type IN ('Medicine', 'Equipment') AND is_active = 1
+            WHERE item_id = ?
+              AND item_type IN ('Medicine', 'Equipment')
+              AND is_active = 1
+              AND (item_type <> 'Medicine' OR expiration_date IS NULL OR expiration_date >= CURDATE())
             FOR UPDATE
         ");
         $itemStmt->execute([$itemId]);
         $item = $itemStmt->fetch();
         if (!$item) {
-            throw new RuntimeException('The selected medicine is unavailable.');
+            throw new RuntimeException('The selected medicine is unavailable or expired.');
         }
         if ((int) $item['quantity'] < $quantity) {
             throw new RuntimeException('Quantity dispensed exceeds the available item quantity. Available: ' . (int) $item['quantity'] . ' ' . $item['unit'] . '.');
@@ -331,9 +339,13 @@ function cliniq_inventory_status_badge(array $item): string
     $quantity = (int) ($item['quantity'] ?? 0);
     $reorderLevel = (int) ($item['reorder_level'] ?? 0);
     $expirationDate = $item['expiration_date'] ?? null;
-    $isExpiring = $expirationDate && strtotime((string) $expirationDate) <= strtotime('+30 days');
+    $isExpired = $expirationDate && (string) $expirationDate < date('Y-m-d');
+    $isExpiring = $expirationDate && !$isExpired && strtotime((string) $expirationDate) <= strtotime('+30 days');
     $isEquipment = str_contains(strtolower((string) ($item['category'] ?? $item['item_type'] ?? '')), 'equipment');
 
+    if ($isExpired) {
+        return '<span class="badge badge-critical">Expired</span>';
+    }
     if ($quantity === 0) {
         return '<span class="badge badge-critical">Out of Stock</span>';
     }
@@ -360,6 +372,9 @@ if (!function_exists('inventory_loan_status_badge')) {
         return match ($status) {
             'Returned' => '<span class="badge badge-completed">Returned</span>',
             'Lost' => '<span class="badge badge-critical">Lost</span>',
+            'Cancelled' => '<span class="badge badge-cancelled">Cancelled</span>',
+            'Overdue' => '<span class="badge badge-critical">Overdue</span>',
+            'Due soon' => '<span class="badge badge-pending">Due Soon</span>',
             default => '<span class="badge badge-in-progress">Borrowed</span>',
         };
     }

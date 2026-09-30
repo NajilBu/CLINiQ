@@ -30,10 +30,10 @@ $passport = [
     'dob'             => $profile['birthdate'] ? date('F j, Y', strtotime($profile['birthdate'])) : 'Not recorded',
     'sex'             => $profile['sex'] ?: 'Not specified',
     'blood_type'      => $profile['blood_type'] ?: 'Unknown',
-    'allergies'       => $profile['allergies'] ?: 'None',
+    'allergies'       => $profile['allergies'] ?? '',
     'conditions'      => $profile['existing_conditions'] ?: 'None reported.',
     'medications'     => $profile['medications'] ?: 'No current medications recorded.',
-    'instructions'    => $profile['emergency_instructions'] ?: "If unconscious, place in recovery position and notify the clinic immediately.",
+    'instructions'    => $profile['emergency_instructions'] ?? '',
     'guardian_name'   => $profile['guardian_name'] ?: '',
     'relationship'    => $profile['guardian_relationship'] ?: 'Guardian',
     'primary_contact' => $profile['guardian_contact'] ?: '',
@@ -48,6 +48,12 @@ $passport = [
 ];
 $passportUrl = '../public/emergency.php?token=' . urlencode($passport['token']);
 $passportPreviewUrl = $passportUrl;
+$passportFocusEmergency = ($_GET['focus'] ?? '') === 'emergency';
+$passportMissingFields = [];
+if (trim((string) ($profile['allergies'] ?? '')) === '') $passportMissingFields['allergies'] = 'Allergy information';
+if (trim((string) ($profile['emergency_instructions'] ?? '')) === '') $passportMissingFields['instructions'] = 'Emergency instructions';
+if (trim((string) ($profile['guardian_name'] ?? '')) === '') $passportMissingFields['guardian_name'] = 'Guardian or next-of-kin name';
+if (trim((string) ($profile['guardian_contact'] ?? '')) === '') $passportMissingFields['primary_contact'] = 'Guardian or next-of-kin phone number';
 
 $saved = false;
 $passportErrorGroup = null;
@@ -63,6 +69,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $passport['relationship'] = trim((string) ($_POST['relationship'] ?? ''));
     $passport['primary_contact'] = trim((string) ($_POST['primary_contact'] ?? ''));
     $passport['secondary_contact'] = trim((string) ($_POST['secondary_contact'] ?? ''));
+    if ($passport['allergies'] === '') throw new InvalidArgumentException('Enter your allergies, or type “None” if you have no known allergies.');
+    if ($passport['instructions'] === '') throw new InvalidArgumentException('Enter emergency instructions so responders know what to do.');
     $contact = cliniq_validate_emergency_contact($passport, dropdown_options('guardian_relationship'));
     $passport['guardian_name'] = $contact['guardian_name'];
     $passport['relationship'] = $contact['relationship'];
@@ -143,6 +151,20 @@ render_student_header('Emergency Health Passport', 'passport');
 </div>
 
 <form method="POST" action="" id="passport-form" data-emergency-contact-form data-passport-error-group="<?= student_e((string) $passportErrorGroup) ?>">
+<?php if ($passportFocusEmergency && $passportMissingFields): ?>
+    <section class="passport-completion-card" data-passport-completion aria-labelledby="passport-completion-title">
+        <span class="student-icon-box"><span class="material-symbols-outlined">emergency</span></span>
+        <div>
+            <p class="student-eyebrow student-eyebrow-compact">Emergency profile incomplete</p>
+            <h2 id="passport-completion-title">Complete these details now</h2>
+            <p>These details are shown to responders during an emergency.</p>
+            <ul>
+                <?php foreach ($passportMissingFields as $fieldLabel): ?><li><?= student_e($fieldLabel) ?></li><?php endforeach; ?>
+            </ul>
+        </div>
+        <button type="button" class="student-button" data-passport-complete data-passport-focus-target="#<?= student_e((string) array_key_first($passportMissingFields)) ?>">Complete emergency details</button>
+    </section>
+<?php endif; ?>
 <nav class="passport-mobile-tabs" aria-label="Passport sections">
     <button type="button" class="is-active" data-passport-tab="profile">Profile</button>
     <button type="button" data-passport-tab="emergency">Emergency</button>
@@ -264,7 +286,7 @@ render_student_header('Emergency Health Passport', 'passport');
                         id="allergies"
                         name="allergies"
                         type="text"
-                        class="student-input"
+                        class="student-input<?= isset($passportMissingFields['allergies']) ? ' passport-required-field' : '' ?>"
                         value="<?= student_e($passport['allergies']) ?>"
                         placeholder="e.g. Penicillin, Shellfish, Dust (comma-separated)"
                     >
@@ -297,7 +319,7 @@ render_student_header('Emergency Health Passport', 'passport');
                     <textarea
                         id="instructions"
                         name="instructions"
-                        class="student-textarea passport-textarea-lg"
+                        class="student-textarea passport-textarea-lg<?= isset($passportMissingFields['instructions']) ? ' passport-required-field' : '' ?>"
                         placeholder="e.g. Do NOT give penicillin. Inhaler is in the bag. Call guardian if unconscious."
                     ><?= student_e($passport['instructions']) ?></textarea>
                     <p class="passport-hint">Keep this concise. Responders need to read it fast.</p>
@@ -328,7 +350,7 @@ render_student_header('Emergency Health Passport', 'passport');
                             id="guardian_name"
                             name="guardian_name"
                             type="text"
-                            class="student-input"
+                            class="student-input<?= isset($passportMissingFields['guardian_name']) ? ' passport-required-field' : '' ?>"
                             value="<?= student_e($passport['guardian_name']) ?>"
                             placeholder="Full name of guardian or next of kin"
                             minlength="2"
@@ -356,7 +378,7 @@ render_student_header('Emergency Health Passport', 'passport');
                             id="primary_contact"
                             name="primary_contact"
                             type="tel"
-                            class="student-input"
+                            class="student-input<?= isset($passportMissingFields['primary_contact']) ? ' passport-required-field' : '' ?>"
                             value="<?= student_e($passport['primary_contact']) ?>"
                             placeholder="+63 9XX XXX XXXX"
                             inputmode="tel"
@@ -568,6 +590,8 @@ render_student_header('Emergency Health Passport', 'passport');
     const form = document.getElementById('passport-form');
     if (!form) return;
     const saveButton = form.querySelector('.passport-save-button');
+    const completionButton = form.querySelector('[data-passport-complete]');
+    const dashboardEmergencyFocus = <?= $passportFocusEmergency ? 'true' : 'false' ?>;
     const initialValues = new URLSearchParams(new FormData(form)).toString();
     let isDirty = false;
     const syncDirtyState = () => {
@@ -584,7 +608,14 @@ render_student_header('Emergency Health Passport', 'passport');
 
     const isPhone = window.matchMedia('(max-width: 640px)').matches;
     const isCompactViewport = window.matchMedia('(max-width: 1024px)').matches;
-    if (!isCompactViewport) return;
+    if (!isCompactViewport) {
+        completionButton?.addEventListener('click', () => {
+            const field = form.querySelector(completionButton.dataset.passportFocusTarget);
+            field?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            field?.focus({ preventScroll: true });
+        });
+        return;
+    }
 
     if (isPhone) {
         form.classList.add('passport-tab-profile');
@@ -638,6 +669,23 @@ render_student_header('Emergency Health Passport', 'passport');
             window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
         });
     });
+    const openEmergencyCompletion = (shouldFocus = false) => {
+        if (isPhone) {
+            form.classList.remove('passport-tab-profile', 'passport-tab-access');
+            form.classList.add('passport-tab-emergency');
+            passportTabs.forEach((tab) => tab.classList.toggle('is-active', tab.dataset.passportTab === 'emergency'));
+        }
+        form.querySelectorAll('[data-passport-group="emergency"]').forEach((panel) => {
+            if (panel.matches('details')) panel.open = true;
+        });
+        const field = form.querySelector(completionButton?.dataset.passportFocusTarget || '#guardian_name');
+        if (shouldFocus && field) {
+            field.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            field.focus({ preventScroll: true });
+        }
+    };
+    completionButton?.addEventListener('click', () => openEmergencyCompletion(true));
+    if (dashboardEmergencyFocus) openEmergencyCompletion(false);
     document.querySelector('[data-passport-open-group]')?.addEventListener('click', (event) => {
         event.preventDefault();
         openPassportGroup(event.currentTarget.dataset.passportOpenGroup, true);

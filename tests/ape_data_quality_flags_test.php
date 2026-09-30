@@ -15,10 +15,13 @@ $documents = [
 $flags = ape_data_quality_flags($record, $requirements, $documents);
 $codes = array_column($flags, 'code');
 
-foreach (['missing_upload_group', 'verified_without_archived_file', 'submitted_pending_review'] as $code) {
+foreach (['missing_upload_group', 'verified_without_archived_file'] as $code) {
     if (!in_array($code, $codes, true)) {
         throw new RuntimeException("Expected APE data-quality flag {$code}.");
     }
+}
+if (in_array('submitted_pending_review', $codes, true)) {
+    throw new RuntimeException('Submitted documents are normal pre-examination state, not a data-quality issue.');
 }
 
 $clearedFlags = ape_data_quality_flags(

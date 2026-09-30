@@ -90,6 +90,18 @@ function patient_notification_mark_source_read(PDO $db, int $patientPersonId, st
     return $stmt->rowCount();
 }
 
+function patient_notification_mark_resolved_ape_read(PDO $db, int $patientPersonId): int
+{
+    if ($patientPersonId < 1) {
+        return 0;
+    }
+
+    $stmt = $db->prepare("\n        UPDATE patient_notifications n\n        INNER JOIN ape_records a ON a.ape_id = n.source_id\n        SET n.read_at = COALESCE(n.read_at, NOW())\n        WHERE n.patient_person_id = ?\n          AND n.category = 'ape'\n          AND n.source_type = 'ape'\n          AND n.read_at IS NULL\n          AND a.patient_id = ?\n          AND (a.clearance_status = 'Cleared' OR a.workflow_status = 'Cleared')\n    ");
+    $stmt->execute([$patientPersonId, $patientPersonId]);
+
+    return $stmt->rowCount();
+}
+
 function patient_notification_for_appointment(PDO $db, array $appointment, string $status, ?int $actorPersonId): ?int
 {
     $patientId = (int) ($appointment['patient_id'] ?? 0);
@@ -120,6 +132,10 @@ function patient_notification_for_ape_action(PDO $db, array $record, string $act
     $apeId = (int) ($record['ape_id'] ?? 0);
     if ($patientId < 1 || $apeId < 1) {
         return null;
+    }
+
+    if (in_array($action, ['finalize_exam_clear', 'approve_clearance'], true)) {
+        patient_notification_mark_source_read($db, $patientId, 'ape', $apeId);
     }
 
     $patientNote = trim((string) ($record['patient_visible_note'] ?? ''));

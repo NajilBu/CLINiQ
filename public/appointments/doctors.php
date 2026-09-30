@@ -43,13 +43,20 @@ render_clinic_command_header(
 );
 ?>
 
-<section class="clinic-card p-6">
-    <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-2">Assign doctors</h2>
-    <p class="text-sm text-slate-600 mb-5">Select a doctor, then optionally choose purposes and weekdays. No purpose selected means both Medical Consult and Dental. No days selected means every clinic working day. A doctor covering both services will not be double-booked in the same hour.</p>
+<section class="clinic-card consultation-doctors-shell">
+    <header class="consultation-doctors-intro">
+        <div class="consultation-doctors-intro-icon" aria-hidden="true"><span class="material-symbols-outlined">stethoscope</span></div>
+        <div>
+            <p class="appointment-availability-eyebrow">Care coverage</p>
+            <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Assign consultation doctors</h2>
+            <p class="text-sm text-slate-600 mb-0">Choose the services and clinic days each doctor covers. Leaving a group blank uses the all-inclusive default.</p>
+        </div>
+        <span class="consultation-doctors-count"><span class="material-symbols-outlined" aria-hidden="true">group</span><?= count($doctors) ?> active</span>
+    </header>
     <?php if (!$doctors): ?>
-        <p class="text-sm text-slate-600">No active doctor accounts are available. Activate a doctor account in Settings first.</p>
+        <div class="appointment-timeline-empty"><span class="material-symbols-outlined" aria-hidden="true">group_off</span><div><strong>No active doctors yet</strong><span>Activate a doctor account in Settings before assigning consultation coverage.</span></div></div>
     <?php else: ?>
-        <div class="space-y-4">
+        <div class="consultation-doctor-list">
         <?php foreach ($doctors as $doctor): ?>
             <?php $doctorId = (int) $doctor['id']; ?>
             <?php
@@ -61,43 +68,47 @@ render_clinic_command_header(
                     $selectedDays = !$medicalDays || !$dentalDays ? [] : array_values(array_unique(array_merge($medicalDays, $dentalDays)));
                 }
                 $daysDiffer = $medicalDays !== null && $dentalDays !== null && $medicalDays !== $dentalDays;
+                $assignedPurposes = array_values(array_filter(appointment_consult_purposes(), static fn(string $purpose): bool => isset($schedule[$purpose]['doctors'][$doctorId])));
+                $coverageLabel = !$hasAssignment ? 'Not assigned yet' : (!$assignedPurposes ? 'Medical & Dental' : implode(' & ', array_map(static fn(string $purpose): string => str_replace(' Consult', '', $purpose), $assignedPurposes)));
             ?>
-            <details class="rounded-2xl border border-slate-200 p-4">
-                <summary class="cursor-pointer font-bold text-[#17261d] flex items-center justify-between">
-                    <span><?= e($doctor['name']) ?></span><span class="material-symbols-outlined" aria-hidden="true">expand_more</span>
+            <details class="consultation-doctor-card" <?= !$hasAssignment ? 'open' : '' ?>>
+                <summary class="consultation-doctor-summary">
+                    <span class="consultation-doctor-identity"><span class="consultation-doctor-avatar material-symbols-outlined" aria-hidden="true">medical_services</span><span><strong><?= e($doctor['name']) ?></strong><small><?= e($coverageLabel) ?></small></span></span>
+                    <span class="consultation-doctor-summary-end"><span class="consultation-doctor-status <?= $hasAssignment ? 'is-assigned' : '' ?>"><?= $hasAssignment ? 'Assigned' : 'Needs setup' ?></span><span class="material-symbols-outlined consultation-doctor-chevron" aria-hidden="true">expand_more</span></span>
                 </summary>
-                <form method="post" class="mt-5 space-y-5">
+                <form method="post" class="consultation-doctor-form">
                     <input type="hidden" name="doctor_id" value="<?= $doctorId ?>">
-                    <fieldset>
-                        <legend class="font-bold text-sm mb-2">Consultation purpose</legend>
-                        <div class="flex flex-wrap gap-4">
+                    <div class="consultation-doctor-fields">
+                    <fieldset class="consultation-doctor-fieldset">
+                        <legend>Consultation purpose</legend>
+                        <p>Leave both clear for Medical Consult and Dental.</p>
+                        <div class="consultation-choice-list">
                             <?php foreach (appointment_consult_purposes() as $purpose): ?>
-                                <label class="inline-flex items-center gap-2 text-sm font-semibold"><input type="checkbox" name="purposes[]" value="<?= e($purpose) ?>" <?= isset($schedule[$purpose]['doctors'][$doctorId]) ? 'checked' : '' ?>> <?= e($purpose) ?></label>
+                                <label class="consultation-choice"><input type="checkbox" name="purposes[]" value="<?= e($purpose) ?>" <?= isset($schedule[$purpose]['doctors'][$doctorId]) ? 'checked' : '' ?>><span><?= e($purpose) ?></span></label>
                             <?php endforeach; ?>
                         </div>
-                        <p class="text-xs text-slate-500 mt-2 mb-0">Leave both unchecked to assign both purposes.</p>
                     </fieldset>
-                    <fieldset>
-                        <legend class="font-bold text-sm mb-2">Assigned days</legend>
-                        <p class="text-xs text-slate-500 mb-2">Leave all days unchecked for every clinic working day. Grey days are closed in <?= e($currentMonthLabel) ?>, but can still be selected for a future clinic schedule.</p>
-                        <?php if ($daysDiffer): ?><p class="text-xs text-amber-700 mb-2">This doctor currently has different days for each purpose. Saving will apply the selected days to both.</p><?php endif; ?>
-                        <div class="flex flex-wrap gap-3">
+                    <fieldset class="consultation-doctor-fieldset">
+                        <legend>Assigned days</legend>
+                        <p>Leave all clear for every clinic working day. Muted days are closed in <?= e($currentMonthLabel) ?>.</p>
+                        <?php if ($daysDiffer): ?><p class="consultation-inline-warning"><span class="material-symbols-outlined" aria-hidden="true">info</span>Saving will apply these days to both services.</p><?php endif; ?>
+                        <div class="consultation-choice-list consultation-weekday-list">
                         <?php foreach ($weekdays as $day => $label): ?>
                             <?php $closedThisMonth = empty($currentMonthClinicSchedule[$day]['enabled']); ?>
-                            <label class="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm cursor-pointer <?= $closedThisMonth ? 'border-slate-200 bg-slate-100 text-slate-400' : 'border-slate-200' ?>" <?= $closedThisMonth ? 'title="Clinic closed in ' . e($currentMonthLabel) . '; selectable for future schedules"' : '' ?>>
-                                <input type="checkbox" name="days[]" value="<?= $day ?>" <?= in_array($day, $selectedDays, true) ? 'checked' : '' ?>>
-                                <?= e($label) ?>
+                            <label class="consultation-choice <?= $closedThisMonth ? 'is-closed' : '' ?>" <?= $closedThisMonth ? 'title="Clinic closed in ' . e($currentMonthLabel) . '; selectable for future schedules"' : '' ?>>
+                                <input type="checkbox" name="days[]" value="<?= $day ?>" <?= in_array($day, $selectedDays, true) ? 'checked' : '' ?>><span><?= e($label) ?></span>
                             </label>
                         <?php endforeach; ?>
                         </div>
                     </fieldset>
-                    <button class="btn btn-primary" data-confirm-submit data-confirm-title="Save doctor days?" data-confirm-message="This will update medical and dental coverage for the selected doctor." data-confirm-toast="Saving doctor days...">Save assigned days</button>
+                    </div>
+                    <div class="consultation-doctor-actions"><button class="btn btn-primary"><span class="material-symbols-outlined" aria-hidden="true">save</span>Save coverage</button></div>
                 </form>
                 <?php if ($hasAssignment): ?>
-                    <form method="post" class="mt-3">
+                    <form method="post" class="consultation-doctor-remove-form">
                         <input type="hidden" name="doctor_id" value="<?= $doctorId ?>">
                         <input type="hidden" name="remove_assignments" value="1">
-                        <button class="btn btn-ghost" data-confirm-submit data-confirm-type="danger" data-confirm-title="Remove doctor assignments?" data-confirm-message="This doctor will no longer cover medical or dental consultations. Existing bookings must still have another doctor available." data-confirm-toast="Removing assignments...">Remove assignments</button>
+                        <button class="btn btn-ghost" data-confirm-submit data-confirm-type="danger" data-confirm-title="Remove doctor assignments?" data-confirm-message="This doctor will no longer cover medical or dental consultations. Existing bookings must still have another doctor available." data-confirm-toast="Removing assignments..."><span class="material-symbols-outlined" aria-hidden="true">person_remove</span>Remove assignments</button>
                     </form>
                 <?php endif; ?>
             </details>

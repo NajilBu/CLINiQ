@@ -10,9 +10,8 @@ if ($defaults !== [
     'UHS Consent Form',
     'UHS Medical Record',
     'UHS Dental Record',
-    'Referral Form',
 ]) {
-    throw new RuntimeException('The initial required APE documents changed unexpectedly.');
+    throw new RuntimeException('The standard APE upload checklist changed unexpectedly.');
 }
 
 $normalized = normalize_ape_required_documents(['  Lab   Request Form ', '', 'TB Certificate']);
@@ -21,10 +20,10 @@ if ($normalized !== ['Lab Request Form', 'TB Certificate']) {
 }
 
 try {
-    normalize_ape_required_documents(['Referral Form', 'referral form']);
-    throw new RuntimeException('Duplicate APE required documents must be rejected.');
+    normalize_ape_required_documents(['Referral Form']);
+    throw new RuntimeException('Referral Form must remain clinician-managed, not a standard upload requirement.');
 } catch (InvalidArgumentException $e) {
-    if (!str_contains($e->getMessage(), 'listed more than once')) {
+    if (!str_contains($e->getMessage(), 'clinic')) {
         throw $e;
     }
 }
@@ -52,6 +51,12 @@ if (!str_contains($cycleService, 'record.requirements_saved_at IS NULL')) {
 }
 if (!str_contains($cycleService, 'requirement.requirement_name IN ({$placeholders})')) {
     throw new RuntimeException('Settings synchronization must remove only names from the previous global template.');
+}
+
+$migration = file_get_contents(dirname(__DIR__) . '/database/migrations/20260930_remove_default_referral_form_requirement.sql');
+if (!str_contains($migration, "requirement.requirement_name = 'Referral Form'")
+    || !str_contains($migration, 'document.document_id IS NULL')) {
+    throw new RuntimeException('The Referral Form cleanup migration must preserve uploaded or otherwise used records.');
 }
 
 $settingsPage = file_get_contents(dirname(__DIR__) . '/public/settings/index.php');

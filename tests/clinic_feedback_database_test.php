@@ -12,6 +12,8 @@ foreach (['people', 'programs', 'students', 'visits', 'clinic_feedback'] as $tab
     $definition = preg_replace('/,\s*\) ENGINE/', "\n) ENGINE", $definition);
     $db->exec($definition);
 }
+// Temporary-table cloning can omit columns added with newer MariaDB syntax.
+$db->exec("ALTER TABLE clinic_feedback ADD COLUMN IF NOT EXISTS is_anonymous TINYINT(1) NOT NULL DEFAULT 1 AFTER consent_version");
 $db->exec("INSERT INTO people (id, id_number, first_name, last_name) VALUES (1, '99-99999', 'Feedback', 'Test'), (2, '99-99998', 'Nonstudent', 'Test')");
 $db->exec("INSERT INTO students (person_id, year_level) VALUES (1, '2')");
 $db->exec("INSERT INTO visits (visit_id, patient_person_id, visit_datetime, chief_complaint, status) VALUES

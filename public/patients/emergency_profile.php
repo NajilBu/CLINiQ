@@ -8,7 +8,7 @@ $id = (int) ($_GET['id'] ?? 0);
 $patient = cliniq_patient_profile_find($id);
 
 if (!$patient) {
-    flash_message('error', 'Patient not found in Cliniq_db.');
+    flash_message('error', 'Patient not found.');
     header('Location: index.php');
     exit;
 }
@@ -31,7 +31,7 @@ render_header('Staff Emergency Profile');
 render_clinic_command_header(
     'Staff Only',
     'Emergency Profile',
-    'Emergency details stored in Cliniq_db for authorized clinic staff.'
+    'Emergency details saved for authorized clinic staff.'
 );
 ?>
 

@@ -23,8 +23,8 @@ if (str_contains($restockSource, 'UPDATE inventory_items SET quantity')) {
 if (!str_contains($restockSource, 'INSERT INTO inventory_items')) {
     throw new RuntimeException('Restocking must create a separate inventory batch row.');
 }
-if (!str_contains($restockSource, "item_type = 'Medicine' AND is_active = 1")) {
-    throw new RuntimeException('Only an active medicine may be used as a restock source.');
+if (!str_contains($restockSource, "item_type IN ('Medicine', 'Equipment') AND is_active = 1")) {
+    throw new RuntimeException('Only active inventory may be used as a restock source.');
 }
 if (!str_contains($inventoryPageSource, 'foreach ($activeItems as $item)')) {
     throw new RuntimeException('Archived medicines must not be offered as restock sources.');

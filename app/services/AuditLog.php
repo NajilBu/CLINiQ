@@ -101,6 +101,15 @@ function audit_log_action_label(string $action): string
         'backup_failed' => 'System backup failed',
         'backup_skipped' => 'Skipped a duplicate system backup',
         'backup_verified' => 'Verified the latest system backup',
+        'backup_destination_updated' => 'Updated the backup destination',
+        'clinic_reminder_batch_completed' => 'Completed an APE follow-up batch',
+        'clinic_reminder_batch_started' => 'Started an APE follow-up batch',
+        'clinic_reminder_queued' => 'Queued an APE follow-up for delivery',
+        'clinic_reminder_review_invalid' => 'Did not send an APE follow-up because its reviewed content was invalid',
+        'clinic_reminder_sent' => 'Sent an APE follow-up',
+        'clinic_reminder_skipped_duplicate' => 'Skipped a duplicate APE follow-up',
+        'clinic_server_designated' => 'Designated the clinic server',
+        'clinic_server_undesignated' => 'Removed the clinic-server designation',
         'clinic_profile_updated' => 'Updated the clinic profile',
         'incident_report_submitted' => 'Submitted an emergency incident report',
         'email_automation_updated' => 'Updated patient email automation',
@@ -109,6 +118,7 @@ function audit_log_action_label(string $action): string
         'email_claimed' => 'Claimed a patient email for delivery',
         'email_cancelled' => 'Cancelled a queued patient email',
         'email_delivery_failed' => 'Patient email delivery failed',
+        'email_deferred_capacity' => 'Deferred patient email because sending capacity was reached',
         'email_edited' => 'Edited a pending patient email',
         'email_follow_up_assigned' => 'Assigned a patient email follow-up',
         'email_follow_up_note_added' => 'Added a patient email follow-up note',
@@ -126,7 +136,13 @@ function audit_log_action_label(string $action): string
         'email_rescheduled' => 'Rescheduled a patient email',
         'email_sent' => 'Sent a patient email',
         'email_sent_manually' => 'Sent a manual patient email',
+        'email_capacity_increased' => 'Increased patient-email sending capacity',
         'inventory_transaction_recorded' => 'Recorded an inventory transaction',
+        'inventory_item_archived' => 'Deactivated an inventory item',
+        'inventory_item_restored' => 'Restored an inventory item',
+        'inventory_item_updated' => 'Updated an inventory item',
+        'legacy_hard_copy_workflow_migrated' => 'Migrated legacy APE hard-copy workflow data',
+        'orphan_reference_repaired' => 'Repaired an orphaned record reference',
         'passport_profile_updated' => 'Updated emergency passport information',
         'passport_viewed' => 'Viewed an emergency health passport',
         'patient_account_deactivated' => 'Deactivated a patient account',
@@ -151,6 +167,7 @@ function audit_log_action_label(string $action): string
         'student_login_success' => 'Signed in to the patient portal',
         'student_logout' => 'Signed out of the patient portal',
         'theme_updated' => 'Updated the system appearance',
+        'user_data_normalized' => 'Normalized user data',
         'viewer_authenticated' => 'Verified identity for passport access',
         'viewer_authentication_failed' => 'Passport-access sign-in failed',
         'visit_created' => 'Created a clinic visit',
@@ -159,8 +176,16 @@ function audit_log_action_label(string $action): string
     return $labels[$action] ?? ucfirst(str_replace(['_', '-'], ' ', $action));
 }
 
+function audit_log_governance_excluded_actions(): array
+{
+    return ['email_queued', 'email_claimed', 'email_deferred_capacity', 'email_sent'];
+}
+
 function audit_log_target_label(array $log): string
 {
+    if (in_array((string) ($log['action'] ?? ''), ['clinic_reminder_batch_started', 'clinic_reminder_batch_completed'], true)) {
+        return 'APE follow-up batch';
+    }
     $targetName = trim((string) ($log['target_name'] ?? ''));
     $targetIdNumber = trim((string) ($log['target_id_number'] ?? ''));
     $targetType = (string) ($log['target_type'] ?? '');
@@ -232,9 +257,6 @@ function audit_log_metadata_summary(?string $metadata): string
         $change = (int) $data['quantity_change'];
         $details[] = 'Quantity change: ' . ($change > 0 ? '+' : '') . $change;
     }
-    if (!empty($data['notes'])) {
-        $details[] = 'Notes: ' . $data['notes'];
-    }
     if (!empty($data['fields']) && is_array($data['fields'])) {
         $fieldLabels = array_map(static fn(string $field): string => ucwords(str_replace('_', ' ', $field)), $data['fields']);
         $details[] = 'Updated: ' . implode(', ', $fieldLabels);
@@ -242,9 +264,43 @@ function audit_log_metadata_summary(?string $metadata): string
     if (!empty($data['documents']) && is_array($data['documents'])) {
         $details[] = count($data['documents']) . ' required document(s) configured';
     }
-    if (!empty($data['message'])) {
-        $details[] = (string) $data['message'];
+    return $details ? implode(' • ', $details) : 'Additional technical information recorded';
+}
+
+function audit_log_event_details(string $action, ?string $metadata): string
+{
+    $data = json_decode((string) $metadata, true);
+    if (!is_array($data)) {
+        return audit_log_metadata_summary($metadata);
     }
 
-    return $details ? implode(' • ', $details) : 'Additional technical information recorded';
+    if ($action === 'clinic_reminder_batch_completed') {
+        $parts = [];
+        foreach (['sent' => 'sent to email service', 'queued' => 'queued for delivery', 'deferred' => 'deferred', 'skipped' => 'skipped', 'blocked' => 'blocked', 'failed' => 'failed'] as $key => $label) {
+            $parts[] = (int) ($data[$key] ?? 0) . ' ' . $label;
+        }
+        return (int) ($data['eligible'] ?? 0) . ' follow-up' . ((int) ($data['eligible'] ?? 0) === 1 ? '' : 's') . ' were eligible. ' . implode('; ', $parts) . '. APE deadlines were not changed.';
+    }
+
+    if ($action === 'clinic_reminder_batch_started') {
+        return !empty($data['batch_id']) ? 'Started the staff-reviewed follow-up batch for APE cycle #' . (int) $data['batch_id'] . '.' : 'Started a staff-reviewed APE follow-up batch.';
+    }
+
+    if ($action === 'clinic_reminder_skipped_duplicate') {
+        return 'No email was sent because the same APE follow-up was already recorded.';
+    }
+
+    if ($action === 'clinic_reminder_review_invalid') {
+        return 'No email was sent because the reviewed subject or message was invalid.';
+    }
+
+    if ($action === 'clinic_reminder_sent') {
+        return 'The staff-reviewed APE follow-up was accepted by the email service.';
+    }
+
+    if ($action === 'clinic_reminder_queued') {
+        return 'The staff-reviewed APE follow-up is queued for delivery.';
+    }
+
+    return audit_log_metadata_summary($metadata);
 }

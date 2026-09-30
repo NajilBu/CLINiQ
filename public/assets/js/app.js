@@ -267,9 +267,12 @@ function showModal(modalId) {
 /**
  * Close a modal by ID with animation.
  */
-function closeModal(modalId) {
+function closeModal(modalId, discardConfirmed = false) {
     const modal = document.getElementById(modalId);
     if (!modal) return;
+    if (!discardConfirmed && typeof window.cliniqConfirmDiscardChanges === 'function') {
+        return window.cliniqConfirmDiscardChanges(modal, () => closeModal(modalId, true));
+    }
 
     modal._closing = true;
     modal.classList.remove('show');
@@ -466,7 +469,7 @@ function updateFilterCounts(tbodySelector) {
  * @param {Function} onConfirm - Callback executed on confirm.
  * @param {'danger'|'primary'} type - Button type (default 'danger').
  */
-function confirmAction(title, message, onConfirm, type = 'danger') {
+function confirmAction(title, message, onConfirm, type = 'danger', confirmLabel = 'Confirm') {
     let modal = document.getElementById('confirmActionModal');
     if (!modal) {
         modal = document.createElement('div');
@@ -490,7 +493,7 @@ function confirmAction(title, message, onConfirm, type = 'danger') {
             </div>
             <div class="flex justify-end gap-3">
                 <button onclick="closeModal('confirmActionModal')" class="btn btn-ghost">Cancel</button>
-                <button id="confirmActionBtn" class="btn ${btnClass}">Confirm</button>
+                <button id="confirmActionBtn" class="btn ${btnClass}">${escapeHtml(confirmLabel)}</button>
             </div>
         </div>
     `;
@@ -1410,7 +1413,7 @@ function initPatientAccountTypeFields(root = document) {
                 idHint: 'Student example: 23-00262',
                 programLabel: 'Program Code',
                 programPlaceholder: 'Select program',
-                programHint: 'Select an active program from the database.',
+                programHint: 'Select an active program.',
                 yearLabel: 'Year Level',
                 yearPlaceholder: '3',
                 yearHint: 'Choose 1 to 4.',
@@ -1423,7 +1426,7 @@ function initPatientAccountTypeFields(root = document) {
                 idHint: 'Faculty example: FAC-0001',
                 programLabel: 'Department',
                 programPlaceholder: 'Select department',
-                programHint: 'Select an active department from the database.',
+                programHint: 'Select an active department.',
                 yearLabel: 'Employment Type',
                 yearPlaceholder: 'Full-time',
                 yearHint: 'Choose Full-time or Part-time.',
@@ -1436,7 +1439,7 @@ function initPatientAccountTypeFields(root = document) {
                 idHint: 'School personnel example: SP-0001',
                 programLabel: 'Department',
                 programPlaceholder: 'Select department',
-                programHint: 'Select an active department from the database.',
+                programHint: 'Select an active department.',
                 yearLabel: 'Employment Type',
                 yearPlaceholder: 'Full-time',
                 yearHint: 'Example: Full-time',

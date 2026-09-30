@@ -890,7 +890,7 @@ html.student-dark .student-feedback-visit-details div { background:rgba(255,255,
     background: var(--student-card);
     border: 1px solid var(--student-border-soft);
     border-radius: 0.75rem;
-    box-shadow: 0 5px 18px rgba(23, 38, 29, 0.045);
+    box-shadow: 0 1px 2px rgba(23, 38, 29, 0.04), 0 8px 22px rgba(23, 38, 29, 0.04);
 }
 
 .student-clickable-card {
@@ -3774,22 +3774,21 @@ body.student-time-modal-open {
     min-width: 0;
     padding: 0.95rem;
     border: 1px solid var(--student-border-soft);
-    border-left-width: 4px;
-    border-radius: 0.9rem;
+    border-radius: 0.75rem;
     background: #fff;
 }
 
-.passport-modern-info-allergy { border-left-color: #dc2626; }
-.passport-modern-info-condition { border-left-color: #d97706; }
-.passport-modern-info-medication { border-left-color: #2563eb; }
+.passport-modern-info-allergy { border-color: #fecaca; background: #fffafa; }
+.passport-modern-info-condition { border-color: #fde68a; background: #fffcf2; }
+.passport-modern-info-medication { border-color: #bfdbfe; background: #f8fbff; }
 .passport-modern-info-instructions {
     grid-column: 1 / -1;
-    border-left-color: #d97706;
+    border-color: #fde68a;
     background: #fffcf2;
 }
 .passport-modern-info-bmi {
     grid-column: 1 / -1;
-    border-left-color: var(--student-primary);
+    border-color: color-mix(in srgb, var(--student-primary) 35%, var(--student-border-soft));
 }
 
 .passport-modern-info-heading {
@@ -5001,6 +5000,13 @@ html.student-dark .student-cancel-form .student-button-danger:focus-visible {
     font-weight: 700;
     line-height: 1.35;
 }
+
+.passport-completion-card { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:16px; align-items:center; margin:0 0 16px; padding:18px; border:1px solid #f2c94c; border-radius:16px; background:#fff9e8; box-shadow:0 8px 20px rgba(122,75,0,.08); }
+.passport-completion-card h2 { margin:2px 0 4px; color:var(--student-fg); font-size:1.05rem; font-weight:800; }
+.passport-completion-card p { margin:0; color:var(--student-muted); font-size:.82rem; font-weight:600; }
+.passport-completion-card ul { display:flex; flex-wrap:wrap; gap:6px 14px; margin:10px 0 0; padding-left:18px; color:#7a4b00; font-size:.78rem; font-weight:700; }
+.passport-required-field { border-color:#d99a00 !important; background:#fffdf6 !important; box-shadow:0 0 0 3px rgba(242,201,76,.16); }
+@media (max-width: 640px) { .passport-completion-card { grid-template-columns:auto minmax(0,1fr); gap:12px; padding:14px; } .passport-completion-card .student-button { grid-column:1 / -1; width:100%; } .passport-completion-card ul { display:grid; gap:4px; } }
 
 html.student-dark .passport-mobile-save-hint {
     border-color: #9c7624;

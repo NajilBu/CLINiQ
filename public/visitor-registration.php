@@ -120,7 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (!$isGuest && !$matchedPatient) {
-        $errors['identifier'] = 'This ID number is not in the Cliniq_db patient list.';
+        $errors['identifier'] = 'No patient account matches this ID number.';
     }
 
     if ($isGuest) {
@@ -609,7 +609,7 @@ $theme = active_cliniq_theme();
                                 <span class="material-symbols-outlined">badge</span>
                                 <input class="visit-input <?= isset($errors['identifier']) ? 'input-error' : '' ?>" id="identifier" name="identifier" value="<?= e($form['identifier']) ?>" placeholder="Enter ID number" data-id-number-format autocomplete="off" <?= $form['subject_type'] === 'guest' ? 'disabled' : 'required' ?>>
                             </div>
-                            <div id="visitorLookupStatus" class="visit-lookup-status">Type your ID to load the existing patient details from Cliniq_db.</div>
+                            <div id="visitorLookupStatus" class="visit-lookup-status">Enter your ID to load your patient details.</div>
                         </div>
 
                         <div>
@@ -897,7 +897,7 @@ $theme = active_cliniq_theme();
                     identifier.dataset.autofilled = '';
                     syncStudentDetail();
                 }
-                setVisitorLookupStatus(patient.message || 'This ID number is not in the Cliniq_db account list.', 'missing');
+                setVisitorLookupStatus(patient.message || 'No patient account matches this ID number.', 'missing');
                 return;
             }
 
@@ -906,10 +906,10 @@ $theme = active_cliniq_theme();
             category.value = patient.category || '';
             department.value = patient.course || '';
             syncStudentDetail();
-            setVisitorLookupStatus('Registered account details loaded from Cliniq_db.', 'found');
+            setVisitorLookupStatus('Patient details loaded.', 'found');
         } catch (error) {
             if (sequence === visitorLookupSequence) {
-                setVisitorLookupStatus('Unable to check Cliniq_db right now. Please try again.', 'missing');
+                setVisitorLookupStatus('We could not check your ID right now. Please try again.', 'missing');
             }
         }
     }

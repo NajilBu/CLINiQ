@@ -760,6 +760,7 @@ function create_ape_schedule_batch(array $input, ?int $actorPersonId): array
                 'ape_batch',
                 $batchId
             );
+            patient_email_queue_notification((int) $candidateRow['patient_id'], 'ape_schedule_updated', 'ape_schedule_updates', 'APE schedule assigned', "Your APE schedule is {$scheduleLabel}. Batch: {$batchName}.", 'ape', $batchId, $actorPersonId, null, 'assigned');
         }
         $db->commit();
         return ['batch_id' => $batchId, 'batch_name' => $batchName, 'assigned_count' => count($selectedIds)];
@@ -816,8 +817,63 @@ function cancel_ape_schedule_batch(int $batchId, int $cycleId, ?int $actorPerson
                 'ape_batch',
                 $batchId
             );
+            patient_email_queue_notification((int) $patientId, 'ape_schedule_updated', 'ape_schedule_updates', 'APE schedule cancelled', "Your APE schedule in batch {$batchName} was cancelled. The clinic will assign a new schedule.", 'ape', $batchId, $actorPersonId, null, 'cancelled');
         }
         $db->commit();
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        throw $e;
+    }
+}
+
+function reschedule_ape_record(int $apeId, int $targetBatchId, ?int $actorPersonId): array
+{
+    if ($apeId < 1 || $targetBatchId < 1) {
+        throw new InvalidArgumentException('Choose a valid APE record and replacement batch.');
+    }
+
+    $db = auth_db();
+    $db->beginTransaction();
+    try {
+        $record = $db->prepare('SELECT ape_id, ape_cycle_id, patient_id, schedule_batch_id, exam_date, entry_mode, workflow_status FROM ape_records WHERE ape_id = ? FOR UPDATE');
+        $record->execute([$apeId]);
+        $record = $record->fetch();
+        if (!$record || ($record['entry_mode'] ?? '') !== 'Student Scheduled') {
+            throw new RuntimeException('Only a scheduled student APE can be moved to another batch.');
+        }
+        if (!empty($record['exam_date'])) {
+            throw new RuntimeException('An examined APE cannot be rescheduled.');
+        }
+        if ((int) ($record['schedule_batch_id'] ?? 0) === $targetBatchId) {
+            throw new InvalidArgumentException('Choose a different APE batch.');
+        }
+
+        $batch = $db->prepare("SELECT batch_id, batch_name, schedule_date, start_time, end_time, capacity FROM ape_schedule_batches WHERE batch_id = ? AND ape_cycle_id = ? AND status = 'Scheduled' AND TIMESTAMP(schedule_date, end_time) > NOW() FOR UPDATE");
+        $batch->execute([$targetBatchId, (int) $record['ape_cycle_id']]);
+        $batch = $batch->fetch();
+        if (!$batch) {
+            throw new RuntimeException('Choose a future scheduled batch in this APE cycle.');
+        }
+        $count = $db->prepare('SELECT COUNT(*) FROM ape_records WHERE schedule_batch_id = ?');
+        $count->execute([$targetBatchId]);
+        if ((int) $count->fetchColumn() >= (int) $batch['capacity']) {
+            throw new RuntimeException('The selected APE batch is already full.');
+        }
+
+        $update = $db->prepare("UPDATE ape_records SET schedule_batch_id = ?, workflow_status = CASE WHEN workflow_status = 'Registered' THEN 'Batch Assigned' ELSE workflow_status END WHERE ape_id = ?");
+        $update->execute([$targetBatchId, $apeId]);
+        $scheduleLabel = date('F j, Y', strtotime((string) $batch['schedule_date'])) . ' from '
+            . date('g:i A', strtotime((string) $batch['start_time'])) . ' to '
+            . date('g:i A', strtotime((string) $batch['end_time']));
+        $db->prepare("INSERT INTO ape_activity_logs (ape_id, performed_by_person_id, action, notes) VALUES (?, ?, 'Rescheduled APE examination', ?)")
+            ->execute([$apeId, $actorPersonId, $batch['batch_name'] . ': ' . $scheduleLabel]);
+        patient_notification_create($db, (int) $record['patient_id'], $actorPersonId, 'ape', 'APE schedule updated', "Your APE schedule is now {$scheduleLabel}. Batch: {$batch['batch_name']}.", 'patient-ape-status.php', 'ape_batch', $targetBatchId);
+        patient_email_queue_notification((int) $record['patient_id'], 'ape_schedule_updated', 'ape_schedule_updates', 'APE schedule updated', "Your APE schedule is now {$scheduleLabel}. Batch: {$batch['batch_name']}.", 'ape', $targetBatchId, $actorPersonId, null, 'rescheduled');
+        $db->commit();
+
+        return $batch;
     } catch (Throwable $e) {
         if ($db->inTransaction()) {
             $db->rollBack();

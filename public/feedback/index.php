@@ -53,7 +53,7 @@ try {
     if ($from !== '' && $to !== '' && $from > $to) throw new InvalidArgumentException('The start date must be on or before the end date.');
     if ($service !== '' && !in_array($service, clinic_feedback_services(), true)) throw new InvalidArgumentException('Select a valid service.');
     $db = auth_db();
-    if (!clinic_feedback_ready($db)) throw new InvalidArgumentException('Feedback is not set up yet. Apply the clinic feedback database migration.');
+    if (!clinic_feedback_ready($db)) throw new InvalidArgumentException('Feedback is unavailable right now. Please contact the clinic.');
     $conditions = ['1=1'];
     $params = [];
     if ($from !== '') { $conditions[] = 'f.submitted_at >= ?'; $params[] = $from . ' 00:00:00'; }
@@ -125,8 +125,8 @@ render_header('Clinic Feedback');
             <?php if (!$rows): ?><div class="empty-state"><p class="empty-state-title">No feedback responses</p><p class="empty-state-text">Responses matching your filters will appear here.</p></div><?php endif; ?>
             <?php foreach ($rows as $row): ?>
                 <details class="feedback-response">
-                    <summary><strong><?= e($row['service_type'] === 'Other' ? 'Other: ' . $row['service_other'] : $row['service_type']) ?></strong><br><span class="feedback-muted">Submitted <?= e($row['submitted_at']) ?> · Overall <?= number_format((float) $row['overall'], 2) ?> · <?= e(clinic_feedback_tier((float) $row['overall'])) ?> · <?= !empty($row['is_anonymous']) ? 'Anonymous' : 'Identified' ?></span></summary>
-                    <p><?= $row['visit_id'] ? 'Visit ' . (int) $row['visit_id'] . ' · ' . e($row['visit_datetime']) : 'General feedback (not linked to a visit)' ?><br><strong>Reason for visit:</strong> <?= e($row['visit_purpose'] ?: 'Not recorded') ?><br><strong>Patient concern:</strong> <?= e($row['chief_complaint'] ?: 'Not recorded') ?><br><?= e($row['academic_term'] === 'Other' ? $row['term_other'] : $row['academic_term']) ?> · <?= e($row['year_level'] === 'Other' ? $row['year_other'] : $row['year_level']) ?> · <?= e($row['program']) ?></p>
+                    <summary><strong><?= e($row['service_type'] === 'Other' ? 'Other: ' . $row['service_other'] : $row['service_type']) ?></strong><br><span class="feedback-muted">Submitted <?= e($row['submitted_at']) ?> · Overall <?= number_format((float) $row['overall'], 2) ?> · <?= e(clinic_feedback_tier((float) $row['overall'])) ?> · <?= !empty($row['is_anonymous']) ? 'Identity private' : 'Visit-linked' ?></span></summary>
+                    <?php if (!empty($row['is_anonymous'])): ?><p>Identity-private feedback. Visit and student details are withheld.</p><?php else: ?><p><?= $row['visit_id'] ? 'Visit ' . (int) $row['visit_id'] . ' · ' . e($row['visit_datetime']) : 'General feedback (not linked to a visit)' ?><br><strong>Reason for visit:</strong> <?= e($row['visit_purpose'] ?: 'Not recorded') ?><br><strong>Patient concern:</strong> <?= e($row['chief_complaint'] ?: 'Not recorded') ?><br><?= e($row['academic_term'] === 'Other' ? $row['term_other'] : $row['academic_term']) ?> · <?= e($row['year_level'] === 'Other' ? $row['year_other'] : $row['year_level']) ?> · <?= e($row['program']) ?></p><?php endif; ?>
                     <h3>Written feedback</h3><p class="feedback-comment"><?= e($row['comments'] ?: 'No written feedback provided.') ?></p>
                     <?php $ratings = json_decode($row['ratings_json'], true) ?: []; foreach (clinic_feedback_sections() as $section => $questions): ?>
                         <h3><?= e($section) ?> · <?= number_format((float) $row[strtolower($section)], 2) ?></h3>

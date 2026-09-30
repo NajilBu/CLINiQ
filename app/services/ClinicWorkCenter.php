@@ -178,29 +178,98 @@ function clinic_work_center_export(array $items): void
     fclose($out);
 }
 
-/**
- * Return all delivery history for one patient/workflow cycle. A matching
- * automatic email is just as important as a manual one when preventing spam.
- */
+/** Return delivery history for one APE action; sent means SMTP accepted. */
 function clinic_work_center_reminder_history(int $patientId, string $sourceType, int $sourceId, string $eventType): array
 {
-    if ($patientId < 1 || $sourceId < 1 || $eventType === '') {
-        return ['count' => 0, 'last_reminded_at' => null, 'last_status' => null, 'latest_id' => 0];
-    }
-    $stmt = auth_db()->prepare("SELECT id, status, created_at, sent_at
+    $empty = ['sent_count' => 0, 'automatic_sent_count' => 0, 'manual_follow_up_count' => 0, 'pending_count' => 0, 'last_sent_at' => null, 'latest_status' => null, 'latest_id' => 0];
+    if ($patientId < 1 || $sourceId < 1 || $eventType === '') return $empty;
+    $stmt = auth_db()->prepare("SELECT id, origin, status, created_at, sent_at
         FROM email_queue
         WHERE patient_person_id = ? AND source_type = ? AND source_id = ?
-           AND event_type = ? AND status <> 'cancelled'
+          AND event_type = ? AND status <> 'cancelled'
         ORDER BY id DESC");
     $stmt->execute([$patientId, $sourceType, $sourceId, $eventType]);
     $rows = $stmt->fetchAll();
-    $latest = $rows[0] ?? null;
+    $sent = array_values(array_filter($rows, static fn(array $row): bool => (string) $row['status'] === 'sent'));
+    $manualSent = array_values(array_filter($sent, static fn(array $row): bool => (string) $row['origin'] === 'manual'));
+    $automaticSent = array_values(array_filter($sent, static fn(array $row): bool => (string) $row['origin'] === 'automatic'));
+    $lastSent = $sent[0] ?? null;
     return [
-        'count' => count($rows),
-        'last_reminded_at' => $latest ? ((string) ($latest['sent_at'] ?: $latest['created_at'])) : null,
-        'last_status' => $latest ? (string) $latest['status'] : null,
-        'latest_id' => $latest ? (int) $latest['id'] : 0,
+        'sent_count' => count($sent),
+        'automatic_sent_count' => count($automaticSent),
+        'manual_follow_up_count' => count($manualSent),
+        'pending_count' => count(array_filter($rows, static fn(array $row): bool => in_array((string) $row['status'], ['pending', 'processing'], true))),
+        'last_sent_at' => $lastSent ? (string) ($lastSent['sent_at'] ?: $lastSent['created_at']) : null,
+        'latest_status' => isset($rows[0]) ? (string) $rows[0]['status'] : null,
+        'latest_id' => isset($rows[0]) ? (int) $rows[0]['id'] : 0,
     ];
+}
+
+/** Pure reminder state calculation; keeps the safety policy testable without a database. */
+function clinic_work_center_reminder_state(array $history, bool $recipientAvailable, ?int $now = null): array
+{
+    $now ??= time();
+    $state = 'ready';
+    $reason = 'A staff-reviewed follow-up can be sent now.';
+    $nextEligibleAt = null;
+    if (!$recipientAvailable) {
+        $state = 'recipient_unavailable';
+        $reason = 'The patient does not have an active account with a valid email address.';
+    } elseif ((int) ($history['pending_count'] ?? 0) > 0) {
+        $state = 'delivery_pending';
+        $reason = 'An earlier email is still waiting to be processed.';
+    } elseif (in_array((string) ($history['latest_status'] ?? ''), ['failed', 'blocked'], true)) {
+        $state = 'delivery_attention';
+        $reason = 'The latest email needs delivery attention before another reminder is sent.';
+    } elseif ((int) ($history['sent_count'] ?? 0) < 1) {
+        $state = 'initial_delivery_required';
+        $reason = 'The initial automatic email has not been sent yet.';
+    } elseif ((int) ($history['manual_follow_up_count'] ?? 0) >= 2) {
+        $state = 'limit_reached';
+        $reason = 'The two staff follow-ups for this APE action have already been used.';
+    } elseif (!empty($history['last_sent_at'])) {
+        try {
+            $nextEligibleAt = (new DateTimeImmutable((string) $history['last_sent_at']))->modify('+72 hours')->format('Y-m-d H:i:s');
+            if (strtotime($nextEligibleAt) > $now) {
+                $state = 'cooldown';
+                $reason = 'A staff follow-up becomes available 72 hours after the latest email.';
+            }
+        } catch (Throwable $e) {
+            $state = 'delivery_attention';
+            $reason = 'The latest email timestamp cannot be verified.';
+        }
+    }
+    return ['state' => $state, 'reason' => $reason, 'next_eligible_at' => $nextEligibleAt, 'can_send' => $state === 'ready'];
+}
+
+/** Apply the one shared, server-authoritative APE follow-up policy. */
+function clinic_work_center_apply_reminder_policy(array $item): array
+{
+    $patientId = (int) ($item['patient_person_id'] ?? 0);
+    $sourceType = (string) ($item['email_source_type'] ?? $item['source_type'] ?? '');
+    $sourceId = (int) ($item['email_source_id'] ?? $item['source_id'] ?? 0);
+    $eventType = (string) ($item['email_event_type'] ?? '');
+    $history = clinic_work_center_reminder_history($patientId, $sourceType, $sourceId, $eventType);
+    $recipientStmt = auth_db()->prepare("SELECT a.email FROM accounts a INNER JOIN patients pt ON pt.person_id = a.person_id WHERE a.person_id = ? AND a.account_status = 'active' LIMIT 1");
+    $recipientStmt->execute([$patientId]);
+    $recipientEmail = (string) ($recipientStmt->fetchColumn() ?: '');
+    $recipientAvailable = filter_var($recipientEmail, FILTER_VALIDATE_EMAIL) !== false;
+    $policy = clinic_work_center_reminder_state($history, $recipientAvailable);
+    $item['patient_email'] = $recipientEmail;
+    $item['sent_count'] = $history['sent_count'];
+    $item['automatic_sent_count'] = $history['automatic_sent_count'];
+    $item['manual_follow_up_count'] = $history['manual_follow_up_count'];
+    $item['reminder_count'] = $history['sent_count'];
+    $item['last_reminded_at'] = $history['last_sent_at'];
+    $item['last_reminder_status'] = $history['latest_status'];
+    $item['reminder_state'] = $policy['state'];
+    $item['reminder_reason'] = $policy['reason'];
+    $item['next_eligible_at'] = $policy['next_eligible_at'];
+    $item['follow_up_number'] = $history['manual_follow_up_count'] + 1;
+    $item['can_send_reminder'] = $policy['can_send'];
+    $item['recipient_available'] = $recipientAvailable;
+    $item['reminder_key_base'] = implode(':', [$patientId, $sourceType, $sourceId, $eventType]);
+    return $item;
 }
 
 function clinic_work_center_reminder_deadline(array $item): ?string
@@ -237,65 +306,21 @@ function clinic_work_center_reminder_deadline(array $item): ?string
     return $due !== '' ? substr($due, 0, 10) : null;
 }
 
-function clinic_work_center_extend_reminder_deadline(array $item, string $newDate, int $actorId, int $emailId, int $count): bool
-{
-    $db = auth_db();
-    $sourceType = (string) ($item['source_type'] ?? $item['email_source_type'] ?? '');
-    $sourceId = (int) ($item['source_id'] ?? $item['email_source_id'] ?? 0);
-    $eventType = (string) ($item['email_event_type'] ?? '');
-    $updated = false;
-    try {
-        $requirementIds = array_values(array_filter(array_map('intval', (array) ($item['requirement_ids'] ?? []))));
-        if ($requirementIds !== []) {
-            $placeholders = implode(',', array_fill(0, count($requirementIds), '?'));
-            $stmt = $db->prepare("UPDATE ape_requirements SET upload_due_date = ? WHERE requirement_id IN ({$placeholders}) AND status IN ('Missing', 'Needs Correction')");
-            $stmt->execute([$newDate, ...$requirementIds]);
-            $updated = $stmt->rowCount() > 0;
-        } elseif (in_array($eventType, ['ape_follow_up_required', 'ape_follow_up_overdue'], true) && $sourceId > 0) {
-            $stmt = $db->prepare('UPDATE ape_records SET follow_up_due_date = ? WHERE ape_id = ?');
-            $stmt->execute([$newDate, $sourceId]);
-            $updated = $stmt->rowCount() > 0;
-        } elseif ($eventType === 'ape_documents_overdue' && (int) ($item['email_source_id'] ?? 0) > 0) {
-            $stmt = $db->prepare("UPDATE ape_requirements SET upload_due_date = ?
-                WHERE ape_id = ? AND status IN ('Missing', 'Needs Correction')");
-            $stmt->execute([$newDate, (int) $item['email_source_id']]);
-            $updated = $stmt->rowCount() > 0;
-        } elseif ($sourceType === 'ape_requirement' && $sourceId > 0) {
-            $stmt = $db->prepare('UPDATE ape_requirements SET upload_due_date = ? WHERE requirement_id = ?');
-            $stmt->execute([$newDate, $sourceId]);
-            $updated = $stmt->rowCount() > 0;
-        } elseif ($sourceType === 'ape_document' && $sourceId > 0) {
-            $stmt = $db->prepare('UPDATE ape_requirements r INNER JOIN ape_documents d
-                ON r.ape_id = d.ape_id AND r.requirement_name = d.document_type
-                SET r.upload_due_date = ? WHERE d.document_id = ?');
-            $stmt->execute([$newDate, $sourceId]);
-            $updated = $stmt->rowCount() > 0;
-        }
-    } catch (Throwable $e) {
-        $updated = false;
-    }
-    if ($updated) {
-        audit_log_event('ape', 'ape_deadline_extended_after_reminder', $actorId ?: null, 'staff', $sourceType ?: 'ape', $sourceId ?: null, [
-            'patient_person_id' => (int) ($item['patient_person_id'] ?? 0),
-            'email_queue_id' => $emailId,
-            'previous_deadline' => (string) ($item['current_deadline'] ?? ''),
-            'new_deadline' => $newDate,
-            'reminder_count' => $count,
-        ], 'success');
-    }
-    return $updated;
-}
-
 /**
  * Build reminder candidates without changing data. This is intentionally
  * separate from clinic_work_center_items(): sent automatic email records must
  * not hide a patient-owned APE action that staff may need to remind again.
  */
-function clinic_work_center_reminder_candidates(): array
+function clinic_work_center_reminder_candidates(?int $batchId = null): array
 {
     $items = [];
     $candidateKeys = [];
-    $today = date('Y-m-d');
+    $batchApeIds = null;
+    if ($batchId !== null && $batchId > 0) {
+        $batchRecords = auth_db()->prepare('SELECT ape_id FROM ape_records WHERE schedule_batch_id = ?');
+        $batchRecords->execute([$batchId]);
+        $batchApeIds = array_fill_keys(array_map('intval', $batchRecords->fetchAll(PDO::FETCH_COLUMN)), true);
+    }
     foreach (workflow_attention_items(['email_relevant' => true], 1000) as $item) {
         if (strtolower((string) ($item['area'] ?? '')) !== 'ape') continue;
         // A missed examination has two valid owners: the clinic must handle
@@ -310,33 +335,16 @@ function clinic_work_center_reminder_candidates(): array
         $sourceType = (string) ($item['email_source_type'] ?? $item['source_type'] ?? '');
         $sourceId = (int) ($item['email_source_id'] ?? $item['source_id'] ?? 0);
         if ($patientId < 1 || $eventType === '' || $sourceId < 1) continue;
+        if ($batchApeIds !== null && !isset($batchApeIds[$sourceId])) continue;
         $candidateKey = implode(':', [$patientId, $sourceType, $sourceId, $eventType]);
         if (isset($candidateKeys[$candidateKey])) continue;
-        $history = clinic_work_center_reminder_history($patientId, $sourceType, $sourceId, $eventType);
-        $deadline = clinic_work_center_reminder_deadline($item);
-        $hasExistingDelivery = $history['count'] > 0;
-        $withinWindow = $deadline !== null && $deadline >= $today;
-        $recentlyReminded = $hasExistingDelivery;
-        $recipientStmt = auth_db()->prepare("SELECT a.email
-            FROM accounts a INNER JOIN patients pt ON pt.person_id = a.person_id
-            WHERE a.person_id = ? AND a.account_status = 'active' LIMIT 1");
-        $recipientStmt->execute([$patientId]);
-        $recipientEmail = (string) ($recipientStmt->fetchColumn() ?: '');
-        $recipientAvailable = filter_var($recipientEmail, FILTER_VALIDATE_EMAIL) !== false;
-        $item['reminder_count'] = $history['count'];
-        $item['last_reminded_at'] = $history['last_reminded_at'];
-        $item['last_reminder_status'] = $history['last_status'];
-        $item['current_deadline'] = $deadline;
-        $item['reminder_state'] = $recentlyReminded ? 'recently_reminded' : 'needs_attention';
-        $item['can_send_reminder'] = !$recentlyReminded && $recipientAvailable;
-        $item['recipient_available'] = $recipientAvailable;
-        $item['reminder_key_base'] = implode(':', [$patientId, $sourceType, $sourceId, $eventType]);
+        $item['current_deadline'] = clinic_work_center_reminder_deadline($item);
+        $item = clinic_work_center_apply_reminder_policy($item);
         $items[] = $item;
         $candidateKeys[$item['reminder_key_base']] = true;
     }
-    // An overdue requirement stops matching the broad overdue query after its
-    // deadline is extended. Rehydrate active manual reminder cycles so they
-    // remain visible under Recently reminded until the patient resolves them.
+    // Keep unresolved manual reminder cycles visible even after the broad
+    // workflow query stops returning their original overdue action.
     try {
         $manualRows = auth_db()->query("SELECT DISTINCT q.patient_person_id, q.source_id, q.event_type,
                 q.created_at, p.first_name, p.middle_name, p.last_name
@@ -352,10 +360,11 @@ function clinic_work_center_reminder_candidates(): array
             $key = implode(':', [$patientId, 'ape', $sourceId, $eventType]);
             if ($patientId < 1 || $sourceId < 1 || isset($candidateKeys[$key])) continue;
             $db = auth_db();
-            $recordStmt = $db->prepare('SELECT ape_id, follow_up_due_date, workflow_status, clearance_status FROM ape_records WHERE ape_id = ? LIMIT 1');
+            $recordStmt = $db->prepare('SELECT ape_id, schedule_batch_id, follow_up_due_date, workflow_status, clearance_status FROM ape_records WHERE ape_id = ? LIMIT 1');
             $recordStmt->execute([$sourceId]);
             $record = $recordStmt->fetch();
-            if (!$record || in_array((string) ($record['workflow_status'] ?? ''), ['Cleared', 'Completed'], true) || (string) ($record['clearance_status'] ?? '') === 'Cleared') continue;
+            if (!$record || in_array((string) ($record['workflow_status'] ?? ''), ['Cleared', 'Completed', 'Inactive'], true) || (string) ($record['clearance_status'] ?? '') === 'Cleared') continue;
+            if ($batchId !== null && $batchId > 0 && (int) ($record['schedule_batch_id'] ?? 0) !== $batchId) continue;
             $deadline = null;
             if (in_array($eventType, ['ape_follow_up_required', 'ape_follow_up_overdue'], true)) {
                 $deadline = $record['follow_up_due_date'] ? (string) $record['follow_up_due_date'] : null;
@@ -365,27 +374,19 @@ function clinic_work_center_reminder_candidates(): array
                 $deadline = ($value = $req->fetchColumn()) ? (string) $value : null;
             }
             if ($deadline === null) continue;
-            $history = clinic_work_center_reminder_history($patientId, 'ape', $sourceId, $eventType);
-            $recipientStmt = $db->prepare("SELECT a.email FROM accounts a INNER JOIN patients pt ON pt.person_id = a.person_id WHERE a.person_id = ? AND a.account_status = 'active' LIMIT 1");
-            $recipientStmt->execute([$patientId]);
-            $recipientAvailable = filter_var((string) ($recipientStmt->fetchColumn() ?: ''), FILTER_VALIDATE_EMAIL) !== false;
-            $withinWindow = $deadline >= $today;
             $item = [
                 'kind' => 'workflow', 'type' => 'ape_reminder_cycle', 'label' => 'APE reminder cycle',
                 'title' => $eventType === 'ape_documents_overdue' ? 'APE documents still incomplete' : 'APE action still incomplete',
                 'explanation' => 'The student was reminded, but the patient-owned APE action is still unresolved.',
                 'patient_name' => trim((string) $row['first_name'] . ' ' . (string) ($row['middle_name'] ?? '') . ' ' . (string) $row['last_name']) ?: 'Patient',
-                'patient_person_id' => $patientId, 'patient_email' => '', 'priority' => $withinWindow ? 'waiting_on_patient' : 'overdue',
-                'status' => $withinWindow ? 'Waiting on patient' : 'Reminder deadline passed', 'area' => 'APE',
+                'patient_person_id' => $patientId, 'patient_email' => '', 'priority' => 'overdue',
+                'status' => 'APE action still incomplete', 'area' => 'APE',
                 'created_at' => (string) $row['created_at'], 'due_at' => $deadline,
                 'source_type' => 'ape', 'source_id' => $sourceId, 'source_url' => '../ape/view.php?id=' . $sourceId,
                 'email_relevant' => true, 'email_event_type' => $eventType, 'email_source_type' => 'ape', 'email_source_id' => $sourceId,
-                'reminder_count' => $history['count'], 'last_reminded_at' => $history['last_reminded_at'],
-                'last_reminder_status' => $history['last_status'], 'current_deadline' => $deadline,
-                'reminder_state' => $withinWindow ? 'recently_reminded' : 'needs_attention',
-                'can_send_reminder' => !$withinWindow && $recipientAvailable, 'recipient_available' => $recipientAvailable,
-                'reminder_key_base' => $key,
+                'current_deadline' => $deadline,
             ];
+            $item = clinic_work_center_apply_reminder_policy($item);
             $items[] = $item;
             $candidateKeys[$key] = true;
         }
@@ -395,10 +396,9 @@ function clinic_work_center_reminder_candidates(): array
     return $items;
 }
 
-function clinic_work_center_send_reminders(int $actorPersonId, int $deadlineDays = 3, ?array $reviewedItems = null): array
+function clinic_work_center_send_reminders(int $actorPersonId, ?array $reviewedItems = null, ?int $batchId = null): array
 {
-    $deadlineDays = max(1, min(30, $deadlineDays));
-    $result = ['eligible' => 0, 'sent' => 0, 'queued' => 0, 'deferred' => 0, 'skipped' => 0, 'blocked' => 0, 'failed' => 0, 'extended' => 0];
+    $result = ['eligible' => 0, 'sent' => 0, 'queued' => 0, 'deferred' => 0, 'skipped' => 0, 'blocked' => 0, 'failed' => 0];
     $reviewedByKey = [];
     if ($reviewedItems !== null) {
         foreach ($reviewedItems as $reviewed) {
@@ -408,7 +408,7 @@ function clinic_work_center_send_reminders(int $actorPersonId, int $deadlineDays
                 (string) ($reviewed['source_type'] ?? 'ape'),
                 (int) ($reviewed['source_id'] ?? 0),
                 (string) ($reviewed['event_type'] ?? ''),
-                (string) ($reviewed['previous_deadline'] ?? ''),
+                (int) ($reviewed['follow_up_number'] ?? 0),
             ]);
             if ((int) ($reviewed['patient_person_id'] ?? 0) > 0 && (int) ($reviewed['source_id'] ?? 0) > 0 && (string) ($reviewed['event_type'] ?? '') !== '') {
                 $reviewedByKey[$key] = [
@@ -418,20 +418,20 @@ function clinic_work_center_send_reminders(int $actorPersonId, int $deadlineDays
             }
         }
     }
-    audit_log_event('email', 'clinic_reminder_batch_started', $actorPersonId ?: null, 'staff', 'email', null, ['deadline_days' => $deadlineDays]);
-    foreach (clinic_work_center_reminder_candidates() as $item) {
+    audit_log_event('email', 'clinic_reminder_batch_started', $actorPersonId ?: null, 'staff', 'email', null, ['batch_id' => $batchId]);
+    foreach (clinic_work_center_reminder_candidates($batchId) as $item) {
         if (empty($item['can_send_reminder'])) {
             $result['skipped']++;
             continue;
         }
         $result['eligible']++;
-        $previousDeadline = (string) ($item['current_deadline'] ?? '') ?: date('Y-m-d');
         $sourceType = (string) ($item['source_type'] ?? $item['email_source_type'] ?? 'ape');
         $sourceId = (int) ($item['source_id'] ?? $item['email_source_id'] ?? 0);
         $emailSourceType = (string) ($item['email_source_type'] ?? $sourceType);
         $emailSourceId = (int) ($item['email_source_id'] ?? $sourceId);
         $eventType = (string) ($item['email_event_type'] ?? '');
-        $reviewKey = implode(':', [(int) $item['patient_person_id'], $sourceType, $sourceId, $eventType, $previousDeadline]);
+        $followUpNumber = (int) ($item['follow_up_number'] ?? 0);
+        $reviewKey = implode(':', [(int) $item['patient_person_id'], $sourceType, $sourceId, $eventType, $followUpNumber]);
         if ($reviewedItems !== null && !isset($reviewedByKey[$reviewKey])) {
             continue;
         }
@@ -443,7 +443,7 @@ function clinic_work_center_send_reminders(int $actorPersonId, int $deadlineDays
                 continue;
             }
         }
-        $dedupeKey = implode(':', ['clinic_reminder', (int) $item['patient_person_id'], $emailSourceType, $emailSourceId, $eventType, $previousDeadline]);
+        $dedupeKey = implode(':', ['clinic_reminder', (int) $item['patient_person_id'], $emailSourceType, $emailSourceId, $eventType, 'follow_up', $followUpNumber]);
         $existing = auth_db()->prepare("SELECT id, status FROM email_queue WHERE dedupe_key = ? AND status <> 'cancelled' LIMIT 1");
         $existing->execute([$dedupeKey]);
         if ($existing->fetch()) {
@@ -513,15 +513,12 @@ function clinic_work_center_send_reminders(int $actorPersonId, int $deadlineDays
         if ($status === 'blocked') { $result['blocked']++; continue; }
         if ($status === 'failed') { $result['failed']++; continue; }
         if ($status === 'sent') $result['sent']++; else $result['queued']++;
-        $newDeadline = date('Y-m-d', strtotime('+' . $deadlineDays . ' days'));
-        if (clinic_work_center_extend_reminder_deadline($item, $newDeadline, $actorPersonId, $queueId, ((int) $item['reminder_count']) + 1)) $result['extended']++;
         audit_log_event('email', $status === 'sent' ? 'clinic_reminder_sent' : 'clinic_reminder_queued', $actorPersonId ?: null, 'staff', 'email', $queueId, [
             'patient_person_id' => (int) $item['patient_person_id'],
             'source_type' => $sourceType,
             'source_id' => $sourceId,
             'event_type' => $eventType,
-            'previous_deadline' => $previousDeadline,
-            'new_deadline' => $newDeadline,
+            'follow_up_number' => $followUpNumber,
         ], 'success');
     }
     audit_log_event('email', 'clinic_reminder_batch_completed', $actorPersonId ?: null, 'staff', 'email', null, $result, 'success');

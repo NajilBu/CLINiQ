@@ -8,6 +8,7 @@ require_once __DIR__ . '/../../app/services/AlertWorkflow.php';
 require_once __DIR__ . '/../../app/services/PatientEmail.php';
 require_once __DIR__ . '/../../app/services/AppointmentWorkflow.php';
 require_once __DIR__ . '/../../app/services/GraduationService.php';
+require_once __DIR__ . '/../../app/services/PatientAccountService.php';
 require_login();
 
 $id = (int) ($_GET['id'] ?? 0);
@@ -105,6 +106,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'gradu
     exit;
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'patient_account_status') {
+    try {
+        if (!csrf_request_is_valid() || !can_manage_patient_accounts($user)) {
+            throw new InvalidArgumentException('You do not have permission to change this patient account.');
+        }
+
+        $accountId = (int) ($patient['account_id'] ?? 0);
+        $decision = (string) ($_POST['decision'] ?? '');
+        $actorPersonId = (int) ($user['person_id'] ?? $user['id'] ?? 0);
+        if ($decision === 'deactivate') {
+            deactivate_patient_account($accountId, (string) ($_POST['inactive_reason'] ?? ''), $actorPersonId);
+            flash_message('success', 'Patient account deactivated.');
+        } elseif ($decision === 'reactivate') {
+            reactivate_patient_account($accountId, $actorPersonId);
+            flash_message('success', 'Patient account reactivated.');
+        } elseif ($decision === 'official') {
+            change_patient_access_status($accountId, 'Official', $actorPersonId);
+            flash_message('success', 'Patient portal access is now official.');
+        } else {
+            throw new InvalidArgumentException('Choose a valid account action.');
+        }
+    } catch (Throwable $e) {
+        flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $e instanceof InvalidArgumentException ? $e->getMessage() : 'Patient account status could not be updated.');
+    }
+    header('Location: view.php?id=' . (int) $patient['person_id']);
+    exit;
+}
+
 $isFourthYearStudent = ($patient['patient_type'] ?? '') === 'Student' && trim((string) ($patient['year_level'] ?? '')) === '4';
 $isGraduated = $isFourthYearStudent && graduation_is_graduated((int) $patient['person_id']);
 $graduationBatchYear = null;
@@ -194,6 +223,16 @@ if ($patient['birthdate']) {
 $sexLabel = $patient['sex'] ?: 'Not specified';
 $emailLabel = trim((string) ($patient['email'] ?? '')) !== '' ? trim((string) $patient['email']) : 'Not specified';
 $bloodTypeLabel = $patient['blood_type'] ?: 'Not specified';
+$accountStatus = strtolower(trim((string) ($patient['account_status'] ?? '')));
+$accountStatusLabel = $accountStatus !== '' ? ucfirst($accountStatus) : 'No portal account';
+$accountStatusStyle = match ($accountStatus) {
+    'active' => 'border-emerald-200 bg-emerald-50 text-emerald-800',
+    'inactive' => 'border-red-200 bg-red-50 text-red-800',
+    default => 'border-slate-200 bg-slate-50 text-slate-700',
+};
+$accountStatusIcon = $accountStatus === 'active' ? 'verified_user' : ($accountStatus === 'inactive' ? 'person_off' : 'person_outline');
+$portalAccess = trim((string) ($patient['access_status'] ?? '')) ?: 'Not available';
+$portalAccessStyle = $portalAccess === 'Official' ? 'text-emerald-700' : ($portalAccess === 'Applicant' ? 'text-amber-700' : 'text-slate-600');
 $courseLabel = $patient['course_section'] ?: $patient['patient_type'];
 $lastVisitLabel = $latestVisit ? date('M d, Y g:i A', strtotime($latestVisit['visit_datetime'])) : 'No visits yet';
 $affiliationLabel = 'Classification';
@@ -306,7 +345,7 @@ render_header($fullName . ' - Patient Profile');
 
     .profile-appointment-card {
         border: 1px solid rgba(199, 220, 205, 0.75);
-        border-radius: 0.9rem;
+        border-radius: 0.75rem;
         background: #fbfdfb;
         padding: 1rem;
     }
@@ -319,15 +358,15 @@ render_header($fullName . ' - Patient Profile');
 
     .patient-profile-card {
         border: 1px solid rgba(199, 220, 205, 0.72);
-        border-radius: 1rem;
+        border-radius: 0.75rem;
         background: #fff;
-        box-shadow: 0 14px 30px rgba(15, 23, 42, 0.04);
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 22px rgba(15, 23, 42, 0.04);
     }
 
     .patient-profile-field {
         min-height: 4.15rem;
         border: 1px solid rgba(199, 220, 205, 0.75);
-        border-radius: 0.8rem;
+        border-radius: 0.75rem;
         background: #f8fbf9;
         padding: 0.85rem 1rem;
     }
@@ -343,14 +382,13 @@ render_header($fullName . ' - Patient Profile');
 
     .patient-profile-note {
         border: 1px solid rgba(199, 220, 205, 0.75);
-        border-left: 4px solid #3f7d52;
-        border-radius: 0.8rem;
+        border-radius: 0.75rem;
         background: #fbfdfb;
         padding: 0.95rem 1rem;
     }
 
     .patient-profile-note.warning {
-        border-left-color: #dc2626;
+        border-color: #fecaca;
         background: #fffafa;
     }
 
@@ -506,49 +544,145 @@ render_header($fullName . ' - Patient Profile');
                 <div class="min-w-0">
                     <p class="text-[11px] font-black text-primary uppercase tracking-widest mb-1">Patient Profile</p>
                     <h1 class="font-headline text-3xl md:text-4xl font-extrabold text-[#17261d] leading-tight m-0"><?= e($fullName) ?></h1>
-                    <p class="text-sm font-bold text-slate-500 mt-1">
-                        <?= e($patient['id_number']) ?> &bull; <?= e($courseLabel) ?>
-                    </p>
+                    <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-2 text-sm font-bold text-slate-500">
+                        <span><?= e($patient['id_number']) ?> &bull; <?= e($courseLabel) ?></span>
+                        <?php if (can_manage_patient_accounts($user)): ?>
+                            <button type="button" class="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-black uppercase tracking-wide <?= e($accountStatusStyle) ?>" onclick="showModal('patientAccountStatusModal')" aria-haspopup="dialog">
+                                <span class="material-symbols-outlined text-[15px]" aria-hidden="true"><?= e($accountStatusIcon) ?></span>
+                                Account <?= e($accountStatusLabel) ?>
+                            </button>
+                        <?php else: ?>
+                            <span class="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-black uppercase tracking-wide <?= e($accountStatusStyle) ?>">
+                                <span class="material-symbols-outlined text-[15px]" aria-hidden="true"><?= e($accountStatusIcon) ?></span>
+                                Account <?= e($accountStatusLabel) ?>
+                            </span>
+                        <?php endif; ?>
+                    </div>
                     <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs font-bold text-slate-500">
                         <span><?= e($emailLabel) ?></span>
-                        <span><?= e(ucfirst((string) ($patient['account_status'] ?: 'Status not specified'))) ?></span>
                         <?php if ($isGraduated): ?><span class="text-emerald-700">Graduated</span><?php elseif ($graduationClearance): ?><span class="text-emerald-700">Cleared for Graduation · Batch <?= (int) $graduationClearance['batch_year'] ?></span><?php endif; ?>
                         <span>Emergency: <?= e($patient['guardian_name'] ?: 'Not specified') ?></span>
                     </div>
                 </div>
             </div>
-            <div class="flex flex-wrap gap-3">
-                <a class="btn btn-outline text-decoration-none" href="edit.php?id=<?= $id ?>">
-                    <span class="material-symbols-outlined text-[18px]">edit</span>
-                    Edit Profile
-                </a>
-                <?php if ($canEmailPatient): ?>
-                    <button type="button" class="btn btn-outline" id="openPatientEmailComposerButton" title="Email this patient">
-                        <span class="material-symbols-outlined text-[18px]">mail</span>
-                        Email Patient
-                    </button>
-                <?php endif; ?>
-                <?php if ($isFourthYearStudent && !$isGraduated && ($patient['account_status'] ?? '') === 'active' && $graduationBatchYear !== null && in_array($user['role'] ?? '', ['admin', 'doctor', 'nurse'], true)): ?>
-                    <form method="post" class="m-0">
-                        <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
-                        <input type="hidden" name="action" value="graduation_clearance">
-                        <input type="hidden" name="decision" value="<?= $graduationClearance ? 'revoke' : 'clear' ?>">
-                        <button class="btn <?= $graduationClearance ? 'btn-outline' : 'btn-primary' ?>" data-confirm-submit data-confirm-title="<?= $graduationClearance ? 'Revoke graduation clearance?' : 'Clear for graduation?' ?>" data-confirm-message="<?= $graduationClearance ? 'This will remove the student from the cleared list until reviewed again.' : 'Confirm that this fourth-year student is ready for graduation. This does not mark them graduated yet.' ?>">
-                            <span class="material-symbols-outlined text-[18px]">verified</span>
-                            <?= $graduationClearance ? 'Revoke Clearance' : 'Clear for Graduation' ?>
+            <div class="flex flex-col items-start xl:items-end gap-3 shrink-0">
+                <div class="flex flex-wrap items-center gap-3 xl:justify-end">
+                    <a class="btn btn-primary text-decoration-none" href="<?= app_url('visits/create.php?patient_id=' . $id) ?>">
+                        <span class="material-symbols-outlined text-[18px]">add_notes</span>
+                        Record Visit
+                    </a>
+                    <?php if ($isFourthYearStudent && !$isGraduated && ($patient['account_status'] ?? '') === 'active' && $graduationBatchYear !== null && in_array($user['role'] ?? '', ['admin', 'doctor', 'nurse'], true)): ?>
+                        <form method="post" class="m-0">
+                            <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
+                            <input type="hidden" name="action" value="graduation_clearance">
+                            <input type="hidden" name="decision" value="<?= $graduationClearance ? 'revoke' : 'clear' ?>">
+                            <button class="btn <?= $graduationClearance ? 'btn-outline' : 'btn-primary' ?>" data-confirm-submit data-confirm-title="<?= $graduationClearance ? 'Revoke graduation clearance?' : 'Clear for graduation?' ?>" data-confirm-message="<?= $graduationClearance ? 'This will remove the student from the cleared list until reviewed again.' : 'Confirm that this fourth-year student is ready for graduation. This does not mark them graduated yet.' ?>">
+                                <span class="material-symbols-outlined text-[18px]">verified</span>
+                                <?= $graduationClearance ? 'Revoke Clearance' : 'Clear for Graduation' ?>
+                            </button>
+                        </form>
+                    <?php endif; ?>
+                </div>
+                <div class="flex flex-wrap items-center gap-3 xl:justify-end">
+                    <a class="btn btn-outline text-decoration-none" href="edit.php?id=<?= $id ?>">
+                        <span class="material-symbols-outlined text-[18px]">edit</span>
+                        Edit Profile
+                    </a>
+                    <?php if (can_manage_patient_accounts($user)): ?>
+                        <button type="button" class="btn btn-outline" onclick="showModal('patientAccountStatusModal')">
+                            <span class="material-symbols-outlined text-[18px]">manage_accounts</span>
+                            Account Status
                         </button>
-                    </form>
-                <?php endif; ?>
+                    <?php endif; ?>
+                    <?php if ($canEmailPatient): ?>
+                        <button type="button" class="btn btn-outline" id="openPatientEmailComposerButton" title="Email this patient">
+                            <span class="material-symbols-outlined text-[18px]">mail</span>
+                            Email Patient
+                        </button>
+                    <?php endif; ?>
+                </div>
                 <?php if ($isFourthYearStudent && !$isGraduated && $graduationBatchYear === null): ?>
-                    <span class="text-xs font-bold text-amber-700 self-center">Set a valid school year or start an APE cycle to enable graduation clearance.</span>
+                    <span class="text-xs font-bold text-amber-700 xl:text-right">Set a valid school year or start an APE cycle to enable graduation clearance.</span>
                 <?php endif; ?>
-                <a class="btn btn-primary text-decoration-none" href="<?= app_url('visits/create.php?patient_id=' . $id) ?>">
-                    <span class="material-symbols-outlined text-[18px]">add_notes</span>
-                    Record Visit
-                </a>
             </div>
         </div>
     </section>
+
+    <?php if (can_manage_patient_accounts($user)): ?>
+        <div class="modal-backdrop" id="patientAccountStatusModal" role="dialog" aria-modal="true" aria-labelledby="patientAccountStatusTitle" style="display:none">
+            <section class="modal-content w-full max-w-md rounded-xl bg-white p-6 shadow-2xl">
+                <div class="flex items-start justify-between gap-4 border-b border-slate-100 pb-4">
+                    <div class="flex items-center gap-3">
+                        <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-fixed text-primary">
+                            <span class="material-symbols-outlined" aria-hidden="true">manage_accounts</span>
+                        </span>
+                        <div>
+                            <p class="mb-1 text-[11px] font-black uppercase tracking-widest text-primary">Patient account</p>
+                            <h2 id="patientAccountStatusTitle" class="m-0 font-headline text-xl font-extrabold text-[#17261d]">Account Status</h2>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-ghost btn-cancel-icon" onclick="closeModal('patientAccountStatusModal')" aria-label="Close account status">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <dl class="mt-5 grid gap-3 text-sm">
+                    <div class="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                        <dt class="font-bold text-slate-600">Sign-in status</dt>
+                        <dd class="m-0"><span class="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-black uppercase tracking-wide <?= e($accountStatusStyle) ?>"><span class="material-symbols-outlined text-[15px]" aria-hidden="true"><?= e($accountStatusIcon) ?></span><?= e($accountStatusLabel) ?></span></dd>
+                    </div>
+                    <div class="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                        <dt class="font-bold text-slate-600">Portal access</dt>
+                        <dd class="m-0 font-extrabold <?= e($portalAccessStyle) ?>"><?= e($portalAccess) ?></dd>
+                    </div>
+                    <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                        <dt class="font-bold text-slate-600">Portal email</dt>
+                        <dd class="mt-1 break-all font-semibold text-slate-800"><?= e($emailLabel) ?></dd>
+                    </div>
+                    <?php if (trim((string) ($patient['status_reason'] ?? '')) !== ''): ?>
+                        <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                            <dt class="font-bold text-slate-600">Status reason</dt>
+                            <dd class="mt-1 font-semibold text-slate-800"><?= e((string) $patient['status_reason']) ?></dd>
+                        </div>
+                    <?php endif; ?>
+                </dl>
+                <?php if ((int) ($patient['account_id'] ?? 0) > 0 && $accountStatus === 'active'): ?>
+                    <form method="post" class="mt-5 rounded-xl border border-red-200 bg-red-50 p-4">
+                        <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
+                        <input type="hidden" name="action" value="patient_account_status">
+                        <input type="hidden" name="decision" value="deactivate">
+                        <label class="block text-sm font-extrabold text-red-900" for="inactiveReason">Deactivate account</label>
+                        <select id="inactiveReason" name="inactive_reason" class="mt-2 w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-sm" required>
+                            <option value="">Select a reason</option>
+                            <?php foreach (patient_account_manual_inactive_reasons() as $reason): ?>
+                                <option value="<?= e($reason) ?>"><?= e($reason) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <button class="btn btn-danger mt-3" data-confirm-submit data-confirm-type="danger" data-confirm-title="Deactivate patient account?" data-confirm-message="The patient will no longer be able to sign in until the account is reactivated.">Deactivate account</button>
+                    </form>
+                <?php elseif ((int) ($patient['account_id'] ?? 0) > 0 && $accountStatus === 'inactive' && str_starts_with((string) ($patient['status_reason'] ?? ''), patient_account_manual_inactive_prefix())): ?>
+                    <form method="post" class="mt-5">
+                        <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
+                        <input type="hidden" name="action" value="patient_account_status">
+                        <input type="hidden" name="decision" value="reactivate">
+                        <button class="btn btn-primary" data-confirm-submit data-confirm-title="Reactivate patient account?" data-confirm-message="The patient will be able to sign in again.">Reactivate account</button>
+                    </form>
+                <?php endif; ?>
+                <?php if ((int) ($patient['account_id'] ?? 0) > 0 && $portalAccess === 'Applicant'): ?>
+                    <form method="post" class="mt-3">
+                        <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
+                        <input type="hidden" name="action" value="patient_account_status">
+                        <input type="hidden" name="decision" value="official">
+                        <button class="btn btn-outline" data-confirm-submit data-confirm-title="Enable official portal access?" data-confirm-message="This confirms the patient's portal access as official.">Enable official portal access</button>
+                    </form>
+                <?php elseif ((int) ($patient['account_id'] ?? 0) < 1): ?>
+                    <p class="mt-5 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">This patient does not have a portal account.</p>
+                <?php endif; ?>
+                <div class="mt-5 flex justify-end">
+                    <button type="button" class="btn btn-outline" onclick="closeModal('patientAccountStatusModal')">Close</button>
+                </div>
+            </section>
+        </div>
+    <?php endif; ?>
 
     <nav class="patient-profile-tabs" aria-label="Student profile sections" role="tablist">
         <?php foreach ([

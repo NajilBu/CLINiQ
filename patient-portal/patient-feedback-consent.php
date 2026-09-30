@@ -39,7 +39,7 @@ try {
             $_SESSION['student_feedback_started'] = true;
             $_SESSION['student_feedback_consented'] = true;
             $_SESSION['student_feedback_selected_visit_id'] = $selectedId;
-            $_SESSION['student_feedback_anonymous'] = $selectedId === 0;
+            $_SESSION['student_feedback_anonymous'] = $selectedId === 0 || ($_POST['private_identity'] ?? '') === '1';
             $_SESSION['student_feedback_start_token'] = bin2hex(random_bytes(32));
             header('Location: patient-feedback.php?start=' . rawurlencode($_SESSION['student_feedback_start_token']));
             exit;
@@ -77,7 +77,8 @@ render_student_header('Give Feedback', 'dashboard');
                 <?php endforeach; ?>
             </fieldset>
             <?php if ($pendingVisits): ?><p class="student-feedback-muted">General feedback will not complete a feedback requirement for any of the listed visits.</p><?php endif; ?>
-            <label class="student-feedback-consent"><input type="checkbox" name="participate" value="1" required><span>Yes, I want to provide clinic feedback.</span></label>
+            <label class="student-feedback-consent"><input type="checkbox" name="private_identity" value="1"><span><strong>Keep my identity private</strong><br>Your response still completes the selected visit’s feedback requirement, but staff will not see the visit or your identity.</span></label>
+            <input type="hidden" name="participate" value="1">
             <label class="student-feedback-consent"><input type="checkbox" name="consent" value="1" required><span>I have read the RA 10173 privacy notice and consent to the collection and use of my feedback.</span></label>
             <div class="student-feedback-privacy mt-4">
                 <p><strong>Data privacy notice — RA 10173</strong></p>

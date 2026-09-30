@@ -77,7 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'pulse_rate' => $_POST['pulse_rate'] ?? '',
         ], $dispensings);
 
-        flash_message('success', 'Manual visit recorded in Cliniq_db.');
+        flash_message('success', 'Manual visit recorded.');
         header('Location: view.php?id=' . $visitId . '&from=logbook');
     } catch (Throwable $e) {
         flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $e->getMessage());

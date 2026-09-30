@@ -40,12 +40,12 @@ set_page_back_link('index.php', 'Patients');
 render_header('Graduates');
 render_clinic_command_header('Patient Registry', 'Graduates', 'Fourth-year students cleared for graduation and students marked graduated during the school-year cycle.');
 ?>
-<section class="bg-white rounded-[2rem] border border-outline-variant/20 shadow-sm overflow-hidden">
+<section class="clinic-card overflow-hidden">
     <form method="get">
         <div class="p-6 border-b border-slate-100">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h2 class="font-headline text-xl font-extrabold text-[#1c2a59] mb-1">Graduation List</h2>
+                    <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Graduation List</h2>
                     <p class="text-xs font-bold text-slate-500 mb-0"><?= count($graduates) ?> student(s) shown. Clearance and graduation are separate decisions.</p>
                 </div>
                 <div class="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
@@ -60,11 +60,11 @@ render_clinic_command_header('Patient Registry', 'Graduates', 'Fourth-year stude
             </div>
         </div>
         <div id="graduateFilterModal" class="modal-backdrop">
-            <div class="modal-content bg-white rounded-[2rem] w-full max-w-lg p-8 shadow-2xl border border-outline-variant/10">
+            <div class="modal-content bg-white rounded-[1.5rem] w-full max-w-lg p-8 shadow-2xl border border-outline-variant/10">
                 <div class="flex items-center justify-between mb-8">
                     <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 bg-primary-fixed text-primary rounded-xl flex items-center justify-center"><span class="material-symbols-outlined">filter_alt</span></div>
-                        <h3 class="font-headline text-2xl font-extrabold text-[#1c2a59] m-0">Advanced Filters</h3>
+                        <div class="w-10 h-10 bg-[var(--cliniq-surface-low)] text-primary rounded-xl flex items-center justify-center"><span class="material-symbols-outlined">filter_alt</span></div>
+                        <h3 class="font-headline text-2xl font-extrabold text-[#17261d] m-0">Advanced Filters</h3>
                     </div>
                     <button type="button" onclick="closeModal('graduateFilterModal')" class="btn-icon btn-icon-slate" aria-label="Close filters"><span class="material-symbols-outlined">close</span></button>
                 </div>

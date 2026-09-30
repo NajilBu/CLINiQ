@@ -9,7 +9,7 @@ $auditService = file_get_contents($root . '/app/services/AuditLog.php');
 $workCenter = file_get_contents($root . '/app/services/ClinicWorkCenter.php');
 $settings = file_get_contents($root . '/app/services/SystemSettings.php');
 $migration = file_get_contents($root . '/database/migrations/20260923_create_patient_email_center.sql');
-$operationsMigration = file_get_contents($root . '/database/migrations/20260923_email_center_operations.sql');
+$operationsMigration = file_get_contents($root . '/database/migrations/20260923_z_email_center_operations.sql');
 
 if ($service === false || $audit === false || $auditService === false || $workCenter === false || $settings === false || $migration === false || $operationsMigration === false) {
     throw new RuntimeException('Unable to read Patient Email Center sources.');
@@ -39,7 +39,7 @@ foreach ($requiredServiceSymbols as $symbol) {
     }
 }
 
-foreach (['Audit Log', 'Email Center', 'email_action', 'retry', 'cancel', 'resend', 'custom_send'] as $expected) {
+foreach (['Email Center', 'email_action', 'retry', 'cancel', 'resend', 'custom_send', 'Compose patient email', 'Queue diagnostics'] as $expected) {
     if (!str_contains($audit, $expected)) {
         throw new RuntimeException("Email Center UI is missing {$expected}.");
     }
@@ -54,7 +54,7 @@ foreach (['clinic_work_center_reminder_history', 'clinic_work_center_reminder_ca
         throw new RuntimeException("Clinic reminder flow is missing {$expected}.");
     }
 }
-foreach (['clinicReminderReviewModal', 'reminders[', 'previous_deadline', 'Review clinic reminders', 'edited subject', 'plpuhs.dpdns.org', 'clinic_reminder_review_invalid'] as $expected) {
+foreach (['clinicReminderReviewModal', 'reminders[', 'follow_up_number', 'Send APE follow-ups', 'edited subject', 'plpuhs.dpdns.org', 'clinic_reminder_review_invalid'] as $expected) {
     if (!str_contains($audit . $workCenter, $expected)) {
         throw new RuntimeException("Reviewed reminder preview is missing {$expected}.");
     }
@@ -76,12 +76,12 @@ foreach (['patient_person_id', 'event_type', 'dedupe_key', 'automation_key', 're
         throw new RuntimeException("Email queue migration is missing {$expected}.");
     }
 }
-foreach (['patient_email_capacity_state', 'patient_email_capacity_snapshot', 'patient_email_capacity_claim', 'patient_email_is_quota_error', 'CLINIQ_EMAIL_INITIAL_SAFETY_CAPACITY', 'email_deferred_capacity', 'email_capacity_reduced', 'remaining_capacity', 'capacity_source'] as $expected) {
+foreach (['patient_email_capacity_state', 'patient_email_capacity_snapshot', 'patient_email_capacity_claim', 'patient_email_is_quota_error', 'CLINIQ_EMAIL_INITIAL_SAFETY_CAPACITY', 'email_capacity_reduced', 'remaining_capacity', 'capacity_source'] as $expected) {
     if (!str_contains($service, $expected)) {
         throw new RuntimeException("Adaptive email capacity is missing {$expected}.");
     }
 }
-foreach (['</strong> sent', '</strong> remaining', 'Initial safety capacity', 'Observed provider capacity', 'Capacity reached'] as $expected) {
+foreach (['</strong> SMTP accepted', '</strong> remaining', 'Capacity reached'] as $expected) {
     if (!str_contains($audit, $expected)) {
         throw new RuntimeException("Email capacity UI is missing {$expected}.");
     }
@@ -93,6 +93,32 @@ foreach (['appointment_confirmed', 'appointment_reminder', 'appointment_changes'
 }
 if (!str_contains($service, 'cliniq_notification_email($templateKey')) {
     throw new RuntimeException('Email dispatcher is not rendering Settings templates.');
+}
+foreach (["workflow_status NOT IN ('Cleared', 'Inactive')", "'worker_healthy'", 'max(180, $workerInterval * 3)', 'actionable_issues', "q.origin = 'automatic'", "q.status = 'processing' AND q.locked_at < DATE_SUB(NOW(), INTERVAL 15 MINUTE)"] as $expected) {
+    if (!str_contains($service, $expected)) {
+        throw new RuntimeException("Email safety guard is missing {$expected}.");
+    }
+}
+foreach (['$adminEmailActions', 'count($ids) > 50', 'ape_schedule_updates', 'SMTP accepted', '$emailIssueCount = (int) $summary[\'actionable_issues\']', 'rolling 24-hour window', 'Send APE follow-ups', 'Quick filters'] as $expected) {
+    if (!str_contains($audit, $expected)) {
+        throw new RuntimeException("Email Center operation safeguard is missing {$expected}.");
+    }
+}
+foreach (["str_starts_with((string) (\$row['event_type'] ?? ''), 'ape_')", "str_starts_with((string) (\$row['source_type'] ?? ''), 'ape')"] as $expected) {
+    if (!str_contains($service, $expected)) {
+        throw new RuntimeException('Raw APE emails must not be resent outside the reviewed follow-up flow.');
+    }
+}
+foreach (['legacy-email-attention', '>Recent activity</h2>', '<span class="btn btn-sm btn-outline">Open history</span>'] as $removed) {
+    if (str_contains($audit, $removed)) {
+        throw new RuntimeException("Redundant Email Center UI remains: {$removed}.");
+    }
+}
+$queueApi = file_get_contents($root . '/public/api/email-queue.php');
+foreach (["!== 'admin'", "!== 'POST'", '$_POST[\'queue_key\']', '$_POST[\'action\']'] as $expected) {
+    if ($queueApi === false || !str_contains($queueApi, $expected)) {
+        throw new RuntimeException("Email queue API safeguard is missing {$expected}.");
+    }
 }
 foreach (['manual_attempts', 'retry_reason', 'follow_up_note', 'follow_up_assigned_to_person_id', 'follow_up_due_at', 'edited_at', 'delivery_state'] as $expected) {
     if (!str_contains($operationsMigration, $expected)) {

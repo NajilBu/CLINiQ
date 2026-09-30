@@ -89,7 +89,7 @@ try {
             if (!$selected || !clinic_feedback_eligible((string) $selected['status']) || clinic_feedback_already_sent($db, (int) $selected['visit_id'])) {
                 throw new InvalidArgumentException('The selected completed visit is no longer available for feedback.');
             }
-            $_SESSION['feedback_context'] = array_replace($context, ['consented' => true, 'anonymous' => false, 'token' => bin2hex(random_bytes(32))]);
+            $_SESSION['feedback_context'] = array_replace($context, ['consented' => true, 'anonymous' => ($_POST['private_identity'] ?? '') === '1', 'token' => bin2hex(random_bytes(32))]);
             header('Location: ' . app_url('clinic-feedback-survey.php'));
             exit;
         }
@@ -146,7 +146,7 @@ try {
             }
             $generalSubmission = ($context['mode'] ?? '') === 'general';
             $values['consent'] = '1';
-            $values['anonymous'] = $generalSubmission ? '1' : '0';
+            $values['anonymous'] = ($generalSubmission || !empty($context['anonymous'])) ? '1' : '0';
             $submittedVisitId = (int) ($context['visit_id'] ?? 0);
             clinic_feedback_submit($db, $context, $values);
             $portalPersonId = (int) ($_SESSION['patient_person_id'] ?? $_SESSION['student_person_id'] ?? 0);
@@ -265,7 +265,7 @@ $feedbackSteps = $generalFlow
             <form method="post">
                 <input type="hidden" name="csrf" value="<?= e($_SESSION['feedback_csrf']) ?>">
                 <input type="hidden" name="action" value="start_general">
-                <label class="feedback-consent"><input type="checkbox" name="participate" value="1" required><span>Yes, I want to provide clinic feedback.</span></label>
+                <input type="hidden" name="participate" value="1">
                 <p class="feedback-muted">This general feedback is anonymous because no visit or ID number is linked to the response.</p>
                 <label class="feedback-consent"><input type="checkbox" name="consent" value="1" required><span>I have read the RA 10173 privacy notice and consent to the collection and use of my feedback.</span></label>
                 <div class="feedback-privacy">
@@ -305,7 +305,7 @@ $feedbackSteps = $generalFlow
                     </form>
                 <?php endif; ?>
             <?php endforeach; ?>
-            <div class="feedback-actions"><form method="post"><input type="hidden" name="csrf" value="<?= e($_SESSION['feedback_csrf']) ?>"><input type="hidden" name="action" value="reset"><button class="btn btn-outline">Use a different student ID</button></form><a class="btn btn-outline" href="<?= e(app_url('clinic-feedback.php?general=1')) ?>">Give general feedback instead</a></div>
+            <div class="feedback-actions"><form method="post"><input type="hidden" name="csrf" value="<?= e($_SESSION['feedback_csrf']) ?>"><input type="hidden" name="action" value="reset"><button class="btn btn-outline">Use a different student ID</button></form><a class="btn btn-outline" href="<?= e(app_url('clinic-feedback.php?general=1')) ?>">Provide anonymous feedback</a></div>
         </section>
     <?php elseif (!$visit && !$generalActive): ?>
         <form method="post" class="clinic-card feedback-section">
@@ -316,7 +316,7 @@ $feedbackSteps = $generalFlow
             <label class="feedback-field">Student ID<input class="clinic-input<?= $error ? ' input-error' : '' ?>" name="identifier" value="<?= e($identifier) ?>" placeholder="23-00262" data-id-number-format autocomplete="off" aria-describedby="feedback-id-help<?= $error ? ' feedback-error' : '' ?>" <?= $error ? 'aria-invalid="true"' : '' ?> required></label>
             <button class="btn btn-primary" type="submit">Find my visits</button>
         </form>
-        <div class="feedback-actions"><a class="btn btn-outline" href="<?= e(app_url('clinic-feedback.php?general=1')) ?>">Give feedback without a visit or ID number</a></div>
+        <div class="feedback-actions"><a class="btn btn-outline" href="<?= e(app_url('clinic-feedback.php?general=1')) ?>">Provide anonymous feedback</a></div>
     <?php elseif (!$feedbackSurveyRoute): ?>
         <section class="clinic-card feedback-section">
             <span class="feedback-eyebrow">Selected visit</span>
@@ -326,19 +326,24 @@ $feedbackSteps = $generalFlow
         <section class="clinic-card feedback-section">
             <span class="feedback-eyebrow">Before you begin</span>
             <h2>Would you like to provide clinic feedback?</h2>
-            <p class="feedback-muted">Your feedback helps improve clinic services. Participation is voluntary. Feedback linked to a visit is confidential, not anonymous.</p>
+            <p class="feedback-muted">Your feedback helps improve clinic services. Participation is voluntary. Choose whether this response stays linked to this visit or is submitted anonymously.</p>
             <form method="post">
                 <input type="hidden" name="csrf" value="<?= e($_SESSION['feedback_csrf']) ?>">
                 <input type="hidden" name="visit_token" value="<?= e($context['token']) ?>">
-                <input type="hidden" name="action" value="start_linked">
-                <label class="feedback-consent"><input type="checkbox" name="participate" value="1" required><span>Yes, I want to provide clinic feedback.</span></label>
+                <input type="hidden" name="action" value="start_linked" data-feedback-start-action>
+                <label class="feedback-anonymous-toggle">
+                    <span><strong>Keep my identity private</strong><small>Your feedback still completes this visit’s requirement, but staff will not see which visit or student submitted it.</small></span>
+                    <input type="checkbox" name="private_identity" value="1" data-feedback-anonymous-toggle aria-describedby="feedback-privacy-mode">
+                </label>
+                <p class="feedback-anonymous-status" id="feedback-privacy-mode" data-feedback-privacy-mode>Feedback is confidential and linked to the selected visit for clinic follow-up.</p>
+                <input type="hidden" name="participate" value="1">
                 <label class="feedback-consent"><input type="checkbox" name="consent" value="1" required><span>I have read the RA 10173 privacy notice and consent to the collection and use of my feedback.</span></label>
                 <div class="feedback-privacy">
                     <p><strong>Data privacy notice — RA 10173</strong></p>
                     <p>Your feedback is collected under the Data Privacy Act of 2012 (Republic Act No. 10173) to evaluate and improve clinic services.</p>
                     <details><summary>Read the privacy notice and your rights</summary><div><p>We collect your visit details, ratings, comments, and consent record for service quality improvement and clinic reporting. Your response is confidential but linked to this visit for follow-up.</p><p>Access is limited to authorized clinic personnel who need it for evaluation, support, or reporting.</p></div></details>
                 </div>
-                <div class="feedback-actions"><button class="btn btn-primary" type="submit">Submit</button><a class="btn btn-outline" href="<?= e(app_url('clinic-feedback.php?general=1')) ?>">Give general feedback instead</a><a class="btn btn-outline" href="<?= e(app_url('index.php')) ?>">Not now</a></div>
+                <div class="feedback-actions feedback-start-actions"><button class="btn btn-primary" type="submit" data-feedback-start-submit>Continue to feedback <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></button><a class="btn btn-outline" href="<?= e(app_url('index.php')) ?>">Not now</a></div>
             </form>
         </section>
     <?php else: ?>
@@ -350,7 +355,7 @@ $feedbackSteps = $generalFlow
             <div class="feedback-visit"><strong><?= e(date('F j, Y · g:i A', strtotime($visit['visit_datetime']))) ?></strong><br><strong>Reason for visit:</strong> <?= e($visit['visit_purpose'] ?: 'Not recorded') ?><br><strong>Patient concern:</strong> <?= e($visit['chief_complaint'] ?: 'Not recorded') ?><br><span class="badge <?= e(status_badge_class($visit['status'])) ?>"><?= e($visit['status']) ?></span></div>
         </section>
         <?php endif; ?>
-        <form method="post" id="feedback-survey">
+        <form method="post" id="feedback-survey" data-no-discard-warning>
             <input type="hidden" name="csrf" value="<?= e($_SESSION['feedback_csrf']) ?>">
             <input type="hidden" name="action" value="submit">
             <input type="hidden" name="visit_token" value="<?= e($context['token']) ?>">
@@ -386,6 +391,29 @@ $feedbackSteps = $generalFlow
         </form>
     <?php endif; ?>
 </main>
+<?php if (!$feedbackSurveyRoute && $visit): ?>
+<script>
+(() => {
+    const toggle = document.querySelector('[data-feedback-anonymous-toggle]');
+    const action = document.querySelector('[data-feedback-start-action]');
+    const status = document.querySelector('[data-feedback-privacy-mode]');
+    const submit = document.querySelector('[data-feedback-start-submit]');
+    if (!toggle || !action || !status || !submit) return;
+    const syncFeedbackMode = () => {
+        const anonymous = toggle.checked;
+        action.value = 'start_linked';
+        status.textContent = anonymous
+            ? 'Your response remains linked internally to complete this visit’s feedback requirement. Staff feedback screens will not show the visit or your identity.'
+            : 'Feedback is confidential and linked to the selected visit for clinic follow-up.';
+        submit.innerHTML = anonymous
+            ? 'Continue privately <span class="material-symbols-outlined" aria-hidden="true">visibility_off</span>'
+            : 'Continue to feedback <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span>';
+    };
+    toggle.addEventListener('change', syncFeedbackMode);
+    syncFeedbackMode();
+})();
+</script>
+<?php endif; ?>
 <?php if ($feedbackSurveyRoute && ($generalActive || $visit)): ?>
 <style>
     #feedback-leave-dialog { margin: auto; width: min(29rem, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; padding: 1.5rem; border: 1px solid var(--cliniq-outline); border-radius: 1rem; background: var(--cliniq-surface); color: var(--cliniq-foreground); box-shadow: 0 24px 70px rgba(var(--cliniq-shadow-rgb), .22); }

@@ -212,6 +212,7 @@
         }
         let restoringState = Boolean(savedState);
         const autoHeight = grid.classList.contains('cliniq-ag-grid-patient-registry');
+        const contentHeight = grid.dataset.contentHeight === 'true';
         const columnDefs = normalizeColumns(readGridJson(grid, '[data-grid-columns]', []), shouldFitColumns);
 
         function eventTarget(gridEvent) {
@@ -294,6 +295,12 @@
             }
         }
 
+        function fitContentHeight(api) {
+            if (!contentHeight || !api || !api.getDisplayedRowCount) return;
+            const rows = Math.min(pageSize, Math.max(1, api.getDisplayedRowCount()));
+            grid.style.height = `${48 + (rows * rowHeight) + 2}px`;
+        }
+
         function persistGridState(api) {
             if (!stateKey || restoringState || !api) return;
             try {
@@ -316,7 +323,7 @@
                 filter: true,
                 resizable: true,
                 minWidth: shouldFitColumns ? 76 : 130,
-                flex: 1,
+                flex: shouldFitColumns ? 1 : undefined,
                 wrapHeaderText: true,
                 autoHeaderHeight: true
             },
@@ -346,6 +353,7 @@
             onPaginationChanged: (params) => {
                 renderPaginationControls(params.api);
                 refreshRowNumbers(params.api);
+                fitContentHeight(params.api);
                 persistGridState(params.api);
             },
             onSortChanged: (params) => {
@@ -354,6 +362,7 @@
             },
             onFilterChanged: (params) => {
                 refreshRowNumbers(params.api);
+                fitContentHeight(params.api);
                 persistGridState(params.api);
             }
         };
@@ -399,6 +408,7 @@
         persistGridState(api);
         fitColumns(api);
         renderPaginationControls(api);
+        fitContentHeight(api);
 
         if (shouldFitColumns && window.ResizeObserver) {
             const observer = new ResizeObserver(() => fitColumns(api));

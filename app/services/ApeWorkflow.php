@@ -47,9 +47,6 @@ function ape_data_quality_flags(array $record, ?array $requirements = null, ?arr
         if ($status === 'Verified' && (!$latest || (string) ($latest['verification_status'] ?? '') !== 'Verified')) {
             $add('verified_without_archived_file', 'high', 'Verified requirement has no archived file', "{$name} is marked Verified, but its latest stored file is missing or not archived. Clinic review is required.", ['requirement_name' => $name, 'requirement_id' => (int) ($requirement['requirement_id'] ?? 0)]);
         }
-        if ($status === 'Submitted' && $latest && (string) ($latest['verification_status'] ?? '') === 'Pending') {
-            $add('submitted_pending_review', 'info', 'Submitted file awaiting clinic review', "{$name} has a current file waiting for archive review.", ['requirement_name' => $name, 'requirement_id' => (int) ($requirement['requirement_id'] ?? 0)]);
-        }
         if (($record['workflow_status'] ?? '') === 'Cleared' && $group === 'follow_up' && $status !== 'Verified') {
             $add('follow_up_on_cleared_record', 'high', 'Active Follow-up requirement on a cleared record', "{$name} is still active even though this APE record is cleared.", ['requirement_name' => $name, 'requirement_id' => (int) ($requirement['requirement_id'] ?? 0)]);
         }
@@ -327,8 +324,16 @@ function ape_digital_submission_complete(array $record): bool
         && (int) $record['required_unverified_count'] === 0;
 }
 
+function ape_record_is_inactive(array $record): bool
+{
+    return ($record['workflow_status'] ?? '') === 'Inactive';
+}
+
 function ape_record_queue(array $record): string
 {
+    if (ape_record_is_inactive($record)) {
+        return 'inactive';
+    }
     if (($record['workflow_status'] ?? '') === 'Cleared' || ($record['clearance_status'] ?? '') === 'Cleared') {
         return 'completed';
     }
@@ -352,7 +357,10 @@ function ape_record_queue(array $record): string
         return 'examination';
     }
 
-    return ape_digital_submission_complete($record) ? 'examination' : 'digital_submission';
+    // A complete student submission moves to the Examination queue immediately.
+    // Clinic verification remains a staff action within that queue; it must not
+    // keep a scheduled patient in Digital Keeping after every file is submitted.
+    return ape_initial_uploads_present($record) ? 'examination' : 'digital_submission';
 }
 
 /**
@@ -361,6 +369,9 @@ function ape_record_queue(array $record): string
  */
 function ape_can_complete_record(array $record): bool
 {
+    if (ape_record_is_inactive($record)) {
+        return false;
+    }
     if (empty($record['exam_date'])) {
         return false;
     }
@@ -489,7 +500,7 @@ function ape_normalized_action_items(array $record, ?array $requirements = null,
         $items[$item['deduplication_key']] = $item;
     };
 
-    if (($record['workflow_status'] ?? '') === 'Cleared' || ($record['clearance_status'] ?? '') === 'Cleared') {
+    if (ape_record_is_inactive($record) || ($record['workflow_status'] ?? '') === 'Cleared' || ($record['clearance_status'] ?? '') === 'Cleared') {
         return [];
     }
 
@@ -1048,6 +1059,9 @@ function ape_schedule_is_current(array $record, ?DateTimeImmutable $now = null):
 
 function ape_examination_is_available(array $record, ?DateTimeImmutable $now = null): bool
 {
+    if (ape_record_is_inactive($record)) {
+        return false;
+    }
     if (($record['entry_mode'] ?? '') === 'Clinic Manual') {
         return true;
     }
@@ -1095,9 +1109,10 @@ function ape_earliest_upcoming_batch(array $batches, ?DateTimeImmutable $now = n
 
 function ape_initial_upload_phase_is_open(array $record): bool
 {
-    return ($record['entry_mode'] ?? '') === 'Clinic Manual'
+    return !ape_record_is_inactive($record)
+        && (($record['entry_mode'] ?? '') === 'Clinic Manual'
         || !empty($record['exam_date'])
-        || (!empty($record['schedule_batch_id']) && ($record['batch_status'] ?? '') === 'Scheduled');
+        || (!empty($record['schedule_batch_id']) && ($record['batch_status'] ?? '') === 'Scheduled'));
 }
 
 function ape_default_scheduled_batch(array $batches, ?DateTimeImmutable $now = null): ?array
@@ -1314,10 +1329,25 @@ function ape_next_action_card(array $record): array
     }
 
     return match (ape_record_queue($record)) {
-        'examination' => [
-            'title' => ape_examination_is_available($record) ? 'Record the examination' : 'Assign this patient to an APE batch',
-            'body' => ape_examination_is_available($record) ? 'Enter the examination result even if digital documents are incomplete, and check any hard copies the patient brings.' : 'Initial uploads are available after an examination batch is assigned.',
-        ],
+        'examination' => ape_examination_is_available($record)
+            ? [
+                'title' => 'Record the examination',
+                'body' => 'Enter the examination result and check any hard copies the patient brings.',
+            ]
+            : (ape_initial_uploads_present($record) && (int) ($record['required_unverified_count'] ?? 0) > 0
+                ? [
+                    'title' => 'Documents submitted for examination review',
+                    'body' => 'The student submitted every required file. Record the examination when the assigned schedule begins; document review follows the examination.',
+                ]
+                : (!empty($record['schedule_batch_id'])
+                    ? [
+                        'title' => 'Wait for the assigned examination schedule',
+                        'body' => 'The student is assigned to a future APE batch. The examination form opens when that schedule begins.',
+                    ]
+                    : [
+                        'title' => 'Assign this patient to an APE batch',
+                        'body' => 'Initial uploads are available after an examination batch is assigned.',
+                    ])),
         'digital_submission' => !ape_initial_uploads_present($record)
             ? [
                 'title' => empty($record['exam_date']) ? 'Wait for early digital uploads' : 'Wait for the remaining regular uploads',
@@ -1658,7 +1688,9 @@ function ape_fetch_records(string $search = '', ?int $limit = null, ?string $sch
 {
     $sql = ape_record_select_sql();
     $params = [];
-    $conditions = [];
+    // Normal operational queues exclude inactive records; a deliberate staff
+    // search may still retrieve one so a doctor can review or reopen it.
+    $conditions = $search === '' ? ["ar.workflow_status <> 'Inactive'"] : [];
     if ($scheduleBatchId !== null) {
         $conditions[] = "batch.batch_id = ? AND batch.status = 'Scheduled'";
         $params[] = $scheduleBatchId;

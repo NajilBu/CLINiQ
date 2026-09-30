@@ -15,6 +15,12 @@ $notes = trim((string) ($_POST['return_notes'] ?? ''));
 $db = cliniq_inventory_db();
 
 try {
+    if (!in_array($condition, dropdown_options('inventory_return_condition'), true)) {
+        throw new InvalidArgumentException('Select a valid equipment condition.');
+    }
+    if ($condition !== 'Good' && $notes === '') {
+        throw new InvalidArgumentException('Describe the damage or loss before recording this return.');
+    }
     $staffId = cliniq_inventory_staff_person_id();
     $db->beginTransaction();
     $stmt = $db->prepare('

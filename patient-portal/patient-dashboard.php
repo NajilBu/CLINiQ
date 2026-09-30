@@ -251,6 +251,28 @@ $apeRequirementsVerified = $apeRequirementStatus === 'Checked' || in_array($apeS
 $apeRequirementsNeedCorrection = $apeRequirementStatus === 'Needs Correction';
 $apeAllDocumentsUploaded = ape_initial_uploads_present($latestApe ?? []);
 $apeDocumentsAwaitingReview = $apeAllDocumentsUploaded && (int) ($latestApe['required_unverified_count'] ?? 0) > 0;
+$apeFollowUpDocumentsAwaitingReview = (int) ($latestApe['deferred_requirement_count'] ?? 0) > 0
+    && (int) ($latestApe['deferred_document_count'] ?? 0) >= (int) ($latestApe['deferred_requirement_count'] ?? 0)
+    && (int) ($latestApe['deferred_unverified_count'] ?? 0) > 0;
+$apeDocumentsAwaitingClinicReview = $apeDocumentsAwaitingReview || $apeFollowUpDocumentsAwaitingReview;
+$apeExaminationActionReady = !$apeExamCompleted && ape_examination_is_available($latestApe ?? []);
+$apePhysicalExaminationScheduled = $hasScheduledApeBatch && !$apeExamCompleted;
+$apeReviewStatusTitle = $apePhysicalExaminationScheduled
+    ? 'Documents submitted — attend your physical examination'
+    : 'Documents submitted for clinic review';
+$apeReviewStatusCopy = $apePhysicalExaminationScheduled
+    ? 'Your documents are with the clinic for review. Attend your physical examination at the school clinic on ' . $scheduledApeBatchLabel . '. You do not need to upload anything unless the clinic returns a file for correction.'
+    : 'Your documents are with the clinic. No upload is needed unless a file is returned for correction.';
+if ($apeRequirementsNeedCorrection && $latestApe) {
+    $apeRequirementsNeedCorrection = false;
+    foreach (ape_requirements_for_record((int) $latestApe['ape_id']) as $requirement) {
+        $latestDocument = $requirement['_latest_document'] ?? null;
+        if (!$latestDocument || ($latestDocument['verification_status'] ?? '') === 'Needs Correction') {
+            $apeRequirementsNeedCorrection = true;
+            break;
+        }
+    }
+}
 $apeDocumentsNeedCorrection = ($latestApe['verification_status'] ?? '') === 'Needs Correction';
 $clinicNotes = [];
 if (!$latestApe) {
@@ -317,8 +339,8 @@ $apeActionTitle = match (true) {
     $apeQueue === 'follow_up' && !ape_document_follow_up($latestApe) && !ape_deferred_submission_complete($latestApe) => 'Submit follow-up documents for archive review',
     $apeRequirementsNeedCorrection => 'Return corrected hard-copy requirements',
     $apeStatus === 'Follow-up Required' => 'Complete the required follow-up',
-    $apeQueue === 'examination' => ape_examination_is_available($latestApe ?? []) ? 'Attend examination' : 'Wait for your APE schedule',
-    $apeDocumentsAwaitingReview => 'Wait for clinic document review',
+    $apeQueue === 'examination' => $apeExaminationActionReady ? 'Attend examination' : 'Wait for your APE schedule',
+    $apeDocumentsAwaitingClinicReview => 'Wait for clinic document review',
     $apeStatus === 'Reviewed' => 'Wait for the final clinical decision',
     default => 'Upload verified APE documents',
 };
@@ -337,10 +359,10 @@ $apeActionCopy = match (true) {
     $apeQueue === 'follow_up' && !ape_document_follow_up($latestApe) && !ape_deferred_submission_complete($latestApe) => 'The initial group is archived. Upload the returned documents by their assigned due date and wait for clinic archive review.',
     $apeRequirementsNeedCorrection => $apeNote ?: 'Return the corrected hard-copy requirements requested by the clinic.',
     $apeStatus === 'Follow-up Required' => $apeNote ?: 'Complete the referral or other follow-up requested by the clinic.',
-    $apeQueue === 'examination' => ape_examination_is_available($latestApe ?? [])
+    $apeQueue === 'examination' => $apeExaminationActionReady
         ? "Attend {$latestApe['batch_name']} now and bring any available hard-copy requirements."
         : 'Continue early digital uploads while waiting for the clinic to assign or open your examination schedule.',
-    $apeDocumentsAwaitingReview => 'Your documents are waiting for clinic archive review.',
+    $apeDocumentsAwaitingClinicReview => 'Your documents are waiting for clinic archive review.',
     $apeStatus === 'Reviewed' => $apeNote ?: 'Your examination and documents are complete and awaiting the clinic\'s final decision.',
     default => $apeNote ?: ($latestApe ? 'Complete the current APE step in your APE status page.' : 'Start your APE record with the clinic.'),
 };
@@ -358,7 +380,7 @@ $apePhaseStatus = match (true) {
     $apeProgress['active_step'] === 4 => 'Follow-up Required',
     $apeRequirementsNeedCorrection => 'Correction Needed',
     $apeStatus === 'Follow-up Required' => 'Follow-up Required',
-    $apeQueue === 'digital_submission' && $apeDocumentsAwaitingReview => 'Under Clinic Review',
+    $apeDocumentsAwaitingClinicReview => 'Under Clinic Review',
     $apeQueue === 'examination' && $hasScheduledApeBatch => 'Scheduled',
     $apeQueue === 'examination' => 'Waiting for Schedule',
     default => $apeStatus,
@@ -373,7 +395,7 @@ $apeActionStatus = match (true) {
     $apeProgress['active_step'] === 4 => 'Follow-up Required',
     $apeRequirementsNeedCorrection => 'Needs Correction',
     $apeQueue === 'digital_submission' && !$apeAllDocumentsUploaded => 'Upload Required',
-    $apeQueue === 'digital_submission' && $apeDocumentsAwaitingReview => 'Under Review',
+    $apeDocumentsAwaitingClinicReview => 'Under Review',
     $apeQueue === 'digital_submission' => 'Documents Complete',
     $apeQueue === 'examination' && $hasScheduledApeBatch => 'Scheduled',
     $apeQueue === 'examination' => 'Waiting for Schedule',
@@ -393,9 +415,6 @@ $apeActionBadgeClass = match ($apeActionStatus) {
     default => 'student-badge-warning',
 };
 $passportMissing = [];
-if (empty($profile['blood_type']) || $profile['blood_type'] === 'Unknown') {
-    $passportMissing[] = 'blood type';
-}
 if (empty($profile['allergies'])) {
     $passportMissing[] = 'allergy notes';
 }
@@ -408,10 +427,13 @@ if (empty($profile['emergency_instructions'])) {
 $passportComplete = empty($passportMissing);
 $apeNeedsAction = $latestApe
     && ($latestApe['clearance_status'] ?? 'Pending') !== 'Cleared'
+    && !$apeDocumentsAwaitingClinicReview
     && (
         $apeDocumentsNeedCorrection
         || $apeRequirementsNeedCorrection
-        || in_array((int) $apeProgress['active_step'], [1, 2, 4], true)
+        || (int) $apeProgress['active_step'] === 1
+        || $apeExaminationActionReady
+        || (int) $apeProgress['active_step'] === 4
     );
 $passportRequired = $isOfficialAccess && !$passportComplete;
 $requiredActionCount = ($passportRequired ? 1 : 0) + ($apeNeedsAction ? 1 : 0) + ($feedbackRequired ? 1 : 0);
@@ -419,8 +441,8 @@ $dashboardTasks = [];
 if ($passportRequired) {
     $dashboardTasks[] = [
         'key' => 'passport', 'icon' => 'emergency', 'tone' => 'danger',
-        'kicker' => 'Urgent profile action', 'title' => 'Complete your Emergency Health Passport',
-        'short_copy' => 'Complete your missing emergency details.', 'href' => 'patient-passport.php', 'button' => 'Complete Passport',
+        'kicker' => 'Emergency profile incomplete', 'title' => 'Complete your Emergency Health Passport',
+        'short_copy' => 'Complete your missing emergency details.', 'href' => 'patient-passport.php?focus=emergency', 'button' => 'Complete Passport',
     ];
 }
 if ($apeNeedsAction) {
@@ -524,7 +546,7 @@ render_student_header('Dashboard', 'dashboard');
 <?php if ($hasScheduledApeBatch): ?>
     <a href="patient-ape-status.php" class="student-dashboard-batch-summary text-decoration-none">
         <span class="student-icon-box"><span class="material-symbols-outlined" aria-hidden="true">event_available</span></span>
-        <strong>Current APE batch</strong>
+                    <strong>Scheduled physical examination</strong>
         <span class="student-dashboard-batch-time"><?= student_e($scheduledApeBatchLabel) ?></span>
     </a>
 <?php endif; ?>
@@ -543,7 +565,7 @@ render_student_header('Dashboard', 'dashboard');
         <div>
             <p class="student-eyebrow student-eyebrow-compact"><span class="student-dashboard-desktop-copy">Your next steps</span><span class="student-dashboard-mobile-copy">Your next step</span></p>
             <h2><span class="student-dashboard-desktop-copy">Start here to keep your clinic profile ready</span><span class="student-dashboard-mobile-copy">Keep your clinic profile ready</span></h2>
-            <p class="student-required-actions-copy"><span class="student-dashboard-desktop-copy">Complete the items below in order. The portal will unlock the next action when it is ready.</span><span class="student-dashboard-mobile-copy">Complete the highlighted task first.</span></p>
+            <p class="student-required-actions-copy"><span class="student-dashboard-desktop-copy">Complete the highlighted task when you are ready. Some clinic actions may need staff review before they are complete.</span><span class="student-dashboard-mobile-copy">Complete the highlighted task when you are ready.</span></p>
         </div>
         <span class="student-badge <?= $requiredActionCount > 0 ? 'student-badge-warning' : 'student-badge-success' ?>">
             <span class="student-dashboard-desktop-copy"><?= (int) $requiredActionCount ?> Pending</span>
@@ -560,12 +582,12 @@ render_student_header('Dashboard', 'dashboard');
                         <span class="material-symbols-outlined">emergency</span>
                     </span>
                     <div>
-                        <p class="student-action-kicker">Urgent profile action</p>
+                        <p class="student-action-kicker">Emergency profile incomplete</p>
                         <h2>Complete your Emergency Health Passport</h2>
                         <p>Add <?= student_e(implode(', ', $passportMissing)) ?> before an incident happens.</p>
                     </div>
                 </div>
-                <a href="patient-passport.php" class="student-button-danger text-decoration-none">
+                <a href="patient-passport.php?focus=emergency" class="student-button-danger text-decoration-none">
                     Complete Passport
                     <span class="material-symbols-outlined">arrow_forward</span>
                 </a>
@@ -658,7 +680,7 @@ render_student_header('Dashboard', 'dashboard');
         <?php endif; ?>
     </div>
 </section>
-<?php else: ?>
+<?php elseif (!$apeDocumentsAwaitingClinicReview): ?>
 <div class="student-required-action-list student-dashboard-ready-action-list mb-4" aria-label="Student profile status">
     <article class="student-action-card">
         <div class="flex items-start gap-4">
@@ -673,6 +695,21 @@ render_student_header('Dashboard', 'dashboard');
         </div>
     </article>
 </div>
+<?php endif; ?>
+
+<?php if ($apeDocumentsAwaitingClinicReview && !$apeNeedsAction): ?>
+<section class="student-required-action-list student-dashboard-ready-action-list mb-4" aria-label="APE review status">
+    <article class="student-action-card">
+        <div class="flex items-start gap-4">
+            <span class="student-icon-box"><span class="material-symbols-outlined">hourglass_top</span></span>
+            <div>
+                <p class="student-action-kicker student-action-kicker-primary">APE status</p>
+                <h2><?= student_e($apeReviewStatusTitle) ?></h2>
+                <p><?= student_e($apeReviewStatusCopy) ?></p>
+            </div>
+        </div>
+    </article>
+</section>
 <?php endif; ?>
 
 <section class="student-dashboard-mobile-overview" aria-label="Dashboard summaries">

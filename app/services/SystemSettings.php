@@ -527,7 +527,6 @@ function default_ape_required_documents(): array
         'UHS Consent Form',
         'UHS Medical Record',
         'UHS Dental Record',
-        'Referral Form',
     ];
 }
 
@@ -544,6 +543,9 @@ function normalize_ape_required_documents(array $documents): array
         $name = trim((string) preg_replace('/\s+/u', ' ', strip_tags((string) $document)));
         if ($name === '') {
             continue;
+        }
+        if (mb_strtolower($name) === 'referral form') {
+            throw new InvalidArgumentException('Referral Form is created by the clinic when an examination results in a referral; do not add it to the standard APE upload checklist.');
         }
         if (mb_strlen($name) > 120) {
             throw new InvalidArgumentException('Each required document name must be 120 characters or fewer.');
@@ -1420,6 +1422,21 @@ function cliniq_mail_template_definitions(): array
                 'message' => 'Your clinic appointment has been cancelled or changed. Please log in to review the latest appointment information and next steps.',
                 'button_label' => 'Review Appointment',
                 'footer' => 'Contact {{clinic_name}} if you need help arranging a new appointment.',
+            ],
+        ],
+        'ape_schedule_updated' => [
+            'label' => 'APE Schedule Updates',
+            'description' => 'Sent when the clinic assigns, changes, or cancels an APE examination schedule.',
+            'icon' => 'event_available',
+            'action_hint' => 'The button opens the APE status page.',
+            'allowed_placeholders' => ['{{patient_name}}', '{{clinic_name}}'],
+            'required_placeholders' => ['{{patient_name}}', '{{clinic_name}}'],
+            'default' => [
+                'subject' => '[{{clinic_name}}] Your APE schedule was updated',
+                'heading' => 'Your APE schedule was updated, {{patient_name}}',
+                'message' => 'The clinic has updated your Annual Physical Examination schedule. Please log in to review the latest date, time, and next steps.',
+                'button_label' => 'View APE Status',
+                'footer' => 'Contact {{clinic_name}} if you need assistance.',
             ],
         ],
         'ape_document_correction' => [

@@ -53,5 +53,10 @@ if (!str_contains($staffUpdate, 'appointment_status_transition_is_allowed')
     || !str_contains($patientBooking, 'Appointments may begin up to 15 minutes late')) {
     throw new RuntimeException('Appointment workflow safeguards are not wired into the staff and patient pages.');
 }
+if (!str_contains($patientBooking, "window.confirm('Cancel this appointment? Your reason will be shared with the clinic.')")
+    || !str_contains($patientBooking, 'How availability works')
+    || !str_contains($patientBooking, 'Choose a purpose')) {
+    throw new RuntimeException('Patient appointment cancellation and compact layout guidance must remain clear.');
+}
 
 echo "Appointment workflow guard checks passed. No database writes.\n";

@@ -288,7 +288,7 @@ render_clinic_command_header(
                             </option>
                         <?php endforeach; ?>
                     </select>
-                    <p class="text-[11px] font-bold text-slate-500 mt-1" id="program_or_department_hint">Select an active program from the database.</p>
+                    <p class="text-[11px] font-bold text-slate-500 mt-1" id="program_or_department_hint">Select an active program.</p>
                 </div>
                 <div>
                     <label class="clinic-label" id="year_level_or_employment_type_label" for="year_level_or_employment_type">Year Level</label>
@@ -370,7 +370,7 @@ render_clinic_command_header(
             <button class="btn btn-primary w-full" id="bulkImportButton" disabled
                 data-confirm-submit data-confirm-type="primary"
                 data-confirm-title="Import inactive patient accounts?"
-                data-confirm-message="Valid Excel rows will be inserted into the new account database."
+                data-confirm-message="Valid rows will create new patient accounts."
                 data-confirm-toast="Importing patient accounts...">
                 <span class="material-symbols-outlined">upload_file</span>
                 Import Valid Rows
@@ -903,7 +903,7 @@ const accountFieldHints = {
         idInputMode: 'text',
         programLabel: 'Program Code',
         programPlaceholder: 'Select program',
-        programHint: 'Select an active program from the database.',
+        programHint: 'Select an active program.',
         yearLabel: 'Year Level',
         yearPlaceholder: '3',
         yearHint: 'Choose 1 to 4.',
@@ -919,7 +919,7 @@ const accountFieldHints = {
         idInputMode: 'numeric',
         programLabel: 'Department',
         programPlaceholder: 'Select department',
-        programHint: 'Select an active department from the database.',
+        programHint: 'Select an active department.',
         yearLabel: 'Employment Type',
         yearPlaceholder: 'Full-time',
         yearHint: 'Choose Full-time or Part-time.',
@@ -935,7 +935,7 @@ const accountFieldHints = {
         idInputMode: 'numeric',
         programLabel: 'Department',
         programPlaceholder: 'Select department',
-        programHint: 'Select an active department from the database.',
+        programHint: 'Select an active department.',
         yearLabel: 'Employment Type',
         yearPlaceholder: 'Full-time',
         yearHint: 'Example: Full-time',

@@ -521,7 +521,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($sent) {
                 flash_message('success', "Test email sent to {$toEmail}. Check the inbox.");
             } else {
-                flash_message('error', 'Failed to send test email. Check your SMTP credentials and server error log.');
+                flash_message('error', 'The test email could not be sent. Check the email sign-in details and try again.');
             }
         }
         header('Location: index.php?tab=email');
@@ -702,6 +702,7 @@ $apeCycleProgress = $apeCurrentCycle['progress'] ?? [
     'follow_up' => 0,
     'compliance_percent' => 0,
 ];
+$apeCycleUnclearedCount = max(0, (int) $apeCycleProgress['total'] - (int) $apeCycleProgress['cleared']);
 $apeRequiredDocuments = ape_required_documents();
 $hasActiveApeCycle = ($apeCurrentCycle['status'] ?? '') === 'Active';
 $canStartNewSchoolYear = can_start_new_school_year($apeCurrentCycle);
@@ -1584,7 +1585,7 @@ render_clinic_command_header(
                             </div>
                             <div>
                                 <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Required APE Documents</h3>
-                                <p class="settings-help mb-0">Set the checklist used for new APE records. During an active cycle, saving also updates only patient checklists that have not been saved, reviewed, or uploaded.</p>
+                                <p class="settings-help mb-0">Set the checklist used for new APE records. During an active cycle, saving also updates only patient checklists that have not been saved, reviewed, or uploaded. Referral forms are clinic-managed and created only when an examination results in a referral.</p>
                             </div>
                         </div>
 
@@ -1635,7 +1636,7 @@ render_clinic_command_header(
                                     <form method="post" data-no-ajax="true">
                                         <input type="hidden" name="action" value="close_ape_cycle">
                                         <input type="hidden" name="ape_cycle_id" value="<?= (int) $apeCurrentCycle['ape_cycle_id'] ?>">
-                                        <button class="btn btn-secondary justify-center" data-confirm-submit data-confirm-type="primary" data-confirm-title="Close this APE cycle?" data-confirm-message="No new work should be added after closing. Existing APE records remain available." data-confirm-toast="Closing APE cycle...">
+                                        <button class="btn btn-secondary justify-center" data-confirm-submit data-confirm-type="primary" data-confirm-title="Close this APE cycle?" data-confirm-message="<?= e(sprintf('%d of %d record(s) are not cleared. Closing prevents new work, but existing records remain available for review.', $apeCycleUnclearedCount, (int) $apeCycleProgress['total'])) ?>" data-confirm-toast="Closing APE cycle...">
                                             <span class="material-symbols-outlined text-[18px]">event_busy</span>
                                             Close Cycle
                                         </button>
@@ -1871,7 +1872,7 @@ render_clinic_command_header(
                             <div>
                                 <p class="clinic-label mb-1 text-[#3f7d52]">Data protection</p>
                                 <h2 class="font-headline text-2xl font-extrabold text-[#17261d] mb-1">System Backup</h2>
-                                <p class="max-w-2xl text-sm font-semibold leading-6 text-slate-600 mb-0">Internal database and document snapshots with automatic integrity verification.</p>
+                                <p class="max-w-2xl text-sm font-semibold leading-6 text-slate-600 mb-0">A protected copy of clinic records and uploaded documents, checked automatically.</p>
                             </div>
                         </div>
                         <?php
@@ -1978,13 +1979,13 @@ render_clinic_command_header(
                         <span class="material-symbols-outlined rounded-xl bg-[#e8f2ea] p-2 text-primary">verified</span>
                         <div>
                             <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Backup Coverage</h3>
-                            <p class="settings-help mb-0">The database and uploaded files are captured and verified together.</p>
+                            <p class="settings-help mb-0">Clinic records and uploaded files are copied and checked together.</p>
                         </div>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div class="rounded-xl border border-outline-variant bg-[var(--cliniq-surface-low)] p-4 flex items-start gap-3">
-                            <span class="material-symbols-outlined text-primary">database</span>
-                            <div><strong class="text-sm block">CLINiQ database</strong><span class="settings-help">Accounts, patient records, visits, appointments, APE, inventory, and settings.</span></div>
+                            <span class="material-symbols-outlined text-primary">folder_copy</span>
+                            <div><strong class="text-sm block">Clinic records</strong><span class="settings-help">Accounts, patient records, visits, appointments, APE, inventory, and settings.</span></div>
                         </div>
                         <div class="rounded-xl border border-outline-variant bg-[var(--cliniq-surface-low)] p-4 flex items-start gap-3">
                             <span class="material-symbols-outlined text-primary">folder_copy</span>
@@ -2026,7 +2027,7 @@ render_clinic_command_header(
                 <section class="settings-section space-y-4">
                     <div>
                         <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Recent Backups</h3>
-                        <p class="settings-help mb-0">Every completed snapshot includes a checksum manifest. Database credentials are never included.</p>
+                        <p class="settings-help mb-0">Every completed copy is checked for completeness. Sign-in details are never included.</p>
                     </div>
                     <?php if (!$backupHistory): ?>
                         <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-5 text-sm font-bold text-slate-500">No completed backups yet.</div>
@@ -2075,7 +2076,7 @@ render_clinic_command_header(
 
                 <div class="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 flex items-start gap-3 text-blue-900">
                     <span class="material-symbols-outlined">shield</span>
-                    <p class="text-sm font-bold mb-0">Internal backups protect against database corruption and accidental deletion, but not failure or loss of this computer's drive.</p>
+                    <p class="text-sm font-bold mb-0">Internal backups protect against damaged or accidentally deleted clinic records, but not failure or loss of this computer’s drive.</p>
                 </div>
             </div>
 
@@ -2088,8 +2089,8 @@ render_clinic_command_header(
                     <div class="flex items-start gap-3">
                         <span class="material-symbols-outlined mt-0.5 rounded-xl bg-[#e8f2ea] p-2 text-[22px] text-primary">dns</span>
                         <div>
-                            <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Clinic Server</h3>
-                            <p class="settings-help mb-0">Designate the Electron desktop computer that hosts CLINiQ and display its local network address for staff setup.</p>
+                            <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Clinic Computer</h3>
+                            <p class="settings-help mb-0">Choose the clinic computer that staff use to open CLINiQ on the local network.</p>
                         </div>
                     </div>
                     <form id="clinicServerForm" method="post" data-no-ajax="true">
@@ -2100,18 +2101,18 @@ render_clinic_command_header(
                     <div class="rounded-xl border <?= !empty($clinicServerSettings['configured']) ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-slate-50' ?> p-4">
                         <?php if (!empty($clinicServerSettings['configured'])): ?>
                             <p class="mb-1 text-sm font-bold text-[#17261d]"><?= e((string) $clinicServerSettings['hostname']) ?> · <?= e((string) $clinicServerSettings['local_ip']) ?></p>
-                            <p class="mb-0 text-sm text-slate-600">Staff address: <code>http://<?= e((string) $clinicServerSettings['local_ip']) ?>:8081/public/</code></p>
+                            <p class="mb-0 text-sm text-slate-600">Clinic address: <code>http://<?= e((string) $clinicServerSettings['local_ip']) ?>:8081/public/</code></p>
                         <?php else: ?>
-                            <p class="mb-0 text-sm text-slate-600">No clinic server has been designated yet.</p>
+                            <p class="mb-0 text-sm text-slate-600">No clinic computer has been selected yet.</p>
                         <?php endif; ?>
                     </div>
                     <div class="flex flex-wrap justify-end gap-2">
                         <?php if (!empty($clinicServerSettings['configured'])): ?>
                             <form method="post" data-no-ajax="true">
                                 <input type="hidden" name="action" value="undesignate_clinic_server">
-                                <button class="btn btn-danger justify-center" <?= ($user['role'] ?? '') !== 'admin' ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="danger" data-confirm-title="Undesignate clinic server?" data-confirm-message="This removes the saved server name and IP address. It does not stop CLINiQ or delete any data." data-confirm-toast="Removing server designation...">
+                                <button class="btn btn-danger justify-center" <?= ($user['role'] ?? '') !== 'admin' ? 'disabled' : '' ?> data-confirm-submit data-confirm-type="danger" data-confirm-title="Remove this clinic computer?" data-confirm-message="This removes this computer’s saved name and address. CLINiQ will keep running and no records will be deleted." data-confirm-toast="Removing clinic computer...">
                                     <span class="material-symbols-outlined text-[18px]">desktop_access_disabled</span>
-                                    Undesignate Server
+                                    Remove Clinic Computer
                                 </button>
                             </form>
                         <?php else: ?>
@@ -2121,7 +2122,7 @@ render_clinic_command_header(
                             </button>
                         <?php endif; ?>
                     </div>
-                    <p class="settings-help mb-0">This must be done from the CLINiQ Electron desktop app on the intended server. The saved address is for the local clinic network; firewall and fixed-IP setup are completed in Step 3.</p>
+                    <p class="settings-help mb-0">Do this from the clinic computer you want staff to use. The saved address works on the clinic’s local network.</p>
                 </section>
                 <section class="settings-section flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>

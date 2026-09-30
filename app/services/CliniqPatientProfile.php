@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../helpers/data_normalization.php';
 require_once __DIR__ . '/../helpers/emergency_contact.php';
+require_once __DIR__ . '/AuditLog.php';
 
 function cliniq_patient_profile_db(): PDO
 {
@@ -26,10 +27,15 @@ function cliniq_patient_profile_select(): string
             pt.emergency_instructions,
             pt.guardian_or_contact_name AS guardian_name,
             pt.guardian_or_contact_number AS guardian_contact,
+            pt.guardian_relationship,
+            pt.secondary_contact_number AS secondary_contact,
             pt.emergency_token,
             pt.token_enabled,
+            a.id AS account_id,
             a.email,
             a.account_status,
+            a.status_reason,
+            pt.access_status,
             CASE
                 WHEN s.person_id IS NOT NULL THEN 'Student'
                 WHEN se.person_id IS NOT NULL THEN se.role_classification
@@ -170,7 +176,7 @@ function cliniq_patient_profile_valid_date(string $value): bool
     return $date !== false && $date->format('Y-m-d') === $value;
 }
 
-function cliniq_patient_profile_update(int $personId, array $data): array
+function cliniq_patient_profile_update(int $personId, array $data, ?int $actorPersonId = null, bool $canUpdateEmail = false): array
 {
     $profile = cliniq_patient_profile_find($personId);
     if (!$profile) {
@@ -185,15 +191,14 @@ function cliniq_patient_profile_update(int $personId, array $data): array
     $sex = trim((string) ($data['sex'] ?? ''));
     $bloodType = cliniq_normalize_blood_type($data['blood_type'] ?? '');
     $guardianName = cliniq_normalize_person_name($data['guardian_name'] ?? '');
-    $guardianRaw = cliniq_normalize_whitespace($data['guardian_contact'] ?? '');
-    $guardianContact = $guardianRaw === '' ? '' : cliniq_normalize_phone($guardianRaw);
+    $guardianRelationship = trim((string) ($data['guardian_relationship'] ?? ''));
+    $guardianRaw = trim((string) ($data['guardian_contact'] ?? ''));
+    $secondaryRaw = trim((string) ($data['secondary_contact'] ?? ''));
     $emergencyInstructions = cliniq_normalize_free_text($data['emergency_instructions'] ?? '');
+    $email = $canUpdateEmail ? strtolower(trim((string) ($data['email'] ?? ''))) : trim((string) ($profile['email'] ?? ''));
 
     if ($idNumber === '' || $firstName === '' || $lastName === '') {
         throw new InvalidArgumentException('ID number, first name, and last name are required.');
-    }
-    if ($guardianRaw !== '' && $guardianContact === null) {
-        throw new InvalidArgumentException('Enter a valid Philippine mobile number for the guardian or contact.');
     }
     if (!preg_match('/^[A-Z0-9][A-Z0-9 _\/-]{0,49}$/', $idNumber)) {
         throw new InvalidArgumentException('Enter a valid ID number.');
@@ -207,12 +212,40 @@ function cliniq_patient_profile_update(int $personId, array $data): array
     if (strlen($bloodType) > 10) {
         throw new InvalidArgumentException('Blood type must not exceed 10 characters.');
     }
+    if ($email !== '' && (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 254)) {
+        throw new InvalidArgumentException('Enter a valid email address.');
+    }
+    if ($canUpdateEmail && (int) ($profile['account_id'] ?? 0) < 1) {
+        throw new InvalidArgumentException('This patient does not have a portal account to update.');
+    }
+
+    $guardianContact = '';
+    $secondaryContact = '';
+    if ($guardianName !== '' || $guardianRelationship !== '' || $guardianRaw !== '' || $secondaryRaw !== '') {
+        $contact = cliniq_validate_emergency_contact([
+            'guardian_name' => $guardianName,
+            'relationship' => $guardianRelationship,
+            'primary_contact' => $guardianRaw,
+            'secondary_contact' => $secondaryRaw,
+        ], dropdown_options('guardian_relationship'));
+        $guardianName = $contact['guardian_name'];
+        $guardianRelationship = $contact['relationship'];
+        $guardianContact = $contact['primary_contact'];
+        $secondaryContact = (string) ($contact['secondary_contact'] ?? '');
+    }
 
     $db = cliniq_patient_profile_db();
     $duplicateStmt = $db->prepare('SELECT id FROM people WHERE id_number = ? AND id <> ? LIMIT 1');
     $duplicateStmt->execute([$idNumber, $personId]);
     if ($duplicateStmt->fetchColumn()) {
         throw new InvalidArgumentException('That ID number already belongs to another account.');
+    }
+    if ($canUpdateEmail && $email !== '') {
+        $duplicateEmailStmt = $db->prepare('SELECT person_id FROM accounts WHERE LOWER(email) = ? AND person_id <> ? LIMIT 1');
+        $duplicateEmailStmt->execute([$email, $personId]);
+        if ($duplicateEmailStmt->fetchColumn()) {
+            throw new InvalidArgumentException('That email address already belongs to another account.');
+        }
     }
 
     try {
@@ -233,15 +266,25 @@ function cliniq_patient_profile_update(int $personId, array $data): array
         $db->prepare('
             UPDATE patients
             SET blood_type = ?, emergency_instructions = ?,
-                guardian_or_contact_name = ?, guardian_or_contact_number = ?
+                guardian_or_contact_name = ?, guardian_or_contact_number = ?,
+                guardian_relationship = ?, secondary_contact_number = ?
             WHERE person_id = ?
         ')->execute([
             $bloodType !== '' ? $bloodType : null,
             $emergencyInstructions !== '' ? $emergencyInstructions : null,
             $guardianName !== '' ? $guardianName : null,
             $guardianContact !== '' ? $guardianContact : null,
+            $guardianRelationship !== '' ? $guardianRelationship : null,
+            $secondaryContact !== '' ? $secondaryContact : null,
             $personId,
         ]);
+
+        if ($canUpdateEmail) {
+            $db->prepare('UPDATE accounts SET email = ? WHERE person_id = ?')->execute([
+                $email !== '' ? $email : null,
+                $personId,
+            ]);
+        }
 
         if ($profile['patient_type'] === 'Student') {
             $programId = (int) ($data['program_id'] ?? 0);
@@ -255,6 +298,12 @@ function cliniq_patient_profile_update(int $personId, array $data): array
             $programStmt->execute([$programId]);
             if (!$programStmt->fetchColumn()) {
                 throw new InvalidArgumentException('The selected program is not active.');
+            }
+            if ($academicYear !== '') {
+                if (!preg_match('/^(\d{4})-(\d{4})$/', $academicYear, $years)
+                    || (int) $years[2] !== (int) $years[1] + 1) {
+                    throw new InvalidArgumentException('Enter a consecutive school year using the format YYYY-YYYY.');
+                }
             }
             $db->prepare('
                 UPDATE students
@@ -299,6 +348,42 @@ function cliniq_patient_profile_update(int $personId, array $data): array
             $db->rollBack();
         }
         throw $e;
+    }
+
+    $changedFields = [];
+    $changed = static fn(mixed $before, mixed $after): bool => trim((string) $before) !== trim((string) $after);
+    if ($changed($profile['id_number'] ?? '', $idNumber)
+        || $changed($profile['first_name'] ?? '', $firstName)
+        || $changed($profile['middle_name'] ?? '', $middleName)
+        || $changed($profile['last_name'] ?? '', $lastName)
+        || $changed($profile['birthdate'] ?? '', $birthdate)
+        || $changed($profile['sex'] ?? '', $sex)) {
+        $changedFields[] = 'identity';
+    }
+    if ($changed($profile['blood_type'] ?? '', $bloodType)) $changedFields[] = 'blood_type';
+    if ($changed($profile['guardian_name'] ?? '', $guardianName)
+        || $changed($profile['guardian_contact'] ?? '', $guardianContact)
+        || $changed($profile['guardian_relationship'] ?? '', $guardianRelationship)
+        || $changed($profile['secondary_contact'] ?? '', $secondaryContact)) {
+        $changedFields[] = 'emergency_contacts';
+    }
+    if ($changed($profile['emergency_instructions'] ?? '', $emergencyInstructions)) $changedFields[] = 'emergency_instructions';
+    if ($canUpdateEmail && $changed($profile['email'] ?? '', $email)) $changedFields[] = 'portal_email';
+    if ($profile['patient_type'] === 'Student'
+        && ($changed($profile['program_id'] ?? '', $data['program_id'] ?? '')
+            || $changed($profile['year_level'] ?? '', $data['year_level'] ?? '')
+            || $changed($profile['section'] ?? '', $data['section'] ?? '')
+            || $changed($profile['academic_year'] ?? '', $data['academic_year'] ?? ''))) {
+        $changedFields[] = 'student_enrollment';
+    }
+    if (in_array($profile['patient_type'], ['Faculty', 'Non-Teaching Personnel', 'Clinic Staff'], true)
+        && ($changed($profile['employee_department_id'] ?? $profile['staff_department_id'] ?? '', $data['department_id'] ?? '')
+            || $changed($profile['employment_type'] ?? '', $data['employment_type'] ?? '')
+            || $changed($profile['employee_position_title'] ?? $profile['staff_position_title'] ?? '', $data['position_title'] ?? ''))) {
+        $changedFields[] = 'work_assignment';
+    }
+    if ($changedFields !== []) {
+        audit_log_event('patients', 'patient_profile_updated', $actorPersonId, 'staff', 'patient', $personId, ['fields' => $changedFields]);
     }
 
     return cliniq_patient_profile_find($personId) ?? $profile;

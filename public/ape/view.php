@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/ApeWorkflow.php';
+require_once __DIR__ . '/../../app/services/ApeCycleService.php';
 require_once __DIR__ . '/../../app/services/PatientNotification.php';
 require_once __DIR__ . '/../../app/services/PatientEmail.php';
 require_once __DIR__ . '/../../app/services/PatientAccessStatus.php';
@@ -23,6 +24,9 @@ function ape_follow_up_due_date_from_post(): ?string
         $parsed = DateTimeImmutable::createFromFormat('Y-m-d', $dueDate);
         if (!$parsed || $parsed->format('Y-m-d') !== $dueDate) {
             throw new InvalidArgumentException('Select a valid follow-up due date.');
+        }
+        if ($dueDate < date('Y-m-d')) {
+            throw new InvalidArgumentException('The follow-up due date cannot be in the past.');
         }
         return $dueDate;
     }
@@ -93,9 +97,11 @@ function render_ape_final_decision_actions(array $record, bool $canRecordApeExam
                     </div>
                 </div>
                 <div>
-                    <label class="clinic-label" for="apeFollowUpNotes">Clinic plan</label>
-                    <textarea class="clinic-textarea" id="apeFollowUpNotes" name="follow_up_notes" rows="3" placeholder="Treatment, repeat test, clearance, or other follow-up..." required></textarea>
-                    <p class="ape-follow-up-plan-help mt-2 mb-0"><?= $clinicManaged ? 'Clinic-only context for treatment, repeat testing, referral, or another clinical action. Add a follow-up document below when clinic staff need to retain a specific file.' : 'Clinic-only context for treatment, repeat testing, referral, or another clinical action. Add a follow-up document below when the student must upload a specific file; that document carries the student instructions and due date.' ?></p>
+                    <label class="clinic-label" for="apeFollowUpInstruction">Patient instructions</label>
+                    <textarea class="clinic-textarea" id="apeFollowUpInstruction" name="patient_visible_note" rows="3" placeholder="Explain the treatment, repeat test, clearance, or other action the patient must complete..." required></textarea>
+                    <div class="mt-3"><label class="clinic-label" for="apeFollowUpDueDate">Due date</label><input class="clinic-input" id="apeFollowUpDueDate" name="follow_up_due_date" type="date" min="<?= e(date('Y-m-d')) ?>" required></div>
+                    <label class="clinic-label mt-3" for="apeFollowUpNotes">Clinic-only notes (optional)</label>
+                    <textarea class="clinic-textarea" id="apeFollowUpNotes" name="follow_up_notes" rows="2" placeholder="Internal treatment or review context..."></textarea>
                 </div>
                 <button class="btn btn-outline w-full" style="color:#b45309;border-color:rgba(180,83,9,0.2);" data-confirm-submit data-confirm-type="danger" data-confirm-title="Save follow-up plan?" data-confirm-message="The APE record will remain open until the follow-up is cleared." data-confirm-toast="Saving follow-up plan..."><span class="material-symbols-outlined text-[18px]">save</span> Save follow-up plan</button>
             </form>
@@ -131,6 +137,20 @@ if (!$record) {
     exit;
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reschedule_ape_record') {
+    try {
+        if (!in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor'], true)) {
+            throw new RuntimeException('Only administrators and doctors can reschedule an APE examination.');
+        }
+        $batch = reschedule_ape_record($id, (int) ($_POST['target_batch_id'] ?? 0), (int) ($apeUser['person_id'] ?? 0) ?: null);
+        flash_message('success', 'APE examination rescheduled to ' . $batch['batch_name'] . '.');
+    } catch (Throwable $e) {
+        flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $e->getMessage());
+    }
+    header('Location: view.php?id=' . $id);
+    exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     $staffPersonId = (int) (current_user()['person_id'] ?? 0);
@@ -142,7 +162,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     try {
         if ($staffPersonId <= 0) {
-            throw new RuntimeException('The logged-in staff account is not linked to Cliniq_db.');
+            throw new RuntimeException('Your staff account is not ready to manage this APE record. Please contact an administrator.');
         }
         if (in_array($action, $clinicalActions, true) && !$canRecordApeExam) {
             throw new RuntimeException('Only administrators, doctors, and nurses can record or finalize an APE examination.');
@@ -157,6 +177,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $record = fetch_ape_record($id);
         if (!$record) {
             throw new RuntimeException('APE record no longer exists.');
+        }
+
+        if (in_array($action, ['mark_ape_inactive', 'reopen_ape_record'], true)) {
+            if (!in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor'], true)) {
+                throw new RuntimeException('Only administrators and doctors can change an APE record\'s active status.');
+            }
+            if ($action === 'mark_ape_inactive') {
+                if (ape_record_is_inactive($record)) {
+                    throw new RuntimeException('This APE record is already inactive.');
+                }
+                $reason = trim((string) ($_POST['inactive_reason'] ?? ''));
+                if (!in_array($reason, ['Withdrew from school', 'Transferred', 'No longer enrolled', 'Duplicate record', 'Declined APE', 'Other'], true)) {
+                    throw new InvalidArgumentException('Select a valid reason for making this APE record inactive.');
+                }
+                $details = trim((string) ($_POST['inactive_details'] ?? ''));
+                if ($reason === 'Other' && $details === '') {
+                    throw new InvalidArgumentException('Add a short reason when selecting Other.');
+                }
+                $previousBatch = trim((string) ($record['batch_name'] ?? ''));
+                $apeDb->prepare("UPDATE ape_records SET workflow_status = 'Inactive', schedule_batch_id = NULL WHERE ape_id = ?")
+                    ->execute([$id]);
+                $activityLabel = 'Marked APE record inactive';
+                $activityNotes = $reason . ($details !== '' ? ': ' . $details : '')
+                    . ($previousBatch !== '' ? ' | Removed from batch: ' . $previousBatch : '');
+                patient_notification_create($apeDb, (int) $record['patient_id'], $staffPersonId, 'ape', 'APE record inactive', 'Your APE record is inactive. Contact the clinic if you believe this needs to be reopened.', 'patient-ape-status.php', 'ape', $id);
+            } else {
+                if (!ape_record_is_inactive($record)) {
+                    throw new RuntimeException('Only an inactive APE record can be reopened.');
+                }
+                $apeDb->prepare("UPDATE ape_records SET workflow_status = 'Registered' WHERE ape_id = ?")
+                    ->execute([$id]);
+                $activityLabel = 'Reopened APE record';
+                $activityNotes = 'Reopened by clinic; assign a new schedule before student uploads or examination.';
+                patient_notification_create($apeDb, (int) $record['patient_id'], $staffPersonId, 'ape', 'APE record reopened', 'The clinic reopened your APE record. Wait for a new examination schedule or contact the clinic for assistance.', 'patient-ape-status.php', 'ape', $id);
+            }
+        } elseif (ape_record_is_inactive($record)) {
+            throw new RuntimeException('This APE record is inactive. Reopen it before recording clinical work or reviewing documents.');
         }
 
         $checklistActions = ['update_requirement', 'delete_requirement'];
@@ -475,14 +532,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $documents->execute([$staffPersonId, $id]);
             $requirements = $apeDb->prepare("UPDATE ape_requirements SET status = 'Verified', remarks = NULL, checked_by_person_id = ?, checked_at = NOW() WHERE ape_id = ? AND status = 'Submitted'");
             $requirements->execute([$staffPersonId, $id]);
-            $followUpNotes = trim((string) ($_POST['follow_up_notes'] ?? ''));
-            if ($followUpNotes === '') {
-                throw new InvalidArgumentException('Enter the follow-up required from the patient.');
+            $patientNote = trim((string) ($_POST['patient_visible_note'] ?? ''));
+            if ($patientNote === '') {
+                throw new InvalidArgumentException('Enter the patient instructions for this follow-up.');
             }
-            // The general plan is clinic-only. A document requirement owns its own
-            // patient instructions and due date, so retain any existing record-level values.
-            $patientNote = $record['patient_visible_note'] ?: null;
-            $followUpDueDate = $record['follow_up_due_date'] ?: null;
+            $followUpNotes = trim((string) ($_POST['follow_up_notes'] ?? '')) ?: null;
+            $followUpDueDate = ape_follow_up_due_date_from_post();
+            if ($followUpDueDate === null) {
+                throw new InvalidArgumentException('Select a due date for this follow-up.');
+            }
             $apeDb->prepare("UPDATE ape_records SET workflow_status = 'Follow-up Required', clearance_status = 'For Follow-up', follow_up_required = 1, follow_up_due_date = ?, clinical_remarks = ?, patient_visible_note = ?, reviewed_by_person_id = ? WHERE ape_id = ?")
                 ->execute([$followUpDueDate, $followUpNotes, $patientNote, $staffPersonId, $id]);
             $apeDb->prepare("INSERT INTO ape_findings (ape_id, finding_type, description, result_status, follow_up_required, recorded_by_person_id) VALUES (?, 'Follow-up Decision', ?, 'With Finding', 1, ?) ON DUPLICATE KEY UPDATE follow_up_required = 1, recorded_by_person_id = VALUES(recorded_by_person_id), recorded_at = CURRENT_TIMESTAMP")
@@ -490,12 +548,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $activityLabel = 'Required follow-up after APE examination';
             $activityNotes = $followUpDueDate ? $followUpNotes . ' Due: ' . $followUpDueDate : $followUpNotes;
         } elseif ($action === 'keep_follow_up_open') {
-            $followUpNotes = trim((string) ($_POST['follow_up_notes'] ?? '')) ?: 'Follow-up remains open.';
+            $patientNote = trim((string) ($_POST['patient_visible_note'] ?? ''));
+            if ($patientNote === '') {
+                throw new InvalidArgumentException('Enter the patient instructions for this follow-up.');
+            }
+            $followUpNotes = trim((string) ($_POST['follow_up_notes'] ?? '')) ?: null;
             $followUpDueDate = ape_follow_up_due_date_from_post();
-            $stmt = $apeDb->prepare("UPDATE ape_records SET clearance_status = 'For Follow-up', workflow_status = 'Follow-up Required', follow_up_due_date = ?, clinical_remarks = ? WHERE ape_id = ?");
-            $stmt->execute([$followUpDueDate, $followUpNotes, $id]);
+            if ($followUpDueDate === null) {
+                throw new InvalidArgumentException('Select a due date for this follow-up.');
+            }
+            $stmt = $apeDb->prepare("UPDATE ape_records SET clearance_status = 'For Follow-up', workflow_status = 'Follow-up Required', follow_up_due_date = ?, clinical_remarks = ?, patient_visible_note = ? WHERE ape_id = ?");
+            $stmt->execute([$followUpDueDate, $followUpNotes, $patientNote, $id]);
             $activityLabel = 'Kept follow-up open';
-            $activityNotes = $followUpDueDate ? $followUpNotes . ' Due: ' . $followUpDueDate : $followUpNotes;
+            $activityNotes = $patientNote . ' Due: ' . $followUpDueDate;
         } elseif ($action === 'resolve_clinical_follow_up') {
             if (ape_record_queue($record) !== 'follow_up' || !ape_deferred_submission_complete($record)) {
                 throw new RuntimeException('Archive any outstanding follow-up documents before resolving clinical follow-up.');
@@ -720,6 +785,7 @@ $displayPendingRequirements = $queueKey === 'final_decision' && !$digitalSubmiss
     : $pendingRequirements;
 $apeIsCompleted = ($record['workflow_status'] ?? '') === 'Cleared'
     || ($record['clearance_status'] ?? '') === 'Cleared';
+$apeIsInactive = ape_record_is_inactive($record);
 $visibleArchivedDocuments = $apeIsCompleted ? $documents : [];
 $dataQualityFlags = ape_data_quality_flags($record, $requirements, $documents);
 $reviewDocuments = array_values(array_filter(
@@ -758,7 +824,7 @@ $canClinicUploadBeforeStudentSubmission = $canUploadApeDocument
     && !$apeIsCompleted
     && ape_initial_upload_phase_is_open($record);
 $headerWaitingLabel = ape_waiting_label($record);
-if ($studentDocumentSubmitted && !$apeIsCompleted && $reviewDocuments) {
+if ($studentDocumentSubmitted && !$apeIsCompleted && $reviewDocuments && $examSaved) {
     $adminStateBadge = $reviewAwaitingCount > 0
         ? $reviewAwaitingCount . ' DOCUMENT' . ($reviewAwaitingCount === 1 ? '' : 'S') . ' AWAITING REVIEW'
         : 'DOCUMENT REVIEW IN PROGRESS';
@@ -766,6 +832,10 @@ if ($studentDocumentSubmitted && !$apeIsCompleted && $reviewDocuments) {
         ? 'Clinic-held documents are ready for review: archive the complete submission or return selected files for correction.'
         : 'Student documents are ready for one clinic decision: archive the complete submission or return selected files for correction.';
     $headerWaitingLabel = 'REVIEW SUBMISSION';
+} elseif ($studentDocumentSubmitted && !$apeIsCompleted && $reviewDocuments) {
+    $adminStateBadge = count($pendingReviewDocuments) . ' DOCUMENT' . (count($pendingReviewDocuments) === 1 ? '' : 'S') . ' SUBMITTED';
+    $adminStateExplanation = 'Student documents are submitted. Record the examination when the assigned schedule begins; document review follows the examination.';
+    $headerWaitingLabel = 'DOCUMENTS SUBMITTED';
 }
 $showExamForm = !$examSaved && !$apeIsCompleted && $canRecordApeExam && ape_examination_is_available($record);
 $savedExam = $findings[0] ?? [];
@@ -1184,6 +1254,7 @@ render_header(($isClinicManagedApe ? 'Faculty & NTP APE Record - ' : 'APE Record
         display: flex;
         align-items: center;
         gap: 0.7rem;
+        width: min(calc(100% - 1rem), 24rem);
         padding: 0.65rem 0.85rem;
         border: 1px solid rgba(148, 163, 184, 0.2);
         border-radius: 0.75rem;
@@ -1203,12 +1274,6 @@ render_header(($isClinicManagedApe ? 'Faculty & NTP APE Record - ' : 'APE Record
     @media (prefers-reduced-motion: reduce) {
         .ape-record-header-float {
             transition: none;
-        }
-    }
-    @media (max-width: 639px) {
-        .ape-record-header-float {
-            padding-left: 0.85rem;
-            padding-right: 0.85rem;
         }
     }
     .ape-secondary-panel {
@@ -1265,6 +1330,13 @@ render_header(($isClinicManagedApe ? 'Faculty & NTP APE Record - ' : 'APE Record
             </div>
         </div>
     </div>
+    <div class="ape-record-header-float" data-ape-record-header-float aria-hidden="true">
+        <div class="avatar <?= e(avatar_color($fullName)) ?> w-9 h-9 text-xs shrink-0"><?= e(initials($fullName)) ?></div>
+        <div class="min-w-0">
+            <p class="font-headline text-base font-extrabold text-[#17261d] truncate mb-0"><?= e($fullName) ?></p>
+            <p class="text-[11px] font-bold text-slate-500 mt-0.5 mb-0"><?= e($record['id_number']) ?></p>
+        </div>
+    </div>
     <?php if ($dataQualityFlags): ?>
         <section class="clinic-card p-5 md:p-6 border border-amber-200 bg-amber-50/60" aria-labelledby="apeDataQualityTitle">
             <div class="flex items-start gap-3">
@@ -1287,14 +1359,6 @@ render_header(($isClinicManagedApe ? 'Faculty & NTP APE Record - ' : 'APE Record
             </div>
         </section>
     <?php endif; ?>
-    <div class="ape-record-header-float" data-ape-record-header-float aria-hidden="true">
-        <div class="avatar <?= e(avatar_color($fullName)) ?> w-9 h-9 text-xs shrink-0"><?= e(initials($fullName)) ?></div>
-        <div class="min-w-0">
-            <p class="font-headline text-base font-extrabold text-[#17261d] truncate mb-0"><?= e($fullName) ?></p>
-            <p class="text-[11px] font-bold text-slate-500 mt-0.5 mb-0"><?= e($record['id_number']) ?></p>
-        </div>
-    </div>
-
     <?php
     $hasApeBatch = !empty($record['schedule_batch_id']) && ($record['batch_status'] ?? '') !== 'Cancelled';
     $batchHasPassed = $hasApeBatch && strtotime((string) $record['batch_end_at']) < time();
@@ -1303,9 +1367,17 @@ render_header(($isClinicManagedApe ? 'Faculty & NTP APE Record - ' : 'APE Record
         ? 'Unscheduled'
         : ($batchWasMissed ? 'Missed' : ($examSaved ? 'Examination Completed' : ($batchHasPassed ? 'Schedule Passed' : 'Scheduled')));
     $batchStatusClass = !$hasApeBatch ? 'badge-pending' : ($batchWasMissed ? 'badge-critical' : ($batchHasPassed ? 'badge-completed' : 'badge-in-progress'));
+    $canRescheduleApe = in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor'], true) && !$examSaved && !$apeIsInactive;
+    $rescheduleBatches = $canRescheduleApe ? array_values(array_filter(
+        ape_schedule_batches((int) ($record['ape_cycle_id'] ?? 0)),
+        static fn(array $batch): bool => (int) $batch['batch_id'] !== (int) ($record['schedule_batch_id'] ?? 0)
+            && ($batch['status'] ?? '') === 'Scheduled'
+            && strtotime((string) $batch['schedule_date'] . ' ' . $batch['end_time']) > time()
+            && (int) $batch['assigned_count'] < (int) $batch['capacity']
+    )) : [];
     ?>
     <?php if (!$isClinicManagedApe): ?>
-    <section class="clinic-card p-5 md:p-6">
+    <section class="clinic-card p-5 md:p-6" data-ape-record-context>
         <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
             <div class="flex items-start gap-4">
                 <span class="w-11 h-11 rounded-2xl bg-primary-fixed text-primary flex items-center justify-center material-symbols-outlined shrink-0"><?= $hasApeBatch ? 'event_available' : 'event_busy' ?></span>
@@ -1334,6 +1406,21 @@ render_header(($isClinicManagedApe ? 'Faculty & NTP APE Record - ' : 'APE Record
                 <span class="badge <?= $batchStatusClass ?>"><?= e($batchDisplayStatus) ?></span>
             <?php endif; ?>
         </div>
+        <?php if ($canRescheduleApe): ?>
+            <form method="post" class="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:items-end">
+                <input type="hidden" name="action" value="reschedule_ape_record">
+                <label class="flex-1 text-sm font-bold text-slate-700" for="apeRescheduleBatch">Move this student to another batch
+                    <select id="apeRescheduleBatch" name="target_batch_id" class="clinic-input mt-2 w-full" required<?= $rescheduleBatches ? '' : ' disabled' ?>>
+                        <option value="">Select a future batch</option>
+                        <?php foreach ($rescheduleBatches as $batch): ?>
+                            <option value="<?= (int) $batch['batch_id'] ?>"><?= e($batch['batch_name']) ?> — <?= e(date('M j, Y g:i A', strtotime($batch['schedule_date'] . ' ' . $batch['start_time']))) ?> (<?= (int) $batch['assigned_count'] ?>/<?= (int) $batch['capacity'] ?>)</option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+                <button class="btn btn-outline" <?= $rescheduleBatches ? '' : 'disabled' ?> data-confirm-submit data-confirm-title="Move this student to another APE batch?" data-confirm-message="The student’s examination schedule will be updated and they will receive a portal notification.">Reschedule student</button>
+            </form>
+            <?php if (!$rescheduleBatches): ?><p class="mt-2 text-xs font-bold text-slate-500">No future batch with available space is currently available.</p><?php endif; ?>
+        <?php endif; ?>
     </section>
     <?php endif; ?>
 
@@ -1456,8 +1543,10 @@ render_header(($isClinicManagedApe ? 'Faculty & NTP APE Record - ' : 'APE Record
                     <p class="text-sm font-bold text-slate-500 mb-0 max-w-3xl"><?= e($adminStateExplanation) ?></p>
                 </div>
                 <span class="badge <?= ape_priority_badge($record)['class'] ?> shrink-0">
-                    <?php if ($studentDocumentSubmitted && $reviewDocuments): ?>
+                    <?php if ($reviewWorkspaceActive && $reviewAwaitingCount > 0): ?>
                         <?= $reviewAwaitingCount ?> Document<?= $reviewAwaitingCount === 1 ? '' : 's' ?> Awaiting Review
+                    <?php elseif ($studentDocumentSubmitted && !$examSaved): ?>
+                        <?= count($reviewDocuments) ?> Document<?= count($reviewDocuments) === 1 ? '' : 's' ?> Submitted
                     <?php elseif ($displayPendingRequirements): ?>
                         <?= count($displayPendingRequirements) ?> Requirement<?= count($displayPendingRequirements) === 1 ? '' : 's' ?> Missing
                     <?php else: ?>
@@ -1470,7 +1559,7 @@ render_header(($isClinicManagedApe ? 'Faculty & NTP APE Record - ' : 'APE Record
                 <div class="flex flex-wrap gap-2 mb-5" aria-label="Requirements needing attention">
                     <?php foreach ($displayPendingRequirements as $requirement): ?>
                         <span class="ape-requirement-chip">
-                            <?= e($requirement['requirement_name']) ?> (<?= e(($requirement['_latest_document']['verification_status'] ?? null) ?: ($requirement['status'] ?? 'Missing')) ?>)
+                            <?= e($requirement['requirement_name']) ?> (<?= e(!$examSaved && (($requirement['_latest_document']['verification_status'] ?? '') === 'Pending') ? 'Submitted' : (($requirement['_latest_document']['verification_status'] ?? null) ?: ($requirement['status'] ?? 'Missing'))) ?>)
                         </span>
                     <?php endforeach; ?>
                 </div>
@@ -1759,12 +1848,14 @@ render_header(($isClinicManagedApe ? 'Faculty & NTP APE Record - ' : 'APE Record
                     <div class="grid grid-cols-1 gap-3">
                         <form method="post" class="ape-flow-action space-y-3">
                             <input type="hidden" name="action" value="keep_follow_up_open">
-                            <label class="clinic-label">Follow-up Notes</label>
-                            <textarea class="clinic-textarea" name="follow_up_notes" rows="4" placeholder="Treatment or follow-up notes..."><?= e($record['clinical_remarks']) ?></textarea>
+                            <label class="clinic-label">Patient instructions</label>
+                            <textarea class="clinic-textarea" name="patient_visible_note" rows="3" placeholder="Explain what the patient must complete..." required><?= e($record['patient_visible_note']) ?></textarea>
                             <div>
                                 <label class="clinic-label">Due Date</label>
-                                <input class="clinic-input" type="date" name="follow_up_due_date" value="<?= e($record['follow_up_due_date'] ?? '') ?>">
+                                <input class="clinic-input" type="date" name="follow_up_due_date" min="<?= e(date('Y-m-d')) ?>" value="<?= e($record['follow_up_due_date'] ?? '') ?>" required>
                             </div>
+                            <label class="clinic-label">Clinic-only notes (optional)</label>
+                            <textarea class="clinic-textarea" name="follow_up_notes" rows="2" placeholder="Internal treatment or review context..."><?= e($record['clinical_remarks']) ?></textarea>
                             <button class="btn btn-ghost w-full" data-confirm-submit data-confirm-type="primary" data-confirm-title="Keep follow-up open?" data-confirm-message="This will save the latest follow-up notes without closing the APE record." data-confirm-toast="Saving follow-up notes..."><span class="material-symbols-outlined text-[18px]">history</span> Keep Follow-up Open</button>
                         </form>
                         <?php if (!ape_explicit_clearance_required($record)): ?>
@@ -2074,6 +2165,24 @@ render_header(($isClinicManagedApe ? 'Faculty & NTP APE Record - ' : 'APE Record
             </section>
         <?php endif; ?>
     </section>
+    <?php if (in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor'], true)): ?>
+        <section class="clinic-card p-5 md:p-6 mt-5 <?= $apeIsInactive ? 'border border-amber-200 bg-amber-50/60' : 'border border-rose-200 bg-rose-50/40' ?>">
+            <?php if ($apeIsInactive): ?>
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div><p class="clinic-label text-amber-800 mb-1">APE record inactive</p><h2 class="font-headline text-lg font-extrabold text-amber-950 mb-1">Reopen this record when the student is ready to continue</h2><p class="text-sm font-bold text-amber-900 mb-0">Documents and history remain retained. Assign a new schedule after reopening.</p></div>
+                    <form method="post"><input type="hidden" name="action" value="reopen_ape_record"><button class="btn btn-outline" data-confirm-submit data-confirm-title="Reopen this APE record?" data-confirm-message="The record will return to the scheduling queue. A new examination batch must be assigned before the student can continue." data-confirm-toast="Reopening APE record..."><span class="material-symbols-outlined text-[18px]">restart_alt</span> Reopen APE</button></form>
+                </div>
+            <?php else: ?>
+                <div class="mb-4"><p class="clinic-label text-rose-800 mb-1">Doctor / administrator control</p><h2 class="font-headline text-lg font-extrabold text-rose-950 mb-1">Make this APE record inactive</h2><p class="text-sm font-bold text-rose-900 mb-0">Use only when the student withdrew, transferred, is no longer enrolled, declined APE, or has a duplicate record. This preserves documents and history while stopping APE work and reminders.</p></div>
+                <form method="post" class="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3 items-end">
+                    <input type="hidden" name="action" value="mark_ape_inactive">
+                    <label class="clinic-label">Reason<select class="clinic-select mt-2" name="inactive_reason" required><option value="">Select a reason</option><?php foreach (['Withdrew from school', 'Transferred', 'No longer enrolled', 'Duplicate record', 'Declined APE', 'Other'] as $reason): ?><option value="<?= e($reason) ?>"><?= e($reason) ?></option><?php endforeach; ?></select></label>
+                    <label class="clinic-label">Details for Other<input class="clinic-input mt-2" name="inactive_details" maxlength="500" placeholder="Required only when Other is selected"></label>
+                    <button class="btn btn-outline" data-confirm-submit data-confirm-type="danger" data-confirm-title="Make this APE record inactive?" data-confirm-message="The student will be removed from any future APE batch. Documents and history will be retained; only a doctor or administrator can reopen it." data-confirm-toast="Updating APE record..."><span class="material-symbols-outlined text-[18px]">block</span> Make inactive</button>
+                </form>
+            <?php endif; ?>
+        </section>
+    <?php endif; ?>
 </div>
 
 <?php if ($canClinicUploadBeforeStudentSubmission && $requirements): ?>
@@ -2175,6 +2284,7 @@ render_header(($isClinicManagedApe ? 'Faculty & NTP APE Record - ' : 'APE Record
 
             currentRow.innerHTML = updatedRow.innerHTML;
             bindUploadButton(currentRow.querySelector('[data-clinic-upload-trigger]'));
+            window.cliniqMarkChangesSaved?.(form);
             close();
             showToast(flash?.dataset.message || 'APE document uploaded.', 'success');
         } catch (error) {
@@ -2323,19 +2433,20 @@ render_header(($isClinicManagedApe ? 'Faculty & NTP APE Record - ' : 'APE Record
         });
 
         const recordHeader = document.querySelector('[data-ape-record-header]');
+        const recordContext = document.querySelector('[data-ape-record-context]');
         const floatingRecordHeader = document.querySelector('[data-ape-record-header-float]');
-        if (recordHeader && floatingRecordHeader) {
+        if (recordHeader && recordContext && floatingRecordHeader) {
             const scrollContainer = document.querySelector('.app-content');
             let pendingFrame = 0;
             const updateRecordHeader = () => {
                 pendingFrame = 0;
                 const headerBounds = recordHeader.getBoundingClientRect();
+                const contextBounds = recordContext.getBoundingClientRect();
                 const contentBounds = scrollContainer ? scrollContainer.getBoundingClientRect() : { top: 0 };
                 const floatingTop = Math.max(0, contentBounds.top);
                 floatingRecordHeader.style.top = `${floatingTop}px`;
                 floatingRecordHeader.style.left = `${Math.max(8, headerBounds.left)}px`;
-                floatingRecordHeader.style.width = `${Math.max(0, headerBounds.width)}px`;
-                floatingRecordHeader.classList.toggle('is-visible', headerBounds.bottom < floatingTop);
+                floatingRecordHeader.classList.toggle('is-visible', contextBounds.bottom < floatingTop);
             };
             const requestRecordHeaderUpdate = () => {
                 if (pendingFrame) return;
@@ -2345,6 +2456,7 @@ render_header(($isClinicManagedApe ? 'Faculty & NTP APE Record - ' : 'APE Record
             window.addEventListener('resize', requestRecordHeaderUpdate, { passive: true });
             updateRecordHeader();
         }
+
     })();
 </script>
 

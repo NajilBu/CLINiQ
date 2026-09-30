@@ -247,7 +247,7 @@ render_student_header('Appointments', 'appointment');
                 <h2 class="student-card-title">Preferred Schedule</h2>
                 <p class="student-card-copy">Choose an available date and time.</p>
             </div>
-            <span class="student-badge student-badge-warning">Pending First</span>
+            <span class="student-badge student-badge-warning">Choose a purpose</span>
         </div>
         <div class="student-card-pad">
             <?php if ($feedbackRequired): ?>
@@ -392,7 +392,7 @@ render_student_header('Appointments', 'appointment');
     </section>
 
     <details class="student-mobile-more appointment-calendar-guide">
-        <summary>Calendar guide</summary>
+        <summary>How availability works</summary>
     <section class="student-card student-span-5">
         <div class="student-card-header">
             <div>
@@ -486,7 +486,7 @@ render_student_header('Appointments', 'appointment');
 </div>
 
 <details class="student-mobile-more appointment-history">
-    <summary>Recent appointment requests</summary>
+        <summary>Appointment history</summary>
 <section class="student-card mt-4">
     <div class="student-card-header">
         <div>
@@ -558,6 +558,12 @@ render_student_header('Appointments', 'appointment');
 
 <?php if (!$feedbackRequired): ?>
 <script>
+    document.querySelectorAll('.student-cancel-form').forEach((form) => {
+        form.addEventListener('submit', (event) => {
+            if (!window.confirm('Cancel this appointment? Your reason will be shared with the clinic.')) event.preventDefault();
+        });
+    });
+
     let availability = <?= json_encode($availabilityPayload, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
     let weeklySchedule = <?= json_encode($weeklySchedule, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
     const dateInput = document.getElementById('appt-date-input');

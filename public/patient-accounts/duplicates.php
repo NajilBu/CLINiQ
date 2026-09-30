@@ -35,47 +35,54 @@ render_header('Duplicate Patient Accounts');
 render_clinic_command_header('Account Administration', 'Duplicate Patient Accounts',
     'Matches are suggestions. Verify identity before merging; a matching name alone does not prove duplication.');
 ?>
-<?php if ($error): ?><div class="clinic-card p-5 mb-5" role="alert"><?= e($error) ?> <a href="<?= e(app_url('patient-accounts/duplicates.php')) ?>">Return to duplicate review</a></div><?php endif; ?>
+<div class="duplicate-review-page space-y-6">
+<?php if ($error): ?><div class="duplicate-review-notice" role="alert"><span class="material-symbols-outlined" aria-hidden="true">error</span><div><?= e($error) ?> <a href="<?= e(app_url('patient-accounts/duplicates.php')) ?>">Return to duplicate review</a></div></div><?php endif; ?>
 <?php if ($review): ?>
-<section class="clinic-card p-5 mb-5">
-    <h2>Review merge</h2>
-    <p><strong>Keep:</strong> <?= e($review['keep']['people']['id_number']) ?> — <?= e($byId[$keepId]['full_name']) ?> (account <?= $keepId ?>)</p>
-    <p><strong>Remove:</strong> <?= e($review['remove']['people']['id_number']) ?> — <?= e($byId[$removeId]['full_name']) ?> (account <?= $removeId ?>)</p>
-    <p>The retained account keeps its ID number, email, password and access to login. Profile differences require a choice below. A verified backup is required before the merge. Linked records with conflicting unique keys will stop the merge without saving changes.</p>
-    <form method="post" id="merge-form">
+<section class="clinic-card overflow-hidden duplicate-merge-card">
+    <header class="duplicate-merge-header">
+        <div class="duplicate-merge-header-icon"><span class="material-symbols-outlined" aria-hidden="true">merge_type</span></div>
+        <div><p class="appointment-availability-eyebrow">Identity review</p><h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Review account merge</h2><p class="text-sm font-semibold text-slate-500 mb-0">Choose the values to retain before combining these two patient accounts.</p></div>
+    </header>
+    <form method="post" id="merge-form" class="duplicate-merge-form">
         <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
         <input type="hidden" name="keep_id" value="<?= $keepId ?>">
         <input type="hidden" name="remove_id" value="<?= $removeId ?>">
         <input type="hidden" name="fingerprint" value="<?= e($review['fingerprint']) ?>">
-        <div class="overflow-x-auto"><table class="w-full"><thead><tr><th>Profile field</th><th>Retained account</th><th>Duplicate</th><th>Use value from</th></tr></thead><tbody>
+        <div class="duplicate-account-compare">
+            <article class="duplicate-account-card is-kept"><span class="duplicate-account-label"><span class="material-symbols-outlined" aria-hidden="true">verified</span> Account to keep</span><strong><?= e($byId[$keepId]['full_name']) ?></strong><span><?= e($review['keep']['people']['id_number']) ?> · Account <?= $keepId ?></span></article>
+            <span class="duplicate-account-merge-icon material-symbols-outlined" aria-hidden="true">arrow_forward</span>
+            <article class="duplicate-account-card is-removed"><span class="duplicate-account-label"><span class="material-symbols-outlined" aria-hidden="true">person_remove</span> Duplicate to remove</span><strong><?= e($byId[$removeId]['full_name']) ?></strong><span><?= e($review['remove']['people']['id_number']) ?> · Account <?= $removeId ?></span></article>
+        </div>
+        <div class="duplicate-merge-guidance"><span class="material-symbols-outlined" aria-hidden="true">info</span><p>The retained account keeps its ID number, email, password, and sign-in access. A verified backup is required; conflicting linked records stop the merge before anything is saved.</p></div>
+        <div class="duplicate-choice-table-wrap"><table class="duplicate-choice-table"><caption>Profile differences to resolve</caption><thead><tr><th>Profile field</th><th>Retained account</th><th>Duplicate</th><th>Keep this value</th></tr></thead><tbody>
         <?php $other = patient_merge_fields($review['remove']); foreach (patient_merge_fields($review['keep']) as $key => $value): if ($value === ($other[$key] ?? null)) continue; ?>
-            <tr><td class="p-3"><?= e(str_replace(['.', '_'], ' ', $key)) ?></td><td class="p-3"><?= e((string) ($value ?? '—')) ?></td><td class="p-3"><?= e((string) ($other[$key] ?? '—')) ?></td><td class="p-3"><select class="clinic-input" name="choices[<?= e($key) ?>]" required><option value="">Choose…</option><option value="keep">Retained account</option><option value="duplicate">Duplicate</option></select></td></tr>
+            <tr><th scope="row"><?= e(str_replace(['.', '_'], ' ', $key)) ?></th><td><?= e((string) ($value ?? '—')) ?></td><td><?= e((string) ($other[$key] ?? '—')) ?></td><td><select class="clinic-input" name="choices[<?= e($key) ?>]" required><option value="">Choose…</option><option value="keep">Retained account</option><option value="duplicate">Duplicate</option></select></td></tr>
         <?php endforeach; ?>
         </tbody></table></div>
-        <details class="my-4"><summary>Linked records to transfer</summary><ul><?php foreach ($review['counts'] as $name => $count): if (!$count) continue; ?><li><?= e($name) ?>: <?= $count ?></li><?php endforeach; ?></ul></details>
-        <label class="block my-4"><input type="checkbox" name="confirm" value="1" required> I verified that these accounts belong to the same patient. Merge their records and remove the duplicate account.</label>
-        <button class="btn btn-primary" type="submit">Merge into selected account</button>
-        <a class="btn btn-outline" href="<?= e(app_url('patient-accounts/duplicates.php')) ?>">Cancel</a>
+        <details class="duplicate-linked-records"><summary><span class="material-symbols-outlined" aria-hidden="true">folder_shared</span>Linked records to transfer</summary><ul><?php foreach ($review['counts'] as $name => $count): if (!$count) continue; ?><li><span><?= e($name) ?></span><strong><?= e((string) $count) ?></strong></li><?php endforeach; ?></ul></details>
+        <label class="duplicate-merge-confirm"><input type="checkbox" name="confirm" value="1" required><span>I verified that these accounts belong to the same patient. Merge their records and remove the duplicate account.</span></label>
+        <div class="duplicate-merge-actions"><a class="btn btn-outline text-decoration-none" href="<?= e(app_url('patient-accounts/duplicates.php')) ?>">Cancel review</a><button class="btn btn-danger" type="submit" data-confirm-submit data-confirm-type="danger" data-confirm-title="Merge these patient accounts?" data-confirm-message="The duplicate account will be removed after its selected records are transferred. This cannot be undone." data-confirm-toast="Creating backup and merging accounts..."><span class="material-symbols-outlined" aria-hidden="true">merge_type</span>Merge into retained account</button></div>
         <p id="merge-progress" hidden role="status">Creating and verifying the backup, then merging. Please keep this page open.</p>
     </form>
 </section>
 <?php endif; ?>
-<section class="clinic-card p-5">
-    <div class="flex flex-wrap justify-between gap-3 mb-4"><h2><?= count($pairs) ?> possible duplicate pair(s)</h2><button type="button" class="btn btn-primary" id="export-duplicates">Export accounts and duplicate check</button></div>
-    <p>Both records are shown for every match. Select which account to keep to review the merge.</p>
-    <?php if (!$pairs): ?><p>No matching IDs, emails, or names were found.</p><?php endif; ?>
+<section class="clinic-card overflow-hidden duplicate-pairs-card">
+    <header class="duplicate-pairs-header"><div><p class="appointment-availability-eyebrow">Possible matches</p><h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1"><?= count($pairs) ?> account pair<?= count($pairs) === 1 ? '' : 's' ?> to review</h2><p class="text-xs font-bold text-slate-500 mb-0">Select the account to retain, then verify each conflicting value.</p></div><button type="button" class="btn btn-outline" id="export-duplicates"><span class="material-symbols-outlined" aria-hidden="true">download</span>Export review</button></header>
+    <div class="duplicate-pair-list">
+    <?php if (!$pairs): ?><div class="appointment-timeline-empty"><span class="material-symbols-outlined" aria-hidden="true">check_circle</span><div><strong>No duplicate matches found</strong><span>There are no matching IDs, email addresses, or names to review.</span></div></div><?php endif; ?>
     <?php foreach ($pairs as $pair): $left = $byId[$pair['left']]; $right = $byId[$pair['right']]; ?>
-    <article class="clinic-card p-4 mb-4">
-        <p><strong>Matched:</strong> <?= e(implode(', ', $pair['reasons'])) ?></p>
+    <article class="duplicate-pair-card">
+        <header><span class="badge badge-pending">Matched by <?= e(implode(', ', $pair['reasons'])) ?></span><span class="text-xs font-bold text-slate-500">Choose the account to retain</span></header>
         <?php foreach ([[$left, $right], [$right, $left]] as [$record, $duplicate]): ?>
-        <div class="flex flex-wrap items-center justify-between gap-3 my-3">
-            <span><?= e($record['full_name']) ?> · <?= e($record['id_number']) ?> · <?= e((string) $record['email']) ?> · <?= e($record['patient_type']) ?> · <?= e($record['account_status']) ?> (account <?= (int) $record['account_id'] ?>)</span>
-            <a class="btn btn-outline" href="?keep_id=<?= (int) $record['account_id'] ?>&amp;remove_id=<?= (int) $duplicate['account_id'] ?>">Keep this account / Review</a>
+        <div class="duplicate-account-option"><div><strong><?= e($record['full_name']) ?></strong><span><?= e($record['id_number']) ?> · <?= e((string) $record['email']) ?></span><small><?= e($record['patient_type']) ?> · <?= e($record['account_status']) ?> · Account <?= (int) $record['account_id'] ?></small></div>
+            <a class="btn btn-outline text-decoration-none" href="?keep_id=<?= (int) $record['account_id'] ?>&amp;remove_id=<?= (int) $duplicate['account_id'] ?>">Keep &amp; review <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></a>
         </div>
         <?php endforeach; ?>
     </article>
     <?php endforeach; ?>
+    </div>
 </section>
+</div>
 <script src="<?= app_url('assets/vendor/sheetjs/xlsx.full.min.js?v=0.20.3') ?>"></script>
 <script>
 (() => {

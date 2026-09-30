@@ -129,6 +129,10 @@ $submittedReview = array_replace($final, ['required_unverified_count' => 1]);
 $staffSubmittedQueue = ape_staff_queue_stage($submittedReview);
 expect_four_step($staffSubmittedQueue === 'final_decision', 'Staff queue must place submitted files awaiting clinic review in Final Decision.');
 expect_four_step(!ape_has_urgent_action($submittedReview), 'Routine clinic document review must not create an urgent sidebar badge.');
+$preExamSubmittedReview = array_replace($submittedReview, ['exam_date' => null, 'schedule_batch_id' => 17]);
+expect_four_step(ape_record_queue($preExamSubmittedReview) === 'examination', 'A complete submitted pre-examination group must enter Examination, not Digital Keeping.');
+expect_four_step((ape_next_action($preExamSubmittedReview)['label'] ?? '') === 'Wait for Assigned Schedule', 'Submitted pre-examination documents must wait for the assigned examination schedule.');
+expect_four_step((ape_next_action_card($preExamSubmittedReview)['title'] ?? '') === 'Documents submitted for examination review', 'The staff record must describe submitted pre-examination documents without exposing premature review controls.');
 $staffSubmittedProgress = ape_staff_progress($submittedReview);
 expect_four_step($staffSubmittedProgress['active_step'] === 3, 'Staff progress must activate Final Decision when the complete initial upload group is submitted and awaiting archive review.');
 expect_four_step($staffSubmittedProgress['steps'][1]['submitted'] && !$staffSubmittedProgress['steps'][1]['done'], 'A submitted upload group must be distinct from completed archive review.');
@@ -292,6 +296,10 @@ expect_four_step(str_contains($viewSource, "\$staffProgress = ape_staff_progress
 expect_four_step(str_contains($viewSource, "\$currentStep = \$staffProgress['active_step'];"), 'The admin active step must come from the staff workflow resolver.');
 expect_four_step(str_contains($viewSource, 'DOCUMENTS STILL NEEDED'), 'The admin header must identify incomplete student documents instead of showing Final Decision prematurely.');
 expect_four_step(str_contains($viewSource, 'Examination Completed'), 'The schedule card must distinguish examination completion from APE completion.');
+expect_four_step(str_contains($viewSource, 'data-ape-record-context')
+    && str_contains($viewSource, 'contextBounds.bottom < floatingTop')
+    && str_contains($viewSource, '$reviewWorkspaceActive && $reviewAwaitingCount > 0')
+    && str_contains($viewSource, "? 'Submitted' :"), 'The examination view must not overlay record content or call pre-examination submissions awaiting review.');
 expect_four_step(str_contains($viewSource, "\$stepState = \$staffProgress['steps'][\$stepNumber];"), 'The admin stepper must use staff workflow step states.');
 expect_four_step(str_contains($viewSource, "\$submitted ? 'Submitted'"), 'The staff workflow strip must distinguish submitted documents from completed steps.');
 expect_four_step(str_contains($viewSource, 'Return selected files'), 'Document review must expose a clear return-for-resubmission action.');
@@ -308,13 +316,17 @@ expect_four_step(str_contains($viewSource, "value=\"Examined\""), 'The examinati
 $patientStatusSource = file_get_contents(__DIR__ . '/../patient-portal/patient-ape-status.php');
 $patientDashboardSource = file_get_contents(__DIR__ . '/../patient-portal/patient-dashboard.php');
 expect_four_step(str_contains($patientStatusSource, '$studentProgress = ape_student_progress($apeRecord ?? []);'), 'The APE status page must use the student-display progress resolver.');
+expect_four_step(str_contains($patientStatusSource, '$documentsAwaitingClinicReview && $physicalExaminationScheduled => \'Attend your scheduled physical examination\'')
+    && str_contains($patientStatusSource, 'Attend your physical examination at the school clinic')
+    && str_contains($patientStatusSource, '$nextActionHeading = $documentsAwaitingClinicReview && !$physicalExaminationScheduled ? \'Current status\' : \'Next action\';'), 'Submitted documents awaiting review must retain a scheduled physical examination reminder without becoming an upload action.');
 expect_four_step(str_contains($patientStatusSource, '$canUploadDocuments = $apeRecord') && !str_contains($patientStatusSource, '$canUploadDocuments = $apeRecord\n    && $hasScheduledBatch'), 'Document controls must not require a scheduled batch.');
 expect_four_step(str_contains($patientStatusSource, '$apePercent = $studentProgress[\'percent\'];'), 'The APE status page must display the student-facing progress percentage.');
 expect_four_step(str_contains($patientStatusSource, "\$stepClass = \$isDone ? 'is-done' : (\$isActive ? 'is-current' : 'is-locked');"), 'Every later unfinished APE step must remain closed until its predecessor is complete.');
 expect_four_step(str_contains($patientStatusSource, "'action' => \$verification === 'Needs Correction' ? 'Replace'"), 'A returned document must give the student a replacement-upload action.');
 expect_four_step(str_contains($patientDashboardSource, '$apeProgress = ape_student_progress($latestApe ?? []);'), 'The dashboard must use the student-display progress resolver.');
 expect_four_step(str_contains($patientStatusSource, 'follow-up documents. Upload them below'), 'Students must receive Follow-up document instructions without being sent back to Step 1.');
-expect_four_step(str_contains($patientDashboardSource, "in_array((int) \$apeProgress['active_step'], [1, 2, 4], true)"), 'The dashboard must not present clinic review as a student action.');
+expect_four_step(str_contains($patientDashboardSource, '&& !$apeDocumentsAwaitingClinicReview')
+    && str_contains($patientDashboardSource, '|| $apeExaminationActionReady'), 'The dashboard must exclude clinic review from student tasks while retaining a currently available examination.');
 expect_four_step(str_contains($patientDashboardSource, '$apePercent = $apeProgress[\'percent\'];'), 'The dashboard must display the shared progress percentage.');
 expect_four_step(str_contains($patientStatusSource, 'max(1, (int) $currentStep)'), 'The APE summary must show the calculated current step.');
 

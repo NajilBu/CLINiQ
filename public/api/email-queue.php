@@ -6,20 +6,25 @@ require_once __DIR__ . '/../../app/services/PatientEmail.php';
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 $user = current_user();
-if ($user === null || trim((string) ($user['role'] ?? '')) === '') {
+if ($user === null || (string) ($user['role'] ?? '') !== 'admin') {
     http_response_code(403);
     echo json_encode(['error' => 'Unauthorized']);
     exit;
 }
+if (strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')) !== 'POST') {
+    http_response_code(405);
+    echo json_encode(['error' => 'Use POST to process an email queue.']);
+    exit;
+}
 
-$key = trim((string) ($_GET['queue_key'] ?? $_POST['queue_key'] ?? ''));
+$key = trim((string) ($_POST['queue_key'] ?? ''));
 if ($key === '' || !preg_match('/^school_year_[0-9]{4}-[0-9]{4}_[a-f0-9]+$/', $key)) {
     http_response_code(400);
     echo json_encode(['error' => 'Invalid queue.']);
     exit;
 }
 $db = auth_db();
-$action = (string) ($_GET['action'] ?? $_POST['action'] ?? 'status');
+$action = (string) ($_POST['action'] ?? 'status');
 if ($action === 'process') {
     patient_email_due_automations();
     $processed = patient_email_process_queue($key, 5);

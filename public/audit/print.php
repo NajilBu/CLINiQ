@@ -18,9 +18,14 @@ $outcome = trim((string) ($_GET['outcome'] ?? ''));
 $search = trim((string) ($_GET['search'] ?? ''));
 $dateFrom = trim((string) ($_GET['date_from'] ?? ''));
 $dateTo = trim((string) ($_GET['date_to'] ?? ''));
+if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateFrom) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateTo)) {
+    http_response_code(400);
+    exit('Choose both a start and end date before printing the audit log.');
+}
 
-$where = ['1 = 1'];
-$params = [];
+$routineEmailActions = audit_log_governance_excluded_actions();
+$where = ['1 = 1', 'a.action NOT IN (' . implode(',', array_fill(0, count($routineEmailActions), '?')) . ')'];
+$params = $routineEmailActions;
 foreach ([['a.module', $module], ['a.action', $action], ['a.actor_type', $actor]] as [$field, $value]) {
     if ($value !== '') {
         $where[] = "{$field} = ?";
@@ -223,7 +228,7 @@ if (!$filterLabels) {
                 <td><span class="primary"><?= e(audit_log_action_label((string) $log['action'])) ?></span><span class="secondary"><?= e(audit_log_module_label((string) $log['module'])) ?></span></td>
                 <td><?= e(audit_log_target_label($log)) ?></td>
                 <td><span class="result <?= $log['outcome'] === 'success' ? 'success' : 'failed' ?>"><?= e($log['outcome'] === 'success' ? 'Successful' : 'Failed') ?></span></td>
-                <td><?= e(audit_log_metadata_summary($log['metadata'] ?? null)) ?></td>
+                <td><?= e(audit_log_event_details((string) $log['action'], $log['metadata'] ?? null)) ?></td>
             </tr>
         <?php endforeach; ?>
         <?php if (!$logs): ?><tr><td colspan="6" class="empty">No audit activities match the selected filters.</td></tr><?php endif; ?>

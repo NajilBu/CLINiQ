@@ -30,5 +30,17 @@ if (strpos($source, 'if ($requiredActionCount > 0):') === false
 if (strpos($source, 'patient-passport.php') === false || strpos($source, 'patient-ape-status.php') === false || strpos($source, '$feedbackPortalUrl') === false) {
     throw new RuntimeException('Dashboard task destinations must remain available.');
 }
+if (strpos($source, '$passportMissing[] = \'blood type\';') !== false
+    || strpos($source, 'The portal will unlock the next action') !== false) {
+    throw new RuntimeException('Dashboard must not present clinic-managed blood type or false task gating as a student action.');
+}
+if (strpos($source, '$apeDocumentsAwaitingClinicReview') === false
+    || strpos($source, "foreach (ape_requirements_for_record((int) \$latestApe['ape_id']) as \$requirement)") === false) {
+    throw new RuntimeException('Dashboard must use the latest submitted requirement before showing a correction task.');
+}
+if (strpos($source, 'Scheduled physical examination') === false
+    || strpos($source, 'Attend your physical examination at the school clinic') === false) {
+    throw new RuntimeException('Dashboard must keep a scheduled physical examination visible after document submission.');
+}
 
 echo "Patient dashboard separate Ready card test passed.\n";

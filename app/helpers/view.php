@@ -8,6 +8,7 @@ require_once __DIR__ . '/../services/SystemSettings.php';
 require_once __DIR__ . '/../services/ProfilePhoto.php';
 require_once __DIR__ . '/../services/ApeWorkflow.php';
 require_once __DIR__ . '/../services/AppointmentWorkflow.php';
+require_once __DIR__ . '/../services/PatientEmail.php';
 
 /**
  * Return counts for staff navigation items that currently need attention.
@@ -28,6 +29,7 @@ function staff_sidebar_action_counts(int $activeAlertCount = 0): array
         'APE' => 0,
         'Appointments' => 0,
         'Inventory' => 0,
+        'Email Center' => 0,
     ];
 
     $db = auth_db();
@@ -73,6 +75,12 @@ function staff_sidebar_action_counts(int $activeAlertCount = 0): array
         }
     } catch (Throwable $e) {
         $counts['APE'] = 0;
+    }
+
+    try {
+        $counts['Email Center'] = max(0, (int) (patient_email_summary()['actionable_issues'] ?? 0));
+    } catch (Throwable $e) {
+        $counts['Email Center'] = 0;
     }
 
     return $counts;
@@ -273,8 +281,6 @@ function render_header(string $title): void
     if ($pendingAlertCount > 0) {
         $bodyClasses .= ' has-active-alerts';
     }
-    $governanceUrl = app_url('audit/index.php' . (($user['role'] ?? '') === 'admin' ? '?tab=audit' : '?tab=email'));
-    $governanceLabel = ($user['role'] ?? '') === 'admin' ? 'Audit Log' : 'Email Center';
     $nav = [
         'Dashboard' => ['group' => 'Overview', 'url' => app_url('dashboard.php'), 'match' => 'dashboard.php', 'icon' => 'dashboard'],
         'Patients' => ['group' => 'People & Records', 'url' => app_url('patients/index.php'), 'match' => '/patients/', 'icon' => 'personal_injury'],
@@ -286,7 +292,8 @@ function render_header(string $title): void
         'Inventory' => ['group' => 'Resources & Reports', 'url' => app_url('inventory/index.php'), 'match' => '/inventory/', 'icon' => 'inventory_2'],
         'Reports' => ['group' => 'Resources & Reports', 'url' => app_url('reports/index.php'), 'match' => '/reports/', 'icon' => 'analytics'],
         'Feedback' => ['group' => 'Resources & Reports', 'url' => app_url('feedback/index.php'), 'match' => '/feedback/', 'icon' => 'rate_review', 'roles' => ['admin', 'doctor', 'nurse']],
-        $governanceLabel => ['group' => 'Administration', 'url' => $governanceUrl, 'match' => '/audit/', 'icon' => 'history'],
+        'Audit Log' => ['group' => 'Administration', 'url' => app_url('audit/index.php?tab=audit'), 'match' => '/audit/', 'tab' => 'audit', 'icon' => 'history', 'roles' => ['admin']],
+        'Email Center' => ['group' => 'Administration', 'url' => app_url('audit/index.php?tab=email'), 'match' => '/audit/', 'tab' => 'email', 'icon' => 'mail', 'roles' => ['admin', 'doctor', 'nurse']],
         'Settings' => ['group' => 'Administration', 'url' => app_url('settings/index.php'), 'match' => '/settings/', 'icon' => 'settings'],
     ];
     if (first_registration_pending('staff')) {
@@ -375,7 +382,7 @@ function render_header(string $title): void
                             <h2 class="app-nav-group-title"><?= e($group) ?></h2>
                             <div class="app-nav-group-links">
                                 <?php foreach ($groupItems as $label => $item): ?>
-                                    <?php $active = str_contains($currentPath, $item['match']); ?>
+                                    <?php $active = str_contains($currentPath, $item['match']) && (!isset($item['tab']) || (string) ($_GET['tab'] ?? 'audit') === $item['tab']); ?>
                                     <?php $actionCount = (int) ($sidebarActionCounts[$label] ?? 0); ?>
                                     <a href="<?= e($item['url']) ?>" class="app-nav-link <?= $active ? 'active' : '' ?> text-decoration-none" title="<?= e($label) ?><?= $actionCount > 0 ? ' (' . $actionCount . ' action' . ($actionCount === 1 ? '' : 's') . ' required)' : '' ?>" data-no-ajax="true">
                                         <span class="material-symbols-outlined"><?= e($item['icon']) ?></span>
@@ -565,6 +572,7 @@ function render_footer(): void
     <script src="<?= app_url('assets/js/ag-grid-tables.js?v=' . filemtime(__DIR__ . '/../../public/assets/js/ag-grid-tables.js')) ?>"></script>
     <script src="<?= app_url('assets/js/file-preview.js?v=ape-popup-9') ?>"></script>
     <script src="<?= app_url('assets/js/submission-loading.js?v=1') ?>"></script>
+    <script src="<?= app_url('assets/js/unsaved-changes.js?v=' . filemtime(__DIR__ . '/../../public/assets/js/unsaved-changes.js')) ?>"></script>
     <script>
         const profilePhotoMotionMs = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 240;
 
@@ -598,7 +606,10 @@ function render_footer(): void
             });
         }
 
-        function closeProfilePhotoModal(modal) {
+        function closeProfilePhotoModal(modal, discardConfirmed = false) {
+            if (!discardConfirmed && typeof window.cliniqConfirmDiscardChanges === 'function') {
+                return window.cliniqConfirmDiscardChanges(modal, () => closeProfilePhotoModal(modal, true));
+            }
             modal._profilePhotoClosing = true;
             modal.classList.remove('is-open');
             clearTimeout(modal._profilePhotoCloseTimer);
@@ -653,6 +664,20 @@ function render_footer(): void
             });
         });
         document.querySelectorAll('[data-profile-photo-form]').forEach((form) => {
+            const preview = form.querySelector('[data-profile-photo-preview]');
+            const fallback = form.querySelector('[data-profile-photo-fallback]');
+            const selectedFile = form.querySelector('[data-profile-photo-selected]');
+            const originalPreviewSrc = preview?.getAttribute('src') || '';
+            const hadOriginalPreview = Boolean(preview && !preview.hidden);
+            form.addEventListener('reset', () => window.requestAnimationFrame(() => {
+                if (preview) {
+                    preview.src = originalPreviewSrc;
+                    preview.hidden = !hadOriginalPreview;
+                }
+                if (fallback) fallback.hidden = hadOriginalPreview;
+                if (selectedFile) selectedFile.textContent = 'No new photo selected';
+                setProfilePhotoConfirmation(form, false);
+            }));
             form.addEventListener('submit', (event) => {
                 if (form.dataset.profilePhotoConfirmed !== 'true') {
                     event.preventDefault();
@@ -719,6 +744,7 @@ function render_ag_grid(string $gridId, array $columns, array $rows, array $opti
     $height = $options['height'] ?? 'standard';
     $heightClass = match ($height) {
         'compact' => 'cliniq-ag-grid-compact',
+        'content' => 'cliniq-ag-grid-content',
         'fill' => 'cliniq-ag-grid-fill',
         'patient-registry' => 'cliniq-ag-grid-patient-registry',
         default => 'cliniq-ag-grid-standard',
@@ -740,6 +766,7 @@ function render_ag_grid(string $gridId, array $columns, array $rows, array $opti
           ($normalizeStudentIdSearch ? 'data-normalize-student-id-search="true" ' : '') .
          ($fitColumns ? 'data-fit-columns="true" ' : 'data-fit-columns="false" ') .
          ($pagination ? 'data-pagination="true" ' : 'data-pagination="false" ') .
+          ($height === 'content' ? 'data-content-height="true" ' : '') .
          'data-row-height="' . $rowHeight . '" ' .
          'data-page-size="' . (int)$pageSize . '" ' .
          'data-empty-title="' . e($options['emptyTitle'] ?? '') . '" ' .

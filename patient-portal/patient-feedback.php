@@ -53,7 +53,7 @@ try {
         }
         $values = $_POST;
         $values['consent'] = '1';
-        $values['anonymous'] = $isGeneralFeedback ? '1' : '0';
+        $values['anonymous'] = !empty($_SESSION['student_feedback_anonymous']) ? '1' : '0';
         clinic_feedback_submit($db, ['person_id' => $personId, 'visit_id' => $selectedId], $values);
         if ($selectedId) {
             patient_notification_mark_source_read($db, $personId, 'clinic_feedback', $selectedId);
@@ -119,7 +119,7 @@ render_student_header('Give Feedback', 'dashboard');
             </section>
             <?php endif; ?>
 
-            <form method="post" id="student-feedback-form" class="student-feedback-form">
+            <form method="post" id="student-feedback-form" class="student-feedback-form" data-no-discard-warning>
                 <input type="hidden" name="_csrf" value="<?= student_e($csrf) ?>">
                 <input type="hidden" name="start_token" value="<?= student_e($startToken) ?>">
                 <nav class="student-feedback-survey-progress" aria-label="Feedback form progress"><span class="is-current" data-feedback-progress="1">1 · Ratings</span><span data-feedback-progress="2">2 · Comments</span></nav>

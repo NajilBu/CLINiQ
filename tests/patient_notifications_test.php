@@ -45,6 +45,15 @@ if (!str_contains($service, 'patient_notification_for_feedback_required')
     || !str_contains($service, 'patient_notification_mark_source_read')) {
     throw new RuntimeException('Feedback requirements must create idempotent notifications and mark them read after submission.');
 }
+if (!str_contains($service, 'in_array($action, [\'finalize_exam_clear\', \'approve_clearance\'], true)')
+    || !str_contains($service, 'patient_notification_mark_source_read($db, $patientId, \'ape\', $apeId)')) {
+    throw new RuntimeException('APE clearance must mark older APE notifications read while retaining notification history.');
+}
+if (!str_contains($service, 'function patient_notification_mark_resolved_ape_read')
+    || !str_contains($service, 'INNER JOIN ape_records a ON a.ape_id = n.source_id')
+    || !str_contains($layout, 'patient_notification_mark_resolved_ape_read($db, (int) $profile[\'person_id\'])')) {
+    throw new RuntimeException('The portal header must reconcile unread APE notifications for already-cleared records.');
+}
 if (!str_contains($patientAppointment, 'clinic_feedback_pending_completed_visits')
     || !str_contains($patientAppointment, '$feedbackRequired')) {
     throw new RuntimeException('Appointment booking must use the global completed-feedback block.');

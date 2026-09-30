@@ -25,7 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$patientId) {
         $identifier = normalize_id_number(trim($_POST['identifier'] ?? ''));
         if ($identifier === '') {
-            flash_message('error', 'Select an existing patient or enter an ID listed in Cliniq_db.');
+            flash_message('error', 'Select an existing patient or enter the ID of an existing patient account.');
             header('Location: emergency_create.php');
             exit;
         }
@@ -40,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $patientId = (int) ($existing['person_id'] ?? 0);
 
         if (!$patientId) {
-            flash_message('error', 'This ID is not listed as a patient in Cliniq_db. Create the inactive patient account first.');
+            flash_message('error', 'No patient account matches this ID. Create an inactive patient account first.');
             header('Location: emergency_create.php');
             exit;
         }
@@ -115,7 +115,7 @@ render_header('Emergency Visit');
                         <?php endforeach; ?>
                     </select>
                     <?php if ($search !== '' && !$patientOptions): ?>
-                        <p class="text-xs font-bold text-amber-600 mt-2 mb-0">No matching patient was found in Cliniq_db. Create the inactive patient account first.</p>
+                        <p class="text-xs font-bold text-amber-600 mt-2 mb-0">No patient account matches this ID. Create an inactive patient account first.</p>
                     <?php endif; ?>
                 </div>
                 <div class="md:col-span-2">

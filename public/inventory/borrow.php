@@ -35,7 +35,7 @@ try {
     $patientStmt->execute([$borrowerIdentifier]);
     $patient = $patientStmt->fetch();
     if (!$patient) {
-        throw new RuntimeException('That ID is not in the Cliniq_db patient list.');
+        throw new RuntimeException('No patient account matches that ID.');
     }
 
     $itemStmt = $db->prepare("

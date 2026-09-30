@@ -24,7 +24,9 @@ foreach ([
     'window.print()',
     'table-header-group',
     'page-break-inside: avoid',
-    'audit_log_metadata_summary',
+    'audit_log_event_details',
+    'Choose both a start and end date before printing the audit log.',
+    'audit_log_governance_excluded_actions',
 ] as $expected) {
     if (!str_contains($printPage, $expected)) {
         throw new RuntimeException("The printable audit view is missing: {$expected}");

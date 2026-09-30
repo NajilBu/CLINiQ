@@ -15,6 +15,7 @@ const CLINIQ_EMAIL_AUTOMATION_DEFAULTS = [
     'ape_corrections' => true,
     'ape_follow_up_reminders' => true,
     'ape_overdue' => true,
+    'ape_schedule_updates' => true,
     'access_restrictions' => true,
     'school_year_enrollment' => true,
 ];
@@ -180,6 +181,7 @@ function patient_email_event_catalog(): array
         'ape_follow_up_reminder' => ['label' => 'APE follow-up reminder', 'automation_key' => 'ape_follow_up_reminders', 'template_key' => 'ape_follow_up_reminder', 'email' => true, 'notification' => true],
         'ape_follow_up_overdue' => ['label' => 'APE follow-up overdue', 'automation_key' => 'ape_overdue', 'template_key' => 'ape_follow_up_overdue', 'email' => true, 'notification' => true],
         'ape_documents_overdue' => ['label' => 'APE documents overdue', 'automation_key' => 'ape_overdue', 'template_key' => 'ape_documents_overdue', 'email' => true, 'notification' => true],
+        'ape_schedule_updated' => ['label' => 'APE schedule updated', 'automation_key' => 'ape_schedule_updates', 'template_key' => 'ape_schedule_updated', 'email' => true, 'notification' => true],
         'ape_exam_missed' => ['label' => 'Missed APE examination', 'automation_key' => '', 'template_key' => 'ape_exam_missed', 'email' => true, 'notification' => true],
         'patient_access_restricted' => ['label' => 'Patient access restricted', 'automation_key' => 'access_restrictions', 'template_key' => 'patient_access_restricted', 'email' => true, 'notification' => true],
         'school_year_enrollment' => ['label' => 'School-year enrollment', 'automation_key' => 'school_year_enrollment', 'email' => true, 'notification' => true],
@@ -474,7 +476,6 @@ function patient_email_dispatch_event(array $event): int
         'recipient_email' => $recipient['email'],
         'recipient_name' => $recipientName,
     ]);
-    if ($id > 0) audit_log_event('email', 'email_queued', (int) ($event['created_by_person_id'] ?? 0) ?: null, $origin === 'manual' ? 'staff' : 'system', 'email', $id, ['event_type' => $eventType, 'origin' => $origin]);
     if (!empty($event['deliver_now']) && $id > 0) patient_email_process_queue('patient_email', 1, null, $id);
     return $id;
 }
@@ -496,7 +497,6 @@ function patient_email_process_queue(?string $queueKey = null, int $limit = 5, ?
         $capacityClaim = patient_email_capacity_claim($db);
         if (empty($capacityClaim['allowed'])) {
             $deferred++;
-            audit_log_event('email', 'email_deferred_capacity', null, 'system', 'email', null, ['reason' => $capacityClaim['reason'] ?? 'capacity_reached']);
             break;
         }
         try {
@@ -515,7 +515,6 @@ function patient_email_process_queue(?string $queueKey = null, int $limit = 5, ?
             $markClaimed->execute([$workerId, (int) $row['id']]);
             $db->commit();
             if (!empty($capacityClaim['lock_held'])) $db->query("SELECT RELEASE_LOCK('cliniq_email_capacity')");
-            audit_log_event('email', 'email_claimed', (int) ($row['created_by_person_id'] ?? 0) ?: null, 'system', 'email', (int) $row['id'], ['worker_id' => $workerId]);
         } catch (Throwable $e) {
             if ($db->inTransaction()) $db->rollBack();
             if (!empty($capacityClaim['lock_held'])) $db->query("SELECT RELEASE_LOCK('cliniq_email_capacity')");
@@ -530,7 +529,9 @@ function patient_email_process_queue(?string $queueKey = null, int $limit = 5, ?
             $done->execute([$result['provider_message_id'], (int) $row['id'], $workerId]);
             patient_email_record_success($db);
             $sent++;
-            audit_log_event('email', 'email_sent', (int) ($row['created_by_person_id'] ?? 0) ?: null, 'system', 'email', (int) $row['id'], ['event_type' => $row['event_type'], 'recipient' => $row['recipient_email'], 'provider_message_id' => $result['provider_message_id']], 'success');
+            if ((string) ($row['origin'] ?? '') === 'manual') {
+                audit_log_event('email', 'email_sent_manually', (int) ($row['created_by_person_id'] ?? 0) ?: null, 'staff', 'email', (int) $row['id'], ['event_type' => $row['event_type']], 'success');
+            }
             continue;
         }
         if (patient_email_is_quota_error($result['error'] ?? null)) {
@@ -706,7 +707,7 @@ function patient_email_resend(int $id, ?int $actorPersonId): int
     $stmt = auth_db()->prepare('SELECT * FROM email_queue WHERE id = ? LIMIT 1');
     $stmt->execute([$id]);
     $row = $stmt->fetch();
-    if (!$row) return 0;
+    if (!$row || (string) $row['status'] !== 'sent' || str_starts_with((string) ($row['event_type'] ?? ''), 'ape_') || str_starts_with((string) ($row['source_type'] ?? ''), 'ape')) return 0;
     $newId = patient_email_queue(array_merge($row, [
         'dedupe_key' => null,
         'origin' => 'manual',
@@ -731,6 +732,32 @@ function patient_email_due_automations(): void
         }
     }
     $today = date('Y-m-d');
+    if (patient_email_automation_enabled('school_year_enrollment')) {
+        $pendingEnrollments = $db->query("
+            SELECT e.enrollment_id, e.student_person_id, e.academic_year
+            FROM student_school_year_enrollments e
+            INNER JOIN accounts a ON a.person_id = e.student_person_id
+            WHERE e.enrollment_status = 'Pending Confirmation'
+              AND a.account_status = 'inactive'
+              AND e.created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)
+        ")->fetchAll();
+        $week = date('o-W');
+        foreach ($pendingEnrollments as $enrollment) {
+            patient_email_queue_notification(
+                (int) $enrollment['student_person_id'],
+                'enrollment_confirmation',
+                'school_year_enrollment',
+                'Confirm your enrollment',
+                'Please confirm your enrollment for the new school year to restore your patient portal access.',
+                'student_school_year_enrollment',
+                (int) $enrollment['enrollment_id'],
+                null,
+                null,
+                'reminder-' . (string) $enrollment['academic_year'] . '-' . $week,
+                true
+            );
+        }
+    }
     foreach (ape_fetch_records() as $record) {
         foreach (ape_patient_document_action_summaries($record) as $action) {
             $due = trim((string) ($action['due_at'] ?? ''));
@@ -779,12 +806,16 @@ function patient_email_summary(): array
         SUM(status = 'failed') AS failed,
         SUM(status = 'blocked') AS blocked,
         SUM(status = 'cancelled') AS cancelled
-        ,SUM(status IN ('pending','failed') AND retryable = 1) AS retryable,
+         ,SUM(status IN ('pending','failed') AND retryable = 1) AS retryable,
          SUM(follow_up_required = 1 AND resolved_at IS NULL) AS follow_up,
+          SUM(status IN ('failed', 'blocked') OR (follow_up_required = 1 AND resolved_at IS NULL)) AS actionable_issues,
          SUM(status = 'failed' AND retryable = 0) AS max_attempts,
         MIN(CASE WHEN status IN ('pending','failed') AND retryable = 1 THEN COALESCE(next_attempt_at, available_at) END) AS oldest_pending
         FROM email_queue")->fetch() ?: [];
     $capacity = patient_email_capacity_snapshot($db);
+    $workerHeartbeat = (array) cliniq_setting_read('mail.worker_heartbeat', []);
+    $workerInterval = max(15, (int) env_value('EMAIL_WORKER_INTERVAL_SECONDS', '60'));
+    $workerAt = strtotime((string) ($workerHeartbeat['at'] ?? ''));
     return [
         'total' => $row['total'] ?? 0,
         'pending' => $row['pending'] ?? 0,
@@ -795,10 +826,12 @@ function patient_email_summary(): array
         'cancelled' => $row['cancelled'] ?? 0,
         'retryable' => $row['retryable'] ?? 0,
         'follow_up' => $row['follow_up'] ?? 0,
+        'actionable_issues' => $row['actionable_issues'] ?? 0,
         'max_attempts' => $row['max_attempts'] ?? 0,
         'oldest_pending' => $row['oldest_pending'] ?? null,
         'queue_paused' => patient_email_queue_is_paused(),
-        'worker_heartbeat' => cliniq_setting_read('mail.worker_heartbeat', []),
+        'worker_heartbeat' => $workerHeartbeat,
+        'worker_healthy' => $workerAt !== false && $workerAt >= time() - max(180, $workerInterval * 3),
         'capacity' => $capacity,
     ];
 }
@@ -821,24 +854,26 @@ function patient_email_attention_items(int $limit = 12): array
         FROM email_queue q
         LEFT JOIN people p ON p.id = q.patient_person_id
         WHERE q.status IN ('failed', 'blocked')
-           OR (q.status IN ('pending', 'processing') AND q.available_at <= NOW())
+           OR (q.status = 'pending' AND q.available_at <= NOW())
+           OR (q.status = 'processing' AND q.locked_at < DATE_SUB(NOW(), INTERVAL 15 MINUTE))
         ORDER BY q.created_at ASC, q.id ASC
         LIMIT 100")->fetchAll();
 
     foreach ($queue as $row) {
         $isFailed = (string) $row['status'] === 'failed';
         $isBlocked = (string) $row['status'] === 'blocked';
+        $isStalled = (string) $row['status'] === 'processing';
         $isDue = !$isFailed && in_array((string) $row['status'], ['pending', 'processing'], true);
         $eventLabel = ucwords(str_replace('_', ' ', (string) ($row['event_type'] ?: 'patient email')));
         $items[] = [
             'kind' => $isBlocked ? 'blocked' : ($isFailed ? 'failed' : 'overdue'),
             'priority' => ($isFailed || $isBlocked) ? 1 : 2,
-            'title' => $isBlocked ? 'Email blocked' : ($isFailed ? 'Delivery failed' : 'Email is waiting to be sent'),
+            'title' => $isBlocked ? 'Email blocked' : ($isFailed ? 'Delivery failed' : ($isStalled ? 'Email processing stalled' : 'Email is waiting to be sent')),
             'message' => $isBlocked
                 ? ((string) ($row['blocked_reason'] ?: 'The email could not be sent until the recipient issue is resolved.'))
                 : ($isFailed
                     ? ((string) ($row['last_error'] ?: 'The email service could not deliver this message.'))
-                    : 'This urgent email is past its scheduled send time and needs review.'),
+                    : ($isStalled ? 'This email has been processing for more than 15 minutes and needs review.' : 'This urgent email is past its scheduled send time and needs review.')),
             'patient_name' => (string) ($row['patient_name'] ?: $row['recipient_name'] ?: 'Patient'),
             'recipient_email' => (string) ($row['recipient_email'] ?? ''),
             'event_label' => $eventLabel,
@@ -879,7 +914,7 @@ function patient_email_attention_items(int $limit = 12): array
             FROM ape_records ar
             INNER JOIN people p ON p.id = ar.patient_id
             LEFT JOIN accounts ac ON ac.person_id = ar.patient_id
-            WHERE ar.workflow_status <> 'Cleared'
+            WHERE ar.workflow_status NOT IN ('Cleared', 'Inactive')
               AND ar.clearance_status <> 'Cleared'
               AND ((ar.follow_up_required = 1 AND ar.follow_up_due_date <= DATE_ADD(CURDATE(), INTERVAL 1 DAY))
                    OR (ar.exam_date IS NOT NULL AND EXISTS (SELECT 1 FROM ape_requirements r2
@@ -941,7 +976,7 @@ function patient_email_upcoming_items(int $limit = 8): array
             TRIM(CONCAT_WS(' ', p.first_name, p.middle_name, p.last_name)) AS patient_name
         FROM email_queue q
         LEFT JOIN people p ON p.id = q.patient_person_id
-        WHERE q.status = 'pending' AND q.available_at > NOW()
+        WHERE q.status = 'pending' AND q.origin = 'automatic' AND q.available_at > NOW()
         ORDER BY q.available_at ASC, q.id ASC
         LIMIT {$limit}");
     $stmt->execute();

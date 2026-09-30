@@ -150,7 +150,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         ape_log_activity($apeId, $staffPersonId, 'Created APE record', 'Academic year ' . $academicYear);
         $apeDb->commit();
-        flash_message('success', 'APE workflow record created successfully in Cliniq_db.');
+        flash_message('success', 'APE record created successfully.');
         header('Location: view.php?id=' . $apeId);
         exit;
     } catch (Throwable $e) {

@@ -25,7 +25,9 @@ foreach ($medicineItems as $item) {
 }
 $lowStock = array_values(array_filter($medicineStockGroups, fn(array $group): bool => (int) $group['quantity'] <= (int) $group['reorder_level']));
 $lowStockKeys = array_fill_keys(array_keys(array_filter($medicineStockGroups, fn(array $group): bool => (int) $group['quantity'] <= (int) $group['reorder_level'])), true);
-$expiring = array_values(array_filter($medicineItems, fn(array $item): bool => $item['expiration_date'] && strtotime($item['expiration_date']) <= strtotime('+30 days')));
+$today = date('Y-m-d');
+$expired = array_values(array_filter($medicineItems, fn(array $item): bool => !empty($item['expiration_date']) && (string) $item['expiration_date'] < $today));
+$expiring = array_values(array_filter($medicineItems, fn(array $item): bool => !empty($item['expiration_date']) && (string) $item['expiration_date'] >= $today && strtotime($item['expiration_date']) <= strtotime('+30 days')));
 $outOfStock = array_values(array_filter($medicineItems, fn(array $item): bool => (int) $item['quantity'] === 0));
 $medicineRestockOptions = [];
 $equipmentRestockOptions = [];
@@ -84,7 +86,7 @@ $returnedToday = array_values(array_filter($loanRowsRaw, fn(array $loan): bool =
 $inventoryTransactions = cliniq_inventory_transactions();
 
 $activeTab = $_GET['tab'] ?? 'medicine';
-if (!in_array($activeTab, ['medicine', 'equipment', 'expiring', 'archived', 'activity'], true)) {
+if (!in_array($activeTab, ['medicine', 'equipment', 'expiring', 'expired', 'archived', 'activity'], true)) {
     $activeTab = 'medicine';
 }
 $stockFilter = $_GET['stock_status'] ?? 'all';
@@ -143,6 +145,7 @@ $activityColumns = [
 
 $visibleItems = match ($activeTab) {
     'expiring' => $expiring,
+    'expired' => $expired,
     'equipment' => $equipmentItems,
     'archived' => $archivedItems,
     default => $medicineItems,
@@ -168,7 +171,8 @@ $inventoryRows = [];
 $highlightedLowStockKeys = [];
 foreach ($visibleItems as $item) {
     $isArchived = !empty($item['archived_at']);
-    $isExpiring = $item['expiration_date'] && strtotime($item['expiration_date']) <= strtotime('+30 days');
+    $isExpired = !empty($item['expiration_date']) && (string) $item['expiration_date'] < $today;
+    $isExpiring = !empty($item['expiration_date']) && !$isExpired && strtotime($item['expiration_date']) <= strtotime('+30 days');
     $category = trim((string) ($item['category'] ?? ''));
     $isEquipment = str_contains(strtolower($category), 'equipment');
     $stockKey = !$isEquipment ? $medicineStockKey($item) : '';
@@ -179,11 +183,13 @@ foreach ($visibleItems as $item) {
     if (!$isEquipment && isset($medicineStockGroups[$stockKey])) {
         $displayQuantityForStatus['quantity'] = (int) $medicineStockGroups[$stockKey]['quantity'];
     }
-    $maxQty = max((int) $item['reorder_level'] * 4, (int) $item['quantity'], 1);
-    $pct = min(100, round(((int) $item['quantity'] / $maxQty) * 100));
+    $batchQuantity = (int) $item['quantity'];
+    $totalQuantity = (int) $displayQuantityForStatus['quantity'];
+    $maxQty = max((int) $item['reorder_level'] * 4, $totalQuantity, 1);
+    $pct = min(100, round(($totalQuantity / $maxQty) * 100));
     $barClass = $isLow ? ($pct <= 20 ? 'stock-critical' : 'stock-warning') : ($pct <= 20 ? 'stock-warning' : 'stock-healthy');
     $expirationLabel = $item['expiration_date'] ? date('M d, Y', strtotime($item['expiration_date'])) : '-';
-    $expirationClass = $isExpiring && !$isArchived ? 'text-red-600' : 'text-slate-600';
+    $expirationClass = ($isExpired || $isExpiring) && !$isArchived ? 'text-red-600' : 'text-slate-600';
     $editArgs = implode(', ', [
         (int) $item['id'],
         e(json_encode($item['item_name'])),
@@ -248,6 +254,9 @@ foreach ($visibleItems as $item) {
     if ($isExpiring && !$isEquipment) {
         $highlightKeys[] = 'expiring';
     }
+    if ($isExpired && !$isEquipment) {
+        $highlightKeys[] = 'expired';
+    }
 
     $inventoryRows[] = [
         'highlightKeys' => $highlightKeys,
@@ -255,8 +264,8 @@ foreach ($visibleItems as $item) {
         'itemHtml' => '<div><strong class="text-sm text-slate-800">' . e($item['item_name']) . '</strong><p class="text-xs font-bold text-slate-400 mb-0">' . e($category !== '' ? $category : 'No type') . '</p></div>',
         'categorySort' => $category,
         'categoryHtml' => '<span class="text-sm font-bold text-slate-600">' . e($category !== '' ? $category : '-') . '</span>',
-        'stockSort' => (int) $item['quantity'],
-        'stockHtml' => '<div class="flex flex-col items-start gap-1"><span class="text-sm font-bold ' . ($isLow ? 'text-amber-600' : 'text-slate-600') . '">' . (int) $item['quantity'] . ' ' . e($item['unit']) . '</span><span class="stock-bar"><span class="stock-bar-fill ' . e($barClass) . '" style="width: ' . (int) $pct . '%"></span></span></div>',
+        'stockSort' => $batchQuantity,
+        'stockHtml' => '<div class="flex flex-col items-start gap-1"><span class="text-sm font-bold ' . ($isLow ? 'text-amber-600' : 'text-slate-600') . '">' . $batchQuantity . ' ' . e($item['unit']) . ($isEquipment ? '' : ' in this batch') . '</span>' . (!$isEquipment && $totalQuantity !== $batchQuantity ? '<span class="text-xs font-bold text-slate-400">' . $totalQuantity . ' ' . e($item['unit']) . ' total across batches</span>' : '') . '<span class="stock-bar"><span class="stock-bar-fill ' . e($barClass) . '" style="width: ' . (int) $pct . '%"></span></span></div>',
         'reorderLevel' => (int) $item['reorder_level'],
         'expirationSort' => $item['expiration_date'],
         'expirationHtml' => '<span class="text-sm font-bold ' . $expirationClass . '">' . e($expirationLabel) . '</span>',
@@ -289,6 +298,9 @@ foreach ($inventoryTransactions as $transaction) {
 $loanRows = [];
 foreach ($loanRowsRaw as $loan) {
     $isBorrowed = in_array(($loan['status'] ?? ''), ['Borrowed', 'Due soon', 'Overdue'], true);
+    $displayLoanStatus = ($loan['status'] ?? '') === 'Cancelled' && ($loan['return_condition'] ?? '') === 'Lost'
+        ? 'Lost'
+        : (string) ($loan['status'] ?? '');
     $dueAt = !empty($loan['due_at']) ? strtotime((string) $loan['due_at']) : false;
     $dueClass = ($loan['status'] ?? '') === 'Overdue' ? 'text-red-600' : (($loan['status'] ?? '') === 'Due soon' ? 'text-amber-700' : 'text-slate-700');
 
@@ -303,8 +315,8 @@ foreach ($loanRowsRaw as $loan) {
         'borrowedHtml' => '<div><strong class="text-sm text-slate-700">' . e(date('M d, g:i A', strtotime($loan['borrowed_at']))) . '</strong><p class="text-xs font-bold text-slate-400 mb-0">' . e($loan['borrowed_by_name'] ?: 'System') . '</p></div>',
         'quantitySort' => (int) $loan['borrowed_quantity'],
         'quantityHtml' => '<span class="text-sm font-bold text-slate-700">' . (int) $loan['borrowed_quantity'] . ' ' . e($loan['unit'] ?: 'unit') . '</span>',
-        'statusSort' => array_search((string) $loan['status'], ['Overdue', 'Due soon', 'Borrowed', 'Returned', 'Cancelled'], true),
-        'statusHtml' => inventory_loan_status_badge((string) $loan['status']),
+        'statusSort' => array_search($displayLoanStatus, ['Overdue', 'Due soon', 'Borrowed', 'Returned', 'Lost', 'Cancelled'], true),
+        'statusHtml' => inventory_loan_status_badge($displayLoanStatus),
         'conditionSort' => $loan['return_condition'] ?? '',
         'conditionHtml' => inventory_return_condition_badge($loan['return_condition'] ?? null),
         'dueSort' => $loan['due_at'] ?? '',
@@ -317,6 +329,7 @@ foreach ($loanRowsRaw as $loan) {
 $tableTitle = match ($activeTab) {
     'equipment' => 'Equipment Tracking',
     'expiring' => 'Expiring Soon',
+    'expired' => 'Expired Stock',
     'archived' => 'Archived Inventory',
     'activity' => 'Inventory Activity',
     default => 'Medicine Inventory',
@@ -324,6 +337,7 @@ $tableTitle = match ($activeTab) {
 $tableDescription = match ($activeTab) {
     'equipment' => count($equipmentItems) . ' active equipment item(s) available for clinic use.',
     'expiring' => count($expiring) . ' active item(s) expiring within 30 days.',
+    'expired' => count($expired) . ' active item(s) that must not be dispensed.',
     'archived' => count($archivedItems) . ' item(s) removed from active inventory.',
     'activity' => count($inventoryTransactions) . ' recent stock transaction(s).',
     default => count($medicineItems) . ' active medicine item(s).',
@@ -359,6 +373,16 @@ if (count($expiring) > 0) {
         'tone' => 'red',
     ];
 }
+if (count($expired) > 0) {
+    $inventoryNotices[] = [
+        'icon' => 'report',
+        'label' => 'Expired Stock',
+        'count' => count($expired),
+        'detail' => count($expired) . ' medicine batch(es) must not be dispensed.',
+        'href' => '?tab=expired&highlight=expired',
+        'tone' => 'red',
+    ];
+}
 if (count($activeLoans) > 0) {
     $inventoryNotices[] = [
         'icon' => 'assignment_ind',
@@ -374,9 +398,9 @@ render_header('Inventory');
 
 render_clinic_command_header(
     'Medicines',
-    'Inventory & Tracking',
+        'Inventory & Tracking',
     'Manage clinic medicines, expiring stock, equipment loans, and archived records.',
-    '<button onclick="openAddMedicineModal()" class="btn btn-primary justify-center"><span class="material-symbols-outlined text-[20px]">medication</span>+ Medicine</button><button onclick="showModal(\'addEquipmentModal\')" class="btn btn-outline justify-center"><span class="material-symbols-outlined text-[20px]">medical_services</span>+ Equipment</button><button onclick="showModal(\'inventoryImportModal\')" class="btn btn-outline justify-center"><span class="material-symbols-outlined text-[20px]">upload_file</span>Import Excel</button>'
+        '<button onclick="openAddMedicineModal()" class="btn btn-primary justify-center"><span class="material-symbols-outlined text-[20px]">medication</span>+ Medicine</button><button onclick="showModal(\'addEquipmentModal\')" class="btn btn-outline justify-center"><span class="material-symbols-outlined text-[20px]">medical_services</span>+ Equipment</button><button onclick="showModal(\'inventoryImportModal\')" class="btn btn-outline justify-center"><span class="material-symbols-outlined text-[20px]">upload_file</span>Import Spreadsheet</button>'
 );
 ?>
 
@@ -394,7 +418,7 @@ render_clinic_command_header(
                 </div>
             </div>
         </div>
-        <div class="p-4 sm:p-5 grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div class="inventory-notice-grid p-4 sm:p-5">
             <?php foreach ($inventoryNotices as $notice): ?>
                 <?php
                     $toneClass = match ($notice['tone']) {
@@ -453,6 +477,11 @@ render_clinic_command_header(
                 Expiring Soon
                 <span class="ml-1.5 px-2 py-0.5 rounded-full <?= $activeTab === 'expiring' ? 'bg-primary-fixed text-primary' : 'bg-slate-100 text-slate-500' ?> text-[10px]"><?= count($expiring) ?></span>
             </a>
+            <a href="?tab=expired" data-inventory-nav class="status-tab <?= $activeTab === 'expired' ? 'active' : '' ?> text-decoration-none">
+                <span class="material-symbols-outlined text-[18px] align-middle mr-1">report</span>
+                Expired
+                <span class="ml-1.5 px-2 py-0.5 rounded-full <?= $activeTab === 'expired' ? 'bg-primary-fixed text-primary' : 'bg-slate-100 text-slate-500' ?> text-[10px]"><?= count($expired) ?></span>
+            </a>
             <a href="?tab=archived" data-inventory-nav class="status-tab <?= $activeTab === 'archived' ? 'active' : '' ?> text-decoration-none">
                 <span class="material-symbols-outlined text-[18px] align-middle mr-1">archive</span>
                 Archived
@@ -506,9 +535,11 @@ render_clinic_command_header(
         'pagination' => true,
         'paginationControls' => 'inventoryPagination',
         'keyboardRows' => $activeTab !== 'activity',
+        'height' => 'content',
         'emptyTitle' => match ($activeTab) {
             'equipment' => 'No equipment items',
             'expiring' => 'No expiring items',
+            'expired' => 'No expired items',
             'archived' => 'No archived records',
             'activity' => 'No inventory activity',
             default => 'No inventory items',
@@ -516,6 +547,7 @@ render_clinic_command_header(
         'emptyText' => match ($activeTab) {
             'equipment' => 'Add clinic equipment to track active stock and availability.',
             'expiring' => 'No active items are expiring within the next 30 days.',
+            'expired' => 'No active medicine batches are expired.',
             'archived' => 'Archived medicine and equipment records will appear here.',
             'activity' => 'Stock-in, dispensing, borrowing, returns, and adjustments will appear here.',
             default => 'Add medicines to start tracking stock.',
@@ -555,7 +587,7 @@ render_clinic_command_header(
             'pageSize' => 10,
             'pagination' => true,
             'paginationControls' => 'inventoryLoansPagination',
-            'height' => 'compact',
+            'height' => 'content',
             'emptyTitle' => 'No equipment loans yet',
             'emptyText' => 'Borrowed equipment and completed returns will appear here.',
         ]); ?>
@@ -578,7 +610,7 @@ render_clinic_command_header(
                     <div class="flex justify-between gap-3"><span class="text-xs font-black text-slate-400 uppercase tracking-widest">Quantity</span><span class="text-sm font-bold text-slate-800 text-right"><?= (int) $loan['borrowed_quantity'] ?> <?= e($loan['unit'] ?: 'unit') ?></span></div>
                     <div class="flex justify-between gap-3"><span class="text-xs font-black text-slate-400 uppercase tracking-widest">Borrowed</span><span class="text-sm font-bold text-slate-700 text-right"><?= e(date('M d, Y g:i A', strtotime($loan['borrowed_at']))) ?></span></div>
                     <div class="flex justify-between gap-3"><span class="text-xs font-black text-slate-400 uppercase tracking-widest">Expected Return</span><span class="text-sm font-bold text-slate-700 text-right"><?= !empty($loan['due_at']) ? e(date('M d, Y g:i A', strtotime($loan['due_at']))) : 'Not set' ?></span></div>
-                    <div class="flex justify-between gap-3"><span class="text-xs font-black text-slate-400 uppercase tracking-widest">Status</span><?= inventory_loan_status_badge((string) $loan['status']) ?></div>
+                    <div class="flex justify-between gap-3"><span class="text-xs font-black text-slate-400 uppercase tracking-widest">Status</span><?= inventory_loan_status_badge(($loan['status'] ?? '') === 'Cancelled' && ($loan['return_condition'] ?? '') === 'Lost' ? 'Lost' : (string) $loan['status']) ?></div>
                     <?php if (!$loanIsActive): ?>
                         <div class="flex justify-between gap-3"><span class="text-xs font-black text-slate-400 uppercase tracking-widest">Returned</span><span class="text-sm font-bold text-slate-700 text-right"><?= !empty($loan['returned_at']) ? e(date('M d, Y g:i A', strtotime($loan['returned_at']))) : 'Recorded' ?></span></div>
                         <div class="flex justify-between gap-3"><span class="text-xs font-black text-slate-400 uppercase tracking-widest">Condition</span><?= inventory_return_condition_badge($loan['return_condition'] ?? null) ?></div>
@@ -590,7 +622,7 @@ render_clinic_command_header(
                     <form method="post" action="return.php" data-inventory-form class="mt-5 space-y-4">
                         <input type="hidden" name="loan_id" value="<?= (int) $loan['id'] ?>">
                         <div><label class="clinic-label">Equipment Condition</label><select class="clinic-select" name="return_condition"><?php foreach (dropdown_options('inventory_return_condition') as $condition): ?><option value="<?= e($condition) ?>"><?= e($condition) ?></option><?php endforeach; ?></select></div>
-                        <div><label class="clinic-label">Return Notes</label><textarea class="clinic-textarea" name="return_notes" rows="3" placeholder="Condition notes, damage details, or follow-up action."></textarea></div>
+                        <div><label class="clinic-label">Return Notes</label><textarea class="clinic-textarea" name="return_notes" rows="3" placeholder="Required for defective or lost equipment; include condition details or follow-up action."></textarea></div>
                         <div class="flex justify-end gap-3"><button type="button" onclick="closeModal('equipmentLoanDetailsModal-<?= (int) $loan['id'] ?>')" class="btn btn-ghost">Cancel</button><button type="submit" class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Process this return?" data-confirm-message="This will close the active loan and record the return condition." data-confirm-toast="Processing equipment return..."><span class="material-symbols-outlined text-[18px]">assignment_return</span>Return Equipment</button></div>
                     </form>
                 <?php else: ?>
@@ -660,7 +692,21 @@ render_clinic_command_header(
                 api.ensureIndexVisible(targetNodes[0].rowIndex, 'middle');
             }
 
-            grid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            window.requestAnimationFrame(() => {
+                const content = document.querySelector('.app-content');
+                const targetRow = grid.querySelector(`.ag-row[row-index="${targetNodes[0].rowIndex}"]`);
+                if (!content || !targetRow) return;
+
+                const contentBounds = content.getBoundingClientRect();
+                const rowBounds = targetRow.getBoundingClientRect();
+                const top = contentBounds.top + 20;
+                const bottom = contentBounds.bottom - 20;
+                if (rowBounds.bottom > bottom) {
+                    content.scrollBy({ top: rowBounds.bottom - bottom, behavior: 'smooth' });
+                } else if (rowBounds.top < top) {
+                    content.scrollBy({ top: rowBounds.top - top, behavior: 'smooth' });
+                }
+            });
 
             window.setTimeout(() => {
                 setTargetRowsAttention(api, targetNodes, false);
@@ -763,8 +809,16 @@ render_clinic_command_header(
                 credentials: 'same-origin',
                 headers: { 'X-Requested-With': 'fetch' }
             }).then(async (response) => {
+                const html = await response.text();
+                const doc = new DOMParser().parseFromString(html, 'text/html');
+                const result = doc.querySelector('#flash-toasts [data-flash]');
+                if (result && result.dataset.flash !== 'success') {
+                    showFetchedFlashes(doc);
+                    return;
+                }
+                window.cliniqMarkChangesSaved?.(form);
                 document.querySelectorAll('.modal-backdrop.show').forEach((modal) => closeModal(modal.id));
-                renderInventoryHtml(await response.text(), response.url || window.location.href, false);
+                renderInventoryHtml(html, response.url || window.location.href, false);
             }).catch(() => {
                 form.submit();
             });
@@ -1008,6 +1062,10 @@ render_clinic_command_header(
                     <label class="clinic-label">Expiration Date</label>
                     <input class="clinic-input" name="expiration_date" id="editItemExpiry" type="date">
                 </div>
+                <div class="md:col-span-2">
+                    <label class="clinic-label">Quantity Adjustment Reason</label>
+                    <textarea class="clinic-textarea" name="adjustment_reason" rows="2" placeholder="Required only when changing quantity."></textarea>
+                </div>
             </div>
             <div class="mt-6 flex justify-end gap-3">
                 <button type="button" onclick="closeModal('editMedicineModal')" class="btn btn-ghost">Cancel</button>
@@ -1034,7 +1092,11 @@ render_clinic_command_header(
         <form method="post" action="archive.php" id="archiveItemForm" data-inventory-form>
             <input type="hidden" name="id" id="archiveItemId">
             <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
-                The item and its history will remain in Cliniq_db, but it will no longer be selectable for dispensing or loans.
+                The item and its history will be kept, but it will no longer be available for dispensing or loans.
+            </div>
+            <div class="mt-4">
+                <label class="clinic-label">Reason for Deactivation</label>
+                <textarea class="clinic-textarea" name="archive_reason" rows="2" required placeholder="Explain why this item is being removed from active inventory."></textarea>
             </div>
             <div class="mt-6 flex justify-end gap-3">
                 <button type="button" onclick="closeModal('archiveItemModal')" class="btn btn-ghost">Cancel</button>
@@ -1064,7 +1126,7 @@ render_clinic_command_header(
                 <div class="md:col-span-2">
                     <label class="clinic-label">Existing Patient ID</label>
                     <input class="clinic-input uppercase" name="borrower_identifier" data-id-number-format required placeholder="Student, faculty, or personnel ID">
-                    <p class="settings-help mt-2 mb-0">The ID must already exist in the Cliniq_db patient list.</p>
+                    <p class="settings-help mt-2 mb-0">Enter the ID of an existing patient account.</p>
                 </div>
                 <div>
                     <label class="clinic-label">Quantity</label>
@@ -1229,6 +1291,12 @@ function openBorrowItem(id, name, available, unit) {
         readDraft(form);
         form.addEventListener('input', () => saveDraft(form));
         form.addEventListener('change', () => saveDraft(form));
+        form.addEventListener('reset', () => {
+            localStorage.removeItem('cliniq:' + form.dataset.inventoryDraft);
+            form.querySelectorAll('[data-inventory-row]').forEach((row, index) => {
+                if (index > 0) row.remove();
+            });
+        });
     }), 0);
 })();
 

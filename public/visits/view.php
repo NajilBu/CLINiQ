@@ -131,7 +131,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $returnTo = 'previous';
                 flash_message('success', 'Assessment finished and visit completed.');
             } else {
-                flash_message('success', 'Visit addressed in Cliniq_db.');
+                flash_message('success', 'Visit updated.');
             }
         } catch (Throwable $e) {
             if ($visitDb->inTransaction()) {
@@ -642,7 +642,7 @@ render_header($pageTitle);
             <span class="material-symbols-outlined text-primary text-[19px]">inventory_2</span>
             Inventory & Dispensing
         </h2>
-        <p class="settings-help mb-4">Append optional medicines to this visit. Saving deducts them from Cliniq_db stock.</p>
+        <p class="settings-help mb-4">Add optional medicines to this visit. Saving updates the available stock.</p>
         <?php if ($sheetDispensings): ?>
             <div class="mb-4 rounded-xl border border-slate-100 bg-slate-50 p-4">
                 <p class="clinic-label mb-2">Previously Recorded Dispensing</p>

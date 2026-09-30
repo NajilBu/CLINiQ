@@ -57,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $created++;
         }
         $db->commit();
-        flash_message('success', $created . ' inventory item' . ($created === 1 ? '' : 's') . ' added to Cliniq_db inventory.');
+        flash_message('success', $created . ' inventory item' . ($created === 1 ? '' : 's') . ' added.');
     } catch (Throwable $e) {
         if ($db->inTransaction()) {
             $db->rollBack();

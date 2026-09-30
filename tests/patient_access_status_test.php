@@ -42,9 +42,10 @@ foreach ([
     }
 }
 
-if (!str_contains($clinicShell, "'Patient Accounts' => ['group' => 'People & Records', 'url' => app_url('patient-accounts/index.php')")
-    || str_contains($settingsPage, '<span>Patient Accounts</span>')) {
-    throw new RuntimeException('Patient Accounts must be located in the main clinic sidebar, not the Settings submenu.');
+if (str_contains($clinicShell, "'Patient Accounts' => ['group' => 'People & Records', 'url' => app_url('patient-accounts/index.php')")
+    || str_contains($settingsPage, '<span>Patient Accounts</span>')
+    || !str_contains($accountPage, 'Patient Accounts')) {
+    throw new RuntimeException('Patient account management must remain merged into the patient workflow, not duplicated in navigation.');
 }
 
 if (!str_contains($service, "\$current === 'Official' && \$status === 'Applicant'")

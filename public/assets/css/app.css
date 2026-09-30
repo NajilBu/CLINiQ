@@ -2979,9 +2979,9 @@ textarea:focus {
 
 .dashboard-page .clinic-card,
 .dashboard-metric-card {
-    border-radius: 1rem;
+    border-radius: 0.75rem;
     border-color: oklch(92% .01 230 / .82);
-    box-shadow: 0 1px 2px oklch(22% .03 250 / .035), 0 10px 26px oklch(22% .03 250 / .035);
+    box-shadow: 0 1px 2px oklch(22% .03 250 / .04), 0 8px 22px oklch(22% .03 250 / .04);
 }
 
 .dashboard-hero {
@@ -4338,11 +4338,10 @@ textarea.record-sheet-field {
     justify-content: space-between;
     min-height: 12rem;
     padding: 1.1rem;
-    border-radius: 0.875rem;
+    border-radius: 0.75rem;
     background: #ffffff;
     border: 1px solid rgba(255, 183, 183, 0.95);
-    border-left: 4px solid var(--danger-strong);
-    box-shadow: 0 1px 2px rgba(180, 35, 42, 0.06);
+    box-shadow: 0 1px 2px rgba(180, 35, 42, 0.04), 0 8px 22px rgba(180, 35, 42, 0.04);
 }
 
 .dashboard-alert-chip {
@@ -5283,6 +5282,16 @@ textarea.record-sheet-field {
     min-height: 340px;
 }
 
+.cliniq-ag-grid-content {
+    min-height: 120px;
+}
+
+.inventory-notice-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+    gap: 1rem;
+}
+
 .cliniq-ag-grid-patient-registry {
     height: auto;
     min-height: 0;
@@ -5453,6 +5462,98 @@ textarea.record-sheet-field {
    APPOINTMENT AVAILABILITY
    Monthly block calendar for clinic appointment scheduling
    ============================================================ */
+.consultation-doctors-shell { overflow: hidden; padding: 0; }
+.consultation-doctors-intro { display: flex; align-items: center; gap: 1rem; padding: 1.35rem; border-bottom: 1px solid #e2e8f0; background: linear-gradient(105deg, #f8fcf9, #ffffff 64%); }
+.consultation-doctors-intro-icon, .consultation-doctor-avatar { display: grid; flex: 0 0 auto; place-items: center; color: #377c52; background: #e8f2ea; }
+.consultation-doctors-intro-icon { width: 2.8rem; height: 2.8rem; border-radius: .9rem; }
+.consultation-doctors-intro-icon .material-symbols-outlined { font-size: 1.45rem; }
+.consultation-doctors-intro > div { min-width: 0; }
+.consultation-doctors-intro h2 { letter-spacing: -.015em; }
+.consultation-doctors-count { display: inline-flex; align-items: center; gap: .35rem; margin-left: auto; padding: .42rem .65rem; border: 1px solid #cfe1d4; border-radius: 999px; color: #28673f; background: #f2f9f3; font-size: .72rem; font-weight: 800; white-space: nowrap; }
+.consultation-doctors-count .material-symbols-outlined { font-size: 1rem; }
+.consultation-doctor-list { display: grid; gap: .75rem; padding: 1rem 1.35rem 1.35rem; }
+.consultation-doctor-card { overflow: hidden; border: 1px solid #dce8e0; border-radius: .9rem; background: #fff; transition: border-color 160ms ease, box-shadow 160ms ease; }
+.consultation-doctor-card[open] { border-color: color-mix(in srgb, var(--cliniq-primary) 45%, #dce8e0); box-shadow: 0 8px 22px rgba(15, 23, 42, .055); }
+.consultation-doctor-summary { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .95rem 1rem; cursor: pointer; list-style: none; }
+.consultation-doctor-summary::-webkit-details-marker { display: none; }
+.consultation-doctor-summary:focus-visible { outline: 3px solid color-mix(in srgb, var(--cliniq-primary) 34%, transparent); outline-offset: -3px; }
+.consultation-doctor-identity, .consultation-doctor-summary-end { display: flex; align-items: center; gap: .7rem; min-width: 0; }
+.consultation-doctor-avatar { width: 2.35rem; height: 2.35rem; border-radius: .7rem; font-size: 1.2rem; }
+.consultation-doctor-identity strong, .consultation-doctor-identity small { display: block; }
+.consultation-doctor-identity strong { color: #17261d; font-size: .92rem; font-weight: 800; }
+.consultation-doctor-identity small { margin-top: .1rem; color: #64748b; font-size: .72rem; font-weight: 700; }
+.consultation-doctor-status { padding: .35rem .55rem; border: 1px solid #d9e2dc; border-radius: 999px; color: #64748b; background: #f8fafc; font-size: .65rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+.consultation-doctor-status.is-assigned { border-color: #cfe1d4; color: #28673f; background: #f2f9f3; }
+.consultation-doctor-chevron { color: #64748b; transition: transform 160ms ease; }
+.consultation-doctor-card[open] .consultation-doctor-chevron { transform: rotate(180deg); }
+.consultation-doctor-form { padding: 1rem; border-top: 1px solid #e2e8f0; background: #fbfdfb; }
+.consultation-doctor-fields { display: grid; grid-template-columns: minmax(13rem, .8fr) minmax(18rem, 1.2fr); gap: 1rem; }
+.consultation-doctor-fieldset { min-width: 0; padding: 0; border: 0; }
+.consultation-doctor-fieldset legend { margin: 0; color: #334155; font-size: .78rem; font-weight: 800; }
+.consultation-doctor-fieldset > p { margin: .28rem 0 .7rem; color: #64748b; font-size: .7rem; font-weight: 600; line-height: 1.45; }
+.consultation-choice-list { display: flex; flex-wrap: wrap; gap: .45rem; }
+.consultation-choice { display: inline-flex; align-items: center; gap: .45rem; min-height: 2.4rem; padding: .45rem .65rem; border: 1px solid #dbe5df; border-radius: .65rem; color: #475569; background: #fff; font-size: .74rem; font-weight: 700; cursor: pointer; transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease; }
+.consultation-choice:hover { border-color: color-mix(in srgb, var(--cliniq-primary) 45%, #dbe5df); }
+.consultation-choice:has(input:checked) { border-color: var(--cliniq-primary); color: #245c38; background: color-mix(in srgb, var(--cliniq-primary) 8%, #fff); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cliniq-primary) 20%, transparent); }
+.consultation-choice input { width: 1rem; height: 1rem; margin: 0; accent-color: var(--cliniq-primary); }
+.consultation-choice.is-closed { color: #94a3b8; background: #f1f5f9; }
+.consultation-choice.is-closed:has(input:checked) { color: #53697f; background: #eaf1f4; }
+.consultation-inline-warning { display: flex; align-items: flex-start; gap: .3rem; padding: .45rem .55rem; border: 1px solid #fde3aa; border-radius: .55rem; color: #9a6200 !important; background: #fffbeb; }
+.consultation-inline-warning .material-symbols-outlined { font-size: .9rem; }
+.consultation-doctor-actions { display: flex; justify-content: flex-end; margin-top: 1rem; }
+.consultation-doctor-actions .material-symbols-outlined, .consultation-doctor-remove-form .material-symbols-outlined { font-size: 1rem; }
+.consultation-doctor-remove-form { display: flex; justify-content: flex-end; padding: .7rem 1rem; border-top: 1px solid #edf1ee; background: #fff; }
+.consultation-doctor-remove-form .btn { color: #b42318; }
+.consultation-doctor-remove-form .btn:hover { color: #991b1b; background: #fff1f1; }
+
+.duplicate-review-notice, .duplicate-merge-guidance, .duplicate-merge-confirm { display: flex; align-items: flex-start; gap: .65rem; padding: .85rem 1rem; border-radius: .8rem; font-size: .78rem; font-weight: 700; line-height: 1.5; }
+.duplicate-review-notice { border: 1px solid #fecaca; color: #991b1b; background: #fef2f2; }
+.duplicate-review-notice a { color: inherit; font-weight: 800; }
+.duplicate-merge-header, .duplicate-pairs-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.35rem; border-bottom: 1px solid #e2e8f0; }
+.duplicate-merge-header { justify-content: flex-start; background: linear-gradient(105deg, #f8fcf9, #fff 64%); }
+.duplicate-merge-header-icon { display: grid; flex: 0 0 auto; place-items: center; width: 2.8rem; height: 2.8rem; border-radius: .9rem; color: #377c52; background: #e8f2ea; }
+.duplicate-merge-form, .duplicate-pair-list { padding: 1.35rem; }
+.duplicate-account-compare { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: .8rem; }
+.duplicate-account-card { display: grid; gap: .28rem; min-width: 0; padding: 1rem; border: 1px solid #dbe5df; border-radius: .8rem; background: #fff; }
+.duplicate-account-card.is-kept { border-color: #b9d8c2; background: #f3faf4; }
+.duplicate-account-card.is-removed { border-color: #f5cccc; background: #fff8f8; }
+.duplicate-account-card strong { overflow: hidden; color: #17261d; font-size: .9rem; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.duplicate-account-card > span:last-child { color: #64748b; font-size: .72rem; font-weight: 700; }
+.duplicate-account-label { display: inline-flex; align-items: center; gap: .25rem; color: #526b5a; font-size: .65rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.duplicate-account-label .material-symbols-outlined, .duplicate-account-merge-icon { font-size: 1rem; }
+.duplicate-account-merge-icon { color: #43855b; }
+.duplicate-merge-guidance { margin: 1rem 0; border: 1px solid #dbe5df; color: #526b5a; background: #f8fcf9; }
+.duplicate-merge-guidance .material-symbols-outlined { color: #43855b; font-size: 1rem; }
+.duplicate-merge-guidance p { margin: 0; }
+.duplicate-choice-table-wrap { overflow-x: auto; border: 1px solid #e2e8f0; border-radius: .8rem; }
+.duplicate-choice-table { width: 100%; min-width: 44rem; border-collapse: collapse; font-size: .78rem; }
+.duplicate-choice-table caption { padding: .75rem 1rem; color: #64748b; font-size: .7rem; font-weight: 800; text-align: left; }
+.duplicate-choice-table th, .duplicate-choice-table td { padding: .75rem 1rem; border-top: 1px solid #eaf0ec; color: #475569; text-align: left; vertical-align: middle; }
+.duplicate-choice-table thead th { border-top: 0; color: #64748b; background: #f8fafc; font-size: .65rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.duplicate-choice-table tbody th { color: #334155; font-weight: 800; text-transform: capitalize; }
+.duplicate-choice-table .clinic-input { min-width: 10.5rem; }
+.duplicate-linked-records { margin-top: 1rem; border: 1px solid #e2e8f0; border-radius: .75rem; overflow: hidden; }
+.duplicate-linked-records summary { display: flex; align-items: center; gap: .45rem; padding: .8rem 1rem; color: #334155; font-size: .76rem; font-weight: 800; cursor: pointer; }
+.duplicate-linked-records summary .material-symbols-outlined { color: #43855b; font-size: 1rem; }
+.duplicate-linked-records ul { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: .45rem; margin: 0; padding: .75rem 1rem 1rem; list-style: none; border-top: 1px solid #eaf0ec; }
+.duplicate-linked-records li { display: flex; justify-content: space-between; gap: .5rem; color: #64748b; font-size: .72rem; font-weight: 700; }
+.duplicate-linked-records li strong { color: #334155; }
+.duplicate-merge-confirm { margin-top: 1rem; border: 1px solid #fde3aa; color: #875500; background: #fffbeb; cursor: pointer; }
+.duplicate-merge-confirm input { flex: 0 0 auto; width: 1rem; height: 1rem; margin-top: .12rem; accent-color: #b7791f; }
+.duplicate-merge-actions { display: flex; justify-content: flex-end; gap: .65rem; margin-top: 1rem; }
+.duplicate-merge-actions .material-symbols-outlined { font-size: 1rem; }
+.duplicate-pairs-header { align-items: flex-start; }
+.duplicate-pair-list { display: grid; gap: .75rem; }
+.duplicate-pair-card { overflow: hidden; border: 1px solid #e2e8f0; border-radius: .8rem; background: #fff; }
+.duplicate-pair-card > header { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .7rem .9rem; border-bottom: 1px solid #edf2ee; background: #fbfdfb; }
+.duplicate-account-option { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .85rem .9rem; }
+.duplicate-account-option + .duplicate-account-option { border-top: 1px solid #edf2ee; }
+.duplicate-account-option > div { display: grid; min-width: 0; gap: .15rem; }
+.duplicate-account-option strong { color: #17261d; font-size: .82rem; font-weight: 800; }
+.duplicate-account-option span, .duplicate-account-option small { overflow: hidden; color: #64748b; font-size: .7rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.duplicate-account-option .btn { flex: 0 0 auto; }
+.duplicate-account-option .material-symbols-outlined { font-size: 1rem; }
+
 .appointment-calendar {
     display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -6287,6 +6388,15 @@ body.cliniq-drag-scroll-active * {
     .appointment-availability-layout {
         grid-template-columns: minmax(0, 1fr);
     }
+
+    .consultation-doctors-intro { align-items: flex-start; flex-wrap: wrap; }
+    .consultation-doctors-count { margin-left: 3.8rem; }
+    .consultation-doctor-fields { grid-template-columns: 1fr; }
+    .duplicate-account-compare { grid-template-columns: 1fr; }
+    .duplicate-account-merge-icon { justify-self: center; transform: rotate(90deg); }
+    .duplicate-merge-header, .duplicate-pairs-header, .duplicate-account-option { align-items: flex-start; flex-direction: column; }
+    .duplicate-merge-actions { flex-direction: column-reverse; }
+    .duplicate-merge-actions .btn, .duplicate-pairs-header .btn, .duplicate-account-option .btn { width: 100%; justify-content: center; }
 
     .appointment-availability-calendar-panel {
         border-right: 0;
@@ -7301,6 +7411,44 @@ html.cliniq-dark .app-content table td {
 }
 
 /* Appointment availability dark-mode contract. */
+html.cliniq-dark .consultation-doctors-intro,
+html.cliniq-dark .consultation-doctor-card,
+html.cliniq-dark .consultation-doctor-remove-form { background: #17231b; border-color: #3b5945; }
+html.cliniq-dark .consultation-doctors-intro { background: linear-gradient(105deg, #1b3524, #17231b 64%); }
+html.cliniq-dark .consultation-doctor-form { background: #1a2a20; border-color: #3b5945; }
+html.cliniq-dark .consultation-doctors-intro h2,
+html.cliniq-dark .consultation-doctor-identity strong,
+html.cliniq-dark .consultation-doctor-fieldset legend { color: #f1f8f2; }
+html.cliniq-dark .consultation-doctors-intro p,
+html.cliniq-dark .consultation-doctor-identity small,
+html.cliniq-dark .consultation-doctor-fieldset > p { color: #b5c9bb; }
+html.cliniq-dark .consultation-choice { border-color: #466650; color: #d7e6da; background: #1d3024; }
+html.cliniq-dark .consultation-choice:has(input:checked) { color: #e8f6ea; background: #245f36; }
+html.cliniq-dark .consultation-choice.is-closed { color: #96aa9d; background: #22352a; }
+html.cliniq-dark .duplicate-merge-header,
+html.cliniq-dark .duplicate-pair-card,
+html.cliniq-dark .duplicate-account-card,
+html.cliniq-dark .duplicate-choice-table thead th { background: #17231b; border-color: #3b5945; }
+html.cliniq-dark .duplicate-merge-header { background: linear-gradient(105deg, #1b3524, #17231b 64%); }
+html.cliniq-dark .duplicate-merge-header h2,
+html.cliniq-dark .duplicate-account-card strong,
+html.cliniq-dark .duplicate-account-option strong,
+html.cliniq-dark .duplicate-choice-table tbody th { color: #f1f8f2; }
+html.cliniq-dark .duplicate-merge-header p,
+html.cliniq-dark .duplicate-account-card > span:last-child,
+html.cliniq-dark .duplicate-account-option span,
+html.cliniq-dark .duplicate-account-option small,
+html.cliniq-dark .duplicate-choice-table th,
+html.cliniq-dark .duplicate-choice-table td { color: #b5c9bb; border-color: #3b5945; }
+html.cliniq-dark .duplicate-account-card.is-kept { background: #1d3826; border-color: #4a7656; }
+html.cliniq-dark .duplicate-account-card.is-removed { background: #3a2224; border-color: #714448; }
+html.cliniq-dark .duplicate-merge-guidance,
+html.cliniq-dark .duplicate-linked-records,
+html.cliniq-dark .duplicate-pair-card > header { color: #c7d8cb; background: #1a2a20; border-color: #3b5945; }
+html.cliniq-dark .duplicate-linked-records summary,
+html.cliniq-dark .duplicate-linked-records li strong { color: #e8f2ea; }
+html.cliniq-dark .duplicate-linked-records ul { border-color: #3b5945; }
+
 html.cliniq-dark .app-content .working-hours-summary,
 html.cliniq-dark .app-content .appointment-availability-sidebar,
 html.cliniq-dark .app-content .appointment-availability-form-card,

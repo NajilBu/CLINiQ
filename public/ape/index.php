@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/ApeWorkflow.php';
 require_once __DIR__ . '/../../app/services/ApeCycleService.php';
+require_once __DIR__ . '/../../app/services/ClinicWorkCenter.php';
 require_login();
 ensure_ape_workflow_schema();
 
@@ -175,18 +176,24 @@ foreach ($allRecords as $rec) {
         break;
     }
 }
+$apeReminderByRecordId = [];
+foreach (clinic_work_center_reminder_candidates($selectedBatchId) as $reminderItem) {
+    if ((string) ($reminderItem['email_source_type'] ?? $reminderItem['source_type'] ?? '') !== 'ape') continue;
+    $apeReminderByRecordId[(int) ($reminderItem['email_source_id'] ?? $reminderItem['source_id'] ?? 0)] = $reminderItem;
+}
+$apeReadyFollowUpCount = count(array_filter($apeReminderByRecordId, static fn(array $item): bool => !empty($item['can_send_reminder'])));
 
 $apeQueueColumns = [
-    ['headerName' => 'Priority', 'field' => 'priorityHtml', 'cellRenderer' => 'html', 'sortField' => 'prioritySort', 'sortType' => 'number', 'width' => 140],
-    ['headerName' => 'Patient', 'field' => 'studentHtml', 'cellRenderer' => 'html', 'sortField' => 'studentSort', 'minWidth' => 250],
-    ['headerName' => 'Program', 'field' => 'programHtml', 'cellRenderer' => 'html', 'sortField' => 'programSort', 'minWidth' => 220],
-    ['headerName' => 'Waiting', 'field' => 'waiting', 'sortField' => 'waitingSort', 'sortType' => 'number', 'width' => 140],
-    ['headerName' => 'Next Action', 'field' => 'nextActionHtml', 'cellRenderer' => 'html', 'sortField' => 'nextActionSort', 'minWidth' => 260],
+    ['headerName' => 'Priority', 'field' => 'priorityHtml', 'cellRenderer' => 'html', 'sortField' => 'prioritySort', 'sortType' => 'number', 'width' => 145],
+    ['headerName' => 'Patient', 'field' => 'studentHtml', 'cellRenderer' => 'html', 'sortField' => 'studentSort', 'width' => 250],
+    ['headerName' => 'Program', 'field' => 'programHtml', 'cellRenderer' => 'html', 'sortField' => 'programSort', 'width' => 190],
+    ['headerName' => 'Waiting', 'field' => 'waiting', 'sortField' => 'waitingSort', 'sortType' => 'number', 'width' => 145],
+    ['headerName' => 'Next Action', 'field' => 'nextActionHtml', 'cellRenderer' => 'html', 'sortField' => 'nextActionSort', 'width' => 320],
 ];
 if ($populationScope === 'students') {
     array_splice($apeQueueColumns, 3, 0, [[
         'headerName' => 'APE Schedule', 'field' => 'scheduleHtml', 'cellRenderer' => 'html',
-        'sortField' => 'scheduleSort', 'minWidth' => 250,
+        'sortField' => 'scheduleSort', 'width' => 210,
     ]]);
 }
 
@@ -219,10 +226,12 @@ render_clinic_command_header(
     <summary class="px-5 py-4 text-red-700 flex items-center justify-between gap-3 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
         <span class="flex items-center gap-2"><span class="material-symbols-outlined text-[18px]">error</span><h2 class="font-headline font-extrabold text-sm m-0"><?= count($overdueRecords) ?> patient(s) need immediate attention</h2></span>
         <span class="flex items-center gap-3">
-            <a href="../audit/index.php?tab=email#needs-attention" class="inline-flex items-center gap-2 rounded-lg bg-[#3f8155] px-3 py-2 text-xs font-extrabold text-white no-underline shadow-sm hover:bg-[#347047]" onclick="event.stopPropagation();">
-                <span class="material-symbols-outlined text-[16px]">mail</span>
-                Remind students
-            </a>
+            <?php if (in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor', 'nurse'], true)): ?>
+                <a href="../audit/index.php?<?= e(http_build_query(array_filter(['tab' => 'email', 'ape_batch' => $selectedBatchId]))) ?>#needs-attention" class="inline-flex items-center gap-2 rounded-lg bg-[#3f8155] px-3 py-2 text-xs font-extrabold text-white no-underline shadow-sm hover:bg-[#347047]" onclick="event.stopPropagation();">
+                    <span class="material-symbols-outlined text-[16px]">mail</span>
+                    Review APE follow-ups <span class="rounded-full bg-white/20 px-2 py-0.5 text-[10px]"><?= $apeReadyFollowUpCount ?> ready</span>
+                </a>
+            <?php endif; ?>
             <span class="material-symbols-outlined text-[20px] transition-transform group-open:rotate-180">expand_more</span>
         </span>
     </summary>
@@ -237,6 +246,13 @@ render_clinic_command_header(
             $badgeIcon = $isMissed ? 'event_busy' : 'error';
             $deadlineText = $isMissed ? 'Assigned batch was missed' : 'Overdue - ' . $days . 'd';
             $canExamineNow = empty($rec['exam_date']) && ape_examination_is_available($rec);
+            $reminderItem = $apeReminderByRecordId[(int) ($rec['id'] ?? 0)] ?? null;
+            $emailStatus = '';
+            if ($reminderItem) {
+                $emailStatus = (int) ($reminderItem['sent_count'] ?? 0) . ' email' . ((int) ($reminderItem['sent_count'] ?? 0) === 1 ? '' : 's') . ' sent to email service';
+                $emailStatus .= ' · ' . (string) ($reminderItem['reminder_reason'] ?? '');
+                if (($reminderItem['reminder_state'] ?? '') === 'cooldown' && !empty($reminderItem['next_eligible_at'])) $emailStatus .= ' Available ' . date('M j, g:i A', strtotime((string) $reminderItem['next_eligible_at'])) . '.';
+            }
         ?>
             <div class="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-red-100/30 transition-colors">
                 <div>
@@ -244,6 +260,7 @@ render_clinic_command_header(
                     <p class="text-xs font-bold text-slate-500 m-0">
                         <?= e($rec['id_number']) ?> &bull; <?= e($rec['course_section'] ?: 'No course') ?> &bull; <?= e($next['label']) ?> &mdash; <?= $isMissed ? 'missed' : 'overdue' ?>
                     </p>
+                    <?php if ($emailStatus !== ''): ?><p class="text-xs text-slate-500 mt-2 mb-0"><span class="material-symbols-outlined text-[14px] align-bottom">mail</span> <?= e($emailStatus) ?></p><?php endif; ?>
                 </div>
                 <div class="flex items-center gap-6 shrink-0">
                     <span class="text-xs font-bold <?= $warningClass ?> flex items-center gap-1">
@@ -419,9 +436,10 @@ render_clinic_command_header(
                 'pagination' => true,
                 'paginationControls' => $paginationId,
                 'height' => 'compact',
+                'fitColumns' => false,
                 'emptyTitle' => 'No patients here',
                 'emptyText' => $scopeEmptyText,
-                'stateKey' => 'ape-work-queue-' . $populationScope . '-' . $queueKey,
+                'stateKey' => 'ape-work-queue-v2-' . $populationScope . '-' . $queueKey,
             ]);
             ?>
             <nav id="<?= e($paginationId) ?>" class="pagination" aria-label="<?= e($queue['title']) ?> pages"></nav>

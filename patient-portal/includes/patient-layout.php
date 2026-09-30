@@ -540,7 +540,9 @@ function render_student_header(string $title, string $active = ''): void
     $notificationUnreadCount = 0;
     if (empty($profile['first_registration']) && (int) ($profile['person_id'] ?? 0) > 0) {
         try {
-            $notificationUnreadCount = patient_notification_unread_count(auth_db(), (int) $profile['person_id']);
+            $db = auth_db();
+            patient_notification_mark_resolved_ape_read($db, (int) $profile['person_id']);
+            $notificationUnreadCount = patient_notification_unread_count($db, (int) $profile['person_id']);
         } catch (Throwable) {
             // Keep the patient portal available if a deployment has not run the notification migration yet.
         }
@@ -891,7 +893,7 @@ function render_student_footer(): void
                         <span class="material-symbols-outlined text-primary">key</span>
                         <h3 class="font-headline text-lg font-extrabold text-on-surface">Change Password</h3>
                     </div>
-                    <button type="button" onclick="document.getElementById('change-password-modal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600">
+                    <button type="button" data-discard-close="change-password-modal" class="text-slate-400 hover:text-slate-600">
                         <span class="material-symbols-outlined">close</span>
                     </button>
                 </div>
@@ -924,7 +926,7 @@ function render_student_footer(): void
                     </div>
 
                     <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-                        <button type="button" onclick="document.getElementById('change-password-modal').classList.add('hidden')" class="student-button bg-slate-100 text-slate-700 hover:bg-slate-200">
+                        <button type="button" data-discard-close="change-password-modal" class="student-button bg-slate-100 text-slate-700 hover:bg-slate-200">
                             Cancel
                         </button>
                         <button type="submit" class="student-button">
@@ -935,6 +937,7 @@ function render_student_footer(): void
             </div>
         </div>
 
+        <script src="../public/assets/js/unsaved-changes.js?v=<?= filemtime(__DIR__ . '/../../public/assets/js/unsaved-changes.js') ?>"></script>
         <script>
             (() => {
                 const root = document.querySelector('[data-patient-notifications]');
@@ -1177,7 +1180,10 @@ function render_student_footer(): void
                 });
             }
 
-            function closeProfilePhotoModal(modal) {
+            function closeProfilePhotoModal(modal, discardConfirmed = false) {
+                if (!discardConfirmed && typeof window.cliniqConfirmDiscardChanges === 'function') {
+                    return window.cliniqConfirmDiscardChanges(modal, () => closeProfilePhotoModal(modal, true));
+                }
                 modal._profilePhotoClosing = true;
                 modal.classList.remove('is-open');
                 clearTimeout(modal._profilePhotoCloseTimer);
@@ -1238,6 +1244,20 @@ function render_student_footer(): void
             });
 
             document.querySelectorAll('[data-profile-photo-form]').forEach((form) => {
+                const preview = form.querySelector('[data-profile-photo-preview]');
+                const fallback = form.querySelector('[data-profile-photo-fallback]');
+                const selectedFile = form.querySelector('[data-profile-photo-selected]');
+                const originalPreviewSrc = preview?.getAttribute('src') || '';
+                const hadOriginalPreview = Boolean(preview && !preview.hidden);
+                form.addEventListener('reset', () => window.requestAnimationFrame(() => {
+                    if (preview) {
+                        preview.src = originalPreviewSrc;
+                        preview.hidden = !hadOriginalPreview;
+                    }
+                    if (fallback) fallback.hidden = hadOriginalPreview;
+                    if (selectedFile) selectedFile.textContent = 'No new photo selected';
+                    setProfilePhotoConfirmation(form, false);
+                }));
                 form.addEventListener('submit', (event) => {
                     if (form.dataset.profilePhotoConfirmed !== 'true') {
                         event.preventDefault();
@@ -1388,6 +1408,7 @@ function render_student_auth_header(string $title): void
         </style>
     <script src="../public/assets/js/id-number-format.js?v=<?= filemtime(__DIR__ . '/../../public/assets/js/id-number-format.js') ?>"></script>
     <script src="../public/assets/js/submission-loading.js?v=1"></script>
+    <script src="../public/assets/js/unsaved-changes.js?v=<?= filemtime(__DIR__ . '/../../public/assets/js/unsaved-changes.js') ?>"></script>
     </head>
     <body class="student-body student-auth-page">
     <?php

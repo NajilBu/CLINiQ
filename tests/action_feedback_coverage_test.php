@@ -50,7 +50,9 @@ $outcomeRoutes = [
     'public/alerts/create.php' => 'flash_message(',
     'public/ape/view.php' => 'flash_message(',
     'public/appointments/update.php' => 'flash_message(',
+    'public/appointments/doctors.php' => 'flash_message(',
     'public/inventory/archive.php' => 'flash_message(',
+    'public/patient-accounts/duplicates.php' => 'flash_message(',
     'public/settings/index.php' => 'flash_message(',
     'public/visits/view.php' => 'flash_message(',
     'patient-portal/patient-ape-status.php' => 'student-toast',
@@ -109,6 +111,21 @@ foreach ([
         $path . ' must keep confirmation for destructive or irreversible staff actions.'
     );
 }
+
+$doctorAssignments = action_feedback_source($root, 'public/appointments/doctors.php');
+expect_action_feedback(str_contains($doctorAssignments, 'data-confirm-title="Remove doctor assignments?"'), 'Removing doctor assignments must require confirmation.');
+expect_action_feedback(!str_contains($doctorAssignments, 'data-confirm-title="Save doctor days?"'), 'Saving doctor coverage must not require confirmation.');
+
+$duplicateAccounts = action_feedback_source($root, 'public/patient-accounts/duplicates.php');
+expect_action_feedback(str_contains($duplicateAccounts, 'data-confirm-title="Merge these patient accounts?"'), 'Merging patient accounts must require confirmation.');
+
+$publicFeedback = action_feedback_source($root, 'public/clinic-feedback.php');
+expect_action_feedback(str_contains($publicFeedback, 'Keep my identity private'), 'Selected-visit feedback must offer an explicit private-identity mode.');
+expect_action_feedback(str_contains($publicFeedback, "action.value = 'start_linked'"), 'Private linked feedback must retain the visit requirement flow.');
+expect_action_feedback(str_contains($publicFeedback, "'anonymous' => (\$_POST['private_identity'] ?? '') === '1'"), 'Private linked feedback must set the existing anonymous flag.');
+
+$staffFeedbackReport = action_feedback_source($root, 'public/feedback/index.php');
+expect_action_feedback(str_contains($staffFeedbackReport, 'Identity-private feedback. Visit and student details are withheld.'), 'Staff feedback reports must hide visit details for private feedback.');
 foreach ([
     'patient-portal/patient-ape-status.php',
     'patient-portal/patient-feedback.php',

@@ -7,11 +7,13 @@ require_login();
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $id = (int) ($_POST['id'] ?? 0);
     $db = cliniq_inventory_db();
+    $staffId = cliniq_inventory_staff_person_id();
     $itemStmt = $db->prepare('SELECT item_type FROM inventory_items WHERE item_id = ? AND is_active = 0');
     $itemStmt->execute([$id]);
     $type = (string) $itemStmt->fetchColumn();
     if ($type !== '') {
         $db->prepare('UPDATE inventory_items SET is_active = 1 WHERE item_id = ?')->execute([$id]);
+        audit_log_event('inventory', 'inventory_item_restored', $staffId, 'staff', 'inventory_item', $id);
         flash_message('success', 'Inventory item restored to active inventory.');
         header('Location: index.php?tab=' . ($type === 'Equipment' ? 'equipment' : 'medicine'));
     } else {
