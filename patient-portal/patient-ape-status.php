@@ -164,10 +164,37 @@ $requirements = $apeRecord ? ape_requirements_for_record((int) $apeRecord['ape_i
 $uploadedDocuments = $apeRecord ? ape_documents_for_record((int) $apeRecord['ape_id']) : [];
 $findings = $apeRecord ? ape_findings_for_record((int) $apeRecord['ape_id']) : [];
 $allActivities = $apeRecord ? ape_activities_for_patient_record((int) $apeRecord['ape_id'], $patientId, 200) : [];
+$studentActivityLabels = [
+    'Created APE record' => ['Your APE record was opened', 'assignment_turned_in'],
+    'Faculty/NTP APE record populated' => ['Your APE record was opened', 'assignment_turned_in'],
+    'Assigned APE schedule batch' => ['APE examination scheduled', 'calendar_month'],
+    'APE schedule batch cancelled' => ['APE examination schedule changed', 'event_repeat'],
+    'Rescheduled APE examination' => ['APE examination schedule updated', 'event_repeat'],
+    'Submitted APE document for patient' => ['APE document submitted for you', 'upload_file'],
+    'Uploaded APE documents' => ['You submitted APE documents', 'upload_file'],
+    'Returned document(s) for resubmission' => ['The clinic asked you to update a document', 'assignment_return'],
+    'Added APE requirement' => ['The clinic added a required document', 'description'],
+    'Added follow-up document requirement' => ['The clinic requested a follow-up document', 'assignment'],
+    'Recorded APE examination' => ['APE examination recorded', 'stethoscope'],
+    'Recorded APE examination and created referral' => ['APE examination recorded and a referral was prepared', 'stethoscope'],
+    'Updated clinical information' => ['The clinic updated your examination information', 'clinical_notes'],
+    'Archived APE documents' => ['Documents received by the clinic', 'folder_check'],
+    'Archived follow-up documents' => ['Follow-up documents received by the clinic', 'folder_check'],
+    'Required follow-up after APE examination' => ['The clinic requested follow-up after your examination', 'medical_information'],
+    'Kept follow-up open' => ['Your APE follow-up is still in progress', 'pending_actions'],
+    'Resolved clinical follow-up' => ['Your APE follow-up was resolved', 'task_alt'],
+    'Approved follow-up clearance' => ['Your follow-up was cleared', 'verified'],
+    'Returned clearance for correction' => ['The clinic requested a follow-up update', 'assignment_return'],
+    'Cleared patient after APE examination' => ['APE cleared', 'verified'],
+];
+$studentActivities = array_values(array_filter($allActivities, static fn (array $activity): bool => !in_array((string) $activity['action_label'], [
+    'Annual APE cycle started', 'Annual APE cycle closed', 'Annual APE cycle archived',
+    'Deleted APE requirement', 'Marked APE record inactive', 'Reopened APE record', 'Updated APE notes',
+], true)));
 $historyLimit = 5;
-$historyTotalPages = max(1, (int) ceil(count($allActivities) / $historyLimit));
+$historyTotalPages = max(1, (int) ceil(count($studentActivities) / $historyLimit));
 $historyPage = max(1, min($historyTotalPages, (int) ($_GET['ape_history_page'] ?? 1)));
-$activities = array_slice($allActivities, ($historyPage - 1) * $historyLimit, $historyLimit);
+$activities = array_slice($studentActivities, ($historyPage - 1) * $historyLimit, $historyLimit);
 $apeStatus = $apeRecord['workflow_status'] ?? 'Not Started';
 $apeIsInactive = ape_record_is_inactive($apeRecord ?? []);
 $clearanceStatus = $apeRecord['clearance_status'] ?? 'Pending';
@@ -763,16 +790,15 @@ render_student_header('APE Status', 'ape');
 
 <?php if ($showActivity): ?>
 <details class="patient-mobile-panel ape-activity-panel" data-mobile-accordion>
-    <summary>APE activity timeline</summary>
+    <summary>APE updates</summary>
 <section class="student-card mt-4" id="ape-activity-timeline">
     <div class="student-card-header">
         <div>
-            <h2 class="student-card-title">APE Activity Timeline</h2>
-            <p class="student-card-copy">Actions recorded for this APE case.</p>
+            <h2 class="student-card-title">APE history</h2>
+            <p class="student-card-copy">Updates that affect your APE documents, examination, follow-up, or clearance.</p>
         </div>
-        <span class="student-badge student-badge-info"><?= count($allActivities) ?> Event(s)</span>
     </div>
-    <div class="student-card-pad grid gap-3" aria-live="polite">
+    <div class="student-card-pad grid gap-3">
         <?php if ($showFindings): ?>
             <?php foreach ($findings as $finding): ?>
                 <article class="student-document-card ape-timeline-clinical-entry <?= $finding['follow_up_required'] ? 'is-follow-up' : 'is-normal' ?>">
@@ -795,10 +821,11 @@ render_student_header('APE Status', 'ape');
             <?php endif; ?>
         <?php endif; ?>
         <?php foreach ($activities as $activity): ?>
+            <?php [$activityLabel, $activityIcon] = $studentActivityLabels[(string) $activity['action_label']] ?? ['Clinic updated your APE record', 'info']; ?>
             <div class="student-document-card">
-                <span class="student-icon-box"><span class="material-symbols-outlined">history</span></span>
+                <span class="student-icon-box"><span class="material-symbols-outlined"><?= student_e($activityIcon) ?></span></span>
                 <div class="student-document-meta">
-                    <h3><?= student_e($activity['action_label']) ?></h3>
+                    <h3><?= student_e($activityLabel) ?></h3>
                     <p><?= student_e(date('M d, Y g:i A', strtotime($activity['created_at']))) ?></p>
                 </div>
             </div>

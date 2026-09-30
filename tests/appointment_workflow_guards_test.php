@@ -22,6 +22,7 @@ $allowedTransitions = [
     ['Pending', 'Scheduled'],
     ['Pending', 'Cancelled'],
     ['Scheduled', 'For Confirmation'],
+    ['Scheduled', 'No Show'],
     ['Scheduled', 'Cancelled'],
     ['For Confirmation', 'Completed'],
     ['For Confirmation', 'No Show'],
@@ -31,7 +32,7 @@ foreach ($allowedTransitions as [$from, $to]) {
         throw new RuntimeException("Expected {$from} to transition to {$to}.");
     }
 }
-foreach ([['Pending', 'Completed'], ['Scheduled', 'No Show'], ['Cancelled', 'Scheduled']] as [$from, $to]) {
+foreach ([['Pending', 'Completed'], ['Pending', 'No Show'], ['Cancelled', 'Scheduled']] as [$from, $to]) {
     if (appointment_status_transition_is_allowed($from, $to)) {
         throw new RuntimeException("Unexpected {$from} to {$to} transition.");
     }
@@ -46,10 +47,33 @@ if (appointment_status_display_label('For Confirmation') !== 'For Completion'
     throw new RuntimeException('Only overdue appointments should use the For Completion display label.');
 }
 
+$startedAppointment = ['status' => 'Scheduled', 'appointment_datetime' => '2026-10-05 09:00:00'];
+$futureAppointment = ['status' => 'Scheduled', 'appointment_datetime' => '2026-10-05 11:00:00'];
+$now = new DateTimeImmutable('2026-10-05 10:00:00');
+if (!appointment_can_mark_no_show($startedAppointment, $now)
+    || appointment_can_mark_no_show($futureAppointment, $now)
+    || !appointment_can_mark_no_show(['status' => 'For Confirmation'], $now)
+    || !appointment_user_can_mark_no_show(['role' => 'nurse'])
+    || !appointment_user_can_mark_no_show(['role' => 'doctor'])
+    || appointment_user_can_mark_no_show(['role' => 'staff'])) {
+    throw new RuntimeException('No-show actions must be role-restricted and only available after the appointment starts.');
+}
+if (appointment_live_service_state(true, true) !== 'busy'
+    || appointment_live_service_state(false, true) !== 'walk_in'
+    || appointment_live_service_state(false, false) !== 'closed'
+    || appointment_live_service_state(true, false) !== 'busy') {
+    throw new RuntimeException('Live service status must prioritize an active patient over walk-in availability.');
+}
+
 $staffUpdate = file_get_contents(dirname(__DIR__) . '/public/appointments/update.php');
 $patientBooking = file_get_contents(dirname(__DIR__) . '/patient-portal/patient-appointment.php');
+$patientDashboard = file_get_contents(dirname(__DIR__) . '/patient-portal/patient-dashboard.php');
 if (!str_contains($staffUpdate, 'appointment_status_transition_is_allowed')
     || !str_contains($staffUpdate, 'appointment_time_is_blocked')
+    || !str_contains($staffUpdate, 'appointment_can_mark_no_show')
+    || !str_contains($staffUpdate, 'appointment_user_can_mark_no_show')
+    || !str_contains($patientDashboard, 'appointment_live_service_statuses')
+    || !str_contains($patientDashboard, 'Refresh service status')
     || !str_contains($patientBooking, 'Appointments may begin up to 15 minutes late')) {
     throw new RuntimeException('Appointment workflow safeguards are not wired into the staff and patient pages.');
 }

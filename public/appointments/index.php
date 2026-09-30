@@ -74,6 +74,7 @@ foreach ($countQuery->fetchAll() as $sc) {
     $statusCounts[$sc['status']] = (int)$sc['cnt'];
     $statusCounts['all'] += (int)$sc['cnt'];
 }
+$canMarkNoShow = appointment_user_can_mark_no_show();
 
 $columns = [
     ['headerName' => 'Requested Slot', 'field' => 'slotHtml', 'cellRenderer' => 'html', 'sortField' => 'slotSort', 'sortType' => 'date', 'width' => 165, 'minWidth' => 165, 'maxWidth' => 165, 'flex' => 0, 'suppressSizeToFit' => true],
@@ -133,9 +134,12 @@ foreach ($appointments as $appointment) {
             . '<button type="button" class="btn btn-sm btn-ghost" title="Cancel request" aria-label="Cancel request" data-cancel-appointment data-cancel-id="' . (int)$appointment['appointment_id'] . '" data-cancel-title="Cancel appointment request"><span class="material-symbols-outlined text-[14px]">cancel</span> Cancel</button>';
     } elseif ($status === 'Scheduled') {
         $actions .= '<button type="button" class="btn btn-sm btn-ghost" title="Cancel appointment" aria-label="Cancel appointment" data-cancel-appointment data-cancel-id="' . (int)$appointment['appointment_id'] . '" data-cancel-title="Cancel scheduled appointment"><span class="material-symbols-outlined text-[14px]">cancel</span> Cancel</button>';
+        if ($canMarkNoShow && appointment_can_mark_no_show($appointment)) {
+            $actions .= '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['appointment_id'] . '"><input type="hidden" name="status" value="No Show"><button class="btn btn-sm btn-ghost" title="Mark no-show" data-confirm-submit data-confirm-type="danger" data-confirm-title="Mark as no-show?" data-confirm-message="This confirms the patient did not attend the appointment." data-confirm-toast="Marking no-show..."><span class="material-symbols-outlined text-[14px]">person_cancel</span> No Show</button></form>';
+        }
     } elseif ($status === 'For Confirmation') {
         $actions .= '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['appointment_id'] . '"><input type="hidden" name="status" value="Completed"><button class="btn btn-sm btn-outline" title="Confirm completed" data-confirm-submit data-confirm-type="primary" data-confirm-title="Confirm appointment completed?" data-confirm-message="This confirms the patient attended and the passed appointment is completed." data-confirm-toast="Completing appointment..."><span class="material-symbols-outlined text-[14px]">check</span> Confirm Completed</button></form>'
-            . '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['appointment_id'] . '"><input type="hidden" name="status" value="No Show"><button class="btn btn-sm btn-ghost" title="Mark no-show" data-confirm-submit data-confirm-type="danger" data-confirm-title="Mark as no-show?" data-confirm-message="This confirms the patient did not attend the appointment." data-confirm-toast="Marking no-show..."><span class="material-symbols-outlined text-[14px]">person_cancel</span> No Show</button></form>';
+            . ($canMarkNoShow ? '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['appointment_id'] . '"><input type="hidden" name="status" value="No Show"><button class="btn btn-sm btn-ghost" title="Mark no-show" data-confirm-submit data-confirm-type="danger" data-confirm-title="Mark as no-show?" data-confirm-message="This confirms the patient did not attend the appointment." data-confirm-toast="Marking no-show..."><span class="material-symbols-outlined text-[14px]">person_cancel</span> No Show</button></form>' : '');
     }
     $actions .= '</div>';
 

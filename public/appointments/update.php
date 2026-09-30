@@ -36,6 +36,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new InvalidArgumentException('This appointment cannot be moved from ' . $appointment['status'] . ' to ' . $status . '.');
             }
 
+            if ($status === 'No Show') {
+                if (!appointment_user_can_mark_no_show()) {
+                    throw new InvalidArgumentException('Only clinic nurses, doctors, and administrators can mark an appointment as no-show.');
+                }
+                if (!appointment_can_mark_no_show($appointment)) {
+                    throw new InvalidArgumentException('An appointment can be marked as no-show only after its scheduled start time.');
+                }
+            }
+
             if ($status === 'Scheduled') {
                 $appointmentDatetime = (string) $appointment['appointment_datetime'];
                 $appointmentDate = substr($appointmentDatetime, 0, 10);

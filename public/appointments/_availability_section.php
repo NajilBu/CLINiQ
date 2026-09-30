@@ -160,9 +160,9 @@ $availabilityUrlForWeek = static function (string $week) use ($availabilityPurpo
         </div>
     </div>
 
-    <nav class="flex flex-wrap gap-2 px-5 pt-4 sm:px-6" aria-label="Clinic service schedule">
+    <nav class="grid grid-cols-2 gap-2 px-5 pt-4 sm:px-6" aria-label="Clinic service schedule">
         <?php foreach (appointment_consult_purposes() as $service): ?>
-            <a class="btn btn-sm <?= $service === $availabilityPurpose ? 'btn-primary' : 'btn-outline' ?>" href="availability.php?<?= e(http_build_query(['week' => $availabilityWeek->format('Y-m-d'), 'service' => $service])) ?>" data-no-ajax="true"><?= e($service) ?></a>
+            <a class="btn btn-sm w-full justify-center <?= $service === $availabilityPurpose ? 'btn-primary' : 'btn-outline' ?>" href="availability.php?<?= e(http_build_query(['week' => $availabilityWeek->format('Y-m-d'), 'service' => $service])) ?>" data-no-ajax="true"><?= e($service) ?></a>
         <?php endforeach; ?>
     </nav>
 

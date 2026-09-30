@@ -635,10 +635,83 @@ function appointment_status_transition_is_allowed(string $currentStatus, string 
 {
     return in_array($nextStatus, match ($currentStatus) {
         'Pending' => ['Scheduled', 'Cancelled'],
-        'Scheduled' => ['For Confirmation', 'Cancelled'],
+        'Scheduled' => ['For Confirmation', 'No Show', 'Cancelled'],
         'For Confirmation' => ['Completed', 'No Show'],
         default => [],
     }, true);
+}
+
+function appointment_user_can_mark_no_show(?array $user = null): bool
+{
+    $role = (string) (($user ?? current_user())['role'] ?? '');
+    return in_array($role, ['nurse', 'doctor', 'admin'], true);
+}
+
+function appointment_can_mark_no_show(array $appointment, ?DateTimeImmutable $now = null): bool
+{
+    $status = (string) ($appointment['status'] ?? '');
+    if ($status === 'For Confirmation') {
+        return true;
+    }
+    if ($status !== 'Scheduled') {
+        return false;
+    }
+    $scheduledAt = DateTimeImmutable::createFromFormat('Y-m-d H:i:s', (string) ($appointment['appointment_datetime'] ?? ''));
+    return $scheduledAt !== false && $scheduledAt <= ($now ?? new DateTimeImmutable('now'));
+}
+
+/** @return array<string,array{state:string,message:string,icon:string}> */
+function appointment_live_service_statuses(?DateTimeImmutable $now = null): array
+{
+    $now ??= new DateTimeImmutable('now');
+    $date = $now->format('Y-m-d');
+    $time = $now->format('H:i:s');
+    $nextMinute = $now->modify('+1 minute')->format('H:i:s');
+    $blocks = appointment_blocks_for_month(appointment_month_from_request($now->format('Y-m')));
+    $apeBatches = appointment_ape_batches_for_range($date, $date);
+    $db = appointment_db();
+    $appointmentStmt = $db->prepare("SELECT 1 FROM appointments WHERE purpose = ? AND status IN ('Scheduled', 'For Confirmation') AND appointment_datetime <= ? LIMIT 1");
+    $visitStmt = $db->prepare("SELECT 1 FROM visits WHERE status = 'Active' AND ((? = 'Dental' AND visit_purpose = 'Dental Consult') OR (? = 'Medical Consult' AND (visit_purpose IS NULL OR visit_purpose <> 'Dental Consult'))) LIMIT 1");
+    $statuses = [];
+
+    foreach (appointment_consult_purposes() as $purpose) {
+        $appointmentStmt->execute([$purpose, $now->format('Y-m-d H:i:s')]);
+        $visitStmt->execute([$purpose, $purpose]);
+        $state = appointment_live_service_state(
+            (bool) $appointmentStmt->fetchColumn() || (bool) $visitStmt->fetchColumn(),
+            appointment_range_is_open($date, $time, $nextMinute, $purpose)
+                && !appointment_range_is_blocked($date, $time, $nextMinute, $blocks, $purpose)
+                && !appointment_live_time_overlaps_ape_batch($now, $apeBatches[$date] ?? [])
+        );
+        if ($state === 'busy') {
+            $statuses[$purpose] = ['state' => 'busy', 'icon' => 'person', 'message' => $purpose . ' is currently assisting a patient.'];
+            continue;
+        }
+        if ($state === 'closed') {
+            $statuses[$purpose] = ['state' => 'closed', 'icon' => 'event_busy', 'message' => $purpose . ' is not accepting walk-ins right now.'];
+            continue;
+        }
+        $statuses[$purpose] = ['state' => 'walk_in', 'icon' => 'directions_walk', 'message' => $purpose . ' may accept a walk-in now—please check with reception.'];
+    }
+
+    return $statuses;
+}
+
+function appointment_live_service_state(bool $busy, bool $openForWalkIns): string
+{
+    return $busy ? 'busy' : ($openForWalkIns ? 'walk_in' : 'closed');
+}
+
+function appointment_live_time_overlaps_ape_batch(DateTimeImmutable $now, array $batches): bool
+{
+    foreach ($batches as $batch) {
+        $start = DateTimeImmutable::createFromFormat('Y-m-d H:i:s', (string) $batch['schedule_date'] . ' ' . (string) $batch['start_time']);
+        $end = DateTimeImmutable::createFromFormat('Y-m-d H:i:s', (string) $batch['schedule_date'] . ' ' . (string) $batch['end_time']);
+        if ($start !== false && $end !== false && $now >= $start && $now < $end) {
+            return true;
+        }
+    }
+    return false;
 }
 
 function appointment_ape_batches_for_range(string $startDate, string $endDate): array

@@ -508,6 +508,7 @@ $appointmentSummary = match ($appointmentStatus) {
 $appointmentDisplayStatus = appointment_status_display_label($appointmentStatus);
 $appointmentCtaLabel = in_array($appointmentStatus, ['Cancelled', 'No Show'], true) ? 'Book New Appointment' : 'Manage Appointment';
 $appointmentCtaIcon = in_array($appointmentStatus, ['Cancelled', 'No Show'], true) ? 'calendar_add_on' : 'schedule';
+$liveServiceStatuses = appointment_live_service_statuses();
 
 render_student_header('Dashboard', 'dashboard');
 ?>
@@ -809,6 +810,7 @@ render_student_header('Dashboard', 'dashboard');
                     </div>
                     <span class="student-badge <?= student_e($apePhaseBadgeClass) ?>"><?= student_e($apePhaseStatus) ?></span>
                 </div>
+                <?php if (($latestApe['clearance_status'] ?? '') !== 'Cleared'): ?>
                 <div class="student-progress-step">
                     <span class="student-progress-step-icon material-symbols-outlined">cloud_upload</span>
                     <div>
@@ -816,6 +818,7 @@ render_student_header('Dashboard', 'dashboard');
                     </div>
                     <span class="student-badge <?= student_e($apeActionBadgeClass) ?>"><?= student_e($apeActionStatus) ?></span>
                 </div>
+                <?php endif; ?>
             </div>
         </div>
     </section>
@@ -867,6 +870,27 @@ render_student_header('Dashboard', 'dashboard');
     </section>
 
 </div>
+
+<section id="clinic-service-status" class="student-card mt-4" aria-labelledby="clinic-service-status-title">
+    <div class="student-card-header">
+        <div>
+            <h2 id="clinic-service-status-title" class="student-card-title">Clinic service status</h2>
+            <p class="student-card-copy">Current walk-in availability. Check with reception before coming in.</p>
+        </div>
+        <form method="get" action="patient-dashboard.php">
+            <button type="submit" class="student-button-secondary text-sm">Refresh service status</button>
+        </form>
+    </div>
+    <div class="student-card-pad grid gap-3 sm:grid-cols-2">
+        <?php foreach ($liveServiceStatuses as $service => $serviceStatus): ?>
+            <?php $serviceTone = $serviceStatus['state'] === 'walk_in' ? 'student-note-success' : ($serviceStatus['state'] === 'busy' ? 'student-note-warning' : 'student-note-danger'); ?>
+            <div class="student-note <?= student_e($serviceTone) ?> mb-0">
+                <span class="material-symbols-outlined" aria-hidden="true"><?= student_e($serviceStatus['icon']) ?></span>
+                <div><strong><?= student_e($service) ?></strong><br><?= student_e($serviceStatus['message']) ?></div>
+            </div>
+        <?php endforeach; ?>
+    </div>
+</section>
 
 <details class="student-mobile-more dashboard-clinic-notes" open>
     <summary>Clinic notes</summary>
