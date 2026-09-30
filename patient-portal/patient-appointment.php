@@ -23,10 +23,11 @@ foreach ($activeAppointments as $activeRow) {
 }
 $activeAppointment = $activeAppointments[0] ?? null;
 $availableAppointmentPurposes = array_values(array_diff($allowedAppointmentPurposes, array_keys($activeAppointmentsByPurpose)));
-$patientActiveTimes = array_values(array_unique(array_map(
-    static fn(array $row): string => date('H:i:s', strtotime((string) $row['appointment_datetime'])),
-    $activeAppointments
-)));
+$patientActiveTimesByDate = [];
+foreach ($activeAppointments as $activeRow) {
+    $date = date('Y-m-d', strtotime((string) $activeRow['appointment_datetime']));
+    $patientActiveTimesByDate[$date][] = date('H:i:s', strtotime((string) $activeRow['appointment_datetime']));
+}
 $pendingFeedbackVisits = clinic_feedback_pending_completed_visits($db, $patientId);
 $feedbackRequired = $pendingFeedbackVisits !== [];
 $feedbackPortalUrl = 'patient-feedback.php';
@@ -37,7 +38,6 @@ for ($hour = 7; $hour < 21; $hour++) {
 }
 $allowedTimes = array_column($timeSlots, 'value');
 $month = appointment_month_from_request($_GET['month'] ?? null);
-$weeklySchedule = appointment_schedule_for_month($month->format('Y-m'));
 $success = false;
 $successMessage = '';
 $error = '';
@@ -85,27 +85,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!$hasAppointmentPatientProfile || 
     $blocksForPostMonth = appointment_blocks_for_month($month);
 
     $purposeAppointment = $activeAppointmentsByPurpose[$type] ?? null;
-    $sameTimeStmt = $db->prepare("SELECT appointment_id FROM appointments WHERE patient_id = ? AND appointment_datetime = ? AND status IN ('Pending', 'Scheduled', 'For Confirmation') LIMIT 1");
-    $sameTimeStmt->execute([$patientId, $datetimeStr]);
     if ($type === '' || !in_array($type, $allowedAppointmentPurposes, true)) {
         $error = 'Please choose an appointment purpose.';
     } elseif ($feedbackRequired) {
         $error = 'Complete all required feedback for your completed clinic visits before requesting another appointment.';
     } elseif ($purposeAppointment !== null) {
         $error = 'You already have an active ' . $type . ' appointment. Complete or cancel it before booking another one.';
-    } elseif ($sameTimeStmt->fetchColumn()) {
+    } elseif (appointment_patient_has_overlap($patientId, $datetimeStr)) {
         $error = 'You already have another active appointment at that date and time. Choose a different time.';
     } elseif (!$selectedDate || $selectedDate->format('Y-m-d') !== $dateStr) {
         $error = 'Please choose a valid appointment date.';
     } elseif ($dateStr < date('Y-m-d')) {
         $error = 'Please choose a future clinic date.';
-    } elseif (!appointment_date_is_clinic_day($dateStr)) {
-        $error = 'The clinic is closed on the selected day.';
+    } elseif (!appointment_date_is_clinic_day($dateStr, $type)) {
+        $error = 'This clinic service is closed on the selected day.';
     } elseif (!appointment_purpose_has_doctor_on_date($type, $dateStr)) {
         $error = 'No doctor is assigned to this consultation on the selected day. Please choose another day.';
-    } elseif (!in_array($timeStr, $allowedTimes, true) || !appointment_slot_is_open($dateStr, $timeStr)) {
+    } elseif (!in_array($timeStr, $allowedTimes, true) || !appointment_slot_is_open($dateStr, $timeStr, $type)) {
         $error = 'Please choose one of the available appointment times.';
-    } elseif (appointment_time_is_blocked($dateStr, $timeStr, $blocksForPostMonth)) {
+    } elseif (appointment_time_is_blocked($dateStr, $timeStr, $blocksForPostMonth, $type)) {
         $error = 'That date or time is unavailable. Please choose another schedule.';
     } elseif ($apeConflict !== null) {
         $error = 'That time is reserved for an APE examination batch. Please choose another hour.';
@@ -117,14 +115,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!$hasAppointmentPatientProfile || 
             $notes .= ' Patient note: ' . $note;
         }
 
-        $lockName = 'cliniq_appointment_' . sha1($datetimeStr);
+        $lockNames = [
+            'cliniq_appointment_patient_' . sha1($patientId . '|' . $datetimeStr),
+            'cliniq_appointment_slot_' . sha1($type . '|' . $datetimeStr),
+        ];
+        sort($lockNames, SORT_STRING);
         $lockStmt = $db->prepare('SELECT GET_LOCK(?, 5)');
-        $lockStmt->execute([$lockName]);
-        if ((int) $lockStmt->fetchColumn() !== 1) {
+        $releaseStmt = $db->prepare('SELECT RELEASE_LOCK(?)');
+        $acquiredLocks = [];
+        foreach ($lockNames as $lockName) {
+            $lockStmt->execute([$lockName]);
+            if ((int) $lockStmt->fetchColumn() !== 1) {
+                break;
+            }
+            $acquiredLocks[] = $lockName;
+        }
+        if (count($acquiredLocks) !== count($lockNames)) {
             $error = 'That appointment time is being requested. Please try again.';
         } else {
             try {
-                if (appointment_slot_is_reserved($datetimeStr, $type)) {
+                if (appointment_patient_has_overlap($patientId, $datetimeStr)) {
+                    $error = 'You already have another active appointment at that date and time. Choose a different time.';
+                } elseif (appointment_slot_is_reserved($datetimeStr, $type)) {
                     $error = 'That appointment time was just taken. Please choose another hour.';
                 } else {
                     $stmt = $db->prepare("INSERT INTO appointments (patient_id, appointment_datetime, purpose, status, request_source, notes) VALUES (?, ?, ?, 'Pending', 'Patient Portal', ?)");
@@ -139,8 +151,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!$hasAppointmentPatientProfile || 
                     throw $exception;
                 }
             } finally {
-                $releaseStmt = $db->prepare('SELECT RELEASE_LOCK(?)');
-                $releaseStmt->execute([$lockName]);
+                foreach (array_reverse($acquiredLocks) as $lockName) {
+                    $releaseStmt->execute([$lockName]);
+                }
             }
         }
     }
@@ -169,11 +182,13 @@ foreach (new DatePeriod(new DateTimeImmutable($monthStart), new DateInterval('P1
 }
 foreach ($availabilityDates as $date) {
     $blocks = $blocksByDate[$date] ?? [];
-    $blockedTimes = [];
+    $blockedTimesByPurpose = array_fill_keys(appointment_consult_purposes(), []);
     $apeTimes = [];
     foreach ($timeSlots as $slot) {
-        if (appointment_time_is_blocked($date, $slot['value'], $blocksByDate)) {
-            $blockedTimes[] = $slot['value'];
+        foreach (appointment_consult_purposes() as $purpose) {
+            if (appointment_time_is_blocked($date, $slot['value'], $blocksByDate, $purpose)) {
+                $blockedTimesByPurpose[$purpose][] = $slot['value'];
+            }
         }
         if (appointment_time_overlaps_ape_batches($date, $slot['value'], $apeBatchesByDate)) {
             $apeTimes[] = $slot['value'];
@@ -182,14 +197,18 @@ foreach ($availabilityDates as $date) {
 
     $availabilityPayload[$date] = [
         'fullDay' => appointment_is_full_day_blocked($blocks),
-        'blockedTimes' => $blockedTimes,
+        'blockedTimesByPurpose' => $blockedTimesByPurpose,
         'reservedTimesByPurpose' => $reservedTimesByDate[$date] ?? [],
+        'serviceSchedule' => array_combine(
+            appointment_consult_purposes(),
+            array_map(static fn (string $purpose): array => appointment_schedule_for_date($date, $purpose), appointment_consult_purposes())
+        ),
         'doctorAvailable' => array_combine(
             appointment_consult_purposes(),
             array_map(static fn (string $purpose): bool => empty($doctorSchedule[$purpose]['configured'])
-                || appointment_doctor_ids_for_weekday($doctorSchedule, $purpose, (int) (new DateTimeImmutable($date))->format('N'), $activeDoctorIds) !== [], appointment_consult_purposes())
+                || appointment_doctor_ids_for_service($doctorSchedule, $purpose, $activeDoctorIds) !== [], appointment_consult_purposes())
         ),
-        'patientTimes' => $patientActiveTimes,
+        'patientTimes' => $patientActiveTimesByDate[$date] ?? [],
         'apeTimes' => $apeTimes,
     ];
 }
@@ -247,7 +266,7 @@ render_student_header('Appointments', 'appointment');
                 <h2 class="student-card-title">Preferred Schedule</h2>
                 <p class="student-card-copy">Choose an available date and time.</p>
             </div>
-            <span class="student-badge student-badge-warning">Choose a purpose</span>
+            <span class="student-badge student-badge-warning" id="appointment-service-status">Choose a purpose</span>
         </div>
         <div class="student-card-pad">
             <?php if ($feedbackRequired): ?>
@@ -264,7 +283,7 @@ render_student_header('Appointments', 'appointment');
                 <input type="hidden" name="appt_date" id="appt-date-input" value="">
                 <input type="hidden" name="appt_time" id="appt-time-input" value="">
                 <p class="appointment-privacy-note"><span class="material-symbols-outlined" aria-hidden="true">privacy_tip</span><span>Your appointment details are added to your clinic record. <a href="<?= student_e(student_legal_url('privacy')) ?>" target="_blank" rel="noopener" class="student-auth-link">Privacy Notice</a></span></p>
-                <p class="student-card-copy mt-2"><span class="material-symbols-outlined" aria-hidden="true">schedule</span> Appointments may begin up to 15 minutes late while the clinic prepares for the next patient.</p>
+                <p class="student-card-copy mt-2">Appointments may begin up to 15 minutes late while the clinic prepares for the next patient.</p>
 
                 <div class="student-field mb-5">
                     <label class="student-label" for="appt-type">1. Appointment Purpose</label>
@@ -280,7 +299,6 @@ render_student_header('Appointments', 'appointment');
                 <div class="student-field" id="appointment-calendar-panel"
                      hidden
                      data-availability="<?= student_e(json_encode($availabilityPayload, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)) ?>"
-                     data-weekly-schedule="<?= student_e(json_encode($weeklySchedule, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)) ?>"
                      data-current-month="<?= student_e($month->format('Y-m')) ?>">
                     <div class="student-month-row">
                         <label class="student-label mb-0">2. Preferred Date</label>
@@ -314,23 +332,12 @@ render_student_header('Appointments', 'appointment');
                         <?php for ($day = 1; $day <= $daysInMonth; $day++): ?>
                             <?php
                             $date = $month->format('Y-m-') . str_pad((string) $day, 2, '0', STR_PAD_LEFT);
-                            $blocks = $blocksByDate[$date] ?? [];
-                            $fullDay = appointment_is_full_day_blocked($blocks);
-                            $unavailableTimes = array_values(array_unique(array_merge(
-                                $availabilityPayload[$date]['blockedTimes'] ?? [],
-                                $availabilityPayload[$date]['apeTimes'] ?? []
-                            )));
-                            $openTimes = array_values(array_filter($allowedTimes, static fn(string $time): bool => appointment_slot_is_open($date, $time)));
-                            $allTimesUnavailable = !$openTimes || count(array_intersect($openTimes, $unavailableTimes)) >= count($openTimes);
+                            $openTimes = array_values(array_filter($allowedTimes, static fn(string $time): bool => appointment_slot_is_open($date, $time, 'Medical Consult') || appointment_slot_is_open($date, $time, 'Dental')));
                             $hasAppointment = !empty($studentAppointmentDates[$date]);
                             $isPast = $date < $today;
-                            $isClosed = !appointment_date_is_clinic_day($date);
-                            $disabled = $fullDay || $allTimesUnavailable || $isPast || $isClosed;
+                            $disabled = !$openTimes || $isPast;
                             $classes = ['student-date-btn'];
                             $classes[] = $disabled ? 'disabled' : 'available';
-                            if (!$disabled && !empty($unavailableTimes)) {
-                                $classes[] = 'partial';
-                            }
                             if ($hasAppointment) {
                                 $classes[] = 'has-appointment';
                             }
@@ -343,19 +350,13 @@ render_student_header('Appointments', 'appointment');
                                     aria-expanded="false"
                                     <?= $disabled ? 'disabled' : '' ?>>
                                 <span><?= (int) $day ?></span>
-                                <?php if ($hasAppointment): ?>
-                                    <small>Booked</small>
-                                <?php elseif ($fullDay || $allTimesUnavailable || $isClosed): ?>
-                                    <small>Closed</small>
-                                <?php elseif (!$isPast && !empty($unavailableTimes)): ?>
-                                    <small>Limited</small>
-                                <?php endif; ?>
+                                <small class="student-date-state"><?php if ($hasAppointment): ?>Booked<?php elseif ($disabled && !$isPast): ?>Closed<?php endif; ?></small>
                             </button>
                         <?php endfor; ?>
                     </div>
                     <p class="student-calendar-action-hint">
                         <span class="material-symbols-outlined" aria-hidden="true">touch_app</span>
-                        <span class="student-calendar-desktop-hint">Double-click an available date to choose a time. On touchscreens, tap once.</span>
+                        <span class="student-calendar-desktop-hint">Select an available date to choose a time.</span>
                         <span class="student-calendar-mobile-hint">Tap a date to select a time.</span>
                     </p>
                     <p class="student-card-copy mt-2" data-appointment-calendar-status role="status" aria-live="polite"></p>
@@ -381,7 +382,7 @@ render_student_header('Appointments', 'appointment');
                     <textarea id="appt-note" name="appt_note" class="student-textarea" placeholder="Briefly describe your concern or document you need to submit."></textarea>
                 </div>
 
-                <button type="submit" class="student-button w-full">
+                <button type="submit" class="student-button w-full" id="appointment-submit" disabled>
                     Send Appointment Request
                     <span class="material-symbols-outlined">send</span>
                 </button>
@@ -565,7 +566,6 @@ render_student_header('Appointments', 'appointment');
     });
 
     let availability = <?= json_encode($availabilityPayload, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
-    let weeklySchedule = <?= json_encode($weeklySchedule, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
     const dateInput = document.getElementById('appt-date-input');
     const timeInput = document.getElementById('appt-time-input');
     const timeSlots = Array.from(document.querySelectorAll('.student-time-slot[data-time]'));
@@ -576,6 +576,8 @@ render_student_header('Appointments', 'appointment');
     const bookingSheet = document.getElementById('appointment-booking-sheet');
     const purposeSelect = document.getElementById('appt-type');
     const purposeHint = document.getElementById('appointment-purpose-hint');
+    const serviceStatus = document.getElementById('appointment-service-status');
+    const appointmentSubmit = document.getElementById('appointment-submit');
     const mobileBookingSheet = window.matchMedia('(max-width: 640px)').matches;
     const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
 
@@ -588,18 +590,21 @@ render_student_header('Appointments', 'appointment');
         }).format(new Date(year, month - 1, day));
     }
 
+    function syncAppointmentSubmit() {
+        appointmentSubmit.disabled = !(purposeSelect?.value && dateInput.value && timeInput.value);
+    }
+
     function updateTimeSlots(date) {
-        const blockedTimes = availability[date]?.blockedTimes || [];
         const purpose = document.getElementById('appt-type')?.value || '';
+        const blockedTimes = availability[date]?.blockedTimesByPurpose?.[purpose] || [];
         const reservedByPurpose = availability[date]?.reservedTimesByPurpose || {};
         const patientTimes = availability[date]?.patientTimes || [];
-        const allowedPurposes = <?= json_encode($availableAppointmentPurposes, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
         const reservedTimes = reservedByPurpose[purpose] || [];
         const doctorAvailable = availability[date]?.doctorAvailable?.[purpose] !== false;
         const apeTimes = availability[date]?.apeTimes || [];
         const [year, month, day] = date.split('-').map(Number);
         const weekday = new Date(year, month - 1, day).getDay() || 7;
-        const hours = weeklySchedule[weekday];
+        const hours = availability[date]?.serviceSchedule?.[purpose]?.[weekday];
 
         timeSlots.forEach((slot) => {
             const start = slot.dataset.time.slice(0, 5);
@@ -607,8 +612,6 @@ render_student_header('Appointments', 'appointment');
             const isWithinHours = Boolean(hours?.enabled) && start >= hours.start && end <= hours.end;
             const isClinicBlocked = blockedTimes.includes(slot.dataset.time);
             const isReserved = reservedTimes.includes(slot.dataset.time);
-            const medicalReserved = !allowedPurposes.includes('Medical Consult') || (reservedByPurpose['Medical Consult'] || []).includes(slot.dataset.time);
-            const dentalReserved = !allowedPurposes.includes('Dental') || (reservedByPurpose['Dental'] || []).includes(slot.dataset.time);
             const isApeBlocked = apeTimes.includes(slot.dataset.time);
             const patientHasTime = patientTimes.includes(slot.dataset.time);
             const isUnavailable = !purpose || !doctorAvailable || !isWithinHours || isClinicBlocked || isApeBlocked || isReserved || patientHasTime;
@@ -617,11 +620,6 @@ render_student_header('Appointments', 'appointment');
             slot.classList.toggle('is-blocked', isClinicBlocked || isApeBlocked);
             slot.classList.toggle('is-reserved', isReserved);
             slot.disabled = isUnavailable;
-            const purposeStatus = medicalReserved && !dentalReserved
-                ? 'Dental available'
-                : dentalReserved && !medicalReserved
-                    ? 'Medical Consult available'
-                    : '';
             slot.title = !isWithinHours ? '' : (!doctorAvailable ? 'No doctor assigned for this service today' : (patientHasTime
                 ? 'You already have an appointment at this time'
                 : (isApeBlocked
@@ -636,11 +634,12 @@ render_student_header('Appointments', 'appointment');
                     ? 'Your appointment'
                     : (isApeBlocked
                         ? 'APE Examination'
-                        : (isReserved ? 'Reserved for this purpose' : (isClinicBlocked ? 'Unavailable' : purposeStatus)))));
+                        : (isReserved ? 'Reserved for this service' : (isClinicBlocked ? 'Unavailable' : '')))));
 
             if (isUnavailable && slot.classList.contains('selected')) {
                 slot.classList.remove('selected');
                 timeInput.value = '';
+                syncAppointmentSubmit();
             }
         });
         syncPurposeOptions(date, timeInput.value);
@@ -650,42 +649,67 @@ render_student_header('Appointments', 'appointment');
         const purpose = purposeSelect?.value || '';
         const currentCalendarPanel = document.getElementById('appointment-calendar-panel');
         if (currentCalendarPanel) currentCalendarPanel.hidden = !purpose;
+        if (serviceStatus) {
+            serviceStatus.className = `student-badge ${purpose ? 'student-badge-info' : 'student-badge-warning'}`;
+            serviceStatus.textContent = purpose ? `${purpose} availability` : 'Choose a purpose';
+        }
         if (purposeHint) purposeHint.textContent = purpose
-            ? `Showing clinic availability for ${purpose}.`
+            ? `Showing ${purpose} availability only. Medical Consult and Dental have separate hours and unavailable times.`
             : 'Choose a purpose to see the clinic dates and times available for that service.';
         if (!purpose) return;
         document.querySelectorAll('.student-date-btn').forEach((button) => {
             const date = button.dataset.date || '';
             const data = availability[date] || {};
-            const blocked = data.blockedTimes || [];
+            const blocked = data.blockedTimesByPurpose?.[purpose] || [];
             const reserved = (data.reservedTimesByPurpose || {})[purpose] || [];
             const ape = data.apeTimes || [];
             const patientTimesForDate = data.patientTimes || [];
             const [year, month, day] = date.split('-').map(Number);
             const weekday = new Date(year, month - 1, day).getDay() || 7;
-            const hours = weeklySchedule[weekday];
-            const hasOpenPurposeSlot = <?= json_encode($allowedTimes) ?>.some((value) => {
+            const hours = data.serviceSchedule?.[purpose]?.[weekday];
+            const serviceSlots = <?= json_encode($allowedTimes) ?>.filter((value) => {
                 const start = value.slice(0, 5);
                 const end = String(Number(start.slice(0, 2)) + 1).padStart(2, '0') + ':00';
-                return Boolean(hours?.enabled) && data.doctorAvailable?.[purpose] !== false && start >= hours.start && end <= hours.end
+                return Boolean(hours?.enabled) && start >= hours.start && end <= hours.end;
+            });
+            const openSlotCount = serviceSlots.filter((value) => {
+                return data.doctorAvailable?.[purpose] !== false
                     && !blocked.includes(value) && !ape.includes(value)
                     && !reserved.includes(value) && !patientTimesForDate.includes(value);
-            });
-            const disabled = button.dataset.baseDisabled === 'true' || !hasOpenPurposeSlot;
+            }).length;
+            const disabled = button.dataset.baseDisabled === 'true' || openSlotCount === 0;
+            const state = button.querySelector('.student-date-state');
+            const hasAppointment = button.classList.contains('has-appointment');
             button.disabled = disabled;
             button.classList.toggle('disabled', disabled);
             button.classList.toggle('available', !disabled);
+            button.classList.toggle('partial', !disabled && openSlotCount < serviceSlots.length);
+            if (state && !hasAppointment) {
+                state.textContent = disabled ? 'Unavailable' : (openSlotCount < serviceSlots.length ? 'Limited' : '');
+            }
         });
     }
 
     function syncPurposeOptions(date, time) {
         const purposeSelect = document.getElementById('appt-type');
         if (!purposeSelect || !date || !time) return;
+        const data = availability[date] || {};
         const reservedByPurpose = availability[date]?.reservedTimesByPurpose || {};
+        const patientTimes = data.patientTimes || [];
+        const apeTimes = data.apeTimes || [];
+        const [year, month, day] = date.split('-').map(Number);
+        const weekday = new Date(year, month - 1, day).getDay() || 7;
+        const start = time.slice(0, 5);
+        const end = String(Number(start.slice(0, 2)) + 1).padStart(2, '0') + ':00';
         Array.from(purposeSelect.options).forEach((option) => {
             if (!option.value) return;
-            const unavailable = (reservedByPurpose[option.value] || []).includes(time)
-                || availability[date]?.doctorAvailable?.[option.value] === false;
+            const hours = data.serviceSchedule?.[option.value]?.[weekday];
+            const unavailable = !hours?.enabled || start < hours.start || end > hours.end
+                || (data.blockedTimesByPurpose?.[option.value] || []).includes(time)
+                || (reservedByPurpose[option.value] || []).includes(time)
+                || patientTimes.includes(time)
+                || apeTimes.includes(time)
+                || data.doctorAvailable?.[option.value] === false;
             option.disabled = unavailable;
             const base = option.dataset.baseLabel || option.textContent.replace(/ — (Available|Reserved)/, '');
             option.dataset.baseLabel = base;
@@ -730,6 +754,7 @@ render_student_header('Appointments', 'appointment');
         button.setAttribute('aria-expanded', revealTimes ? 'true' : 'false');
         dateInput.value = button.dataset.date;
         timeInput.value = '';
+        syncAppointmentSubmit();
         timeSlots.forEach((item) => item.classList.remove('selected'));
         selectedScheduleSummary.hidden = true;
         updateTimeSlots(button.dataset.date);
@@ -746,21 +771,14 @@ render_student_header('Appointments', 'appointment');
 
     function bindCalendarButtons() {
         document.querySelectorAll('.student-date-btn:not(.disabled)').forEach((button) => {
-            button.addEventListener('click', (event) => {
-                const shouldReveal = coarsePointer || event.detail === 0;
-                selectAppointmentDate(button, shouldReveal, event.detail === 0);
-            });
-
-            button.addEventListener('dblclick', (event) => {
-                event.preventDefault();
-                selectAppointmentDate(button, true);
-            });
+            button.addEventListener('click', () => selectAppointmentDate(button, true, coarsePointer));
         });
     }
     bindCalendarButtons();
     purposeSelect?.addEventListener('change', () => {
         dateInput.value = '';
         timeInput.value = '';
+        syncAppointmentSubmit();
         selectedScheduleSummary.hidden = true;
         closeTimeModal();
         closeBookingSheet();
@@ -794,11 +812,11 @@ render_student_header('Appointments', 'appointment');
             if (!replacement) throw new Error('The calendar response was incomplete.');
 
             availability = JSON.parse(replacement.dataset.availability || '{}');
-            weeklySchedule = JSON.parse(replacement.dataset.weeklySchedule || '{}');
             currentPanel.replaceWith(replacement);
             document.getElementById('booking-form').action = `?month=${encodeURIComponent(replacement.dataset.currentMonth || '')}`;
             dateInput.value = '';
             timeInput.value = '';
+            syncAppointmentSubmit();
             selectedScheduleSummary.hidden = true;
             timeSlots.forEach(slot => slot.classList.remove('selected'));
             closeTimeModal();
@@ -829,6 +847,7 @@ render_student_header('Appointments', 'appointment');
             timeSlots.forEach((item) => item.classList.remove('selected'));
             button.classList.add('selected');
             timeInput.value = button.dataset.time;
+            syncAppointmentSubmit();
             syncPurposeOptions(dateInput.value, timeInput.value);
             const chosenTime = button.querySelector('.student-calendar-time-hour').textContent.trim();
             selectedScheduleText.textContent = formatSelectedDate(dateInput.value) + ' at ' + chosenTime;

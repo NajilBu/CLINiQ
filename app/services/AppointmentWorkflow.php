@@ -53,6 +53,22 @@ function appointment_consult_purposes(): array
     return ['Medical Consult', 'Dental'];
 }
 
+function appointment_closure_scopes(): array
+{
+    return ['Both', ...appointment_consult_purposes()];
+}
+
+function appointment_normalize_closure_scope(string $scope): string
+{
+    return in_array($scope, appointment_closure_scopes(), true) ? $scope : 'Both';
+}
+
+function appointment_block_applies_to(array $block, string $purpose): bool
+{
+    return appointment_normalize_closure_scope((string) ($block['applies_to'] ?? 'Both')) === 'Both'
+        || (string) ($block['applies_to'] ?? '') === $purpose;
+}
+
 function appointment_active_doctors(): array
 {
     return auth_db()->query("SELECT cs.person_id AS id, TRIM(CONCAT_WS(' ', p.first_name, p.middle_name, p.last_name)) AS name
@@ -69,100 +85,51 @@ function appointment_doctor_schedule(): array
     foreach (appointment_consult_purposes() as $purpose) {
         $entry = (array) ($stored[$purpose] ?? []);
         $assignedDoctors = [];
-        foreach ((array) ($entry['doctors'] ?? []) as $doctorId => $assignment) {
-            if ((int) $doctorId <= 0 || !is_array($assignment)) {
+        foreach (array_keys((array) ($entry['doctors'] ?? [])) as $doctorId) {
+            if ((int) $doctorId <= 0) {
                 continue;
             }
-            $days = array_values(array_unique(array_filter(array_map('intval', (array) ($assignment['days'] ?? [])),
-                static fn (int $day): bool => $day >= 1 && $day <= 7)));
-            $assignedDoctors[(int) $doctorId] = ['days' => $days];
+            $assignedDoctors[(int) $doctorId] = true;
         }
         $schedule[$purpose] = ['configured' => !empty($entry['configured']), 'doctors' => $assignedDoctors];
     }
     return $schedule;
 }
 
-function appointment_doctor_ids_for_weekday(array $schedule, string $purpose, int $weekday, array $activeDoctorIds): array
+function appointment_doctor_ids_for_service(array $schedule, string $purpose, array $activeDoctorIds): array
 {
     $ids = [];
-    foreach ((array) ($schedule[$purpose]['doctors'] ?? []) as $doctorId => $assignment) {
-        $days = (array) ($assignment['days'] ?? []);
-        if (in_array((int) $doctorId, $activeDoctorIds, true) && (!$days || in_array($weekday, $days, true))) {
+    foreach (array_keys((array) ($schedule[$purpose]['doctors'] ?? [])) as $doctorId) {
+        if (in_array((int) $doctorId, $activeDoctorIds, true)) {
             $ids[] = (int) $doctorId;
         }
     }
     return $ids;
 }
 
-function appointment_doctor_for_date(string $purpose, string $date): ?int
-{
-    $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
-    if (!$parsed || $parsed->format('Y-m-d') !== $date) {
-        return null;
-    }
-    $schedule = appointment_doctor_schedule();
-    $activeDoctorIds = array_map(static fn (array $doctor): int => (int) $doctor['id'], appointment_active_doctors());
-    return appointment_doctor_ids_for_weekday($schedule, $purpose, (int) $parsed->format('N'), $activeDoctorIds)[0] ?? null;
-}
-
 function appointment_purpose_has_doctor_on_date(string $purpose, string $date): bool
 {
-    $schedule = appointment_doctor_schedule();
-    return empty($schedule[$purpose]['configured']) || appointment_doctor_for_date($purpose, $date) !== null;
-}
-
-function appointment_services_can_share_time(string $date): bool
-{
     $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
     if (!$parsed || $parsed->format('Y-m-d') !== $date) {
         return false;
     }
     $schedule = appointment_doctor_schedule();
-    if (empty($schedule['Medical Consult']['configured']) || empty($schedule['Dental']['configured'])) {
-        return false;
-    }
     $activeDoctorIds = array_map(static fn (array $doctor): int => (int) $doctor['id'], appointment_active_doctors());
-    $weekday = (int) $parsed->format('N');
-    $medical = appointment_doctor_ids_for_weekday($schedule, 'Medical Consult', $weekday, $activeDoctorIds);
-    $dental = appointment_doctor_ids_for_weekday($schedule, 'Dental', $weekday, $activeDoctorIds);
-    foreach ($medical as $medicalId) {
-        foreach ($dental as $dentalId) {
-            if ($medicalId !== $dentalId) {
-                return true;
-            }
-        }
-    }
-    return false;
+    return empty($schedule[$purpose]['configured']) || appointment_doctor_ids_for_service($schedule, $purpose, $activeDoctorIds) !== [];
 }
 
-function appointment_normalize_doctor_selection(array $selectedPurposes, array $submittedDays): array
-{
-    $purposes = array_values(array_unique(array_filter(
-        array_map('strval', $selectedPurposes),
-        static fn (string $purpose): bool => in_array($purpose, appointment_consult_purposes(), true)
-    )));
-    if (!$purposes) {
-        $purposes = appointment_consult_purposes();
-    }
-    $days = array_values(array_unique(array_map('intval', $submittedDays)));
-    if (array_filter($days, static fn (int $day): bool => $day < 1 || $day > 7)) {
-        throw new InvalidArgumentException('Choose valid weekdays for the doctor.');
-    }
-    sort($days);
-    return ['purposes' => $purposes, 'days' => $days];
-}
-
-function appointment_save_doctor_days(int $doctorId, array $selectedPurposes, array $submittedDays, ?int $updatedBy, bool $remove = false): void
+function appointment_save_doctor_roles(int $doctorId, array $coverage, ?int $updatedBy, bool $remove = false): void
 {
     $doctors = appointment_active_doctors();
     if (!in_array($doctorId, array_map(static fn (array $doctor): int => (int) $doctor['id'], $doctors), true)) {
         throw new InvalidArgumentException('Choose an active doctor.');
     }
-    $selection = $remove ? ['purposes' => [], 'days' => []] : appointment_normalize_doctor_selection($selectedPurposes, $submittedDays);
     $schedule = appointment_doctor_schedule();
     foreach (appointment_consult_purposes() as $purpose) {
-        if (in_array($purpose, $selection['purposes'], true)) {
-            $schedule[$purpose]['doctors'][$doctorId] = ['days' => $selection['days']];
+        $entry = (array) ($coverage[$purpose] ?? []);
+        $enabled = !$remove && !empty($entry['enabled']);
+        if ($enabled) {
+            $schedule[$purpose]['doctors'][$doctorId] = true;
             $schedule[$purpose]['configured'] = true;
         } else {
             unset($schedule[$purpose]['doctors'][$doctorId]);
@@ -178,9 +145,8 @@ function appointment_save_doctor_days(int $doctorId, array $selectedPurposes, ar
             continue;
         }
         $date = substr((string) $appointment['appointment_datetime'], 0, 10);
-        $day = (int) (new DateTimeImmutable($date))->format('N');
-        if (!appointment_doctor_ids_for_weekday($schedule, $purpose, $day, $activeDoctorIds)) {
-            throw new InvalidArgumentException('An upcoming ' . $purpose . ' appointment on ' . $date . ' would have no doctor. Reassign that day before saving.');
+        if (!appointment_doctor_ids_for_service($schedule, $purpose, $activeDoctorIds)) {
+            throw new InvalidArgumentException('An upcoming ' . $purpose . ' appointment on ' . $date . ' would have no assigned doctor. Assign another doctor before saving.');
         }
     }
     cliniq_setting_write('appointment_doctor_schedule', $schedule, $updatedBy);
@@ -306,27 +272,31 @@ function appointment_week_bounds(DateTimeImmutable $week): array
     return [$start->format('Y-m-d'), $end->format('Y-m-d')];
 }
 
-function appointment_date_is_clinic_day(string $date): bool
+function appointment_date_is_clinic_day(string $date, ?string $purpose = null): bool
 {
     $parsedDate = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
     return $parsedDate !== false
         && $parsedDate->format('Y-m-d') === $date
-        && appointment_schedule_for_date($date)[(int) $parsedDate->format('N')]['enabled'];
+        && appointment_schedule_for_date($date, $purpose)[(int) $parsedDate->format('N')]['enabled'];
 }
 
-function appointment_weekly_schedule(): array
+function appointment_weekly_schedule(?string $purpose = null): array
 {
-    static $schedule = null;
-    if ($schedule !== null) {
-        return $schedule;
+    static $schedules = [];
+    $cacheKey = $purpose ?? '__legacy__';
+    if (isset($schedules[$cacheKey])) {
+        return $schedules[$cacheKey];
     }
     $defaults = [];
     for ($day = 1; $day <= 7; $day++) {
         $defaults[$day] = ['enabled' => $day <= 5, 'start' => '08:00', 'end' => '17:00'];
     }
-    $stored = cliniq_setting_read('appointment_weekly_schedule', []);
+    $legacy = (array) (cliniq_setting_read('appointment_weekly_schedule', [])['days'] ?? []);
+    $stored = $purpose !== null
+        ? (array) (cliniq_setting_read('appointment_service_weekly_schedules', [])['services'][$purpose]['days'] ?? $legacy)
+        : $legacy;
     foreach ($defaults as $day => $default) {
-        $saved = $stored['days'][$day] ?? [];
+        $saved = $stored[$day] ?? [];
         if (!is_array($saved)) {
             continue;
         }
@@ -336,7 +306,7 @@ function appointment_weekly_schedule(): array
             'end' => (string) ($saved['end'] ?? $default['end']),
         ];
     }
-    return $schedule = $defaults;
+    return $schedules[$cacheKey] = $defaults;
 }
 
 function appointment_normalize_weekly_schedule(array $submitted): array
@@ -388,10 +358,19 @@ function appointment_schedule_from_form(array $form): array
     return appointment_normalize_weekly_schedule($days);
 }
 
-function appointment_save_weekly_schedule(array $submitted, ?int $updatedBy): void
+function appointment_save_weekly_schedule(array $submitted, ?int $updatedBy, ?string $purpose = null): void
 {
     $days = appointment_normalize_weekly_schedule($submitted);
-    cliniq_setting_write('appointment_weekly_schedule', ['days' => $days], $updatedBy);
+    if ($purpose === null) {
+        cliniq_setting_write('appointment_weekly_schedule', ['days' => $days], $updatedBy);
+        return;
+    }
+    if (!in_array($purpose, appointment_consult_purposes(), true)) {
+        throw new InvalidArgumentException('Choose a valid clinic service.');
+    }
+    $services = (array) (cliniq_setting_read('appointment_service_weekly_schedules', [])['services'] ?? []);
+    $services[$purpose] = ['days' => $days];
+    cliniq_setting_write('appointment_service_weekly_schedules', ['services' => $services], $updatedBy);
 }
 
 function appointment_normalize_month_key(string $month, bool $futureOnly = false): string
@@ -408,13 +387,17 @@ function appointment_normalize_month_key(string $month, bool $futureOnly = false
 }
 
 /** @return array<string,array{days:array<int,array{enabled:bool,start:string,end:string}>}> */
-function appointment_monthly_schedules(): array
+function appointment_monthly_schedules(?string $purpose = null): array
 {
-    static $months = null;
-    if ($months !== null) {
-        return $months;
+    static $schedules = [];
+    $cacheKey = $purpose ?? '__legacy__';
+    if (isset($schedules[$cacheKey])) {
+        return $schedules[$cacheKey];
     }
-    $stored = cliniq_setting_read('appointment_monthly_schedules', ['months' => []]);
+    $legacy = (array) cliniq_setting_read('appointment_monthly_schedules', ['months' => []]);
+    $stored = $purpose !== null
+        ? (array) (cliniq_setting_read('appointment_service_monthly_schedules', [])['services'][$purpose] ?? $legacy)
+        : $legacy;
     $months = [];
     foreach ((array) ($stored['months'] ?? []) as $month => $entry) {
         try {
@@ -426,48 +409,60 @@ function appointment_monthly_schedules(): array
         }
     }
     ksort($months);
-    return $months;
+    return $schedules[$cacheKey] = $months;
 }
 
-function appointment_schedule_for_month(string $month): array
+function appointment_schedule_for_month(string $month, ?string $purpose = null): array
 {
     try {
         $month = appointment_normalize_month_key($month);
     } catch (InvalidArgumentException $exception) {
-        return appointment_weekly_schedule();
+        return appointment_weekly_schedule($purpose);
     }
-    return appointment_monthly_schedules()[$month]['days'] ?? appointment_weekly_schedule();
+    return appointment_monthly_schedules($purpose)[$month]['days'] ?? appointment_weekly_schedule($purpose);
 }
 
-function appointment_schedule_for_date(string $date): array
+function appointment_schedule_for_date(string $date, ?string $purpose = null): array
 {
     $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
     if (!$parsed || $parsed->format('Y-m-d') !== $date) {
-        return appointment_weekly_schedule();
+        return appointment_weekly_schedule($purpose);
     }
-    return appointment_schedule_for_month($parsed->format('Y-m'));
+    return appointment_schedule_for_month($parsed->format('Y-m'), $purpose);
 }
 
-function appointment_save_monthly_schedule(string $month, array $submitted, ?int $updatedBy): void
+function appointment_save_monthly_schedule(string $month, array $submitted, ?int $updatedBy, ?string $purpose = null): void
 {
     $month = appointment_normalize_month_key($month, true);
-    $months = appointment_monthly_schedules();
+    $months = appointment_monthly_schedules($purpose);
     $months[$month] = ['days' => appointment_normalize_weekly_schedule($submitted)];
     ksort($months);
-    cliniq_setting_write('appointment_monthly_schedules', ['months' => $months], $updatedBy);
+    if ($purpose === null) {
+        cliniq_setting_write('appointment_monthly_schedules', ['months' => $months], $updatedBy);
+        return;
+    }
+    $services = (array) (cliniq_setting_read('appointment_service_monthly_schedules', [])['services'] ?? []);
+    $services[$purpose] = ['months' => $months];
+    cliniq_setting_write('appointment_service_monthly_schedules', ['services' => $services], $updatedBy);
 }
 
-function appointment_delete_monthly_schedule(string $month, ?int $updatedBy): void
+function appointment_delete_monthly_schedule(string $month, ?int $updatedBy, ?string $purpose = null): void
 {
     $month = appointment_normalize_month_key($month, true);
-    $months = appointment_monthly_schedules();
+    $months = appointment_monthly_schedules($purpose);
     unset($months[$month]);
-    cliniq_setting_write('appointment_monthly_schedules', ['months' => $months], $updatedBy);
+    if ($purpose === null) {
+        cliniq_setting_write('appointment_monthly_schedules', ['months' => $months], $updatedBy);
+        return;
+    }
+    $services = (array) (cliniq_setting_read('appointment_service_monthly_schedules', [])['services'] ?? []);
+    $services[$purpose] = ['months' => $months];
+    cliniq_setting_write('appointment_service_monthly_schedules', ['services' => $services], $updatedBy);
 }
 
-function appointment_slot_is_open(string $date, string $time): bool
+function appointment_slot_is_open(string $date, string $time, ?string $purpose = null): bool
 {
-    return appointment_slot_is_open_for_schedule(appointment_schedule_for_date($date), $date, $time);
+    return appointment_slot_is_open_for_schedule(appointment_schedule_for_date($date, $purpose), $date, $time);
 }
 
 function appointment_slot_is_open_for_schedule(array $schedule, string $date, string $time): bool
@@ -501,10 +496,10 @@ function appointment_range_is_open_for_schedule(array $schedule, string $date, s
     return !empty($hours['enabled']) && $start >= $hours['start'] && $end <= $hours['end'];
 }
 
-function appointment_range_is_open(string $date, string $startTime, string $endTime): bool
+function appointment_range_is_open(string $date, string $startTime, string $endTime, ?string $purpose = null): bool
 {
     return appointment_range_is_open_for_schedule(
-        appointment_schedule_for_date($date),
+        appointment_schedule_for_date($date, $purpose),
         $date,
         $startTime,
         $endTime
@@ -585,13 +580,6 @@ function appointment_reserved_times_for_month(DateTimeImmutable $month): array
         $date = (string) $row['appointment_date'];
         $purpose = (string) $row['purpose'];
         $timesByDate[$date][$purpose][] = $row['appointment_time'];
-        if (!appointment_services_can_share_time($date)) {
-            foreach (appointment_consult_purposes() as $otherPurpose) {
-                if ($otherPurpose !== $purpose) {
-                    $timesByDate[$date][$otherPurpose][] = $row['appointment_time'];
-                }
-            }
-        }
     }
 
     return $timesByDate;
@@ -599,21 +587,37 @@ function appointment_reserved_times_for_month(DateTimeImmutable $month): array
 
 function appointment_slot_is_reserved(string $appointmentDatetime, string $purpose): bool
 {
-    $canShare = appointment_services_can_share_time(substr($appointmentDatetime, 0, 10));
     $stmt = appointment_db()->prepare("
         SELECT appointment_id
         FROM appointments
         WHERE appointment_datetime = ?
-          AND (purpose = ? OR ? = 0)
+          AND purpose = ?
           AND status IN ('Pending', 'Scheduled', 'For Confirmation')
         LIMIT 1
     ");
-    $stmt->execute([$appointmentDatetime, $purpose, $canShare ? 1 : 0]);
+    $stmt->execute([$appointmentDatetime, $purpose]);
 
     return (bool) $stmt->fetchColumn();
 }
 
-function appointment_active_conflicts_for_range(string $date, string $startTime, string $endTime): array
+function appointment_patient_has_overlap(int $patientId, string $appointmentDatetime): bool
+{
+    $start = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $appointmentDatetime);
+    if (!$start || $start->format('Y-m-d H:i:s') !== $appointmentDatetime) {
+        return true;
+    }
+    $end = $start->modify('+' . appointment_duration_minutes() . ' minutes');
+    $stmt = appointment_db()->prepare("SELECT appointment_id FROM appointments
+        WHERE patient_id = ?
+          AND status IN ('Pending', 'Scheduled', 'For Confirmation')
+          AND appointment_datetime < ?
+          AND DATE_ADD(appointment_datetime, INTERVAL " . appointment_duration_minutes() . " MINUTE) > ?
+        LIMIT 1");
+    $stmt->execute([$patientId, $end->format('Y-m-d H:i:s'), $start->format('Y-m-d H:i:s')]);
+    return (bool) $stmt->fetchColumn();
+}
+
+function appointment_active_conflicts_for_range(string $date, string $startTime, string $endTime, ?string $purpose = null): array
 {
     $start = DateTimeImmutable::createFromFormat('!Y-m-d H:i', $date . ' ' . substr($startTime, 0, 5));
     $end = DateTimeImmutable::createFromFormat('!Y-m-d H:i', $date . ' ' . substr($endTime, 0, 5));
@@ -621,8 +625,8 @@ function appointment_active_conflicts_for_range(string $date, string $startTime,
         return [];
     }
 
-    $stmt = appointment_db()->prepare("\n        SELECT appointment_id, patient_id, appointment_datetime, purpose, status\n        FROM appointments\n        WHERE status IN ('Pending', 'Scheduled', 'For Confirmation')\n          AND appointment_datetime < ?\n          AND DATE_ADD(appointment_datetime, INTERVAL " . appointment_duration_minutes() . " MINUTE) > ?\n        ORDER BY appointment_datetime ASC, appointment_id ASC\n    ");
-    $stmt->execute([$end->format('Y-m-d H:i:s'), $start->format('Y-m-d H:i:s')]);
+    $stmt = appointment_db()->prepare("\n        SELECT appointment_id, patient_id, appointment_datetime, purpose, status\n        FROM appointments\n        WHERE status IN ('Pending', 'Scheduled', 'For Confirmation')\n          AND appointment_datetime < ?\n          AND DATE_ADD(appointment_datetime, INTERVAL " . appointment_duration_minutes() . " MINUTE) > ?\n          AND (? IS NULL OR purpose = ?)\n        ORDER BY appointment_datetime ASC, appointment_id ASC\n    ");
+    $stmt->execute([$end->format('Y-m-d H:i:s'), $start->format('Y-m-d H:i:s'), $purpose, $purpose]);
 
     return $stmt->fetchAll();
 }
@@ -715,7 +719,7 @@ function appointment_is_full_day_blocked(array $blocks): bool
     return false;
 }
 
-function appointment_time_is_blocked(string $date, string $time, array $blocksByDate): bool
+function appointment_time_is_blocked(string $date, string $time, array $blocksByDate, ?string $purpose = null): bool
 {
     $slotStart = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $date . ' ' . $time);
     if (!$slotStart || $slotStart->format('Y-m-d') !== $date) {
@@ -726,13 +730,14 @@ function appointment_time_is_blocked(string $date, string $time, array $blocksBy
         $date,
         $slotStart->format('H:i:s'),
         $slotStart->modify('+' . appointment_duration_minutes() . ' minutes')->format('H:i:s'),
-        $blocksByDate
+        $blocksByDate,
+        $purpose
     );
 }
 
-function appointment_range_is_blocked(string $date, string $startTime, string $endTime, array $blocksByDate): bool
+function appointment_range_is_blocked(string $date, string $startTime, string $endTime, array $blocksByDate, ?string $purpose = null): bool
 {
-    $blocks = $blocksByDate[$date] ?? [];
+    $blocks = array_values(array_filter($blocksByDate[$date] ?? [], static fn(array $block): bool => $purpose === null || appointment_block_applies_to($block, $purpose)));
     if (appointment_is_full_day_blocked($blocks)) {
         return true;
     }

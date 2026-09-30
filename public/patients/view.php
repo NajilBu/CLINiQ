@@ -684,7 +684,7 @@ render_header($fullName . ' - Patient Profile');
         </div>
     <?php endif; ?>
 
-    <nav class="patient-profile-tabs" aria-label="Student profile sections" role="tablist">
+    <nav class="patient-profile-tabs" aria-label="Patient profile sections" role="tablist">
         <?php foreach ([
             'overview' => ['Overview', 'dashboard'],
             'appointments' => ['Appointments', 'event'],
@@ -1493,16 +1493,11 @@ render_header($fullName . ' - Patient Profile');
     const openEmailComposer = document.getElementById('openPatientEmailComposerButton');
     const closeEmailComposer = document.getElementById('closePatientEmailComposerButton');
     const cancelEmailComposer = document.getElementById('cancelPatientEmailComposerButton');
-    const patientEmailForm = document.getElementById('patientEmailComposerForm');
 
     openEmailComposer?.addEventListener('click', () => showModal('patientEmailComposerModal'));
     [closeEmailComposer, cancelEmailComposer].forEach((button) => {
         button?.addEventListener('click', () => closeModal('patientEmailComposerModal'));
     });
-    patientEmailForm?.addEventListener('submit', () => {
-        closeModal('patientEmailComposerModal');
-    }, true);
-
     const alertHistory = document.querySelector('[data-alert-history]');
     const alertPagination = document.querySelector('[data-alert-pagination]');
     if (alertHistory && alertPagination) {

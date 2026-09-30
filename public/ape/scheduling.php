@@ -7,7 +7,7 @@ require_login();
 ensure_ape_cycle_schema();
 
 $user = current_user() ?? [];
-$canManageApeSchedules = ($user['role'] ?? '') === 'admin';
+$canManageApeSchedules = in_array((string) ($user['role'] ?? ''), ['admin', 'doctor'], true);
 if (!$canManageApeSchedules) {
     flash_message('error', 'Only administrators and doctors can manage APE scheduling.');
     header('Location: index.php');
@@ -37,7 +37,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new InvalidArgumentException('Choose a valid APE scheduling action.');
         }
     } catch (Throwable $e) {
-        flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $e->getMessage());
+        flash_message(
+            $e instanceof InvalidArgumentException || $e instanceof RuntimeException ? 'warning' : 'error',
+            $e instanceof InvalidArgumentException || $e instanceof RuntimeException
+                ? $e->getMessage()
+                : 'The APE batch could not be saved. Please try again.'
+        );
     }
 
     header('Location: scheduling.php');
@@ -140,8 +145,8 @@ render_clinic_command_header(
         foreach ($apeScheduleBatches as $batch) {
             $batchIsCancelled = ($batch['status'] ?? '') === 'Cancelled';
             $batchHasPassed = strtotime((string) $batch['schedule_date'] . ' ' . (string) $batch['end_time']) < time();
-            $batchDisplayStatus = $batchIsCancelled ? 'Cancelled' : ($batchHasPassed ? 'Completed' : 'Scheduled');
-            $batchStatusClass = $batchIsCancelled ? 'badge-pending' : ($batchHasPassed ? 'badge-completed' : 'badge-in-progress');
+            $batchDisplayStatus = $batchIsCancelled ? 'Cancelled' : ($batchHasPassed ? 'Schedule Ended' : 'Scheduled');
+            $batchStatusClass = $batchIsCancelled ? 'badge-pending' : ($batchHasPassed ? 'badge-pending' : 'badge-in-progress');
             $batchActions = '';
             if (!$batchIsCancelled && !$batchHasPassed) {
                 $batchActions = '<form method="post" data-no-ajax="true">'
@@ -345,6 +350,7 @@ render_clinic_command_header(
             const cycleStart = <?= json_encode((string) $apeCurrentCycle['compliance_start']) ?>;
             const cycleEnd = <?= json_encode((string) $apeCurrentCycle['compliance_end']) ?>;
             const today = <?= json_encode(date('Y-m-d')) ?>;
+            const currentMinutes = (new Date()).getHours() * 60 + (new Date()).getMinutes();
             const perPage = 5;
             let currentPage = 1;
 
@@ -522,6 +528,9 @@ render_clinic_command_header(
                 }
 
                 if (!startMessage && !endMessage && dateField.value) {
+                    if (dateField.value === today && startMinutes <= currentMinutes) {
+                        startMessage = 'Choose a future start time for a batch scheduled today.';
+                    }
                     const batchConflict = existingBatches.find((batch) => batch.status === 'Scheduled'
                         && batch.date === dateField.value
                         && rangesOverlap(startMinutes, endMinutes, minutesFromStoredTime(batch.start), minutesFromStoredTime(batch.end)));

@@ -2,21 +2,27 @@
 
 $availabilityWeek = appointment_week_from_request($_GET['week'] ?? null);
 $availabilityBlocksByDate = appointment_blocks_for_week($availabilityWeek);
+$availabilityBlocksByDate = array_map(
+    static fn(array $blocks): array => array_values(array_filter($blocks, static fn(array $block): bool => appointment_block_applies_to($block, $availabilityPurpose))),
+    $availabilityBlocksByDate
+);
 [$availabilityRangeStart, $availabilityRangeEnd] = appointment_week_bounds($availabilityWeek);
 $availabilityApeBatchesByDate = appointment_ape_batches_for_range($availabilityRangeStart, $availabilityRangeEnd);
-$weeklySchedule = appointment_weekly_schedule();
-$monthlySchedules = appointment_monthly_schedules();
+$weeklySchedule = appointment_weekly_schedule($availabilityPurpose);
+$monthlySchedules = appointment_monthly_schedules($availabilityPurpose);
 $minimumFutureMonth = (new DateTimeImmutable('first day of next month'))->format('Y-m');
 $availabilityWeekDays = [];
+$availabilityOpenWeekDays = [];
 $availabilityWeekSchedule = [];
 for ($offset = 0; $offset < 7; $offset++) {
     $day = $availabilityWeek->modify('+' . $offset . ' days');
     $date = $day->format('Y-m-d');
-    $effectiveSchedule = appointment_schedule_for_date($date);
+    $effectiveSchedule = appointment_schedule_for_date($date, $availabilityPurpose);
     $dayNumber = (int) $day->format('N');
     $availabilityWeekSchedule[$dayNumber] = $effectiveSchedule[$dayNumber];
+    $availabilityWeekDays[] = $day;
     if ($effectiveSchedule[$dayNumber]['enabled']) {
-        $availabilityWeekDays[] = $day;
+        $availabilityOpenWeekDays[] = $day;
     }
 }
 
@@ -76,7 +82,7 @@ $availabilityPrevWeek = $availabilityWeek->modify('-1 week')->format('Y-m-d');
 $availabilityNextWeek = $availabilityWeek->modify('+1 week')->format('Y-m-d');
 $availabilityToday = new DateTimeImmutable('today');
 $availabilityMinimumDate = $availabilityToday;
-for ($offset = 0; $offset < 7 && !appointment_date_is_clinic_day($availabilityMinimumDate->format('Y-m-d')); $offset++) {
+for ($offset = 0; $offset < 7 && !appointment_date_is_clinic_day($availabilityMinimumDate->format('Y-m-d'), $availabilityPurpose); $offset++) {
     $availabilityMinimumDate = $availabilityMinimumDate->modify('+1 day');
 }
 $availabilityCurrentWeek = $availabilityToday->modify('monday this week')->format('Y-m-d');
@@ -84,7 +90,7 @@ $availabilityWeekEnd = $availabilityWeek->modify('+6 days');
 $availabilityRequestedDate = '';
 if (isset($_GET['block_date']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $_GET['block_date'])) {
     $requestedDate = DateTimeImmutable::createFromFormat('!Y-m-d', (string) $_GET['block_date']);
-    if ($requestedDate && $requestedDate->format('Y-m-d') === (string) $_GET['block_date'] && $requestedDate >= $availabilityMinimumDate && appointment_date_is_clinic_day($requestedDate->format('Y-m-d'))) {
+    if ($requestedDate && $requestedDate->format('Y-m-d') === (string) $_GET['block_date'] && $requestedDate >= $availabilityMinimumDate && appointment_date_is_clinic_day($requestedDate->format('Y-m-d'), $availabilityPurpose)) {
         $availabilityRequestedDate = $requestedDate->format('Y-m-d');
     }
 }
@@ -95,7 +101,7 @@ if ($availabilityRequestedDate !== '') {
 } elseif ($availabilityWeekEnd < $availabilityMinimumDate) {
     $availabilityDefaultDate = $availabilityMinimumDate->format('Y-m-d');
 } else {
-    $availabilityDefaultDate = ($availabilityWeekDays[0] ?? $availabilityWeek)->format('Y-m-d');
+    $availabilityDefaultDate = ($availabilityOpenWeekDays[0] ?? $availabilityWeek)->format('Y-m-d');
 }
 $availabilityWeekLabel = $availabilityWeek->format('Y-m-d') === $availabilityCurrentWeek
     ? 'This Week'
@@ -131,8 +137,8 @@ foreach ($weeklySchedule as $dayNumber => $hours) {
     }
 }
 $availabilityCalendarDayCount = count($availabilityWeekDays);
-$availabilityUrlForWeek = static function (string $week): string {
-    return 'availability.php?' . http_build_query(['week' => $week]) . '#clinic-availability';
+$availabilityUrlForWeek = static function (string $week) use ($availabilityPurpose): string {
+    return 'availability.php?' . http_build_query(['week' => $week, 'service' => $availabilityPurpose]) . '#clinic-availability';
 };
 ?>
 
@@ -141,7 +147,7 @@ $availabilityUrlForWeek = static function (string $week): string {
         <div>
             <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Scheduling</p>
             <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Clinic Availability</h2>
-            <p class="text-xs font-bold text-slate-500 mb-0">Follow the three steps to block a full day or selected clinic hours.</p>
+            <p class="text-xs font-bold text-slate-500 mb-0">Choose a service to manage its hours and unavailable appointment periods.</p>
         </div>
         <div class="flex items-center gap-2">
             <a href="<?= e($availabilityUrlForWeek($availabilityPrevWeek)) ?>" class="btn btn-sm btn-ghost text-decoration-none" title="Previous week" data-no-ajax="true" data-availability-week-nav>
@@ -154,11 +160,17 @@ $availabilityUrlForWeek = static function (string $week): string {
         </div>
     </div>
 
+    <nav class="flex flex-wrap gap-2 px-5 pt-4 sm:px-6" aria-label="Clinic service schedule">
+        <?php foreach (appointment_consult_purposes() as $service): ?>
+            <a class="btn btn-sm <?= $service === $availabilityPurpose ? 'btn-primary' : 'btn-outline' ?>" href="availability.php?<?= e(http_build_query(['week' => $availabilityWeek->format('Y-m-d'), 'service' => $service])) ?>" data-no-ajax="true"><?= e($service) ?></a>
+        <?php endforeach; ?>
+    </nav>
+
     <div class="working-hours-summary">
         <span class="working-hours-summary-icon material-symbols-outlined" aria-hidden="true">schedule</span>
         <div class="working-hours-summary-main">
             <div class="working-hours-summary-heading">
-                <h3>Regular working hours</h3>
+                <h3><?= e($availabilityPurpose) ?> working hours</h3>
                 <span class="working-hours-count"><?= $openWorkingDayCount ?> day<?= $openWorkingDayCount === 1 ? '' : 's' ?> open</span>
             </div>
             <div class="working-hours-summary-groups" aria-label="Current weekly working hours">
@@ -189,7 +201,7 @@ $availabilityUrlForWeek = static function (string $week): string {
                     <?php foreach ($availabilityWeekDays as $day):
                         $date = $day->format('Y-m-d');
                         $isToday = $date === $availabilityToday->format('Y-m-d');
-                        $isPast = $day < $availabilityMinimumDate || !appointment_date_is_clinic_day($date);
+                        $isPast = $day < $availabilityMinimumDate || !appointment_date_is_clinic_day($date, $availabilityPurpose);
                         ?>
                         <button type="button" class="appointment-week-header <?= $isToday ? 'is-today' : '' ?> <?= $isPast ? 'is-past' : '' ?>" data-week-day-toggle="<?= e($date) ?>" aria-pressed="false" aria-label="Select whole day <?= e($day->format('l, F j')) ?>" <?= $isPast ? 'disabled' : '' ?> style="cursor:<?= $isPast ? 'not-allowed' : 'pointer' ?>;">
                             <span><?= e($day->format('D')) ?></span>
@@ -209,13 +221,25 @@ $availabilityUrlForWeek = static function (string $week): string {
                         $date = $day->format('Y-m-d');
                         $blocks = $calendarBlocksByDate[$date] ?? [];
                         $isToday = $date === $availabilityToday->format('Y-m-d');
-                        $isPast = $day < $availabilityMinimumDate || !appointment_date_is_clinic_day($date);
-                        $daySchedule = appointment_schedule_for_date($date);
+                        $isPast = $day < $availabilityMinimumDate || !appointment_date_is_clinic_day($date, $availabilityPurpose);
+                        $daySchedule = appointment_schedule_for_date($date, $availabilityPurpose);
                         $dayHours = $daySchedule[(int) $day->format('N')];
                         $dayStartMinutes = (int) substr($dayHours['start'], 0, 2) * 60;
                         $dayEndMinutes = (int) substr($dayHours['end'], 0, 2) * 60;
+                        $unavailableRanges = empty($dayHours['enabled'])
+                            ? [[$availabilityStartMinutes, $availabilityEndMinutes]]
+                            : array_filter([
+                                $dayStartMinutes > $availabilityStartMinutes ? [$availabilityStartMinutes, $dayStartMinutes] : null,
+                                $dayEndMinutes < $availabilityEndMinutes ? [$dayEndMinutes, $availabilityEndMinutes] : null,
+                            ]);
                         ?>
                         <div class="appointment-week-day-column <?= $isToday ? 'is-today' : '' ?> <?= $isPast ? 'is-past' : '' ?>" data-week-date="<?= e($date) ?>" data-is-past="<?= $isPast ? 'true' : 'false' ?>" role="button" tabindex="<?= $isPast ? '-1' : '0' ?>" aria-disabled="<?= $isPast ? 'true' : 'false' ?>" aria-label="<?= $isPast ? 'Past date unavailable on ' : 'Choose an available hour on ' ?><?= e($day->format('l, F j')) ?>">
+                            <?php foreach ($unavailableRanges as [$rangeStart, $rangeEnd]):
+                                $top = (($rangeStart - $availabilityStartMinutes) / $availabilityDurationMinutes) * 100;
+                                $height = (($rangeEnd - $rangeStart) / $availabilityDurationMinutes) * 100;
+                                ?>
+                                <div class="appointment-week-unavailable-area" style="top: <?= number_format($top, 4, '.', '') ?>%; height: <?= number_format($height, 4, '.', '') ?>%;" aria-hidden="true"></div>
+                            <?php endforeach; ?>
                             <?php for ($hour = $availabilityStartHour; $hour < $availabilityEndHour; $hour++):
                                 if ($hour * 60 < $dayStartMinutes || ($hour + 1) * 60 > $dayEndMinutes) {
                                     continue;
@@ -247,7 +271,7 @@ $availabilityUrlForWeek = static function (string $week): string {
                                     style="top: calc(<?= number_format($top, 4, '.', '') ?>% + 2px); height: calc(<?= number_format($height, 4, '.', '') ?>% - 4px);"
                                     role="button" tabindex="0" aria-haspopup="dialog"
                                     data-reason="<?= e($block['reason'] ?? '') ?>" data-time-label="<?= e($isWholeDay ? 'Whole day unavailable' : appointment_format_block_time($block)) ?>"
-                                    data-availability-block data-date="<?= e($date) ?>" data-start="<?= e($block['start_time'] ?? '') ?>" data-end="<?= e($block['end_time'] ?? '') ?>"
+                                    data-availability-block data-date="<?= e($date) ?>" data-start="<?= e($block['start_time'] ?? '') ?>" data-end="<?= e($block['end_time'] ?? '') ?>" data-applies-to="<?= e($block['applies_to'] ?? 'Both') ?>"
                                     <?= $isApeBatch ? 'data-ape-block="true"' : '' ?>
                                     title="<?= e(appointment_format_block_time($block) . ($block['reason'] ? ' — ' . $block['reason'] : '')) ?>">
                                     <strong><?= $isWholeDay ? 'Unavailable' : e(appointment_format_block_time($block)) ?><?php if ($isApeBatch): ?><span class="appointment-week-sample-badge">APE</span><?php endif; ?></strong>
@@ -264,17 +288,12 @@ $availabilityUrlForWeek = static function (string $week): string {
             <section class="appointment-availability-form-card appointment-availability-flow-card">
                 <p class="appointment-availability-eyebrow">One-time change</p>
                 <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Block clinic time</h3>
-                <p class="text-xs font-bold text-slate-500 mb-4">Complete the steps in order. Your working hours remain unchanged.</p>
-
-                <ol class="availability-flow-steps" aria-label="Block clinic time steps">
-                    <li data-availability-step="mode" class="is-current"><span>1</span><div><strong>Choose block type</strong><small>Full day or selected hours</small></div></li>
-                    <li data-availability-step="select"><span>2</span><div><strong>Select date and time</strong><small>Use the calendar beside this panel</small></div></li>
-                    <li data-availability-step="review"><span>3</span><div><strong>Review and save</strong><small>Add a reason, then confirm</small></div></li>
-                </ol>
+                <p class="text-xs font-bold text-slate-500 mb-4">Choose the block type, then select its date or hours in the calendar.</p>
 
                 <form method="POST" action="availability.php" class="grid gap-4" id="availabilityForm" data-no-ajax="true">
                     <input type="hidden" name="action" value="add">
                     <input type="hidden" name="week" value="<?= e($availabilityWeek->format('Y-m-d')) ?>">
+                    <input type="hidden" name="service" value="<?= e($availabilityPurpose) ?>">
                     <div id="availabilitySelectedDates">
                         <input type="hidden" name="block_dates[]" value="<?= e($availabilityDefaultDate) ?>">
                     </div>
@@ -304,6 +323,13 @@ $availabilityUrlForWeek = static function (string $week): string {
                         <p id="availabilitySelectionPrompt">Choose a date, then select a full day or open hours on the calendar.</p>
                         <div class="appointment-selected-time-slots" id="availabilitySelectedSlotSummary" aria-live="polite"></div>
                     </div>
+                    <label class="grid gap-1">
+                        <span class="text-[11px] font-black uppercase tracking-widest text-slate-400">Block applies to</span>
+                        <select name="applies_to" class="form-select" data-availability-scope>
+                            <?php foreach (appointment_closure_scopes() as $scope): ?><option value="<?= e($scope) ?>" <?= $scope === $availabilityPurpose ? 'selected' : '' ?>><?= e($scope) ?></option><?php endforeach; ?>
+                        </select>
+                        <small class="text-xs font-bold text-amber-700" data-both-services-notice hidden><strong>Both services:</strong> this prevents Medical Consult and Dental appointments for the selected date or time.</small>
+                    </label>
                     <label class="grid gap-1">
                         <span class="text-[11px] font-black uppercase tracking-widest text-slate-400">3. Reason (optional)</span>
                         <textarea name="reason" class="form-textarea" rows="3" placeholder="Staff meeting, campus event, maintenance..."></textarea>
@@ -336,7 +362,7 @@ $availabilityUrlForWeek = static function (string $week): string {
                         data-date="<?= e($block['date']) ?>"
                         data-start="<?= e($block['start_time'] ? substr($block['start_time'], 0, 5) : '') ?>"
                         data-end="<?= e($block['end_time'] ? substr($block['end_time'], 0, 5) : '') ?>"
-                        data-reason="<?= e($block['reason']) ?>">
+                        data-reason="<?= e($block['reason']) ?>" data-applies-to="<?= e($block['applies_to'] ?? 'Both') ?>">
                         <span class="appointment-timeline-marker material-symbols-outlined" aria-hidden="true">block</span>
                         <span class="appointment-block-row-copy"><strong><?= e(date('M d, Y', strtotime($block['date']))) ?></strong><span><?= e(appointment_format_block_time($block)) ?><?= $block['reason'] ? ' — ' . e($block['reason']) : '' ?></span></span>
                         <span class="appointment-block-row-action">Manage <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></span>
@@ -350,6 +376,7 @@ $availabilityUrlForWeek = static function (string $week): string {
         <form method="POST" action="availability.php" class="modal-content working-hours-modal-card" id="clinicWorkingHoursForm" data-no-ajax="true">
             <input type="hidden" name="action" value="save_schedule" id="workingHoursAction">
             <input type="hidden" name="week" value="<?= e($availabilityWeek->format('Y-m-d')) ?>">
+            <input type="hidden" name="service" value="<?= e($availabilityPurpose) ?>">
             <header class="working-hours-modal-header">
                 <div class="working-hours-modal-title-row">
                     <span class="working-hours-modal-icon material-symbols-outlined" aria-hidden="true">calendar_clock</span>
@@ -539,6 +566,7 @@ $availabilityUrlForWeek = static function (string $week): string {
         <form method="POST" action="availability.php" data-no-ajax="true" class="grid gap-4">
             <input type="hidden" name="action" value="update">
             <input type="hidden" name="week" value="<?= e($availabilityWeek->format('Y-m-d')) ?>">
+            <input type="hidden" name="service" value="<?= e($availabilityPurpose) ?>">
             <div id="availabilityEditIds"></div>
             <input type="hidden" name="block_date" id="availabilityEditDate">
             <input type="hidden" name="original_start" id="availabilityEditOriginalStart">
@@ -547,6 +575,7 @@ $availabilityUrlForWeek = static function (string $week): string {
                 <label class="grid gap-1"><span class="text-[11px] font-black uppercase tracking-widest text-slate-400">Start</span><input class="form-input" type="time" name="start_time" id="availabilityEditStart" required></label>
                 <label class="grid gap-1"><span class="text-[11px] font-black uppercase tracking-widest text-slate-400">End</span><input class="form-input" type="time" name="end_time" id="availabilityEditEnd" required></label>
             </div>
+            <label class="grid gap-1"><span class="text-[11px] font-black uppercase tracking-widest text-slate-400">Block applies to</span><select class="form-select" name="applies_to" id="availabilityEditScope" data-availability-scope><?php foreach (appointment_closure_scopes() as $scope): ?><option value="<?= e($scope) ?>"><?= e($scope) ?></option><?php endforeach; ?></select><small class="text-xs font-bold text-amber-700" data-both-services-notice hidden><strong>Both services:</strong> this prevents Medical Consult and Dental appointments for the selected date or time.</small></label>
             <label class="grid gap-1"><span class="text-[11px] font-black uppercase tracking-widest text-slate-400">Reason</span><textarea class="form-textarea" name="reason" id="availabilityEditReason" rows="3"></textarea></label>
             <div class="flex justify-between gap-3">
                 <button type="submit" name="action" value="delete_group" formnovalidate class="btn btn-ghost text-red-700" data-confirm-submit data-confirm-type="danger" data-confirm-title="Delete entire unavailable time?" data-confirm-message="This will remove the complete unavailable period and make it available again." data-confirm-toast="Deleting unavailable time...">Delete entire unavailable time</button>
@@ -895,6 +924,13 @@ $availabilityUrlForWeek = static function (string $week): string {
         allDay: document.getElementById('allDayToggle'),
         partial: document.getElementById('partialTimeFields'),
     });
+
+    const syncScopeNotices = () => {
+        document.querySelectorAll('[data-availability-scope]').forEach(select => {
+            const notice = select.closest('label')?.querySelector('[data-both-services-notice]');
+            if (notice) notice.hidden = select.value !== 'Both';
+        });
+    };
 
     let modalDateDrag = null;
     let suppressDatePointerClick = false;
@@ -1272,12 +1308,6 @@ $availabilityUrlForWeek = static function (string $week): string {
             button.classList.toggle('is-selected', selected);
             button.setAttribute('aria-pressed', String(selected));
         });
-        document.querySelectorAll('[data-availability-step]').forEach(step => {
-            const name = step.dataset.availabilityStep;
-            const complete = name === 'mode' || (name === 'select' && hasDates) || (name === 'review' && hasDates && (isWholeDay || hasHours));
-            step.classList.toggle('is-complete', complete);
-            step.classList.toggle('is-current', name === (hasDates && (isWholeDay || hasHours) ? 'review' : hasDates ? 'select' : 'mode'));
-        });
         const prompt = document.getElementById('availabilitySelectionPrompt');
         if (prompt) {
             prompt.textContent = !hasDates ? 'Choose a date, then select a full day or open hours on the calendar.'
@@ -1458,6 +1488,7 @@ $availabilityUrlForWeek = static function (string $week): string {
             }
             selectAvailabilityDate(event.target.value);
         }
+        if (event.target.matches('[data-availability-scope]')) syncScopeNotices();
     });
 
     document.addEventListener('click', (event) => {
@@ -1659,6 +1690,8 @@ $availabilityUrlForWeek = static function (string $week): string {
             startSelect.value = originalStart;
             endSelect.value = originalEnd;
             document.getElementById('availabilityEditReason').value = edit.dataset.reason || '';
+            document.getElementById('availabilityEditScope').value = edit.dataset.appliesTo || 'Both';
+            syncScopeNotices();
             document.getElementById('availabilityEditOriginalStart').value = edit.dataset.start || '';
             document.getElementById('availabilityEditOriginalEnd').value = edit.dataset.end || '';
             startSelect.min = originalStart;
@@ -1673,5 +1706,6 @@ $availabilityUrlForWeek = static function (string $week): string {
     });
     syncPartialFields();
     syncCalendarSelection();
+    syncScopeNotices();
 })();
 </script>

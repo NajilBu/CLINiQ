@@ -286,7 +286,7 @@ render_clinic_command_header(
         </div>
         <div class="ape-work-queue-toolbar">
             <div class="ape-work-queue-toolbar-actions">
-            <?php if (($apeUser['role'] ?? '') === 'admin'): ?>
+            <?php if (in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor'], true)): ?>
                 <a href="scheduling.php" class="btn btn-outline ape-work-queue-scheduling text-decoration-none">
                     <span class="material-symbols-outlined text-[18px]">calendar_month</span>
                     Manage Scheduling

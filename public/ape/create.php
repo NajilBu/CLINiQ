@@ -5,6 +5,13 @@ require_once __DIR__ . '/../../app/services/ApeWorkflow.php';
 require_login();
 ensure_ape_workflow_schema();
 
+$apeUser = current_user() ?? [];
+if (!in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor', 'nurse'], true)) {
+    flash_message('error', 'Only authorized clinic staff can create a manual APE record.');
+    header('Location: index.php');
+    exit;
+}
+
 $apeDb = auth_db();
 $patients = $apeDb->query("
     SELECT pt.person_id AS id, p.id_number, p.first_name, p.last_name,
@@ -38,11 +45,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $staffPersonId = (int) (current_user()['person_id'] ?? 0);
         $academicYear = trim((string) ($_POST['academic_year'] ?? ''));
         $appointmentId = (int) ($_POST['appointment_id'] ?? 0) ?: null;
-        $workflowStatus = 'Reviewed';
         $requirementStatus = 'Checked';
-        $clearanceStatus = 'Pending';
         $verificationStatus = 'Verified';
-        $followUpRequired = isset($_POST['follow_up_required']) ? 1 : 0;
+        $clearanceStatus = trim((string) ($_POST['clearance_status'] ?? ''));
         $clinicalRemarks = trim((string) ($_POST['clinical_remarks'] ?? ''));
 
         if ($patientId <= 0 || $staffPersonId <= 0 || $academicYear === '') {
@@ -56,6 +61,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if ($clinicalRemarks === '') {
             throw new InvalidArgumentException('Record the clinic findings before saving a manual APE.');
+        }
+        if (!in_array($clearanceStatus, ['Pending', 'For Follow-up', 'Cleared'], true)) {
+            throw new InvalidArgumentException('Choose a valid clearance status.');
         }
         if (empty($_FILES['document']['name'])) {
             throw new InvalidArgumentException('Attach the submitted APE document before saving.');
@@ -78,10 +86,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $idNumber = (string) ($patientIdentity->fetchColumn() ?: 'patient-' . $patientId);
         $documentType = trim((string) ($_POST['document_type'] ?? 'APE Form')) ?: 'APE Form';
         $storedFile = ape_store_uploaded_file($_FILES['document'], $idNumber, $documentType);
-        if ($followUpRequired) {
-            $workflowStatus = 'Follow-up Required';
-            $clearanceStatus = 'For Follow-up';
-        }
+        $followUpRequired = $clearanceStatus === 'For Follow-up' ? 1 : 0;
+        $workflowStatus = match ($clearanceStatus) {
+            'Cleared' => 'Cleared',
+            'For Follow-up' => 'Follow-up Required',
+            default => 'Reviewed',
+        };
+        $findingStatus = $followUpRequired ? 'With Finding' : 'Normal';
 
         $apeDb->beginTransaction();
         $stmt = $apeDb->prepare("
@@ -137,7 +148,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 INSERT INTO ape_findings (
                     ape_id, finding_type, description, result_status,
                     follow_up_required, recorded_by_person_id
-                ) VALUES (?, 'General', ?, 'With Finding', 1, ?)
+                ) VALUES (?, 'General', ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
                     finding_type = VALUES(finding_type),
                     description = VALUES(description),
@@ -146,7 +157,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     recorded_by_person_id = VALUES(recorded_by_person_id),
                     recorded_at = CURRENT_TIMESTAMP
             ");
-        $finding->execute([$apeId, $clinicalRemarks, $staffPersonId]);
+        $finding->execute([$apeId, $clinicalRemarks, $findingStatus, $followUpRequired, $staffPersonId]);
 
         ape_log_activity($apeId, $staffPersonId, 'Created APE record', 'Academic year ' . $academicYear);
         $apeDb->commit();
@@ -162,7 +173,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         flash_message('error', $e->getCode() === '23000'
             ? 'This patient already has an APE record for that academic year.'
-            : $e->getMessage());
+            : ($e instanceof InvalidArgumentException || $e instanceof RuntimeException
+                ? $e->getMessage()
+                : 'The manual APE record could not be saved. Please try again.'));
     }
 }
 
@@ -200,7 +213,7 @@ render_header('Add APE Record');
         </section>
 
         <section>
-            <h2 class="font-headline text-xl font-extrabold text-[#1c2a59] mb-4">Appointment & Clearance</h2>
+            <h2 class="font-headline text-xl font-extrabold text-[#1c2a59] mb-4">Appointment & Clinical Decision</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div class="md:col-span-2">
                     <label class="clinic-label">Related Scheduled Appointment (Optional)</label>
@@ -218,20 +231,14 @@ render_header('Add APE Record');
                     <input class="clinic-input" name="exam_date" type="date" required>
                 </div>
                 <div>
-                    <label class="clinic-label">Clearance Status</label>
-                    <select class="clinic-select" name="clearance_status">
-                        <option>Pending</option>
-                        <option>For Follow-up</option>
-                        <option>Cleared</option>
-                    </select>
-                </div>
-                <label class="md:col-span-2 flex items-center gap-3 rounded-2xl bg-amber-50 border border-amber-100 p-4 cursor-pointer">
-                    <input class="rounded border-amber-300 text-primary" type="checkbox" name="follow_up_required" value="1">
-                    <span>
-                        <strong class="block text-sm text-amber-900">Follow-up required</strong>
-                        <span class="block text-xs font-bold text-amber-700">Use for clinic-only treatment monitoring before final clearance.</span>
-                    </span>
-                </label>
+                        <label class="clinic-label">Clearance Status</label>
+                        <select class="clinic-select" name="clearance_status">
+                            <option value="Pending">Pending final clinic decision</option>
+                            <option>For Follow-up</option>
+                            <option>Cleared</option>
+                        </select>
+                    </div>
+                <p class="md:col-span-2 text-xs font-bold text-slate-500 mb-0">Choose <strong>For Follow-up</strong> only when the clinic needs treatment monitoring, a referral, or further clearance before the APE can be completed.</p>
             </div>
         </section>
     </div>

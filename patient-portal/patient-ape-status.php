@@ -57,21 +57,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
                 ));
             }
         }
-        $requiredDocumentKeys = [];
-        foreach ($documentTypesByKey as $documentKey => $documentType) {
-            $existing = $latestExistingByType[$documentType] ?? null;
-            if (!$existing || ($existing['verification_status'] ?? '') === 'Needs Correction') {
-                $requiredDocumentKeys[] = $documentKey;
-            }
-        }
-        $missingDocuments = array_filter($requiredDocumentKeys, static function (string $documentKey) use ($batchFiles): bool {
-            $errors = $batchFiles['error'][$documentKey] ?? [UPLOAD_ERR_NO_FILE];
-            $errors = is_array($errors) ? $errors : [$errors];
-            return !array_filter($errors, static fn($error): bool => (int) $error !== UPLOAD_ERR_NO_FILE);
-        });
-        if ($missingDocuments) {
-            throw new InvalidArgumentException('Attach a file for every required APE document before submitting.');
-        }
         foreach ($documentTypesByKey as $documentKey => $documentType) {
             $errors = $batchFiles['error'][$documentKey] ?? UPLOAD_ERR_NO_FILE;
             if (!is_array($errors)) {
@@ -168,7 +153,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
                 }
             }
         }
-        $uploadError = $e->getMessage();
+        $uploadError = $e instanceof InvalidArgumentException || $e instanceof RuntimeException
+            ? $e->getMessage()
+            : 'Your APE documents could not be submitted. Please try again.';
     }
 }
 
@@ -695,8 +682,6 @@ render_student_header('APE Status', 'ape');
                                 <p class="ape-staged-file-name hidden" id="ape-file-name-<?= student_e($doc['key']) ?>"></p>
                             <?php endif; ?>
                         </div>
-                        <details class="patient-document-more">
-                            <summary>Actions</summary>
                         <?php if ($doc['disabled']): ?>
                             <div class="student-appointment-actions">
                                 <?php if (!empty($doc['document_id'])): ?>
@@ -722,7 +707,6 @@ render_student_header('APE Status', 'ape');
                                 </button>
                             </div>
                         <?php endif; ?>
-                        </details>
                     </div>
                 <?php endforeach; ?>
                 <?php if (!$documents): ?>

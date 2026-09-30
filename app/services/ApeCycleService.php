@@ -539,7 +539,10 @@ function ape_schedule_candidates(int $cycleId): array
          INNER JOIN students s ON s.person_id = pt.person_id
         LEFT JOIN programs pr ON pr.id = s.program_id
         WHERE ar.ape_cycle_id = ?
-          AND ar.schedule_batch_id IS NULL
+           AND ar.schedule_batch_id IS NULL
+           AND ar.entry_mode = 'Student Scheduled'
+           AND ar.workflow_status NOT IN ('Inactive', 'Cleared')
+           AND ar.exam_date IS NULL
          ORDER BY p.last_name, p.first_name, ar.ape_id
     ");
     $stmt->execute([$cycleId]);
@@ -644,6 +647,9 @@ function create_ape_schedule_batch(array $input, ?int $actorPersonId): array
         if ($scheduleDate < date('Y-m-d')) {
             throw new InvalidArgumentException('The APE batch date cannot be in the past.');
         }
+        if ($scheduleDate === date('Y-m-d') && $startTime <= date('H:i:s')) {
+            throw new InvalidArgumentException('Choose a future start time for a batch scheduled today.');
+        }
         ape_validate_batch_working_hours($scheduleDate, $startTime, $endTime, appointment_schedule_for_date($scheduleDate));
 
         $duplicateName = $db->prepare("SELECT batch_id FROM ape_schedule_batches WHERE ape_cycle_id = ? AND LOWER(batch_name) = LOWER(?) LIMIT 1");
@@ -712,6 +718,8 @@ function create_ape_schedule_batch(array $input, ?int $actorPersonId): array
             INNER JOIN students s ON s.person_id = pt.person_id
             WHERE ar.ape_cycle_id = ? AND ar.schedule_batch_id IS NULL
               AND ar.entry_mode = 'Student Scheduled'
+              AND ar.workflow_status NOT IN ('Inactive', 'Cleared')
+              AND ar.exam_date IS NULL
               AND ar.ape_id IN ({$placeholders})
             FOR UPDATE
         ");
@@ -781,12 +789,13 @@ function cancel_ape_schedule_batch(int $batchId, int $cycleId, ?int $actorPerson
         $batch = $db->prepare("
             SELECT batch_name, schedule_date, start_time, end_time FROM ape_schedule_batches
             WHERE batch_id = ? AND ape_cycle_id = ? AND status = 'Scheduled'
+              AND TIMESTAMP(schedule_date, start_time) > NOW()
             FOR UPDATE
         ");
         $batch->execute([$batchId, $cycleId]);
         $batchRow = $batch->fetch();
         if (!$batchRow) {
-            throw new RuntimeException('Only a scheduled batch can be cancelled.');
+            throw new RuntimeException('Only a future scheduled batch can be cancelled. Use individual rescheduling for a student who needs a different schedule.');
         }
         $batchName = (string) $batchRow['batch_name'];
         $patients = $db->prepare('SELECT patient_id FROM ape_records WHERE schedule_batch_id = ? FOR UPDATE');

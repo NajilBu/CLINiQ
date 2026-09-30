@@ -11,15 +11,23 @@ function ensure_system_settings_schema(): void
         return;
     }
 
-    auth_db()->exec("
-        CREATE TABLE IF NOT EXISTS system_settings (
-            setting_key VARCHAR(120) PRIMARY KEY,
-            setting_value MEDIUMTEXT NOT NULL,
-            updated_by BIGINT UNSIGNED NULL,
-            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (updated_by) REFERENCES people(id) ON DELETE SET NULL
-        )
-    ");
+    $db = auth_db();
+    $tableExists = (bool) $db->query("SHOW TABLES LIKE 'system_settings'")->fetchColumn();
+    if (!$tableExists) {
+        if ($db->inTransaction()) {
+            throw new RuntimeException('System settings are not available while this update is being saved.');
+        }
+
+        $db->exec("
+            CREATE TABLE system_settings (
+                setting_key VARCHAR(120) PRIMARY KEY,
+                setting_value MEDIUMTEXT NOT NULL,
+                updated_by BIGINT UNSIGNED NULL,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                FOREIGN KEY (updated_by) REFERENCES people(id) ON DELETE SET NULL
+            )
+        ");
+    }
 
     $ready = true;
 }

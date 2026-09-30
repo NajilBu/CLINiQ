@@ -4,6 +4,11 @@ require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/ApeWorkflow.php';
 
 require_login();
+$apeUser = current_user() ?? [];
+if (!in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor', 'nurse'], true)) {
+    http_response_code(403);
+    exit('Only authorized clinic staff can view APE documents.');
+}
 
 $documentId = (int) ($_GET['id'] ?? 0);
 if ($documentId <= 0) {

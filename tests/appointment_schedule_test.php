@@ -103,7 +103,7 @@ if (!appointment_slot_is_open_for_schedule($schedule, '2026-09-15', '09:00:00')
 $patientAppointmentSource = file_get_contents(dirname(__DIR__) . '/patient-portal/patient-appointment.php');
 if (!str_contains($patientAppointmentSource, 'slot.hidden = !isWithinHours;')
     || !str_contains($patientAppointmentSource, 'start >= hours.start && end <= hours.end')
-    || !str_contains($patientAppointmentSource, 'appointment_schedule_for_month')
+    || !str_contains($patientAppointmentSource, 'serviceSchedule')
     || !str_contains($patientAppointmentSource, 'data-appointment-month-link')
     || !str_contains($patientAppointmentSource, "fetch(link.href")
     || !str_contains($patientAppointmentSource, "currentPanel.replaceWith(replacement)")

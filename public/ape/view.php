@@ -156,6 +156,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $staffPersonId = (int) (current_user()['person_id'] ?? 0);
     $activityLabel = null;
     $activityNotes = null;
+    $successMessage = null;
     $apeDb = auth_db();
     $storedClinicDocument = null;
     $clinicalActions = ['record_examination', 'update_clinical_information', 'finalize_exam_clear', 'finalize_exam_follow_up', 'resolve_clinical_follow_up'];
@@ -691,9 +692,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (in_array($action, ['finalize_exam_follow_up', 'keep_follow_up_open'], true)) {
                 patient_email_queue_notification((int) $updatedRecord['patient_id'], 'ape_follow_up_required', 'ape_follow_up_reminders', 'APE follow-up required', 'The clinic requires follow-up for your APE. Please open your APE status for the required action and due date.', 'ape', $id, $staffPersonId);
             }
-            flash_message('success', $activityLabel . '.');
+            $successMessage = $activityLabel . '.';
         }
         $apeDb->commit();
+        if ($successMessage !== null) {
+            flash_message('success', $successMessage);
+        }
     } catch (Throwable $e) {
         if ($apeDb->inTransaction()) {
             $apeDb->rollBack();
@@ -701,7 +705,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($storedClinicDocument && !empty($storedClinicDocument['absolute_path']) && is_file($storedClinicDocument['absolute_path'])) {
             @unlink($storedClinicDocument['absolute_path']);
         }
-        flash_message('error', $e->getMessage());
+        flash_message(
+            $e instanceof InvalidArgumentException || $e instanceof RuntimeException ? 'warning' : 'error',
+            $e instanceof InvalidArgumentException || $e instanceof RuntimeException
+                ? $e->getMessage()
+                : 'The APE update could not be completed. Please try again.'
+        );
     }
 
     header('Location: view.php?id=' . $id);
@@ -819,11 +828,12 @@ $reviewDocuments = array_values($latestReviewDocuments);
 $pendingReviewDocuments = array_values(array_filter($reviewDocuments, static fn(array $document): bool => $document['verification_status'] === 'Pending'));
 $reviewAwaitingCount = count($pendingReviewDocuments);
 $reviewWorkspaceActive = $examSaved && !$apeIsCompleted && $reviewUploadGroup !== null;
+$flowPanelTitle = $reviewWorkspaceActive ? 'Document Review' : $queue['title'];
+$flowPanelAction = $reviewWorkspaceActive ? 'Review submitted documents' : $next['label'];
 $showRequirementsChecklist = !$apeIsCompleted && !$examSaved;
 $canClinicUploadBeforeStudentSubmission = $canUploadApeDocument
     && !$apeIsCompleted
     && ape_initial_upload_phase_is_open($record);
-$headerWaitingLabel = ape_waiting_label($record);
 if ($studentDocumentSubmitted && !$apeIsCompleted && $reviewDocuments && $examSaved) {
     $adminStateBadge = $reviewAwaitingCount > 0
         ? $reviewAwaitingCount . ' DOCUMENT' . ($reviewAwaitingCount === 1 ? '' : 'S') . ' AWAITING REVIEW'
@@ -831,11 +841,9 @@ if ($studentDocumentSubmitted && !$apeIsCompleted && $reviewDocuments && $examSa
     $adminStateExplanation = $isClinicManagedApe
         ? 'Clinic-held documents are ready for review: archive the complete submission or return selected files for correction.'
         : 'Student documents are ready for one clinic decision: archive the complete submission or return selected files for correction.';
-    $headerWaitingLabel = 'REVIEW SUBMISSION';
 } elseif ($studentDocumentSubmitted && !$apeIsCompleted && $reviewDocuments) {
     $adminStateBadge = count($pendingReviewDocuments) . ' DOCUMENT' . (count($pendingReviewDocuments) === 1 ? '' : 'S') . ' SUBMITTED';
     $adminStateExplanation = 'Student documents are submitted. Record the examination when the assigned schedule begins; document review follows the examination.';
-    $headerWaitingLabel = 'DOCUMENTS SUBMITTED';
 }
 $showExamForm = !$examSaved && !$apeIsCompleted && $canRecordApeExam && ape_examination_is_available($record);
 $savedExam = $findings[0] ?? [];
@@ -1215,9 +1223,6 @@ render_header(($isClinicManagedApe ? 'Faculty & NTP APE Record - ' : 'APE Record
     .ape-document-review-list {
         display: grid;
         gap: 0.75rem;
-        max-height: 31rem;
-        overflow-y: auto;
-        padding-right: 0.2rem;
     }
     .ape-document-review-card {
         display: grid;
@@ -1276,37 +1281,11 @@ render_header(($isClinicManagedApe ? 'Faculty & NTP APE Record - ' : 'APE Record
             transition: none;
         }
     }
-    .ape-secondary-panel {
-        position: relative;
-    }
-    .ape-secondary-panel > :not(.ape-secondary-heading) {
-        display: none;
-    }
-    .ape-secondary-panel.is-open > :not(.ape-secondary-heading) {
-        display: block;
-    }
-    .ape-secondary-panel.is-open > form.grid,
-    .ape-secondary-panel.is-open > .grid {
-        display: grid;
-    }
     .ape-secondary-heading {
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 1rem;
-    }
-    .ape-secondary-toggle {
-        flex: 0 0 auto;
-        border: 1px solid rgba(148, 163, 184, 0.35);
-        border-radius: 0.75rem;
-        padding: 0.45rem 0.7rem;
-        background: #fff;
-        color: var(--cliniq-primary);
-        font-size: 0.72rem;
-        font-weight: 800;
-    }
-    .ape-secondary-toggle:hover {
-        background: #f0fdf4;
     }
 </style>
 
@@ -1323,9 +1302,8 @@ render_header(($isClinicManagedApe ? 'Faculty & NTP APE Record - ' : 'APE Record
             </div>
             <div class="flex flex-wrap gap-2 ape-record-header-actions">
                 <span class="badge <?= ape_priority_badge($record)['class'] ?>"><?= e($adminStateBadge) ?></span>
-                <span class="badge <?= ape_priority_badge($record)['class'] ?>"><?= e($headerWaitingLabel) ?></span>
                 <a class="btn btn-ghost text-decoration-none" href="<?= app_url('patients/view.php?id=' . (int)$record['patient_id']) ?>">
-                    <span class="material-symbols-outlined text-[18px]">folder_shared</span> Patient
+                    <span class="material-symbols-outlined text-[18px]">folder_shared</span> Open patient profile
                 </a>
             </div>
         </div>
@@ -1365,7 +1343,7 @@ render_header(($isClinicManagedApe ? 'Faculty & NTP APE Record - ' : 'APE Record
     $batchWasMissed = $batchHasPassed && empty($record['exam_date']);
     $batchDisplayStatus = !$hasApeBatch
         ? 'Unscheduled'
-        : ($batchWasMissed ? 'Missed' : ($examSaved ? 'Examination Completed' : ($batchHasPassed ? 'Schedule Passed' : 'Scheduled')));
+        : ($batchWasMissed ? 'Missed' : ($examSaved ? 'Student Examined' : ($batchHasPassed ? 'Schedule Passed' : 'Scheduled')));
     $batchStatusClass = !$hasApeBatch ? 'badge-pending' : ($batchWasMissed ? 'badge-critical' : ($batchHasPassed ? 'badge-completed' : 'badge-in-progress'));
     $canRescheduleApe = in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor'], true) && !$examSaved && !$apeIsInactive;
     $rescheduleBatches = $canRescheduleApe ? array_values(array_filter(
@@ -1450,14 +1428,15 @@ render_header(($isClinicManagedApe ? 'Faculty & NTP APE Record - ' : 'APE Record
         <?php endif; ?>
 
         <?php if ($examSaved): ?>
-        <section class="ape-flow-panel ape-secondary-panel" aria-labelledby="savedApeExamTitle">
-            <div class="ape-secondary-heading flex items-center justify-between gap-3 mb-4">
+        <details class="ape-flow-panel" aria-labelledby="savedApeExamTitle">
+            <summary class="ape-secondary-heading cursor-pointer list-none [&::-webkit-details-marker]:hidden">
                 <div>
-                    <h2 class="font-headline text-lg font-extrabold mb-1" id="savedApeExamTitle">Examination</h2>
-                    <p class="text-xs font-bold text-slate-500 mb-0">Saved examination. Document review is handled separately below.</p>
+                    <h2 class="font-headline text-lg font-extrabold mb-1" id="savedApeExamTitle">Examination recorded</h2>
+                    <p class="text-xs font-bold text-slate-500 mb-0">Step 2 is complete. Open the record only when you need to review or update clinical information.</p>
                 </div>
-                <span class="badge badge-completed"><span class="material-symbols-outlined text-[14px]">lock</span> Saved and locked</span>
-            </div>
+                <span class="badge badge-completed"><span class="material-symbols-outlined text-[14px]">check</span> Step 2 complete</span>
+            </summary>
+            <div class="pt-5">
             <fieldset disabled class="grid grid-cols-1 md:grid-cols-2 gap-4" style="border:0; padding:0; margin:0; min-width:0;">
                 <div>
                     <label class="clinic-label" for="savedApeExamDate">Examination Date</label>
@@ -1532,14 +1511,15 @@ render_header(($isClinicManagedApe ? 'Faculty & NTP APE Record - ' : 'APE Record
                 </form>
                 <?php endif; ?>
             </div>
-        </section>
+            </div>
+        </details>
         <?php endif; ?>
 
         <section class="ape-flow-panel">
             <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-3">
                 <div class="min-w-0 flex-1">
-                    <p class="text-[10px] font-black text-primary uppercase tracking-widest mb-2"><?= e($queue['title']) ?></p>
-                    <h2 class="font-headline text-xl md:text-2xl font-extrabold text-[#17261d] mb-1"><?= e($next['label']) ?></h2>
+                    <p class="text-[10px] font-black text-primary uppercase tracking-widest mb-2"><?= e($flowPanelTitle) ?></p>
+                    <h2 class="font-headline text-xl md:text-2xl font-extrabold text-[#17261d] mb-1"><?= e($flowPanelAction) ?></h2>
                     <p class="text-sm font-bold text-slate-500 mb-0 max-w-3xl"><?= e($adminStateExplanation) ?></p>
                 </div>
                 <span class="badge <?= ape_priority_badge($record)['class'] ?> shrink-0">
@@ -2322,22 +2302,6 @@ render_header(($isClinicManagedApe ? 'Faculty & NTP APE Record - ' : 'APE Record
 <?php endif; ?>
 <script>
     (() => {
-        document.querySelectorAll('.ape-secondary-panel').forEach((panel) => {
-            const heading = panel.querySelector(':scope > .ape-secondary-heading');
-            if (!heading || heading.querySelector('.ape-secondary-toggle')) return;
-            const toggle = document.createElement('button');
-            toggle.type = 'button';
-            toggle.className = 'ape-secondary-toggle';
-            toggle.textContent = 'View details';
-            toggle.setAttribute('aria-expanded', 'false');
-            heading.append(toggle);
-            toggle.addEventListener('click', () => {
-                const open = panel.classList.toggle('is-open');
-                toggle.textContent = open ? 'Hide details' : 'View details';
-                toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-            });
-        });
-
         document.querySelectorAll('[data-document-review-actions]').forEach((group) => {
             const buttons = group.querySelectorAll('[data-document-review-mode]');
             const panes = group.querySelectorAll('[data-document-review-pane]');

@@ -25,6 +25,7 @@ check_time(str_contains($source, 'appointmentConflicts'), 'Client-side appointme
 check_time(str_contains($source, 'unavailableBlocks'), 'Client-side unavailable-time validation remains available.');
 check_time(str_contains($source, "confirmAction('Create this APE batch?'"), 'Batch creation uses the custom confirmation modal.');
 check_time(str_contains($service, 'The APE batch date cannot be in the past.'), 'Server-side past-date validation is required.');
+check_time(str_contains($service, 'Choose a future start time for a batch scheduled today.'), 'Server-side same-day start-time validation is required.');
 check_time(str_contains($service, 'LOWER(batch_name) = LOWER(?)'), 'Server-side duplicate-name validation is required.');
 check_time(str_contains($service, 'appointment_availability_blocks'), 'Server-side unavailable-time validation is required.');
 check_time(str_contains($service, 'appointment_schedule_for_date($scheduleDate)'), 'APE batches must use a future month working-hours arrangement when one exists.');

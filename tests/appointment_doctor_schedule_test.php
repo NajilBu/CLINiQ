@@ -9,18 +9,10 @@ $schedule = [
     'Dental' => ['configured' => true, 'doctors' => [13 => ['days' => [1, 3, 5]]]],
 ];
 $active = [11, 12, 13];
-if (appointment_doctor_ids_for_weekday($schedule, 'Medical Consult', 1, $active) !== [11]
-    || appointment_doctor_ids_for_weekday($schedule, 'Medical Consult', 2, $active) !== [11, 12]
-    || appointment_doctor_ids_for_weekday($schedule, 'Dental', 2, $active) !== []
-    || appointment_doctor_ids_for_weekday($schedule, 'Dental', 3, [11, 12]) !== []) {
-    throw new RuntimeException('Default or restricted doctor weekdays are incorrect.');
-}
-
-$defaultSelection = appointment_normalize_doctor_selection([], []);
-$restrictedSelection = appointment_normalize_doctor_selection(['Dental'], ['4', '2', '4']);
-if ($defaultSelection !== ['purposes' => ['Medical Consult', 'Dental'], 'days' => []]
-    || $restrictedSelection !== ['purposes' => ['Dental'], 'days' => [2, 4]]) {
-    throw new RuntimeException('Blank purpose or weekday selections did not receive the intended defaults.');
+if (appointment_doctor_ids_for_service($schedule, 'Medical Consult', $active) !== [11, 12]
+    || appointment_doctor_ids_for_service($schedule, 'Dental', $active) !== [13]
+    || appointment_doctor_ids_for_service($schedule, 'Dental', [11, 12]) !== []) {
+    throw new RuntimeException('Doctor role assignments must apply to every open service day.');
 }
 
 $root = dirname(__DIR__);
@@ -32,8 +24,9 @@ if (!str_contains($booking, 'appointment_purpose_has_doctor_on_date')
     || !str_contains($booking, 'doctorAvailable')
     || !str_contains($approval, 'appointment_purpose_has_doctor_on_date')
     || !str_contains($migration, 'uq_appointments_reserved_slot (reserved_slot, purpose)')
-    || substr_count($doctorPage, 'name="days[]"') !== 1) {
-    throw new RuntimeException('Doctor coverage or parallel consultation slot guards are missing.');
+    || !str_contains($doctorPage, 'Assign consultation roles')
+    || str_contains($doctorPage, '[days][]')) {
+    throw new RuntimeException('Doctor roles must remain separate from service availability and parallel consultation slot guards.');
 }
 
 echo "Appointment doctor schedule checks passed. No database writes.\n";

@@ -295,7 +295,7 @@ expect_four_step(str_contains($viewSource, "\$patientProgress = ape_patient_prog
 expect_four_step(str_contains($viewSource, "\$staffProgress = ape_staff_progress(\$record);"), 'The admin APE record must use the staff progress resolver for its workflow strip.');
 expect_four_step(str_contains($viewSource, "\$currentStep = \$staffProgress['active_step'];"), 'The admin active step must come from the staff workflow resolver.');
 expect_four_step(str_contains($viewSource, 'DOCUMENTS STILL NEEDED'), 'The admin header must identify incomplete student documents instead of showing Final Decision prematurely.');
-expect_four_step(str_contains($viewSource, 'Examination Completed'), 'The schedule card must distinguish examination completion from APE completion.');
+expect_four_step(str_contains($viewSource, 'Student Examined'), 'The schedule card must distinguish this student examination from APE completion.');
 expect_four_step(str_contains($viewSource, 'data-ape-record-context')
     && str_contains($viewSource, 'contextBounds.bottom < floatingTop')
     && str_contains($viewSource, '$reviewWorkspaceActive && $reviewAwaitingCount > 0')
@@ -305,6 +305,19 @@ expect_four_step(str_contains($viewSource, "\$submitted ? 'Submitted'"), 'The st
 expect_four_step(str_contains($viewSource, 'Return selected files'), 'Document review must expose a clear return-for-resubmission action.');
 expect_four_step(str_contains($viewSource, 'data-document-review-actions'), 'Submitted documents must use one mode-switching review-action panel.');
 expect_four_step(str_contains($viewSource, 'data-document-review-mode="archive"'), 'The review-action panel must default to archive mode.');
+expect_four_step(str_contains($viewSource, '$apeDb->commit();') && str_contains($viewSource, "flash_message('success', \$successMessage);"), 'APE success feedback must be shown only after the save is committed.');
+expect_four_step(str_contains($viewSource, 'The APE update could not be completed. Please try again.'), 'Unexpected APE save failures must use a staff-friendly message.');
+expect_four_step(!str_contains($viewSource, 'Saved and locked') && !str_contains($viewSource, 'REVIEW SUBMISSION'), 'APE review controls must not use misleading or duplicate labels.');
+expect_four_step(!str_contains($viewSource, 'max-height: 31rem') && !str_contains($viewSource, 'ape-secondary-toggle'), 'APE review files and details must remain visible without nested scrolling or JavaScript-only controls.');
+expect_four_step(str_contains($viewSource, 'Review submitted documents'), 'The active document-review workspace must identify the work staff need to do.');
+$settingsSource = file_get_contents(__DIR__ . '/../app/services/SystemSettings.php');
+expect_four_step($settingsSource !== false && str_contains($settingsSource, "SHOW TABLES LIKE 'system_settings'") && str_contains($settingsSource, '$db->inTransaction()'), 'System settings initialization must not create a table inside an active clinical save.');
+$manualCreateSource = file_get_contents(__DIR__ . '/../public/ape/create.php');
+$staffDocumentSource = file_get_contents(__DIR__ . '/../public/ape/document.php');
+$scheduleSource = file_get_contents(__DIR__ . '/../public/ape/scheduling.php');
+expect_four_step($manualCreateSource !== false && str_contains($manualCreateSource, "['admin', 'doctor', 'nurse']") && str_contains($manualCreateSource, '$followUpRequired = $clearanceStatus === \'For Follow-up\' ? 1 : 0;') && str_contains($manualCreateSource, '$findingStatus = $followUpRequired ? \'With Finding\' : \'Normal\';'), 'Manual APE decisions must use the selected clearance status and require clinical authorization.');
+expect_four_step($staffDocumentSource !== false && str_contains($staffDocumentSource, 'Only authorized clinic staff can view APE documents.'), 'APE document previews must require authorized clinical staff.');
+expect_four_step($scheduleSource !== false && str_contains($scheduleSource, 'Schedule Ended') && str_contains($scheduleSource, 'The APE batch could not be saved. Please try again.'), 'Expired batches must not be called completed and unexpected batch failures must be friendly.');
 expect_four_step(str_contains($viewSource, 'The student receives a correction notification and an email when delivery is enabled.'), 'Returning documents must explain the automatic notification and email behavior.');
 expect_four_step(str_contains($viewSource, '<?php if ($reviewWorkspaceActive): ?>') && str_contains($viewSource, "<?php elseif (\$queueKey === 'final_decision'): ?>"), 'Phase 3 review must suppress downstream final clinical decisions until document review is resolved.');
 expect_four_step(str_contains($viewSource, 'Enter the reason the student must correct and resubmit'), 'Returning a document must require staff instructions.');
@@ -320,6 +333,7 @@ expect_four_step(str_contains($patientStatusSource, '$documentsAwaitingClinicRev
     && str_contains($patientStatusSource, 'Attend your physical examination at the school clinic')
     && str_contains($patientStatusSource, '$nextActionHeading = $documentsAwaitingClinicReview && !$physicalExaminationScheduled ? \'Current status\' : \'Next action\';'), 'Submitted documents awaiting review must retain a scheduled physical examination reminder without becoming an upload action.');
 expect_four_step(str_contains($patientStatusSource, '$canUploadDocuments = $apeRecord') && !str_contains($patientStatusSource, '$canUploadDocuments = $apeRecord\n    && $hasScheduledBatch'), 'Document controls must not require a scheduled batch.');
+expect_four_step(!str_contains($patientStatusSource, 'Attach a file for every required APE document before submitting.') && !str_contains($patientStatusSource, 'patient-document-more'), 'Students must be able to submit available APE documents incrementally with visible document actions.');
 expect_four_step(str_contains($patientStatusSource, '$apePercent = $studentProgress[\'percent\'];'), 'The APE status page must display the student-facing progress percentage.');
 expect_four_step(str_contains($patientStatusSource, "\$stepClass = \$isDone ? 'is-done' : (\$isActive ? 'is-current' : 'is-locked');"), 'Every later unfinished APE step must remain closed until its predecessor is complete.');
 expect_four_step(str_contains($patientStatusSource, "'action' => \$verification === 'Needs Correction' ? 'Replace'"), 'A returned document must give the student a replacement-upload action.');

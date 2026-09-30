@@ -4,21 +4,29 @@ require_once __DIR__ . '/../../app/services/AppointmentWorkflow.php';
 require_login();
 ensure_appointment_schema();
 
+$availabilityPurpose = (string) ($_POST['service'] ?? $_GET['service'] ?? 'Medical Consult');
+if (!in_array($availabilityPurpose, appointment_consult_purposes(), true)) {
+    $availabilityPurpose = 'Medical Consult';
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) ($_POST['action'] ?? '');
     $week = trim((string) ($_POST['week'] ?? ''));
-    $redirect = 'availability.php' . (preg_match('/^\d{4}-\d{2}-\d{2}$/', $week) ? '?week=' . rawurlencode($week) : '');
+    $redirect = 'availability.php?' . http_build_query(array_filter([
+        'week' => preg_match('/^\d{4}-\d{2}-\d{2}$/', $week) ? $week : null,
+        'service' => $availabilityPurpose,
+    ]));
     $user = current_user();
     $userId = (int) (current_user()['person_id'] ?? 0) ?: null;
     try {
         if ($action === 'save_schedule') {
-            appointment_save_weekly_schedule(appointment_schedule_from_form($_POST), $userId);
-            flash_message('success', 'Regular clinic working hours were saved.');
+            appointment_save_weekly_schedule(appointment_schedule_from_form($_POST), $userId, $availabilityPurpose);
+            flash_message('success', $availabilityPurpose . ' working hours were saved.');
         } elseif ($action === 'save_month_schedule') {
-            appointment_save_monthly_schedule((string) ($_POST['schedule_month'] ?? ''), appointment_schedule_from_form($_POST), $userId);
-            flash_message('success', 'Future-month clinic working hours were saved.');
+            appointment_save_monthly_schedule((string) ($_POST['schedule_month'] ?? ''), appointment_schedule_from_form($_POST), $userId, $availabilityPurpose);
+            flash_message('success', 'Future-month ' . $availabilityPurpose . ' hours were saved.');
         } elseif ($action === 'delete_month_schedule') {
-            appointment_delete_monthly_schedule((string) ($_POST['schedule_month'] ?? ''), $userId);
+            appointment_delete_monthly_schedule((string) ($_POST['schedule_month'] ?? ''), $userId, $availabilityPurpose);
             flash_message('success', 'The future-month arrangement was removed.');
         } elseif ($action === 'delete') {
             $id = (int) ($_POST['id'] ?? 0);
@@ -39,20 +47,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $start = trim((string) ($_POST['start_time'] ?? ''));
             $end = trim((string) ($_POST['end_time'] ?? ''));
             $reason = trim((string) ($_POST['reason'] ?? ''));
+            $scope = appointment_normalize_closure_scope((string) ($_POST['applies_to'] ?? 'Both'));
             $selected = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
             $dateError = !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || !$selected || $selected->format('Y-m-d') !== $date
                 ? 'Choose a valid date.'
-                : (!appointment_date_is_clinic_day($date) ? 'Unavailable time can only be set Monday through Friday.' : null);
-            $rangeError = !appointment_range_is_open($date, $start, $end);
+                : (!appointment_date_is_clinic_day($date, $scope === 'Both' ? $availabilityPurpose : $scope) ? 'The selected clinic service is closed on that date.' : null);
+            $rangeError = !appointment_range_is_open($date, $start, $end, $scope === 'Both' ? $availabilityPurpose : $scope);
             if (!$ids || $dateError || $rangeError || $reason === '') {
                 flash_message('error', $dateError ?: ($reason === '' ? 'Enter a reason for the unavailable time.' : 'Choose a valid time within the clinic working hours.'));
-            } elseif (appointment_active_conflicts_for_range($date, $start, $end) !== []) {
+            } elseif (appointment_active_conflicts_for_range($date, $start, $end, $scope === 'Both' ? null : $scope) !== []) {
                 flash_message('error', 'Cannot update this unavailable period because it overlaps an active appointment. Cancel or reschedule that appointment first.');
             } else {
                 $db = appointment_db();
                 $db->beginTransaction();
                 try {
-                    $db->prepare('UPDATE appointment_availability_blocks SET block_date = ?, start_time = ?, end_time = ?, reason = ? WHERE availability_block_id = ?')->execute([$date, $start, $end, $reason, $ids[0]]);
+                    $db->prepare('UPDATE appointment_availability_blocks SET block_date = ?, start_time = ?, end_time = ?, applies_to = ?, reason = ? WHERE availability_block_id = ?')->execute([$date, $start, $end, $scope, $reason, $ids[0]]);
                     if (count($ids) > 1) {
                         $placeholders = implode(',', array_fill(0, count($ids) - 1, '?'));
                         $db->prepare("DELETE FROM appointment_availability_blocks WHERE availability_block_id IN ($placeholders)")->execute(array_slice($ids, 1));
@@ -77,6 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $start = trim((string) ($_POST['start_time'] ?? ''));
             $end = trim((string) ($_POST['end_time'] ?? ''));
             $reason = trim((string) ($_POST['reason'] ?? ''));
+            $scope = appointment_normalize_closure_scope((string) ($_POST['applies_to'] ?? 'Both'));
             $validDates = [];
             $validSlots = [];
             $today = new DateTimeImmutable('today');
@@ -85,7 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $selectedDate = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
                 if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || !$selectedDate || $selectedDate->format('Y-m-d') !== $date) return 'Choose valid dates to block.';
                 if ($selectedDate < $minimumDate) return 'Past dates can no longer be marked unavailable.';
-                if (!appointment_date_is_clinic_day($date)) return 'Clinic availability can only be managed from Monday through Friday.';
+                if (!appointment_date_is_clinic_day($date, $scope === 'Both' ? $availabilityPurpose : $scope)) return 'The selected clinic service is closed on that date.';
                 return null;
             };
             foreach ($submittedDates as $date) {
@@ -107,7 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                     [$slotDate, $slotStart, $slotEnd] = array_map('trim', $parts);
                     $dateError = $validateDate($slotDate);
-                    if ($dateError !== null || !appointment_range_is_open($slotDate, $slotStart, $slotEnd)) {
+                    if ($dateError !== null || !appointment_range_is_open($slotDate, $slotStart, $slotEnd, $scope === 'Both' ? $availabilityPurpose : $scope)) {
                         $validSlots = [];
                         flash_message('error', $dateError ?: 'Choose valid time slots within the clinic working hours.');
                         break;
@@ -117,7 +127,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             if ($validSlots) {
                 foreach ($validSlots as [$slotDate, $slotStart, $slotEnd]) {
-                    if (appointment_active_conflicts_for_range($slotDate, $slotStart, $slotEnd) !== []) {
+                    if (appointment_active_conflicts_for_range($slotDate, $slotStart, $slotEnd, $scope === 'Both' ? null : $scope) !== []) {
                         $validSlots = [];
                         flash_message('error', 'Cannot mark this time unavailable because it overlaps an active appointment. Cancel or reschedule that appointment first.');
                         break;
@@ -129,12 +139,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } elseif (!$allDay && $validSlots && $reason === '') {
                 flash_message('error', 'Enter a reason for the unavailable time.');
             } elseif (!$allDay && $validSlots) {
-                $stmt = appointment_db()->prepare('INSERT INTO appointment_availability_blocks (block_date, start_time, end_time, reason, created_by_person_id) VALUES (?, ?, ?, ?, ?)');
+                $stmt = appointment_db()->prepare('INSERT INTO appointment_availability_blocks (block_date, start_time, end_time, applies_to, reason, created_by_person_id) VALUES (?, ?, ?, ?, ?, ?)');
                 $db = appointment_db();
                 $db->beginTransaction();
                 try {
                     foreach ($validSlots as [$slotDate, $slotStart, $slotEnd]) {
-                        $stmt->execute([$slotDate, $slotStart, $slotEnd, $reason, (int) ($user['person_id'] ?? 0) ?: null]);
+                        $stmt->execute([$slotDate, $slotStart, $slotEnd, $scope, $reason, (int) ($user['person_id'] ?? 0) ?: null]);
                     }
                     $db->commit();
                 } catch (Throwable $exception) {
@@ -152,19 +162,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 flash_message('error', 'Enter a reason for the unavailable time.');
             } else {
                 foreach ($validDates as $date) {
-                    $hours = appointment_schedule_for_date($date)[(int) (new DateTimeImmutable($date))->format('N')];
+                    $hours = appointment_schedule_for_date($date, $scope === 'Both' ? $availabilityPurpose : $scope)[(int) (new DateTimeImmutable($date))->format('N')];
                     $conflictStart = $allDay ? $hours['start'] : $start;
                     $conflictEnd = $allDay ? $hours['end'] : $end;
-                    if (appointment_active_conflicts_for_range($date, $conflictStart, $conflictEnd) !== []) {
+                    if (appointment_active_conflicts_for_range($date, $conflictStart, $conflictEnd, $scope === 'Both' ? null : $scope) !== []) {
                         throw new InvalidArgumentException('Cannot mark this period unavailable because it overlaps an active appointment. Cancel or reschedule that appointment first.');
                     }
                 }
-                $stmt = appointment_db()->prepare('INSERT INTO appointment_availability_blocks (block_date, start_time, end_time, reason, created_by_person_id) VALUES (?, ?, ?, ?, ?)');
+                $stmt = appointment_db()->prepare('INSERT INTO appointment_availability_blocks (block_date, start_time, end_time, applies_to, reason, created_by_person_id) VALUES (?, ?, ?, ?, ?, ?)');
                 $db = appointment_db();
                 $db->beginTransaction();
                 try {
                     foreach ($validDates as $date) {
-                        $stmt->execute([$date, $allDay ? null : $start, $allDay ? null : $end, $reason, (int) ($user['person_id'] ?? 0) ?: null]);
+                        $stmt->execute([$date, $allDay ? null : $start, $allDay ? null : $end, $scope, $reason, (int) ($user['person_id'] ?? 0) ?: null]);
                     }
                     $db->commit();
                 } catch (Throwable $exception) {

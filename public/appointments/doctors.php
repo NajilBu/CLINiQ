@@ -12,14 +12,13 @@ if (!in_array((string) (current_user()['role'] ?? ''), ['admin', 'doctor', 'nurs
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
-        appointment_save_doctor_days(
+        appointment_save_doctor_roles(
             (int) ($_POST['doctor_id'] ?? 0),
-            (array) ($_POST['purposes'] ?? []),
-            (array) ($_POST['days'] ?? []),
+            (array) ($_POST['coverage'] ?? []),
             (int) (current_user()['person_id'] ?? 0) ?: null,
             isset($_POST['remove_assignments'])
         );
-        flash_message('success', isset($_POST['remove_assignments']) ? 'Doctor assignments were removed.' : 'Doctor consultation days were saved.');
+        flash_message('success', isset($_POST['remove_assignments']) ? 'Doctor roles were removed.' : 'Doctor consultation roles were saved.');
     } catch (InvalidArgumentException $exception) {
         flash_message('error', $exception->getMessage());
     }
@@ -29,17 +28,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $doctors = appointment_active_doctors();
 $schedule = appointment_doctor_schedule();
-$weekdays = [1 => 'Monday', 2 => 'Tuesday', 3 => 'Wednesday', 4 => 'Thursday', 5 => 'Friday', 6 => 'Saturday', 7 => 'Sunday'];
-$currentMonth = date('Y-m');
-$currentMonthLabel = date('F Y');
-$currentMonthClinicSchedule = appointment_schedule_for_month($currentMonth);
-
 set_page_back_link(app_url('appointments/index.php'), 'Back to Appointments');
-render_header('Consultation Doctors');
+render_header('Consultation Roles');
 render_clinic_command_header(
-    'Scheduling',
-    'Consultation Doctors',
-    'Assign active doctors to medical and dental consultations and set their working days.'
+    'Clinic Team',
+    'Consultation Roles',
+    'Assign active doctors to Medical Consult, Dental, or both. Service hours and open days are managed in Clinic Availability.'
 );
 ?>
 
@@ -48,8 +42,8 @@ render_clinic_command_header(
         <div class="consultation-doctors-intro-icon" aria-hidden="true"><span class="material-symbols-outlined">stethoscope</span></div>
         <div>
             <p class="appointment-availability-eyebrow">Care coverage</p>
-            <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Assign consultation doctors</h2>
-            <p class="text-sm text-slate-600 mb-0">Choose the services and clinic days each doctor covers. Leaving a group blank uses the all-inclusive default.</p>
+            <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Assign consultation roles</h2>
+            <p class="text-sm text-slate-600 mb-0">Choose the services each doctor covers. Clinic Availability controls service hours, open days, and future schedules.</p>
         </div>
         <span class="consultation-doctors-count"><span class="material-symbols-outlined" aria-hidden="true">group</span><?= count($doctors) ?> active</span>
     </header>
@@ -60,14 +54,7 @@ render_clinic_command_header(
         <?php foreach ($doctors as $doctor): ?>
             <?php $doctorId = (int) $doctor['id']; ?>
             <?php
-                $medicalDays = $schedule['Medical Consult']['doctors'][$doctorId]['days'] ?? null;
-                $dentalDays = $schedule['Dental']['doctors'][$doctorId]['days'] ?? null;
-                $hasAssignment = $medicalDays !== null || $dentalDays !== null;
-                $selectedDays = $medicalDays ?? $dentalDays ?? [];
-                if ($medicalDays !== null && $dentalDays !== null) {
-                    $selectedDays = !$medicalDays || !$dentalDays ? [] : array_values(array_unique(array_merge($medicalDays, $dentalDays)));
-                }
-                $daysDiffer = $medicalDays !== null && $dentalDays !== null && $medicalDays !== $dentalDays;
+                $hasAssignment = isset($schedule['Medical Consult']['doctors'][$doctorId]) || isset($schedule['Dental']['doctors'][$doctorId]);
                 $assignedPurposes = array_values(array_filter(appointment_consult_purposes(), static fn(string $purpose): bool => isset($schedule[$purpose]['doctors'][$doctorId])));
                 $coverageLabel = !$hasAssignment ? 'Not assigned yet' : (!$assignedPurposes ? 'Medical & Dental' : implode(' & ', array_map(static fn(string $purpose): string => str_replace(' Consult', '', $purpose), $assignedPurposes)));
             ?>
@@ -79,36 +66,21 @@ render_clinic_command_header(
                 <form method="post" class="consultation-doctor-form">
                     <input type="hidden" name="doctor_id" value="<?= $doctorId ?>">
                     <div class="consultation-doctor-fields">
-                    <fieldset class="consultation-doctor-fieldset">
-                        <legend>Consultation purpose</legend>
-                        <p>Leave both clear for Medical Consult and Dental.</p>
-                        <div class="consultation-choice-list">
-                            <?php foreach (appointment_consult_purposes() as $purpose): ?>
-                                <label class="consultation-choice"><input type="checkbox" name="purposes[]" value="<?= e($purpose) ?>" <?= isset($schedule[$purpose]['doctors'][$doctorId]) ? 'checked' : '' ?>><span><?= e($purpose) ?></span></label>
-                            <?php endforeach; ?>
-                        </div>
-                    </fieldset>
-                    <fieldset class="consultation-doctor-fieldset">
-                        <legend>Assigned days</legend>
-                        <p>Leave all clear for every clinic working day. Muted days are closed in <?= e($currentMonthLabel) ?>.</p>
-                        <?php if ($daysDiffer): ?><p class="consultation-inline-warning"><span class="material-symbols-outlined" aria-hidden="true">info</span>Saving will apply these days to both services.</p><?php endif; ?>
-                        <div class="consultation-choice-list consultation-weekday-list">
-                        <?php foreach ($weekdays as $day => $label): ?>
-                            <?php $closedThisMonth = empty($currentMonthClinicSchedule[$day]['enabled']); ?>
-                            <label class="consultation-choice <?= $closedThisMonth ? 'is-closed' : '' ?>" <?= $closedThisMonth ? 'title="Clinic closed in ' . e($currentMonthLabel) . '; selectable for future schedules"' : '' ?>>
-                                <input type="checkbox" name="days[]" value="<?= $day ?>" <?= in_array($day, $selectedDays, true) ? 'checked' : '' ?>><span><?= e($label) ?></span>
-                            </label>
-                        <?php endforeach; ?>
-                        </div>
-                    </fieldset>
+                    <?php foreach (appointment_consult_purposes() as $purpose): ?>
+                        <fieldset class="consultation-doctor-fieldset">
+                            <legend><?= e($purpose) ?></legend>
+                            <label class="consultation-choice"><input type="checkbox" name="coverage[<?= e($purpose) ?>][enabled]" value="1" <?= isset($schedule[$purpose]['doctors'][$doctorId]) ? 'checked' : '' ?>><span>This doctor covers <?= e($purpose) ?></span></label>
+                            <p>Assigned doctors cover every open day for this service. Change hours and days in Clinic Availability.</p>
+                        </fieldset>
+                    <?php endforeach; ?>
                     </div>
-                    <div class="consultation-doctor-actions"><button class="btn btn-primary"><span class="material-symbols-outlined" aria-hidden="true">save</span>Save coverage</button></div>
+                    <div class="consultation-doctor-actions"><button class="btn btn-primary"><span class="material-symbols-outlined" aria-hidden="true">save</span>Save roles</button></div>
                 </form>
                 <?php if ($hasAssignment): ?>
                     <form method="post" class="consultation-doctor-remove-form">
                         <input type="hidden" name="doctor_id" value="<?= $doctorId ?>">
                         <input type="hidden" name="remove_assignments" value="1">
-                        <button class="btn btn-ghost" data-confirm-submit data-confirm-type="danger" data-confirm-title="Remove doctor assignments?" data-confirm-message="This doctor will no longer cover medical or dental consultations. Existing bookings must still have another doctor available." data-confirm-toast="Removing assignments..."><span class="material-symbols-outlined" aria-hidden="true">person_remove</span>Remove assignments</button>
+                        <button class="btn btn-ghost" data-confirm-submit data-confirm-type="danger" data-confirm-title="Remove doctor roles?" data-confirm-message="This doctor will no longer cover Medical Consult or Dental. Existing bookings must still have another doctor assigned." data-confirm-toast="Removing roles..."><span class="material-symbols-outlined" aria-hidden="true">person_remove</span>Remove roles</button>
                     </form>
                 <?php endif; ?>
             </details>

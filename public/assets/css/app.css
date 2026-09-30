@@ -6101,7 +6101,7 @@ body.cliniq-drag-scroll-active * {
 }
 
 .appointment-week-day-column.is-past {
-    background: #f8fafc;
+    background: repeating-linear-gradient(-45deg, #f8fafc, #f8fafc 8px, #f1f5f9 8px, #f1f5f9 16px);
     cursor: not-allowed;
 }
 
@@ -6117,6 +6117,7 @@ body.cliniq-drag-scroll-active * {
 
 .appointment-week-hour-cell {
     position: absolute;
+    z-index: 1;
     left: 0;
     right: 0;
     width: 100%;
@@ -6128,6 +6129,16 @@ body.cliniq-drag-scroll-active * {
     background: rgba(255, 255, 255, 0.46);
     cursor: pointer;
     transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+
+.appointment-week-unavailable-area {
+    position: absolute;
+    left: 0;
+    right: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(-45deg, #f8fafc, #f8fafc 8px, #f1f5f9 8px, #f1f5f9 16px);
+    border-bottom: 1px solid #dbe3ec;
 }
 
 .appointment-week-hour-cell:first-of-type {

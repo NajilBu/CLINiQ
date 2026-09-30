@@ -35,5 +35,9 @@ if (!str_contains($view, "require_once __DIR__ . '/../../app/services/PatientAcc
     || !str_contains($view, 'change_patient_access_status') || !str_contains($view, 'inactive_reason')) {
     throw new RuntimeException('Patient account status dialog is missing.');
 }
+if (!str_contains($view, 'aria-label="Patient profile sections"')
+    || str_contains($view, "patientEmailForm?.addEventListener('submit'")) {
+    throw new RuntimeException('Patient profile tabs and email confirmation flow are inconsistent.');
+}
 
 echo "Patient profile edit coverage test passed.\n";
