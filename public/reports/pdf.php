@@ -3,7 +3,7 @@
 require_once __DIR__ . '/../../app/helpers/auth.php';
 require_once __DIR__ . '/../../app/services/SystemReport.php';
 require_once __DIR__ . '/../../app/services/SystemReportRenderer.php';
-require_login();
+require_report_access();
 
 $currentUser = current_user() ?? [];
 $input = $_SERVER['REQUEST_METHOD'] === 'POST' ? $_POST : $_GET;

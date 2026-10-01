@@ -467,7 +467,7 @@ function render_system_report_document(array $report, bool $standalone = false, 
                     <div class="report-charts">
                         <?php foreach ($section['charts'] as $chart): $chartType = system_report_chart_type($chart['title']); ?>
                             <?php $chartPayload = json_encode(['type' => $chartType, 'title' => $chart['title'], 'rows' => $chart['rows']], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '{}'; ?>
-                            <div class="report-chart" data-report-chart="<?= system_report_escape($chartPayload) ?>"><h3><?= system_report_escape($chart['title']) ?><span class="report-chart-kind"><?= system_report_escape($chartType) ?></span></h3><div class="report-chart-visual"><?php if (!$isDashboard): ?><?= render_system_report_chart($chart) ?><?php endif; ?></div></div>
+                            <div class="report-chart" data-report-chart="<?= system_report_escape($chartPayload) ?>"><h3><?= system_report_escape($chart['title']) ?><span class="report-chart-kind"><?= system_report_escape($chartType) ?></span></h3><div class="report-chart-visual"><?= render_system_report_chart($chart) ?></div></div>
                         <?php endforeach; ?>
                     </div>
                     <?php if ($remarksMode === 'input'): ?>

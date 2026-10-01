@@ -399,6 +399,21 @@ function require_login(): void
     }
 }
 
+function require_report_access(): void
+{
+    require_login();
+
+    $role = (string) ((current_user() ?? [])['role'] ?? '');
+    if (in_array($role, ['admin', 'doctor', 'nurse'], true)) {
+        return;
+    }
+
+    http_response_code(403);
+    header('Content-Type: text/plain; charset=UTF-8');
+    header('Cache-Control: no-store');
+    exit('You do not have permission to view clinic reports.');
+}
+
 function login_attempt(string $idNumber, string $password): bool
 {
     require_once __DIR__ . '/../services/SystemSettings.php';

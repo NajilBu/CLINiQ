@@ -3,14 +3,19 @@
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/SystemReport.php';
 require_once __DIR__ . '/../../app/services/SystemReportRenderer.php';
-require_login();
+require_report_access();
 
 $dateFrom = normalize_system_report_date($_GET['from'] ?? null, date('Y-m-01'));
 $dateTo = normalize_system_report_date($_GET['to'] ?? null, date('Y-m-d'));
 $modules = normalize_system_report_modules((array) ($_GET['modules'] ?? []));
 $moduleLabels = system_report_module_labels();
 $report = build_system_report($dateFrom, $dateTo, array_keys($moduleLabels));
-$adjustQuery = http_build_query(['from' => $report['date_from'], 'to' => $report['date_to']]);
+$adjustQuery = http_build_query([
+    'from' => $report['date_from'],
+    'to' => $report['date_to'],
+    'period' => (string) ($_GET['period'] ?? 'monthly'),
+    'semester' => (int) ($_GET['semester'] ?? 0),
+]);
 
 set_page_back_link('index.php?' . $adjustQuery, 'Back to Reports');
 render_header('Report Preview');

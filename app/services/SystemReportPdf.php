@@ -230,9 +230,11 @@ function render_system_report_pdf(array $report, array $options = []): string
                 $pdf->addPage();
                 $y = 780;
             }
-            $pdf->text(42, $y, (string) $chart['title'], 12, [51, 65, 85], 'F2');
+            $chartRows = $chart['rows'] ?? [];
+            $chartTitle = (string) $chart['title'] . (count($chartRows) > 8 ? ' (top 8)' : '');
+            $pdf->text(42, $y, $chartTitle, 12, [51, 65, 85], 'F2');
             $y -= 18;
-            $rows = array_slice($chart['rows'] ?? [], 0, 8);
+            $rows = array_slice($chartRows, 0, 8);
             $chartDecimals = max(0, min(2, (int) ($chart['decimals'] ?? 0)));
             $max = max(1.0, ...array_map(static fn(array $row): float => (float) ($row['value'] ?? 0), $rows ?: [['value' => 0]]));
             if (!$rows) {

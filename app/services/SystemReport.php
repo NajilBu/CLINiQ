@@ -1,7 +1,6 @@
 <?php
 
 require_once __DIR__ . '/../config/database.php';
-require_once __DIR__ . '/AlertWorkflow.php';
 
 function system_report_module_labels(): array
 {
@@ -74,7 +73,6 @@ function system_report_chart(string $title, array $rows, string $empty = 'No dat
 function build_system_report(string $dateFrom, string $dateTo, array $modules): array
 {
     $newDb = auth_db();
-    ensure_alert_workflow_schema();
     $dateFrom = normalize_system_report_date($dateFrom, date('Y-m-01'));
     $dateTo = normalize_system_report_date($dateTo, date('Y-m-d'));
     if ($dateFrom > $dateTo) {
@@ -230,16 +228,16 @@ function build_system_report(string $dateFrom, string $dateTo, array $modules): 
             'title' => 'Inventory',
             'description' => 'Medicine and equipment stock, dispensing, borrowing, returns, and overdue loans.',
             'metrics' => [
-                system_report_metric('Active Medicine', system_report_scalar($newDb, "SELECT COUNT(*) FROM inventory_items WHERE is_active = 1 AND item_type = 'Medicine'")),
-                system_report_metric('Active Equipment', system_report_scalar($newDb, "SELECT COUNT(*) FROM inventory_items WHERE is_active = 1 AND item_type = 'Equipment'")),
-                system_report_metric('Units in Stock', system_report_scalar($newDb, 'SELECT COALESCE(SUM(quantity), 0) FROM inventory_items WHERE is_active = 1')),
-                system_report_metric('Low Stock Items', system_report_scalar($newDb, 'SELECT COUNT(*) FROM inventory_items WHERE is_active = 1 AND quantity <= reorder_level')),
+                system_report_metric('Active Medicine', system_report_scalar($newDb, "SELECT COUNT(*) FROM inventory_items WHERE is_active = 1 AND item_type = 'Medicine'"), 'current snapshot'),
+                system_report_metric('Active Equipment', system_report_scalar($newDb, "SELECT COUNT(*) FROM inventory_items WHERE is_active = 1 AND item_type = 'Equipment'"), 'current snapshot'),
+                system_report_metric('Units in Stock', system_report_scalar($newDb, 'SELECT COALESCE(SUM(quantity), 0) FROM inventory_items WHERE is_active = 1'), 'current snapshot'),
+                system_report_metric('Low Stock Items', system_report_scalar($newDb, 'SELECT COUNT(*) FROM inventory_items WHERE is_active = 1 AND quantity <= reorder_level'), 'current snapshot'),
                 system_report_metric('Medicine Dispensed', system_report_scalar($newDb, 'SELECT COALESCE(SUM(quantity), 0) FROM medicine_dispensings WHERE DATE(dispensed_at) BETWEEN ? AND ?', $range), 'units'),
                 system_report_metric('People Given Medicine', system_report_scalar($newDb, 'SELECT COUNT(DISTINCT v.patient_person_id) FROM medicine_dispensings md JOIN visit_entries ve ON ve.entry_id = md.entry_id JOIN visits v ON v.visit_id = ve.visit_id WHERE DATE(md.dispensed_at) BETWEEN ? AND ?', $range)),
                 system_report_metric('Equipment Loans', system_report_scalar($newDb, 'SELECT COUNT(*) FROM equipment_loans WHERE DATE(borrowed_at) BETWEEN ? AND ?', $range)),
                 system_report_metric('Equipment Items Borrowed', system_report_scalar($newDb, 'SELECT COALESCE(SUM(quantity), 0) FROM equipment_loans WHERE DATE(borrowed_at) BETWEEN ? AND ?', $range)),
-                system_report_metric('Currently Borrowed', system_report_scalar($newDb, "SELECT COUNT(*) FROM equipment_loans WHERE status IN ('Borrowed', 'Active')")),
-                system_report_metric('Overdue Loans', system_report_scalar($newDb, 'SELECT COUNT(*) FROM equipment_loans WHERE returned_at IS NULL AND due_at < NOW()')),
+                system_report_metric('Currently Borrowed', system_report_scalar($newDb, "SELECT COUNT(*) FROM equipment_loans WHERE status IN ('Borrowed', 'Active')"), 'current snapshot'),
+                system_report_metric('Overdue Loans', system_report_scalar($newDb, 'SELECT COUNT(*) FROM equipment_loans WHERE returned_at IS NULL AND due_at < NOW()'), 'current snapshot'),
             ],
             'charts' => [
                 system_report_chart('Items by Type', system_report_rows($newDb, "SELECT COALESCE(NULLIF(item_type, ''), 'Not specified') label, COUNT(*) value FROM inventory_items WHERE is_active = 1 GROUP BY label ORDER BY value DESC")),

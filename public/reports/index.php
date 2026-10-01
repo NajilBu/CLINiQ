@@ -2,11 +2,9 @@
 
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/CliniqVisitWorkflow.php';
-require_once __DIR__ . '/../../app/services/AlertWorkflow.php';
 require_once __DIR__ . '/../../app/services/SystemReport.php';
 require_once __DIR__ . '/../../app/services/SystemReportRenderer.php';
-require_login();
-ensure_alert_workflow_schema();
+require_report_access();
 
 // ── Date range filter ───────────────────────────────────────
 $periodOptions = [
@@ -29,10 +27,10 @@ if (isset($_GET['from'], $_GET['to'])) {
 } else {
     $anchor = new DateTimeImmutable('today');
     if ($period === 'weekly') {
-        $dateFrom = $anchor->modify('-7 days')->format('Y-m-d');
+        $dateFrom = $anchor->modify('-6 days')->format('Y-m-d');
         $dateTo = $anchor->format('Y-m-d');
     } elseif ($period === 'yearly') {
-        $dateFrom = $anchor->modify('-1 year')->format('Y-m-d');
+        $dateFrom = $anchor->setDate((int) $anchor->format('Y'), 1, 1)->format('Y-m-d');
         $dateTo = $anchor->format('Y-m-d');
     } elseif ($period === 'semestral') {
         $schoolYearStart = (int) $anchor->format('n') >= 6
@@ -46,7 +44,7 @@ if (isset($_GET['from'], $_GET['to'])) {
             $dateTo = sprintf('%04d-05-31', $schoolYearStart + 1);
         }
     } else {
-        $dateFrom = $anchor->modify('-1 month')->format('Y-m-d');
+        $dateFrom = $anchor->modify('first day of this month')->format('Y-m-d');
         $dateTo = $anchor->format('Y-m-d');
     }
 }
@@ -95,6 +93,7 @@ render_header('Reports');
         <div><label class="clinic-label" for="reportFrom">From</label><input class="clinic-input" id="reportFrom" type="date" name="from" value="<?= e($dateFrom) ?>" required></div>
         <div><label class="clinic-label" for="reportTo">To</label><input class="clinic-input" id="reportTo" type="date" name="to" value="<?= e($dateTo) ?>" required></div>
     </div>
+    <div class="px-6 pb-6 flex justify-end"><button class="btn btn-primary" type="submit">Apply period</button></div>
 </form>
 
 <p class="report-analytics-range">
@@ -128,6 +127,16 @@ render_header('Reports');
     const chartValue = isDarkReport ? '#9be3ae' : '#205f3d';
     const chartGrid = isDarkReport ? '#35523f' : '#edf3ef';
     const chartAxis = isDarkReport ? '#4b6d55' : '#dfe9e2';
+    const reportCharts = [];
+    let reportRequest = null;
+    let reportSectionObserver = null;
+
+    const disposeReportCharts = () => {
+        reportCharts.splice(0).forEach(({ chart, observer }) => {
+            observer.disconnect();
+            chart.dispose();
+        });
+    };
 
     const enhanceReportCharts = () => {
         if (!window.echarts) return;
@@ -146,11 +155,9 @@ render_header('Reports');
             if (!visual) return;
             const canvas = document.createElement('div');
             canvas.className = 'report-echarts-canvas';
-            visual.append(canvas);
 
             const labels = rows.map((row) => String(row.label ?? ''));
             const values = rows.map((row) => Number(row.value) || 0);
-            const chart = echarts.init(canvas, null, { renderer: 'svg' });
             const shared = {
                 animationDuration: 420,
                 color: chartPalette,
@@ -201,12 +208,16 @@ render_header('Reports');
                 };
             }
 
+            let chart;
             try {
+                chart = echarts.init(canvas, null, { renderer: 'svg' });
                 chart.setOption(option);
-                new ResizeObserver(() => chart.resize()).observe(canvas);
+                visual.replaceChildren(canvas);
+                const observer = new ResizeObserver(() => chart.resize());
+                observer.observe(canvas);
+                reportCharts.push({ chart, observer });
             } catch (_) {
-                chart.dispose();
-                canvas.remove();
+                chart?.dispose();
             }
         });
     };
@@ -222,8 +233,6 @@ render_header('Reports');
     if (!form || !fromInput || !toInput) return;
 
     let submitTimer = null;
-    const currentUrl = new URL(window.location.href);
-
     const formatDate = (date) => {
         const year = date.getFullYear();
         const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -247,13 +256,12 @@ render_header('Reports');
 
         if (period === 'weekly') {
             const from = new Date(anchor);
-            from.setDate(anchor.getDate() - 7);
+            from.setDate(anchor.getDate() - 6);
             return [formatDate(from), formatDate(anchor)];
         }
 
         if (period === 'yearly') {
-            const from = new Date(anchor);
-            from.setFullYear(anchor.getFullYear() - 1);
+            const from = new Date(anchor.getFullYear(), 0, 1);
             return [formatDate(from), formatDate(anchor)];
         }
 
@@ -265,8 +273,7 @@ render_header('Reports');
                 : [`${startYear}-12-01`, `${startYear + 1}-05-31`];
         }
 
-        const from = new Date(anchor);
-        from.setMonth(anchor.getMonth() - 1);
+        const from = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
         return [formatDate(from), formatDate(anchor)];
     };
 
@@ -297,22 +304,109 @@ render_header('Reports');
         previewLink.href = previewUrl.pathname.split('/').pop() + '?' + previewUrl.searchParams.toString();
     };
 
+    const reportUrl = () => {
+        const nextUrl = new URL(window.location.href);
+        nextUrl.searchParams.set('from', fromInput.value);
+        nextUrl.searchParams.set('to', toInput.value);
+        nextUrl.searchParams.set('period', selectedPeriod());
+        if (semesterInput) {
+            nextUrl.searchParams.set('semester', semesterInput.value);
+        }
+        return nextUrl;
+    };
+
+    const bindSectionNavigation = () => {
+        reportSectionObserver?.disconnect();
+        const sectionLinks = Array.from(document.querySelectorAll('.report-section-navigation-link'));
+        const sectionTargets = sectionLinks
+            .map((link) => document.querySelector(link.getAttribute('href')))
+            .filter(Boolean);
+        const setActiveSection = (sectionId) => {
+            sectionLinks.forEach((link) => {
+                const isActive = link.getAttribute('href') === `#${sectionId}`;
+                link.classList.toggle('is-active', isActive);
+                if (isActive) link.setAttribute('aria-current', 'location');
+                else link.removeAttribute('aria-current');
+            });
+        };
+        sectionLinks.forEach((link) => link.addEventListener('click', (event) => {
+            const target = document.querySelector(link.getAttribute('href'));
+            if (!target) return;
+            event.preventDefault();
+            target.scrollIntoView({
+                behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+                block: 'start',
+            });
+            setActiveSection(target.id);
+        }));
+        if ('IntersectionObserver' in window && sectionTargets.length) {
+            reportSectionObserver = new IntersectionObserver((entries) => {
+                const visible = entries
+                    .filter((entry) => entry.isIntersecting)
+                    .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+                if (visible[0]) setActiveSection(visible[0].target.id);
+            }, { root: document.querySelector('.app-content'), rootMargin: '-16px 0px -65% 0px', threshold: 0 });
+            sectionTargets.forEach((section) => reportSectionObserver.observe(section));
+        }
+    };
+
+    const refreshAnalytics = async () => {
+        const nextUrl = reportUrl();
+        if (nextUrl.search === window.location.search) return;
+
+        reportRequest?.abort();
+        const request = new AbortController();
+        reportRequest = request;
+        const layout = document.querySelector('.report-analytics-layout');
+        if (!layout) {
+            window.location.assign(nextUrl.href);
+            return;
+        }
+        layout.setAttribute('aria-busy', 'true');
+        layout.classList.add('opacity-60', 'pointer-events-none');
+        try {
+            const response = await fetch(nextUrl.href, {
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'fetch' },
+                signal: request.signal,
+            });
+            if (!response.ok) throw new Error(`Report request failed (${response.status})`);
+            const nextDocument = new DOMParser().parseFromString(await response.text(), 'text/html');
+            const nextRange = nextDocument.querySelector('.report-analytics-range');
+            const nextLayout = nextDocument.querySelector('.report-analytics-layout');
+            const currentRange = document.querySelector('.report-analytics-range');
+            if (!nextRange || !nextLayout || !currentRange) throw new Error('Report response did not contain analytics.');
+
+            disposeReportCharts();
+            currentRange.replaceWith(nextRange);
+            layout.replaceWith(nextLayout);
+            window.history.replaceState({ reportFilter: true }, '', nextUrl.href);
+            enhanceReportCharts();
+            bindSectionNavigation();
+        } catch (error) {
+            if (error.name !== 'AbortError') window.location.assign(nextUrl.href);
+        } finally {
+            if (reportRequest !== request) return;
+            const currentLayout = document.querySelector('.report-analytics-layout');
+            currentLayout?.removeAttribute('aria-busy');
+            currentLayout?.classList.remove('opacity-60', 'pointer-events-none');
+        }
+    };
+
     const submitWhenComplete = () => {
         syncPreviewLink();
         if (!fromInput.value || !toInput.value) return;
         clearTimeout(submitTimer);
         submitTimer = setTimeout(() => {
-            const nextUrl = new URL(window.location.href);
-            nextUrl.searchParams.set('from', fromInput.value);
-            nextUrl.searchParams.set('to', toInput.value);
-            nextUrl.searchParams.set('period', selectedPeriod());
-            if (semesterInput) {
-                nextUrl.searchParams.set('semester', semesterInput.value);
-            }
-            if (nextUrl.search === currentUrl.search) return;
-            window.location.assign(nextUrl.href);
+            refreshAnalytics();
         }, 250);
     };
+
+    form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        syncPreviewLink();
+        refreshAnalytics();
+    });
 
     [fromInput, toInput].forEach((input) => {
         input.addEventListener('change', submitWhenComplete);
@@ -344,38 +438,7 @@ render_header('Reports');
 
     syncPeriodUi();
     syncPreviewLink();
-
-    const sectionLinks = Array.from(document.querySelectorAll('.report-section-navigation-link'));
-    const sectionTargets = sectionLinks
-        .map((link) => document.querySelector(link.getAttribute('href')))
-        .filter(Boolean);
-    const setActiveSection = (sectionId) => {
-        sectionLinks.forEach((link) => {
-            const isActive = link.getAttribute('href') === `#${sectionId}`;
-            link.classList.toggle('is-active', isActive);
-            if (isActive) link.setAttribute('aria-current', 'location');
-            else link.removeAttribute('aria-current');
-        });
-    };
-    sectionLinks.forEach((link) => link.addEventListener('click', (event) => {
-        const target = document.querySelector(link.getAttribute('href'));
-        if (!target) return;
-        event.preventDefault();
-        target.scrollIntoView({
-            behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
-            block: 'start',
-        });
-        setActiveSection(target.id);
-    }));
-    if ('IntersectionObserver' in window && sectionTargets.length) {
-        const observer = new IntersectionObserver((entries) => {
-            const visible = entries
-                .filter((entry) => entry.isIntersecting)
-                .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-            if (visible[0]) setActiveSection(visible[0].target.id);
-        }, { root: document.querySelector('.app-content'), rootMargin: '-16px 0px -65% 0px', threshold: 0 });
-        sectionTargets.forEach((section) => observer.observe(section));
-    }
+    bindSectionNavigation();
 })();
 </script>
 

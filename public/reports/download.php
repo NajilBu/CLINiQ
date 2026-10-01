@@ -4,7 +4,7 @@ require_once __DIR__ . '/../../app/helpers/auth.php';
 require_once __DIR__ . '/../../app/services/SystemReport.php';
 require_once __DIR__ . '/../../app/services/SystemReportPdf.php';
 
-require_login();
+require_report_access();
 
 $input = $_SERVER['REQUEST_METHOD'] === 'POST' ? $_POST : $_GET;
 $dateFrom = normalize_system_report_date($input['from'] ?? null, date('Y-m-01'));
