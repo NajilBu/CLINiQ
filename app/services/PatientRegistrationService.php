@@ -16,27 +16,6 @@ const CLINIQ_PATIENT_REGISTRATION_CODE_MINUTES = 15;
 const CLINIQ_PATIENT_REGISTRATION_MAX_ATTEMPTS = 5;
 const CLINIQ_PATIENT_REGISTRATION_MAX_REQUESTS = 3;
 
-function ensure_patient_registration_schema(): void
-{
-    auth_db()->exec(<<<'SQL'
-CREATE TABLE IF NOT EXISTS patient_registration_verifications (
-    registration_verification_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    student_number VARCHAR(50) NOT NULL,
-    email VARCHAR(160) NOT NULL,
-    code_hash VARCHAR(255) NOT NULL,
-    requested_ip VARCHAR(45) NULL,
-    attempt_count TINYINT UNSIGNED NOT NULL DEFAULT 0,
-    expires_at DATETIME NOT NULL,
-    verified_at DATETIME NULL,
-    consumed_at DATETIME NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_patient_registration_identity_created (student_number, email, created_at),
-    INDEX idx_patient_registration_expiry (expires_at, verified_at, consumed_at),
-    INDEX idx_patient_registration_ip_created (requested_ip, created_at)
-)
-SQL);
-}
-
 function patient_registration_assert_identity_available(PDO $db, string $studentNumber, string $email): void
 {
     $idCheck = $db->prepare('SELECT 1 FROM people WHERE id_number = ? LIMIT 1');
@@ -53,7 +32,6 @@ function patient_registration_assert_identity_available(PDO $db, string $student
 
 function request_patient_registration_code(string $studentNumber, string $email, string $confirmation, ?string $ipAddress = null): array
 {
-    ensure_patient_registration_schema();
     $studentNumber = patient_account_normalize_id_number($studentNumber, 'student');
     $email = account_assert_institutional_email($email);
     $confirmation = account_normalize_email($confirmation);
@@ -127,7 +105,6 @@ function request_patient_registration_code(string $studentNumber, string $email,
 
 function verify_patient_registration_code(int $verificationId, string $code): array
 {
-    ensure_patient_registration_schema();
     $code = trim($code);
     if ($verificationId < 1 || !preg_match('/^\d{6}$/', $code)) {
         throw new InvalidArgumentException('Enter the six-digit verification code from your email.');
@@ -165,7 +142,6 @@ function verify_patient_registration_code(int $verificationId, string $code): ar
  */
 function patient_registration_verified_onboarding_context(int $verificationId): ?array
 {
-    ensure_patient_registration_schema();
     if ($verificationId < 1) {
         return null;
     }
@@ -187,8 +163,6 @@ function patient_registration_verified_onboarding_context(int $verificationId): 
 
 function complete_patient_registration(int $verificationId, array $input): array
 {
-    ensure_patient_registration_schema();
-    ensure_ape_cycle_schema();
     $firstName = cliniq_normalize_person_name($input['first_name'] ?? '');
     $middleName = cliniq_normalize_person_name($input['middle_name'] ?? '');
     $lastName = cliniq_normalize_person_name($input['last_name'] ?? '');

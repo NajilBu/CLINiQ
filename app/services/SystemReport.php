@@ -70,6 +70,29 @@ function system_report_chart(string $title, array $rows, string $empty = 'No dat
     return ['title' => $title, 'rows' => $rows, 'empty' => $empty, 'decimals' => max(0, min(2, $decimals))];
 }
 
+function system_report_action_summary(PDO $db): array
+{
+    $actions = [
+        ['label' => 'Low-stock medicine', 'detail' => 'medicine item(s) are at or below reorder level.', 'icon' => 'inventory_2', 'tone' => 'amber', 'href' => '../inventory/index.php?tab=medicine&highlight=low-stock', 'sql' => "SELECT COUNT(*) FROM inventory_items WHERE is_active = 1 AND item_type = 'Medicine' AND quantity <= reorder_level"],
+        ['label' => 'Overdue equipment loans', 'detail' => 'equipment loan(s) are overdue.', 'icon' => 'assignment_late', 'tone' => 'red', 'href' => '../inventory/index.php?tab=equipment&highlight=active-loans', 'sql' => 'SELECT COUNT(*) FROM equipment_loans WHERE returned_at IS NULL AND due_at < NOW()'],
+        ['label' => 'High-risk pending alerts', 'detail' => 'pending alert(s) need urgent review.', 'icon' => 'warning', 'tone' => 'red', 'href' => '../alerts/index.php?status=active&risk=high-critical', 'sql' => "SELECT COUNT(*) FROM nurse_alerts WHERE status = 'Pending' AND risk_level IN ('High', 'Critical')"],
+        ['label' => 'Appointments awaiting completion', 'detail' => 'appointment(s) need completion review.', 'icon' => 'event_available', 'tone' => 'amber', 'href' => '../appointments/index.php?status=For%20Confirmation', 'sql' => "SELECT COUNT(*) FROM appointments WHERE status = 'For Confirmation'"],
+        ['label' => 'Incomplete referrals', 'detail' => 'referral(s) are not completed.', 'icon' => 'send', 'tone' => 'amber', 'href' => '../referrals/index.php?status=incomplete', 'sql' => "SELECT COUNT(*) FROM referrals WHERE COALESCE(status, '') <> 'Completed'"],
+    ];
+
+    foreach ($actions as $index => $action) {
+        $count = (int) system_report_scalar($db, $action['sql']);
+        if ($count === 0) {
+            unset($actions[$index]);
+            continue;
+        }
+        $actions[$index]['count'] = $count;
+        unset($actions[$index]['sql']);
+    }
+
+    return array_values($actions);
+}
+
 function build_system_report(string $dateFrom, string $dateTo, array $modules): array
 {
     $newDb = auth_db();
@@ -96,8 +119,8 @@ function build_system_report(string $dateFrom, string $dateTo, array $modules): 
             ],
             'charts' => [
                 system_report_chart('Visits by Day', system_report_rows($newDb, "SELECT DATE_FORMAT(visit_datetime, '%b %e') label, COUNT(*) value FROM visits WHERE DATE(visit_datetime) BETWEEN ? AND ? GROUP BY DATE(visit_datetime), label ORDER BY DATE(visit_datetime)", $range)),
-                system_report_chart('Visit Purpose', system_report_rows($newDb, "SELECT COALESCE(NULLIF(visit_purpose, ''), 'Not specified') label, COUNT(*) value FROM visits WHERE DATE(visit_datetime) BETWEEN ? AND ? GROUP BY label ORDER BY value DESC LIMIT 10", $range)),
-                system_report_chart('Common Complaints', system_report_rows($newDb, "SELECT COALESCE(NULLIF(chief_complaint, ''), 'Not specified') label, COUNT(*) value FROM visits WHERE DATE(visit_datetime) BETWEEN ? AND ? GROUP BY label ORDER BY value DESC LIMIT 10", $range)),
+                system_report_chart('Visit Purpose', system_report_rows($newDb, "SELECT COALESCE(NULLIF(visit_purpose, ''), 'Not specified') label, COUNT(*) value FROM visits WHERE DATE(visit_datetime) BETWEEN ? AND ? GROUP BY label ORDER BY value DESC", $range)),
+                system_report_chart('Common Complaints', system_report_rows($newDb, "SELECT COALESCE(NULLIF(chief_complaint, ''), 'Not specified') label, COUNT(*) value FROM visits WHERE DATE(visit_datetime) BETWEEN ? AND ? GROUP BY label ORDER BY value DESC", $range)),
                 system_report_chart('Patient Type Seen', system_report_rows($newDb, "
                     SELECT CASE
                         WHEN s.person_id IS NOT NULL THEN 'Student'
@@ -245,10 +268,10 @@ function build_system_report(string $dateFrom, string $dateTo, array $modules): 
                 system_report_chart('Inventory Transactions', system_report_rows($newDb, "SELECT COALESCE(NULLIF(transaction_type, ''), 'Not specified') label, COUNT(*) value FROM inventory_transactions WHERE DATE(created_at) BETWEEN ? AND ? GROUP BY label ORDER BY value DESC", $range)),
                 system_report_chart('Medicine Dispensed by Month', system_report_rows($newDb, "SELECT DATE_FORMAT(md.dispensed_at, '%b %Y') label, SUM(md.quantity) value FROM medicine_dispensings md WHERE DATE(md.dispensed_at) BETWEEN ? AND ? GROUP BY YEAR(md.dispensed_at), MONTH(md.dispensed_at), label ORDER BY YEAR(md.dispensed_at), MONTH(md.dispensed_at)", $range), 'No medicine was dispensed during this period.'),
                 system_report_chart('People Given Medicine by Month', system_report_rows($newDb, "SELECT DATE_FORMAT(md.dispensed_at, '%b %Y') label, COUNT(DISTINCT v.patient_person_id) value FROM medicine_dispensings md JOIN visit_entries ve ON ve.entry_id = md.entry_id JOIN visits v ON v.visit_id = ve.visit_id WHERE DATE(md.dispensed_at) BETWEEN ? AND ? GROUP BY YEAR(md.dispensed_at), MONTH(md.dispensed_at), label ORDER BY YEAR(md.dispensed_at), MONTH(md.dispensed_at)", $range), 'No patients received medicine during this period.'),
-                system_report_chart('Medicine Dispensed by Item', system_report_rows($newDb, "SELECT i.item_name label, SUM(md.quantity) value FROM medicine_dispensings md JOIN inventory_items i ON i.item_id = md.item_id WHERE DATE(md.dispensed_at) BETWEEN ? AND ? GROUP BY i.item_id, i.item_name ORDER BY value DESC LIMIT 10", $range)),
+                system_report_chart('Medicine Dispensed by Item', system_report_rows($newDb, "SELECT i.item_name label, SUM(md.quantity) value FROM medicine_dispensings md JOIN inventory_items i ON i.item_id = md.item_id WHERE DATE(md.dispensed_at) BETWEEN ? AND ? GROUP BY i.item_id, i.item_name ORDER BY value DESC", $range)),
                 system_report_chart('Low Stock by Type', system_report_rows($newDb, "SELECT COALESCE(NULLIF(item_type, ''), 'Not specified') label, COUNT(*) value FROM inventory_items WHERE is_active = 1 AND quantity <= reorder_level GROUP BY label ORDER BY value DESC")),
                 system_report_chart('Loan Status', system_report_rows($newDb, "SELECT COALESCE(NULLIF(status, ''), 'Not specified') label, COUNT(*) value FROM equipment_loans WHERE DATE(borrowed_at) BETWEEN ? AND ? GROUP BY label ORDER BY value DESC", $range)),
-                system_report_chart('Borrowed Equipment', system_report_rows($newDb, "SELECT i.item_name label, SUM(el.quantity) value FROM equipment_loans el JOIN inventory_items i ON i.item_id = el.item_id WHERE DATE(el.borrowed_at) BETWEEN ? AND ? GROUP BY i.item_id, i.item_name ORDER BY value DESC LIMIT 10", $range)),
+                system_report_chart('Borrowed Equipment', system_report_rows($newDb, "SELECT i.item_name label, SUM(el.quantity) value FROM equipment_loans el JOIN inventory_items i ON i.item_id = el.item_id WHERE DATE(el.borrowed_at) BETWEEN ? AND ? GROUP BY i.item_id, i.item_name ORDER BY value DESC", $range)),
             ],
         ];
     }
@@ -265,7 +288,7 @@ function build_system_report(string $dateFrom, string $dateTo, array $modules): 
             ],
             'charts' => [
                 system_report_chart('Referral Status', system_report_rows($newDb, "SELECT COALESCE(NULLIF(status, ''), 'Not specified') label, COUNT(*) value FROM referrals WHERE DATE(referral_date) BETWEEN ? AND ? GROUP BY label ORDER BY value DESC", $range)),
-                system_report_chart('Referred To', system_report_rows($newDb, "SELECT COALESCE(NULLIF(referred_to, ''), 'Not specified') label, COUNT(*) value FROM referrals WHERE DATE(referral_date) BETWEEN ? AND ? GROUP BY label ORDER BY value DESC LIMIT 10", $range)),
+                system_report_chart('Referred To', system_report_rows($newDb, "SELECT COALESCE(NULLIF(referred_to, ''), 'Not specified') label, COUNT(*) value FROM referrals WHERE DATE(referral_date) BETWEEN ? AND ? GROUP BY label ORDER BY value DESC", $range)),
                 system_report_chart('Referrals by Day', system_report_rows($newDb, "SELECT DATE_FORMAT(referral_date, '%b %e') label, COUNT(*) value FROM referrals WHERE DATE(referral_date) BETWEEN ? AND ? GROUP BY DATE(referral_date), label ORDER BY DATE(referral_date)", $range)),
                 system_report_chart('Referral Source', system_report_rows($newDb, "SELECT CASE WHEN visit_id IS NOT NULL THEN 'Visit / Consultation' ELSE 'Direct Referral' END label, COUNT(*) value FROM referrals WHERE DATE(referral_date) BETWEEN ? AND ? GROUP BY label ORDER BY value DESC", $range)),
             ],
@@ -287,7 +310,7 @@ function build_system_report(string $dateFrom, string $dateTo, array $modules): 
             'charts' => [
                 system_report_chart('Risk Level', system_report_rows($newDb, "SELECT COALESCE(NULLIF(risk_level, ''), 'Not assessed') label, COUNT(*) value FROM nurse_alerts WHERE DATE(created_at) BETWEEN ? AND ? GROUP BY label ORDER BY FIELD(label, 'Critical', 'High', 'Moderate', 'Low', 'Not assessed')", $range)),
                 system_report_chart('Alert Status', system_report_rows($newDb, "SELECT COALESCE(NULLIF(status, ''), 'Not specified') label, COUNT(*) value FROM nurse_alerts WHERE DATE(created_at) BETWEEN ? AND ? GROUP BY label ORDER BY value DESC", $range)),
-                system_report_chart('Incident Type', system_report_rows($newDb, "SELECT COALESCE(NULLIF(incident_type, ''), 'Not specified') label, COUNT(*) value FROM nurse_alerts WHERE DATE(created_at) BETWEEN ? AND ? GROUP BY label ORDER BY value DESC LIMIT 10", $range)),
+                system_report_chart('Incident Type', system_report_rows($newDb, "SELECT COALESCE(NULLIF(incident_type, ''), 'Not specified') label, COUNT(*) value FROM nurse_alerts WHERE DATE(created_at) BETWEEN ? AND ? GROUP BY label ORDER BY value DESC", $range)),
                 system_report_chart('Alerts by Day', system_report_rows($newDb, "SELECT DATE_FORMAT(created_at, '%b %e') label, COUNT(*) value FROM nurse_alerts WHERE DATE(created_at) BETWEEN ? AND ? GROUP BY DATE(created_at), label ORDER BY DATE(created_at)", $range)),
                 system_report_chart('Incident Report Status', system_report_rows($newDb, "SELECT COALESCE(NULLIF(status, ''), 'Not specified') label, COUNT(*) value FROM incident_reports WHERE DATE(reported_at) BETWEEN ? AND ? GROUP BY label ORDER BY value DESC", $range)),
                 system_report_chart('Passport Access by Day', system_report_rows($newDb, "SELECT DATE_FORMAT(accessed_at, '%b %e') label, COUNT(*) value FROM passport_access_logs WHERE DATE(accessed_at) BETWEEN ? AND ? GROUP BY DATE(accessed_at), label ORDER BY DATE(accessed_at)", $range)),
@@ -332,7 +355,7 @@ function build_system_report(string $dateFrom, string $dateTo, array $modules): 
                     SELECT COALESCE(NULLIF(CASE WHEN service_type = 'Other' THEN service_other ELSE service_type END, ''), 'Other') label, COUNT(*) value
                     FROM clinic_feedback
                     WHERE DATE(submitted_at) BETWEEN ? AND ?
-                    GROUP BY label ORDER BY value DESC, label LIMIT 10
+                    GROUP BY label ORDER BY value DESC, label
                 ", $range), 'No feedback was submitted during this period.'),
                 system_report_chart('Feedback Performance', system_report_rows($newDb, "
                     SELECT CASE WHEN overall >= 6 THEN 'Excellent' WHEN overall >= 4 THEN 'Satisfactory' ELSE 'Critical' END label, COUNT(*) value
@@ -356,6 +379,7 @@ function build_system_report(string $dateFrom, string $dateTo, array $modules): 
         'date_to' => $dateTo,
         'generated_at' => date('Y-m-d H:i:s'),
         'modules' => $modules,
+        'action_summary' => system_report_action_summary($newDb),
         'sections' => $sections,
     ];
 }

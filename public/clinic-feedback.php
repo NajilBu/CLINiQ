@@ -18,7 +18,6 @@ unset($_SESSION['feedback_success']);
 $available = false;
 $identifier = '';
 $context = $_SESSION['feedback_context'] ?? null;
-$generalRequested = ($_GET['general'] ?? '') === '1';
 if ($context && (int) ($context['expires'] ?? 0) < time()) {
     unset($_SESSION['feedback_context']);
     $context = null;
@@ -56,26 +55,13 @@ try {
         }
         $action = $_POST['action'] ?? '';
         if ($action === 'reset') {
-            unset($_SESSION['feedback_context'], $_SESSION['feedback_success'], $_SESSION['feedback_success_general']);
+            unset($_SESSION['feedback_context'], $_SESSION['feedback_success']);
             if (($_POST['async'] ?? '') === '1') {
                 header('Content-Type: application/json; charset=utf-8');
                 echo json_encode(['ok' => true]);
                 exit;
             }
             header('Location: ' . app_url('clinic-feedback.php'));
-            exit;
-        }
-        if ($action === 'start_general') {
-            if ($feedbackSurveyRoute) throw new InvalidArgumentException('Start from the consent page before opening the survey.');
-            if (($_POST['participate'] ?? '') !== '1' || ($_POST['consent'] ?? '') !== '1') {
-                throw new InvalidArgumentException('Please confirm your participation and privacy consent before continuing.');
-            }
-            $_SESSION['feedback_context'] = [
-                'mode' => 'general', 'identifier' => '', 'visit_id' => 0,
-                'anonymous' => true, 'consented' => true,
-                'expires' => time() + 3600, 'token' => bin2hex(random_bytes(32)),
-            ];
-            header('Location: ' . app_url('clinic-feedback-survey.php?general=1'));
             exit;
         }
         if ($action === 'start_linked') {
@@ -106,7 +92,7 @@ try {
             $identifier = normalize_id_number($raw);
             if (!preg_match('/^\d{2}-\d{5}$/D', $identifier)) throw new InvalidArgumentException('Enter a student ID such as 23-00262.');
             $found = clinic_feedback_visits($db, $identifier);
-            if (!$found) throw new InvalidArgumentException('No Completed clinic visits were found for this student ID. Check your ID or ask the clinic staff. You may still give general feedback without a visit.');
+            if (!$found) throw new InvalidArgumentException('No Completed clinic visits were found for this student ID. Check your ID or ask the clinic staff.');
             $_SESSION['feedback_context'] = [
                 'identifier' => $identifier, 'visit_id' => 0,
                 'expires' => time() + 3600, 'token' => bin2hex(random_bytes(32)),
@@ -144,9 +130,8 @@ try {
             if (!$feedbackSurveyRoute || empty($context['consented'])) {
                 throw new InvalidArgumentException('Please confirm your participation and privacy consent before submitting feedback.');
             }
-            $generalSubmission = ($context['mode'] ?? '') === 'general';
             $values['consent'] = '1';
-            $values['anonymous'] = ($generalSubmission || !empty($context['anonymous'])) ? '1' : '0';
+            $values['anonymous'] = !empty($context['anonymous']) ? '1' : '0';
             $submittedVisitId = (int) ($context['visit_id'] ?? 0);
             clinic_feedback_submit($db, $context, $values);
             $portalPersonId = (int) ($_SESSION['patient_person_id'] ?? $_SESSION['student_person_id'] ?? 0);
@@ -155,9 +140,8 @@ try {
             }
             unset($_SESSION['feedback_context']);
             $_SESSION['feedback_success'] = true;
-            $_SESSION['feedback_success_general'] = $generalSubmission;
             $_SESSION['feedback_csrf'] = bin2hex(random_bytes(32));
-            header('Location: ' . app_url('clinic-feedback.php' . ($generalSubmission ? '?general=1' : '')));
+            header('Location: ' . app_url('clinic-feedback.php'));
             exit;
         }
     }
@@ -167,7 +151,7 @@ try {
     error_log('Clinic feedback: ' . $exception->getMessage());
     $error = 'Feedback is temporarily unavailable. Please try again later.';
 }
-if ($available && $context && ($context['mode'] ?? '') !== 'general') {
+if ($available && $context) {
     try {
         $found = $context['visit_id'] ? clinic_feedback_visit($db, $context['identifier'], (int) $context['visit_id']) : null;
         if ($found && clinic_feedback_eligible($found['status']) && !clinic_feedback_already_sent($db, (int) $found['visit_id'])) {
@@ -190,22 +174,16 @@ function feedback_value(array $values, string $key): string {
     return is_string($values[$key] ?? null) ? $values[$key] : '';
 }
 $theme = active_cliniq_theme();
-$generalActive = ($context['mode'] ?? '') === 'general' && !empty($context['consented']);
-$generalFlow = $feedbackSurveyRoute ? $generalActive : ($generalRequested || $generalActive);
-$successGeneral = !empty($_SESSION['feedback_success_general']);
-unset($_SESSION['feedback_success_general']);
-if ($feedbackSurveyRoute && (!$available || !$context || empty($context['consented']) || (!$generalActive && !$visit))) {
-    header('Location: ' . app_url('clinic-feedback.php' . ($generalRequested ? '?general=1' : '')));
+if ($feedbackSurveyRoute && (!$available || !$context || empty($context['consented']) || !$visit)) {
+    header('Location: ' . app_url('clinic-feedback.php'));
     exit;
 }
-if (!$feedbackSurveyRoute && !$success && $error === '' && !empty($context['consented']) && ($generalActive || $visit)) {
-    header('Location: ' . app_url('clinic-feedback-survey.php' . ($generalActive ? '?general=1' : '')));
+if (!$feedbackSurveyRoute && !$success && $error === '' && !empty($context['consented']) && $visit) {
+    header('Location: ' . app_url('clinic-feedback-survey.php'));
     exit;
 }
-$feedbackStep = $generalFlow ? ($success ? 3 : ($generalActive ? 2 : 1)) : ($success ? 5 : ($feedbackSurveyRoute ? 4 : ($visit ? 3 : ($context ? 2 : 1))));
-$feedbackSteps = $generalFlow
-    ? [1 => ['label' => 'Before you begin', 'description' => 'Confirm consent'], 2 => ['label' => 'Give feedback', 'description' => 'Share your experience']]
-    : [1 => ['label' => 'Find visit', 'description' => 'Enter your student ID'], 2 => ['label' => 'Choose visit', 'description' => 'Select a completed visit'], 3 => ['label' => 'Before you begin', 'description' => 'Confirm consent'], 4 => ['label' => 'Give feedback', 'description' => 'Share your experience']];
+$feedbackStep = $success ? 5 : ($feedbackSurveyRoute ? 4 : ($visit ? 3 : ($context ? 2 : 1)));
+$feedbackSteps = [1 => ['label' => 'Find visit', 'description' => 'Enter your student ID'], 2 => ['label' => 'Choose visit', 'description' => 'Select a completed visit'], 3 => ['label' => 'Before you begin', 'description' => 'Confirm consent'], 4 => ['label' => 'Give feedback', 'description' => 'Share your experience']];
 ?>
 <!doctype html>
 <html lang="en" class="feedback-document<?= !empty($theme['dark_mode']) ? ' cliniq-dark' : '' ?>"><head>
@@ -240,7 +218,7 @@ $feedbackSteps = $generalFlow
         <span class="feedback-eyebrow">University Clinic · Clinic experience</span>
         <h1>Give Clinic Feedback</h1>
         <p>Help us improve your campus healthcare.</p>
-        <p class="feedback-muted"><?= $generalFlow ? 'No visit or ID number is needed for general feedback.' : 'You can link feedback to a clinic visit using your student ID, or provide general feedback without one.' ?></p>
+        <p class="feedback-muted">Provide feedback for a completed clinic visit using your student ID.</p>
     </header>
     <nav class="feedback-progress clinic-card" aria-label="Feedback progress">
         <?php foreach ($feedbackSteps as $stepNumber => $step): ?>
@@ -254,60 +232,30 @@ $feedbackSteps = $generalFlow
     </nav>
     <?php if ($error): ?><div class="feedback-notice" role="alert" id="feedback-error" tabindex="-1"><?= e($error) ?></div><?php endif; ?>
     <?php if ($success): ?>
-        <section class="clinic-card feedback-section feedback-success" role="status"><h2>Thank you for your valuable feedback!</h2><p><?= $successGeneral ? 'Your general feedback has been recorded without a visit or ID number.' : 'Your response has been recorded for your clinic visit.' ?> Your input helps improve our university's clinical care.</p><p class="feedback-muted">Returning to the homepage in <strong id="feedbackCountdown">10</strong> seconds.</p><a class="btn btn-primary" href="<?= e(app_url('index.php')) ?>">Return to homepage</a></section>
+        <section class="clinic-card feedback-section feedback-success" role="status"><h2>Thank you for your valuable feedback!</h2><p>Your response has been recorded for your clinic visit. Your input helps improve our university's clinical care.</p><p class="feedback-muted">Returning to the homepage in <strong id="feedbackCountdown">10</strong> seconds.</p><a class="btn btn-primary" href="<?= e(app_url('index.php')) ?>">Return to homepage</a></section>
     <?php elseif (!$available): ?>
         <div class="feedback-notice" role="alert">Feedback is temporarily unavailable. Please try again later.</div>
-    <?php elseif (!$feedbackSurveyRoute && $generalRequested && !$generalActive): ?>
-        <section class="clinic-card feedback-section">
-            <span class="feedback-eyebrow">Before you begin</span>
-            <h2>Would you like to provide clinic feedback?</h2>
-            <p class="feedback-muted">Your feedback helps improve clinic services. Participation is voluntary, and your response will be anonymous.</p>
-            <form method="post">
-                <input type="hidden" name="csrf" value="<?= e($_SESSION['feedback_csrf']) ?>">
-                <input type="hidden" name="action" value="start_general">
-                <input type="hidden" name="participate" value="1">
-                <p class="feedback-muted">This general feedback is anonymous because no visit or ID number is linked to the response.</p>
-                <label class="feedback-consent"><input type="checkbox" name="consent" value="1" required><span>I have read the RA 10173 privacy notice and consent to the collection and use of my feedback.</span></label>
-                <div class="feedback-privacy">
-                    <p><strong>Data privacy notice — RA 10173</strong></p>
-                    <p>Your feedback is collected under the Data Privacy Act of 2012 (Republic Act No. 10173) to evaluate and improve clinic services.</p>
-                    <details><summary>Read the privacy notice and your rights</summary><div><p>We collect your ratings, comments, and consent record for service quality improvement and clinic reporting. Your general response is anonymous and is not linked to a visit or ID number.</p><p>Access is limited to authorized clinic personnel who need it for evaluation, support, or reporting.</p></div></details>
-                </div>
-                <div class="feedback-actions"><button class="btn btn-primary" type="submit">Submit</button><a class="btn btn-outline" href="<?= e(app_url('index.php')) ?>">Not now</a></div>
-            </form>
-        </section>
-    <?php elseif (!$visit && $context && !$generalActive): ?>
+    <?php elseif (!$visit && $context): ?>
         <section class="clinic-card feedback-section">
             <h2>Choose a clinic visit</h2>
-            <p class="feedback-muted">Completed visits are listed newest first. Each visit accepts one response.</p>
+            <p class="feedback-muted">Visits that still need feedback are listed newest first.</p>
             <?php if (!$visits): ?><p>No Completed visits are currently available.</p><?php endif; ?>
-            <?php if ($visits && !array_filter($visits, fn($item) => !$item['feedback_submitted'])): ?><p role="status">Feedback has been submitted for all listed visits. Thank you!</p><?php endif; ?>
             <?php foreach ($visits as $item): ?>
-                <?php if ($item['feedback_submitted']): ?>
-                    <article class="feedback-visit feedback-visit-submitted" aria-label="Feedback already submitted">
-                        <strong><?= e(date('F j, Y · g:i A', strtotime($item['visit_datetime']))) ?></strong><br>
-                        <strong>Reason for visit:</strong> <?= e($item['visit_purpose'] ?: 'Not recorded') ?><br>
-                        <strong>Patient concern:</strong> <?= e($item['chief_complaint'] ?: 'Not recorded') ?><br>
-                        <span class="badge <?= e(status_badge_class($item['status'])) ?>"><?= e($item['status']) ?></span>
-                        <p class="feedback-visit-status"><span class="material-symbols-outlined" aria-hidden="true">check_circle</span> Feedback submitted — responses cannot be edited.</p>
-                    </article>
-                <?php else: ?>
-                    <form method="post" class="feedback-visit">
-                        <strong><?= e(date('F j, Y · g:i A', strtotime($item['visit_datetime']))) ?></strong><br>
-                        <strong>Reason for visit:</strong> <?= e($item['visit_purpose'] ?: 'Not recorded') ?><br>
-                        <strong>Patient concern:</strong> <?= e($item['chief_complaint'] ?: 'Not recorded') ?><br>
-                        <span class="badge <?= e(status_badge_class($item['status'])) ?>"><?= e($item['status']) ?></span>
-                        <input type="hidden" name="csrf" value="<?= e($_SESSION['feedback_csrf']) ?>">
-                        <input type="hidden" name="visit_token" value="<?= e($context['token']) ?>">
-                        <input type="hidden" name="action" value="select">
-                        <input type="hidden" name="visit_id" value="<?= (int) $item['visit_id'] ?>">
-                        <div class="feedback-actions"><button class="btn btn-primary">Give feedback for this visit</button></div>
-                    </form>
-                <?php endif; ?>
+                <form method="post" class="feedback-visit">
+                    <strong><?= e(date('F j, Y · g:i A', strtotime($item['visit_datetime']))) ?></strong><br>
+                    <strong>Reason for visit:</strong> <?= e($item['visit_purpose'] ?: 'Not recorded') ?><br>
+                    <strong>Patient concern:</strong> <?= e($item['chief_complaint'] ?: 'Not recorded') ?><br>
+                    <span class="badge <?= e(status_badge_class($item['status'])) ?>"><?= e($item['status']) ?></span>
+                    <input type="hidden" name="csrf" value="<?= e($_SESSION['feedback_csrf']) ?>">
+                    <input type="hidden" name="visit_token" value="<?= e($context['token']) ?>">
+                    <input type="hidden" name="action" value="select">
+                    <input type="hidden" name="visit_id" value="<?= (int) $item['visit_id'] ?>">
+                    <div class="feedback-actions"><button class="btn btn-primary">Give feedback for this visit</button></div>
+                </form>
             <?php endforeach; ?>
-            <div class="feedback-actions"><form method="post"><input type="hidden" name="csrf" value="<?= e($_SESSION['feedback_csrf']) ?>"><input type="hidden" name="action" value="reset"><button class="btn btn-outline">Use a different student ID</button></form><a class="btn btn-outline" href="<?= e(app_url('clinic-feedback.php?general=1')) ?>">Provide anonymous feedback</a></div>
+            <div class="feedback-actions"><form method="post"><input type="hidden" name="csrf" value="<?= e($_SESSION['feedback_csrf']) ?>"><input type="hidden" name="action" value="reset"><button class="btn btn-outline">Use a different student ID</button></form></div>
         </section>
-    <?php elseif (!$visit && !$generalActive): ?>
+    <?php elseif (!$visit): ?>
         <form method="post" class="clinic-card feedback-section">
             <h2>Find your clinic visits</h2>
             <p class="feedback-muted" id="feedback-id-help">Visit-linked feedback is available once your visit is Completed. Each visit accepts one response.</p>
@@ -316,7 +264,6 @@ $feedbackSteps = $generalFlow
             <label class="feedback-field">Student ID<input class="clinic-input<?= $error ? ' input-error' : '' ?>" name="identifier" value="<?= e($identifier) ?>" placeholder="23-00262" data-id-number-format autocomplete="off" aria-describedby="feedback-id-help<?= $error ? ' feedback-error' : '' ?>" <?= $error ? 'aria-invalid="true"' : '' ?> required></label>
             <button class="btn btn-primary" type="submit">Find my visits</button>
         </form>
-        <div class="feedback-actions"><a class="btn btn-outline" href="<?= e(app_url('clinic-feedback.php?general=1')) ?>">Provide anonymous feedback</a></div>
     <?php elseif (!$feedbackSurveyRoute): ?>
         <section class="clinic-card feedback-section">
             <span class="feedback-eyebrow">Selected visit</span>
@@ -347,26 +294,20 @@ $feedbackSteps = $generalFlow
             </form>
         </section>
     <?php else: ?>
-        <?php if ($generalActive): ?>
-        <section class="clinic-card feedback-section"><span class="feedback-eyebrow">General feedback</span><h2>Share your clinic experience</h2><p class="feedback-muted">This response will not be linked to a visit or ID number.</p></section>
-        <?php else: ?>
         <section class="clinic-card feedback-section">
             <h2>Your clinic visit</h2>
             <div class="feedback-visit"><strong><?= e(date('F j, Y · g:i A', strtotime($visit['visit_datetime']))) ?></strong><br><strong>Reason for visit:</strong> <?= e($visit['visit_purpose'] ?: 'Not recorded') ?><br><strong>Patient concern:</strong> <?= e($visit['chief_complaint'] ?: 'Not recorded') ?><br><span class="badge <?= e(status_badge_class($visit['status'])) ?>"><?= e($visit['status']) ?></span></div>
         </section>
-        <?php endif; ?>
         <form method="post" id="feedback-survey" data-no-discard-warning>
             <input type="hidden" name="csrf" value="<?= e($_SESSION['feedback_csrf']) ?>">
             <input type="hidden" name="action" value="submit">
             <input type="hidden" name="visit_token" value="<?= e($context['token']) ?>">
-            <?php if ($generalActive): ?><input type="hidden" name="consent" value="1"><?php endif; ?>
             <nav class="feedback-survey-progress feedback-survey-progress--two clinic-card" aria-label="Feedback form progress">
                 <span class="is-current" data-feedback-progress="1">1<span>Ratings</span></span>
                 <span data-feedback-progress="2">2<span>Comments</span></span>
             </nav>
             <div class="feedback-survey-step is-active" data-feedback-step="1">
             <section class="clinic-card feedback-section"><h2 id="feedback-rating-title">Rate your visit</h2><p id="feedback-rating-help">Choose one answer for each statement. Rate from <strong>1 (Strongly disagree)</strong> to <strong>7 (Strongly agree)</strong>.</p>
-                <?php if ($generalActive): ?><label class="feedback-field">Service being reviewed<select class="clinic-select" name="service_type" required><option value="">Choose a service</option><?php foreach (clinic_feedback_services() as $serviceOption): ?><option value="<?= e($serviceOption) ?>" <?= feedback_value($values, 'service_type') === $serviceOption ? 'selected' : '' ?>><?= e($serviceOption) ?></option><?php endforeach; ?></select></label><label class="feedback-field" data-feedback-other-service hidden>Other service<input class="clinic-input" name="service_other" maxlength="160" value="<?= e(feedback_value($values, 'service_other')) ?>"></label><?php endif; ?>
             </section>
             <?php foreach (clinic_feedback_sections() as $section => $questions): ?>
                 <details class="clinic-card feedback-section feedback-rating-group" <?= $section === 'Tangibles' ? 'open' : '' ?>><summary><?= e($section) ?><span class="material-symbols-outlined" aria-hidden="true">expand_more</span></summary>
@@ -414,7 +355,7 @@ $feedbackSteps = $generalFlow
 })();
 </script>
 <?php endif; ?>
-<?php if ($feedbackSurveyRoute && ($generalActive || $visit)): ?>
+<?php if ($feedbackSurveyRoute && $visit): ?>
 <style>
     #feedback-leave-dialog { margin: auto; width: min(29rem, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; padding: 1.5rem; border: 1px solid var(--cliniq-outline); border-radius: 1rem; background: var(--cliniq-surface); color: var(--cliniq-foreground); box-shadow: 0 24px 70px rgba(var(--cliniq-shadow-rgb), .22); }
     #feedback-leave-dialog::backdrop { background: rgba(15, 23, 42, .55); backdrop-filter: blur(3px); }
@@ -435,16 +376,6 @@ if (feedbackSurvey) {
     let currentStep = 1;
     const panels = Array.from(feedbackSurvey.querySelectorAll('[data-feedback-step]'));
     const progress = Array.from(feedbackSurvey.querySelectorAll('[data-feedback-progress]'));
-    const serviceSelect = feedbackSurvey.querySelector('select[name="service_type"]');
-    const otherService = feedbackSurvey.querySelector('[data-feedback-other-service]');
-    const updateOtherService = () => {
-        if (!otherService || !serviceSelect) return;
-        otherService.hidden = serviceSelect.value !== 'Other';
-        otherService.querySelector('input').required = serviceSelect.value === 'Other';
-    };
-    serviceSelect?.addEventListener('change', updateOtherService);
-    updateOtherService();
-
     const showStep = step => {
         currentStep = step;
         panels.forEach(panel => {

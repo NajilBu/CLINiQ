@@ -162,6 +162,53 @@ function render_system_report_chart(array $chart): string
     };
 }
 
+function render_system_report_data_table(array $chart, bool $open = false): string
+{
+    $rows = is_array($chart['rows'] ?? null) ? $chart['rows'] : [];
+    $decimals = (int) ($chart['decimals'] ?? 0);
+    $title = (string) ($chart['title'] ?? 'Chart');
+    ob_start(); ?>
+    <details class="report-data-table"<?= $open ? ' open' : '' ?>>
+        <summary>View data table <span><?= count($rows) ?> row(s)</span></summary>
+        <div class="report-data-table-scroll">
+            <table>
+                <caption><?= system_report_escape($title) ?> data</caption>
+                <thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead>
+                <tbody>
+                    <?php if ($rows): foreach ($rows as $row): ?>
+                        <tr><th scope="row"><?= system_report_escape((string) ($row['label'] ?? 'Not specified')) ?></th><td><?= system_report_format_number((float) ($row['value'] ?? 0), $decimals) ?></td></tr>
+                    <?php endforeach; else: ?>
+                        <tr><td colspan="2"><?= system_report_escape((string) ($chart['empty'] ?? 'No data available for this period.')) ?></td></tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </details>
+    <?php return (string) ob_get_clean();
+}
+
+function render_system_report_action_summary(array $actions): string
+{
+    if (!$actions) {
+        return '<section class="report-action-summary" aria-labelledby="reportActionSummaryTitle"><p class="report-action-summary-eyebrow">Live now</p><h2 id="reportActionSummaryTitle">All clear</h2><p>There are no current operational exceptions needing attention.</p></section>';
+    }
+    ob_start(); ?>
+    <section class="report-action-summary" aria-labelledby="reportActionSummaryTitle">
+        <div><p class="report-action-summary-eyebrow">Live now</p><h2 id="reportActionSummaryTitle">Needs attention</h2><p>Current operational exceptions. These do not change with the report period.</p></div>
+        <div class="report-action-summary-grid">
+            <?php foreach ($actions as $action): ?>
+                <a class="report-action-card report-action-card--<?= system_report_escape((string) ($action['tone'] ?? 'amber')) ?>" href="<?= system_report_escape((string) ($action['href'] ?? '#')) ?>">
+                    <span class="material-symbols-outlined" aria-hidden="true"><?= system_report_escape((string) ($action['icon'] ?? 'warning')) ?></span>
+                    <strong><?= system_report_format_number((int) ($action['count'] ?? 0)) ?></strong>
+                    <span><?= system_report_escape((string) ($action['label'] ?? 'Action needed')) ?></span>
+                    <small><?= system_report_escape((string) ($action['detail'] ?? '')) ?></small>
+                </a>
+            <?php endforeach; ?>
+        </div>
+    </section>
+    <?php return (string) ob_get_clean();
+}
+
 function system_report_styles(): string
 {
     return <<<'CSS'
@@ -223,6 +270,35 @@ function system_report_styles(): string
 .report-metric-note { margin: 5px 0 0; color: #94a3b8; font-size: 9px; font-weight: 700; }
 .report-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .report-chart { min-height: 180px; padding: 15px; border: 1px solid var(--cliniq-outline, #dfe9e2); border-radius: 12px; background: #fff; break-inside: avoid; page-break-inside: avoid; }
+.report-data-table { margin-top: 12px; border-top: 1px solid #e2ebe5; }
+.report-data-table summary { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; color: #205f3d; cursor: pointer; font-size: 11px; font-weight: 800; }
+.report-data-table summary span { color: #64748b; }
+.report-data-table-scroll { max-height: 280px; overflow: auto; }
+.report-data-table table { width: 100%; border-collapse: collapse; font-size: 10px; }
+.report-data-table caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.report-data-table th, .report-data-table td { padding: 8px; border-top: 1px solid #edf3ef; text-align: left; }
+.report-data-table td { color: #205f3d; font-weight: 800; text-align: right; }
+.report-tables-only { grid-template-columns: 1fr; }
+.report-tables-only .report-chart { min-height: 0; }
+.report-document-preview { margin-top: 0; }
+.report-preview-summary { display: grid; grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(8rem, 1fr)); gap: 1rem; margin: 0 0 1.5rem; padding: 1.5rem; border: 1px solid color-mix(in srgb, var(--cliniq-primary, #287548) 18%, transparent); border-radius: 1rem; background: linear-gradient(135deg, var(--cliniq-primary-fixed, #e6f4eb), #fff); box-shadow: 0 1px 2px rgba(23,38,29,.03); }
+.report-preview-summary-eyebrow { margin: 0 0 .375rem; color: var(--cliniq-primary, #287548); font-size: .6875rem; font-weight: 900; letter-spacing: .09em; text-transform: uppercase; }
+.report-preview-summary h2 { margin: 0 0 .375rem; color: var(--cliniq-foreground, #17261d); font-size: 1.5rem; font-weight: 800; letter-spacing: -.025em; }
+.report-preview-summary p:last-child { margin: 0; color: #64748b; font-size: .875rem; font-weight: 600; line-height: 1.5; }
+.report-preview-summary-stat { padding: .875rem; border: 1px solid oklch(92% .01 230 / .8); border-radius: .75rem; background: rgba(255,255,255,.84); }
+.report-preview-summary-stat span { display: block; margin-bottom: .375rem; color: #64748b; font-size: .625rem; font-weight: 900; letter-spacing: .07em; text-transform: uppercase; }
+.report-preview-summary-stat strong { display: block; color: var(--cliniq-foreground, #17261d); font-size: .875rem; font-weight: 800; line-height: 1.35; }
+.report-action-summary { margin: 0 0 24px; padding: 20px; border: 1px solid #dfe9e2; border-radius: 16px; background: #f8fcf9; }
+.report-action-summary-eyebrow { margin: 0 0 4px; color: #205f3d; font-size: 10px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.report-action-summary h2 { margin: 0; color: #17261d; font-size: 20px; }
+.report-action-summary > div > p:last-child { margin: 4px 0 16px; color: #64748b; font-size: 11px; font-weight: 600; }
+.report-action-summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+.report-action-card { display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; padding: 12px; border: 1px solid #f1d18a; border-radius: 10px; background: #fffdf6; color: #713f12; text-decoration: none; }
+.report-action-card--red { border-color: #fecaca; background: #fff8f8; color: #991b1b; }
+.report-action-card .material-symbols-outlined { grid-row: span 2; font-size: 20px; }
+.report-action-card strong { font-size: 20px; line-height: 1; }
+.report-action-card span:not(.material-symbols-outlined) { font-size: 10px; font-weight: 800; }
+.report-action-card small { grid-column: 1 / -1; color: #64748b; font-size: 9px; font-weight: 600; line-height: 1.35; }
 .report-chart h3 { margin: 0 0 13px; color: #334155; font-size: 12px; }
 .report-chart-kind { float: right; color: #94a3b8; font-size: 8px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }
 .report-chart-row { display: grid; grid-template-columns: minmax(82px, 34%) minmax(80px, 1fr) 35px; align-items: center; gap: 8px; margin: 7px 0; }
@@ -293,6 +369,10 @@ html.cliniq-dark .report-document-dashboard .report-donut-caption,
 html.cliniq-dark .report-document-dashboard .report-axis-label { fill: #a9c0b0; }
 html.cliniq-dark .report-document-dashboard .report-empty { border-color: #4b6d55; color: #a9c0b0; }
 html.cliniq-dark .report-document-dashboard .report-remarks textarea { border-color: #4b6d55; background: #0d1b13; color: #e7f4ea; }
+html.cliniq-dark .report-preview-summary { border-color: #3b5945; background: linear-gradient(135deg, #183524, #14271b); }
+html.cliniq-dark .report-preview-summary h2, html.cliniq-dark .report-preview-summary-stat strong { color: #e7f4ea; }
+html.cliniq-dark .report-preview-summary p:last-child, html.cliniq-dark .report-preview-summary-stat span { color: #b3c9ba; }
+html.cliniq-dark .report-preview-summary-stat { border-color: #3b5945; background: #1b2c21; }
 @media (max-width: 760px) {
   .report-document { width: 100%; margin: 0; }
   .report-cover, .report-body { padding: 28px 22px; }
@@ -310,6 +390,8 @@ html.cliniq-dark .report-document-dashboard .report-remarks textarea { border-co
   .report-document-dashboard .report-chart { min-height: 0; padding: 1rem; }
   .report-document-dashboard .report-chart-visual { min-height: 11.5rem; }
   .report-document-dashboard .report-echarts-canvas { height: 12.5rem; }
+  .report-preview-summary { grid-template-columns: 1fr 1fr; }
+  .report-preview-summary > :first-child { grid-column: 1 / -1; }
 }
 @page { size: A4 portrait; margin: 11mm 10mm 13mm; }
 @media print {
@@ -373,10 +455,14 @@ function render_system_report_document(array $report, bool $standalone = false, 
     $systemName = trim((string) ($clinicProfile['system_name'] ?? 'CLINiQ')) ?: 'CLINiQ';
     $institutionName = trim((string) ($clinicProfile['institution_name'] ?? 'Pamantasan ng Lungsod ng Pasig')) ?: 'Pamantasan ng Lungsod ng Pasig';
     $departmentName = trim((string) ($clinicProfile['department'] ?? 'University Health Services')) ?: 'University Health Services';
-    $includeCover = (bool) ($options['include_cover'] ?? true);
+    $presentation = (string) ($options['presentation'] ?? 'document');
+    $isPreview = $presentation === 'preview';
+    $includeCover = !$isPreview && (bool) ($options['include_cover'] ?? true);
     $isDashboard = !$includeCover;
     $remarksMode = (string) ($options['remarks_mode'] ?? 'none');
     $remarks = is_array($options['remarks'] ?? null) ? $options['remarks'] : [];
+    $includeTables = (bool) ($options['include_tables'] ?? true);
+    $tableOnly = (bool) ($options['table_only'] ?? false);
     $preparedBy = is_array($options['prepared_by'] ?? null) ? $options['prepared_by'] : [];
     $preparedByName = trim((string) ($preparedBy['name'] ?? ''));
     if ($preparedByName === '') {
@@ -389,7 +475,7 @@ function render_system_report_document(array $report, bool $standalone = false, 
     if ($standalone): ?>
         <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title><?= system_report_escape($report['title']) ?></title><style><?= system_report_styles() ?></style></head><body class="system-report-standalone">
     <?php endif; ?>
-    <article class="report-document<?= $includeCover ? '' : ' report-document-dashboard' ?>" id="systemReportDocument">
+    <article class="report-document<?= $includeCover ? '' : ' report-document-dashboard' ?><?= $isPreview ? ' report-document-preview' : '' ?>" id="systemReportDocument">
         <?php if ($includeCover): ?>
             <header class="report-cover">
                 <div class="report-cover-card">
@@ -432,11 +518,19 @@ function render_system_report_document(array $report, bool $standalone = false, 
                 </div>
             </header>
         <?php endif; ?>
+        <?php if ($isPreview): ?>
+            <section class="report-preview-summary" aria-label="Report preview summary">
+                <div><p class="report-preview-summary-eyebrow">Live report preview</p><h2><?= system_report_escape($report['title']) ?></h2><p>Review the selected operational sections before opening the printable PDF view.</p></div>
+                <div class="report-preview-summary-stat"><span>Reporting period</span><strong><?= system_report_escape(date('M j, Y', strtotime($report['date_from']))) ?> – <?= system_report_escape(date('M j, Y', strtotime($report['date_to']))) ?></strong></div>
+                <div class="report-preview-summary-stat"><span>Included modules</span><strong data-report-module-total><?= count($report['sections']) ?> module(s)</strong></div>
+                <div class="report-preview-summary-stat"><span>Export status</span><strong>Ready to export</strong></div>
+            </section>
+        <?php endif; ?>
         <main class="report-body">
             <?php $sectionNumber = 0; foreach ($report['sections'] as $sectionKey => $section): $sectionNumber++; ?>
                 <section class="report-section" id="report-section-<?= system_report_escape((string) $sectionKey) ?>" data-report-section="<?= system_report_escape((string) $sectionKey) ?>">
                     <div class="report-section-heading"><div class="report-section-number"><?= $sectionNumber ?></div><div><h2><?= system_report_escape($section['title']) ?></h2><p class="report-section-description"><?= system_report_escape($section['description']) ?></p></div></div>
-                    <?php if ($isDashboard && $sectionKey === 'inventory'): ?>
+                    <?php if (!$tableOnly && $isDashboard && $sectionKey === 'inventory'): ?>
                         <?php $inventoryMetricGroups = [
                             'Stock overview' => ['Active Medicine', 'Active Equipment', 'Units in Stock', 'Low Stock Items'],
                             'Dispensing activity' => ['Medicine Dispensed', 'People Given Medicine'],
@@ -456,7 +550,7 @@ function render_system_report_document(array $report, bool $standalone = false, 
                                 </section>
                             <?php endforeach; ?>
                         </div>
-                    <?php else: ?>
+                    <?php elseif (!$tableOnly): ?>
                         <?php $metricCount = max(1, min(8, count($section['metrics']))); ?>
                         <div class="report-metrics" style="--report-metric-columns: <?= $metricCount ?>">
                             <?php foreach ($section['metrics'] as $metric): ?>
@@ -464,10 +558,15 @@ function render_system_report_document(array $report, bool $standalone = false, 
                             <?php endforeach; ?>
                         </div>
                     <?php endif; ?>
-                    <div class="report-charts">
-                        <?php foreach ($section['charts'] as $chart): $chartType = system_report_chart_type($chart['title']); ?>
-                            <?php $chartPayload = json_encode(['type' => $chartType, 'title' => $chart['title'], 'rows' => $chart['rows']], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '{}'; ?>
-                            <div class="report-chart" data-report-chart="<?= system_report_escape($chartPayload) ?>"><h3><?= system_report_escape($chart['title']) ?><span class="report-chart-kind"><?= system_report_escape($chartType) ?></span></h3><div class="report-chart-visual"><?= render_system_report_chart($chart) ?></div></div>
+                    <div class="report-charts<?= $tableOnly ? ' report-tables-only' : '' ?>">
+                        <?php foreach ($section['charts'] as $chart): ?>
+                            <?php if ($tableOnly): ?>
+                                <div class="report-chart"><h3><?= system_report_escape($chart['title']) ?></h3><?= render_system_report_data_table($chart, true) ?></div>
+                            <?php else: ?>
+                                <?php $chartType = system_report_chart_type($chart['title']); ?>
+                                <?php $chartPayload = json_encode(['type' => $chartType, 'title' => $chart['title'], 'rows' => $chart['rows']], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '{}'; ?>
+                                <div class="report-chart" data-report-chart="<?= system_report_escape($chartPayload) ?>"><h3><?= system_report_escape($chart['title']) ?><span class="report-chart-kind"><?= system_report_escape($chartType) ?></span></h3><div class="report-chart-visual"><?= render_system_report_chart($chart) ?></div><?php if ($includeTables): ?><?= render_system_report_data_table($chart) ?><?php endif; ?></div>
+                            <?php endif; ?>
                         <?php endforeach; ?>
                     </div>
                     <?php if ($remarksMode === 'input'): ?>

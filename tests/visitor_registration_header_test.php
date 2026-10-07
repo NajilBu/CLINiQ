@@ -33,7 +33,7 @@ if (!str_contains($visitor, 'href="visitor-registration.php"')) {
 if (!str_contains($visitor, 'Give feedback about a clinic visit')
     || !str_contains($visitor, "app_url('clinic-feedback.php')")
     || !str_contains($visitor, 'rounded-full border border-primary/25')) {
-    throw new RuntimeException('Visitor registration must render the restored legacy feedback pill.');
+    throw new RuntimeException('Visitor registration must provide on-site access to visit-linked feedback.');
 }
 
 echo "Visitor registration header test passed.\n";

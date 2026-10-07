@@ -15,7 +15,7 @@ if (!isset($allowedStatuses[$filterKey])) {
     $filterKey = 'active';
 }
 $filterStatus = $allowedStatuses[$filterKey];
-$allowedRisks = ['all', 'Critical', 'High', 'Moderate', 'Low', 'Not assessed'];
+    $allowedRisks = ['all', 'high-critical', 'Critical', 'High', 'Moderate', 'Low', 'Not assessed'];
 $filterRisk = trim((string) ($_GET['risk'] ?? 'all'));
 if (!in_array($filterRisk, $allowedRisks, true)) {
     $filterRisk = 'all';
@@ -31,7 +31,9 @@ if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateTo)) {
 
 $where = 'a.status = ?';
 $params = [$filterStatus];
-if ($filterRisk !== 'all') {
+    if ($filterRisk === 'high-critical') {
+        $where .= " AND a.risk_level IN ('High', 'Critical')";
+    } elseif ($filterRisk !== 'all') {
     $where .= ' AND a.risk_level = ?';
     $params[] = $filterRisk;
 }

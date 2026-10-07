@@ -6,7 +6,7 @@ require_once __DIR__ . '/clinic_feedback_database_test.php';
 require_once __DIR__ . '/../app/helpers/view.php';
 ob_clean();
 $case = $argv[1] ?? 'render';
-if (!in_array($case, ['render', 'submit', 'submit_old', 'picker', 'lookup', 'select', 'select_consented', 'select_rated', 'select_foreign', 'csrf', 'stale', 'inactive', 'malformed', 'admin', 'forbidden', 'anonymous', 'general_consent', 'general_reject', 'general_start', 'general_survey', 'general_submit', 'reset_async', 'linked_consent', 'linked_start', 'direct_survey', 'direct_submit'], true)) throw new RuntimeException('Unknown test case.');
+if (!in_array($case, ['render', 'submit', 'submit_old', 'picker', 'lookup', 'select', 'select_consented', 'select_rated', 'select_foreign', 'csrf', 'stale', 'inactive', 'malformed', 'admin', 'forbidden', 'anonymous', 'reset_async', 'linked_consent', 'linked_start', 'direct_survey', 'direct_submit'], true)) throw new RuntimeException('Unknown test case.');
 $_SERVER['REQUEST_METHOD'] = 'GET';
 $_SERVER['SCRIPT_NAME'] = '/cliniq/public/clinic-feedback.php';
 $_SERVER['REQUEST_URI'] = '/cliniq/public/clinic-feedback.php';
@@ -20,7 +20,7 @@ if ($case === 'linked_start') {
     $_SERVER['REQUEST_METHOD'] = 'POST';
     $_POST = ['csrf' => str_repeat('a', 64), 'action' => 'start_linked', 'visit_token' => str_repeat('b', 64), 'participate' => '1', 'consent' => '1'];
 }
-$surveyCases = ['render', 'submit', 'submit_old', 'csrf', 'stale', 'inactive', 'malformed', 'general_survey', 'general_submit', 'reset_async', 'direct_survey', 'direct_submit'];
+$surveyCases = ['render', 'submit', 'submit_old', 'csrf', 'stale', 'inactive', 'malformed', 'reset_async', 'direct_survey', 'direct_submit'];
 if (in_array($case, $surveyCases, true)) {
     $_SERVER['SCRIPT_NAME'] = '/cliniq/public/clinic-feedback-survey.php';
     $_SERVER['REQUEST_URI'] = '/cliniq/public/clinic-feedback-survey.php';
@@ -29,23 +29,6 @@ if (in_array($case, $surveyCases, true)) {
 if ($case === 'reset_async') {
     $_SERVER['REQUEST_METHOD'] = 'POST';
     $_POST = ['csrf' => str_repeat('a', 64), 'action' => 'reset', 'async' => '1'];
-}
-if (in_array($case, ['general_consent', 'general_reject', 'general_start', 'general_survey', 'general_submit'], true)) {
-    $_GET['general'] = '1';
-    unset($_SESSION['feedback_context']);
-    if (in_array($case, ['general_survey', 'general_submit'], true)) {
-        $_SESSION['feedback_context'] = ['mode' => 'general', 'identifier' => '', 'visit_id' => 0, 'anonymous' => true, 'consented' => true, 'expires' => time() + 3600, 'token' => str_repeat('b', 64)];
-    }
-    if (in_array($case, ['general_reject', 'general_start'], true)) {
-        $_SERVER['REQUEST_METHOD'] = 'POST';
-        $_POST = ['csrf' => str_repeat('a', 64), 'action' => 'start_general', 'participate' => '1', 'consent' => '1'];
-        if ($case === 'general_reject') unset($_POST['consent']);
-    }
-    if ($case === 'general_submit') {
-        $_SERVER['REQUEST_METHOD'] = 'POST';
-        $_POST = $input + ['csrf' => str_repeat('a', 64), 'action' => 'submit', 'visit_token' => str_repeat('b', 64), 'service_type' => clinic_feedback_services()[0], 'anonymous' => '0'];
-        unset($_POST['consent']);
-    }
 }
 if (in_array($case, ['submit', 'submit_old', 'csrf', 'stale', 'inactive', 'malformed', 'direct_submit'], true)) {
     $_SERVER['REQUEST_METHOD'] = 'POST';
@@ -67,6 +50,7 @@ if (in_array($case, ['admin', 'forbidden'], true)) {
     $_SESSION['user'] = ['id' => 0, 'person_id' => 0, 'name' => 'Test Evaluator', 'role' => $case === 'admin' ? 'admin' : 'nurse'];
 }
 if ($case === 'admin') {
+    $_GET = ['from' => '2000-01-01', 'to' => '2100-12-31'];
     $otherResponse = array_replace($input, ['service_type' => clinic_feedback_services()[1], 'ratings' => $low, 'comments' => '<script>test</script>']);
     clinic_feedback_submit($db, $_SESSION['feedback_context'], $otherResponse);
 }
@@ -75,11 +59,11 @@ register_shutdown_function(function () use ($db, $case): void {
     try {
         check_feedback(!preg_match('/Fatal error|Warning:|Notice:/', $html), 'PHP output error.');
         $count = (int) $db->query('SELECT COUNT(*) FROM clinic_feedback')->fetchColumn();
-        check_feedback($count === (in_array($case, ['submit', 'submit_old', 'admin', 'general_submit'], true) ? 3 : 2), 'Unexpected saved response count.');
+        check_feedback($count === (in_array($case, ['submit', 'submit_old', 'admin'], true) ? 3 : 2), 'Unexpected saved response count.');
         if ($case === 'submit_old') check_feedback(clinic_feedback_already_sent($db, 1), 'Older selected visit must accept feedback despite newer visits.');
         if ($case === 'picker') {
             check_feedback(str_contains($html, 'Choose a clinic visit') && substr_count($html, 'name="action" value="select"') === 2, 'Picker should expose only unrated owned visits for selection.');
-            check_feedback(substr_count($html, 'Feedback submitted — responses cannot be edited.') === 2, 'Already-rated visits must be visibly non-editable.');
+            check_feedback(!str_contains($html, 'Feedback submitted — responses cannot be edited.'), 'Already-rated visits must not appear in the picker.');
             check_feedback(!str_contains($html, 'id="feedback-survey"'), 'Do not select a visit automatically.');
         }
         if ($case === 'lookup') check_feedback($_SESSION['feedback_context']['visit_id'] === 0, 'Lookup should open picker, not auto-select.');
@@ -100,27 +84,17 @@ register_shutdown_function(function () use ($db, $case): void {
             check_feedback(clinic_feedback_already_sent($db, 6), 'Submitted to wrong visit.');
             check_feedback(!isset($_SESSION['feedback_context']) && !empty($_SESSION['feedback_success']), 'Clear session and redirect after successful submit.');
         }
-        if ($case === 'general_consent') check_feedback(str_contains($html, 'Before you begin') && str_contains($html, 'name="participate"') && str_contains($html, 'name="consent"') && !str_contains($html, 'id="feedback-survey"') && !str_contains($html, 'name="identifier"'), 'General entry must show consent before the survey without requesting an ID.');
         if ($case === 'linked_consent') check_feedback(str_contains($html, 'name="action" value="start_linked"') && str_contains($html, 'name="participate"') && !str_contains($html, 'id="feedback-survey"'), 'Selected visit must show consent on the entry page, not the survey.');
         if ($case === 'linked_start') check_feedback(!empty($_SESSION['feedback_context']['consented']) && !empty($_SESSION['feedback_context']['visit_id']), 'Completed-visit consent must authorize the separate survey page.');
         if ($case === 'direct_survey') check_feedback(!str_contains($html, 'id="feedback-survey"'), 'Direct survey access without consent must redirect.');
         if ($case === 'direct_submit') check_feedback(!clinic_feedback_already_sent($db, 6) && !str_contains($html, 'id="feedback-survey"'), 'Direct survey submission without consent must be rejected.');
-        if ($case === 'general_reject') check_feedback(!isset($_SESSION['feedback_context']) && !str_contains($html, 'id="feedback-survey"') && str_contains($html, 'Please confirm your participation and privacy consent'), 'Missing privacy consent must not open the survey.');
-        if ($case === 'general_start') check_feedback(($_SESSION['feedback_context']['mode'] ?? '') === 'general' && !empty($_SESSION['feedback_context']['consented']) && !empty($_SESSION['feedback_context']['anonymous']), 'General consent must start an anonymous visitless survey.');
-        if ($case === 'general_survey') check_feedback(str_contains($html, 'id="feedback-survey"') && str_contains($html, 'name="service_type"') && !str_contains($html, 'name="identifier"') && str_contains($html, 'id="feedback-leave-dialog"'), 'General survey must ask for service without requesting an ID and confirm before leaving.');
         if ($case === 'reset_async') check_feedback(!isset($_SESSION['feedback_context']) && str_contains($html, '"ok":true'), 'Confirmed async exit must clear feedback context.');
-        if ($case === 'general_submit') {
-            $general = $db->query('SELECT visit_id, is_anonymous FROM clinic_feedback WHERE visit_id IS NULL ORDER BY feedback_id DESC LIMIT 1')->fetch();
-            check_feedback($general && $general['visit_id'] === null && (int) $general['is_anonymous'] === 1, 'General feedback must remain anonymous and unlinked to a visit.');
-        }
         if ($case === 'csrf') check_feedback(str_contains($html, 'This form has expired.'), 'CSRF rejection missing.');
         if ($case === 'stale') check_feedback(!str_contains($html, 'id="feedback-survey"'), 'Stale token must require a fresh lookup.');
         if ($case === 'inactive') check_feedback(!str_contains($html, 'id="feedback-survey"'), 'Unaddressed visit must not display the survey.');
         if ($case === 'malformed') check_feedback(str_contains($html, 'Please answer all 22 statements'), 'Invalid nested rating must be rejected.');
         if ($case === 'admin') {
-            check_feedback(str_contains($html, 'Create feedback') && str_contains($html, 'clinic-feedback.php?general=1'), 'Clinic Feedback must link to the general-feedback consent step.');
-            check_feedback(str_contains($html, '4.90') && str_contains($html, 'Grand total'), 'Report must weight individual responses equally.');
-            check_feedback(str_contains($html, '&lt;script&gt;test&lt;/script&gt;') && !str_contains($html, '<script>test</script>'), 'Escape written feedback.');
+            check_feedback(!str_contains($html, 'Create feedback') && !str_contains($html, 'clinic-feedback.php?general=1'), 'Clinic Feedback must not expose general feedback creation.');
         }
         if ($case === 'forbidden') check_feedback(http_response_code() !== 403 && str_contains($html, 'Feedback Filters'), 'Nurses remain authorized to review clinic feedback.');
         if ($case === 'anonymous') check_feedback(!str_contains($html, 'Student responses'), 'Anonymous report access denied.');

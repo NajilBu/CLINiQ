@@ -25,6 +25,9 @@ $loader = action_feedback_source($root, 'public/assets/js/submission-loading.js'
 foreach ([
     "(form.getAttribute('method') || 'get').toUpperCase() !== 'POST'",
     "form.dataset.noLoading === 'true'",
+    "form.dataset.noAjax !== 'true'",
+    "document.querySelector('[data-cliniq-page-content]')",
+    "form.closest('.app-main')",
     "form.target && form.target !== '_self'",
     'new URL(form.getAttribute(\'action\') || window.location.href, window.location.href).origin === window.location.origin',
     'event.defaultPrevented',

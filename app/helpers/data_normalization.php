@@ -21,16 +21,17 @@ function cliniq_normalize_free_text(?string $value): string
 function cliniq_normalize_person_name(?string $value): string
 {
     $value = cliniq_normalize_whitespace($value);
-    if ($value === '' || (mb_strtolower($value, 'UTF-8') !== $value && mb_strtoupper($value, 'UTF-8') !== $value)) {
-        return $value;
-    }
+    if ($value === '') return '';
     $particles = ['de', 'del', 'la', 'van', 'von'];
     $suffixes = ['jr', 'jr.', 'sr', 'sr.', 'i', 'ii', 'iii', 'iv', 'v'];
     $words = preg_split('/\s+/u', $value) ?: [];
     foreach ($words as $index => $word) {
         $lower = mb_strtolower($word, 'UTF-8');
+        $upper = mb_strtoupper($word, 'UTF-8');
+        if ($word !== $lower && $word !== $upper) continue;
         if ($index > 0 && in_array($lower, $particles, true)) { $words[$index] = $lower; continue; }
         if (in_array($lower, $suffixes, true)) { $words[$index] = strtoupper(rtrim($lower, '.')) . (str_ends_with($lower, '.') ? '.' : ''); continue; }
+        if ($word === $upper && preg_match('/^\p{Lu}{1,3}$/u', $word)) continue;
         $words[$index] = preg_replace_callback("/[\\p{L}]+(?:['-][\\p{L}]+)*/u", static fn (array $m): string => mb_convert_case(mb_strtolower($m[0], 'UTF-8'), MB_CASE_TITLE, 'UTF-8'), $word) ?? $word;
     }
     return implode(' ', $words);

@@ -18,6 +18,7 @@
     function shouldShow(form) {
         if (!(form instanceof HTMLFormElement)) return false;
         if (form.dataset.noLoading === 'true' || form.hasAttribute('data-no-loading')) return false;
+        if (form.dataset.noAjax !== 'true' && document.querySelector('[data-cliniq-page-content]') && form.closest('.app-main')) return false;
         if ((form.getAttribute('method') || 'get').toUpperCase() !== 'POST') return false;
         if (form.target && form.target !== '_self') return false;
 

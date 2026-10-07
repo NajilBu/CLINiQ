@@ -2908,6 +2908,10 @@ body.student-time-modal-open {
 }
 
 @media (max-width: 1024px) {
+    .student-auth-page .cliniq-entry-header-mobile-hidden {
+        display: none;
+    }
+
     .student-auth-wrap {
         min-height: auto;
         padding: 1rem;
@@ -5213,54 +5217,6 @@ html.student-dark .passport-mobile-save-hint {
     .student-appointment-booking-sheet { border-radius: 14px 14px 0 0; }
 }
 
-@media (max-width: 720px) {
-    .student-login-wrap {
-        min-height: auto;
-        height: auto;
-        overflow: visible;
-        align-content: start;
-        padding: 40px var(--student-mobile-gutter) 0;
-    }
-    .student-login-wrap .student-auth-shell {
-        max-height: none;
-        overflow: hidden;
-    }
-    .student-login-wrap .student-auth-side {
-        padding: 10px 12px;
-    }
-    .student-login-wrap .student-auth-side-copy {
-        display: none;
-    }
-    .student-login-wrap .student-auth-form-side {
-        padding: 14px 16px 15px;
-    }
-    .student-login-wrap .student-auth-form-side .student-eyebrow {
-        margin-bottom: 3px;
-        font-size: .66rem;
-    }
-    .student-login-wrap .student-auth-form-side .student-card-copy {
-        display: none;
-    }
-    .student-login-wrap .student-field {
-        gap: 3px;
-        margin-bottom: 10px;
-    }
-    .student-login-wrap .student-label {
-        font-size: .68rem;
-    }
-    .student-login-wrap .student-input {
-        min-height: 42px;
-        padding: 8px 10px;
-    }
-    .student-login-wrap .student-button {
-        min-height: 44px;
-        margin-top: 4px;
-    }
-    .student-login-wrap .student-auth-footer {
-        margin-top: 10px;
-    }
-}
-
 @media (max-width: 1024px) {
     .student-appointment-feedback-note {
         gap: 10px;
@@ -5322,12 +5278,29 @@ html.student-dark .passport-mobile-save-hint {
     .student-dashboard-mobile-copy { display: none; }
 }
 
-/* Compact, branded auth banners on mobile; onboarding uses its dedicated single-card layout. */
+/* Roomy mobile auth shells; onboarding keeps its dedicated single-card layout. */
 @media (max-width: 720px) {
+    .student-login-wrap,
+    .student-register-wrap,
+    .student-recovery-wrap,
+    .student-reset-wrap {
+        min-height: auto;
+        height: auto;
+        align-content: start;
+        padding: 2.5rem var(--student-mobile-gutter) 2rem;
+    }
+
+    .student-login-wrap .student-auth-shell,
+    .student-register-wrap .student-auth-shell,
+    .student-recovery-wrap .student-auth-shell,
+    .student-reset-wrap .student-auth-shell {
+        max-height: none;
+    }
+
     .student-auth-shell:not(.student-onboarding-shell) .student-auth-side {
         display: block;
         min-height: auto;
-        padding: 1.15rem 1.25rem;
+        padding: 1.5rem;
     }
 
     .student-auth-shell:not(.student-onboarding-shell) .student-auth-side > div {
@@ -5336,15 +5309,16 @@ html.student-dark .passport-mobile-save-hint {
         grid-template-areas:
             "mark brand"
             "mark title"
-            "mark copy";
+            "mark department"
+            "copy copy";
         column-gap: 1rem;
         align-items: center;
     }
 
     .student-auth-shell:not(.student-onboarding-shell) .student-auth-side .student-brand-mark {
         grid-area: mark;
-        width: 2.75rem;
-        height: 2.75rem;
+        width: 3.25rem;
+        height: 3.25rem;
     }
 
     .student-auth-shell:not(.student-onboarding-shell) .student-auth-brand-line {
@@ -5355,10 +5329,16 @@ html.student-dark .passport-mobile-save-hint {
 
     .student-auth-shell:not(.student-onboarding-shell) .student-auth-side-title {
         grid-area: title;
-        margin: 0.15rem 0 0.25rem;
-        font-size: clamp(0.95rem, 5vw, 1.28rem);
+        margin: 0.2rem 0 0.3rem;
+        font-size: clamp(1.05rem, 5vw, 1.35rem);
         line-height: 1.12;
         white-space: nowrap;
+    }
+
+    .student-auth-department-line {
+        grid-area: department;
+        margin: 0;
+        font-size: 0.62rem;
     }
 
     .student-registration-shell .student-auth-side-title br {
@@ -5367,18 +5347,37 @@ html.student-dark .passport-mobile-save-hint {
 
     .student-auth-shell:not(.student-onboarding-shell) .student-auth-side-copy {
         grid-area: copy;
-        max-width: 42ch;
-        margin: 0;
-        max-width: 100%;
-        overflow: hidden;
-        font-size: 0.74rem;
-        line-height: 1.35;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        margin: 1rem 0 0;
+        font-size: 0.78rem;
+        line-height: 1.45;
+        white-space: normal;
     }
 
-    .student-login-wrap .student-auth-divider {
-        margin: 1.1rem 0 0.85rem;
+    .student-auth-shell:not(.student-onboarding-shell) .student-auth-form-side {
+        padding: 1.5rem;
+    }
+
+    .student-auth-shell:not(.student-onboarding-shell) .student-auth-form-side .student-card-copy {
+        margin-bottom: 1.25rem !important;
+    }
+
+    .student-auth-shell:not(.student-onboarding-shell) .student-field {
+        gap: 0.45rem;
+        margin-bottom: 1rem;
+    }
+
+    .student-auth-shell:not(.student-onboarding-shell) .student-input {
+        min-height: 3rem;
+        padding: 0.65rem 0.85rem;
+    }
+
+    .student-auth-shell:not(.student-onboarding-shell) .student-button {
+        min-height: 3rem;
+        margin-top: 0.25rem;
+    }
+
+    .student-auth-shell:not(.student-onboarding-shell) .student-auth-divider {
+        margin: 1.5rem 0 1rem;
     }
 
     .student-auth-shell:not(.student-onboarding-shell) .student-auth-side-footnote,

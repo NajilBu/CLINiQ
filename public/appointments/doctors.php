@@ -80,7 +80,7 @@ render_clinic_command_header(
                     <form method="post" class="consultation-doctor-remove-form">
                         <input type="hidden" name="doctor_id" value="<?= $doctorId ?>">
                         <input type="hidden" name="remove_assignments" value="1">
-                        <button class="btn btn-ghost" data-confirm-submit data-confirm-type="danger" data-confirm-title="Remove doctor roles?" data-confirm-message="This doctor will no longer cover Medical Consult or Dental. Existing bookings must still have another doctor assigned." data-confirm-toast="Removing roles..."><span class="material-symbols-outlined" aria-hidden="true">person_remove</span>Remove roles</button>
+                        <button class="btn btn-ghost" data-confirm-submit data-confirm-type="danger" data-confirm-title="Remove doctor assignments?" data-confirm-message="This doctor will no longer cover Medical Consult or Dental. Existing bookings must still have another doctor assigned." data-confirm-toast="Removing roles..."><span class="material-symbols-outlined" aria-hidden="true">person_remove</span>Remove roles</button>
                     </form>
                 <?php endif; ?>
             </details>

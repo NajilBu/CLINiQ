@@ -144,7 +144,7 @@ function clinic_feedback_visits(PDO $db, string $identifier): array
         JOIN people p ON p.id = v.patient_person_id
         JOIN students s ON s.person_id = p.id
         LEFT JOIN clinic_feedback f ON f.visit_id = v.visit_id
-        WHERE p.id_number = ? AND v.status = 'Completed'
+        WHERE p.id_number = ? AND v.status = 'Completed' AND f.feedback_id IS NULL
         ORDER BY v.visit_datetime DESC, v.visit_id DESC");
     $query->execute([normalize_id_number($identifier)]);
     return $query->fetchAll();
@@ -236,41 +236,37 @@ function clinic_feedback_submit(PDO $db, array $context, array $input): void
     $db->beginTransaction();
     try {
         $visitId = (int) ($context['visit_id'] ?? 0);
-        $visit = null;
-        if ($visitId > 0) {
-            $visit = !empty($context['person_id'])
-                ? clinic_feedback_visit_for_person($db, (int) $context['person_id'], $visitId, true)
-                : clinic_feedback_visit($db, (string) ($context['identifier'] ?? ''), $visitId, true);
-            if (!$visit || !clinic_feedback_eligible((string) $visit['status'])) {
-                throw new InvalidArgumentException('The selected visit is no longer available for feedback. Please select another visit.');
-            }
+        if ($visitId < 1) {
+            throw new InvalidArgumentException('Select a completed clinic visit before submitting feedback.');
+        }
+        $visit = !empty($context['person_id'])
+            ? clinic_feedback_visit_for_person($db, (int) $context['person_id'], $visitId, true)
+            : clinic_feedback_visit($db, (string) ($context['identifier'] ?? ''), $visitId, true);
+        if (!$visit || !clinic_feedback_eligible((string) $visit['status'])) {
+            throw new InvalidArgumentException('The selected visit is no longer available for feedback. Please select another visit.');
         }
         if ($visit && clinic_feedback_already_sent($db, (int) $visit['visit_id'])) {
             throw new InvalidArgumentException('Feedback has already been submitted for this visit.');
         }
-        $service = $visit
-            ? clinic_feedback_default_service((string) ($visit['visit_purpose'] ?? ''))
-            : trim((string) ($input['service_type'] ?? ''));
+        $service = clinic_feedback_default_service((string) ($visit['visit_purpose'] ?? ''));
         if (!in_array($service, clinic_feedback_services(), true)) {
             throw new InvalidArgumentException('Select the clinic service you are reviewing.');
         }
         $yearLabels = [1 => '1st Year', 2 => '2nd Year', 3 => '3rd Year', 4 => '4th Year'];
         $data['service_type'] = $service;
-        $data['service_other'] = $service === 'Other'
-            ? ($visit ? trim((string) ($visit['visit_purpose'] ?? '')) : clinic_feedback_text($input, 'service_other', 160))
-            : null;
-        $data['academic_term'] = $visit ? clinic_feedback_default_academic_term((string) $visit['visit_datetime']) : clinic_feedback_default_academic_term();
+        $data['service_other'] = $service === 'Other' ? trim((string) ($visit['visit_purpose'] ?? '')) : null;
+        $data['academic_term'] = clinic_feedback_default_academic_term((string) $visit['visit_datetime']);
         $data['term_other'] = null;
-        $data['year_level'] = $visit ? ($yearLabels[(int) ($visit['year_level'] ?? 0)] ?? 'Other') : 'Not provided';
+        $data['year_level'] = $yearLabels[(int) ($visit['year_level'] ?? 0)] ?? 'Other';
         $data['year_other'] = $data['year_level'] === 'Other' ? (string) ($visit['year_level'] ?? '') : null;
-        $data['program'] = $visit && trim((string) ($visit['program_code'] ?? '')) !== '' ? (string) $visit['program_code'] : 'Not recorded';
+        $data['program'] = trim((string) ($visit['program_code'] ?? '')) !== '' ? (string) $visit['program_code'] : 'Not recorded';
         $isAnonymous = !empty($input['anonymous']) ? 1 : 0;
         $stmt = $db->prepare('INSERT INTO clinic_feedback
             (visit_id, is_anonymous, service_type, service_other, academic_term, term_other, year_level, year_other,
              program, comments, ratings_json, tangibles, reliability, responsiveness, assurance, empathy, overall)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
         $stmt->execute([
-            $visit ? $visit['visit_id'] : null, $isAnonymous, $data['service_type'], $data['service_other'],
+            $visit['visit_id'], $isAnonymous, $data['service_type'], $data['service_other'],
             $data['academic_term'], $data['term_other'], $data['year_level'], $data['year_other'],
             $data['program'], $data['comments'], json_encode($data['ratings'], JSON_THROW_ON_ERROR),
             $data['scores']['Tangibles'], $data['scores']['Reliability'], $data['scores']['Responsiveness'],

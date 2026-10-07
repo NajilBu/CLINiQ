@@ -17,6 +17,7 @@ $period = strtolower((string) ($_GET['period'] ?? 'monthly'));
 if (!isset($periodOptions[$period])) {
     $period = 'monthly';
 }
+$reportView = ($_GET['view'] ?? '') === 'tables' ? 'tables' : 'charts';
 $semester = (int) ($_GET['semester'] ?? 0);
 if (!in_array($semester, [1, 2], true)) {
     $semester = (int) date('n') >= 6 && (int) date('n') <= 11 ? 1 : 2;
@@ -58,10 +59,14 @@ render_header('Reports');
     'Reports',
     'Reports & Analytics',
     'Build, preview, and export consolidated clinic operational analytics.',
-    '<a class="btn btn-primary text-decoration-none" id="reportHeaderPreviewLink" href="preview.php?from=' . e($dateFrom) . '&to=' . e($dateTo) . '&period=' . e($period) . '&semester=' . e((string) $semester) . '"><span class="material-symbols-outlined text-[20px]">preview</span>Preview Report</a>'
+    '<a class="btn btn-outline text-decoration-none" id="reportHeaderTablesLink" href="index.php?view=' . ($reportView === 'tables' ? 'charts' : 'tables') . '&from=' . e($dateFrom) . '&to=' . e($dateTo) . '&period=' . e($period) . '&semester=' . e((string) $semester) . '"><span class="material-symbols-outlined text-[20px]">' . ($reportView === 'tables' ? 'bar_chart' : 'table_chart') . '</span>' . ($reportView === 'tables' ? 'View charts' : 'Data tables') . '</a><a class="btn btn-primary text-decoration-none" id="reportHeaderPreviewLink" href="preview.php?from=' . e($dateFrom) . '&to=' . e($dateTo) . '&period=' . e($period) . '&semester=' . e((string) $semester) . '"><span class="material-symbols-outlined text-[20px]">preview</span>Preview Report</a>'
 ); ?>
 
 <div class="reports-page">
+
+<div class="report-live-actions">
+    <?= render_system_report_action_summary($mainSystemReport['action_summary'] ?? []) ?>
+</div>
 
 <!-- ═══ Date Range Filter ═══ -->
 <form method="get" class="clinic-card overflow-hidden" data-no-ajax="true" id="reportDateForm">
@@ -103,7 +108,7 @@ render_header('Reports');
 <div class="report-analytics-layout">
     <div class="report-analytics-content">
         <style><?= system_report_styles() ?></style>
-        <?= render_system_report_document($mainSystemReport, false, ['include_cover' => false]) ?>
+        <?= render_system_report_document($mainSystemReport, false, ['include_cover' => false, 'include_tables' => false, 'table_only' => $reportView === 'tables']) ?>
     </div>
     <aside class="report-section-navigation" aria-label="Report section navigation">
         <p class="report-section-navigation-label">Jump to section</p>
@@ -148,8 +153,9 @@ render_header('Reports');
             } catch (_) {
                 return;
             }
-            const rows = Array.isArray(chartData.rows) ? chartData.rows : [];
-            if (!rows.length) return;
+            const tableRows = Array.isArray(chartData.rows) ? chartData.rows : [];
+            if (!tableRows.length) return;
+            const rows = chartData.type === 'line' ? tableRows : tableRows.slice(0, 10);
 
             const visual = card.querySelector('.report-chart-visual');
             if (!visual) return;
@@ -230,6 +236,8 @@ render_header('Reports');
     const semesterInput = document.getElementById('reportSemester');
     const periodInputs = Array.from(document.querySelectorAll('input[name="period"]'));
     const previewLink = document.getElementById('reportHeaderPreviewLink');
+    const tablesLink = document.getElementById('reportHeaderTablesLink');
+    let reportView = <?= json_encode($reportView) ?>;
     if (!form || !fromInput || !toInput) return;
 
     let submitTimer = null;
@@ -292,16 +300,21 @@ render_header('Reports');
         }
     };
 
-    const syncPreviewLink = () => {
-        if (!previewLink) return;
-        const previewUrl = new URL(previewLink.href, window.location.href);
-        previewUrl.searchParams.set('from', fromInput.value);
-        previewUrl.searchParams.set('to', toInput.value);
-        previewUrl.searchParams.set('period', selectedPeriod());
-        if (semesterInput) {
-            previewUrl.searchParams.set('semester', semesterInput.value);
-        }
-        previewLink.href = previewUrl.pathname.split('/').pop() + '?' + previewUrl.searchParams.toString();
+    const syncReportLinks = () => {
+        [previewLink, tablesLink].filter(Boolean).forEach((link) => {
+            const destinationUrl = new URL(link.href, window.location.href);
+            destinationUrl.searchParams.set('from', fromInput.value);
+            destinationUrl.searchParams.set('to', toInput.value);
+            destinationUrl.searchParams.set('period', selectedPeriod());
+            if (semesterInput) destinationUrl.searchParams.set('semester', semesterInput.value);
+            if (link === tablesLink) {
+                destinationUrl.searchParams.set('view', reportView === 'tables' ? 'charts' : 'tables');
+                link.innerHTML = '<span class="material-symbols-outlined text-[20px]">' + (reportView === 'tables' ? 'bar_chart' : 'table_chart') + '</span>' + (reportView === 'tables' ? 'View charts' : 'Data tables');
+            } else {
+                destinationUrl.searchParams.delete('view');
+            }
+            link.href = destinationUrl.pathname.split('/').pop() + '?' + destinationUrl.searchParams.toString();
+        });
     };
 
     const reportUrl = () => {
@@ -312,6 +325,8 @@ render_header('Reports');
         if (semesterInput) {
             nextUrl.searchParams.set('semester', semesterInput.value);
         }
+        if (reportView === 'tables') nextUrl.searchParams.set('view', 'tables');
+        else nextUrl.searchParams.delete('view');
         return nextUrl;
     };
 
@@ -375,9 +390,12 @@ render_header('Reports');
             const nextRange = nextDocument.querySelector('.report-analytics-range');
             const nextLayout = nextDocument.querySelector('.report-analytics-layout');
             const currentRange = document.querySelector('.report-analytics-range');
-            if (!nextRange || !nextLayout || !currentRange) throw new Error('Report response did not contain analytics.');
+            const nextActions = nextDocument.querySelector('.report-live-actions');
+            const currentActions = document.querySelector('.report-live-actions');
+            if (!nextRange || !nextLayout || !currentRange || !nextActions || !currentActions) throw new Error('Report response did not contain analytics.');
 
             disposeReportCharts();
+            currentActions.replaceWith(nextActions);
             currentRange.replaceWith(nextRange);
             layout.replaceWith(nextLayout);
             window.history.replaceState({ reportFilter: true }, '', nextUrl.href);
@@ -394,7 +412,7 @@ render_header('Reports');
     };
 
     const submitWhenComplete = () => {
-        syncPreviewLink();
+        syncReportLinks();
         if (!fromInput.value || !toInput.value) return;
         clearTimeout(submitTimer);
         submitTimer = setTimeout(() => {
@@ -404,13 +422,20 @@ render_header('Reports');
 
     form.addEventListener('submit', (event) => {
         event.preventDefault();
-        syncPreviewLink();
+        syncReportLinks();
+        refreshAnalytics();
+    });
+
+    tablesLink?.addEventListener('click', (event) => {
+        event.preventDefault();
+        reportView = reportView === 'tables' ? 'charts' : 'tables';
+        syncReportLinks();
         refreshAnalytics();
     });
 
     [fromInput, toInput].forEach((input) => {
         input.addEventListener('change', submitWhenComplete);
-        input.addEventListener('input', syncPreviewLink);
+        input.addEventListener('input', syncReportLinks);
     });
 
     periodInputs.forEach((input) => {
@@ -437,7 +462,7 @@ render_header('Reports');
     }
 
     syncPeriodUi();
-    syncPreviewLink();
+    syncReportLinks();
     bindSectionNavigation();
 })();
 </script>

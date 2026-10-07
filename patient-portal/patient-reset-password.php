@@ -36,7 +36,7 @@ render_student_auth_header('Reset Password');
     'class' => 'cliniq-entry-header-mobile-hidden',
 ]); ?>
 
-<main class="student-auth-wrap">
+<main class="student-auth-wrap student-reset-wrap">
     <section class="student-auth-shell">
         <aside class="student-auth-side">
             <div>

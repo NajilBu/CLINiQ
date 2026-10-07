@@ -25,23 +25,24 @@ render_clinic_command_header(
     'Choose the sections to export, add optional remarks, and review the final report.'
 );
 ?>
-<link rel="stylesheet" href="<?= e(app_url('assets/css/reports.css?v=3')) ?>">
-<div class="reports-page">
+<link rel="stylesheet" href="<?= e(app_url('assets/css/reports.css?v=' . filemtime(__DIR__ . '/../assets/css/reports.css'))) ?>">
+<div class="reports-page report-preview-page">
 
-<div class="report-inline-notice" role="status">
-    <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
-    <p class="m-0">The checklist controls which report sections are included in the printable PDF view. The checklist itself is never included in the report.</p>
-</div>
+<section class="report-preview-guidance clinic-card" role="status">
+    <span class="material-symbols-outlined" aria-hidden="true">fact_check</span>
+    <div><p class="report-preview-guidance-eyebrow">Export workspace</p><h2>Review the exact report content before exporting</h2><p>Both downloads use the selected sections, metrics, charts, tables, and remarks shown below. PDF changes the page layout; XLSX provides a metric summary in Overview and full detail in each module worksheet. These controls never modify clinical records.</p></div>
+</section>
 
-<form method="post" action="pdf.php" data-no-ajax="true" id="reportExportForm" class="space-y-6">
+<form method="post" action="pdf.php" data-no-ajax="true" id="reportExportForm" class="space-y-6 report-preview-export-form">
+    <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
     <input type="hidden" name="from" value="<?= e($report['date_from']) ?>">
     <input type="hidden" name="to" value="<?= e($report['date_to']) ?>">
 
-    <section class="clinic-card overflow-hidden">
+    <section class="clinic-card overflow-hidden report-preview-controls">
         <div class="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
             <div>
-                <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Sections Included in PDF</h2>
-                <p class="text-xs font-bold text-slate-500 mb-0">Uncheck a section to hide it from this preview and exclude it from the printable report.</p>
+                <p class="report-preview-guidance-eyebrow">Step 1</p><h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Choose report sections</h2>
+                <p class="text-xs font-bold text-slate-500 mb-0">Uncheck a section to hide it from the live preview and the exported report.</p>
             </div>
             <span class="badge badge-in-progress shrink-0" id="selectedModuleCount"><?= count($modules) ?> selected</span>
         </div>
@@ -59,14 +60,13 @@ render_clinic_command_header(
                 <?php endforeach; ?>
             </div>
             <p class="report-module-error hidden" id="reportModuleError" role="alert">Select at least one section before exporting.</p>
-            <div class="flex justify-end">
-                <button class="btn btn-primary justify-center" type="submit" id="exportReportPdf"><span class="material-symbols-outlined text-[18px]">print</span>Open Printable PDF View</button>
-            </div>
+            <input type="hidden" name="include_tables" value="1">
+            <div class="report-preview-export-row"><p class="report-preview-table-option"><span><strong>Charts and complete data tables are included in every format.</strong><small>PDF uses report pages. XLSX uses an Overview worksheet and one worksheet for each selected module.</small></span></p><div class="flex flex-wrap gap-2"><button class="btn btn-outline justify-center" type="submit" id="exportReportPdf">Printable view</button><button class="btn btn-outline justify-center" type="button" data-report-export-format="xlsx">Download XLSX</button><button class="btn btn-primary justify-center" type="button" data-report-export-format="pdf">Download PDF</button></div></div>
         </div>
     </section>
 
     <style><?= system_report_styles() ?></style>
-    <?= render_system_report_document($report, false, ['remarks_mode' => 'input']) ?>
+    <?= render_system_report_document($report, false, ['presentation' => 'preview', 'remarks_mode' => 'input']) ?>
 </form>
 
 <script>
@@ -112,6 +112,10 @@ render_clinic_command_header(
     syncSections();
 })();
 </script>
+<script src="<?= e(app_url('assets/vendor/jspdf/jspdf.umd.min.js')) ?>"></script>
+<script src="<?= e(app_url('assets/vendor/jspdf-autotable/jspdf.plugin.autotable.min.js')) ?>"></script>
+<script src="<?= e(app_url('assets/vendor/exceljs/exceljs.min.js')) ?>"></script>
+<script src="<?= e(app_url('assets/js/system-report-export.js?v=' . filemtime(__DIR__ . '/../assets/js/system-report-export.js'))) ?>"></script>
 
 </div>
 <?php render_footer(); ?>

@@ -20,6 +20,7 @@ foreach ([
     'item type is retained from the locked record' => str_contains($update, "\$type = (string) \$current['item_type'];"),
     'stock changes require a reason' => str_contains($update, 'Explain the quantity adjustment before saving.'),
     'stock changes are blocked during equipment loans' => str_contains($update, 'Available quantity cannot be adjusted while this equipment has an open loan.'),
+    'ajax inventory forms rely on the shared loading-overlay boundary' => preg_match_all('/<form\b[^>]*\bdata-inventory-form\b/', $index) === 10 && !str_contains($index, 'data-inventory-form data-no-loading'),
     'inventory audit labels describe item changes' => str_contains($audit, "'inventory_item_updated'") && str_contains($audit, "'inventory_item_archived'"),
 ] as $label => $passed) {
     if (!$passed) throw new RuntimeException('Failed: ' . $label);

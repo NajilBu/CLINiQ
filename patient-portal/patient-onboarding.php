@@ -83,7 +83,9 @@ render_student_auth_header('Complete Profile');
 </div>
 <script>
 document.querySelectorAll('.student-toggle-pw').forEach((button)=>button.addEventListener('click',()=>{const input=document.getElementById(button.dataset.target);if(!input)return;input.type=input.type==='password'?'text':'password';button.textContent=input.type==='password'?'Show':'Hide';}));
-  document.querySelectorAll('[data-person-name]').forEach((input)=>input.addEventListener('input',()=>{input.setCustomValidity(input.value&&!/^[\p{L} .'-]+$/u.test(input.value)?'Use only letters, spaces, apostrophes, periods, and hyphens.':'');}));
+const validatePersonName=(input)=>input.setCustomValidity(input.value&&!/^[\p{L} .'-]+$/u.test(input.value)?'Use only letters, spaces, apostrophes, periods, and hyphens.':'');
+document.querySelectorAll('[data-person-name]').forEach((input)=>{input.addEventListener('input',()=>validatePersonName(input));validatePersonName(input);});
+const birthdate=document.getElementById('birthdate');const validateBirthdate=()=>{if(!birthdate)return;birthdate.setCustomValidity(birthdate.value&&(birthdate.value<birthdate.min||birthdate.value>birthdate.max)?'Enter a birthdate within the last 120 years and not in the future.':'');};birthdate?.addEventListener('input',validateBirthdate);validateBirthdate();
   const onboardingForm=document.querySelector('[data-onboarding-form]');
   if(onboardingForm){
     const grid=onboardingForm.querySelector('.grid');

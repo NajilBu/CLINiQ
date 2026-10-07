@@ -118,6 +118,27 @@
 .reports-page .report-document-dashboard { margin-top: 0; }
 .reports-page .report-document-dashboard .report-section { scroll-margin-top: 1rem; }
 
+.report-preview-page { padding-bottom: 2rem; }
+.report-preview-guidance { display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 1.5rem; padding: 1.5rem; border-color: color-mix(in srgb, var(--cliniq-primary, #287548) 18%, transparent); background: linear-gradient(135deg, var(--cliniq-primary-fixed, #e6f4eb), #fff); }
+.report-preview-guidance > .material-symbols-outlined { display: grid; place-items: center; flex: 0 0 2.75rem; height: 2.75rem; border-radius: .875rem; background: var(--cliniq-primary, #287548); color: #fff; }
+.report-preview-guidance-eyebrow { margin: 0 0 .35rem; color: var(--cliniq-primary, #287548); font-size: .6875rem; font-weight: 900; letter-spacing: .09em; text-transform: uppercase; }
+.report-preview-guidance h2 { margin: 0 0 .35rem; color: var(--cliniq-foreground, #17261d); font-size: 1.25rem; font-weight: 800; letter-spacing: -.02em; }
+.report-preview-guidance p:last-child { margin: 0; color: #64748b; font-size: .875rem; font-weight: 600; line-height: 1.5; }
+.report-preview-controls { border-radius: 1rem; box-shadow: 0 1px 2px rgba(23,38,29,.03), 0 12px 28px rgba(23,38,29,.045); }
+.report-preview-controls .report-module-card { min-height: 3.75rem; border-radius: .75rem; }
+.report-preview-export-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding-top: 1.25rem; border-top: 1px solid var(--cliniq-outline, #dfe9e2); }
+.report-preview-table-option { display: flex; align-items: flex-start; gap: .625rem; color: #475569; font-size: .8125rem; font-weight: 600; }
+.report-preview-table-option input { margin-top: .2rem; accent-color: var(--cliniq-primary, #287548); }
+.report-preview-table-option strong, .report-preview-table-option small { display: block; }
+.report-preview-table-option strong { color: var(--cliniq-foreground, #17261d); font-size: .8125rem; font-weight: 800; }
+.report-preview-table-option small { margin-top: .2rem; color: #64748b; font-size: .75rem; line-height: 1.4; }
+html.cliniq-dark .report-preview-guidance { border-color: #3b5945; background: linear-gradient(135deg, #183524, #14271b); }
+html.cliniq-dark .report-preview-guidance h2, html.cliniq-dark .report-preview-table-option strong { color: #e7f4ea; }
+html.cliniq-dark .report-preview-guidance p:last-child, html.cliniq-dark .report-preview-table-option { color: #b3c9ba; }
+html.cliniq-dark .report-preview-controls { border-color: #3b5945; background: #14271b; }
+html.cliniq-dark .report-preview-export-row { border-color: #3b5945; }
+@media (max-width: 640px) { .report-preview-export-row { align-items: stretch; flex-direction: column; } .report-preview-export-row .btn { width: 100%; } }
+
 .reports-page .report-analytics-range {
     display: flex;
     align-items: center;

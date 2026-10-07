@@ -22,7 +22,6 @@ $feedbackStarted = $startToken !== '' && $storedStartToken !== '' && hash_equals
     && array_key_exists('student_feedback_selected_visit_id', $_SESSION);
 $selectedId = (int) ($_SESSION['student_feedback_selected_visit_id'] ?? 0);
 $selectedVisit = null;
-$isGeneralFeedback = $selectedId === 0;
 
 try {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST' && !$feedbackStarted && !$success) {
@@ -99,12 +98,11 @@ render_student_header('Give Feedback', 'dashboard');
     <?php elseif (!$feedbackStarted): ?>
         <section class="student-card student-card-pad student-feedback-visit-summary">
             <div class="student-card-header"><div><p class="student-feedback-eyebrow">Before you begin</p><h2>Consent is required before the survey</h2></div></div>
-            <p>Choose general feedback or a completed visit, then confirm participation and privacy consent.</p>
+            <p>Choose a completed visit, then confirm participation and privacy consent.</p>
             <a class="student-button text-decoration-none" href="patient-feedback-consent.php">Go to consent page</a>
         </section>
     <?php else: ?>
-        <?php if ($selectedVisit || $isGeneralFeedback): ?>
-            <?php if (!$isGeneralFeedback): ?>
+        <?php if ($selectedVisit): ?>
             <section class="student-card student-card-pad student-feedback-visit-summary">
                 <div class="student-card-header"><div><p class="student-feedback-eyebrow">Selected visit</p><h2><?= student_e(date('F j, Y · g:i A', strtotime((string) $selectedVisit['visit_datetime']))) ?></h2></div><span class="student-badge student-badge-success">Completed</span></div>
                 <dl class="student-feedback-visit-details">
@@ -112,13 +110,6 @@ render_student_header('Give Feedback', 'dashboard');
                     <div><dt>Patient concern</dt><dd><?= student_e($selectedVisit['chief_complaint'] ?: 'Not recorded') ?></dd></div>
                 </dl>
             </section>
-            <?php else: ?>
-            <section class="student-card student-card-pad student-feedback-visit-summary">
-                <div class="student-card-header"><div><p class="student-feedback-eyebrow">General feedback</p><h2>Share your clinic experience</h2></div><span class="student-badge student-badge-success">No visit link</span></div>
-                <p class="student-feedback-muted">This response is anonymous and will not be linked to a visit or ID number.</p>
-            </section>
-            <?php endif; ?>
-
             <form method="post" id="student-feedback-form" class="student-feedback-form" data-no-discard-warning>
                 <input type="hidden" name="_csrf" value="<?= student_e($csrf) ?>">
                 <input type="hidden" name="start_token" value="<?= student_e($startToken) ?>">
@@ -126,10 +117,6 @@ render_student_header('Give Feedback', 'dashboard');
                 <div class="student-feedback-survey-step" data-feedback-step="1">
                 <section class="student-card student-card-pad">
                     <div class="student-feedback-step-heading"><span>1</span><div><h2>Rate your visit</h2><p>Choose one answer for each statement.</p></div></div>
-                    <?php if ($isGeneralFeedback): ?>
-                    <label class="student-field">Service being reviewed<select class="student-input" name="service_type" required><option value="">Choose a service</option><?php foreach (clinic_feedback_services() as $service): ?><option value="<?= student_e($service) ?>" <?= student_feedback_value($values, 'service_type') === $service ? 'selected' : '' ?>><?= student_e($service) ?></option><?php endforeach; ?></select></label>
-                    <label class="student-field" data-feedback-other-service hidden>Other service<input class="student-input" name="service_other" maxlength="160" value="<?= student_e(student_feedback_value($values, 'service_other')) ?>"></label>
-                    <?php endif; ?>
                     <?php foreach (clinic_feedback_sections() as $section => $questions): ?>
                         <details class="student-feedback-rating-group" <?= $section === 'Tangibles' ? 'open' : '' ?>><summary><?= student_e($section) ?><span class="material-symbols-outlined" aria-hidden="true">expand_more</span></summary>
                             <?php foreach ($questions as $code => $question): ?><fieldset class="student-feedback-question"><legend><?= student_e($question) ?> <span aria-label="required">*</span></legend><div class="student-feedback-scale"><?php for ($rating = 1; $rating <= 7; $rating++): ?><label><input type="radio" name="ratings[<?= student_e($code) ?>]" value="<?= $rating ?>" required <?= is_array($values['ratings'] ?? null) && (string) ($values['ratings'][$code] ?? '') === (string) $rating ? 'checked' : '' ?>><span><?= $rating ?></span></label><?php endfor; ?></div><div class="student-feedback-scale-labels"><span>Strongly disagree</span><span>Strongly agree</span></div></fieldset><?php endforeach; ?>
@@ -255,15 +242,6 @@ render_student_header('Give Feedback', 'dashboard');
         showStep(2);
     });
     surveyForm?.querySelector('[data-feedback-back]')?.addEventListener('click', () => showStep(1));
-    const serviceSelect = surveyForm?.querySelector('select[name="service_type"]');
-    const otherService = surveyForm?.querySelector('[data-feedback-other-service]');
-    const updateOtherService = () => {
-        if (!serviceSelect || !otherService) return;
-        otherService.hidden = serviceSelect.value !== 'Other';
-        otherService.querySelector('input').required = serviceSelect.value === 'Other';
-    };
-    serviceSelect?.addEventListener('change', updateOtherService);
-    updateOtherService();
     const ratingSections = Array.from(surveyForm?.querySelectorAll('.student-feedback-rating-group') || []);
     surveyForm?.addEventListener('change', (event) => {
         if (!event.target.matches('input[type="radio"]')) return;

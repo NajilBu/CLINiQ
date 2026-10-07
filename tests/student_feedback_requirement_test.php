@@ -44,7 +44,7 @@ if (!str_contains($feedbackEntry, 'Reason for visit')
     throw new RuntimeException('Portal feedback context, consent gate, or privacy notice is incomplete, or exposes an internal visit number.');
 }
 if (!str_contains($feedbackConsent, 'name="feedback_target"')
-    || !str_contains($feedbackConsent, 'value="general"')
+    || str_contains($feedbackConsent, 'value="general"')
     || !str_contains($feedbackEntry, 'name="start_token"')
     || !str_contains($feedbackEntry, 'student_feedback_selected_visit_id')
     || str_contains($feedbackEntry, 'name="participate"')) {

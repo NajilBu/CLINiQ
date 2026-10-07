@@ -425,6 +425,7 @@ if (empty($profile['emergency_instructions'])) {
     $passportMissing[] = 'emergency instructions';
 }
 $passportComplete = empty($passportMissing);
+$applicantApePending = !$isOfficialAccess;
 $apeNeedsAction = $latestApe
     && ($latestApe['clearance_status'] ?? 'Pending') !== 'Cleared'
     && !$apeDocumentsAwaitingClinicReview
@@ -690,8 +691,8 @@ render_student_header('Dashboard', 'dashboard');
             </span>
             <div>
                 <p class="student-action-kicker student-action-kicker-primary">Ready</p>
-                <h2>Your clinic profile is complete</h2>
-                <p>Your passport and APE clearance records are up to date.</p>
+                <h2><?= $applicantApePending ? 'Your Applicant account is set up' : 'Your clinic profile is complete' ?></h2>
+                <p><?= $applicantApePending ? 'Check APE Status for clinic updates. Passport and appointments unlock after final APE clearance.' : 'Your passport and APE clearance records are up to date.' ?></p>
             </div>
         </div>
     </article>
@@ -912,19 +913,6 @@ render_student_header('Dashboard', 'dashboard');
     </div>
 </section>
 </details>
-
-<section class="student-card mt-4" aria-label="Clinic feedback">
-    <div class="student-card-pad flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-            <h2 class="student-card-title mb-1">Share your clinic experience</h2>
-            <p class="student-card-copy mb-0">Tell us how your recent clinic visit went.</p>
-        </div>
-        <a href="patient-feedback.php" class="student-button-secondary text-decoration-none">
-            Give feedback
-            <span class="material-symbols-outlined" aria-hidden="true">rate_review</span>
-        </a>
-    </div>
-</section>
 
 <section class="student-card student-dashboard-help mt-4" aria-labelledby="student-dashboard-help-title">
     <div class="student-card-pad student-dashboard-help-content">

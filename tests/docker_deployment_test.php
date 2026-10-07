@@ -69,6 +69,14 @@ foreach (['absolute_redirect off', '/patient-portal/', '/public/emergency.php', 
         throw new RuntimeException("Public gateway allowlist is missing {$expected}.");
     }
 }
+foreach (['resolver 127.0.0.11', 'set $cliniq_app_upstream app:80;', 'proxy_pass http://$cliniq_app_upstream;'] as $expected) {
+    if (!str_contains($gateway, $expected)) {
+        throw new RuntimeException("Public gateway must dynamically resolve the app service: {$expected}.");
+    }
+}
+if (str_contains($gateway, 'proxy_pass http://app:80;')) {
+    throw new RuntimeException('Public gateway must not pin requests to a recreated app container IP.');
+}
 foreach (['/public/login.php', '/public/visitor-registration.php', '/public/settings/'] as $forbiddenPublicRoute) {
     if (str_contains($gateway, $forbiddenPublicRoute)) {
         throw new RuntimeException("Public gateway must not expose {$forbiddenPublicRoute}.");

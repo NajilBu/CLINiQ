@@ -1,0 +1,59 @@
+services:
+  database:
+    image: mariadb:11.4
+    environment:
+      MARIADB_DATABASE: Cliniq_db
+      MARIADB_USER: cliniq_proof
+      MARIADB_PASSWORD: cliniq_proof
+      MARIADB_ROOT_PASSWORD: cliniq_proof_root
+    tmpfs:
+      - /var/lib/mysql
+    volumes:
+      - ./database/production_schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  mailpit:
+    image: axllent/mailpit:v1.21
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      APP_ENV: development
+      APP_URL: http://app/public
+      PATIENT_PORTAL_URL: http://app/patient-portal
+      APP_TIMEZONE: Asia/Manila
+      DB_HOST: database
+      DB_PORT: 3306
+      AUTH_DB_NAME: Cliniq_db
+      DB_USER: cliniq_proof
+      DB_PASS: cliniq_proof
+      MAIL_HOST: mailpit
+      MAIL_PORT: 1025
+      MAIL_USER: proof
+      MAIL_PASS: proof
+      MAIL_FROM: proof@plpasig.edu.ph
+      MAIL_FROM_NAME: CLINiQ Proof
+      MAIL_ENCRYPTION: none
+      MAIL_CAPACITY_INITIAL: 100
+      MAIL_CAPACITY_MAX: 100
+    depends_on:
+      database:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    volumes:
+      - ./tests:/proof:ro
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost/patient-portal/patient-register.php"]
+      interval: 5s
+      timeout: 3s
+      retries: 30

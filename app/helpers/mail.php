@@ -83,7 +83,14 @@ function send_cliniq_email_result(string $toEmail, string $toName, string $subje
         $mail->SMTPAuth   = true;
         $mail->Username   = $user;
         $mail->Password   = $pass;
-        $mail->SMTPSecure = $encryption === 'ssl' ? PHPMailer::ENCRYPTION_SMTPS : PHPMailer::ENCRYPTION_STARTTLS;
+        if ($encryption === 'none') {
+            if (app_is_production()) {
+                throw new RuntimeException('Production SMTP must use TLS or SSL.');
+            }
+            $mail->SMTPAutoTLS = false;
+        } else {
+            $mail->SMTPSecure = $encryption === 'ssl' ? PHPMailer::ENCRYPTION_SMTPS : PHPMailer::ENCRYPTION_STARTTLS;
+        }
         $mail->Port       = $port;
         $mail->Timeout    = 10;
 

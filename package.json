@@ -1,6 +1,12 @@
 {
   "name": "cliniq",
   "private": true,
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "jspdf": "^2.5.2",
+    "jspdf-autotable": "^3.8.4",
+    "pdfjs-dist": "^3.11.174"
+  },
   "scripts": {
     "desktop:install": "npm --prefix electron ci",
     "desktop": "npm --prefix electron start",

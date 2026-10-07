@@ -5,6 +5,10 @@ require_login();
 
 $dateFrom = trim((string) ($_GET['date_from'] ?? ''));
 $dateTo = trim((string) ($_GET['date_to'] ?? ''));
+$status = strtolower(trim((string) ($_GET['status'] ?? 'all')));
+if (!in_array($status, ['all', 'incomplete', 'completed'], true)) {
+    $status = 'all';
+}
 if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateFrom)) {
     $dateFrom = '';
 }
@@ -21,6 +25,11 @@ if ($dateFrom !== '') {
 if ($dateTo !== '') {
     $where .= ' AND DATE(r.referral_date) <= ?';
     $params[] = $dateTo;
+}
+if ($status === 'incomplete') {
+    $where .= " AND COALESCE(r.status, '') <> 'Completed'";
+} elseif ($status === 'completed') {
+    $where .= " AND r.status = 'Completed'";
 }
 
 $stmt = auth_db()->prepare("

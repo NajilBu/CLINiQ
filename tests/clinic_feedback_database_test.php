@@ -27,6 +27,7 @@ check_feedback(clinic_feedback_latest($db, '99-00000') === null, 'Unknown ID sho
 check_feedback(clinic_feedback_latest($db, '99-99998') === null, 'Nonstudent should not match.');
 check_feedback((int) clinic_feedback_latest($db, '9999999')['visit_id'] === 2, 'Latest noncancelled visit selection and ID normalization.');
 $context = ['identifier' => '99-99999', 'visit_id' => 2];
+rejects_feedback(fn() => clinic_feedback_submit($db, ['identifier' => '99-99999', 'visit_id' => 0], $input), 'Visitless feedback accepted.');
 rejects_feedback(fn() => clinic_feedback_submit($db, $context, $input), 'Active visit should not accept feedback.');
 $db->exec("UPDATE visits SET status = 'Completed' WHERE visit_id = 2");
 clinic_feedback_submit($db, $context, $input);
@@ -58,8 +59,7 @@ try {
     check_feedback((int) $error->errorInfo[1] === 1062, 'Expected duplicate key rejection.');
 }
 $choices = clinic_feedback_visits($db, '99-99999');
-check_feedback(array_map('intval', array_column($choices, 'visit_id')) === [6, 5, 2, 1], 'Picker must show owned Completed visits newest first.');
-check_feedback((bool) $choices[1]['feedback_submitted'] && !(bool) $choices[3]['feedback_submitted'], 'Rated and unrated visits must be distinguished.');
+check_feedback(array_map('intval', array_column($choices, 'visit_id')) === [6, 1], 'Picker must show only unrated owned Completed visits newest first.');
 check_feedback(clinic_feedback_visit($db, '99-99999', 1) !== null, 'Older visit must be selectable.');
 check_feedback(clinic_feedback_visit($db, '99-99999', 4) === null, 'Another person visit must not match.');
 rejects_feedback(fn() => clinic_feedback_submit($db, ['identifier' => '99-99999', 'visit_id' => 4], $input), 'Another person visit accepted.');

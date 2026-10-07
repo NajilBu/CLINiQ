@@ -11,22 +11,8 @@ function ensure_system_settings_schema(): void
         return;
     }
 
-    $db = auth_db();
-    $tableExists = (bool) $db->query("SHOW TABLES LIKE 'system_settings'")->fetchColumn();
-    if (!$tableExists) {
-        if ($db->inTransaction()) {
-            throw new RuntimeException('System settings are not available while this update is being saved.');
-        }
-
-        $db->exec("
-            CREATE TABLE system_settings (
-                setting_key VARCHAR(120) PRIMARY KEY,
-                setting_value MEDIUMTEXT NOT NULL,
-                updated_by BIGINT UNSIGNED NULL,
-                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                FOREIGN KEY (updated_by) REFERENCES people(id) ON DELETE SET NULL
-            )
-        ");
+    if (!(bool) auth_db()->query("SHOW TABLES LIKE 'system_settings'")->fetchColumn()) {
+        throw new RuntimeException('System settings are unavailable. Run the database migrations before serving requests.');
     }
 
     $ready = true;
@@ -369,13 +355,14 @@ function cliniq_legal_document_fields(string $document): array
 
 function cliniq_legal_markdown_html(string $markdown): string
 {
+    $escape = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
     $html = ''; $paragraph = []; $list = null;
-    $flush = static function () use (&$html, &$paragraph): void { if ($paragraph !== []) { $html .= '<p>' . e(implode(' ', array_map('trim', $paragraph))) . '</p>'; $paragraph = []; } };
+    $flush = static function () use (&$html, &$paragraph, $escape): void { if ($paragraph !== []) { $html .= '<p>' . $escape(implode(' ', array_map('trim', $paragraph))) . '</p>'; $paragraph = []; } };
     foreach (preg_split('/\R/', $markdown) ?: [] as $line) {
         $line = trim($line);
         if ($line === '') { $flush(); if ($list !== null) { $html .= '</' . $list . '>'; $list = null; } continue; }
-        if (preg_match('/^(#{1,3})\s+(.+)$/', $line, $match)) { $flush(); if ($list !== null) { $html .= '</' . $list . '>'; $list = null; } $html .= '<h' . strlen($match[1]) . '>' . e($match[2]) . '</h' . strlen($match[1]) . '>'; continue; }
-        if (preg_match('/^[-*]\s+(.+)$/', $line, $match)) { $flush(); if ($list !== 'ul') { if ($list !== null) { $html .= '</' . $list . '>'; } $list = 'ul'; $html .= '<ul>'; } $html .= '<li>' . e($match[1]) . '</li>'; continue; }
+        if (preg_match('/^(#{1,3})\s+(.+)$/', $line, $match)) { $flush(); if ($list !== null) { $html .= '</' . $list . '>'; $list = null; } $html .= '<h' . strlen($match[1]) . '>' . $escape($match[2]) . '</h' . strlen($match[1]) . '>'; continue; }
+        if (preg_match('/^[-*]\s+(.+)$/', $line, $match)) { $flush(); if ($list !== 'ul') { if ($list !== null) { $html .= '</' . $list . '>'; } $list = 'ul'; $html .= '<ul>'; } $html .= '<li>' . $escape($match[1]) . '</li>'; continue; }
         $paragraph[] = $line;
     }
     $flush(); if ($list !== null) { $html .= '</' . $list . '>'; }
@@ -389,7 +376,7 @@ function cliniq_sanitize_legal_html(string $html): string
     return preg_replace_callback('/<a\b([^>]*)>/i', static function (array $match): string {
         if (!preg_match('/href\s*=\s*(["\'])(.*?)\1/i', $match[1], $href)) { return '<a>'; }
         $url = trim(html_entity_decode($href[2], ENT_QUOTES, 'UTF-8'));
-        return preg_match('/^(?:https:\/\/|[A-Za-z0-9._\/-]+\.php(?:\?[^\s]*)?)$/', $url) ? '<a href="' . e($url) . '" target="_blank" rel="noopener">' : '<a>';
+        return preg_match('/^(?:https:\/\/|[A-Za-z0-9._\/-]+\.php(?:\?[^\s]*)?)$/', $url) ? '<a href="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '" target="_blank" rel="noopener">' : '<a>';
     }, $html) ?? '';
 }
 
