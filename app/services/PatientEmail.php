@@ -170,6 +170,7 @@ function patient_email_event_catalog(): array
         'appointment_confirmed' => ['label' => 'Appointment confirmed', 'automation_key' => 'appointment_reminders', 'template_key' => 'appointment_confirmed', 'email' => true, 'notification' => true],
         'appointment_confirmation_required' => ['label' => 'Appointment completion review required', 'automation_key' => 'appointment_reminders', 'template_key' => 'appointment_confirmed', 'email' => true, 'notification' => true],
         'appointment_reminder' => ['label' => 'Appointment reminder', 'automation_key' => 'appointment_reminders', 'template_key' => 'appointment_reminder', 'email' => true, 'notification' => true],
+        'appointment_declined' => ['label' => 'Appointment request declined', 'automation_key' => 'appointment_changes', 'template_key' => 'appointment_changes', 'email' => true, 'notification' => true],
         'appointment_cancelled' => ['label' => 'Appointment cancelled', 'automation_key' => 'appointment_changes', 'template_key' => 'appointment_changes', 'email' => true, 'notification' => true],
         'appointment_no_show' => ['label' => 'Appointment no-show update', 'automation_key' => 'appointment_changes', 'template_key' => 'appointment_changes', 'email' => true, 'notification' => true],
         'appointment_rescheduled' => ['label' => 'Appointment rescheduled', 'automation_key' => 'appointment_changes', 'template_key' => 'appointment_changes', 'email' => true, 'notification' => true],

@@ -38,7 +38,7 @@ function appointment_status_badge_class(string $status): string
         'Scheduled' => 'badge-in-progress',
         'For Confirmation' => 'badge-pending',
         'Completed' => 'badge-completed',
-        'Cancelled', 'No Show' => 'badge-cancelled',
+        'Declined', 'Cancelled', 'No Show' => 'badge-cancelled',
         default => 'badge-pending',
     };
 }
@@ -634,7 +634,7 @@ function appointment_active_conflicts_for_range(string $date, string $startTime,
 function appointment_status_transition_is_allowed(string $currentStatus, string $nextStatus): bool
 {
     return in_array($nextStatus, match ($currentStatus) {
-        'Pending' => ['Scheduled', 'Cancelled'],
+        'Pending' => ['Scheduled', 'Declined', 'Cancelled'],
         'Scheduled' => ['For Confirmation', 'No Show', 'Cancelled'],
         'For Confirmation' => ['Completed', 'No Show'],
         default => [],

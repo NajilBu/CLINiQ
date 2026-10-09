@@ -14,7 +14,7 @@ $patientProfileStmt = $db->prepare('SELECT COUNT(*) FROM patients WHERE person_i
 $patientProfileStmt->execute([$patientId]);
 $hasAppointmentPatientProfile = (int) $patientProfileStmt->fetchColumn() === 1;
 $allowedAppointmentPurposes = ['Medical Consult', 'Dental'];
-$activeAppointmentStmt = $db->prepare("\n    SELECT appointment_id, appointment_datetime, purpose, status\n    FROM appointments\n    WHERE patient_id = ?\n      AND status IN ('Pending', 'Scheduled', 'For Confirmation')\n      AND purpose IN ('Medical Consult', 'Dental')\n    ORDER BY appointment_datetime DESC, created_at DESC\n");
+$activeAppointmentStmt = $db->prepare("\n    SELECT appointment_id, appointment_datetime, purpose, status\n    FROM appointments\n    WHERE patient_id = ?\n      AND status IN ('Pending', 'Scheduled', 'For Confirmation')\n      AND purpose IN ('Medical Consult', 'Dental')\n    ORDER BY CASE status\n        WHEN 'Scheduled' THEN 1\n        WHEN 'Pending' THEN 2\n        WHEN 'For Confirmation' THEN 3\n        ELSE 4\n    END, appointment_datetime ASC, created_at ASC\n");
 $activeAppointmentStmt->execute([$patientId]);
 $activeAppointments = $activeAppointmentStmt->fetchAll();
 $activeAppointmentsByPurpose = [];
@@ -217,11 +217,12 @@ $historyStmt = $db->prepare("
     SELECT *
     FROM appointments
     WHERE patient_id = ?
+      AND status NOT IN ('Pending', 'Scheduled', 'For Confirmation')
     ORDER BY appointment_datetime DESC, created_at DESC
     LIMIT 5
 ");
 $historyStmt->execute([$patientId]);
-$appointments = $historyStmt->fetchAll();
+$appointmentHistory = $historyStmt->fetchAll();
 
 $firstDay = $month->modify('first day of this month');
 $daysInMonth = (int) $month->format('t');
@@ -486,30 +487,27 @@ render_student_header('Appointments', 'appointment');
     </div>
 </div>
 
-<details class="student-mobile-more appointment-history">
-        <summary>Appointment history</summary>
-<section class="student-card mt-4">
+<section class="student-card mt-4 appointment-history-active" aria-labelledby="active-appointments-title">
     <div class="student-card-header">
         <div>
-            <h2 class="student-card-title">Recent Appointment Requests</h2>
-            <p class="student-card-copy">Your latest requests and clinic decisions</p>
+            <h2 id="active-appointments-title" class="student-card-title">Active bookings</h2>
+            <p class="student-card-copy">Appointments still awaiting clinic or patient action</p>
         </div>
-        <span class="student-badge student-badge-info"><?= count($appointments) ?> Record(s)</span>
+        <span class="student-badge student-badge-info"><?= count($activeAppointments) ?> Active</span>
     </div>
-    <div class="student-card-pad grid gap-3">
-        <?php if (empty($appointments)): ?>
+    <div class="student-card-pad appointment-active-list">
+        <?php if ($activeAppointments === []): ?>
             <div class="student-note student-note-warning">
                 <span class="material-symbols-outlined">event_busy</span>
-                <div><strong>No requests yet.</strong> Submit your first appointment request using the form above.</div>
+                <div><strong>No active bookings.</strong> Your current appointment requests will appear here.</div>
             </div>
         <?php else: ?>
-            <?php foreach ($appointments as $appointment): ?>
+            <?php foreach ($activeAppointments as $appointment): ?>
                 <?php
                 $status = $appointment['status'];
                 $canCancel = in_array($status, ['Pending', 'Scheduled'], true);
                 $badge = match ($status) {
-                    'Scheduled', 'Completed' => 'student-badge-success',
-                    'Cancelled', 'No Show' => 'student-badge-danger',
+                    'Scheduled' => 'student-badge-success',
                     'Pending', 'For Confirmation' => 'student-badge-warning',
                     default => 'student-badge-info',
                 };
@@ -518,39 +516,85 @@ render_student_header('Appointments', 'appointment');
                     'For Confirmation' => 'For Completion',
                     default => $status,
                 };
+                $statusCopy = match ($status) {
+                    'Scheduled' => 'Your visit is confirmed. Please arrive 10 minutes before your scheduled time.',
+                    'Pending' => 'Awaiting clinic approval. Please do not visit the clinic until your request is confirmed.',
+                    'For Confirmation' => 'Your appointment time has passed. Clinic staff are recording the visit outcome.',
+                    default => 'This appointment still needs clinic action.',
+                };
                 ?>
-                <div class="student-document-card">
+                <article class="student-appointment-active student-appointment-active--<?= student_e(strtolower(str_replace(' ', '-', $status))) ?>">
                     <span class="student-icon-box">
-                        <span class="material-symbols-outlined">event_note</span>
+                        <span class="material-symbols-outlined"><?= $status === 'Scheduled' ? 'event_available' : 'pending_actions' ?></span>
                     </span>
-                    <div class="student-document-meta">
+                    <div class="student-appointment-active-copy">
                         <div class="flex flex-wrap items-center gap-2">
                             <h3><?= student_e($appointment['purpose']) ?></h3>
                             <span class="student-badge <?= student_e($badge) ?>"><?= student_e($displayStatus) ?></span>
                         </div>
-                        <p><?= student_e(date('F j, Y \a\t g:i A', strtotime($appointment['appointment_datetime']))) ?></p>
-                        <?php if ($status === 'For Confirmation'): ?>
-                            <p><strong>Status:</strong> Your appointment time has passed. Clinic staff will mark it completed or no-show.</p>
-                        <?php endif; ?>
-                        <?php if ($status === 'Cancelled' && trim((string) ($appointment['cancellation_reason'] ?? '')) !== ''): ?>
-                            <p><strong>Reason:</strong> <?= student_e($appointment['cancellation_reason']) ?></p>
-                        <?php endif; ?>
+                        <p class="student-appointment-date"><span class="material-symbols-outlined" aria-hidden="true">schedule</span><?= student_e(date('F j, Y \a\t g:i A', strtotime($appointment['appointment_datetime']))) ?></p>
+                        <p class="student-appointment-status-copy"><?= student_e($statusCopy) ?></p>
                     </div>
-                    <div class="student-appointment-actions">
-                        <span class="student-badge <?= student_e($badge) ?>"><?= student_e($displayStatus) ?></span>
-                        <?php if ($canCancel): ?>
+                    <?php if ($canCancel): ?>
+                        <details class="student-appointment-cancel">
+                            <summary>Cancel booking</summary>
                             <form method="post" class="student-cancel-form">
                                 <input type="hidden" name="action" value="cancel_appointment">
                                 <input type="hidden" name="appointment_id" value="<?= (int) $appointment['appointment_id'] ?>">
-                                <input class="student-input student-cancel-input" type="text" name="cancellation_reason" placeholder="Reason for cancellation" required maxlength="500">
+                                <label class="student-label" for="cancellation-reason-<?= (int) $appointment['appointment_id'] ?>">Reason for cancellation</label>
+                                <input id="cancellation-reason-<?= (int) $appointment['appointment_id'] ?>" class="student-input student-cancel-input" type="text" name="cancellation_reason" placeholder="Tell the clinic why you need to cancel" required maxlength="500">
                                 <button type="submit" class="student-button-danger">
-                                    Cancel
+                                    Confirm cancellation
                                     <span class="material-symbols-outlined">cancel</span>
                                 </button>
                             </form>
+                        </details>
+                    <?php endif; ?>
+                </article>
+            <?php endforeach; ?>
+        <?php endif; ?>
+    </div>
+</section>
+
+<details class="student-mobile-more appointment-history">
+        <summary>Appointment history</summary>
+<section class="student-card mt-4" aria-labelledby="appointment-history-title">
+    <div class="student-card-header">
+        <div>
+            <h2 id="appointment-history-title" class="student-card-title">Recent history</h2>
+            <p class="student-card-copy">Your latest completed requests and clinic decisions</p>
+        </div>
+        <span class="student-badge student-badge-info"><?= count($appointmentHistory) ?> Record(s)</span>
+    </div>
+    <div class="student-card-pad appointment-history-list">
+        <?php if ($appointmentHistory === []): ?>
+            <div class="student-note student-note-warning">
+                <span class="material-symbols-outlined">history</span>
+                <div><strong>No appointment history yet.</strong> Completed and closed requests will appear here.</div>
+            </div>
+        <?php else: ?>
+            <?php foreach ($appointmentHistory as $appointment): ?>
+                <?php
+                $status = $appointment['status'];
+                $badge = match ($status) {
+                    'Completed' => 'student-badge-success',
+                    'Declined', 'Cancelled', 'No Show' => 'student-badge-danger',
+                    default => 'student-badge-info',
+                };
+                ?>
+                <article class="student-appointment-history-item">
+                    <span class="student-icon-box"><span class="material-symbols-outlined" aria-hidden="true">event_note</span></span>
+                    <div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <h3><?= student_e($appointment['purpose']) ?></h3>
+                            <span class="student-badge <?= student_e($badge) ?>"><?= student_e($status) ?></span>
+                        </div>
+                        <p><?= student_e(date('F j, Y \a\t g:i A', strtotime($appointment['appointment_datetime']))) ?></p>
+                        <?php if (in_array($status, ['Declined', 'Cancelled'], true) && trim((string) ($appointment['cancellation_reason'] ?? '')) !== ''): ?>
+                            <p><strong>Reason:</strong> <?= student_e($appointment['cancellation_reason']) ?></p>
                         <?php endif; ?>
                     </div>
-                </div>
+                </article>
             <?php endforeach; ?>
         <?php endif; ?>
     </div>

@@ -7,7 +7,7 @@ ensure_appointment_schema();
 appointment_sync_overdue_confirmations();
 
 $filterStatus = $_GET['status'] ?? 'Pending';
-$allowedFilters = ['all', 'Pending', 'Scheduled', 'For Confirmation', 'Completed', 'Cancelled', 'No Show'];
+$allowedFilters = ['all', 'Pending', 'Scheduled', 'For Confirmation', 'Completed', 'Declined', 'Cancelled', 'No Show'];
 if (!in_array($filterStatus, $allowedFilters, true)) {
     $filterStatus = 'Pending';
 }
@@ -51,7 +51,7 @@ $stmt = appointment_db()->prepare("
     LEFT JOIN departments ed ON ed.id = se.department_id
     WHERE {$where}
     ORDER BY
-        CASE a.status WHEN 'Pending' THEN 0 WHEN 'Scheduled' THEN 1 WHEN 'For Confirmation' THEN 2 ELSE 3 END,
+        CASE a.status WHEN 'Pending' THEN 0 WHEN 'Scheduled' THEN 1 WHEN 'For Confirmation' THEN 2 WHEN 'Completed' THEN 3 WHEN 'Declined' THEN 4 WHEN 'Cancelled' THEN 5 WHEN 'No Show' THEN 6 ELSE 7 END,
         a.appointment_datetime ASC,
         a.created_at DESC
 ");
@@ -84,9 +84,9 @@ $columns = [
     ['headerName' => 'Notes', 'field' => 'notes', 'minWidth' => 220],
     ['headerName' => 'Requested', 'field' => 'created', 'sortField' => 'createdSort', 'sortType' => 'date', 'width' => 150],
 ];
-if (in_array($filterStatus, ['Cancelled', 'all'], true)) {
+if (in_array($filterStatus, ['Declined', 'Cancelled'], true)) {
     array_splice($columns, 5, 0, [[
-        'headerName' => 'Cancellation Reason',
+        'headerName' => $filterStatus === 'Declined' ? 'Reason for Declining' : 'Cancellation Reason',
         'field' => 'cancelReason',
         'minWidth' => 240,
     ]]);
@@ -101,8 +101,8 @@ foreach ($appointments as $appointment) {
     if (!$patientHistory) {
         $historyHtml .= '<p class="text-sm text-slate-500 mb-0">No previous appointment history.</p>';
     } else {
-        if (count(array_filter($patientHistory, static fn(array $history): bool => $history['status'] === 'Cancelled')) > 0) {
-            $historyHtml .= '<p class="text-xs font-extrabold text-red-600 mb-2">This patient had a cancelled appointment in the last three records.</p>';
+        if (count(array_filter($patientHistory, static fn(array $history): bool => in_array($history['status'], ['Declined', 'Cancelled'], true))) > 0) {
+            $historyHtml .= '<p class="text-xs font-extrabold text-red-600 mb-2">This patient had a declined or cancelled appointment in the last three records.</p>';
         }
         $historyHtml .= '<div class="grid gap-2">';
         foreach ($patientHistory as $history) {
@@ -131,9 +131,9 @@ foreach ($appointments as $appointment) {
 
     if ($status === 'Pending') {
         $actions .= '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['appointment_id'] . '"><input type="hidden" name="status" value="Scheduled"><button class="btn btn-sm btn-primary" title="Approve appointment" data-confirm-submit data-confirm-type="primary" data-confirm-title="Approve this appointment?" data-confirm-message="This will schedule the appointment request." data-confirm-toast="Approving appointment..."><span class="material-symbols-outlined text-[14px]">event_available</span> Approve</button></form>'
-            . '<button type="button" class="btn btn-sm btn-ghost" title="Cancel request" aria-label="Cancel request" data-cancel-appointment data-cancel-id="' . (int)$appointment['appointment_id'] . '" data-cancel-title="Cancel appointment request"><span class="material-symbols-outlined text-[14px]">cancel</span> Cancel</button>';
+            . '<button type="button" class="btn btn-sm btn-ghost" title="Decline request" aria-label="Decline request" data-appointment-decision data-decision-id="' . (int)$appointment['appointment_id'] . '" data-decision-status="Declined" data-decision-title="Decline appointment request" data-decision-reason-label="Reason for declining" data-decision-submit-label="Decline Request"><span class="material-symbols-outlined text-[14px]">block</span> Decline</button>';
     } elseif ($status === 'Scheduled') {
-        $actions .= '<button type="button" class="btn btn-sm btn-ghost" title="Cancel appointment" aria-label="Cancel appointment" data-cancel-appointment data-cancel-id="' . (int)$appointment['appointment_id'] . '" data-cancel-title="Cancel scheduled appointment"><span class="material-symbols-outlined text-[14px]">cancel</span> Cancel</button>';
+        $actions .= '<button type="button" class="btn btn-sm btn-ghost" title="Cancel appointment" aria-label="Cancel appointment" data-appointment-decision data-decision-id="' . (int)$appointment['appointment_id'] . '" data-decision-status="Cancelled" data-decision-title="Cancel scheduled appointment" data-decision-reason-label="Cancellation Reason" data-decision-submit-label="Cancel Appointment"><span class="material-symbols-outlined text-[14px]">cancel</span> Cancel</button>';
         if ($canMarkNoShow && appointment_can_mark_no_show($appointment)) {
             $actions .= '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['appointment_id'] . '"><input type="hidden" name="status" value="No Show"><button class="btn btn-sm btn-ghost" title="Mark no-show" data-confirm-submit data-confirm-type="danger" data-confirm-title="Mark as no-show?" data-confirm-message="This confirms the patient did not attend the appointment." data-confirm-toast="Marking no-show..."><span class="material-symbols-outlined text-[14px]">person_cancel</span> No Show</button></form>';
         }
@@ -150,7 +150,7 @@ foreach ($appointments as $appointment) {
         'studentHtml' => '<div class="flex items-center gap-3"><div class="avatar ' . e(avatar_color($fullName)) . '">' . e(initials($fullName)) . '</div><div><strong class="text-sm text-slate-800">' . e($fullName) . '</strong><div class="text-xs font-bold text-slate-400">' . e($appointment['id_number']) . ' · ' . e($appointment['course_section'] ?: 'No course') . '</div></div></div>',
         'purpose' => $appointment['purpose'],
         'statusHtml' => '<span class="badge ' . e(appointment_status_badge_class($status)) . '">' . e(appointment_status_display_label($status)) . '</span>',
-        'statusSort' => array_search($status, ['Pending', 'Scheduled', 'For Confirmation', 'Completed', 'No Show', 'Cancelled'], true),
+        'statusSort' => array_search($status, ['Pending', 'Scheduled', 'For Confirmation', 'Completed', 'Declined', 'No Show', 'Cancelled'], true),
         'notes' => $patientNote !== '' ? $patientNote : '—',
         'cancelReason' => $appointment['cancellation_reason'] ?: '-',
         'created' => date('M d, g:i A', strtotime($appointment['created_at'])),
@@ -197,6 +197,7 @@ render_clinic_command_header(
                 'Scheduled' => 'Approved',
                 'For Confirmation' => 'For Completion',
                 'Completed' => 'Completed',
+                'Declined' => 'Declined',
                 'Cancelled' => 'Cancelled',
                 'No Show' => 'No Show',
                 'all' => 'All',
@@ -264,22 +265,22 @@ render_clinic_command_header(
                 <span class="material-symbols-outlined">event_busy</span>
             </div>
             <div>
-                <h3 id="appointmentCancelTitle" class="font-headline text-lg font-extrabold text-[#1c2a59] mb-1">Cancel appointment</h3>
+                <h3 id="appointmentDecisionTitle" class="font-headline text-lg font-extrabold text-[#1c2a59] mb-1">Cancel appointment</h3>
                 <p class="text-sm font-bold text-slate-500">Please provide a reason. This will be visible in the appointment record.</p>
             </div>
         </div>
         <form method="post" action="update.php">
-            <input type="hidden" name="id" id="appointmentCancelId" value="">
-            <input type="hidden" name="status" value="Cancelled">
+            <input type="hidden" name="id" id="appointmentDecisionId" value="">
+            <input type="hidden" name="status" id="appointmentDecisionStatus" value="Cancelled">
             <div class="mb-5">
-                <label class="clinic-label" for="appointmentCancellationReason">Cancellation Reason</label>
-                <textarea id="appointmentCancellationReason" name="cancellation_reason" class="clinic-textarea" required maxlength="500" placeholder="Example: Student requested reschedule, clinic schedule conflict, or another reason."></textarea>
+                <label id="appointmentDecisionReasonLabel" class="clinic-label" for="appointmentDecisionReason">Cancellation Reason</label>
+                <textarea id="appointmentDecisionReason" name="cancellation_reason" class="clinic-textarea" required maxlength="500" placeholder="Example: Student requested reschedule, clinic schedule conflict, or another reason."></textarea>
             </div>
             <div class="flex justify-end gap-3">
                 <button type="button" onclick="closeModal('appointmentCancelModal')" class="btn btn-ghost">Back</button>
                 <button type="submit" class="btn btn-danger">
                     <span class="material-symbols-outlined text-[16px]">cancel</span>
-                    Cancel Appointment
+                    <span id="appointmentDecisionSubmitLabel">Cancel Appointment</span>
                 </button>
             </div>
         </form>
@@ -288,18 +289,21 @@ render_clinic_command_header(
 
 <script>
     document.addEventListener('click', (event) => {
-        const button = event.target.closest('[data-cancel-appointment]');
+        const button = event.target.closest('[data-appointment-decision]');
         if (!button) {
             return;
         }
 
         event.preventDefault();
         closeModal('rowActionsModal');
-        document.getElementById('appointmentCancelId').value = button.dataset.cancelId || '';
-        document.getElementById('appointmentCancelTitle').textContent = button.dataset.cancelTitle || 'Cancel appointment';
-        document.getElementById('appointmentCancellationReason').value = '';
+        document.getElementById('appointmentDecisionId').value = button.dataset.decisionId || '';
+        document.getElementById('appointmentDecisionStatus').value = button.dataset.decisionStatus || 'Cancelled';
+        document.getElementById('appointmentDecisionTitle').textContent = button.dataset.decisionTitle || 'Cancel appointment';
+        document.getElementById('appointmentDecisionReasonLabel').textContent = button.dataset.decisionReasonLabel || 'Cancellation Reason';
+        document.getElementById('appointmentDecisionSubmitLabel').textContent = button.dataset.decisionSubmitLabel || 'Cancel Appointment';
+        document.getElementById('appointmentDecisionReason').value = '';
         showModal('appointmentCancelModal');
-        setTimeout(() => document.getElementById('appointmentCancellationReason').focus(), 60);
+        setTimeout(() => document.getElementById('appointmentDecisionReason').focus(), 60);
     });
 </script>
 

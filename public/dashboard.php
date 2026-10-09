@@ -609,7 +609,7 @@ render_header('Main Dashboard');
                         $isConfirmation = ($pa['status'] ?? '') === 'For Confirmation';
                         $paHistory = $dashboardLatestAppointments[(int) $pa['patient_id']] ?? [];
                         $paLatest = $paHistory[0] ?? null;
-                        $paHadCancellation = count(array_filter($paHistory, static fn(array $history): bool => $history['status'] === 'Cancelled')) > 0;
+                        $paHadCancellation = count(array_filter($paHistory, static fn(array $history): bool => in_array($history['status'], ['Declined', 'Cancelled'], true))) > 0;
                     ?>
                         <div class="p-4 hover:bg-slate-50 transition-colors">
                             <div class="flex items-start gap-3">
@@ -634,7 +634,7 @@ render_header('Main Dashboard');
                                         <p class="text-xs text-slate-500 mb-3 line-clamp-1"><?= e($pa['purpose']) ?></p>
                                     <?php endif; ?>
                                     <p class="text-[11px] font-bold text-slate-400 mb-3">Latest appointment: <?= $paLatest ? e(date('M d, Y · g:i A', strtotime($paLatest['appointment_datetime'])) . ' · ' . $paLatest['purpose'] . ' · ' . appointment_status_display_label((string) $paLatest['status'])) : 'None' ?></p>
-                                    <?php if ($paHadCancellation): ?><p class="text-[11px] font-extrabold text-red-600 mb-3">Cancelled appointment in the last three records.</p><?php endif; ?>
+                                    <?php if ($paHadCancellation): ?><p class="text-[11px] font-extrabold text-red-600 mb-3">Declined or cancelled appointment in the last three records.</p><?php endif; ?>
                                     <div class="flex items-center gap-2">
                                         <form method="post" action="<?= app_url('appointments/update.php') ?>" class="flex-1">
                                             <input type="hidden" name="id" value="<?= $paId ?>">
@@ -650,22 +650,27 @@ render_header('Main Dashboard');
                                                 <?= $isConfirmation ? 'Completed' : 'Approve' ?>
                                             </button>
                                         </form>
-                                        <form method="post" action="<?= app_url('appointments/update.php') ?>">
-                                            <input type="hidden" name="id" value="<?= $paId ?>">
-                                            <input type="hidden" name="status" value="<?= $isConfirmation ? 'No Show' : 'Cancelled' ?>">
-                                            <?php if (!$isConfirmation): ?><input type="hidden" name="cancellation_reason" value="Declined by clinic staff."><?php endif; ?>
-                                            <input type="hidden" name="redirect" value="../dashboard.php">
-                                            <button type="submit" class="btn btn-sm btn-ghost btn-cancel-icon"
-                                                title="<?= $isConfirmation ? 'Mark as no-show' : 'Decline request' ?>"
-                                                aria-label="<?= $isConfirmation ? 'Mark appointment as no-show' : 'Decline appointment request' ?>"
-                                                data-confirm-submit
-                                                data-confirm-type="danger"
-                                                data-confirm-title="<?= $isConfirmation ? 'Mark as no-show?' : 'Decline this request?' ?>"
-                                                data-confirm-message="<?= $isConfirmation ? 'This will mark the appointment for ' . e($paName) . ' as a no-show.' : 'This will cancel the appointment request for ' . e($paName) . '.' ?>"
-                                                data-confirm-toast="<?= $isConfirmation ? 'Marking no-show...' : 'Declining request...' ?>">
-                                                <span class="material-symbols-outlined text-[16px]"><?= $isConfirmation ? 'person_off' : 'cancel' ?></span>
-                                            </button>
-                                        </form>
+                                        <?php if ($isConfirmation): ?>
+                                            <form method="post" action="<?= app_url('appointments/update.php') ?>">
+                                                <input type="hidden" name="id" value="<?= $paId ?>">
+                                                <input type="hidden" name="status" value="No Show">
+                                                <input type="hidden" name="redirect" value="../dashboard.php">
+                                                <button type="submit" class="btn btn-sm btn-ghost btn-cancel-icon"
+                                                    title="Mark as no-show"
+                                                    aria-label="Mark appointment as no-show"
+                                                    data-confirm-submit
+                                                    data-confirm-type="danger"
+                                                    data-confirm-title="Mark as no-show?"
+                                                    data-confirm-message="<?= 'This will mark the appointment for ' . e($paName) . ' as a no-show.' ?>"
+                                                    data-confirm-toast="Marking no-show...">
+                                                    <span class="material-symbols-outlined text-[16px]">person_off</span>
+                                                </button>
+                                            </form>
+                                        <?php else: ?>
+                                            <a href="<?= e(app_url('appointments/index.php?status=Pending')) ?>" class="btn btn-sm btn-ghost btn-cancel-icon" title="Review or decline request" aria-label="Review or decline appointment request">
+                                                <span class="material-symbols-outlined text-[16px]">rate_review</span>
+                                            </a>
+                                        <?php endif; ?>
                                     </div>
                                 </div>
                             </div>

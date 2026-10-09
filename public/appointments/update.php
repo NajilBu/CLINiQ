@@ -11,7 +11,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $id = (int)($_POST['id'] ?? 0);
     $status = $_POST['status'] ?? '';
     $cancellationReason = trim($_POST['cancellation_reason'] ?? '');
-    $allowed = ['Pending', 'Scheduled', 'For Confirmation', 'Completed', 'Cancelled', 'No Show'];
+    $allowed = ['Pending', 'Scheduled', 'For Confirmation', 'Completed', 'Declined', 'Cancelled', 'No Show'];
     $redirect = $_POST['redirect'] ?? 'index.php';
     $allowedRedirects = ['index.php', '../dashboard.php'];
     $reviewedByPersonId = (int) (current_user()['person_id'] ?? 0) ?: null;
@@ -19,8 +19,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($id > 0 && in_array($status, $allowed, true)) {
         $db = appointment_db();
         try {
-            if ($status === 'Cancelled' && $cancellationReason === '') {
-                throw new InvalidArgumentException('Please provide a reason before cancelling the appointment.');
+            if (in_array($status, ['Declined', 'Cancelled'], true) && $cancellationReason === '') {
+                throw new InvalidArgumentException($status === 'Declined'
+                    ? 'Please provide a reason before declining the appointment request.'
+                    : 'Please provide a reason before cancelling the appointment.');
             }
 
             $db->beginTransaction();
@@ -67,11 +69,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $changed = (string) $appointment['status'] !== $status
-                || ($status === 'Cancelled' && (string) ($appointment['cancellation_reason'] ?? '') !== $cancellationReason);
+                || (in_array($status, ['Declined', 'Cancelled'], true) && (string) ($appointment['cancellation_reason'] ?? '') !== $cancellationReason);
             if ($changed) {
                 if ($status === 'Cancelled') {
                     $stmt = $db->prepare('UPDATE appointments SET status = ?, cancellation_reason = ?, cancelled_by = ?, reviewed_by_person_id = ? WHERE appointment_id = ?');
                     $stmt->execute([$status, $cancellationReason, 'Clinic', $reviewedByPersonId, $id]);
+                    $appointment['cancellation_reason'] = $cancellationReason;
+                } elseif ($status === 'Declined') {
+                    $stmt = $db->prepare('UPDATE appointments SET status = ?, cancellation_reason = ?, cancelled_by = NULL, reviewed_by_person_id = ? WHERE appointment_id = ?');
+                    $stmt->execute([$status, $cancellationReason, $reviewedByPersonId, $id]);
                     $appointment['cancellation_reason'] = $cancellationReason;
                 } else {
                     $stmt = $db->prepare('UPDATE appointments SET status = ?, cancellation_reason = NULL, cancelled_by = NULL, reviewed_by_person_id = ? WHERE appointment_id = ?');
@@ -84,15 +90,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($patientId > 0 && in_array($status, ['Scheduled', 'For Confirmation'], true)) {
                     patient_email_queue_notification($patientId, $status === 'Scheduled' ? 'appointment_confirmed' : 'appointment_confirmation_required', 'appointment_reminders', $status === 'Scheduled' ? 'Appointment confirmed' : 'Appointment awaiting completion', $status === 'Scheduled' ? "Your clinic appointment for {$when} has been confirmed." : "Your clinic appointment for {$when} has passed and is awaiting clinic completion review.", 'appointment', (int) $appointment['appointment_id'], $reviewedByPersonId, null, $status);
                 }
-                if ($patientId > 0 && in_array($status, ['Cancelled', 'No Show'], true)) {
+                if ($patientId > 0 && in_array($status, ['Declined', 'Cancelled', 'No Show'], true)) {
                     $reason = trim((string) ($appointment['cancellation_reason'] ?? ''));
-                    patient_email_queue_notification($patientId, 'appointment_' . strtolower(str_replace(' ', '_', $status)), 'appointment_changes', 'Appointment update', "Your clinic appointment for {$when} was marked {$status}." . ($reason !== '' ? " Reason: {$reason}" : ''), 'appointment', (int) $appointment['appointment_id'], $reviewedByPersonId, null, $status);
+                    $isDeclined = $status === 'Declined';
+                    patient_email_queue_notification($patientId, 'appointment_' . strtolower(str_replace(' ', '_', $status)), 'appointment_changes', $isDeclined ? 'Appointment request declined' : 'Appointment update', $isDeclined ? "Your clinic appointment request for {$when} was declined." . ($reason !== '' ? " Reason: {$reason}" : '') : "Your clinic appointment for {$when} was marked {$status}." . ($reason !== '' ? " Reason: {$reason}" : ''), 'appointment', (int) $appointment['appointment_id'], $reviewedByPersonId, null, $status);
                 }
             }
             $db->commit();
 
             $message = match ($status) {
                 'Scheduled' => 'Appointment request approved and added to the clinic schedule.',
+                'Declined' => 'Appointment request declined.',
                 'For Confirmation' => 'Appointment is awaiting completion review.',
                 'Cancelled' => 'Appointment request cancelled.',
                 'Completed' => 'Appointment marked as completed.',

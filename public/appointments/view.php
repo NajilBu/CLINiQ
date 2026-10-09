@@ -37,7 +37,7 @@ if (!$appointment) {
     exit('Appointment record not found.');
 }
 
-$allowedReturnStatuses = ['all', 'Pending', 'Scheduled', 'For Confirmation', 'Completed', 'Cancelled', 'No Show'];
+$allowedReturnStatuses = ['all', 'Pending', 'Scheduled', 'For Confirmation', 'Completed', 'Declined', 'Cancelled', 'No Show'];
 $returnStatus = (string) ($_GET['status'] ?? 'all');
 if (!in_array($returnStatus, $allowedReturnStatuses, true)) {
     $returnStatus = 'all';
@@ -118,7 +118,7 @@ render_clinic_command_header(
     </div>
     <?php if ($cancellationReason !== ''): ?>
         <div class="mt-5 rounded-2xl border border-red-100 bg-red-50 p-5">
-            <p class="clinic-label mb-2">Cancellation reason</p>
+            <p class="clinic-label mb-2"><?= ($appointment['status'] ?? '') === 'Declined' ? 'Reason for declining' : 'Cancellation reason' ?></p>
             <p class="text-sm text-slate-700 leading-6 mb-0"><?= nl2br(e($cancellationReason)) ?></p>
         </div>
     <?php endif; ?>

@@ -1436,7 +1436,7 @@ function cliniq_mail_template_definitions(): array
         ],
         'appointment_changes' => [
             'label' => 'Appointment Changes',
-            'description' => 'Sent when an appointment is cancelled, rescheduled, or requires patient attention.',
+            'description' => 'Sent when an appointment request is declined, an appointment is cancelled or rescheduled, or it requires patient attention.',
             'icon' => 'event_busy',
             'action_hint' => 'The button opens the patient appointment page.',
             'allowed_placeholders' => ['{{patient_name}}', '{{clinic_name}}'],
@@ -1444,7 +1444,7 @@ function cliniq_mail_template_definitions(): array
             'default' => [
                 'subject' => '[{{clinic_name}}] Your appointment was updated',
                 'heading' => 'Your appointment needs attention, {{patient_name}}',
-                'message' => 'Your clinic appointment has been cancelled or changed. Please log in to review the latest appointment information and next steps.',
+                'message' => 'Your clinic appointment request was declined, cancelled, or changed. Please log in to review the latest appointment information and next steps.',
                 'button_label' => 'Review Appointment',
                 'footer' => 'Contact {{clinic_name}} if you need help arranging a new appointment.',
             ],

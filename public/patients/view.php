@@ -191,7 +191,7 @@ $upcomingAppointments = [];
 $appointmentHistory = [];
 foreach ($appointments as $appointment) {
     $appointmentTimestamp = strtotime((string) ($appointment['appointment_datetime'] ?? '')) ?: 0;
-    $isPastStatus = in_array((string) ($appointment['status'] ?? ''), ['Completed', 'Cancelled', 'No Show'], true);
+    $isPastStatus = in_array((string) ($appointment['status'] ?? ''), ['Completed', 'Declined', 'Cancelled', 'No Show'], true);
     if (!$isPastStatus && $appointmentTimestamp >= $nowTimestamp) {
         $upcomingAppointments[] = $appointment;
     } else {
