@@ -92,6 +92,7 @@
         });
 
         form.addEventListener('submit', (event) => {
+            if (event.defaultPrevented) return;
             guardian.value = titleCaseName(guardian.value);
             primary.value = formatPhone(primary.value);
             secondary.value = formatPhone(secondary.value);

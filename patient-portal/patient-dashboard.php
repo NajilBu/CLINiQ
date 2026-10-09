@@ -209,7 +209,15 @@ $appointmentStmt = appointment_db()->prepare("
     SELECT *
     FROM appointments
     WHERE patient_id = ?
-    ORDER BY appointment_datetime DESC, created_at DESC
+    ORDER BY CASE status
+        WHEN 'Scheduled' THEN 1
+        WHEN 'Pending' THEN 2
+        WHEN 'For Confirmation' THEN 3
+        WHEN 'Completed' THEN 4
+        WHEN 'Cancelled' THEN 5
+        WHEN 'No Show' THEN 6
+        ELSE 7
+    END ASC, appointment_datetime DESC, created_at DESC
     LIMIT 1
 ");
 $appointmentStmt->execute([$appointmentPatientId]);

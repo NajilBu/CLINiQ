@@ -289,6 +289,7 @@ render_student_header('Emergency Health Passport', 'passport');
                         class="student-input<?= isset($passportMissingFields['allergies']) ? ' passport-required-field' : '' ?>"
                         value="<?= student_e($passport['allergies']) ?>"
                         placeholder="e.g. Penicillin, Shellfish, Dust (comma-separated)"
+                        required
                     >
                     <p class="passport-hint">Separate multiple allergies with commas.</p>
                 </div>
@@ -321,6 +322,7 @@ render_student_header('Emergency Health Passport', 'passport');
                         name="instructions"
                         class="student-textarea passport-textarea-lg<?= isset($passportMissingFields['instructions']) ? ' passport-required-field' : '' ?>"
                         placeholder="e.g. Do NOT give penicillin. Inhaler is in the bag. Call guardian if unconscious."
+                        required
                     ><?= student_e($passport['instructions']) ?></textarea>
                     <p class="passport-hint">Keep this concise. Responders need to read it fast.</p>
                 </div>
@@ -639,15 +641,21 @@ render_student_header('Emergency Health Passport', 'passport');
     if (isPhone) {
         form.noValidate = true;
         form.addEventListener('submit', (event) => {
-            const requiredContactFields = ['guardian_name', 'relationship', 'primary_contact']
+            const requiredPassportFields = ['allergies', 'instructions', 'guardian_name', 'relationship', 'primary_contact']
                 .map((id) => form.querySelector(`#${id}`))
                 .filter(Boolean);
-            const invalidField = requiredContactFields.find((field) => !field.checkValidity());
+            const invalidField = requiredPassportFields.find((field) => !field.checkValidity());
             if (!invalidField) return;
             event.preventDefault();
             if (mobileSaveHint) mobileSaveHint.hidden = false;
-            openPassportGroup('emergency', true);
-        });
+            form.classList.remove('passport-tab-profile', 'passport-tab-access');
+            form.classList.add('passport-tab-emergency');
+            passportTabs.forEach((tab) => tab.classList.toggle('is-active', tab.dataset.passportTab === 'emergency'));
+            const panel = invalidField.closest('details[data-passport-group]');
+            if (panel) panel.open = true;
+            invalidField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            invalidField.focus({ preventScroll: true });
+        }, true);
     }
     passportTabs.forEach((tab) => {
         tab.addEventListener('click', () => {

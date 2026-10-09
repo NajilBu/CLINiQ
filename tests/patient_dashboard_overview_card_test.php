@@ -30,6 +30,10 @@ if (strpos($source, 'if ($requiredActionCount > 0):') === false
 if (strpos($source, 'patient-passport.php') === false || strpos($source, 'patient-ape-status.php') === false || strpos($source, '$feedbackPortalUrl') === false) {
     throw new RuntimeException('Dashboard task destinations must remain available.');
 }
+if (strpos($source, "ORDER BY CASE status\n        WHEN 'Scheduled' THEN 1\n        WHEN 'Pending' THEN 2") === false
+    || strpos($source, "WHEN 'Cancelled' THEN 5") === false) {
+    throw new RuntimeException('Dashboard must prioritize approved and pending appointments above cancelled history.');
+}
 if (strpos($source, '$passportMissing[] = \'blood type\';') !== false
     || strpos($source, 'The portal will unlock the next action') !== false) {
     throw new RuntimeException('Dashboard must not present clinic-managed blood type or false task gating as a student action.');

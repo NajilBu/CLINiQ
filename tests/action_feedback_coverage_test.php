@@ -24,13 +24,16 @@ function action_feedback_source(string $root, string $path): string
 $loader = action_feedback_source($root, 'public/assets/js/submission-loading.js');
 foreach ([
     "(form.getAttribute('method') || 'get').toUpperCase() !== 'POST'",
-    "form.dataset.noLoading === 'true'",
+    "form.matches('[data-no-loading]')",
     "form.dataset.noAjax !== 'true'",
     "document.querySelector('[data-cliniq-page-content]')",
     "form.closest('.app-main')",
     "form.target && form.target !== '_self'",
     'new URL(form.getAttribute(\'action\') || window.location.href, window.location.href).origin === window.location.origin',
     'event.defaultPrevented',
+    'window.setTimeout(() => {',
+    "window.addEventListener('pageshow', clearLoading)",
+    'data-cliniq-loading-disabled',
     'button.disabled = true',
     "role', 'status'",
     "aria-live', 'polite'",
@@ -48,6 +51,27 @@ foreach ([
         $path . ' must load the shared submission feedback script.'
     );
 }
+
+$studentLayout = action_feedback_source($root, 'patient-portal/includes/patient-layout.php');
+expect_action_feedback(
+    !str_contains($studentLayout, 'submission-loading.js?v=1')
+        && str_contains($studentLayout, "filemtime(__DIR__ . '/../../public/assets/js/submission-loading.js')"),
+    'Student portal must cache-bust the shared submission loader after deployment.'
+);
+
+$passport = action_feedback_source($root, 'patient-portal/patient-passport.php');
+expect_action_feedback(
+    str_contains($passport, "const requiredPassportFields = ['allergies', 'instructions', 'guardian_name', 'relationship', 'primary_contact']")
+        && str_contains($passport, "const panel = invalidField.closest('details[data-passport-group]');")
+        && str_contains($passport, '}, true);'),
+    'Mobile Passport validation must reveal the first missing required field before a save is attempted.'
+);
+
+$emergencyContact = action_feedback_source($root, 'public/assets/js/emergency-contact.js');
+expect_action_feedback(
+    str_contains($emergencyContact, 'if (event.defaultPrevented) return;'),
+    'Emergency-contact validation must not override a page-specific cancelled submit.'
+);
 
 $outcomeRoutes = [
     'public/alerts/create.php' => 'flash_message(',
