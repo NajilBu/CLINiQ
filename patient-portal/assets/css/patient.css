@@ -1587,6 +1587,125 @@ html.student-dark .student-feedback-visit-details div { background:rgba(255,255,
     padding: 0.5rem 0.65rem;
 }
 
+.appointment-history-active {
+    border-color: #b9d9c3;
+}
+
+.appointment-active-list,
+.appointment-history-list {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.student-appointment-active,
+.student-appointment-history-item {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 0.85rem;
+    padding: 1rem;
+    border: 1px solid var(--student-border-soft);
+    border-radius: 0.8rem;
+    background: #ffffff;
+}
+
+.student-appointment-active {
+    border-color: #b9d9c3;
+    background: #f6fcf7;
+}
+
+.student-appointment-active-copy h3,
+.student-appointment-history-item h3 {
+    margin: 0;
+    color: var(--student-fg);
+    font-size: 0.9rem;
+    font-weight: 800;
+}
+
+.student-appointment-date,
+.student-appointment-status-copy,
+.student-appointment-history-item p {
+    margin: 0.32rem 0 0;
+    color: var(--student-muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+    line-height: 1.45;
+}
+
+.student-appointment-date {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: var(--student-primary-dark);
+}
+
+.student-appointment-date .material-symbols-outlined {
+    font-size: 1rem;
+}
+
+.student-appointment-status-copy {
+    max-width: 42rem;
+}
+
+.student-appointment-cancel {
+    min-width: 10.5rem;
+}
+
+.student-appointment-cancel > summary {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.35rem;
+    padding: 0.45rem 0.65rem;
+    border: 1px solid #fecaca;
+    border-radius: 0.65rem;
+    color: var(--student-danger);
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 800;
+    list-style: none;
+}
+
+.student-appointment-cancel > summary::-webkit-details-marker {
+    display: none;
+}
+
+.student-appointment-cancel[open] {
+    grid-column: 1 / -1;
+}
+
+.student-appointment-cancel[open] > summary {
+    margin-bottom: 0.65rem;
+}
+
+@media (max-width: 1024px) {
+    .student-appointment-active,
+    .student-appointment-history-item {
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .student-appointment-cancel {
+        grid-column: 1 / -1;
+        width: 100%;
+    }
+}
+
+html.student-dark .appointment-history-active,
+html.student-dark .student-appointment-active,
+html.student-dark .student-appointment-history-item {
+    border-color: var(--student-border-soft);
+    background: var(--student-card);
+}
+
+html.student-dark .student-appointment-active {
+    background: #122219;
+}
+
+html.student-dark .student-appointment-cancel > summary {
+    border-color: #89434f;
+    color: #ffd4d4;
+}
+
 .student-note {
     display: flex;
     align-items: flex-start;
@@ -4838,11 +4957,11 @@ body.student-time-modal-open {
     /* Health Passport: keep section navigation visible and anchored on compact screens. */
     .passport-mobile-tabs { position:sticky; top:var(--student-mobile-header-height, 72px); z-index:30; display:grid; grid-template-columns:repeat(3,1fr); gap:4px; margin:0 0 12px; padding:4px; border:1px solid var(--student-border-soft); border-radius:12px; background:var(--student-card); box-shadow:0 6px 16px rgba(23,38,29,.12); }
     .passport-mobile-tabs button { min-height:40px; border:0; border-radius:9px; background:transparent; color:var(--student-muted); font-size:12px; font-weight:700; }
-    .passport-mobile-tabs button.is-active { color:var(--student-primary-dark); background:var(--student-primary-soft); }
+    .passport-mobile-tabs button.is-active, .passport-mobile-tabs button[aria-pressed="true"] { color:var(--student-primary-dark); background:var(--student-primary-soft); }
     #passport-form [data-passport-group] { scroll-margin-top:calc(var(--student-mobile-header-height, 72px) + 60px); }
     #passport-form.passport-tab-profile [data-passport-group]:not([data-passport-group="profile"]), #passport-form.passport-tab-emergency [data-passport-group]:not([data-passport-group="emergency"]), #passport-form.passport-tab-access [data-passport-group]:not([data-passport-group="access"]) { display:none !important; }
     #passport-form .passport-layout { gap:12px; } #passport-form .passport-settings-stack { gap:12px !important; } #passport-form .passport-settings-stack .patient-mobile-panel + .patient-mobile-panel, #passport-form .passport-layout > .patient-mobile-panel + .patient-mobile-panel { margin-top:0; }
-    #passport-form .student-card-header, #passport-form .passport-grid-tight { gap:8px; } #passport-form .patient-mobile-panel .student-card-title { display:none; } #passport-form .patient-mobile-panel .student-card-header { padding-bottom:8px; } #passport-form .passport-readonly-field { min-height:0; padding:0; border:0; border-radius:0; background:transparent; color:var(--student-fg); font-size:14px; font-weight:600; } #passport-form .passport-field-compact:has(.passport-readonly-field) { display:grid; grid-template-columns:minmax(88px,.75fr) minmax(0,1.25fr); align-items:baseline; gap:8px; } #passport-form .passport-field-compact:has(.passport-readonly-field) .student-label { margin:0; color:var(--student-muted); font-size:11px; }
+    #passport-form .student-card-header, #passport-form .passport-grid-tight { gap:8px; } #passport-form .patient-mobile-panel .student-card-title { display:none; } #passport-form .patient-mobile-panel .student-card-header { padding-bottom:8px; } #passport-form .passport-readonly-field { min-height:0; padding:0; border:0; border-radius:0; background:transparent; color:var(--student-fg); font-size:14px; font-weight:600; } #passport-form .passport-field-compact:has(.passport-readonly-field) { display:grid; grid-template-columns:minmax(88px,.75fr) minmax(0,1.25fr); align-items:baseline; gap:8px; } #passport-form .passport-field-compact:has(.passport-readonly-field) .student-label { margin:0; color:var(--student-muted); font-size:11px; } #passport-form .passport-personal-grid .passport-hint { grid-column:2; margin:0; }
     #passport-form .student-span-7 > .passport-action-row, #passport-form .flex.gap-2 { align-items:stretch; flex-direction:column; } #passport-form .flex.gap-2 .student-button-secondary { width:100%; white-space:normal !important; }
     #passport-form { padding-bottom:64px; } #passport-form .passport-action-row { position:fixed; z-index:75; right:0; bottom:calc(var(--student-mobile-nav-height) + env(safe-area-inset-bottom)); left:0; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin:0; padding:8px 16px; border-top:1px solid var(--student-border-soft); background:#fff; box-shadow:0 -8px 20px rgba(23,38,29,.12); } #passport-form .passport-action-row .student-button, #passport-form .passport-action-row .student-button-secondary { width:100%; min-width:0; min-height:44px; padding:8px; font-size:12px; line-height:1.2; white-space:normal !important; } #passport-form[data-passport-dirty="false"] .passport-action-row { grid-template-columns:1fr; } #passport-form[data-passport-dirty="false"] .passport-save-button { display:none; } #passport-form .passport-save-button { flex:0 0 auto; } .passport-action-label-short { display:inline; } .passport-action-label-long { display:none; }
     .passport-save-confirmation { position:fixed; z-index:100; top:calc(var(--student-mobile-header-height) + env(safe-area-inset-top) + 8px); right:16px; left:16px; margin:0 !important; box-shadow:0 10px 24px rgba(23,38,29,.18); } .passport-save-confirmation-dismiss { display:grid; width:32px; height:32px; min-width:32px; place-items:center; border:0; border-radius:8px; background:transparent; color:inherit; } .passport-save-confirmation-dismiss .material-symbols-outlined { font-size:20px; }
@@ -6139,6 +6258,24 @@ html.student-dark #feedback-leave-dialog {
 
 .patient-help-category-icon {
     display: none !important;
+}
+
+/* Final auth title fit: reserve room for real account-flow names after legacy resets. */
+@media (min-width: 721px) {
+    .student-auth-shell:not(.student-onboarding-shell) {
+        grid-template-columns: minmax(0, 1.3fr) minmax(22rem, 0.7fr);
+    }
+
+    .student-auth-shell:not(.student-onboarding-shell) .student-auth-side {
+        padding: clamp(2rem, 3vw, 2.75rem);
+    }
+
+    .student-auth-shell:not(.student-onboarding-shell) .student-auth-side-title {
+        font-size: clamp(2rem, 2.8vw, 2.4rem);
+        overflow-wrap: normal;
+    }
+
+    .student-recovery-title-break { display: block; }
 }
 
 .patient-help-category-icon {

@@ -29,6 +29,8 @@ foreach ([
     '.student-portal-legal-footer',
     '.student-password-dialog',
     '@media (max-width: 720px)',
+    'minmax(22rem, 0.7fr)',
+    '.student-recovery-title-break { display: block; }',
 ] as $marker) {
     if (!str_contains($css, $marker)) {
         throw new RuntimeException("Shared account-flow styling is missing {$marker}.");

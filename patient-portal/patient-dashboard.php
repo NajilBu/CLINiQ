@@ -214,9 +214,10 @@ $appointmentStmt = appointment_db()->prepare("
         WHEN 'Pending' THEN 2
         WHEN 'For Confirmation' THEN 3
         WHEN 'Completed' THEN 4
-        WHEN 'Cancelled' THEN 5
-        WHEN 'No Show' THEN 6
-        ELSE 7
+        WHEN 'Declined' THEN 5
+        WHEN 'Cancelled' THEN 6
+        WHEN 'No Show' THEN 7
+        ELSE 8
     END ASC, appointment_datetime DESC, created_at DESC
     LIMIT 1
 ");
@@ -484,18 +485,18 @@ $accountBadgeLabel = $isOfficialAccess ? 'Official' : 'Applicant';
 $appointmentStatus = $latestAppointment['status'] ?? 'No Request';
 $appointmentBadgeClass = match ($appointmentStatus) {
     'Scheduled', 'Completed' => 'student-badge-success',
-    'Cancelled', 'No Show' => 'student-badge-danger',
+    'Declined', 'Cancelled', 'No Show' => 'student-badge-danger',
     'Pending', 'For Confirmation' => 'student-badge-warning',
     default => 'student-badge-info',
 };
 $appointmentNoteClass = match ($appointmentStatus) {
     'Pending', 'For Confirmation' => 'student-note-warning',
-    'Cancelled', 'No Show' => 'student-note-danger',
+    'Declined', 'Cancelled', 'No Show' => 'student-note-danger',
     default => 'student-note-success',
 };
 $appointmentIcon = match ($appointmentStatus) {
     'Pending', 'For Confirmation' => 'hourglass_top',
-    'Cancelled', 'No Show' => 'event_busy',
+    'Declined', 'Cancelled', 'No Show' => 'event_busy',
     default => 'event_available',
 };
 $appointmentSummary = match ($appointmentStatus) {
@@ -503,13 +504,14 @@ $appointmentSummary = match ($appointmentStatus) {
     'Scheduled' => 'Please arrive 10 minutes before your scheduled time.',
     'For Confirmation' => 'Your appointment time has passed. Clinic staff will mark it completed or no-show.',
     'Completed' => 'This appointment has been completed.',
+    'Declined' => 'This appointment request was declined by the clinic.',
     'Cancelled' => 'This appointment was cancelled.',
     'No Show' => 'This appointment was marked as no-show by the clinic.',
     default => 'Manage your appointment request from the appointment page.',
 };
 $appointmentDisplayStatus = appointment_status_display_label($appointmentStatus);
-$appointmentCtaLabel = in_array($appointmentStatus, ['Cancelled', 'No Show'], true) ? 'Book New Appointment' : 'Manage Appointment';
-$appointmentCtaIcon = in_array($appointmentStatus, ['Cancelled', 'No Show'], true) ? 'calendar_add_on' : 'schedule';
+$appointmentCtaLabel = in_array($appointmentStatus, ['Declined', 'Cancelled', 'No Show'], true) ? 'Book New Appointment' : 'Manage Appointment';
+$appointmentCtaIcon = in_array($appointmentStatus, ['Declined', 'Cancelled', 'No Show'], true) ? 'calendar_add_on' : 'schedule';
 $liveServiceStatuses = appointment_live_service_statuses();
 
 render_student_header('Dashboard', 'dashboard');
@@ -862,13 +864,21 @@ render_student_header('Dashboard', 'dashboard');
     <div class="student-card-header">
         <div>
             <h2 id="clinic-service-status-title" class="student-card-title">Clinic service status</h2>
-            <p class="student-card-copy">Current walk-in availability. Check with reception before coming in.</p>
+            <p class="student-card-copy"><?= $isOfficialAccess ? 'Current walk-in availability. Check with reception before coming in.' : 'Clinic service access unlocks after final APE clearance.' ?></p>
         </div>
+        <?php if ($isOfficialAccess): ?>
         <form method="get" action="<?= student_e(student_portal_url('dashboard')) ?>">
             <button type="submit" class="student-button-secondary text-sm">Refresh service status</button>
         </form>
+        <?php endif; ?>
     </div>
     <div class="student-card-pad grid gap-3 sm:grid-cols-2">
+        <?php if (!$isOfficialAccess): ?>
+            <div class="student-note student-note-warning mb-0 sm:col-span-2" role="status">
+                <span class="material-symbols-outlined" aria-hidden="true">lock</span>
+                <div><strong>Applicant access</strong><br>Clinic service access unlocks after final APE clearance.</div>
+            </div>
+        <?php else: ?>
         <?php foreach ($liveServiceStatuses as $service => $serviceStatus): ?>
             <?php $serviceTone = $serviceStatus['state'] === 'walk_in' ? 'student-note-success' : ($serviceStatus['state'] === 'busy' ? 'student-note-warning' : 'student-note-danger'); ?>
             <div class="student-note <?= student_e($serviceTone) ?> mb-0">
@@ -876,6 +886,7 @@ render_student_header('Dashboard', 'dashboard');
                 <div><strong><?= student_e($service) ?></strong><br><?= student_e($serviceStatus['message']) ?></div>
             </div>
         <?php endforeach; ?>
+        <?php endif; ?>
     </div>
 </section>
 
