@@ -130,8 +130,13 @@ function migration_option_value(string $value): string
 function migration_run_sql_file(string $database, string $sqlFile): int
 {
     $optionFile = tempnam(sys_get_temp_dir(), 'cliniq-mysql-');
+    $targetSqlFile = tempnam(sys_get_temp_dir(), 'cliniq-migration-');
     if ($optionFile === false) {
         migration_fail('Could not create a temporary MySQL option file.');
+    }
+    if ($targetSqlFile === false) {
+        @unlink($optionFile);
+        migration_fail('Could not create a temporary migration file.');
     }
 
     $optionContents = implode(PHP_EOL, [
@@ -146,6 +151,14 @@ function migration_run_sql_file(string $database, string $sqlFile): int
     ]);
 
     try {
+        $sql = file_get_contents($sqlFile);
+        if ($sql === false) {
+            throw new RuntimeException('Unable to read migration: ' . basename($sqlFile));
+        }
+        $sql = preg_replace('/^\s*USE\s+`?Cliniq_db`?\s*;\s*$/mi', "USE `{$database}`;", $sql) ?? $sql;
+        if (file_put_contents($targetSqlFile, $sql, LOCK_EX) === false) {
+            throw new RuntimeException('Could not prepare migration: ' . basename($sqlFile));
+        }
         if (file_put_contents($optionFile, $optionContents, LOCK_EX) === false) {
             migration_fail('Could not write the temporary MySQL option file.');
         }
@@ -160,7 +173,7 @@ function migration_run_sql_file(string $database, string $sqlFile): int
         ];
         $pipes = [];
         $process = proc_open($command, [
-            0 => ['file', $sqlFile, 'rb'],
+            0 => ['file', $targetSqlFile, 'rb'],
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w'],
         ], $pipes, dirname(__DIR__, 2), null, ['bypass_shell' => true]);
@@ -184,6 +197,9 @@ function migration_run_sql_file(string $database, string $sqlFile): int
     } finally {
         if (is_file($optionFile)) {
             @unlink($optionFile);
+        }
+        if (is_file($targetSqlFile)) {
+            @unlink($targetSqlFile);
         }
     }
 }

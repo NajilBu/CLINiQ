@@ -51,14 +51,14 @@ if (isset($_GET['from'], $_GET['to'])) {
 }
 $mainSystemReport = build_system_report($dateFrom, $dateTo, []);
 
-render_header('Reports');
+render_header('Clinic Transaction Summary');
 ?>
-<link hidden rel="stylesheet" href="<?= e(app_url('assets/css/reports.css?v=4')) ?>">
+<link rel="stylesheet" href="<?= e(app_url('assets/css/reports.css?v=' . filemtime(__DIR__ . '/../assets/css/reports.css'))) ?>">
 <!-- ═══ Title ═══ -->
 <?php render_clinic_command_header(
     'Reports',
-    'Reports & Analytics',
-    'Build, preview, and export consolidated clinic operational analytics.',
+    'Clinic Transaction Summary',
+    'Review and export the clinic activity totals and follow-up queues for a selected period.',
     '<a class="btn btn-outline text-decoration-none" id="reportHeaderTablesLink" href="index.php?view=' . ($reportView === 'tables' ? 'charts' : 'tables') . '&from=' . e($dateFrom) . '&to=' . e($dateTo) . '&period=' . e($period) . '&semester=' . e((string) $semester) . '"><span class="material-symbols-outlined text-[20px]">' . ($reportView === 'tables' ? 'bar_chart' : 'table_chart') . '</span>' . ($reportView === 'tables' ? 'View charts' : 'Data tables') . '</a><a class="btn btn-primary text-decoration-none" id="reportHeaderPreviewLink" href="preview.php?from=' . e($dateFrom) . '&to=' . e($dateTo) . '&period=' . e($period) . '&semester=' . e((string) $semester) . '"><span class="material-symbols-outlined text-[20px]">preview</span>Preview Report</a>'
 ); ?>
 
@@ -71,8 +71,8 @@ render_header('Reports');
 <!-- ═══ Date Range Filter ═══ -->
 <form method="get" class="clinic-card overflow-hidden" data-no-ajax="true" id="reportDateForm">
     <div class="p-6 border-b border-slate-100">
-        <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">System Analytics Period</h2>
-        <p class="text-xs font-bold text-slate-500 mb-0">All available operational graphs update automatically when the date range changes.</p>
+        <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Transaction reporting period</h2>
+        <p class="text-xs font-bold text-slate-500 mb-0">Transaction totals and follow-up queues update when the date range changes.</p>
     </div>
     <div class="p-6 grid grid-cols-1 xl:grid-cols-[1fr_auto] gap-5 items-end">
         <div class="space-y-3">
@@ -124,14 +124,10 @@ render_header('Reports');
 </div>
 
 <script src="<?= e(app_url('assets/vendor/echarts/echarts.min.js')) ?>"></script>
+<script src="<?= e(app_url('assets/js/system-report-charts.js?v=' . filemtime(__DIR__ . '/../assets/js/system-report-charts.js'))) ?>"></script>
 <script>
 (() => {
-    const chartPalette = ['#2f8553', '#58a978', '#89c79f', '#d4a72c', '#5377b8', '#8b69c7', '#d26b6b', '#64748b'];
     const isDarkReport = document.documentElement.classList.contains('cliniq-dark');
-    const chartText = isDarkReport ? '#b3c9ba' : '#475569';
-    const chartValue = isDarkReport ? '#9be3ae' : '#205f3d';
-    const chartGrid = isDarkReport ? '#35523f' : '#edf3ef';
-    const chartAxis = isDarkReport ? '#4b6d55' : '#dfe9e2';
     const reportCharts = [];
     let reportRequest = null;
     let reportSectionObserver = null;
@@ -154,77 +150,16 @@ render_header('Reports');
                 return;
             }
             const tableRows = Array.isArray(chartData.rows) ? chartData.rows : [];
-            if (!tableRows.length) return;
+            if (!tableRows.length || chartData.presentation !== 'diagram') return;
             const rows = chartData.type === 'line' ? tableRows : tableRows.slice(0, 10);
 
             const visual = card.querySelector('.report-chart-visual');
             if (!visual) return;
-            const canvas = document.createElement('div');
-            canvas.className = 'report-echarts-canvas';
-
-            const labels = rows.map((row) => String(row.label ?? ''));
-            const values = rows.map((row) => Number(row.value) || 0);
-            const shared = {
-                animationDuration: 420,
-                color: chartPalette,
-                textStyle: { fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif' },
-                tooltip: { trigger: chartData.type === 'donut' ? 'item' : 'axis', confine: true },
-            };
-            let option;
-
-            if (chartData.type === 'donut') {
-                option = {
-                    ...shared,
-                    tooltip: { trigger: 'item', formatter: '{b}: <b>{c}</b> ({d}%)' },
-                    series: [{
-                        type: 'pie', radius: ['48%', '72%'], center: ['50%', '50%'], avoidLabelOverlap: true,
-                         itemStyle: { borderColor: isDarkReport ? '#14271b' : '#fff', borderWidth: 3, borderRadius: 5 },
-                        label: { color: chartText, fontSize: 12, fontWeight: 700, formatter: '{b}' },
-                        labelLine: { length: 8, length2: 8 },
-                        data: rows.map((row) => ({ name: String(row.label ?? ''), value: Number(row.value) || 0 })),
-                    }],
-                    graphic: [{ type: 'text', left: 'center', top: '42%', style: { text: String(values.reduce((total, value) => total + value, 0)), fill: chartValue, font: '800 18px Inter, sans-serif', textAlign: 'center' } }, { type: 'text', left: 'center', top: '55%', style: { text: 'TOTAL', fill: '#64748b', font: '700 9px Inter, sans-serif', textAlign: 'center' } }],
-                };
-            } else if (chartData.type === 'line') {
-                option = {
-                    ...shared,
-                    grid: { left: 36, right: 18, top: 22, bottom: 38 },
-                     xAxis: { type: 'category', data: labels, axisLabel: { color: chartText, fontSize: 11, fontWeight: 600, interval: 'auto' }, axisLine: { lineStyle: { color: chartAxis } } },
-                     yAxis: { type: 'value', axisLabel: { color: chartText, fontSize: 11, fontWeight: 600 }, splitLine: { lineStyle: { color: chartGrid } } },
-                    series: [{ type: 'line', data: values, smooth: true, symbolSize: 8, lineStyle: { width: 3 }, areaStyle: { color: 'rgba(47,133,83,.12)' }, label: { show: true, position: 'top', color: chartValue, fontWeight: 800, fontSize: 11 } }],
-                };
-            } else if (chartData.type === 'progress') {
-                option = {
-                    ...shared,
-                    tooltip: { trigger: 'item', formatter: '{b}: <b>{c}</b>' },
-                    grid: { left: 4, right: 4, top: 48, bottom: 10 },
-                    xAxis: { type: 'value', max: values.reduce((total, value) => total + value, 0) || 1, show: false },
-                    yAxis: { type: 'category', data: [''], show: false },
-                    legend: { top: 0, type: 'scroll', textStyle: { color: chartText, fontSize: 11, fontWeight: 600 } },
-                    series: rows.map((row, index) => ({ name: String(row.label ?? ''), type: 'bar', stack: 'total', barWidth: 26, data: [values[index]], label: { show: values[index] > 0, formatter: '{c}', color: '#fff', fontWeight: 800, fontSize: 11 } })),
-                };
-            } else {
-                const isColumn = chartData.type === 'column';
-                option = {
-                    ...shared,
-                    grid: isColumn ? { left: 36, right: 16, top: 20, bottom: 52 } : { left: 116, right: 36, top: 16, bottom: 12 },
-                     xAxis: isColumn ? { type: 'category', data: labels, axisLabel: { color: chartText, fontSize: 10, fontWeight: 600, rotate: labels.length > 5 ? 24 : 0, interval: 0 }, axisLine: { lineStyle: { color: chartAxis } } } : { type: 'value', axisLabel: { color: chartText, fontSize: 11, fontWeight: 600 }, splitLine: { lineStyle: { color: chartGrid } } },
-                     yAxis: isColumn ? { type: 'value', axisLabel: { color: chartText, fontSize: 11, fontWeight: 600 }, splitLine: { lineStyle: { color: chartGrid } } } : { type: 'category', data: labels, axisLabel: { color: chartText, fontSize: 11, fontWeight: 600, width: 102, overflow: 'truncate' }, axisLine: { show: false }, axisTick: { show: false } },
-                    series: [{ type: 'bar', data: values, barMaxWidth: 34, itemStyle: { borderRadius: isColumn ? [6, 6, 0, 0] : [0, 6, 6, 0] }, label: { show: true, position: isColumn ? 'top' : 'right', color: chartValue, fontWeight: 800, fontSize: 11 } }],
-                };
-            }
-
-            let chart;
-            try {
-                chart = echarts.init(canvas, null, { renderer: 'svg' });
-                chart.setOption(option);
-                visual.replaceChildren(canvas);
-                const observer = new ResizeObserver(() => chart.resize());
-                observer.observe(canvas);
-                reportCharts.push({ chart, observer });
-            } catch (_) {
-                chart?.dispose();
-            }
+            const mounted = window.cliniqSystemReportCharts?.mount(visual, chartData, { dark: isDarkReport });
+            if (!mounted) return;
+            const observer = new ResizeObserver(() => mounted.chart.resize());
+            observer.observe(mounted.canvas);
+            reportCharts.push({ chart: mounted.chart, observer });
         });
     };
 

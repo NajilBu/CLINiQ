@@ -5,13 +5,10 @@ require_once __DIR__ . '/../config/database.php';
 function system_report_module_labels(): array
 {
     return [
-        'visits' => 'Visits',
-        'demographics' => 'Patient Demographics',
-        'appointments' => 'Appointments',
-        'inventory' => 'Inventory',
-        'referrals' => 'Referrals',
-        'alerts' => 'Alerts and Incidents',
-        'feedback' => 'Clinic Feedback',
+        'patient_care' => 'Patient Care Transactions',
+        'scheduling_referrals' => 'Scheduling and Referral Transactions',
+        'inventory_loans' => 'Inventory and Loan Transactions',
+        'safety' => 'Safety Transactions',
     ];
 }
 
@@ -24,13 +21,7 @@ function normalize_system_report_date(?string $value, string $fallback): string
 
 function normalize_system_report_modules(array $modules): array
 {
-    $allowed = array_keys(system_report_module_labels());
-    $requested = array_map(static function ($module): string {
-        $module = (string) $module;
-        return $module === 'loans' ? 'inventory' : $module;
-    }, $modules);
-    $selected = array_values(array_unique(array_intersect($allowed, $requested)));
-    return $selected ?: $allowed;
+    return array_keys(system_report_module_labels());
 }
 
 function normalize_system_report_remarks(array $remarks, array $modules): array
@@ -65,9 +56,97 @@ function system_report_metric(string $label, float|int $value, string $note = ''
     return ['label' => $label, 'value' => $value, 'note' => $note, 'decimals' => $decimals];
 }
 
-function system_report_chart(string $title, array $rows, string $empty = 'No data available for this period.', int $decimals = 0): array
+function system_report_chart_presentation(array $rows, string $renderType): string
 {
-    return ['title' => $title, 'rows' => $rows, 'empty' => $empty, 'decimals' => max(0, min(2, $decimals))];
+    $values = array_map(static fn(array $row): float => (float) ($row['value'] ?? 0), $rows);
+    if (!$rows || !array_filter($values, static fn(float $value): bool => $value !== 0.0)) {
+        return 'empty';
+    }
+    if (count($rows) === 1) {
+        return 'summary';
+    }
+    return $renderType === 'line' || count($rows) <= 6 ? 'diagram' : 'summary';
+}
+
+function system_report_range(string $dateFrom, string $dateTo): array
+{
+    $end = (new DateTimeImmutable($dateTo))->modify('+1 day')->format('Y-m-d');
+    return [$dateFrom . ' 00:00:00', $end . ' 00:00:00'];
+}
+
+function system_report_ape_range(string $dateFrom, string $dateTo): array
+{
+    [$start, $end] = system_report_range($dateFrom, $dateTo);
+    return [$dateFrom, substr($end, 0, 10), $start, $end];
+}
+
+function system_report_chart_summary_insight(array $rows): string
+{
+    $format = static fn(float $value): string => $value === floor($value)
+        ? (string) (int) $value
+        : rtrim(rtrim(number_format($value, 2, '.', ''), '0'), '.');
+    $total = array_sum(array_map(static fn(array $row): float => (float) ($row['value'] ?? 0), $rows));
+    $items = array_map(static fn(array $row): string => trim((string) ($row['label'] ?? 'Not specified')) . ' (' . $format((float) ($row['value'] ?? 0)) . ')', $rows);
+
+    return count($rows) === 1
+        ? ($items[0] ?? 'No category data is available.')
+        : count($rows) . ' categories, total ' . $format($total) . ': ' . implode(', ', array_slice($items, 0, 4)) . (count($items) > 4 ? ', and more.' : '.');
+}
+
+function system_report_chart(string $title, array $rows, string $empty = 'No data available for this period.', int $decimals = 0, string $renderType = 'bar', bool $detailInPdf = true, string $insight = ''): array
+{
+    return [
+        'title' => $title,
+        'rows' => $rows,
+        'empty' => $empty,
+        'decimals' => max(0, min(2, $decimals)),
+        'render_type' => $renderType,
+        'presentation' => system_report_chart_presentation($rows, $renderType),
+        'detail_in_pdf' => $detailInPdf,
+        'insight' => trim($insight) !== '' ? $insight : system_report_chart_summary_insight($rows),
+    ];
+}
+
+function system_report_visit_volume(PDO $db, string $dateFrom, string $dateTo): array
+{
+    $start = new DateTimeImmutable($dateFrom);
+    $end = new DateTimeImmutable($dateTo);
+    $days = $start->diff($end)->days + 1;
+    $bucket = $days <= 31 ? 'day' : ($days <= 180 ? 'week' : 'month');
+    [, $rangeEnd] = system_report_range($dateFrom, $dateTo);
+    $rawRows = system_report_rows($db, 'SELECT DATE(visit_datetime) label, COUNT(*) value FROM visits WHERE visit_datetime >= ? AND visit_datetime < ? GROUP BY DATE(visit_datetime)', [$dateFrom . ' 00:00:00', $rangeEnd]);
+    $dailyCounts = [];
+    foreach ($rawRows as $row) {
+        $dailyCounts[$row['label']] = (int) $row['value'];
+    }
+
+    $buckets = [];
+    for ($day = $start; $day <= $end; $day = $day->modify('+1 day')) {
+        $key = match ($bucket) {
+            'week' => $day->modify('monday this week')->format('Y-m-d'),
+            'month' => $day->format('Y-m'),
+            default => $day->format('Y-m-d'),
+        };
+        $label = match ($bucket) {
+            'week' => $day->modify('monday this week')->format('M j') . '–' . $day->modify('sunday this week')->format('M j'),
+            'month' => $day->format('M Y'),
+            default => $day->format('M j'),
+        };
+        if (!isset($buckets[$key])) {
+            $buckets[$key] = ['label' => $label, 'value' => 0];
+        }
+        $buckets[$key]['value'] += $dailyCounts[$day->format('Y-m-d')] ?? 0;
+    }
+
+    $rows = array_values($buckets);
+    $total = array_sum(array_column($rows, 'value'));
+    $peak = $rows ? array_reduce($rows, static fn(array $carry, array $row): array => $row['value'] > $carry['value'] ? $row : $carry, $rows[0]) : null;
+    $unit = $bucket === 'day' ? 'day' : ($bucket === 'week' ? 'week' : 'month');
+    $insight = $total > 0 && $peak
+        ? sprintf('%d visits across %d %s%s. Average %.1f per %s. Peak: %s (%d).', $total, count($rows), $unit, count($rows) === 1 ? '' : 's', $total / max(1, count($rows)), $unit, $peak['label'], $peak['value'])
+        : 'No visits were recorded during the selected reporting period.';
+
+    return ['title' => 'Visits by ' . ucfirst($bucket), 'rows' => $rows, 'insight' => $insight];
 }
 
 function system_report_action_summary(PDO $db): array
@@ -102,284 +181,130 @@ function build_system_report(string $dateFrom, string $dateTo, array $modules): 
         [$dateFrom, $dateTo] = [$dateTo, $dateFrom];
     }
     $modules = normalize_system_report_modules($modules);
-    $range = [$dateFrom, $dateTo];
+    $range = system_report_range($dateFrom, $dateTo);
+    $apeRange = system_report_ape_range($dateFrom, $dateTo);
     $sections = [];
 
-    if (in_array('visits', $modules, true)) {
-        $visitCount = system_report_scalar($newDb, 'SELECT COUNT(*) FROM visits WHERE DATE(visit_datetime) BETWEEN ? AND ?', $range);
-        $sections['visits'] = [
-            'title' => 'Visits',
-            'description' => 'Visit activity for the selected period. APE records are reported separately.',
+    if (in_array('patient_care', $modules, true)) {
+        $sections['patient_care'] = [
+            'title' => 'Patient Care Transactions',
+            'description' => 'Visits, clinical documentation, and APE workflow activity during the selected period.',
             'metrics' => [
-                system_report_metric('Visits', $visitCount),
-                system_report_metric('Unaddressed', system_report_scalar($newDb, "SELECT COUNT(*) FROM visits WHERE status = 'Unaddressed' AND DATE(visit_datetime) BETWEEN ? AND ?", $range)),
-                system_report_metric('Active', system_report_scalar($newDb, "SELECT COUNT(*) FROM visits WHERE status = 'Active' AND DATE(visit_datetime) BETWEEN ? AND ?", $range)),
-                system_report_metric('Completed Visits', system_report_scalar($newDb, "SELECT COUNT(*) FROM visits WHERE status = 'Completed' AND DATE(visit_datetime) BETWEEN ? AND ?", $range)),
-                system_report_metric('Clinical Entries', system_report_scalar($newDb, 'SELECT COUNT(*) FROM visit_entries ve JOIN visits v ON v.visit_id = ve.visit_id WHERE DATE(v.visit_datetime) BETWEEN ? AND ?', $range)),
+                system_report_metric('Clinical Visits', system_report_scalar($newDb, 'SELECT COUNT(*) FROM visits WHERE visit_datetime >= ? AND visit_datetime < ?', $range)),
+                system_report_metric('Clinical Entries', system_report_scalar($newDb, 'SELECT COUNT(*) FROM visit_entries ve JOIN visits v ON v.visit_id = ve.visit_id WHERE v.visit_datetime >= ? AND v.visit_datetime < ?', $range)),
+                system_report_metric('APE Records', system_report_scalar($newDb, 'SELECT COUNT(*) FROM ape_records WHERE (exam_date >= ? AND exam_date < ?) OR (exam_date IS NULL AND created_at >= ? AND created_at < ?)', $apeRange)),
+                system_report_metric('APE Findings', system_report_scalar($newDb, 'SELECT COUNT(*) FROM ape_findings WHERE recorded_at >= ? AND recorded_at < ?', $range)),
             ],
             'charts' => [
-                system_report_chart('Visits by Day', system_report_rows($newDb, "SELECT DATE_FORMAT(visit_datetime, '%b %e') label, COUNT(*) value FROM visits WHERE DATE(visit_datetime) BETWEEN ? AND ? GROUP BY DATE(visit_datetime), label ORDER BY DATE(visit_datetime)", $range)),
-                system_report_chart('Visit Purpose', system_report_rows($newDb, "SELECT COALESCE(NULLIF(visit_purpose, ''), 'Not specified') label, COUNT(*) value FROM visits WHERE DATE(visit_datetime) BETWEEN ? AND ? GROUP BY label ORDER BY value DESC", $range)),
-                system_report_chart('Common Complaints', system_report_rows($newDb, "SELECT COALESCE(NULLIF(chief_complaint, ''), 'Not specified') label, COUNT(*) value FROM visits WHERE DATE(visit_datetime) BETWEEN ? AND ? GROUP BY label ORDER BY value DESC", $range)),
-                system_report_chart('Patient Type Seen', system_report_rows($newDb, "
-                    SELECT CASE
-                        WHEN s.person_id IS NOT NULL THEN 'Student'
-                        WHEN se.person_id IS NOT NULL THEN se.role_classification
-                        WHEN cs.person_id IS NOT NULL THEN 'Clinic Staff'
-                        ELSE 'Patient'
-                    END label, COUNT(*) value
-                    FROM visits v
-                    LEFT JOIN students s ON s.person_id = v.patient_person_id
-                    LEFT JOIN school_employees se ON se.person_id = v.patient_person_id
-                    LEFT JOIN clinic_staff cs ON cs.person_id = v.patient_person_id
-                    WHERE DATE(v.visit_datetime) BETWEEN ? AND ?
-                    GROUP BY label ORDER BY value DESC, label
-                ", $range)),
-                system_report_chart('Visits by Recorded Sex', system_report_rows($newDb, "
-                    SELECT COALESCE(NULLIF(p.sex, ''), 'Not specified') label, COUNT(*) value
-                    FROM visits v
-                    JOIN people p ON p.id = v.patient_person_id
-                    WHERE DATE(v.visit_datetime) BETWEEN ? AND ?
-                    GROUP BY label ORDER BY value DESC, label
-                ", $range)),
-                system_report_chart('APE Clearance Status (from APE records)', system_report_rows($newDb, "SELECT COALESCE(NULLIF(clearance_status, ''), 'Not specified') label, COUNT(*) value FROM ape_records WHERE DATE(COALESCE(exam_date, created_at)) BETWEEN ? AND ? GROUP BY label ORDER BY value DESC", $range)),
-                system_report_chart('APE Finding Result (from APE findings)', system_report_rows($newDb, "SELECT COALESCE(NULLIF(result_status, ''), 'Not specified') label, COUNT(*) value FROM ape_findings WHERE DATE(recorded_at) BETWEEN ? AND ? GROUP BY label ORDER BY value DESC", $range)),
+                (static function () use ($newDb, $dateFrom, $dateTo): array {
+                    $volume = system_report_visit_volume($newDb, $dateFrom, $dateTo);
+                    return system_report_chart($volume['title'], $volume['rows'], 'No visits were recorded during the selected reporting period.', 0, 'line', false, $volume['insight']);
+                })(),
+                system_report_chart('APE Clearance Status', system_report_rows($newDb, "SELECT COALESCE(NULLIF(clearance_status, ''), 'Not specified') label, COUNT(*) value FROM ape_records WHERE (exam_date >= ? AND exam_date < ?) OR (exam_date IS NULL AND created_at >= ? AND created_at < ?) GROUP BY label ORDER BY value DESC", $apeRange), 'No APE clearance records were available for this period.', 0, 'donut'),
+            ],
+            'tables' => [
+                system_report_chart('Visit Purpose', system_report_rows($newDb, "SELECT COALESCE(NULLIF(visit_purpose, ''), 'Not specified') label, COUNT(*) value FROM visits WHERE visit_datetime >= ? AND visit_datetime < ? GROUP BY label ORDER BY value DESC", $range)),
+                system_report_chart('Common Complaints', system_report_rows($newDb, "SELECT COALESCE(NULLIF(chief_complaint, ''), 'Not specified') label, COUNT(*) value FROM visits WHERE visit_datetime >= ? AND visit_datetime < ? GROUP BY label ORDER BY value DESC", $range)),
             ],
         ];
     }
 
-    if (in_array('demographics', $modules, true)) {
-        $registeredPatientsSql = 'SELECT person_id AS patient_person_id FROM patients';
-        $sections['demographics'] = [
-            'title' => 'Patient Demographics',
-            'description' => 'All registered patients, counted once. Age uses the recorded birthdate at period end; recorded sex comes from the patient profile.',
+    if (in_array('scheduling_referrals', $modules, true)) {
+        $sections['scheduling_referrals'] = [
+            'title' => 'Scheduling and Referral Transactions',
+            'description' => 'Appointment requests and referral transactions recorded during the selected period.',
             'metrics' => [
-                system_report_metric('Registered Patients', system_report_scalar($newDb, "SELECT COUNT(*) FROM ({$registeredPatientsSql}) registered")),
-                system_report_metric('Students', system_report_scalar($newDb, "SELECT COUNT(*) FROM ({$registeredPatientsSql}) registered JOIN students s ON s.person_id = registered.patient_person_id")),
-                system_report_metric('Faculty', system_report_scalar($newDb, "SELECT COUNT(*) FROM ({$registeredPatientsSql}) registered JOIN school_employees se ON se.person_id = registered.patient_person_id WHERE se.role_classification = 'Faculty'")),
-                system_report_metric('NTP', system_report_scalar($newDb, "SELECT COUNT(*) FROM ({$registeredPatientsSql}) registered JOIN school_employees se ON se.person_id = registered.patient_person_id WHERE se.role_classification = 'Non-Teaching Personnel'")),
-                system_report_metric('Birthdate Recorded', system_report_scalar($newDb, "SELECT COUNT(*) FROM ({$registeredPatientsSql}) registered JOIN people p ON p.id = registered.patient_person_id WHERE p.birthdate IS NOT NULL AND p.birthdate <= ?", [$dateTo])),
-                system_report_metric('Sex Recorded', system_report_scalar($newDb, "SELECT COUNT(*) FROM ({$registeredPatientsSql}) registered JOIN people p ON p.id = registered.patient_person_id WHERE NULLIF(p.sex, '') IS NOT NULL")),
+                system_report_metric('Appointment Requests', system_report_scalar($newDb, 'SELECT COUNT(*) FROM appointments WHERE created_at >= ? AND created_at < ?', $range)),
+                system_report_metric('Pending Requests', system_report_scalar($newDb, "SELECT COUNT(*) FROM appointments WHERE status = 'Pending' AND created_at >= ? AND created_at < ?", $range)),
+                system_report_metric('For Completion', system_report_scalar($newDb, "SELECT COUNT(*) FROM appointments WHERE status = 'For Confirmation' AND created_at >= ? AND created_at < ?", $range)),
+                system_report_metric('Referrals', system_report_scalar($newDb, 'SELECT COUNT(*) FROM referrals WHERE referral_date >= ? AND referral_date < ?', $range)),
+                system_report_metric('Completed Referrals', system_report_scalar($newDb, "SELECT COUNT(*) FROM referrals WHERE status = 'Completed' AND referral_date >= ? AND referral_date < ?", $range)),
             ],
             'charts' => [
-                system_report_chart('Patients by Age Group', system_report_rows($newDb, "
-                    SELECT CASE
-                        WHEN age_years IS NULL THEN 'Not recorded'
-                        WHEN age_years < 18 THEN 'Under 18'
-                        WHEN age_years < 25 THEN '18-24'
-                        WHEN age_years < 35 THEN '25-34'
-                        WHEN age_years < 45 THEN '35-44'
-                        WHEN age_years < 55 THEN '45-54'
-                        ELSE '55 and above'
-                    END label, COUNT(*) value
-                    FROM (
-                        SELECT CASE WHEN p.birthdate IS NULL OR p.birthdate > ? THEN NULL
-                            ELSE TIMESTAMPDIFF(YEAR, p.birthdate, ?) END age_years
-                        FROM ({$registeredPatientsSql}) registered
-                        JOIN people p ON p.id = registered.patient_person_id
-                    ) ages
-                    GROUP BY label
-                    ORDER BY FIELD(label, 'Under 18', '18-24', '25-34', '35-44', '45-54', '55 and above', 'Not recorded')
-                ", [$dateTo, $dateTo])),
-                system_report_chart('Patients by Recorded Sex', system_report_rows($newDb, "
-                    SELECT COALESCE(NULLIF(p.sex, ''), 'Not recorded') label, COUNT(*) value
-                    FROM ({$registeredPatientsSql}) registered
-                    JOIN people p ON p.id = registered.patient_person_id
-                    GROUP BY label ORDER BY value DESC, label
-                ")),
-                system_report_chart('Patients by Type', system_report_rows($newDb, "
-                    SELECT CASE
-                        WHEN s.person_id IS NOT NULL THEN 'Student'
-                        WHEN se.role_classification = 'Non-Teaching Personnel' THEN 'NTP'
-                        WHEN se.person_id IS NOT NULL THEN se.role_classification
-                        WHEN cs.person_id IS NOT NULL THEN 'Clinic Staff'
-                        ELSE 'Other Patient'
-                    END label, COUNT(*) value
-                    FROM ({$registeredPatientsSql}) registered
-                    LEFT JOIN students s ON s.person_id = registered.patient_person_id
-                    LEFT JOIN school_employees se ON se.person_id = registered.patient_person_id
-                    LEFT JOIN clinic_staff cs ON cs.person_id = registered.patient_person_id
-                    GROUP BY label ORDER BY value DESC, label
-                ")),
-                system_report_chart('Students by College', system_report_rows($newDb, "
-                    SELECT COALESCE(NULLIF(d.department_name, ''), 'Not specified') label, COUNT(*) value
-                    FROM ({$registeredPatientsSql}) registered
-                    JOIN students s ON s.person_id = registered.patient_person_id
-                    LEFT JOIN programs pr ON pr.id = s.program_id
-                    LEFT JOIN departments d ON d.id = pr.department_id
-                    GROUP BY label ORDER BY value DESC, label
-                ")),
-                system_report_chart('Faculty and Personnel by Department', system_report_rows($newDb, "
-                    SELECT CONCAT(
-                        CASE WHEN se.role_classification = 'Non-Teaching Personnel' THEN 'NTP' ELSE se.role_classification END,
-                        ' - ', COALESCE(NULLIF(d.department_name, ''), 'Not specified')
-                    ) label, COUNT(*) value
-                    FROM ({$registeredPatientsSql}) registered
-                    JOIN school_employees se ON se.person_id = registered.patient_person_id
-                    LEFT JOIN departments d ON d.id = se.department_id
-                    GROUP BY se.role_classification, d.id, d.department_name
-                    ORDER BY se.role_classification, value DESC, label
-                ")),
+                system_report_chart('Appointment Status', system_report_rows($newDb, "SELECT CASE WHEN status = 'For Confirmation' THEN 'For Completion' ELSE COALESCE(NULLIF(status, ''), 'Not specified') END label, COUNT(*) value FROM appointments WHERE created_at >= ? AND created_at < ? GROUP BY label ORDER BY value DESC", $range), 'No appointment requests were recorded for this period.', 0, 'donut'),
+                system_report_chart('Referral Status', system_report_rows($newDb, "SELECT COALESCE(NULLIF(status, ''), 'Not specified') label, COUNT(*) value FROM referrals WHERE referral_date >= ? AND referral_date < ? GROUP BY label ORDER BY value DESC", $range), 'No referrals were recorded for this period.', 0, 'donut'),
+            ],
+            'tables' => [
+                system_report_chart('Request Source', system_report_rows($newDb, "SELECT COALESCE(NULLIF(request_source, ''), 'Not specified') label, COUNT(*) value FROM appointments WHERE created_at >= ? AND created_at < ? GROUP BY label ORDER BY value DESC", $range)),
+                system_report_chart('Referral Destination', system_report_rows($newDb, "SELECT COALESCE(NULLIF(referred_to, ''), 'Not specified') label, COUNT(*) value FROM referrals WHERE referral_date >= ? AND referral_date < ? GROUP BY label ORDER BY value DESC", $range)),
             ],
         ];
     }
 
-    if (in_array('appointments', $modules, true)) {
-        $sections['appointments'] = [
-            'title' => 'Appointments',
-            'description' => 'Appointment requests and schedule outcomes in the selected period.',
+    if (in_array('inventory_loans', $modules, true)) {
+        $sections['inventory_loans'] = [
+            'title' => 'Inventory and Loan Transactions',
+            'description' => 'Inventory movements, medicine dispensing, equipment loans, and current stock exceptions.',
             'metrics' => [
-                system_report_metric('Appointments', system_report_scalar($newDb, 'SELECT COUNT(*) FROM appointments WHERE DATE(appointment_datetime) BETWEEN ? AND ?', $range)),
-                system_report_metric('Pending Requests', system_report_scalar($newDb, "SELECT COUNT(*) FROM appointments WHERE status = 'Pending' AND DATE(appointment_datetime) BETWEEN ? AND ?", $range)),
-                system_report_metric('Scheduled', system_report_scalar($newDb, "SELECT COUNT(*) FROM appointments WHERE status IN ('Approved', 'Scheduled') AND DATE(appointment_datetime) BETWEEN ? AND ?", $range)),
-                system_report_metric('For Completion', system_report_scalar($newDb, "SELECT COUNT(*) FROM appointments WHERE status = 'For Confirmation' AND DATE(appointment_datetime) BETWEEN ? AND ?", $range)),
-                system_report_metric('Completed', system_report_scalar($newDb, "SELECT COUNT(*) FROM appointments WHERE status = 'Completed' AND DATE(appointment_datetime) BETWEEN ? AND ?", $range)),
-                system_report_metric('Cancelled or No-show', system_report_scalar($newDb, "SELECT COUNT(*) FROM appointments WHERE status IN ('Cancelled', 'No Show', 'No-show') AND DATE(appointment_datetime) BETWEEN ? AND ?", $range)),
-            ],
-            'charts' => [
-                system_report_chart('Appointment Status', system_report_rows($newDb, "SELECT CASE WHEN status = 'For Confirmation' THEN 'For Completion' ELSE COALESCE(NULLIF(status, ''), 'Not specified') END label, COUNT(*) value FROM appointments WHERE DATE(appointment_datetime) BETWEEN ? AND ? GROUP BY label ORDER BY value DESC", $range)),
-                system_report_chart('Appointment Purpose', system_report_rows($newDb, "SELECT COALESCE(NULLIF(purpose, ''), 'Not specified') label, COUNT(*) value FROM appointments WHERE DATE(appointment_datetime) BETWEEN ? AND ? GROUP BY label ORDER BY value DESC LIMIT 10", $range)),
-                system_report_chart('Request Source', system_report_rows($newDb, "SELECT COALESCE(NULLIF(request_source, ''), 'Not specified') label, COUNT(*) value FROM appointments WHERE DATE(appointment_datetime) BETWEEN ? AND ? GROUP BY label ORDER BY value DESC", $range)),
-                system_report_chart('Appointments by Day', system_report_rows($newDb, "SELECT DATE_FORMAT(appointment_datetime, '%b %e') label, COUNT(*) value FROM appointments WHERE DATE(appointment_datetime) BETWEEN ? AND ? GROUP BY DATE(appointment_datetime), label ORDER BY DATE(appointment_datetime)", $range)),
-                system_report_chart('Appointments by Hour', system_report_rows($newDb, "SELECT DATE_FORMAT(appointment_datetime, '%l %p') label, COUNT(*) value FROM appointments WHERE DATE(appointment_datetime) BETWEEN ? AND ? GROUP BY HOUR(appointment_datetime), label ORDER BY HOUR(appointment_datetime)", $range)),
-            ],
-        ];
-    }
-
-    if (in_array('inventory', $modules, true)) {
-        $sections['inventory'] = [
-            'title' => 'Inventory',
-            'description' => 'Medicine and equipment stock, dispensing, borrowing, returns, and overdue loans.',
-            'metrics' => [
-                system_report_metric('Active Medicine', system_report_scalar($newDb, "SELECT COUNT(*) FROM inventory_items WHERE is_active = 1 AND item_type = 'Medicine'"), 'current snapshot'),
-                system_report_metric('Active Equipment', system_report_scalar($newDb, "SELECT COUNT(*) FROM inventory_items WHERE is_active = 1 AND item_type = 'Equipment'"), 'current snapshot'),
-                system_report_metric('Units in Stock', system_report_scalar($newDb, 'SELECT COALESCE(SUM(quantity), 0) FROM inventory_items WHERE is_active = 1'), 'current snapshot'),
+                system_report_metric('Inventory Transactions', system_report_scalar($newDb, 'SELECT COUNT(*) FROM inventory_transactions WHERE created_at >= ? AND created_at < ?', $range)),
+                system_report_metric('Medicine Dispensed', system_report_scalar($newDb, 'SELECT COALESCE(SUM(quantity), 0) FROM medicine_dispensings WHERE dispensed_at >= ? AND dispensed_at < ?', $range), 'units'),
+                system_report_metric('Equipment Loans', system_report_scalar($newDb, 'SELECT COUNT(*) FROM equipment_loans WHERE borrowed_at >= ? AND borrowed_at < ?', $range)),
                 system_report_metric('Low Stock Items', system_report_scalar($newDb, 'SELECT COUNT(*) FROM inventory_items WHERE is_active = 1 AND quantity <= reorder_level'), 'current snapshot'),
-                system_report_metric('Medicine Dispensed', system_report_scalar($newDb, 'SELECT COALESCE(SUM(quantity), 0) FROM medicine_dispensings WHERE DATE(dispensed_at) BETWEEN ? AND ?', $range), 'units'),
-                system_report_metric('People Given Medicine', system_report_scalar($newDb, 'SELECT COUNT(DISTINCT v.patient_person_id) FROM medicine_dispensings md JOIN visit_entries ve ON ve.entry_id = md.entry_id JOIN visits v ON v.visit_id = ve.visit_id WHERE DATE(md.dispensed_at) BETWEEN ? AND ?', $range)),
-                system_report_metric('Equipment Loans', system_report_scalar($newDb, 'SELECT COUNT(*) FROM equipment_loans WHERE DATE(borrowed_at) BETWEEN ? AND ?', $range)),
-                system_report_metric('Equipment Items Borrowed', system_report_scalar($newDb, 'SELECT COALESCE(SUM(quantity), 0) FROM equipment_loans WHERE DATE(borrowed_at) BETWEEN ? AND ?', $range)),
-                system_report_metric('Currently Borrowed', system_report_scalar($newDb, "SELECT COUNT(*) FROM equipment_loans WHERE status IN ('Borrowed', 'Active')"), 'current snapshot'),
                 system_report_metric('Overdue Loans', system_report_scalar($newDb, 'SELECT COUNT(*) FROM equipment_loans WHERE returned_at IS NULL AND due_at < NOW()'), 'current snapshot'),
             ],
             'charts' => [
-                system_report_chart('Items by Type', system_report_rows($newDb, "SELECT COALESCE(NULLIF(item_type, ''), 'Not specified') label, COUNT(*) value FROM inventory_items WHERE is_active = 1 GROUP BY label ORDER BY value DESC")),
+                system_report_chart('Inventory Transactions by Type', system_report_rows($newDb, "SELECT COALESCE(NULLIF(transaction_type, ''), 'Not specified') label, COUNT(*) value FROM inventory_transactions WHERE created_at >= ? AND created_at < ? GROUP BY label ORDER BY value DESC", $range), 'No inventory transactions were recorded for this period.', 0, 'bar'),
+                system_report_chart('Loan Status', system_report_rows($newDb, "SELECT COALESCE(NULLIF(status, ''), 'Not specified') label, COUNT(*) value FROM equipment_loans WHERE borrowed_at >= ? AND borrowed_at < ? GROUP BY label ORDER BY value DESC", $range), 'No equipment loans were recorded for this period.', 0, 'donut'),
+            ],
+            'tables' => [
                 system_report_chart('Stock Condition', system_report_rows($newDb, "SELECT CASE WHEN quantity = 0 THEN 'Out of Stock' WHEN quantity <= reorder_level THEN 'Low Stock' ELSE 'Healthy Stock' END label, COUNT(*) value FROM inventory_items WHERE is_active = 1 GROUP BY label ORDER BY value DESC")),
-                system_report_chart('Inventory Transactions', system_report_rows($newDb, "SELECT COALESCE(NULLIF(transaction_type, ''), 'Not specified') label, COUNT(*) value FROM inventory_transactions WHERE DATE(created_at) BETWEEN ? AND ? GROUP BY label ORDER BY value DESC", $range)),
-                system_report_chart('Medicine Dispensed by Month', system_report_rows($newDb, "SELECT DATE_FORMAT(md.dispensed_at, '%b %Y') label, SUM(md.quantity) value FROM medicine_dispensings md WHERE DATE(md.dispensed_at) BETWEEN ? AND ? GROUP BY YEAR(md.dispensed_at), MONTH(md.dispensed_at), label ORDER BY YEAR(md.dispensed_at), MONTH(md.dispensed_at)", $range), 'No medicine was dispensed during this period.'),
-                system_report_chart('People Given Medicine by Month', system_report_rows($newDb, "SELECT DATE_FORMAT(md.dispensed_at, '%b %Y') label, COUNT(DISTINCT v.patient_person_id) value FROM medicine_dispensings md JOIN visit_entries ve ON ve.entry_id = md.entry_id JOIN visits v ON v.visit_id = ve.visit_id WHERE DATE(md.dispensed_at) BETWEEN ? AND ? GROUP BY YEAR(md.dispensed_at), MONTH(md.dispensed_at), label ORDER BY YEAR(md.dispensed_at), MONTH(md.dispensed_at)", $range), 'No patients received medicine during this period.'),
-                system_report_chart('Medicine Dispensed by Item', system_report_rows($newDb, "SELECT i.item_name label, SUM(md.quantity) value FROM medicine_dispensings md JOIN inventory_items i ON i.item_id = md.item_id WHERE DATE(md.dispensed_at) BETWEEN ? AND ? GROUP BY i.item_id, i.item_name ORDER BY value DESC", $range)),
-                system_report_chart('Low Stock by Type', system_report_rows($newDb, "SELECT COALESCE(NULLIF(item_type, ''), 'Not specified') label, COUNT(*) value FROM inventory_items WHERE is_active = 1 AND quantity <= reorder_level GROUP BY label ORDER BY value DESC")),
-                system_report_chart('Loan Status', system_report_rows($newDb, "SELECT COALESCE(NULLIF(status, ''), 'Not specified') label, COUNT(*) value FROM equipment_loans WHERE DATE(borrowed_at) BETWEEN ? AND ? GROUP BY label ORDER BY value DESC", $range)),
-                system_report_chart('Borrowed Equipment', system_report_rows($newDb, "SELECT i.item_name label, SUM(el.quantity) value FROM equipment_loans el JOIN inventory_items i ON i.item_id = el.item_id WHERE DATE(el.borrowed_at) BETWEEN ? AND ? GROUP BY i.item_id, i.item_name ORDER BY value DESC", $range)),
+                system_report_chart('Medicine Dispensed by Item', system_report_rows($newDb, "SELECT i.item_name label, SUM(md.quantity) value FROM medicine_dispensings md JOIN inventory_items i ON i.item_id = md.item_id WHERE md.dispensed_at >= ? AND md.dispensed_at < ? GROUP BY i.item_id, i.item_name ORDER BY value DESC", $range)),
+                system_report_chart('Borrowed Equipment', system_report_rows($newDb, "SELECT i.item_name label, SUM(el.quantity) value FROM equipment_loans el JOIN inventory_items i ON i.item_id = el.item_id WHERE el.borrowed_at >= ? AND el.borrowed_at < ? GROUP BY i.item_id, i.item_name ORDER BY value DESC", $range)),
             ],
         ];
     }
 
-    if (in_array('referrals', $modules, true)) {
-        $sections['referrals'] = [
-            'title' => 'Referrals',
-            'description' => 'Referrals created during APE, consultations, emergencies, and clinic visits.',
+    if (in_array('safety', $modules, true)) {
+        $sections['safety'] = [
+            'title' => 'Safety Transactions',
+            'description' => 'Alerts and incident reports recorded during the selected period.',
             'metrics' => [
-                system_report_metric('Referrals', system_report_scalar($newDb, 'SELECT COUNT(*) FROM referrals WHERE DATE(referral_date) BETWEEN ? AND ?', $range)),
-                system_report_metric('Completed', system_report_scalar($newDb, "SELECT COUNT(*) FROM referrals WHERE status = 'Completed' AND DATE(referral_date) BETWEEN ? AND ?", $range)),
-                system_report_metric('Linked to Visit', system_report_scalar($newDb, 'SELECT COUNT(*) FROM referrals WHERE visit_id IS NOT NULL AND DATE(referral_date) BETWEEN ? AND ?', $range)),
-                system_report_metric('Unique Destinations', system_report_scalar($newDb, 'SELECT COUNT(DISTINCT referred_to) FROM referrals WHERE DATE(referral_date) BETWEEN ? AND ?', $range)),
+                system_report_metric('Alerts', system_report_scalar($newDb, 'SELECT COUNT(*) FROM nurse_alerts WHERE created_at >= ? AND created_at < ?', $range)),
+                system_report_metric('Incident Reports', system_report_scalar($newDb, 'SELECT COUNT(*) FROM incident_reports WHERE reported_at >= ? AND reported_at < ?', $range)),
+                system_report_metric('Pending Alerts', system_report_scalar($newDb, "SELECT COUNT(*) FROM nurse_alerts WHERE status = 'Pending' AND created_at >= ? AND created_at < ?", $range)),
+                system_report_metric('High or Critical Risk', system_report_scalar($newDb, "SELECT COUNT(*) FROM nurse_alerts WHERE risk_level IN ('High', 'Critical') AND created_at >= ? AND created_at < ?", $range)),
             ],
             'charts' => [
-                system_report_chart('Referral Status', system_report_rows($newDb, "SELECT COALESCE(NULLIF(status, ''), 'Not specified') label, COUNT(*) value FROM referrals WHERE DATE(referral_date) BETWEEN ? AND ? GROUP BY label ORDER BY value DESC", $range)),
-                system_report_chart('Referred To', system_report_rows($newDb, "SELECT COALESCE(NULLIF(referred_to, ''), 'Not specified') label, COUNT(*) value FROM referrals WHERE DATE(referral_date) BETWEEN ? AND ? GROUP BY label ORDER BY value DESC", $range)),
-                system_report_chart('Referrals by Day', system_report_rows($newDb, "SELECT DATE_FORMAT(referral_date, '%b %e') label, COUNT(*) value FROM referrals WHERE DATE(referral_date) BETWEEN ? AND ? GROUP BY DATE(referral_date), label ORDER BY DATE(referral_date)", $range)),
-                system_report_chart('Referral Source', system_report_rows($newDb, "SELECT CASE WHEN visit_id IS NOT NULL THEN 'Visit / Consultation' ELSE 'Direct Referral' END label, COUNT(*) value FROM referrals WHERE DATE(referral_date) BETWEEN ? AND ? GROUP BY label ORDER BY value DESC", $range)),
+                system_report_chart('Alert Risk Level', system_report_rows($newDb, "SELECT COALESCE(NULLIF(risk_level, ''), 'Not assessed') label, COUNT(*) value FROM nurse_alerts WHERE created_at >= ? AND created_at < ? GROUP BY label ORDER BY FIELD(label, 'Critical', 'High', 'Moderate', 'Low', 'Not assessed')", $range), 'No alerts were recorded for this period.', 0, 'donut'),
+                system_report_chart('Alert Status', system_report_rows($newDb, "SELECT COALESCE(NULLIF(status, ''), 'Not specified') label, COUNT(*) value FROM nurse_alerts WHERE created_at >= ? AND created_at < ? GROUP BY label ORDER BY value DESC", $range), 'No alerts were recorded for this period.', 0, 'donut'),
             ],
-        ];
-    }
-
-    if (in_array('alerts', $modules, true)) {
-        $sections['alerts'] = [
-            'title' => 'Alerts and Incidents',
-            'description' => 'Alerts, incidents, emergency risk, passport access, and resolution status.',
-            'metrics' => [
-                system_report_metric('Alerts', system_report_scalar($newDb, 'SELECT COUNT(*) FROM nurse_alerts WHERE DATE(created_at) BETWEEN ? AND ?', $range)),
-                system_report_metric('Incident Reports', system_report_scalar($newDb, 'SELECT COUNT(*) FROM incident_reports WHERE DATE(reported_at) BETWEEN ? AND ?', $range)),
-                system_report_metric('Passport Accesses', system_report_scalar($newDb, 'SELECT COUNT(*) FROM passport_access_logs WHERE DATE(accessed_at) BETWEEN ? AND ?', $range)),
-                system_report_metric('Pending', system_report_scalar($newDb, "SELECT COUNT(*) FROM nurse_alerts WHERE status = 'Pending' AND DATE(created_at) BETWEEN ? AND ?", $range)),
-                system_report_metric('Resolved', system_report_scalar($newDb, "SELECT COUNT(*) FROM nurse_alerts WHERE status = 'Resolved' AND DATE(created_at) BETWEEN ? AND ?", $range)),
-                system_report_metric('High or Critical Risk', system_report_scalar($newDb, "SELECT COUNT(*) FROM nurse_alerts WHERE risk_level IN ('High', 'Critical') AND DATE(created_at) BETWEEN ? AND ?", $range)),
-            ],
-            'charts' => [
-                system_report_chart('Risk Level', system_report_rows($newDb, "SELECT COALESCE(NULLIF(risk_level, ''), 'Not assessed') label, COUNT(*) value FROM nurse_alerts WHERE DATE(created_at) BETWEEN ? AND ? GROUP BY label ORDER BY FIELD(label, 'Critical', 'High', 'Moderate', 'Low', 'Not assessed')", $range)),
-                system_report_chart('Alert Status', system_report_rows($newDb, "SELECT COALESCE(NULLIF(status, ''), 'Not specified') label, COUNT(*) value FROM nurse_alerts WHERE DATE(created_at) BETWEEN ? AND ? GROUP BY label ORDER BY value DESC", $range)),
-                system_report_chart('Incident Type', system_report_rows($newDb, "SELECT COALESCE(NULLIF(incident_type, ''), 'Not specified') label, COUNT(*) value FROM nurse_alerts WHERE DATE(created_at) BETWEEN ? AND ? GROUP BY label ORDER BY value DESC", $range)),
-                system_report_chart('Alerts by Day', system_report_rows($newDb, "SELECT DATE_FORMAT(created_at, '%b %e') label, COUNT(*) value FROM nurse_alerts WHERE DATE(created_at) BETWEEN ? AND ? GROUP BY DATE(created_at), label ORDER BY DATE(created_at)", $range)),
-                system_report_chart('Incident Report Status', system_report_rows($newDb, "SELECT COALESCE(NULLIF(status, ''), 'Not specified') label, COUNT(*) value FROM incident_reports WHERE DATE(reported_at) BETWEEN ? AND ? GROUP BY label ORDER BY value DESC", $range)),
-                system_report_chart('Passport Access by Day', system_report_rows($newDb, "SELECT DATE_FORMAT(accessed_at, '%b %e') label, COUNT(*) value FROM passport_access_logs WHERE DATE(accessed_at) BETWEEN ? AND ? GROUP BY DATE(accessed_at), label ORDER BY DATE(accessed_at)", $range)),
-            ],
-        ];
-    }
-
-    if (in_array('feedback', $modules, true)) {
-        $feedbackDimensions = [];
-        foreach ([
-            'tangibles' => 'Tangibles',
-            'reliability' => 'Reliability',
-            'responsiveness' => 'Responsiveness',
-            'assurance' => 'Assurance',
-            'empathy' => 'Empathy',
-            'overall' => 'Overall SERVPERF',
-        ] as $column => $label) {
-            $feedbackDimensions[] = [
-                'label' => $label,
-                'value' => system_report_scalar(
-                    $newDb,
-                    "SELECT COALESCE(AVG({$column}), 0) FROM clinic_feedback WHERE DATE(submitted_at) BETWEEN ? AND ?",
-                    $range
-                ),
-            ];
-        }
-
-        $sections['feedback'] = [
-            'title' => 'Clinic Feedback',
-            'description' => 'Anonymous student evaluations across five SERVPERF dimensions.',
-            'metrics' => [
-                system_report_metric('Responses', system_report_scalar($newDb, 'SELECT COUNT(*) FROM clinic_feedback WHERE DATE(submitted_at) BETWEEN ? AND ?', $range)),
-                system_report_metric('Average Overall Score', system_report_scalar($newDb, 'SELECT COALESCE(AVG(overall), 0) FROM clinic_feedback WHERE DATE(submitted_at) BETWEEN ? AND ?', $range), 'out of 7', 2),
-                system_report_metric('Excellent', system_report_scalar($newDb, 'SELECT COUNT(*) FROM clinic_feedback WHERE overall >= 6 AND DATE(submitted_at) BETWEEN ? AND ?', $range)),
-                system_report_metric('Satisfactory', system_report_scalar($newDb, 'SELECT COUNT(*) FROM clinic_feedback WHERE overall >= 4 AND overall < 6 AND DATE(submitted_at) BETWEEN ? AND ?', $range)),
-                system_report_metric('Critical', system_report_scalar($newDb, 'SELECT COUNT(*) FROM clinic_feedback WHERE overall < 4 AND DATE(submitted_at) BETWEEN ? AND ?', $range)),
-                system_report_metric('Written Comments', system_report_scalar($newDb, "SELECT COUNT(*) FROM clinic_feedback WHERE NULLIF(TRIM(comments), '') IS NOT NULL AND DATE(submitted_at) BETWEEN ? AND ?", $range)),
-            ],
-            'charts' => [
-                system_report_chart('Average SERVPERF Scores', $feedbackDimensions, 'No feedback was submitted during this period.', 2),
-                system_report_chart('Responses by Service', system_report_rows($newDb, "
-                    SELECT COALESCE(NULLIF(CASE WHEN service_type = 'Other' THEN service_other ELSE service_type END, ''), 'Other') label, COUNT(*) value
-                    FROM clinic_feedback
-                    WHERE DATE(submitted_at) BETWEEN ? AND ?
-                    GROUP BY label ORDER BY value DESC, label
-                ", $range), 'No feedback was submitted during this period.'),
-                system_report_chart('Feedback Performance', system_report_rows($newDb, "
-                    SELECT CASE WHEN overall >= 6 THEN 'Excellent' WHEN overall >= 4 THEN 'Satisfactory' ELSE 'Critical' END label, COUNT(*) value
-                    FROM clinic_feedback
-                    WHERE DATE(submitted_at) BETWEEN ? AND ?
-                    GROUP BY label ORDER BY FIELD(label, 'Excellent', 'Satisfactory', 'Critical')
-                ", $range), 'No feedback was submitted during this period.'),
-                system_report_chart('Feedback by Day', system_report_rows($newDb, "
-                    SELECT DATE_FORMAT(submitted_at, '%b %e') label, COUNT(*) value
-                    FROM clinic_feedback
-                    WHERE DATE(submitted_at) BETWEEN ? AND ?
-                    GROUP BY DATE(submitted_at), label ORDER BY DATE(submitted_at)
-                ", $range), 'No feedback was submitted during this period.'),
+            'tables' => [
+                system_report_chart('Alert Incident Type', system_report_rows($newDb, "SELECT COALESCE(NULLIF(incident_type, ''), 'Not specified') label, COUNT(*) value FROM nurse_alerts WHERE created_at >= ? AND created_at < ? GROUP BY label ORDER BY value DESC", $range)),
+                system_report_chart('Incident Report Status', system_report_rows($newDb, "SELECT COALESCE(NULLIF(status, ''), 'Not specified') label, COUNT(*) value FROM incident_reports WHERE reported_at >= ? AND reported_at < ? GROUP BY label ORDER BY value DESC", $range)),
             ],
         ];
     }
 
     return [
-        'title' => 'CLINiQ System Analytics Report',
+        'title' => 'CLINiQ Clinic Transaction Summary',
         'date_from' => $dateFrom,
         'date_to' => $dateTo,
         'generated_at' => date('Y-m-d H:i:s'),
         'modules' => $modules,
         'action_summary' => system_report_action_summary($newDb),
+        'transaction_summary' => [
+            system_report_metric('Clinical Visits', system_report_scalar($newDb, 'SELECT COUNT(*) FROM visits WHERE visit_datetime >= ? AND visit_datetime < ?', $range)),
+            system_report_metric('Clinical Entries', system_report_scalar($newDb, 'SELECT COUNT(*) FROM visit_entries ve JOIN visits v ON v.visit_id = ve.visit_id WHERE v.visit_datetime >= ? AND v.visit_datetime < ?', $range)),
+            system_report_metric('APE Records', system_report_scalar($newDb, 'SELECT COUNT(*) FROM ape_records WHERE (exam_date >= ? AND exam_date < ?) OR (exam_date IS NULL AND created_at >= ? AND created_at < ?)', $apeRange)),
+            system_report_metric('APE Findings', system_report_scalar($newDb, 'SELECT COUNT(*) FROM ape_findings WHERE recorded_at >= ? AND recorded_at < ?', $range)),
+            system_report_metric('Appointment Requests', system_report_scalar($newDb, 'SELECT COUNT(*) FROM appointments WHERE created_at >= ? AND created_at < ?', $range)),
+            system_report_metric('Inventory Transactions', system_report_scalar($newDb, 'SELECT COUNT(*) FROM inventory_transactions WHERE created_at >= ? AND created_at < ?', $range)),
+            system_report_metric('Medicine Dispensed', system_report_scalar($newDb, 'SELECT COALESCE(SUM(quantity), 0) FROM medicine_dispensings WHERE dispensed_at >= ? AND dispensed_at < ?', $range), 'units'),
+            system_report_metric('Equipment Loans', system_report_scalar($newDb, 'SELECT COUNT(*) FROM equipment_loans WHERE borrowed_at >= ? AND borrowed_at < ?', $range)),
+            system_report_metric('Referrals', system_report_scalar($newDb, 'SELECT COUNT(*) FROM referrals WHERE referral_date >= ? AND referral_date < ?', $range)),
+            system_report_metric('Alerts', system_report_scalar($newDb, 'SELECT COUNT(*) FROM nurse_alerts WHERE created_at >= ? AND created_at < ?', $range)),
+            system_report_metric('Incident Reports', system_report_scalar($newDb, 'SELECT COUNT(*) FROM incident_reports WHERE reported_at >= ? AND reported_at < ?', $range)),
+        ],
+        'attention_summary' => [
+            system_report_metric('Unaddressed Visits', system_report_scalar($newDb, "SELECT COUNT(*) FROM visits WHERE status = 'Unaddressed' AND visit_datetime >= ? AND visit_datetime < ?", $range)),
+            system_report_metric('Pending Appointments', system_report_scalar($newDb, "SELECT COUNT(*) FROM appointments WHERE status = 'Pending' AND created_at >= ? AND created_at < ?", $range)),
+            system_report_metric('Appointments for Completion', system_report_scalar($newDb, "SELECT COUNT(*) FROM appointments WHERE status = 'For Confirmation' AND created_at >= ? AND created_at < ?", $range)),
+            system_report_metric('Low Stock Items', system_report_scalar($newDb, 'SELECT COUNT(*) FROM inventory_items WHERE is_active = 1 AND quantity <= reorder_level'), 'current snapshot'),
+            system_report_metric('Overdue Loans', system_report_scalar($newDb, 'SELECT COUNT(*) FROM equipment_loans WHERE returned_at IS NULL AND due_at < NOW()'), 'current snapshot'),
+            system_report_metric('Incomplete Referrals', system_report_scalar($newDb, "SELECT COUNT(*) FROM referrals WHERE COALESCE(status, '') <> 'Completed' AND referral_date >= ? AND referral_date < ?", $range)),
+            system_report_metric('Pending Alerts', system_report_scalar($newDb, "SELECT COUNT(*) FROM nurse_alerts WHERE status = 'Pending' AND created_at >= ? AND created_at < ?", $range)),
+            system_report_metric('High or Critical Alerts', system_report_scalar($newDb, "SELECT COUNT(*) FROM nurse_alerts WHERE risk_level IN ('High', 'Critical') AND created_at >= ? AND created_at < ?", $range)),
+        ],
         'sections' => $sections,
     ];
 }

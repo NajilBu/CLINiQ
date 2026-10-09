@@ -10,6 +10,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Allow: POST');
     exit;
 }
+csrf_enforce_request();
 
 $dateFrom = normalize_system_report_date($_POST['from'] ?? null, date('Y-m-01'));
 $dateTo = normalize_system_report_date($_POST['to'] ?? null, date('Y-m-d'));

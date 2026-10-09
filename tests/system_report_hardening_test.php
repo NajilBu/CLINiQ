@@ -10,11 +10,12 @@ $tables = file_get_contents($root . '/public/reports/tables.php');
 $preview = file_get_contents($root . '/public/reports/preview.php');
 $pdf = file_get_contents($root . '/public/reports/pdf.php');
 $download = file_get_contents($root . '/public/reports/download.php');
+$serverPdf = file_get_contents($root . '/app/services/SystemReportPdf.php');
 $exportPayload = file_get_contents($root . '/public/reports/export-data.php');
 $alerts = file_get_contents($root . '/public/alerts/index.php');
 $referrals = file_get_contents($root . '/public/referrals/index.php');
 
-if ($builder === false || $renderer === false || $index === false || $tables === false || $preview === false || $pdf === false || $download === false || $exportPayload === false || $alerts === false || $referrals === false) {
+if ($builder === false || $renderer === false || $index === false || $tables === false || $preview === false || $pdf === false || $download === false || $serverPdf === false || $exportPayload === false || $alerts === false || $referrals === false) {
     throw new RuntimeException('Unable to read the report sources.');
 }
 
@@ -46,11 +47,23 @@ $checks = [
         && str_contains($renderer, '<caption>')
         && str_contains($renderer, 'View data table'),
     'visual charts limit categories without limiting table data' => str_contains($index, 'tableRows.slice(0, 10)'),
-    'browser export keeps complete tables while server PDF remains available' => str_contains($preview, 'name="include_tables"')
-        && str_contains($download, 'SystemReportPdf.php')
+    'server PDF is the authoritative protected document' => str_contains($preview, 'All clinic transaction groups are included in this report.')
+        && str_contains($preview, 'formaction="pdf.php"')
+        && str_contains($preview, 'formaction="download.php"')
         && str_contains($download, 'render_system_report_pdf')
+        && str_contains($download, "header('Content-Type: application/pdf')")
+        && str_contains($serverPdf, '%PDF-1.4')
+        && str_contains($serverPdf, 'Transaction Summary')
+        && str_contains($pdf, "require __DIR__ . '/download.php';")
         && str_contains($exportPayload, 'build_system_report($dateFrom, $dateTo, $modules)')
         && str_contains($download, 'csrf_enforce_request'),
+    'legacy patient CSV route is retired' => !is_file($root . '/public/reports/export.php'),
+    'dashboard CSS cache key changes with the asset' => str_contains($index, "filemtime(__DIR__ . '/../assets/css/reports.css')"),
+    'report filters use index-friendly half-open date ranges' => str_contains($builder, 'function system_report_range')
+        && str_contains($builder, 'visit_datetime >= ? AND visit_datetime < ?')
+        && str_contains($builder, 'created_at >= ? AND created_at < ?')
+        && !str_contains($builder, 'DATE(visit_datetime) BETWEEN')
+        && !str_contains($builder, 'DATE(created_at) BETWEEN'),
     'action queues have matching filters' => str_contains($alerts, "'high-critical'")
         && str_contains($referrals, "['all', 'incomplete', 'completed']"),
 ];

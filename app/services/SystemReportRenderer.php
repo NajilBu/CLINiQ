@@ -12,8 +12,12 @@ function system_report_format_number(float|int $value, int $decimals = 0): strin
     return number_format((float) $value, $decimals);
 }
 
-function system_report_chart_type(string $title): string
+function system_report_chart_type(array|string $chart): string
 {
+    if (is_array($chart) && isset($chart['render_type'])) {
+        return (string) $chart['render_type'];
+    }
+    $title = is_array($chart) ? (string) ($chart['title'] ?? '') : $chart;
     if (preg_match('/by Day|by Month|Trend/i', $title)) {
         return 'line';
     }
@@ -146,6 +150,12 @@ function render_system_report_progress_chart(array $rows): string
 
 function render_system_report_chart(array $chart): string
 {
+    if (($chart['presentation'] ?? '') === 'empty') {
+        return '<p class="report-empty">' . system_report_escape((string) ($chart['empty'] ?? 'No data available for this period.')) . '</p>';
+    }
+    if (($chart['presentation'] ?? '') === 'summary') {
+        return '<p class="report-chart-summary">' . system_report_escape((string) ($chart['insight'] ?? 'A single category was recorded for this period.')) . '</p>';
+    }
     if (!$chart['rows']) {
         return '<p class="report-empty">' . system_report_escape($chart['empty']) . '</p>';
     }
@@ -270,6 +280,8 @@ function system_report_styles(): string
 .report-metric-note { margin: 5px 0 0; color: #94a3b8; font-size: 9px; font-weight: 700; }
 .report-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .report-chart { min-height: 180px; padding: 15px; border: 1px solid var(--cliniq-outline, #dfe9e2); border-radius: 12px; background: #fff; break-inside: avoid; page-break-inside: avoid; }
+.report-chart-summary-card, .report-document-dashboard .report-chart-summary-card { min-height: 0; }
+.report-document-dashboard .report-chart-summary-card .report-chart-visual { min-height: 0; }
 .report-data-table { margin-top: 12px; border-top: 1px solid #e2ebe5; }
 .report-data-table summary { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; color: #205f3d; cursor: pointer; font-size: 11px; font-weight: 800; }
 .report-data-table summary span { color: #64748b; }
@@ -334,6 +346,7 @@ function system_report_styles(): string
 .report-remarks textarea:focus { border-color: #58a978; box-shadow: 0 0 0 3px rgba(47,133,83,.1); }
 .report-remarks-print { min-height: 65px; padding: 10px 12px; border: 1px solid #d8e4dc; border-radius: 9px; background: repeating-linear-gradient(#fff 0, #fff 20px, #e8efe9 21px); color: #334155; font-size: 10px; font-weight: 600; line-height: 21px; white-space: pre-wrap; }
 .report-empty { display: grid; place-items: center; min-height: 112px; margin: 0; border: 1px dashed #d8e2db; border-radius: 9px; color: #94a3b8; font-size: 10px; font-weight: 700; text-align: center; }
+.report-chart-summary { margin: 0; padding: 14px 0; color: #526155; font-size: 11px; line-height: 1.55; }
 .report-footer { display: flex; justify-content: space-between; padding: 16px 40px; border-top: 1px solid #dfe9e2; color: #94a3b8; font-size: 9px; font-weight: 700; }
 .report-document-dashboard .report-chart-fill,
 .report-document-dashboard .report-column-track div { background: var(--cliniq-primary, #3b8b5d); }
@@ -481,10 +494,10 @@ function render_system_report_document(array $report, bool $standalone = false, 
                 <div class="report-cover-card">
                     <div class="report-brand"><div class="report-logo">+</div><div><strong><?= system_report_escape($systemName) ?></strong><span><?= system_report_escape($departmentName) ?></span></div></div>
                     <h1><?= system_report_escape($report['title']) ?></h1>
-                    <p>Consolidated clinic activity and patient demographics for the selected reporting period.</p>
+                    <p>Operational clinic transactions and follow-up queues for the selected reporting period.</p>
                     <div class="report-meta">
                         <div><span>Reporting Period</span><strong><?= system_report_escape(date('M j, Y', strtotime($report['date_from']))) ?> - <?= system_report_escape(date('M j, Y', strtotime($report['date_to']))) ?></strong></div>
-                        <div><span>Included Modules</span><strong data-report-module-total><?= count($report['sections']) ?> module(s)</strong></div>
+                        <div><span>Transaction Groups</span><strong data-report-module-total><?= count($report['sections']) ?> group(s)</strong></div>
                         <div><span>Generated</span><strong><?= system_report_escape(date('M j, Y g:i A', strtotime($report['generated_at']))) ?></strong></div>
                     </div>
                 </div>
@@ -500,7 +513,7 @@ function render_system_report_document(array $report, bool $standalone = false, 
                         </div>
                         <div class="report-cover-detail">
                             <span>Report type</span>
-                            <strong>System Analytics Report</strong>
+                            <strong>Clinic Transaction Summary</strong>
                         </div>
                         <div class="report-cover-detail">
                             <span>School office</span>
@@ -520,9 +533,9 @@ function render_system_report_document(array $report, bool $standalone = false, 
         <?php endif; ?>
         <?php if ($isPreview): ?>
             <section class="report-preview-summary" aria-label="Report preview summary">
-                <div><p class="report-preview-summary-eyebrow">Live report preview</p><h2><?= system_report_escape($report['title']) ?></h2><p>Review the selected operational sections before opening the printable PDF view.</p></div>
+                <div><p class="report-preview-summary-eyebrow">Live report preview</p><h2><?= system_report_escape($report['title']) ?></h2><p>Review the complete transaction summary before opening the printable PDF view.</p></div>
                 <div class="report-preview-summary-stat"><span>Reporting period</span><strong><?= system_report_escape(date('M j, Y', strtotime($report['date_from']))) ?> – <?= system_report_escape(date('M j, Y', strtotime($report['date_to']))) ?></strong></div>
-                <div class="report-preview-summary-stat"><span>Included modules</span><strong data-report-module-total><?= count($report['sections']) ?> module(s)</strong></div>
+                <div class="report-preview-summary-stat"><span>Transaction groups</span><strong data-report-module-total><?= count($report['sections']) ?> group(s)</strong></div>
                 <div class="report-preview-summary-stat"><span>Export status</span><strong>Ready to export</strong></div>
             </section>
         <?php endif; ?>
@@ -563,10 +576,14 @@ function render_system_report_document(array $report, bool $standalone = false, 
                             <?php if ($tableOnly): ?>
                                 <div class="report-chart"><h3><?= system_report_escape($chart['title']) ?></h3><?= render_system_report_data_table($chart, true) ?></div>
                             <?php else: ?>
-                                <?php $chartType = system_report_chart_type($chart['title']); ?>
-                                <?php $chartPayload = json_encode(['type' => $chartType, 'title' => $chart['title'], 'rows' => $chart['rows']], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '{}'; ?>
-                                <div class="report-chart" data-report-chart="<?= system_report_escape($chartPayload) ?>"><h3><?= system_report_escape($chart['title']) ?><span class="report-chart-kind"><?= system_report_escape($chartType) ?></span></h3><div class="report-chart-visual"><?= render_system_report_chart($chart) ?></div><?php if ($includeTables): ?><?= render_system_report_data_table($chart) ?><?php endif; ?></div>
+                                <?php $chartType = system_report_chart_type($chart); ?>
+                                <?php $chartPayload = json_encode(['type' => $chartType, 'title' => $chart['title'], 'rows' => $chart['rows'], 'presentation' => $chart['presentation'] ?? 'diagram'], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '{}'; ?>
+                                <?php $isDiagram = ($chart['presentation'] ?? 'diagram') === 'diagram'; ?>
+                                <div class="report-chart<?= $isDiagram ? '' : ' report-chart-summary-card' ?>" data-report-chart="<?= system_report_escape($chartPayload) ?>"><h3><?= system_report_escape($chart['title']) ?><?php if ($isDiagram): ?><span class="report-chart-kind"><?= system_report_escape($chartType) ?></span><?php endif; ?></h3><div class="report-chart-visual"><?= render_system_report_chart($chart) ?></div><?php if ($includeTables): ?><?= render_system_report_data_table($chart) ?><?php endif; ?></div>
                             <?php endif; ?>
+                        <?php endforeach; ?>
+                        <?php foreach (($section['tables'] ?? []) as $table): ?>
+                            <div class="report-chart report-chart-table"><h3><?= system_report_escape((string) ($table['title'] ?? 'Transaction detail')) ?></h3><?= render_system_report_data_table($table, true) ?></div>
                         <?php endforeach; ?>
                     </div>
                     <?php if ($remarksMode === 'input'): ?>
