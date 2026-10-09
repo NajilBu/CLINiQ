@@ -5,6 +5,7 @@ declare(strict_types=1);
 $source = file_get_contents(__DIR__ . '/../public/ape/scheduling.php');
 $service = file_get_contents(__DIR__ . '/../app/services/ApeCycleService.php');
 $appScript = file_get_contents(__DIR__ . '/../public/assets/js/app.js');
+$loadingScript = file_get_contents(__DIR__ . '/../public/assets/js/submission-loading.js');
 $appStyles = file_get_contents(__DIR__ . '/../public/assets/css/app.css');
 
 function check_time(bool $ok, string $message): void
@@ -24,6 +25,8 @@ check_time(str_contains($source, 'startMinutes >= endMinutes'), 'Client-side ord
 check_time(str_contains($source, 'appointmentConflicts'), 'Client-side appointment conflict validation remains available.');
 check_time(str_contains($source, 'unavailableBlocks'), 'Client-side unavailable-time validation remains available.');
 check_time(str_contains($source, "confirmAction('Create this APE batch?'"), 'Batch creation uses the custom confirmation modal.');
+check_time(str_contains($source, 'data-loading-after-confirm="true"'), 'The APE batch loader must wait for confirmation.');
+check_time(str_contains($loadingScript, "form.dataset.loadingAfterConfirm === 'true' && form.dataset.confirmed !== '1'"), 'The shared loader must defer until a custom confirmation is accepted.');
 check_time(str_contains($service, 'The APE batch date cannot be in the past.'), 'Server-side past-date validation is required.');
 check_time(str_contains($service, 'Choose a future start time for a batch scheduled today.'), 'Server-side same-day start-time validation is required.');
 check_time(str_contains($service, 'LOWER(batch_name) = LOWER(?)'), 'Server-side duplicate-name validation is required.');

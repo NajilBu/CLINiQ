@@ -235,7 +235,7 @@ render_clinic_command_header(
                 </button>
             </div>
 
-            <form method="post" data-no-ajax="true" id="apeBatchForm" class="space-y-5">
+            <form method="post" data-no-ajax="true" data-loading-after-confirm="true" id="apeBatchForm" class="space-y-5">
                 <input type="hidden" name="action" value="create_ape_schedule_batch">
                 <input type="hidden" name="ape_cycle_id" value="<?= (int) $apeCurrentCycle['ape_cycle_id'] ?>">
 

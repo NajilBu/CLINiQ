@@ -768,9 +768,15 @@ function create_ape_schedule_batch(array $input, ?int $actorPersonId): array
                 'ape_batch',
                 $batchId
             );
-            patient_email_queue_notification((int) $candidateRow['patient_id'], 'ape_schedule_updated', 'ape_schedule_updates', 'APE schedule assigned', "Your APE schedule is {$scheduleLabel}. Batch: {$batchName}.", 'ape', $batchId, $actorPersonId, null, 'assigned');
         }
         $db->commit();
+        foreach ($candidateRows as $candidateRow) {
+            try {
+                patient_email_queue_notification((int) $candidateRow['patient_id'], 'ape_schedule_updated', 'ape_schedule_updates', 'APE schedule assigned', "Your APE schedule is {$scheduleLabel}. Batch: {$batchName}.", 'ape', $batchId, $actorPersonId, null, 'assigned');
+            } catch (Throwable $emailError) {
+                error_log("APE batch {$batchId} email queue failed for patient " . (int) $candidateRow['patient_id'] . ': ' . $emailError->getMessage());
+            }
+        }
         return ['batch_id' => $batchId, 'batch_name' => $batchName, 'assigned_count' => count($selectedIds)];
     } catch (Throwable $e) {
         if ($db->inTransaction()) {
