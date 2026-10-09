@@ -764,24 +764,26 @@ function render_student_header(string $title, string $active = ''): void
             </header>
 
             <main class="student-main">
-                <?php if ($flashSuccess): ?>
-                    <div class="student-note student-note-success student-toast flex items-center justify-between" data-student-toast role="status" aria-live="polite">
-                        <div class="flex items-center gap-2">
-                            <span class="material-symbols-outlined">check_circle</span>
-                            <div><?= student_e($flashSuccess) ?></div>
+                <div class="student-toast-region" data-student-toast-region>
+                    <?php if ($flashSuccess): ?>
+                        <div class="student-note student-note-success student-toast flex items-center justify-between" data-student-toast data-auto-dismiss="true" role="status" aria-atomic="true">
+                            <div class="flex items-center gap-2">
+                                <span class="material-symbols-outlined" aria-hidden="true">check_circle</span>
+                                <div><?= student_e($flashSuccess) ?></div>
+                            </div>
+                            <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
                         </div>
-                        <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
-                    </div>
-                <?php endif; ?>
-
-                <?php if ($flashError): ?>
-                    <div class="student-note student-note-danger mb-4 flex items-center justify-between">
-                        <div class="flex items-center gap-2">
-                            <span class="material-symbols-outlined">error</span>
-                            <div><?= student_e($flashError) ?></div>
+                    <?php endif; ?>
+                    <?php if ($flashError): ?>
+                        <div class="student-note student-note-danger student-toast flex items-center justify-between" data-student-toast role="alert" aria-atomic="true">
+                            <div class="flex items-center gap-2">
+                                <span class="material-symbols-outlined" aria-hidden="true">error</span>
+                                <div><?= student_e($flashError) ?></div>
+                            </div>
+                            <button type="button" class="student-toast-dismiss" aria-label="Dismiss error"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
                         </div>
-                    </div>
-                <?php endif; ?>
+                    <?php endif; ?>
+                </div>
 
                 <?php if (empty($profile['has_clinical_record'])): ?>
                     <div class="student-note student-note-warning mb-4">
@@ -1324,16 +1326,55 @@ function render_student_footer(): void
         <script src="../public/assets/js/file-preview.js?v=ape-popup-9"></script>
         <script src="../public/assets/js/submission-loading.js?v=<?= filemtime(__DIR__ . '/../../public/assets/js/submission-loading.js') ?>"></script>
         <script>
-            document.querySelectorAll('[data-student-toast]').forEach((toast) => {
-                const dismiss = () => {
-                    toast.remove();
+            (() => {
+                const region = document.querySelector('[data-student-toast-region]');
+                if (!region) return;
+                let dismissTimer;
+                const icons = { success: 'check_circle', warning: 'info', danger: 'error' };
+                const dismiss = (toast) => {
+                    if (!toast || toast.classList.contains('is-leaving')) return;
+                    window.clearTimeout(dismissTimer);
+                    toast.classList.add('is-leaving');
+                    window.setTimeout(() => toast.remove(), 160);
                 };
-                toast.querySelector('.student-toast-dismiss')?.addEventListener('click', dismiss);
+                const bind = (toast) => {
+                    toast.querySelector('.student-toast-dismiss')?.addEventListener('click', () => dismiss(toast));
+                    if (toast.dataset.autoDismiss === 'true') dismissTimer = window.setTimeout(() => dismiss(toast), 5000);
+                };
+                window.studentNotify = (message, type = 'danger', autoDismiss = false) => {
+                    region.querySelectorAll('[data-student-toast]').forEach((toast) => toast.remove());
+                    window.clearTimeout(dismissTimer);
+                    const toast = document.createElement('div');
+                    const isError = type === 'danger';
+                    toast.className = `student-note student-note-${type} student-toast flex items-center justify-between`;
+                    toast.dataset.studentToast = '';
+                    if (autoDismiss) toast.dataset.autoDismiss = 'true';
+                    toast.setAttribute('role', isError ? 'alert' : 'status');
+                    toast.setAttribute('aria-atomic', 'true');
+                    const content = document.createElement('div');
+                    content.className = 'flex items-center gap-2';
+                    const icon = document.createElement('span');
+                    icon.className = 'material-symbols-outlined';
+                    icon.setAttribute('aria-hidden', 'true');
+                    icon.textContent = icons[type] || icons.danger;
+                    const text = document.createElement('div');
+                    text.textContent = message;
+                    const close = document.createElement('button');
+                    close.type = 'button';
+                    close.className = 'student-toast-dismiss';
+                    close.setAttribute('aria-label', isError ? 'Dismiss error' : 'Dismiss notification');
+                    close.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">close</span>';
+                    content.append(icon, text);
+                    toast.append(content, close);
+                    region.append(toast);
+                    bind(toast);
+                };
+                region.querySelectorAll('[data-student-toast]').forEach(bind);
+                region.classList.add('is-ready');
                 const url = new URL(window.location.href);
                 ['uploaded', 'activated', 'password_reset'].forEach((key) => url.searchParams.delete(key));
                 if (url.href !== window.location.href) history.replaceState({}, document.title, url);
-                window.setTimeout(dismiss, 5000);
-            });
+            })();
         </script>
     </body>
     </html>
@@ -1419,18 +1460,6 @@ function render_student_auth_footer(): void
     ?>
     <p class="student-portal-legal-footer text-center text-xs font-bold text-slate-500 py-5"><?= student_legal_links() ?></p>
     <?php render_student_cookie_banner(); ?>
-    <script>
-        document.querySelectorAll('[data-student-toast]').forEach((toast) => {
-            const dismiss = () => {
-                toast.remove();
-            };
-            toast.querySelector('.student-toast-dismiss')?.addEventListener('click', dismiss);
-            const url = new URL(window.location.href);
-            ['uploaded', 'activated', 'password_reset'].forEach((key) => url.searchParams.delete(key));
-            if (url.href !== window.location.href) history.replaceState({}, document.title, url);
-            window.setTimeout(dismiss, 5000);
-        });
-    </script>
     </body>
     </html>
     <?php

@@ -1615,23 +1615,58 @@ html.student-dark .student-feedback-visit-details div { background:rgba(255,255,
     border: 1px solid #bbf7d0;
 }
 
-/* Shared transactional confirmation toast. Status, warning, and error notes remain in flow. */
-.student-toast {
+/* Shared transactional feedback. Field validation and destructive confirmations stay in context. */
+.student-toast-region {
     position: fixed;
     z-index: 120;
     top: max(16px, env(safe-area-inset-top));
     right: 16px;
+    width: min(28rem, calc(100vw - 32px));
+    pointer-events: none;
+}
+
+.student-toast {
     display: flex;
     align-items: center;
     gap: 12px;
-    width: min(28rem, calc(100vw - 32px));
+    width: 100%;
     margin: 0 !important;
     box-shadow: 0 12px 28px rgba(23, 38, 29, .2);
+    pointer-events: auto;
 }
 
-.student-body:not(.student-auth-page) .student-toast,
-.student-auth-page .student-toast {
-    top: max(16px, env(safe-area-inset-top));
+.student-toast-region.is-ready .student-toast {
+    animation: student-toast-in .2s ease-out both;
+}
+
+.student-toast.is-leaving {
+    animation: student-toast-out .16s ease-in both;
+}
+
+@keyframes student-toast-in {
+    from { opacity: 0; transform: translateY(-12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes student-toast-out {
+    from { opacity: 1; transform: translateY(0); }
+    to { opacity: 0; transform: translateY(-8px); }
+}
+
+@media (max-width: 640px) {
+    .student-body:not(.student-auth-page) .student-toast-region {
+        top: calc(env(safe-area-inset-top) + 64px);
+        right: 12px;
+        left: 12px;
+        width: auto;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .student-toast-region.is-ready .student-toast,
+    .student-toast.is-leaving {
+        animation: none;
+    }
 }
 
 @media (min-width: 1025px) {

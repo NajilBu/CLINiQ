@@ -886,7 +886,7 @@ render_student_header('APE Status', 'ape');
         const allowedTypes = { pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png' };
         const selectedFiles = Array.from(input.files || []);
         if (selectedFiles.length > maxFilesPerRequirement) {
-            window.alert(`You selected ${selectedFiles.length} files for ${input.dataset.documentName || 'this requirement'}. A maximum of ${maxFilesPerRequirement} files is allowed. Please combine additional pages into one PDF before uploading.`);
+            window.studentNotify?.(`You selected ${selectedFiles.length} files for ${input.dataset.documentName || 'this requirement'}. A maximum of ${maxFilesPerRequirement} files is allowed. Please combine additional pages into one PDF before uploading.`);
             input.value = '';
             updateApeFileRow(input);
             refreshApeBatchSummary();
@@ -894,7 +894,7 @@ render_student_header('APE Status', 'ape');
         }
         const oversizedFile = selectedFiles.find((file) => file.size > maxFileSize && !file.type.startsWith('image/'));
         if (oversizedFile) {
-            window.alert(`${oversizedFile.name} is larger than 2 MB. Please choose files that are 2 MB or smaller.`);
+            window.studentNotify?.(`${oversizedFile.name} is larger than 2 MB. Please choose files that are 2 MB or smaller.`);
             input.value = '';
             updateApeFileRow(input);
             refreshApeBatchSummary();
@@ -902,7 +902,7 @@ render_student_header('APE Status', 'ape');
         }
         const oversizedImage = selectedFiles.find((file) => file.size > maxClientImageSize && file.type.startsWith('image/'));
         if (oversizedImage) {
-            window.alert(`${oversizedImage.name} is too large to optimize safely in the browser. Please choose an image smaller than 12 MB.`);
+            window.studentNotify?.(`${oversizedImage.name} is too large to optimize safely in the browser. Please choose an image smaller than 12 MB.`);
             input.value = '';
             updateApeFileRow(input);
             refreshApeBatchSummary();
@@ -913,7 +913,7 @@ render_student_header('APE Status', 'ape');
             return !allowedTypes[extension] || (file.type && file.type !== allowedTypes[extension]);
         });
         if (invalidFile) {
-            window.alert(`${invalidFile.name} is not a valid file type. Choose a PDF, JPG/JPEG, or PNG file.`);
+            window.studentNotify?.(`${invalidFile.name} is not a valid file type. Choose a PDF, JPG/JPEG, or PNG file.`);
             input.value = '';
             updateApeFileRow(input);
             refreshApeBatchSummary();
@@ -1193,7 +1193,7 @@ render_student_header('APE Status', 'ape');
             submitButton.disabled = false;
             submitButton.innerHTML = '<span class="material-symbols-outlined">cloud_upload</span> Try Upload Again';
             setApeUploadProgress(0, '');
-            window.alert(error?.message || 'The upload could not be completed. Please try again.');
+            window.studentNotify?.(error?.message || 'The upload could not be completed. Please try again.');
         }
     });
 
