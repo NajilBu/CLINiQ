@@ -218,14 +218,14 @@ render_header('Emergency Health Passport');
 <link rel="stylesheet" href="<?= app_url('assets/css/emergency-passport.css?v=' . filemtime(__DIR__ . '/assets/css/emergency-passport.css') . '&layout=2') ?>">
 <div class="passport-page">
     <?php if (!$patient): ?>
-        <div class="rounded-2xl bg-red-50 border border-red-100 text-red-700 px-5 py-4 font-bold">Emergency tag not found or
+        <div class="passport-access-alert is-danger">Emergency tag not found or
             disabled.</div>
     <?php else: ?>
         <?php if (!$viewer): ?>
-        <div class="w-full max-w-3xl overflow-hidden">
-            <div class="bg-[#173f2a] text-white px-6 py-5">
-                <p class="text-xs font-black uppercase tracking-[0.18em] text-emerald-200 mb-1">CLINiQ</p>
-                <div class="flex items-center gap-3">
+        <div class="passport-access-shell">
+            <div class="passport-access-header">
+                <p class="passport-access-kicker">CLINiQ</p>
+                <div class="passport-access-heading">
                     <span class="material-symbols-outlined text-3xl" aria-hidden="true">medical_information</span>
                     <div>
                         <h1 class="font-headline text-2xl md:text-3xl font-extrabold leading-tight">Emergency Health Passport</h1>
@@ -233,14 +233,14 @@ render_header('Emergency Health Passport');
                     </div>
                 </div>
             </div>
-            <div class="p-6 md:p-8">
+            <div class="passport-access-body">
         <?php endif; ?>
                 <?php if ($authError): ?>
-                    <div class="rounded-2xl bg-red-50 border border-red-100 text-red-700 px-5 py-4 font-bold mb-4"><?= e($authError) ?></div>
+                    <div class="passport-access-alert is-danger mb-4"><?= e($authError) ?></div>
                 <?php endif; ?>
 
                 <?php if (!$viewer): ?>
-                    <div class="rounded-2xl bg-amber-50 border border-amber-200 px-5 py-4 mb-5">
+                    <div class="passport-access-notice">
                         <div class="flex items-start gap-3">
                             <span class="material-symbols-outlined text-amber-700" aria-hidden="true">shield_lock</span>
                             <div>
@@ -249,7 +249,7 @@ render_header('Emergency Health Passport');
                             </div>
                         </div>
                     </div>
-                    <form method="post" class="rounded-2xl bg-slate-50 border border-slate-200 p-5 mb-6">
+                    <form method="post" class="passport-access-form">
                         <input type="hidden" name="action" value="passport_auth">
                         <p class="font-black text-slate-800 mb-1">View passport</p>
                         <p class="text-xs font-bold text-slate-500 mb-4">For privacy and accountability, enter your own account credentials. Access will be recorded in the audit log.</p>
@@ -257,7 +257,7 @@ render_header('Emergency Health Passport');
                             <input class="clinic-input" name="student_number" required placeholder="Your ID number" autocomplete="username" data-id-number-format>
                             <input class="clinic-input" name="password" type="password" required placeholder="Password" autocomplete="current-password">
                         </div>
-                        <button class="mt-4 px-5 py-3 bg-slate-800 text-white rounded-2xl text-sm font-black" type="submit">Unlock Emergency Passport</button>
+                        <button class="passport-access-submit" type="submit">Unlock Emergency Passport</button>
                     </form>
                 <?php else: ?>
                     <section aria-labelledby="passport-holder-heading" class="public-passport">
@@ -323,7 +323,7 @@ render_header('Emergency Health Passport');
                                     <?php endif; ?>
                                 </div>
 
-                                <div class="rounded-2xl bg-slate-50 border border-slate-200 text-slate-600 px-5 py-4 text-sm mb-5">
+                                <div class="passport-access-alert is-privacy mb-5">
                                     <strong class="text-slate-800">Emergency privacy notice.</strong>
                                     This page displays only the emergency information selected for this passport. Access is logged. Use the information only to help the identified person; do not copy, publish, or use it for another purpose. See the <a href="legal/privacy-notice.php" target="_blank" rel="noopener" class="underline font-bold">CLINiQ Privacy Notice</a>.
                                 </div>
@@ -343,33 +343,51 @@ render_header('Emergency Health Passport');
                         </div>
                     <div class="passport-emergency-action">
                 <?php if ($message): ?>
-                    <div class="rounded-2xl bg-emerald-50 border border-emerald-100 text-emerald-700 px-5 py-4 font-bold mb-4">
+                    <div class="passport-access-alert is-success mb-4">
                         <?= e($message) ?></div>
                 <?php endif; ?>
 
                 <?php if ($error): ?>
-                    <div class="rounded-2xl bg-red-50 border border-red-100 text-red-700 px-5 py-4 font-bold mb-4">
+                    <div class="passport-access-alert is-danger mb-4">
                         <?= e($error) ?></div>
                 <?php endif; ?>
 
-                <section id="emergency-report-panel" class="mt-6 border-t border-slate-200 pt-6" <?= $reportFormOpen ? '' : 'hidden' ?>>
-                    <div class="rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 px-5 py-4 mb-5">
+                <section id="emergency-report-panel" class="emergency-report-sheet" <?= $reportFormOpen ? '' : 'hidden' ?>>
+                    <div class="passport-access-alert is-warning mb-5">
                         <p class="font-black mb-1">Emergency reporting</p>
                         <p class="text-sm font-bold mb-0">Stay with the patient, notify the clinic, and provide the current location. Do not rely on this page alone for urgent care.</p>
                     </div>
+                    <dialog id="missing-risk-dialog" class="emergency-risk-dialog" aria-labelledby="missing-risk-title">
+                        <h2 id="missing-risk-title">Risk classifiers not filled</h2>
+                        <p>Those answers will not be saved. You can report urgency instead, or send this report without risk details.</p>
+                        <div class="emergency-risk-dialog-actions">
+                            <button type="button" class="emergency-dock-button emergency-dock-button-secondary" onclick="this.closest('dialog').close()">Go back</button>
+                            <button type="button" class="emergency-dock-button emergency-dock-button-secondary" id="report-urgency-instead">Report urgency instead</button>
+                            <button type="button" class="emergency-dock-button" id="send-without-risk-details">Send without details</button>
+                        </div>
+                    </dialog>
                     <form method="post" enctype="multipart/form-data" class="emergency-report-form" id="emergency-report-form">
                     <input type="hidden" name="action" value="incident_report">
-                    <section class="emergency-report-section">
+                    <section class="emergency-report-section emergency-report-location">
                         <div class="emergency-report-section-heading">
-                            <span class="material-symbols-outlined" aria-hidden="true">person_pin_circle</span>
-                            <div><h2>Reporter details</h2><p>Tell the clinic where help is needed and how to contact you.</p></div>
+                            <div><h2>Where is help needed?</h2><p>Give the clinic the current location first.</p></div>
                         </div>
-                        <div class="emergency-report-grid">
                     <div class="emergency-report-field emergency-report-field-wide">
                         <label class="clinic-label">Reported Location</label>
                         <input class="clinic-input" name="location" required
                             placeholder="Example: Gymnasium, Room 204, gate area">
                     </div>
+                    </section>
+
+                    <details class="emergency-report-optional">
+                        <summary>Add optional details</summary>
+                        <div class="emergency-report-optional-content">
+                    <section class="emergency-report-section">
+                        <div class="emergency-report-section-heading">
+                            <span class="material-symbols-outlined" aria-hidden="true">person</span>
+                            <div><h2>How can the clinic reach you?</h2><p>These details are optional.</p></div>
+                        </div>
+                        <div class="emergency-report-grid">
                     <div class="emergency-report-field">
                         <label class="clinic-label">Reporter Name</label>
                         <input class="clinic-input" name="reporter_name" placeholder="Optional for responders" <?= $viewer ? 'value="' . e($viewer['name']) . '" readonly' : '' ?>>
@@ -380,9 +398,11 @@ render_header('Emergency Health Passport');
                     </div>
                         </div>
                     </section>
+                        </div>
+                    </details>
 
-                    <fieldset class="emergency-report-section emergency-risk-check">
-                        <legend><span class="material-symbols-outlined" aria-hidden="true">monitor_heart</span> Risk check <small>Optional</small></legend>
+                    <fieldset class="emergency-report-section emergency-risk-check" data-risk-classifiers>
+                        <legend>What can you observe? <small>Optional</small></legend>
                         <p class="emergency-report-section-copy">Answer only what you can observe. You can still forward the report without these answers.</p>
                         <div class="emergency-report-grid">
                     <div class="emergency-report-field">
@@ -439,28 +459,35 @@ render_header('Emergency Health Passport');
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <div class="emergency-report-field">
-                        <label class="clinic-label">Reported Urgency <small>Optional</small></label>
-                        <select class="clinic-input" name="reporter_risk_rating">
-                            <option value="">Not assessed</option>
-                            <?php foreach (['Low', 'Moderate', 'High', 'Critical'] as $option): ?>
-                                <option value="<?= e($option) ?>"><?= e($option) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
                         </div>
                     </fieldset>
 
+                    <section id="emergency-urgency-choice" class="emergency-report-section emergency-urgency-choice" hidden>
+                        <div class="emergency-report-section-heading">
+                            <div><h2>Report urgency instead</h2><p>The clinic will use your stated urgency because no classifier answers were provided.</p></div>
+                        </div>
+                        <div class="emergency-report-field">
+                            <label class="clinic-label" for="reporter-risk-rating">Reported Urgency</label>
+                            <select class="clinic-input" id="reporter-risk-rating" name="reporter_risk_rating">
+                                <option value="">Choose urgency</option>
+                                <?php foreach (['Low', 'Moderate', 'High', 'Critical'] as $option): ?>
+                                    <option value="<?= e($option) ?>"><?= e($option) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </section>
+
                     <section class="emergency-report-section">
                         <div class="emergency-report-section-heading">
-                            <span class="material-symbols-outlined" aria-hidden="true">attachment</span>
-                            <div><h2>Supporting details</h2><p>Add context or a photo if it will help the clinic respond.</p></div>
+                            <div><h2>Supporting details</h2><p>Notes and a photo are optional.</p></div>
                         </div>
                     <div class="emergency-report-field">
                         <label class="clinic-label">Notes</label>
                         <textarea class="clinic-textarea" name="notes" rows="4"
                             placeholder="What happened? What does the student need?"></textarea>
                     </div>
+                    <details class="emergency-report-photo">
+                        <summary>Would you like to add a photo? <small>Optional</small></summary>
                     <div class="emergency-report-field emergency-photo-evidence">
                         <h3 class="emergency-photo-evidence-title">Photo evidence</h3>
                         <input id="alert-photo" class="clinic-input emergency-photo-input" name="photo" type="file" accept="image/png,image/jpeg,image/webp" aria-hidden="true" tabindex="-1">
@@ -489,6 +516,7 @@ render_header('Emergency Health Passport');
                         </div>
                         <p class="text-xs font-bold text-slate-400 mt-2 mb-0">Optional. Take one live photo; it will appear in the nurse alert report.</p>
                     </div>
+                    </details>
                     </section>
                     </form>
 
@@ -498,12 +526,12 @@ render_header('Emergency Health Passport');
                 </section>
                     </div>
                     </section>
-                <div class="emergency-action-dock" aria-label="Emergency report actions" style="position:fixed;z-index:9999;right:1rem;bottom:1rem;left:1rem;display:grid;grid-template-columns:0.8fr 1.2fr;gap:.65rem;width:min(42rem,calc(100vw - 2rem));margin:0 auto;padding:.65rem;border:1px solid #d8e9dd;border-radius:1rem;background:rgba(255,255,255,.96);box-shadow:0 12px 32px rgba(23,38,29,.22);backdrop-filter:blur(10px);">
-                    <button type="button" id="toggle-emergency-report" class="emergency-dock-button emergency-dock-button-secondary" style="min-height:3rem;padding:.7rem;border:0;border-radius:.7rem;color:#7f1d1d;background:#fff1f2;font:800 .78rem inherit;cursor:pointer;" aria-controls="emergency-report-panel" aria-expanded="<?= $reportFormOpen ? 'true' : 'false' ?>">
-                        Emergency
+                <div class="emergency-action-dock" aria-label="Emergency report actions">
+                    <button type="button" id="toggle-emergency-report" class="emergency-dock-button emergency-dock-button-secondary" aria-controls="emergency-report-panel" aria-expanded="<?= $reportFormOpen ? 'true' : 'false' ?>">
+                        Report emergency
                     </button>
-                    <button type="submit" form="emergency-report-form" id="submit-emergency-report" class="emergency-dock-button" style="min-height:3rem;padding:.7rem;border:0;border-radius:.7rem;color:#fff;background:#dc2626;font:800 .78rem inherit;cursor:pointer;" data-confirm-submit data-confirm-type="danger" data-confirm-title="Submit this emergency report?" data-confirm-message="This will send the possible accident report to the clinic response queue." data-confirm-toast="Submitting emergency report..." <?= $reportFormOpen ? '' : 'disabled' ?>>
-                        Report to Clinic
+                    <button type="submit" form="emergency-report-form" id="submit-emergency-report" class="emergency-dock-button" <?= $reportFormOpen ? '' : 'disabled' ?>>
+                        <span class="material-symbols-outlined" aria-hidden="true">send</span><span data-action-label>Send to clinic</span>
                     </button>
                 </div>
                 <?php endif; ?>
@@ -518,16 +546,78 @@ render_header('Emergency Health Passport');
     var button = document.getElementById('toggle-emergency-report');
     var panel = document.getElementById('emergency-report-panel');
     var submitButton = document.getElementById('submit-emergency-report');
+    var locationInput = panel ? panel.querySelector('[name="location"]') : null;
+    var form = document.getElementById('emergency-report-form');
+    var urgencyChoice = document.getElementById('emergency-urgency-choice');
+    var urgencyInput = document.getElementById('reporter-risk-rating');
+    var missingRiskDialog = document.getElementById('missing-risk-dialog');
     if (!button || !panel) return;
 
+    function setReportOpen(open, returnFocus) {
+        panel.hidden = !open;
+        button.setAttribute('aria-expanded', open ? 'true' : 'false');
+        button.textContent = open ? 'Close report' : 'Report emergency';
+        if (submitButton) submitButton.disabled = !open;
+        if (open && locationInput) locationInput.focus();
+        if (!open && returnFocus) button.focus();
+    }
+
     button.addEventListener('click', function () {
-        var willOpen = panel.hidden;
-        panel.hidden = !willOpen;
-        button.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
-        if (submitButton) submitButton.disabled = !willOpen;
-        if (willOpen) {
-            panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        setReportOpen(panel.hidden, !panel.hidden);
+    });
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && !panel.hidden && !(missingRiskDialog && missingRiskDialog.open)) setReportOpen(false, true);
+    });
+
+    setReportOpen(!panel.hidden, false);
+
+    if (!form || !submitButton) return;
+
+    function setSubmitting() {
+        submitButton.disabled = true;
+        submitButton.setAttribute('aria-busy', 'true');
+        submitButton.classList.add('is-loading');
+        submitButton.querySelector('[data-action-label]').textContent = 'Sending report…';
+        submitButton.querySelector('.material-symbols-outlined').textContent = 'progress_activity';
+    }
+
+    function submitReport() {
+        setSubmitting();
+        form.dataset.reportApproved = '1';
+        if (typeof form.requestSubmit === 'function') form.requestSubmit();
+        else form.submit();
+    }
+
+    function confirmSubmit(message, label) {
+        confirmAction('Submit this emergency report?', message, submitReport, 'danger', label);
+    }
+
+    form.addEventListener('submit', function (event) {
+        if (form.dataset.reportApproved === '1') return;
+        event.preventDefault();
+        if (typeof form.reportValidity === 'function' && !form.reportValidity()) return;
+
+        var classifiers = Array.prototype.slice.call(form.querySelectorAll('[data-risk-classifiers] select'));
+        var classifiersAnswered = classifiers.some(function (field) { return field.value.trim() !== ''; });
+        if (!classifiersAnswered && !(urgencyInput && urgencyInput.value.trim())) {
+            if (missingRiskDialog && typeof missingRiskDialog.showModal === 'function') missingRiskDialog.showModal();
+            else confirmSubmit('No risk classifier answers will be saved. The clinic will assess urgency from the rest of this report.', 'Send without details');
+            return;
         }
+
+        confirmSubmit('This will send the possible accident report to the clinic response queue.', 'Send report');
+    });
+
+    document.getElementById('report-urgency-instead').addEventListener('click', function () {
+        missingRiskDialog.close();
+        urgencyChoice.hidden = false;
+        urgencyInput.focus();
+    });
+
+    document.getElementById('send-without-risk-details').addEventListener('click', function () {
+        missingRiskDialog.close();
+        confirmSubmit('No risk classifier answers will be saved. The clinic will assess urgency from the rest of this report.', 'Send without details');
     });
 })();
 

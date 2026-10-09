@@ -23,6 +23,10 @@ $assertions = [
     'NFC writing requires a secure context' => str_contains($script, 'window.isSecureContext'),
     'patient controls body measurements passport visibility' => str_contains($page, 'name="show_bmi_on_passport"') && str_contains($page, 'Show Body Measurements on Emergency Passport') && str_contains($page, 'height, weight, and BMI'),
     'patient preview hides or shows all body measurements together' => str_contains($page, 'id="prev-body-measurements"') && str_contains($page, 'syncBodyMeasurementsVisibility') && !str_contains($page, 'id="prev-bmi-metric"'),
+    'patient preview reuses the responder passport style' => str_contains($page, 'emergency-passport.css?v=') && str_contains($page, 'passport-preview public-passport'),
+    'patient preview uses the responder incident state' => str_contains($page, "FROM nurse_alerts WHERE patient_id = ? AND status = 'Pending'") && str_contains($page, '$hasActiveIncident ? \'Active Incident\' : \'No Active Incident\''),
+    'patient preview excludes responder-unavailable personal details' => !str_contains($page, 'passport-modern-personal-item-wide'),
+    'patient preview call action follows the responder contract' => str_contains($page, '$passport[\'primary_contact\'] === \'\' ? \' hidden\' : \'\'') && str_contains($page, "link.hidden = pcInp.value.trim() === ''"),
     'passport intro uses a compact privacy summary' => str_contains($page, 'passport-page-header') && str_contains($page, 'Review the details you choose to share in an emergency.') && !str_contains($page, 'Emergency Access'),
     'local QR library file exists' => is_file($library) && filesize($library) > 10000,
 ];

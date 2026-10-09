@@ -49,6 +49,9 @@ $passport = [
 $passportUrl = '../public/emergency.php?token=' . urlencode($passport['token']);
 $passportPreviewUrl = $passportUrl;
 $passportFocusEmergency = ($_GET['focus'] ?? '') === 'emergency';
+$activeIncidentStmt = auth_db()->prepare("SELECT COUNT(*) FROM nurse_alerts WHERE patient_id = ? AND status = 'Pending'");
+$activeIncidentStmt->execute([$patientId]);
+$hasActiveIncident = (int) $activeIncidentStmt->fetchColumn() > 0;
 $passportMissingFields = [];
 if (trim((string) ($profile['allergies'] ?? '')) === '') $passportMissingFields['allergies'] = 'Allergy information';
 if (trim((string) ($profile['emergency_instructions'] ?? '')) === '') $passportMissingFields['instructions'] = 'Emergency instructions';
@@ -115,6 +118,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 render_student_header('Emergency Health Passport', 'passport');
 ?>
+<link rel="stylesheet" href="../public/assets/css/emergency-passport.css?v=<?= filemtime(__DIR__ . '/../public/assets/css/emergency-passport.css') ?>">
 
 <section class="student-page-header passport-page-header">
     <div>
@@ -166,9 +170,9 @@ render_student_header('Emergency Health Passport', 'passport');
     </section>
 <?php endif; ?>
 <nav class="passport-mobile-tabs" aria-label="Passport sections">
-    <button type="button" class="is-active" data-passport-tab="profile">Profile</button>
-    <button type="button" data-passport-tab="emergency">Emergency</button>
-    <button type="button" data-passport-tab="access">Access</button>
+    <button type="button" class="is-active" data-passport-tab="profile" aria-pressed="true">Profile</button>
+    <button type="button" data-passport-tab="emergency" aria-pressed="false">Emergency</button>
+    <button type="button" data-passport-tab="access" aria-pressed="false">Access</button>
 </nav>
 <p id="passport-mobile-save-hint" class="passport-mobile-save-hint" hidden role="alert">Complete the required Emergency Contact fields before saving your passport settings.</p>
 <div class="student-grid passport-layout">
@@ -187,7 +191,7 @@ render_student_header('Emergency Health Passport', 'passport');
                 </div>
                 <span class="student-badge student-badge-info">
                         <span class="material-symbols-outlined passport-icon-xs">lock</span>
-                    Mostly Read-only
+                    Student record
                 </span>
             </div>
             <div class="student-card-pad">
@@ -209,9 +213,9 @@ render_student_header('Emergency Health Passport', 'passport');
                         <div class="passport-readonly-field"><?= student_e($passport['sex']) ?></div>
                     </div>
                     <div class="student-span-12 student-field passport-field-compact">
-                        <label class="student-label">Blood Type <span class="passport-readonly-tag">Clinic-managed</span></label>
+                        <label class="student-label">Blood Type</label>
                         <div class="passport-readonly-field"><?= student_e($passport['blood_type'] ?: 'Not recorded') ?></div>
-                        <p class="passport-hint">Updated only by authorized clinic staff during APE.</p>
+                        <p class="passport-hint">Clinic staff manage blood-type corrections. Contact the clinic if this is incorrect.</p>
                     </div>
                 </div>
             </div>
@@ -436,7 +440,7 @@ render_student_header('Emergency Health Passport', 'passport');
             <div class="student-card-header">
                 <div>
                     <h2 class="student-card-title">QR / NFC Access</h2>
-                    <p class="student-card-copy">Share this code with your ID or phone</p>
+                    <p class="student-card-copy">Keep this QR or NFC link ready for a responder. Access requires CLINiQ sign-in and is logged.</p>
                 </div>
                 <span class="student-badge student-badge-success">Active</span>
             </div>
@@ -485,7 +489,7 @@ render_student_header('Emergency Health Passport', 'passport');
                 </span>
             </div>
 
-            <div class="passport-preview passport-preview-modern">
+            <div class="passport-preview public-passport">
                 <div class="passport-modern-hero">
                     <div class="passport-modern-avatar">
                         <?php $passportPhotoPath = profile_photo_normalize_path($profile['profile_photo_path'] ?? null); ?>
@@ -499,12 +503,12 @@ render_student_header('Emergency Health Passport', 'passport');
                         <div class="passport-modern-kicker-row">
                             <span class="passport-modern-pill">Emergency Passport</span>
                         </div>
-                        <div class="passport-modern-name" id="prev-name"><?= student_e($passport['name']) ?></div>
+                        <h2 class="passport-modern-name" id="prev-name"><?= student_e($passport['name']) ?></h2>
                         <div class="passport-modern-meta">
                             <span id="prev-sid"><?= student_e($passport['student_id']) ?></span>
                         </div>
                     </div>
-                    <span class="passport-modern-status"><span class="material-symbols-outlined">check_circle</span> No Active Incident</span>
+                    <span class="passport-modern-status <?= $hasActiveIncident ? 'is-active' : '' ?>"><span class="material-symbols-outlined"><?= $hasActiveIncident ? 'warning' : 'check_circle' ?></span><?= $hasActiveIncident ? 'Active Incident' : 'No Active Incident' ?></span>
                     <div class="passport-modern-blood" role="img" aria-label="Blood type">
                         <span>Blood type</span>
                         <strong id="prev-blood"><?= student_e($passport['blood_type']) ?></strong>
@@ -512,33 +516,38 @@ render_student_header('Emergency Health Passport', 'passport');
                 </div>
 
                 <div class="passport-modern-content">
-                    <section class="passport-modern-section">
-                        <div class="passport-modern-section-title"><span class="material-symbols-outlined">person</span> Personal information</div>
-                        <div class="passport-modern-personal-grid">
-                            <div class="passport-modern-personal-item passport-modern-personal-item-wide"><span>Full name</span><strong><?= student_e($passport['name']) ?></strong></div>
-                            <div class="passport-modern-personal-item"><span>ID number</span><strong><?= student_e($passport['student_id']) ?></strong></div>
-                            <div class="passport-modern-personal-item"><span>Date of birth</span><strong><?= student_e($passport['dob']) ?></strong></div>
-                            <div class="passport-modern-personal-item"><span>Sex</span><strong><?= student_e($passport['sex']) ?></strong></div>
-                            <div class="passport-modern-personal-item"><span>Blood type</span><strong><?= student_e($passport['blood_type']) ?></strong></div>
-                        </div>
-                    </section>
-                    <section class="passport-modern-section">
-                        <div class="passport-modern-section-title"><span class="material-symbols-outlined">medical_information</span> Medical information</div>
-                        <div class="passport-modern-medical-list">
-                            <div class="passport-modern-medical-item"><span>Allergies</span><strong id="prev-allergies"><?= student_e($passport['allergies'] ?: 'None reported.') ?></strong></div>
-                            <div class="passport-modern-medical-item"><span>Medical conditions</span><strong id="prev-conditions"><?= nl2br(student_e($passport['conditions'] ?: 'None reported.')) ?></strong></div>
-                            <div class="passport-modern-medical-item"><span>Current medications</span><strong id="prev-medications"><?= nl2br(student_e($passport['medications'] ?: 'No current medications recorded.')) ?></strong></div>
-                            <div class="passport-modern-medical-item"><span>Emergency instructions</span><strong class="passport-modern-instructions" id="prev-instructions"><?= nl2br(student_e($passport['instructions'])) ?></strong></div>
-                        </div>
-                    </section>
-                    <section class="passport-modern-section" id="prev-body-measurements"<?= $passport['show_bmi'] ? '' : ' hidden' ?>>
-                        <div class="passport-modern-section-title"><span class="material-symbols-outlined">monitor_weight</span> Body measurements</div>
-                        <div class="passport-modern-personal-grid">
-                            <div class="passport-modern-personal-item"><span>Height</span><strong><?= $passport['height_cm'] !== null ? student_e(number_format((float) $passport['height_cm'], 2)) . ' cm' : 'Not recorded' ?></strong></div>
-                            <div class="passport-modern-personal-item"><span>Weight</span><strong><?= $passport['weight_kg'] !== null ? student_e(number_format((float) $passport['weight_kg'], 2)) . ' kg' : 'Not recorded' ?></strong></div>
-                            <div class="passport-modern-personal-item"><span>BMI</span><strong><?= $passport['bmi'] !== null ? student_e(number_format((float) $passport['bmi'], 2)) : 'Not recorded' ?></strong></div>
-                        </div>
-                    </section>
+                    <div class="passport-modern-info-grid">
+                        <article class="passport-modern-info passport-modern-info-allergy">
+                            <div class="passport-modern-info-heading"><span class="material-symbols-outlined">allergy</span><span>Allergies</span></div>
+                            <div class="passport-modern-tags" id="prev-allergies">
+                                <?php foreach (array_filter(array_map('trim', preg_split('/[,;\r\n]+/', (string) ($passport['allergies'] ?: 'None')) ?: [])) as $allergy): ?>
+                                    <span class="passport-modern-tag"><?= student_e($allergy) ?></span>
+                                <?php endforeach; ?>
+                            </div>
+                        </article>
+                        <article class="passport-modern-info passport-modern-info-condition">
+                            <div class="passport-modern-info-heading"><span class="material-symbols-outlined">cardiology</span><span>Medical Conditions</span></div>
+                            <div class="passport-modern-value" id="prev-conditions"><?= nl2br(student_e($passport['conditions'] ?: 'None reported.')) ?></div>
+                        </article>
+                        <article class="passport-modern-info passport-modern-info-medication">
+                            <div class="passport-modern-info-heading"><span class="material-symbols-outlined">medication</span><span>Current Medications</span></div>
+                            <div class="passport-modern-value" id="prev-medications"><?= nl2br(student_e($passport['medications'] ?: 'No current medications recorded.')) ?></div>
+                        </article>
+                        <article class="passport-modern-info passport-modern-info-instructions">
+                            <div class="passport-modern-info-heading"><span class="material-symbols-outlined">emergency_home</span><span>Emergency Instructions</span></div>
+                            <div class="passport-modern-instructions" id="prev-instructions"><?= nl2br(student_e($passport['instructions'] ?: 'Notify the clinic immediately.')) ?></div>
+                        </article>
+                        <?php if ($latestBmiRecord): ?>
+                            <article class="passport-modern-info passport-modern-info-bmi" id="prev-body-measurements"<?= $passport['show_bmi'] ? '' : ' hidden' ?>>
+                                <div class="passport-modern-info-heading"><span class="material-symbols-outlined">monitor_weight</span><span>Body Measurements</span></div>
+                                <div class="passport-modern-metrics">
+                                    <span><strong><?= student_e((string) ($passport['height_cm'] ?? '—')) ?></strong><small>Height (cm)</small></span>
+                                    <span><strong><?= student_e((string) ($passport['weight_kg'] ?? '—')) ?></strong><small>Weight (kg)</small></span>
+                                    <span><strong><?= student_e((string) ($passport['bmi'] ?? '—')) ?></strong><small>BMI</small></span>
+                                </div>
+                            </article>
+                        <?php endif; ?>
+                    </div>
 
                     <div class="passport-modern-contact">
                         <div class="passport-modern-contact-icon" aria-hidden="true">
@@ -549,7 +558,7 @@ render_student_header('Emergency Health Passport', 'passport');
                             <strong id="prev-guardian"><?= student_e($passport['guardian_name'] ?: 'Not provided') ?></strong>
                             <small><span id="prev-rel"><?= student_e($passport['relationship']) ?></span> &bull; <span id="prev-phone"><?= student_e($passport['primary_contact'] ?: 'No phone number') ?></span></small>
                         </div>
-                        <a class="passport-modern-call" href="tel:<?= student_e($passport['primary_contact']) ?>" id="prev-call-link">
+                        <a class="passport-modern-call" href="tel:<?= student_e($passport['primary_contact']) ?>" id="prev-call-link"<?= $passport['primary_contact'] === '' ? ' hidden' : '' ?>>
                             <span class="material-symbols-outlined">call</span>
                             Call Now
                         </a>
@@ -625,6 +634,13 @@ render_student_header('Emergency Health Passport', 'passport');
         if (profilePanel?.matches('details')) profilePanel.open = true;
     }
     const passportTabs = document.querySelectorAll('[data-passport-tab]');
+    const setPassportTabState = (group) => {
+        passportTabs.forEach((tab) => {
+            const isActive = tab.dataset.passportTab === group;
+            tab.classList.toggle('is-active', isActive);
+            tab.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        });
+    };
     const openPassportGroup = (group, shouldFocus = false) => {
         const tab = form.querySelector(`[data-passport-tab="${group}"]`);
         if (tab) tab.click();
@@ -650,7 +666,7 @@ render_student_header('Emergency Health Passport', 'passport');
             if (mobileSaveHint) mobileSaveHint.hidden = false;
             form.classList.remove('passport-tab-profile', 'passport-tab-access');
             form.classList.add('passport-tab-emergency');
-            passportTabs.forEach((tab) => tab.classList.toggle('is-active', tab.dataset.passportTab === 'emergency'));
+            setPassportTabState('emergency');
             const panel = invalidField.closest('details[data-passport-group]');
             if (panel) panel.open = true;
             invalidField.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -664,7 +680,7 @@ render_student_header('Emergency Health Passport', 'passport');
                 form.classList.remove('passport-tab-profile', 'passport-tab-emergency', 'passport-tab-access');
                 form.classList.add(`passport-tab-${group}`);
             }
-            document.querySelectorAll('[data-passport-tab]').forEach((item) => item.classList.toggle('is-active', item === tab));
+            setPassportTabState(group);
 
             const target = form.querySelector(`[data-passport-group="${group}"]`);
             if (!target) return;
@@ -681,7 +697,7 @@ render_student_header('Emergency Health Passport', 'passport');
         if (isPhone) {
             form.classList.remove('passport-tab-profile', 'passport-tab-access');
             form.classList.add('passport-tab-emergency');
-            passportTabs.forEach((tab) => tab.classList.toggle('is-active', tab.dataset.passportTab === 'emergency'));
+            setPassportTabState('emergency');
         }
         form.querySelectorAll('[data-passport-group="emergency"]').forEach((panel) => {
             if (panel.matches('details')) panel.open = true;
@@ -756,7 +772,10 @@ render_student_header('Emergency Health Passport', 'passport');
     if (pcInp) {
         pcInp.addEventListener('input', () => {
             const link = $('prev-call-link');
-            if (link) link.href = 'tel:' + pcInp.value;
+            if (link) {
+                link.href = 'tel:' + pcInp.value;
+                link.hidden = pcInp.value.trim() === '';
+            }
         });
     }
 
