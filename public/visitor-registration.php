@@ -320,10 +320,6 @@ $theme = active_cliniq_theme();
             flex: 0 0 auto;
         }
 
-        .visit-main.is-borrowing {
-            align-items: start;
-        }
-
         .visit-card {
             width: min(100%, 64rem);
             overflow: hidden;

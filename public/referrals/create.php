@@ -26,6 +26,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         throw new InvalidArgumentException('A referral must be linked to an existing clinic visit.');
     }
 
+    $submissionToken = (string) ($_POST['submission_token'] ?? '');
+    if ($submissionToken === '' || empty($_SESSION['referral_submission_tokens'][$submissionToken])) {
+        throw new RuntimeException('This referral form was already submitted. Return to the referrals list before creating another referral.');
+    }
+    unset($_SESSION['referral_submission_tokens'][$submissionToken]);
+
     $referrerPersonId = (int) ((current_user()['person_id'] ?? 0));
     if ($referrerPersonId > 0) {
         $staffCheck = auth_db()->prepare('SELECT 1 FROM clinic_staff WHERE person_id = ?');
@@ -75,6 +81,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 set_page_back_link('index.php', 'Back');
+$submissionToken = bin2hex(random_bytes(16));
+$_SESSION['referral_submission_tokens'] ??= [];
+$_SESSION['referral_submission_tokens'][$submissionToken] = time();
+$_SESSION['referral_submission_tokens'] = array_filter(
+    $_SESSION['referral_submission_tokens'],
+    static fn(int $createdAt): bool => $createdAt >= time() - 3600
+);
 render_header('New Referral');
 ?>
 <?php render_clinic_command_header(
@@ -83,7 +96,8 @@ render_header('New Referral');
     'Refer a patient to an external facility or specialist.'
 ); ?>
 
-<form class="clinic-card p-6 md:p-8" method="post">
+<form class="clinic-card p-6 md:p-8" method="post" data-no-ajax="true" data-loading-after-confirm="true">
+    <input type="hidden" name="submission_token" value="<?= e($submissionToken) ?>">
     <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
         <div>
             <label class="clinic-label">Patient</label>
