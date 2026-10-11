@@ -298,7 +298,7 @@ function render_header(string $title): void
         'Appointments' => ['group' => 'Clinical Operations', 'url' => app_url('appointments/index.php'), 'match' => '/appointments/', 'icon' => 'calendar_month'],
         'Referrals' => ['group' => 'Clinical Operations', 'url' => app_url('referrals/index.php'), 'match' => '/referrals/', 'icon' => 'send'],
         'Inventory' => ['group' => 'Resources & Reports', 'url' => app_url('inventory/index.php'), 'match' => '/inventory/', 'icon' => 'inventory_2'],
-        'Reports' => ['group' => 'Resources & Reports', 'url' => app_url('reports/index.php'), 'match' => '/reports/', 'icon' => 'analytics'],
+        'Analytics' => ['group' => 'Resources & Reports', 'url' => app_url('reports/index.php'), 'match' => '/reports/', 'icon' => 'analytics'],
         'Feedback' => ['group' => 'Resources & Reports', 'url' => app_url('feedback/index.php'), 'match' => '/feedback/', 'icon' => 'rate_review', 'roles' => ['admin', 'doctor', 'nurse']],
         'Audit Log' => ['group' => 'Administration', 'url' => app_url('audit/index.php?tab=audit'), 'match' => '/audit/', 'tab' => 'audit', 'icon' => 'history', 'roles' => ['admin']],
         'Email Center' => ['group' => 'Administration', 'url' => app_url('audit/index.php?tab=email'), 'match' => '/audit/', 'tab' => 'email', 'icon' => 'mail', 'roles' => ['admin', 'doctor', 'nurse']],

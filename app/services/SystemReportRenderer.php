@@ -24,7 +24,7 @@ function system_report_chart_type(array|string $chart): string
     if (preg_match('/Workflow|Requirement Status|Stock Condition/i', $title)) {
         return 'progress';
     }
-    if (preg_match('/Status|Sex|Patient Type|Items by Type|Risk Level|Classification|Request Source|Visit Source|Finding Result/i', $title)) {
+    if (preg_match('/Status|Sex|Patient Type|Affiliation|Items by Type|Risk Level|Classification|Request Source|Visit Source|Finding Result/i', $title)) {
         return 'donut';
     }
     if (preg_match('/Program|Purpose|Transactions|Referred To|Borrowed Equipment|Incident Type/i', $title)) {
@@ -154,32 +154,39 @@ function render_system_report_chart(array $chart): string
         return '<p class="report-empty">' . system_report_escape((string) ($chart['empty'] ?? 'No data available for this period.')) . '</p>';
     }
     if (($chart['presentation'] ?? '') === 'summary') {
-        return '<p class="report-chart-summary">' . system_report_escape((string) ($chart['insight'] ?? 'A single category was recorded for this period.')) . '</p>';
+        $row = (array) (($chart['rows'] ?? [])[0] ?? []);
+        $label = (string) ($row['label'] ?? 'Recorded');
+        $value = system_report_format_number((float) ($row['value'] ?? 0), (int) ($chart['decimals'] ?? 0));
+        return '<div class="report-chart-summary"><span class="report-chart-summary-label">' . system_report_escape($label) . '</span><strong class="report-chart-summary-value">' . system_report_escape($value) . '</strong></div>';
     }
-    if (!$chart['rows']) {
+    $visualChart = $chart;
+    $visualChart['rows'] = is_array($chart['visual_rows'] ?? null) ? $chart['visual_rows'] : ($chart['rows'] ?? []);
+    if (!$visualChart['rows']) {
         return '<p class="report-empty">' . system_report_escape($chart['empty']) . '</p>';
     }
-    return match (system_report_chart_type($chart['title'])) {
-        'donut' => render_system_report_donut_chart($chart['rows']),
-        'line' => render_system_report_line_chart($chart['rows']),
-        'column' => render_system_report_column_chart($chart['rows']),
-        'progress' => render_system_report_progress_chart($chart['rows']),
+    return match (system_report_chart_type($visualChart)) {
+        'donut' => render_system_report_donut_chart($visualChart['rows']),
+        'line' => render_system_report_line_chart($visualChart['rows']),
+        'column' => render_system_report_column_chart($visualChart['rows']),
+        'progress' => render_system_report_progress_chart($visualChart['rows']),
         default => render_system_report_bar_chart(
-            $chart['rows'],
-            (int) ($chart['decimals'] ?? 0),
-            ($chart['title'] ?? '') === 'Average SERVPERF Scores' ? null : 6
+            $visualChart['rows'],
+            (int) ($visualChart['decimals'] ?? 0),
+            ($visualChart['title'] ?? '') === 'Average SERVPERF Scores' ? null : 6
         ),
     };
 }
 
-function render_system_report_data_table(array $chart, bool $open = false): string
+function render_system_report_data_table(array $chart, bool $open = false, bool $showSummary = true): string
 {
     $rows = is_array($chart['rows'] ?? null) ? $chart['rows'] : [];
     $decimals = (int) ($chart['decimals'] ?? 0);
     $title = (string) ($chart['title'] ?? 'Chart');
     ob_start(); ?>
-    <details class="report-data-table"<?= $open ? ' open' : '' ?>>
+    <?php if ($showSummary): ?><details class="report-data-table"<?= $open ? ' open' : '' ?>>
         <summary>View data table <span><?= count($rows) ?> row(s)</span></summary>
+    <?php else: ?><div class="report-data-table report-data-table-static">
+    <?php endif; ?>
         <div class="report-data-table-scroll">
             <table>
                 <caption><?= system_report_escape($title) ?> data</caption>
@@ -193,7 +200,7 @@ function render_system_report_data_table(array $chart, bool $open = false): stri
                 </tbody>
             </table>
         </div>
-    </details>
+    <?php if ($showSummary): ?></details><?php else: ?></div><?php endif; ?>
     <?php return (string) ob_get_clean();
 }
 
@@ -253,26 +260,58 @@ function system_report_styles(): string
 .report-document-dashboard .report-section h2 { color: var(--cliniq-foreground, #17261d); font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 1.5rem; font-weight: 800; letter-spacing: -.025em; line-height: 1.2; }
 .report-document-dashboard .report-section-description { color: #64748b; font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: .9375rem; font-weight: 600; line-height: 1.55; }
 .report-document-dashboard .report-body { padding: 0; }
+.report-document-paper-preview .report-body { padding: 28px 40px 42px; }
+.report-document.report-document-dashboard.report-document-paper-preview .report-section { margin: 0 0 2rem; padding: 0 0 2rem; border: 0; border-bottom: 1px solid #dfe9e2; border-radius: 0; background: transparent; box-shadow: none; }
+.report-document.report-document-dashboard.report-document-paper-preview .report-section:last-child { padding-bottom: 0; border-bottom: 0; }
+.report-paper-letterhead { display: grid; grid-template-columns: 74px minmax(0, 1fr) 74px; align-items: center; gap: 18px; padding: 30px 40px 18px; border-bottom: 2px solid #2f7d4b; }
+.report-paper-letterhead-logo { display: grid; place-items: center; width: 74px; height: 74px; border: 1px solid #d7dfd9; background: #fff; }
+.report-paper-letterhead-logo img { display: block; width: 62px; height: 62px; object-fit: contain; }
+.report-paper-letterhead-title { color: #2f7d4b; font-family: Arial, Helvetica, sans-serif; font-size: 16px; font-weight: 800; letter-spacing: .02em; line-height: 1.15; text-align: center; text-transform: uppercase; }
+.report-paper-letterhead-title span { display: block; margin-top: 3px; font-size: 13px; }
 .report-document-dashboard .report-section { margin: 0 0 2rem; padding: 1.75rem; border: 1px solid oklch(92% .01 230 / .8); border-radius: 1rem; background: #fff; box-shadow: 0 1px 2px rgba(23,38,29,.04), 0 12px 28px rgba(23,38,29,.055); }
 .report-document-dashboard .report-section:last-child { margin-bottom: 0; padding-bottom: 1.75rem; border-bottom: 1px solid oklch(92% .01 230 / .8); }
-.report-document-dashboard .report-metrics { grid-template-columns: repeat(auto-fit, minmax(min(100%, 12.5rem), 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+.report-document-dashboard .report-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
 .report-document-dashboard .report-metric { min-height: 6rem; padding: .875rem 1rem; border-color: oklch(92% .01 230 / .8); border-radius: .875rem; background: linear-gradient(145deg, #fff, var(--cliniq-surface-low, #fbfdfb)); box-shadow: 0 1px 2px rgba(23,38,29,.025); }
 .report-document-dashboard .report-metric-label { min-height: 1.125rem; margin-bottom: .375rem; font-size: .6875rem; font-weight: 800; letter-spacing: .06em; }
 .report-document-dashboard .report-metric-value { color: var(--cliniq-primary, #205f3d); font-size: clamp(1.75rem, 2.25vw, 2.125rem); font-weight: 800; letter-spacing: -.04em; line-height: 1; }
 .report-document-dashboard .report-metric-note { margin-top: .375rem; font-size: .6875rem; font-weight: 650; }
-.report-document-dashboard .inventory-metric-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-.report-document-dashboard .inventory-metric-group { padding: 1rem; border: 1px solid oklch(92% .01 230 / .8); border-radius: .875rem; background: var(--cliniq-surface-low, #fbfdfb); }
-.report-document-dashboard .inventory-metric-group-title { margin: 0 0 .75rem; color: var(--cliniq-foreground, #17261d); font-size: .8125rem; font-weight: 800; letter-spacing: -.01em; }
-.report-document-dashboard .inventory-metric-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .625rem; }
-.report-document-dashboard .inventory-metric-grid .report-metric { min-height: 5.5rem; padding: .75rem; border-radius: .75rem; background: #fff; }
-.report-document-dashboard .inventory-metric-grid .report-metric-label { font-size: .625rem; line-height: 1.35; }
-.report-document-dashboard .inventory-metric-grid .report-metric-value { font-size: 1.625rem; }
-.report-document-dashboard .report-charts { grid-template-columns: repeat(auto-fit, minmax(min(100%, 25rem), 1fr)); gap: 1rem; }
+.report-document-dashboard .visit-metric-groups { display: grid; grid-template-columns: 1fr; gap: 1rem; margin-bottom: 1.5rem; }
+.report-document-dashboard .visit-metric-group { padding: 1rem; border: 1px solid oklch(92% .01 230 / .8); border-radius: .875rem; background: var(--cliniq-surface-low, #fbfdfb); }
+.report-document-dashboard .visit-metric-group-title { margin: 0 0 .75rem; color: var(--cliniq-foreground, #17261d); font-size: .8125rem; font-weight: 800; letter-spacing: -.01em; }
+.report-document-dashboard .visit-metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .625rem; }
+.report-document-dashboard .visit-metric-grid .report-metric { min-height: 5.5rem; padding: .75rem; border-radius: .75rem; background: #fff; }
+.report-document-dashboard .visit-metric-grid .report-metric-label { font-size: .625rem; line-height: 1.35; }
+.report-document-dashboard .visit-metric-grid .report-metric-value { font-size: 1.625rem; }
+.report-document-dashboard .report-charts { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.report-document-dashboard .report-charts--five-cards { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.report-document-dashboard .report-charts--five-cards > .report-chart { grid-column: span 2; }
+.report-document-dashboard .report-charts--five-cards > .report-chart:nth-last-child(-n + 2) { grid-column: span 3; }
+.report-document-dashboard .report-charts--two-charts-three-tables { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.report-document-dashboard .report-charts--two-charts-three-tables > .report-chart { grid-column: span 2; }
+.report-document-dashboard .report-charts--two-charts-three-tables > .report-chart:nth-child(-n + 2) { grid-column: span 3; }
+.report-document-dashboard .report-charts--one-chart { grid-template-columns: 1fr; }
+.report-document-dashboard .report-charts--two-charts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.report-document-dashboard .report-charts--two-charts-one-table { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.report-document-dashboard .report-charts--two-charts-one-table > .report-chart:nth-child(-n + 2) { grid-column: span 3; }
+.report-document-dashboard .report-charts--two-charts-one-table > .report-chart:last-child { grid-column: 1 / -1; }
+.report-document-dashboard .report-charts--feedback { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.report-document-dashboard .report-charts--feedback > .report-chart:first-child { grid-column: span 4; }
+.report-document-dashboard .report-charts--feedback > .report-chart:nth-child(2) { order: 2; align-self: start; min-height: 12rem; grid-column: span 2; }
+.report-document-dashboard .report-charts--feedback > .report-chart:last-child { order: 3; grid-column: 1 / -1; }
+.report-document-dashboard .report-charts--feedback > .report-chart:nth-child(2) .report-chart-visual { min-height: 10rem; }
+.report-document-dashboard .report-charts--feedback > .report-chart:nth-child(2) .report-apexcharts-canvas { height: 10.5rem; }
+.report-document-dashboard .report-charts--three-charts-one-table { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.report-document-dashboard .report-charts--three-charts-one-table > .report-chart:last-child { grid-column: 1 / -1; }
+.report-document-dashboard .report-charts--visits { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.report-document-dashboard .report-charts--visits > .report-chart { grid-column: span 2; }
+.report-document-dashboard .report-charts--visits > .report-chart:nth-last-child(3),
+.report-document-dashboard .report-charts--visits > .report-chart:nth-last-child(2) { grid-column: span 3; }
+.report-document-dashboard .report-charts--visits > .report-chart:last-child { grid-column: 1 / -1; }
 .report-document-dashboard .report-chart { min-height: 15rem; padding: 1.25rem; border-color: oklch(92% .01 230 / .8); border-radius: .875rem; background: #fff; box-shadow: 0 1px 2px rgba(23,38,29,.025); }
  .report-document-dashboard .report-chart h3 { margin-bottom: 1.125rem; color: var(--cliniq-foreground, #334155); font-size: 1rem; font-weight: 800; line-height: 1.35; }
 .report-document-dashboard .report-chart-kind { font-size: .625rem; }
 .report-document-dashboard .report-chart-visual { min-height: 12.5rem; }
-.report-document-dashboard .report-echarts-canvas { width: 100%; height: 13.5rem; }
+.report-document-dashboard .report-apexcharts-canvas { width: 100%; height: 13.5rem; }
 .report-metrics { display: grid; grid-template-columns: repeat(var(--report-metric-columns, 4), minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
 .report-metric { min-height: 88px; padding: 14px; border: 1px solid var(--cliniq-outline, #dfe9e2); border-radius: 12px; background: var(--cliniq-surface-low, #fbfdfb); }
 .report-metric-label { min-height: 24px; margin: 0 0 8px; color: #64748b; font-size: 9px; font-weight: 900; letter-spacing: .07em; text-transform: uppercase; }
@@ -283,6 +322,7 @@ function system_report_styles(): string
 .report-chart-summary-card, .report-document-dashboard .report-chart-summary-card { min-height: 0; }
 .report-document-dashboard .report-chart-summary-card .report-chart-visual { min-height: 0; }
 .report-data-table { margin-top: 12px; border-top: 1px solid #e2ebe5; }
+.report-data-table-static { margin-top: 0; border-top: 0; }
 .report-data-table summary { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; color: #205f3d; cursor: pointer; font-size: 11px; font-weight: 800; }
 .report-data-table summary span { color: #64748b; }
 .report-data-table-scroll { max-height: 280px; overflow: auto; }
@@ -346,7 +386,9 @@ function system_report_styles(): string
 .report-remarks textarea:focus { border-color: #58a978; box-shadow: 0 0 0 3px rgba(47,133,83,.1); }
 .report-remarks-print { min-height: 65px; padding: 10px 12px; border: 1px solid #d8e4dc; border-radius: 9px; background: repeating-linear-gradient(#fff 0, #fff 20px, #e8efe9 21px); color: #334155; font-size: 10px; font-weight: 600; line-height: 21px; white-space: pre-wrap; }
 .report-empty { display: grid; place-items: center; min-height: 112px; margin: 0; border: 1px dashed #d8e2db; border-radius: 9px; color: #94a3b8; font-size: 10px; font-weight: 700; text-align: center; }
-.report-chart-summary { margin: 0; padding: 14px 0; color: #526155; font-size: 11px; line-height: 1.55; }
+.report-chart-summary { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0; padding: 14px 0; }
+.report-chart-summary-label { min-width: 0; overflow: hidden; color: #526155; font-size: 12px; font-weight: 700; line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }
+.report-chart-summary-value { flex: 0 0 auto; color: var(--cliniq-primary, #205f3d); font-size: 30px; font-weight: 800; line-height: 1; }
 .report-footer { display: flex; justify-content: space-between; padding: 16px 40px; border-top: 1px solid #dfe9e2; color: #94a3b8; font-size: 9px; font-weight: 700; }
 .report-document-dashboard .report-chart-fill,
 .report-document-dashboard .report-column-track div { background: var(--cliniq-primary, #3b8b5d); }
@@ -358,13 +400,14 @@ html.cliniq-dark .report-document-dashboard .report-section { border-color: #3b5
 html.cliniq-dark .report-document-dashboard .report-section-number { background: #1d4934; color: #9be3ae; box-shadow: inset 0 0 0 1px #4d9b68; }
 html.cliniq-dark .report-document-dashboard .report-section h2 { color: #e7f4ea; }
 html.cliniq-dark .report-document-dashboard .report-section-description { color: #b3c9ba; }
-html.cliniq-dark .report-document-dashboard .report-metric,
-html.cliniq-dark .report-document-dashboard .inventory-metric-group { border-color: #3b5945; background: #1b2c21; }
-html.cliniq-dark .report-document-dashboard .inventory-metric-grid .report-metric { background: #1b3424; }
+html.cliniq-dark .report-chart-summary-label { color: #b3c9ba; }
+html.cliniq-dark .report-document-dashboard .report-metric { border-color: #3b5945; background: #1b2c21; }
+html.cliniq-dark .report-document-dashboard .visit-metric-group { border-color: #3b5945; background: #1b2c21; }
+html.cliniq-dark .report-document-dashboard .visit-metric-grid .report-metric { background: #1b3424; }
 html.cliniq-dark .report-document-dashboard .report-metric-label,
 html.cliniq-dark .report-document-dashboard .report-metric-note { color: #a9c0b0; }
-html.cliniq-dark .report-document-dashboard .report-metric-value,
-html.cliniq-dark .report-document-dashboard .inventory-metric-group-title { color: #9be3ae; }
+html.cliniq-dark .report-document-dashboard .report-metric-value { color: #9be3ae; }
+html.cliniq-dark .report-document-dashboard .visit-metric-group-title { color: #9be3ae; }
 html.cliniq-dark .report-document-dashboard .report-chart { border-color: #3b5945; background: #1b2c21; }
 html.cliniq-dark .report-document-dashboard .report-chart h3 { color: #e7f4ea; }
 html.cliniq-dark .report-document-dashboard .report-chart-kind { color: #a9c0b0; }
@@ -382,10 +425,34 @@ html.cliniq-dark .report-document-dashboard .report-donut-caption,
 html.cliniq-dark .report-document-dashboard .report-axis-label { fill: #a9c0b0; }
 html.cliniq-dark .report-document-dashboard .report-empty { border-color: #4b6d55; color: #a9c0b0; }
 html.cliniq-dark .report-document-dashboard .report-remarks textarea { border-color: #4b6d55; background: #0d1b13; color: #e7f4ea; }
+html.cliniq-dark .report-action-summary { border-color: #3b5945; background: #14271b; }
+html.cliniq-dark .report-action-summary-eyebrow { color: #9be3ae; }
+html.cliniq-dark .report-action-summary h2 { color: #e7f4ea; }
+html.cliniq-dark .report-action-summary > div > p:last-child,
+html.cliniq-dark .report-action-card small { color: #b3c9ba; }
+html.cliniq-dark .report-action-card { border-color: #785a24; background: #33270f; color: #fde68a; }
+html.cliniq-dark .report-action-card--red { border-color: #7f3d3d; background: #321719; color: #fecaca; }
 html.cliniq-dark .report-preview-summary { border-color: #3b5945; background: linear-gradient(135deg, #183524, #14271b); }
 html.cliniq-dark .report-preview-summary h2, html.cliniq-dark .report-preview-summary-stat strong { color: #e7f4ea; }
 html.cliniq-dark .report-preview-summary p:last-child, html.cliniq-dark .report-preview-summary-stat span { color: #b3c9ba; }
 html.cliniq-dark .report-preview-summary-stat { border-color: #3b5945; background: #1b2c21; }
+@media (max-width: 60rem) {
+  .report-document-dashboard .report-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .report-document-dashboard .report-charts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .report-document-dashboard .report-charts--five-cards > .report-chart { grid-column: auto; }
+  .report-document-dashboard .report-charts--two-charts-three-tables > .report-chart { grid-column: auto; }
+  .report-document-dashboard .report-charts--two-charts-one-table > .report-chart { grid-column: auto; }
+  .report-document-dashboard .report-charts--two-charts-one-table > .report-chart:last-child { grid-column: 1 / -1; }
+  .report-document-dashboard .report-charts--feedback > .report-chart { grid-column: auto; }
+  .report-document-dashboard .report-charts--feedback > .report-chart:first-child,
+  .report-document-dashboard .report-charts--feedback > .report-chart:last-child { grid-column: 1 / -1; }
+  .report-document-dashboard .report-charts--feedback > .report-chart:nth-child(2) { min-height: 0; }
+  .report-document-dashboard .report-charts--feedback > .report-chart:nth-child(2) .report-chart-visual { min-height: 11.5rem; }
+  .report-document-dashboard .report-charts--feedback > .report-chart:nth-child(2) .report-apexcharts-canvas { height: 12.5rem; }
+  .report-document-dashboard .report-charts--three-charts-one-table > .report-chart:last-child { grid-column: auto; }
+  .report-document-dashboard .report-charts--visits > .report-chart { grid-column: auto; }
+  .report-document-dashboard .report-charts--visits > .report-chart:last-child { grid-column: 1 / -1; }
+}
 @media (max-width: 760px) {
   .report-document { width: 100%; margin: 0; }
   .report-cover, .report-body { padding: 28px 22px; }
@@ -396,13 +463,14 @@ html.cliniq-dark .report-preview-summary-stat { border-color: #3b5945; backgroun
   .report-document-dashboard .report-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
   .report-document-dashboard .report-metric { min-height: 5.75rem; padding: .875rem; }
   .report-document-dashboard .report-metric-value { font-size: 1.875rem; }
-  .report-document-dashboard .inventory-metric-groups { grid-template-columns: 1fr; gap: .75rem; }
-  .report-document-dashboard .inventory-metric-group { padding: .875rem; }
-  .report-document-dashboard .inventory-metric-grid .report-metric-value { font-size: 1.625rem; }
+  .report-document-dashboard .visit-metric-groups { grid-template-columns: 1fr; gap: .75rem; }
+  .report-document-dashboard .visit-metric-group { padding: .875rem; }
+  .report-document-dashboard .visit-metric-grid .report-metric-value { font-size: 1.625rem; }
+  .report-document-dashboard .visit-metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .report-document-dashboard .report-charts { grid-template-columns: 1fr; }
   .report-document-dashboard .report-chart { min-height: 0; padding: 1rem; }
   .report-document-dashboard .report-chart-visual { min-height: 11.5rem; }
-  .report-document-dashboard .report-echarts-canvas { height: 12.5rem; }
+  .report-document-dashboard .report-apexcharts-canvas { height: 12.5rem; }
   .report-preview-summary { grid-template-columns: 1fr 1fr; }
   .report-preview-summary > :first-child { grid-column: 1 / -1; }
 }
@@ -443,6 +511,19 @@ html.cliniq-dark .report-preview-summary-stat { border-color: #3b5945; backgroun
   .report-metric-value { font-size: 17px; }
   .report-metric-note { font-size: 7px; }
   .report-charts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .report-document-dashboard .report-charts--five-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .report-document-dashboard .report-charts--five-cards > .report-chart { grid-column: auto; }
+  .report-document-dashboard .report-charts--two-charts-three-tables { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .report-document-dashboard .report-charts--two-charts-three-tables > .report-chart { grid-column: auto; }
+  .report-document-dashboard .report-charts--two-charts-one-table > .report-chart { grid-column: auto; }
+  .report-document-dashboard .report-charts--two-charts-one-table > .report-chart:last-child { grid-column: 1 / -1; }
+  .report-document-dashboard .report-charts--feedback > .report-chart { grid-column: auto; }
+  .report-document-dashboard .report-charts--feedback > .report-chart:first-child,
+  .report-document-dashboard .report-charts--feedback > .report-chart:last-child { grid-column: 1 / -1; }
+  .report-document-dashboard .report-charts--feedback > .report-chart:nth-child(2) { min-height: 0; }
+  .report-document-dashboard .report-charts--three-charts-one-table > .report-chart:last-child { grid-column: auto; }
+  .report-document-dashboard .report-charts--visits > .report-chart { grid-column: auto; }
+  .report-document-dashboard .report-charts--visits > .report-chart:last-child { grid-column: 1 / -1; }
   .report-chart { min-height: 130px; padding: 9px; }
   .report-chart h3 { margin-bottom: 7px; font-size: 10px; }
   .report-chart-row { margin: 4px 0; }
@@ -458,6 +539,12 @@ html.cliniq-dark .report-preview-summary-stat { border-color: #3b5945; backgroun
   .report-remarks { margin-top: 8px; }
   .report-remarks-print { min-height: 42px; font-size: 8px; line-height: 15px; background: #fff; }
   .report-footer { display: none; }
+  .report-document-paper-preview .report-footer { display: flex; }
+  .report-paper-letterhead { grid-template-columns: 21mm minmax(0, 1fr) 21mm; gap: 7mm; padding: 0 0 5mm; border-bottom-width: .6mm; }
+  .report-paper-letterhead-logo { width: 21mm; height: 21mm; }
+  .report-paper-letterhead-logo img { width: 18mm; height: 18mm; }
+  .report-paper-letterhead-title { font-size: 12px; }
+  .report-paper-letterhead-title span { margin-top: 2px; font-size: 10px; }
 }
 CSS;
 }
@@ -470,8 +557,9 @@ function render_system_report_document(array $report, bool $standalone = false, 
     $departmentName = trim((string) ($clinicProfile['department'] ?? 'University Health Services')) ?: 'University Health Services';
     $presentation = (string) ($options['presentation'] ?? 'document');
     $isPreview = $presentation === 'preview';
-    $includeCover = !$isPreview && (bool) ($options['include_cover'] ?? true);
-    $isDashboard = !$includeCover;
+    $isPaperPreview = $presentation === 'paper-preview';
+    $includeCover = $isPaperPreview || (!$isPreview && (bool) ($options['include_cover'] ?? true));
+    $isDashboard = !$includeCover || $isPaperPreview;
     $remarksMode = (string) ($options['remarks_mode'] ?? 'none');
     $remarks = is_array($options['remarks'] ?? null) ? $options['remarks'] : [];
     $includeTables = (bool) ($options['include_tables'] ?? true);
@@ -484,12 +572,23 @@ function render_system_report_document(array $report, bool $standalone = false, 
     $preparedByRole = trim((string) ($preparedBy['role'] ?? ''));
     $preparedByRole = $preparedByRole !== '' ? ucwords(str_replace('_', ' ', $preparedByRole)) : 'Authorized Staff';
     $coverage = implode(', ', array_map(static fn(array $section): string => (string) ($section['title'] ?? ''), $report['sections']));
+    $reportDate = strtotime((string) ($report['date_to'] ?? '')) ?: time();
+    $reportYear = (int) date('Y', $reportDate);
+    $schoolYearStart = (int) date('n', $reportDate) >= 7 ? $reportYear : $reportYear - 1;
+    $schoolYear = $schoolYearStart . '-' . ($schoolYearStart + 1);
+    $letterheadLogoUrl = app_url(clinic_profile_logo_path($clinicProfile));
     ob_start();
     if ($standalone): ?>
         <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title><?= system_report_escape($report['title']) ?></title><style><?= system_report_styles() ?></style></head><body class="system-report-standalone">
     <?php endif; ?>
-    <article class="report-document<?= $includeCover ? '' : ' report-document-dashboard' ?><?= $isPreview ? ' report-document-preview' : '' ?>" id="systemReportDocument">
-        <?php if ($includeCover): ?>
+    <article class="report-document<?= $isDashboard ? ' report-document-dashboard' : '' ?><?= $isPreview ? ' report-document-preview' : '' ?><?= $isPaperPreview ? ' report-document-paper-preview' : '' ?>" id="systemReportDocument">
+        <?php if ($isPaperPreview): ?>
+            <header class="report-paper-letterhead">
+                <div class="report-paper-letterhead-logo"><img src="<?= system_report_escape($letterheadLogoUrl) ?>" alt="<?= system_report_escape($institutionName) ?> seal"></div>
+                <div class="report-paper-letterhead-title"><?= system_report_escape($institutionName) ?><span>School Year <?= system_report_escape($schoolYear) ?></span></div>
+                <div class="report-paper-letterhead-logo"><img src="<?= system_report_escape($letterheadLogoUrl) ?>" alt="<?= system_report_escape($institutionName) ?> seal"></div>
+            </header>
+        <?php elseif ($includeCover): ?>
             <header class="report-cover">
                 <div class="report-cover-card">
                     <div class="report-brand"><div class="report-logo">+</div><div><strong><?= system_report_escape($systemName) ?></strong><span><?= system_report_escape($departmentName) ?></span></div></div>
@@ -543,17 +642,16 @@ function render_system_report_document(array $report, bool $standalone = false, 
             <?php $sectionNumber = 0; foreach ($report['sections'] as $sectionKey => $section): $sectionNumber++; ?>
                 <section class="report-section" id="report-section-<?= system_report_escape((string) $sectionKey) ?>" data-report-section="<?= system_report_escape((string) $sectionKey) ?>">
                     <div class="report-section-heading"><div class="report-section-number"><?= $sectionNumber ?></div><div><h2><?= system_report_escape($section['title']) ?></h2><p class="report-section-description"><?= system_report_escape($section['description']) ?></p></div></div>
-                    <?php if (!$tableOnly && $isDashboard && $sectionKey === 'inventory'): ?>
-                        <?php $inventoryMetricGroups = [
-                            'Stock overview' => ['Active Medicine', 'Active Equipment', 'Units in Stock', 'Low Stock Items'],
-                            'Dispensing activity' => ['Medicine Dispensed', 'People Given Medicine'],
-                            'Loan activity' => ['Equipment Loans', 'Equipment Items Borrowed', 'Currently Borrowed', 'Overdue Loans'],
+                    <?php if (!$tableOnly && $isDashboard && $sectionKey === 'visits'): ?>
+                        <?php $metricGroups = [
+                            'Clinical visit activity' => ['Clinical Visits', 'Visits with Vitals', 'Median Time to First Action', 'Median Time to Completion'],
+                            'Appointment activity' => ['For Approval', 'Approved', 'For Completion', 'Completed'],
                         ]; ?>
-                        <div class="inventory-metric-groups">
-                            <?php foreach ($inventoryMetricGroups as $groupTitle => $metricLabels): ?>
-                                <section class="inventory-metric-group" aria-label="<?= system_report_escape($groupTitle) ?>">
-                                    <h3 class="inventory-metric-group-title"><?= system_report_escape($groupTitle) ?></h3>
-                                    <div class="inventory-metric-grid">
+                        <div class="visit-metric-groups">
+                            <?php foreach ($metricGroups as $groupTitle => $metricLabels): ?>
+                                <section class="visit-metric-group" aria-label="<?= system_report_escape($groupTitle) ?>">
+                                    <h3 class="visit-metric-group-title"><?= system_report_escape($groupTitle) ?></h3>
+                                    <div class="visit-metric-grid">
                                         <?php foreach ($section['metrics'] as $metric): ?>
                                             <?php if (in_array($metric['label'], $metricLabels, true)): ?>
                                                 <div class="report-metric"><p class="report-metric-label"><?= system_report_escape($metric['label']) ?></p><p class="report-metric-value"><?= system_report_format_number($metric['value'], (int) ($metric['decimals'] ?? 0)) ?></p><?php if (($metric['note'] ?? '') !== ''): ?><p class="report-metric-note"><?= system_report_escape($metric['note']) ?></p><?php endif; ?></div>
@@ -571,19 +669,35 @@ function render_system_report_document(array $report, bool $standalone = false, 
                             <?php endforeach; ?>
                         </div>
                     <?php endif; ?>
-                    <div class="report-charts<?= $tableOnly ? ' report-tables-only' : '' ?>">
+                    <?php
+                        $chartCardCount = count($section['charts']);
+                        $tableCardCount = count($section['tables'] ?? []);
+                        $analysisCardCount = $chartCardCount + $tableCardCount;
+                        $analysisLayoutClass = '';
+                        if (!$tableOnly && $isDashboard) {
+                            if ($chartCardCount === 1 && $tableCardCount === 0) $analysisLayoutClass = ' report-charts--one-chart';
+                            elseif ($chartCardCount === 2 && $tableCardCount === 0) $analysisLayoutClass = ' report-charts--two-charts';
+                            elseif ($sectionKey === 'feedback' && $chartCardCount === 2 && $tableCardCount === 1) $analysisLayoutClass = ' report-charts--feedback';
+                            elseif ($chartCardCount === 2 && $tableCardCount === 1) $analysisLayoutClass = ' report-charts--two-charts-one-table';
+                            elseif ($chartCardCount === 2 && $tableCardCount === 3) $analysisLayoutClass = ' report-charts--two-charts-three-tables';
+                            elseif ($chartCardCount === 3 && $tableCardCount === 1) $analysisLayoutClass = ' report-charts--three-charts-one-table';
+                            elseif ($sectionKey === 'visits' && $chartCardCount === 8 && $tableCardCount === 1) $analysisLayoutClass = ' report-charts--visits';
+                            elseif ($analysisCardCount === 5) $analysisLayoutClass = ' report-charts--five-cards';
+                        }
+                    ?>
+                    <div class="report-charts<?= $tableOnly ? ' report-tables-only' : '' ?><?= $analysisLayoutClass ?>">
                         <?php foreach ($section['charts'] as $chart): ?>
                             <?php if ($tableOnly): ?>
-                                <div class="report-chart"><h3><?= system_report_escape($chart['title']) ?></h3><?= render_system_report_data_table($chart, true) ?></div>
+                                <div class="report-chart"><h3><?= system_report_escape($chart['title']) ?></h3><?= render_system_report_data_table($chart, true, false) ?></div>
                             <?php else: ?>
                                 <?php $chartType = system_report_chart_type($chart); ?>
-                                <?php $chartPayload = json_encode(['type' => $chartType, 'title' => $chart['title'], 'rows' => $chart['rows'], 'presentation' => $chart['presentation'] ?? 'diagram'], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '{}'; ?>
+                                <?php $chartPayload = json_encode(['type' => $chartType, 'title' => $chart['title'], 'rows' => $chart['visual_rows'] ?? $chart['rows'], 'presentation' => $chart['presentation'] ?? 'diagram', 'decimals' => $chart['decimals'] ?? 0, 'axis_max' => $chart['axis_max'] ?? null, 'colors' => $chart['colors'] ?? []], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '{}'; ?>
                                 <?php $isDiagram = ($chart['presentation'] ?? 'diagram') === 'diagram'; ?>
                                 <div class="report-chart<?= $isDiagram ? '' : ' report-chart-summary-card' ?>" data-report-chart="<?= system_report_escape($chartPayload) ?>"><h3><?= system_report_escape($chart['title']) ?><?php if ($isDiagram): ?><span class="report-chart-kind"><?= system_report_escape($chartType) ?></span><?php endif; ?></h3><div class="report-chart-visual"><?= render_system_report_chart($chart) ?></div><?php if ($includeTables): ?><?= render_system_report_data_table($chart) ?><?php endif; ?></div>
                             <?php endif; ?>
                         <?php endforeach; ?>
                         <?php foreach (($section['tables'] ?? []) as $table): ?>
-                            <div class="report-chart report-chart-table"><h3><?= system_report_escape((string) ($table['title'] ?? 'Transaction detail')) ?></h3><?= render_system_report_data_table($table, true) ?></div>
+                            <div class="report-chart report-chart-table"><h3><?= system_report_escape((string) ($table['title'] ?? 'Transaction detail')) ?></h3><?= render_system_report_data_table($table, true, false) ?></div>
                         <?php endforeach; ?>
                     </div>
                     <?php if ($remarksMode === 'input'): ?>

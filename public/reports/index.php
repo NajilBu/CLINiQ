@@ -5,6 +5,7 @@ require_once __DIR__ . '/../../app/services/CliniqVisitWorkflow.php';
 require_once __DIR__ . '/../../app/services/SystemReport.php';
 require_once __DIR__ . '/../../app/services/SystemReportRenderer.php';
 require_report_access();
+header('Cache-Control: private, no-store, max-age=0');
 
 // ── Date range filter ───────────────────────────────────────
 $periodOptions = [
@@ -123,7 +124,7 @@ render_header('Clinic Transaction Summary');
     </aside>
 </div>
 
-<script src="<?= e(app_url('assets/vendor/echarts/echarts.min.js')) ?>"></script>
+<script src="<?= e(app_url('assets/vendor/apexcharts/apexcharts.min.js')) ?>"></script>
 <script src="<?= e(app_url('assets/js/system-report-charts.js?v=' . filemtime(__DIR__ . '/../assets/js/system-report-charts.js'))) ?>"></script>
 <script>
 (() => {
@@ -133,14 +134,14 @@ render_header('Clinic Transaction Summary');
     let reportSectionObserver = null;
 
     const disposeReportCharts = () => {
-        reportCharts.splice(0).forEach(({ chart, observer }) => {
+        reportCharts.splice(0).forEach(({ mounted, observer }) => {
             observer.disconnect();
-            chart.dispose();
+            mounted.destroy();
         });
     };
 
     const enhanceReportCharts = () => {
-        if (!window.echarts) return;
+        if (!window.ApexCharts) return;
 
         document.querySelectorAll('[data-report-chart]').forEach((card) => {
             let chartData;
@@ -151,15 +152,13 @@ render_header('Clinic Transaction Summary');
             }
             const tableRows = Array.isArray(chartData.rows) ? chartData.rows : [];
             if (!tableRows.length || chartData.presentation !== 'diagram') return;
-            const rows = chartData.type === 'line' ? tableRows : tableRows.slice(0, 10);
-
             const visual = card.querySelector('.report-chart-visual');
             if (!visual) return;
             const mounted = window.cliniqSystemReportCharts?.mount(visual, chartData, { dark: isDarkReport });
             if (!mounted) return;
-            const observer = new ResizeObserver(() => mounted.chart.resize());
+            const observer = new ResizeObserver(() => mounted.resize());
             observer.observe(mounted.canvas);
-            reportCharts.push({ chart: mounted.chart, observer });
+            reportCharts.push({ mounted, observer });
         });
     };
 
@@ -172,6 +171,7 @@ render_header('Clinic Transaction Summary');
     const periodInputs = Array.from(document.querySelectorAll('input[name="period"]'));
     const previewLink = document.getElementById('reportHeaderPreviewLink');
     const tablesLink = document.getElementById('reportHeaderTablesLink');
+    const reportAnchor = new Date(<?= json_encode($dateTo . 'T00:00:00') ?>);
     let reportView = <?= json_encode($reportView) ?>;
     if (!form || !fromInput || !toInput) return;
 
@@ -193,8 +193,7 @@ render_header('Clinic Transaction Summary');
     };
 
     const computeRange = (period) => {
-        const anchor = new Date();
-        anchor.setHours(0, 0, 0, 0);
+        const anchor = new Date(reportAnchor);
         if (Number.isNaN(anchor.getTime())) return null;
 
         if (period === 'weekly') {
@@ -268,6 +267,7 @@ render_header('Clinic Transaction Summary');
     const bindSectionNavigation = () => {
         reportSectionObserver?.disconnect();
         const sectionLinks = Array.from(document.querySelectorAll('.report-section-navigation-link'));
+        const scrollRoot = document.querySelector('.app-content');
         const sectionTargets = sectionLinks
             .map((link) => document.querySelector(link.getAttribute('href')))
             .filter(Boolean);
@@ -283,9 +283,10 @@ render_header('Clinic Transaction Summary');
             const target = document.querySelector(link.getAttribute('href'));
             if (!target) return;
             event.preventDefault();
-            target.scrollIntoView({
+            const top = target.getBoundingClientRect().top - scrollRoot.getBoundingClientRect().top + scrollRoot.scrollTop - 16;
+            scrollRoot.scrollTo({
                 behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
-                block: 'start',
+                top: Math.max(0, top),
             });
             setActiveSection(target.id);
         }));

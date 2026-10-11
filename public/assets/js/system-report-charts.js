@@ -1,66 +1,214 @@
-/* global echarts */
+/* global ApexCharts */
 (() => {
   const palette = ["#2f8553", "#58a978", "#89c79f", "#d4a72c", "#5377b8", "#8b69c7", "#d26b6b", "#64748b"];
-  const optionFor = (chart, { dark = false } = {}) => {
-    const rows = Array.isArray(chart?.rows) ? chart.rows : [];
-    const type = String(chart?.type || chart?.render_type || "bar");
-    const labels = rows.map((row) => String(row.label ?? ""));
-    const values = rows.map((row) => Number(row.value) || 0);
-    const text = dark ? "#b3c9ba" : "#475569";
-    const value = dark ? "#9be3ae" : "#205f3d";
-    const grid = dark ? "#35523f" : "#edf3ef";
-    const axis = dark ? "#4b6d55" : "#dfe9e2";
-    const shared = { animationDuration: 0, color: palette, textStyle: { fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif" }, tooltip: { trigger: type === "donut" ? "item" : "axis", confine: true } };
-    if (type === "donut") return { ...shared, tooltip: { trigger: "item", formatter: "{b}: <b>{c}</b> ({d}%)" }, series: [{ type: "pie", radius: ["48%", "72%"], center: ["50%", "50%"], avoidLabelOverlap: true, itemStyle: { borderColor: dark ? "#14271b" : "#fff", borderWidth: 3, borderRadius: 5 }, label: { color: text, fontSize: 12, fontWeight: 700, formatter: "{b}" }, labelLine: { length: 8, length2: 8 }, data: rows.map((row) => ({ name: String(row.label ?? ""), value: Number(row.value) || 0 })) }], graphic: [{ type: "text", left: "center", top: "42%", style: { text: String(values.reduce((total, item) => total + item, 0)), fill: value, font: "800 18px Inter, sans-serif", textAlign: "center" } }, { type: "text", left: "center", top: "55%", style: { text: "TOTAL", fill: "#64748b", font: "700 9px Inter, sans-serif", textAlign: "center" } }] };
-    if (type === "line") return { ...shared, grid: { left: 36, right: 18, top: 22, bottom: 38 }, xAxis: { type: "category", data: labels, axisLabel: { color: text, fontSize: 11, fontWeight: 600, interval: "auto" }, axisLine: { lineStyle: { color: axis } } }, yAxis: { type: "value", axisLabel: { color: text, fontSize: 11, fontWeight: 600 }, splitLine: { lineStyle: { color: grid } } }, series: [{ type: "line", data: values, smooth: true, symbolSize: 8, lineStyle: { width: 3 }, areaStyle: { color: "rgba(47,133,83,.12)" }, label: { show: true, position: "top", color: value, fontWeight: 800, fontSize: 11 } }] };
-    if (type === "progress") return { ...shared, tooltip: { trigger: "item", formatter: "{b}: <b>{c}</b>" }, grid: { left: 4, right: 4, top: 48, bottom: 10 }, xAxis: { type: "value", max: values.reduce((total, item) => total + item, 0) || 1, show: false }, yAxis: { type: "category", data: [""], show: false }, legend: { top: 0, type: "scroll", textStyle: { color: text, fontSize: 11, fontWeight: 600 } }, series: rows.map((row, index) => ({ name: String(row.label ?? ""), type: "bar", stack: "total", barWidth: 26, data: [values[index]], label: { show: values[index] > 0, formatter: "{c}", color: "#fff", fontWeight: 800, fontSize: 11 } })) };
-    const column = type === "column";
-    return { ...shared, grid: column ? { left: 36, right: 16, top: 20, bottom: 52 } : { left: 116, right: 36, top: 16, bottom: 12 }, xAxis: column ? { type: "category", data: labels, axisLabel: { color: text, fontSize: 10, fontWeight: 600, rotate: labels.length > 5 ? 24 : 0, interval: 0 }, axisLine: { lineStyle: { color: axis } } } : { type: "value", axisLabel: { color: text, fontSize: 11, fontWeight: 600 }, splitLine: { lineStyle: { color: grid } } }, yAxis: column ? { type: "value", axisLabel: { color: text, fontSize: 11, fontWeight: 600 }, splitLine: { lineStyle: { color: grid } } } : { type: "category", data: labels, axisLabel: { color: text, fontSize: 11, fontWeight: 600, width: 102, overflow: "truncate" }, axisLine: { show: false }, axisTick: { show: false } }, series: [{ type: "bar", data: values, barMaxWidth: 34, itemStyle: { borderRadius: column ? [6, 6, 0, 0] : [0, 6, 6, 0] }, label: { show: true, position: column ? "top" : "right", color: value, fontWeight: 800, fontSize: 11 } }] };
+
+  const themeFor = (dark) => ({
+    text: dark ? "#b3c9ba" : "#475569",
+    value: dark ? "#9be3ae" : "#205f3d",
+    grid: dark ? "#35523f" : "#edf3ef",
+    axis: dark ? "#4b6d55" : "#dfe9e2",
+    background: dark ? "#14271b" : "#ffffff",
+  });
+
+  const rowsFor = (chart) => Array.isArray(chart?.rows) ? chart.rows : [];
+  const valuesFor = (rows) => rows.map((row) => Number(row.value) || 0);
+  const labelsFor = (rows) => rows.map((row) => String(row.label ?? ""));
+
+  const placeHorizontalBarLabels = (host, horizontal) => {
+    if (!horizontal) return;
+    const bars = Array.from(host.querySelectorAll(".apexcharts-bar-area"));
+    const labels = Array.from(host.querySelectorAll("text.apexcharts-datalabel"));
+    if (!bars.length || !labels.length) return;
+
+    // ApexCharts ignores dataLabels.offsetX for bars, so use each rendered bar edge.
+    bars.forEach((bar, index) => {
+      const label = labels[index];
+      if (!label) return;
+      const box = bar.getBBox();
+      if (!Number.isFinite(box.x) || !Number.isFinite(box.width)) return;
+      label.setAttribute("text-anchor", "start");
+      label.setAttribute("x", String(box.x + box.width + 10));
+    });
   };
+
+  const baseOptions = (dark) => ({
+    chart: {
+      fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
+      animations: { enabled: false },
+      background: "transparent",
+      toolbar: { show: false },
+      redrawOnParentResize: true,
+      redrawOnWindowResize: true,
+    },
+    colors: palette,
+    theme: { mode: dark ? "dark" : "light" },
+    tooltip: { theme: dark ? "dark" : "light" },
+  });
+
+  const horizontalBarOptions = (rows, dark, { stacked = false, axisMax = null, decimals = 0, colors = [] } = {}) => {
+    const theme = themeFor(dark);
+    const configuredMax = Number(axisMax);
+    const horizontalMax = Number.isFinite(configuredMax) && configuredMax > 0 ? configuredMax : Math.max(1, ...valuesFor(rows));
+    const valueDecimals = Math.max(0, Number(decimals) || 0);
+    const horizontalAxisMax = horizontalMax + Math.max(1, horizontalMax * 0.16);
+    return {
+      ...baseOptions(dark),
+      ...(colors.length ? { colors } : {}),
+      chart: { ...baseOptions(dark).chart, type: "bar", stacked, height: "100%" },
+      series: [{ name: "Recorded", data: valuesFor(rows) }],
+      xaxis: {
+        categories: labelsFor(rows),
+        min: 0,
+        max: horizontalAxisMax,
+        tickAmount: Math.min(5, horizontalMax),
+        decimalsInFloat: valueDecimals,
+        labels: { style: { colors: theme.text, fontSize: "11px", fontWeight: 600 } },
+        axisBorder: { color: theme.axis },
+      },
+      yaxis: { labels: { style: { colors: theme.text, fontSize: "11px", fontWeight: 600 }, maxWidth: 116 } },
+      grid: { borderColor: theme.grid, padding: { left: 4, right: 56, top: -4, bottom: -8 } },
+      plotOptions: { bar: { horizontal: true, distributed: colors.length > 1, borderRadius: 6, barHeight: "58%", dataLabels: { position: "top" } } },
+      dataLabels: {
+        enabled: true,
+        formatter: (value) => Number(value).toFixed(valueDecimals),
+        textAnchor: "start",
+        style: { colors: [theme.value], fontSize: "11px", fontWeight: 800 },
+      },
+      legend: { show: false },
+    };
+  };
+
+  const optionFor = (chart, { dark = false } = {}) => {
+    const rows = rowsFor(chart);
+    const type = String(chart?.type || chart?.render_type || "bar");
+    const values = valuesFor(rows);
+    const labels = labelsFor(rows);
+    const theme = themeFor(dark);
+    const axisMax = chart?.axis_max;
+    const decimals = chart?.decimals ?? 0;
+    const colors = Array.isArray(chart?.colors) ? chart.colors : [];
+
+    if (type === "donut") {
+      if (rows.length > 4) return horizontalBarOptions(rows, dark, { axisMax, decimals, colors });
+      const total = values.reduce((sum, value) => sum + value, 0);
+      return {
+        ...baseOptions(dark),
+        chart: { ...baseOptions(dark).chart, type: "donut", height: "100%" },
+        series: values,
+        labels,
+        stroke: { colors: [theme.background], width: 3 },
+        legend: { show: false },
+        dataLabels: { enabled: false },
+        plotOptions: {
+          pie: {
+            expandOnClick: false,
+            customScale: 0.88,
+            donut: {
+              size: "62%",
+              labels: {
+                show: true,
+                name: { show: false },
+                value: { show: false },
+                total: {
+                  show: true,
+                  showAlways: true,
+                  label: "TOTAL",
+                  color: "#64748b",
+                  fontSize: "9px",
+                  fontWeight: 700,
+                  formatter: () => String(total),
+                },
+              },
+            },
+            dataLabels: {
+              external: {
+                show: true,
+                formatter: (name, options) => [name, String(values[options.seriesIndex] ?? 0)],
+                connector: { show: true, length: 12, width: 1 },
+                style: { colors: [theme.text], fontSize: "11px", fontWeight: 700 },
+              },
+            },
+          },
+        },
+        tooltip: { theme: dark ? "dark" : "light", y: { formatter: (value) => String(value) } },
+      };
+    }
+
+    if (type === "line") return {
+      ...baseOptions(dark),
+      chart: { ...baseOptions(dark).chart, type: "area", height: "100%" },
+      series: [{ name: "Recorded", data: values }],
+      xaxis: { categories: labels, labels: { style: { colors: theme.text, fontSize: "11px", fontWeight: 600 } }, axisBorder: { color: theme.axis } },
+      yaxis: { min: 0, labels: { style: { colors: theme.text, fontSize: "11px", fontWeight: 600 } } },
+      stroke: { curve: "smooth", width: 3 },
+      fill: { type: "solid", opacity: 0.12 },
+      markers: { size: 4 },
+      dataLabels: { enabled: true, offsetY: -8, style: { colors: [theme.value], fontSize: "11px", fontWeight: 800 } },
+      grid: { borderColor: theme.grid, padding: { left: 2, right: 8, top: 12, bottom: 0 } },
+      legend: { show: false },
+    };
+
+    if (type === "progress") return horizontalBarOptions(rows, dark, { stacked: true, axisMax, decimals, colors });
+
+    if (type === "column") return {
+      ...baseOptions(dark),
+      chart: { ...baseOptions(dark).chart, type: "bar", height: "100%" },
+      series: [{ name: "Recorded", data: values }],
+      xaxis: { categories: labels, labels: { rotate: labels.length > 5 ? -24 : 0, style: { colors: theme.text, fontSize: "10px", fontWeight: 600 } }, axisBorder: { color: theme.axis } },
+      yaxis: { min: 0, labels: { style: { colors: theme.text, fontSize: "11px", fontWeight: 600 } } },
+      grid: { borderColor: theme.grid, padding: { left: 2, right: 8, top: 42, bottom: 4 } },
+      plotOptions: { bar: { borderRadius: 6, columnWidth: "48%", dataLabels: { position: "top" } } },
+      dataLabels: { enabled: true, offsetY: -18, style: { colors: [theme.value], fontSize: "11px", fontWeight: 800 } },
+      legend: { show: false },
+    };
+
+    return horizontalBarOptions(rows, dark, { axisMax, decimals, colors });
+  };
+
   const imageFor = async (chart, { width = 960, height = 360 } = {}) => {
-    if (!window.echarts) throw new Error("The report chart renderer is unavailable.");
+    if (!window.ApexCharts) throw new Error("The report chart renderer is unavailable.");
     const host = document.createElement("div");
     host.style.cssText = `position:fixed;left:-10000px;top:-10000px;width:${width}px;height:${height}px;pointer-events:none;`;
     document.body.append(host);
     let instance;
     try {
-      instance = window.echarts.init(host, null, { renderer: "canvas", width, height });
-      await new Promise((resolve) => {
-        let captured = false;
-        let timeout;
-        const finish = () => {
-          if (captured) return;
-          captured = true;
-          window.clearTimeout(timeout);
-          instance.off("finished", finish);
-          resolve();
-        };
-        instance.on("finished", finish);
-        instance.setOption({ ...optionFor(chart), animation: false }, { lazyUpdate: false });
-        timeout = window.setTimeout(finish, 1000);
-      });
-      return instance.getDataURL({ type: "png", pixelRatio: 2, backgroundColor: "#ffffff" });
+      instance = new window.ApexCharts(host, optionFor(chart));
+      await instance.render();
+      placeHorizontalBarLabels(host, instance.w?.config?.plotOptions?.bar?.horizontal);
+      const image = await instance.dataURI({ scale: 2 });
+      return image.imgURI;
     } finally {
-      instance?.dispose();
+      instance?.destroy();
       host.remove();
     }
   };
+
   const mount = (host, chart, { dark = false } = {}) => {
-    if (!window.echarts || !host) return null;
+    if (!window.ApexCharts || !host) return null;
     const fallback = Array.from(host.childNodes);
     const canvas = document.createElement("div");
-    canvas.className = "report-echarts-canvas";
+    canvas.className = "report-apexcharts-canvas";
     let instance;
     try {
       host.replaceChildren(canvas);
-      instance = window.echarts.init(canvas, null, { renderer: "svg" });
-      instance.setOption(optionFor(chart, { dark }));
-      return { chart: instance, canvas };
+      instance = new window.ApexCharts(canvas, optionFor(chart, { dark }));
+      instance.render().then(() => {
+        placeHorizontalBarLabels(canvas, instance.w?.config?.plotOptions?.bar?.horizontal);
+      }).catch(() => {
+        instance?.destroy();
+        host.replaceChildren(...fallback);
+      });
+      return {
+        canvas,
+        resize: () => Promise.resolve(instance?.updateOptions({}, false, false, false)).then(() => placeHorizontalBarLabels(canvas, instance?.w?.config?.plotOptions?.bar?.horizontal)),
+        destroy: () => instance?.destroy(),
+      };
     } catch (_) {
-      instance?.dispose();
+      instance?.destroy();
       host.replaceChildren(...fallback);
       return null;
     }
   };
+
   window.cliniqSystemReportCharts = { optionFor, imageFor, mount };
 })();

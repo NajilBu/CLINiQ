@@ -25,7 +25,7 @@
     } catch (_) { return ""; }
   }
 
-  const chartImage = (chart, compact = false) => window.cliniqSystemReportCharts.imageFor(chart, { width: compact ? 720 : 960, height: 360 });
+  const chartImage = (chart, compact = false) => window.cliniqSystemReportCharts.imageFor({ ...chart, rows: chart.visual_rows || chart.rows || [] }, { width: compact ? 720 : 960, height: 360 });
 
   function chartRows(chart) { return (chart.rows || []).map((row) => [String(row.label || "Not specified"), Number(row.value) || 0]); }
   function chartHasData(chart) { return chartRows(chart).some(([, value]) => value !== 0); }
@@ -67,6 +67,9 @@
     const { jsPDF } = jspdf;
     const autoTable = window.jspdfAutoTable || ((doc, options) => doc.autoTable(options));
     const report = data.report; const branding = data.branding; const sections = sectionsFor(report);
+    const reportEnd = String(report.date_to || ""); const reportYear = Number(reportEnd.slice(0, 4)); const reportMonth = Number(reportEnd.slice(5, 7));
+    const schoolYearStart = reportMonth >= 7 ? reportYear : reportYear - 1;
+    const schoolYear = Number.isFinite(schoolYearStart) ? `SCHOOL YEAR ${schoolYearStart}-${schoolYearStart + 1}` : branding.department;
     const [plpLogo, customLogo] = await Promise.all([imageData(branding.plp_logo_url), imageData(branding.custom_logo_url)]);
     const doc = new jsPDF({ unit: "mm", format: "a4" });
     const green = [62, 124, 69]; const paleGreen = [237, 246, 237];
@@ -75,8 +78,8 @@
       if (plpLogo) doc.addImage(plpLogo, "PNG", 14, 10, 20, 20);
       if (customLogo) doc.addImage(customLogo, "PNG", width - 34, 10, 20, 20);
       doc.setTextColor(...green); doc.setFont("helvetica", "bold"); doc.setFontSize(12);
-      doc.text(doc.splitTextToSize(branding.institution_name, 120), width / 2, 17, { align: "center" });
-      doc.setFontSize(9); doc.text(branding.department, width / 2, 28, { align: "center" });
+      doc.text(doc.splitTextToSize(String(branding.institution_name || "").toUpperCase(), 120), width / 2, 17, { align: "center" });
+      doc.setFontSize(9); doc.text(schoolYear, width / 2, 28, { align: "center" });
       doc.setDrawColor(...green); doc.setLineWidth(.7); doc.line(14, 37, width - 14, 37);
       doc.setFontSize(15); doc.text("Clinic Transaction Summary", width / 2, 49, { align: "center" });
       doc.setTextColor(71, 85, 105); doc.setFont("helvetica", "normal"); doc.setFontSize(8);
@@ -248,11 +251,10 @@
 
   document.addEventListener("click", async (event) => {
     const button = event.target.closest("[data-report-export-format]"); if (!button) return;
-    if (button.dataset.reportExportFormat !== "xlsx") return;
     const form = button.closest("form"); if (!form) return;
     event.preventDefault();
     const original = button.textContent; button.disabled = true; button.textContent = "Preparing…";
-    try { await xlsxExport(await payload(form)); } catch (error) { window.alert(error instanceof Error ? error.message : "Unable to export the report."); } finally { button.disabled = false; button.textContent = original; }
+    try { const data = await payload(form); if (button.dataset.reportExportFormat === "xlsx") await xlsxExport(data); else await pdfExport(data, form.__systemReportPdf); } catch (error) { window.alert(error instanceof Error ? error.message : "Unable to export the report."); } finally { button.disabled = false; button.textContent = original; }
   });
 
   window.cliniqSystemReportExport = { previewPdf };

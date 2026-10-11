@@ -22,25 +22,40 @@ $checks = [
     'payload uses the report builder rather than direct export queries' => str_contains($payload, 'build_system_report($dateFrom, $dateTo, $modules)')
         && !str_contains($payload, 'SELECT ')
         && str_contains($payload, 'csrf_enforce_request();'),
-    'report contains only four approved transaction groups' => str_contains($builder, "'patient_care' => 'Patient Care Transactions'")
-        && str_contains($builder, "'scheduling_referrals' => 'Scheduling and Referral Transactions'")
-        && str_contains($builder, "'inventory_loans' => 'Inventory and Loan Transactions'")
-        && str_contains($builder, "'safety' => 'Safety Transactions'")
+    'report contains six operational sections with appointments inside Visits' => str_contains($builder, "'visits' => 'Visits'")
+        && str_contains($builder, "'ape' => 'APE Workflow'")
+        && str_contains($builder, "'inventory' => 'Inventory'")
+        && str_contains($builder, "'referrals' => 'Referrals'")
+        && str_contains($builder, "'alerts' => 'Alerts and Incidents'")
+        && str_contains($builder, "'feedback' => 'Clinic Feedback'")
         && !str_contains($builder, 'Patient Demographics')
-        && !str_contains($builder, 'Clinic Feedback')
-        && !str_contains($builder, 'passport_access_logs'),
-    'transaction exports cannot be narrowed by request parameters' => str_contains($builder, 'return array_keys(system_report_module_labels());')
-        && !str_contains($builder, 'array_intersect($allowed, $requested)'),
-    'summary and attention counts come from the transaction builder' => str_contains($builder, "'transaction_summary' => [")
-        && str_contains($builder, "'attention_summary' => [")
-        && str_contains($builder, "system_report_metric('Clinical Entries'")
-        && str_contains($builder, "system_report_metric('High or Critical Alerts'"),
-    'supporting breakdowns are tables rather than extra diagrams' => substr_count($builder, "'tables' => [") === 4
-        && str_contains($builder, 'Common Complaints')
-        && str_contains($builder, 'Referral Destination')
+        && str_contains($builder, 'passport_access_logs'),
+    'transaction exports honor recognized selected sections and map old appointment links to Visits' => str_contains($builder, "if (in_array('appointments', \$requested, true)) \$requested[] = 'visits';")
+        && str_contains($builder, 'array_intersect($allowed, $requested)')
+        && str_contains($builder, 'return $selected ?: $allowed;'),
+    'summary and attention counts reuse selected section metrics' => str_contains($builder, '$metricsByLabel = [];')
+        && str_contains($builder, '$transactionSummary = [];')
+        && str_contains($builder, '$attentionSummary = [];')
+        && str_contains($builder, '\'transaction_summary\' => $transactionSummary')
+        && str_contains($builder, '\'attention_summary\' => $attentionSummary')
+        && !str_contains($builder, "'transaction_summary' => [")
+        && !str_contains($builder, "'attention_summary' => ["),
+    'appointment reporting is grouped with Visits and follows scheduled appointment dates' => str_contains($builder, "'description' => 'Clinic visits recorded and appointment activity scheduled during the selected period.'")
+        && str_contains($builder, 'appointments WHERE appointment_datetime >= ? AND appointment_datetime < ?')
+        && !str_contains($builder, "'Appointment Requests', system_report_scalar"),
+    'tables are reserved for complete high-cardinality, audit, and snapshot detail' => substr_count($builder, "'tables' => [") === 6
+        && str_contains($builder, 'Visit Purpose')
+        && !str_contains($builder, 'Appointment Request Source')
+        && str_contains($builder, 'APE Activity')
         && str_contains($builder, 'Medicine Dispensed by Item')
-        && str_contains($builder, 'Alert Incident Type')
-        && str_contains($builder, 'Incident Report Status')
+        && str_contains($builder, 'All Responses by Service')
+        && !str_contains($builder, 'All Referral Destinations')
+        && !str_contains($builder, "system_report_chart('Referral Status'")
+        && !str_contains($builder, "system_report_chart('Referral Source'")
+        && !str_contains($builder, 'Alert Incident Type')
+        && !str_contains($builder, 'Incident Report Status')
+        && !str_contains($builder, "system_report_chart('Alert Status'")
+        && !str_contains($builder, 'Common Complaints')
         && str_contains($exporter, '(section.tables || []).forEach'),
     'all requested libraries are declared' => isset($package['dependencies']['jspdf'], $package['dependencies']['jspdf-autotable'], $package['dependencies']['exceljs'], $package['dependencies']['pdfjs-dist']),
     'pdf contains tables and charts from canonical chart rows' => str_contains($exporter, 'chartImage(chart)')
@@ -48,6 +63,23 @@ $checks = [
         && str_contains($exporter, 'autoTable(doc')
         && str_contains($exporter, 'window.cliniqSystemReportCharts.imageFor')
         && str_contains($chartRenderer, 'const optionFor = (chart, { dark = false } = {}) =>'),
+    'horizontal charts honor bounded decimal scales when supplied' => str_contains($chartRenderer, 'const configuredMax = Number(axisMax);')
+        && str_contains($chartRenderer, 'const horizontalAxisMax = horizontalMax + Math.max(1, horizontalMax * 0.16);')
+        && str_contains($chartRenderer, 'max: horizontalAxisMax,')
+        && str_contains($chartRenderer, 'decimalsInFloat: valueDecimals,')
+        && str_contains($builder, "'axis_max' => isset(\$options['axis_max'])")
+        && str_contains($builder, "['axis_max' => 7]"),
+    'bar values remain outside full bars without clipping' => str_contains($chartRenderer, 'padding: { left: 4, right: 56, top: -4, bottom: -8 }')
+        && str_contains($chartRenderer, 'textAnchor: "start",')
+        && str_contains($chartRenderer, 'const placeHorizontalBarLabels = (host, horizontal) =>')
+        && str_contains($chartRenderer, 'if (!horizontal) return;')
+        && str_contains($chartRenderer, 'bar.getBBox()')
+        && str_contains($chartRenderer, 'box.x + box.width + 10')
+        && str_contains($chartRenderer, 'placeHorizontalBarLabels(host, instance.w?.config?.plotOptions?.bar?.horizontal);')
+        && str_contains($chartRenderer, 'placeHorizontalBarLabels(canvas, instance.w?.config?.plotOptions?.bar?.horizontal);')
+        && str_contains($chartRenderer, 'columnWidth: "48%", dataLabels: { position: "top" }')
+        && str_contains($chartRenderer, 'padding: { left: 2, right: 8, top: 42, bottom: 4 }')
+        && str_contains($chartRenderer, 'offsetY: -18'),
     'empty measures stay compact in both export formats' => str_contains($exporter, 'function emptyChartMessage(chart)')
         && str_contains($exporter, 'function emptyChartsMessage(charts)')
         && !str_contains($exporter, 'ctx.fillText(chart.title || "Report chart"')
@@ -117,8 +149,8 @@ $checks = [
         && str_contains($serverPdf, 'private function footer(int $page, int $total): string'),
     'XLSX chart images render from a paintable off-screen host' => str_contains($chartRenderer, 'pointer-events:none;')
         && !str_contains($chartRenderer, 'visibility:hidden;')
-        && str_contains($chartRenderer, 'animation: false')
-        && str_contains($chartRenderer, 'window.setTimeout(finish, 1000)'),
+        && str_contains($chartRenderer, 'await instance.render();')
+        && str_contains($chartRenderer, 'await instance.dataURI({ scale: 2 })'),
 ];
 
 foreach ($checks as $label => $passed) {
