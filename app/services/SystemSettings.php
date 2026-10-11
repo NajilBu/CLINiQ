@@ -1305,8 +1305,9 @@ function default_mail_settings(): array
         'encryption' => 'tls',
         'username'   => '',
         'password'   => '',   // stored encrypted
-        'from_email' => '',
-        'from_name'  => 'CLINiQ Clinic',
+        'from_email' => 'plphealthservices@plpuhs.qd.je',
+        'from_name'  => 'University Health Services',
+        'reply_to_email' => 'plpuhs2026@gmail.com',
     ];
 }
 
@@ -1364,6 +1365,9 @@ function save_mail_settings(array $input, ?int $updatedBy = null): void
     $data['port'] = max(1, min(65535, (int) ($data['port'] ?: 587)));
     if (!in_array($data['encryption'], ['tls', 'ssl'], true)) {
         $data['encryption'] = 'tls';
+    }
+    if ($data['reply_to_email'] !== '' && !filter_var($data['reply_to_email'], FILTER_VALIDATE_EMAIL)) {
+        throw new InvalidArgumentException('Reply-To email address is invalid.');
     }
     // Encrypt password before storing. If the form sent an empty password,
     // keep the existing encrypted one.

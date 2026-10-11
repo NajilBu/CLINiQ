@@ -14,7 +14,7 @@ use PHPMailer\PHPMailer\Exception as MailException;
 const CLINIQ_EMAIL_LOGO_CID = 'cliniq-clinic-logo@cliniq.local';
 const CLINIQ_EMAIL_LOGO_PLACEHOLDER = '{{CLINIQ_EMAIL_LOGO}}';
 
-function cliniq_email_logo_path(): ?string
+function cliniq_email_logo_file(): ?array
 {
     $profile = clinic_profile_settings();
     $relativePath = ltrim(str_replace('\\', '/', clinic_profile_logo_path($profile)), '/');
@@ -23,28 +23,25 @@ function cliniq_email_logo_path(): ?string
         return null;
     }
 
-    $logoPath = realpath($publicRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relativePath));
-    if ($logoPath === false || !is_file($logoPath)) {
+    $filePath = realpath($publicRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relativePath));
+    if ($filePath === false || !is_file($filePath) || !is_readable($filePath)) {
         return null;
     }
 
     $normalizedRoot = rtrim(str_replace('\\', '/', $publicRoot), '/') . '/';
-    $normalizedLogo = str_replace('\\', '/', $logoPath);
-    if (!str_starts_with($normalizedLogo, $normalizedRoot)) {
+    $normalizedFile = str_replace('\\', '/', $filePath);
+    if (!str_starts_with($normalizedFile, $normalizedRoot)) {
         return null;
     }
 
-    return $logoPath;
-}
-
-function cliniq_email_logo_mime_type(string $logoPath): ?string
-{
-    return match (strtolower((string) pathinfo($logoPath, PATHINFO_EXTENSION))) {
+    $extension = strtolower((string) pathinfo($filePath, PATHINFO_EXTENSION));
+    $mimeType = match ($extension) {
         'png' => 'image/png',
         'jpg', 'jpeg' => 'image/jpeg',
         'webp' => 'image/webp',
         default => null,
     };
+    return $mimeType === null ? null : ['path' => $filePath, 'name' => basename($filePath), 'type' => $mimeType];
 }
 
 /**
@@ -64,6 +61,7 @@ function send_cliniq_email_result(string $toEmail, string $toName, string $subje
     $pass        = $dbSettings['password']   ?? env_value('MAIL_PASS', '');
     $fromEmail   = $dbSettings['from_email'] ?? env_value('MAIL_FROM', $user);
     $fromName    = $dbSettings['from_name']  ?? env_value('MAIL_FROM_NAME', 'CLINiQ Clinic');
+    $replyToEmail = $dbSettings['reply_to_email'] ?? env_value('MAIL_REPLY_TO', '');
 
     if (
         trim((string) $host) === ''
@@ -95,20 +93,26 @@ function send_cliniq_email_result(string $toEmail, string $toName, string $subje
         $mail->Timeout    = 10;
 
         $mail->setFrom($fromEmail, $fromName);
+        if (filter_var($replyToEmail, FILTER_VALIDATE_EMAIL)) {
+            $mail->addReplyTo($replyToEmail);
+        }
         $mail->addAddress($toEmail, $toName);
 
+        $logoFile = cliniq_email_logo_file();
         $logoMarkup = '';
-        $logoPath = cliniq_email_logo_path();
-        $logoMimeType = $logoPath !== null ? cliniq_email_logo_mime_type($logoPath) : null;
-        if ($logoPath !== null && $logoMimeType !== null) {
-            $mail->addEmbeddedImage(
-                $logoPath,
-                CLINIQ_EMAIL_LOGO_CID,
-                basename($logoPath),
-                PHPMailer::ENCODING_BASE64,
-                $logoMimeType
-            );
-            $logoMarkup = '<img src="cid:' . CLINIQ_EMAIL_LOGO_CID . '" alt="Clinic logo" width="56" height="56" style="display:block;width:56px;height:56px;object-fit:contain;border-radius:12px;background:#ffffff;">';
+        if ($logoFile !== null) {
+            try {
+                $mail->addEmbeddedImage(
+                    $logoFile['path'],
+                    CLINIQ_EMAIL_LOGO_CID,
+                    $logoFile['name'],
+                    PHPMailer::ENCODING_BASE64,
+                    $logoFile['type']
+                );
+                $logoMarkup = '<img src="cid:' . CLINIQ_EMAIL_LOGO_CID . '" alt="Clinic logo" width="56" height="56" style="display:block;width:56px;height:56px;object-fit:contain;border-radius:12px;background:#ffffff;">';
+            } catch (Throwable $error) {
+                error_log('[CLINiQ Mail] Logo embedding failed: ' . $error->getMessage());
+            }
         }
         $htmlBody = str_replace(CLINIQ_EMAIL_LOGO_PLACEHOLDER, $logoMarkup, $htmlBody);
 
@@ -154,17 +158,21 @@ function cliniq_custom_email_body(string $message, string $clinicName): string
 <!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background:#f4f6f3;font-family:Arial,sans-serif;color:#17261d;">
-<table width="100%" cellpadding="0" cellspacing="0" style="padding:28px 14px;"><tr><td align="center">
-  <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:14px;overflow:hidden;">
-    <tr><td style="background:#1e6e4f;padding:20px 30px;color:#ffffff;">
+<body style="margin:0;padding:0;background:#f4fbf6;font-family:Inter,Arial,sans-serif;color:#17261d;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;padding:32px 14px;background:#f4fbf6;"><tr><td align="center">
+  <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:#ffffff;border:1px solid #d8e9dd;border-radius:16px;overflow:hidden;">
+    <tr><td style="background:#3f7d52;padding:22px 28px;color:#ffffff;">
       <table role="presentation" cellpadding="0" cellspacing="0"><tr>
         <td style="padding-right:14px;vertical-align:middle;">{{CLINIQ_EMAIL_LOGO}}</td>
-        <td style="vertical-align:middle;font-size:21px;font-weight:800;">{$clinicSafe}</td>
+        <td style="vertical-align:middle;">
+          <div style="font-size:21px;line-height:1.15;font-weight:800;letter-spacing:-0.2px;">{$clinicSafe}</div>
+          <div style="padding-top:3px;font-size:12px;line-height:1.3;font-weight:700;color:#e8f6ec;">UNIVERSITY HEALTH SERVICES</div>
+        </td>
       </tr></table>
     </td></tr>
-    <tr><td style="padding:30px;font-size:15px;line-height:1.7;color:#374a3d;">{$messageSafe}</td></tr>
-    <tr><td style="padding:18px 30px;background:#f4f6f3;color:#7a8c80;font-size:12px;text-align:center;">Sent by {$clinicSafe}</td></tr>
+    <tr><td style="padding:34px 30px 26px;font-size:16px;line-height:1.7;color:#334a3a;">{$messageSafe}</td></tr>
+    <tr><td style="padding:0 30px 28px;font-size:13px;line-height:1.55;color:#64756a;">Questions or concerns? Reply to this email to contact the clinic.</td></tr>
+    <tr><td style="padding:18px 30px;background:#edf8f0;border-top:1px solid #d8e9dd;color:#64756a;font-size:12px;line-height:1.5;text-align:center;">{$clinicSafe} &middot; University Health Services</td></tr>
   </table>
 </td></tr></table>
 </body>
@@ -201,24 +209,28 @@ function cliniq_notification_email(string $templateKey, array $context, string $
 <!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background:#f4f6f3;font-family:Arial,sans-serif;color:#17261d;">
-<table width="100%" cellpadding="0" cellspacing="0" style="padding:28px 14px;"><tr><td align="center">
-  <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 4px 22px rgba(0,0,0,.07);">
-    <tr><td style="background:#1e6e4f;padding:22px 30px;color:#ffffff;">
+<body style="margin:0;padding:0;background:#f4fbf6;font-family:Inter,Arial,sans-serif;color:#17261d;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;padding:32px 14px;background:#f4fbf6;"><tr><td align="center">
+  <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:#ffffff;border:1px solid #d8e9dd;border-radius:16px;overflow:hidden;">
+    <tr><td style="background:#3f7d52;padding:22px 28px;color:#ffffff;">
       <table role="presentation" cellpadding="0" cellspacing="0"><tr>
         <td style="padding-right:14px;vertical-align:middle;">{{CLINIQ_EMAIL_LOGO}}</td>
-        <td style="vertical-align:middle;font-size:21px;font-weight:800;">{$clinic}</td>
+        <td style="vertical-align:middle;">
+          <div style="font-size:21px;line-height:1.15;font-weight:800;letter-spacing:-0.2px;">{$clinic}</div>
+          <div style="padding-top:3px;font-size:12px;line-height:1.3;font-weight:700;color:#e8f6ec;">UNIVERSITY HEALTH SERVICES</div>
+        </td>
       </tr></table>
     </td></tr>
-    <tr><td style="padding:32px 30px;">
-      <h1 style="margin:0 0 16px;font-size:23px;line-height:1.3;color:#17261d;">{$heading}</h1>
-      <div style="font-size:15px;line-height:1.7;color:#374a3d;">{$message}</div>
-      <table role="presentation" cellpadding="0" cellspacing="0" style="margin:26px 0;"><tr><td style="background:#1e6e4f;border-radius:9px;">
+    <tr><td style="padding:34px 30px 26px;">
+      <h1 style="margin:0 0 16px;font-size:24px;line-height:1.3;color:#17261d;letter-spacing:-0.2px;">{$heading}</h1>
+      <div style="font-size:16px;line-height:1.7;color:#334a3a;">{$message}</div>
+      <table role="presentation" cellpadding="0" cellspacing="0" style="margin:26px 0 22px;"><tr><td style="background:#3f7d52;border-radius:10px;">
         <a href="{$url}" target="_blank" style="display:inline-block;padding:13px 24px;color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;">{$button}</a>
       </td></tr></table>
-      <div style="font-size:12px;line-height:1.6;color:#7a8c80;">{$footer}</div>
+      <div style="font-size:13px;line-height:1.6;color:#64756a;">{$footer}</div>
     </td></tr>
-    <tr><td style="padding:17px 30px;background:#f4f6f3;color:#7a8c80;font-size:12px;text-align:center;">Automated message from {$clinic}</td></tr>
+    <tr><td style="padding:0 30px 28px;font-size:13px;line-height:1.55;color:#64756a;">Questions or concerns? Reply to this email to contact the clinic.</td></tr>
+    <tr><td style="padding:18px 30px;background:#edf8f0;border-top:1px solid #d8e9dd;color:#64756a;font-size:12px;line-height:1.5;text-align:center;">{$clinic} &middot; University Health Services</td></tr>
   </table>
 </td></tr></table>
 </body>

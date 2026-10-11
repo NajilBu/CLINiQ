@@ -2276,6 +2276,13 @@ render_clinic_command_header(
                                 placeholder="cliniq@plpasig.edu.ph"
                                 value="<?= e($mailSettings['from_email'] ?? '') ?>">
                         </div>
+                        <div class="settings-field">
+                            <label class="clinic-label" for="mailReplyToEmail">Reply-To Email</label>
+                            <input class="settings-input" id="mailReplyToEmail" name="reply_to_email" type="email"
+                                placeholder="clinic@example.edu"
+                                value="<?= e($mailSettings['reply_to_email'] ?? '') ?>">
+                            <p class="settings-help mb-0">Optional. Replies go here instead of the sender address.</p>
+                        </div>
                     </div>
                 </div>
 

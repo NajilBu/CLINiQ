@@ -49,13 +49,20 @@ function patient_email_max_capacity(): int
 
 function patient_email_capacity_growth(): int
 {
-    return patient_email_capacity_config('MAIL_CAPACITY_GROWTH', CLINIQ_EMAIL_CAPACITY_GROWTH, 1, patient_email_max_capacity());
+    return patient_email_capacity_config('MAIL_CAPACITY_GROWTH', CLINIQ_EMAIL_CAPACITY_GROWTH, 0, patient_email_max_capacity());
+}
+
+function patient_email_provider_identifier_from_settings(array $settings): string
+{
+    $host = trim((string) ($settings['host'] ?? env_value('MAIL_HOST', 'smtp.gmail.com')));
+    $username = trim((string) ($settings['username'] ?? env_value('MAIL_USER', '')));
+    $fromEmail = trim((string) ($settings['from_email'] ?? env_value('MAIL_FROM', $username)));
+    return strtolower(implode('|', [$host, $username, $fromEmail]));
 }
 
 function patient_email_provider_identifier(): string
 {
-    $settings = mail_settings_configured() ? mail_settings() : [];
-    return strtolower(trim((string) ($settings['host'] ?? env_value('MAIL_HOST', 'smtp.gmail.com'))));
+    return patient_email_provider_identifier_from_settings(mail_settings_configured() ? mail_settings() : []);
 }
 
 function patient_email_capacity_state(): array
@@ -87,22 +94,26 @@ function patient_email_is_quota_error(?string $error): bool
     return false;
 }
 
+function patient_email_remaining_capacity(int $capacity, int $sent, int $reserved, bool $allowProbe): int
+{
+    $remaining = max(0, $capacity - $sent - $reserved);
+    return $remaining === 0 && $allowProbe ? 1 : $remaining;
+}
+
 function patient_email_capacity_snapshot(?PDO $db = null): array
 {
     $db ??= auth_db();
     $state = patient_email_capacity_state();
     $windowSeconds = max(60, (int) ($state['window_duration_seconds'] ?? CLINIQ_EMAIL_CAPACITY_WINDOW_SECONDS));
-    $sent = (int) $db->query("SELECT COUNT(*) FROM email_queue WHERE status = 'sent' AND delivery_state = 'smtp_accepted' AND sent_at >= DATE_SUB(NOW(), INTERVAL {$windowSeconds} SECOND)")->fetchColumn();
+    $senderEmail = patient_email_sender()['email'] ?? '';
+    $sentQuery = $db->prepare("SELECT COUNT(*) FROM email_queue WHERE status = 'sent' AND sender_email = ? AND sent_at >= DATE_SUB(NOW(), INTERVAL {$windowSeconds} SECOND)");
+    $sentQuery->execute([$senderEmail]);
+    $sent = (int) $sentQuery->fetchColumn();
     $reserved = (int) $db->query("SELECT COUNT(*) FROM email_queue WHERE status = 'processing' AND locked_at >= DATE_SUB(NOW(), INTERVAL 15 MINUTE)")->fetchColumn();
     $capacity = max(1, min(patient_email_max_capacity(), (int) ($state['observed_capacity'] ?? patient_email_initial_capacity())));
-    $remaining = max(0, $capacity - $sent - $reserved);
     $lastQuotaRejection = strtotime((string) ($state['last_quota_rejection_at'] ?? '')) ?: 0;
     $quotaRecentlyRejected = $lastQuotaRejection > (time() - $windowSeconds);
-    if ($remaining <= 0 && !$quotaRecentlyRejected) {
-        // A successful window at the current estimate gets one controlled probe.
-        // The next accepted message raises the estimate; a provider rejection lowers it.
-        $remaining = 1;
-    }
+    $remaining = patient_email_remaining_capacity($capacity, $sent, $reserved, patient_email_capacity_growth() > 0 && !$quotaRecentlyRejected);
     $state['accepted_count'] = $sent;
     $state['window_started_at'] = date('c', time() - $windowSeconds);
     return array_merge($state, [
@@ -148,6 +159,9 @@ function patient_email_record_quota_rejection(PDO $db, string $error): void
 
 function patient_email_record_success(PDO $db): void
 {
+    if (patient_email_capacity_growth() === 0) {
+        return;
+    }
     $state = patient_email_capacity_state();
     $current = max(1, min(patient_email_max_capacity(), (int) ($state['observed_capacity'] ?? patient_email_initial_capacity())));
     $next = min(patient_email_max_capacity(), $current + patient_email_capacity_growth());
@@ -432,7 +446,16 @@ function patient_email_dispatch_event(array $event): int
         : 'Patient';
     $templateKey = trim((string) ($catalog['template_key'] ?? ''));
     $subject = trim((string) ($event['subject'] ?? ($catalog['label'] ?? 'Patient email')));
-    $htmlBody = (string) ($event['html_body'] ?? cliniq_custom_email_body((string) ($event['message'] ?? ''), (string) ($clinic['system_name'] ?? 'CLINiQ Clinic')));
+    $message = (string) ($event['message'] ?? '');
+    if ($origin === 'manual') {
+        $manualTemplateContext = [
+            'patient_name' => $recipientName,
+            'clinic_name' => (string) ($clinic['system_name'] ?? 'CLINiQ Clinic'),
+        ];
+        $subject = cliniq_mail_template_interpolate($subject, $manualTemplateContext);
+        $message = cliniq_mail_template_interpolate($message, $manualTemplateContext);
+    }
+    $htmlBody = (string) ($event['html_body'] ?? cliniq_custom_email_body($message, (string) ($clinic['system_name'] ?? 'CLINiQ Clinic')));
     if ($templateKey !== '') {
         $portalBase = rtrim((string) env_value('PATIENT_PORTAL_URL', 'http://localhost/CLINiQ/patient-portal'), '/');
         $actionUrl = (string) ($event['action_url'] ?? ($portalBase . '/' . match ((string) ($event['source_type'] ?? '')) {
@@ -760,6 +783,25 @@ function patient_email_due_automations(): void
         }
     }
     foreach (ape_fetch_records() as $record) {
+        $apeId = (int) ($record['ape_id'] ?? 0);
+        $patientId = (int) ($record['patient_id'] ?? 0);
+        if ($apeId > 0 && $patientId > 0
+            && ape_record_queue($record) === 'examination'
+            && (ape_priority_badge($record)['label'] ?? '') === 'Missed') {
+            patient_email_queue_notification(
+                $patientId,
+                'ape_exam_missed',
+                '',
+                'Missed APE examination — action needed',
+                'Our records show that you were unable to complete your scheduled APE examination. Please contact the clinic to arrange the next step.',
+                'ape',
+                $apeId,
+                null,
+                null,
+                'initial',
+                true
+            );
+        }
         foreach (ape_patient_document_action_summaries($record) as $action) {
             $due = trim((string) ($action['due_at'] ?? ''));
             $eventType = trim((string) ($action['email_event_type'] ?? ''));
@@ -997,6 +1039,7 @@ function patient_email_history(array $filters = [], int $page = 1, int $perPage 
     $deliveryState = trim((string) ($filters['delivery_state'] ?? ''));
     $followUp = trim((string) ($filters['follow_up'] ?? ''));
     $assignedTo = (int) ($filters['assigned_to'] ?? 0);
+    $patientPersonId = (int) ($filters['patient_person_id'] ?? 0);
     $dateFrom = trim((string) ($filters['date_from'] ?? ''));
     $dateTo = trim((string) ($filters['date_to'] ?? ''));
     if ($search !== '') {
@@ -1008,10 +1051,11 @@ function patient_email_history(array $filters = [], int $page = 1, int $perPage 
     if ($sourceType !== '') { $where[] = 'q.source_type = ?'; $params[] = $sourceType; }
     if (in_array($origin, ['automatic', 'manual', 'system'], true)) { $where[] = 'q.origin = ?'; $params[] = $origin; }
     if ($sender !== '') { $where[] = '(q.sender_email LIKE ? OR CONCAT_WS(" ", actor.first_name, actor.middle_name, actor.last_name) LIKE ?)'; $params[] = "%{$sender}%"; $params[] = "%{$sender}%"; }
-    if (in_array($deliveryState, ['smtp_accepted', 'delivered', 'bounced', 'rejected', 'unknown'], true)) { $where[] = 'q.delivery_state = ?'; $params[] = $deliveryState; }
+    if (in_array($deliveryState, ['smtp_accepted', 'delivered', 'bounced', 'blocked', 'rejected', 'unknown', 'deferred', 'complained'], true)) { $where[] = 'q.delivery_state = ?'; $params[] = $deliveryState; }
     if ($followUp === 'open') { $where[] = 'q.follow_up_required = 1 AND q.resolved_at IS NULL'; }
     if ($followUp === 'resolved') { $where[] = 'q.follow_up_required = 0 AND q.resolved_at IS NOT NULL'; }
     if ($assignedTo > 0) { $where[] = 'q.follow_up_assigned_to_person_id = ?'; $params[] = $assignedTo; }
+    if ($patientPersonId > 0) { $where[] = 'q.patient_person_id = ?'; $params[] = $patientPersonId; }
     if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateFrom)) { $where[] = 'DATE(q.created_at) >= ?'; $params[] = $dateFrom; }
     if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateTo)) { $where[] = 'DATE(q.created_at) <= ?'; $params[] = $dateTo; }
     $whereSql = implode(' AND ', $where);
