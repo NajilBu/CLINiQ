@@ -4,8 +4,8 @@ This folder contains the Electron shell for the clinic/staff side of CLINiQ. It 
 
 ## Local requirements
 
-- Apache and MySQL running through XAMPP.
-- CLINiQ available at `http://localhost/CLINiQ/public/`.
+- Docker Desktop running the CLINiQ services.
+- CLINiQ available at `http://localhost:8081/public/`.
 - Node.js and npm for development or packaging.
 
 ## Install and run
@@ -18,16 +18,7 @@ npm ci
 npm start
 ```
 
-The desktop app checks `api/health.php` before opening `login.php`. If Apache or MySQL is unavailable, it displays a retry screen.
-
-## Use a different local URL
-
-Set `CLINIQ_CLINIC_URL` before starting Electron:
-
-```powershell
-$env:CLINIQ_CLINIC_URL = 'http://127.0.0.1:8081/public/'
-npm start
-```
+The desktop app checks `api/health.php` before opening `login.php`. If the CLINiQ Docker application or database is unavailable, it displays a retry screen. The desktop app intentionally uses only this local Docker address.
 
 ## Windows package
 

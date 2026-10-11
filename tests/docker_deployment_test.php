@@ -101,7 +101,7 @@ foreach (['app|database|docker|electron|scripts|storage|student|tests|tools|tmp|
         throw new RuntimeException('Apache does not protect application-only directories.');
     }
 }
-foreach (['student', 'database/schema.sql', 'database/seed_*.php', 'database/seeder.php'] as $expected) {
+foreach (['student'] as $expected) {
     if (!str_contains($dockerignore, $expected)) {
         throw new RuntimeException("Production image exclusions are missing {$expected}.");
     }
@@ -113,6 +113,9 @@ foreach (['/var/backups/cliniq', '/usr/bin/mariadb-dump', 'DIRECTORY_SEPARATOR']
 }
 if (!str_contains($electron, "DEFAULT_CLINIC_URL = 'http://localhost:8081/public/'")) {
     throw new RuntimeException('Electron must connect to the local Docker application port.');
+}
+if (str_contains($electron, 'CLINIQ_CLINIC_URL')) {
+    throw new RuntimeException('Electron must not permit an alternate clinic backend.');
 }
 if (!str_contains($electron, "new URL('../patient-portal/', clinicBaseUrl)")) {
     throw new RuntimeException('Patient portal links must remain browser-only in Electron.');

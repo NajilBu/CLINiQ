@@ -1,10 +1,6 @@
 Options -Indexes
 RewriteEngine On
 
-# XAMPP can serve this checkout directly; keep application-only files private.
-RewriteRule ^(app|database|docker|electron|external-backups|scripts|storage|student|tests|tools|tmp|outputs|uploads)(/|$) - [F,L,NC]
-RewriteRule (^|/)\. - [F,L]
-
-<FilesMatch "(^\.|\.(sql|ini|log|yml|yaml|toml|lock|md)$)">
-    Require all denied
-</FilesMatch>
+# CLINiQ runs only through the Docker application at localhost:8081.
+# Prevent Apache/XAMPP from executing this checkout against its stale local database.
+RewriteRule ^ - [R=410,L]

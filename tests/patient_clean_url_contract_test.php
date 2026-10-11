@@ -58,7 +58,6 @@ foreach ([
     $root . '/app/services/ApeCycleService.php',
     $root . '/app/services/PatientAccessStatus.php',
     $root . '/app/services/PatientEmail.php',
-    $root . '/app/services/PatientNotification.php',
     $root . '/app/services/PatientPasswordResetService.php',
     $root . '/public/assets/js/patient-passport-qr.js',
 ] as $file) {

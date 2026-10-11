@@ -16,9 +16,6 @@ cliniq-dev*.sql
 docker/cloudflared/
 external-backups/
 uploads/
-database/schema.sql
-database/seed_*.php
-database/seeder.php
 public/uploads/*
 !public/uploads/.gitkeep
 storage/documents/*

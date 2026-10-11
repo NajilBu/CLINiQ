@@ -12,25 +12,7 @@ const HEALTH_TIMEOUT_MS = 5000;
 const EXTERNAL_BACKUP_MARKER = '.cliniq-external-backup-drive.json';
 let mainWindow = null;
 
-function normalizedClinicUrl() {
-    const configuredUrl = String(process.env.CLINIQ_CLINIC_URL || DEFAULT_CLINIC_URL).trim();
-    let parsedUrl;
-
-    try {
-        parsedUrl = new URL(configuredUrl);
-    } catch (error) {
-        parsedUrl = new URL(DEFAULT_CLINIC_URL);
-    }
-
-    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
-        parsedUrl = new URL(DEFAULT_CLINIC_URL);
-    }
-
-    if (!parsedUrl.pathname.endsWith('/')) parsedUrl.pathname += '/';
-    return parsedUrl;
-}
-
-const clinicBaseUrl = normalizedClinicUrl();
+const clinicBaseUrl = new URL(DEFAULT_CLINIC_URL);
 const clinicStartUrl = new URL('index.php', clinicBaseUrl);
 const healthUrl = new URL('api/health.php', clinicBaseUrl);
 const browserOnlyClinicPaths = [
