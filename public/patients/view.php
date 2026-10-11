@@ -62,6 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'send_
             'event_type' => 'manual_patient_email',
             'origin' => 'manual',
             'created_by_person_id' => (int) ($user['person_id'] ?? 0),
+            'dedupe_suffix' => 'manual-' . bin2hex(random_bytes(16)),
             'subject' => $subject,
             'message' => $message,
             'deliver_now' => true,
@@ -73,7 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'send_
         audit_log_event('email', $sent ? 'email_sent_manually' : 'email_manual_send_failed', (int) ($user['person_id'] ?? 0) ?: null, 'staff', 'patient', (int) $patient['person_id'], ['email_id' => $emailId], $sent ? 'success' : 'failure');
         flash_message(
             $sent ? 'success' : 'error',
-            $sent ? 'Email sent to ' . $fullName . '.' : 'The email could not be delivered. Check the SMTP configuration.'
+            $sent ? 'Email queue #' . $emailId . ': SMTP accepted for ' . $fullName . '. Final delivery updates when the provider reports it.' : 'The email could not be delivered. Check Email Center delivery details.'
         );
     } catch (Throwable $e) {
         flash_message(

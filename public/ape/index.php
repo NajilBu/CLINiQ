@@ -163,8 +163,17 @@ $activePatients = $metrics['total'] - $metrics['completed'];
 $appointmentsStmt = appointment_db()->query("SELECT COUNT(*) AS total FROM appointments WHERE DATE(appointment_datetime) = CURDATE()");
 $appointmentsToday = (int)($appointmentsStmt->fetch()['total'] ?? 0);
 
+$apeReminderByRecordId = [];
+foreach (clinic_work_center_reminder_candidates($selectedBatchId) as $reminderItem) {
+    if ((string) ($reminderItem['email_source_type'] ?? $reminderItem['source_type'] ?? '') !== 'ape') continue;
+    $apeReminderByRecordId[(int) ($reminderItem['email_source_id'] ?? $reminderItem['source_id'] ?? 0)] = $reminderItem;
+}
 $overdueRecords = [];
 foreach ($allRecords as $rec) {
+    $apeId = (int) ($rec['ape_id'] ?? $rec['id'] ?? 0);
+    $missedExamEmailSent = (int) ($apeReminderByRecordId[$apeId]['automatic_sent_count'] ?? 0) > 0;
+    if (!ape_show_immediate_attention_warning($rec, $missedExamEmailSent)) continue;
+
     $priority = ape_priority_badge($rec);
     if ($priority['label'] === 'Missed' && ape_record_queue($rec) === 'examination') {
         $overdueRecords[] = ['record' => $rec, 'attention' => ['kind' => 'missed']];
@@ -175,11 +184,6 @@ foreach ($allRecords as $rec) {
         $overdueRecords[] = ['record' => $rec, 'attention' => ['kind' => 'overdue', 'action' => $action]];
         break;
     }
-}
-$apeReminderByRecordId = [];
-foreach (clinic_work_center_reminder_candidates($selectedBatchId) as $reminderItem) {
-    if ((string) ($reminderItem['email_source_type'] ?? $reminderItem['source_type'] ?? '') !== 'ape') continue;
-    $apeReminderByRecordId[(int) ($reminderItem['email_source_id'] ?? $reminderItem['source_id'] ?? 0)] = $reminderItem;
 }
 $apeReadyFollowUpCount = count(array_filter($apeReminderByRecordId, static fn(array $item): bool => !empty($item['can_send_reminder'])));
 

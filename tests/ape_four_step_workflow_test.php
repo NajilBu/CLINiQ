@@ -125,6 +125,8 @@ $returnedDocument = ape_student_progress(array_replace($final, ['verification_st
 expect_four_step($returnedDocument['active_step'] === 3 && $returnedDocument['percent'] === 50 && $returnedDocument['steps'][1]['done'], 'A returned document must remain in Follow-up without moving the student backward to Digital Keeping.');
 expect_four_step(ape_record_queue(array_replace($final, ['verification_status' => 'Needs Correction'])) === 'follow_up', 'A returned document must remain in the Follow-up staff queue.');
 expect_four_step(!ape_has_urgent_action(array_replace($final, ['verification_status' => 'Needs Correction'])), 'A returned document must remain outside the Missed/Overdue immediate-attention badge.');
+expect_four_step(ape_show_immediate_attention_warning($missedSchedule, false), 'An uncontacted missed examination must remain in the APE immediate-attention warning.');
+expect_four_step(!ape_show_immediate_attention_warning($missedSchedule, true), 'A missed examination with an accepted initial email must leave only the APE immediate-attention warning.');
 $submittedReview = array_replace($final, ['required_unverified_count' => 1]);
 $staffSubmittedQueue = ape_staff_queue_stage($submittedReview);
 expect_four_step($staffSubmittedQueue === 'final_decision', 'Staff queue must place submitted files awaiting clinic review in Final Decision.');
@@ -283,6 +285,8 @@ expect_four_step(str_contains($indexSource, "['queue' => \$activeQueue, 'scope' 
 expect_four_step(str_contains($indexSource, "name=\"scope\" value=\"overall\""), 'Search must preserve the explicit Overall scope.');
 expect_four_step(str_contains($indexSource, "'Examine Patient'"), 'Missed-patient alerts must provide an examination action.');
 expect_four_step(str_contains($indexSource, 'ape_normalized_action_items($rec)'), 'APE Work Queues must render normalized actions.');
+$viewHelperSource = file_get_contents(__DIR__ . '/../app/helpers/view.php');
+expect_four_step($viewHelperSource !== false && str_contains($viewHelperSource, "event_type = 'ape_exam_missed'") && str_contains($viewHelperSource, 'ape_show_immediate_attention_warning($record, isset($missedExamEmailSent[$apeId]))'), 'The APE sidebar badge must use the same post-contact warning rule as the APE page.');
 $auditSource = file_get_contents(__DIR__ . '/../public/audit/index.php');
 expect_four_step($auditSource !== false && str_contains($auditSource, 'send_clinic_reminders'), 'Email Center must provide the dedicated clinic reminder action.');
 expect_four_step(!str_contains($indexSource, 'remind_ape=1'), 'APE Work Queues must not open the obsolete generic reminder composer.');

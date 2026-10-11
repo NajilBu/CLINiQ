@@ -9,6 +9,7 @@ require_once __DIR__ . '/../services/ProfilePhoto.php';
 require_once __DIR__ . '/../services/ApeWorkflow.php';
 require_once __DIR__ . '/../services/AppointmentWorkflow.php';
 require_once __DIR__ . '/../services/PatientEmail.php';
+require_once __DIR__ . '/../services/ClinicWorkCenter.php';
 
 /**
  * Return counts for staff navigation items that currently need attention.
@@ -66,10 +67,15 @@ function staff_sidebar_action_counts(int $activeAlertCount = 0): array
 
     try {
         $apeRecords = ape_fetch_records();
+        $missedExamEmailSent = $db->query("SELECT DISTINCT source_id FROM email_queue
+            WHERE source_type = 'ape' AND event_type = 'ape_exam_missed'
+              AND origin = 'automatic' AND status = 'sent'")->fetchAll(PDO::FETCH_COLUMN);
+        $missedExamEmailSent = array_fill_keys(array_map('intval', $missedExamEmailSent), true);
         foreach ($apeRecords as $record) {
             // Routine clinic work remains visible in APE, but only immediate
             // corrections, overdue work, or missed examinations get a badge.
-            if (ape_has_urgent_action($record)) {
+            $apeId = (int) ($record['ape_id'] ?? $record['id'] ?? 0);
+            if (ape_show_immediate_attention_warning($record, isset($missedExamEmailSent[$apeId]))) {
                 $counts['APE']++;
             }
         }
@@ -78,7 +84,9 @@ function staff_sidebar_action_counts(int $activeAlertCount = 0): array
     }
 
     try {
-        $counts['Email Center'] = max(0, (int) (patient_email_summary()['actionable_issues'] ?? 0));
+        $emailWork = clinic_work_center_items(['email_relevant' => true], 1000);
+        $emailWorkSummary = clinic_work_center_summary($emailWork);
+        $counts['Email Center'] = max(0, (int) $emailWorkSummary['urgent'] + (int) $emailWorkSummary['overdue'] + (int) $emailWorkSummary['email_issues']);
     } catch (Throwable $e) {
         $counts['Email Center'] = 0;
     }

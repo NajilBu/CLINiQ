@@ -25,16 +25,13 @@ function clinic_work_center_items(array $filters = [], int $limit = 1000): array
     ];
     $items = [];
     $workflowEmailKeys = [];
-    foreach (workflow_attention_items($workflowFilters, $limit) as $item) {
+    $workflowItems = workflow_attention_items($workflowFilters, $limit);
+    $emailStatusMap = clinic_work_center_email_status_map($workflowItems);
+    foreach ($workflowItems as $item) {
         if (!empty($item['email_relevant']) && (string) ($item['email_event_type'] ?? '') !== '' && (int) ($item['email_source_id'] ?? 0) > 0) {
-            $emailCheck = auth_db()->prepare('SELECT status FROM email_queue WHERE patient_person_id = ? AND event_type = ? AND source_type = ? AND source_id = ? AND status <> \'cancelled\' ORDER BY id DESC LIMIT 1');
-            $emailCheck->execute([
-                (int) ($item['patient_person_id'] ?? 0),
-                (string) $item['email_event_type'],
-                (string) ($item['email_source_type'] ?? $item['source_type'] ?? ''),
-                (int) $item['email_source_id'],
-            ]);
-            $emailStatus = (string) ($emailCheck->fetchColumn() ?: '');
+            $emailRow = $emailStatusMap[clinic_work_center_email_key($item)] ?? [];
+            $emailStatus = (string) ($emailRow['status'] ?? '');
+            if ($emailStatus !== '') $item['email_id'] = (int) ($emailRow['id'] ?? 0);
             $item['email_status'] = $emailStatus !== '' ? $emailStatus : 'not_queued';
             if ($emailStatus === 'sent') {
                 $item['title'] = 'Patient has not completed the required APE action';
@@ -84,7 +81,7 @@ function clinic_work_center_items(array $filters = [], int $limit = 1000): array
         }
         $items[] = $item;
         if (!empty($item['email_relevant']) && (string) ($item['email_event_type'] ?? '') !== '') {
-            $workflowEmailKeys[implode(':', [(int) ($item['patient_person_id'] ?? 0), (string) ($item['email_source_type'] ?? $item['source_type'] ?? ''), (int) ($item['email_source_id'] ?? $item['source_id'] ?? 0), (string) $item['email_event_type']])] = true;
+            $workflowEmailKeys[clinic_work_center_email_key($item)] = true;
         }
     }
 
@@ -130,6 +127,42 @@ function clinic_work_center_items(array $filters = [], int $limit = 1000): array
         ];
     }
 
+    return clinic_work_center_filter_items($items, $filters, $limit);
+}
+
+/** Preload the latest queue record for each email-relevant workflow item. */
+function clinic_work_center_email_status_map(array $items): array
+{
+    $patientIds = [];
+    foreach ($items as $item) {
+        $patientId = (int) ($item['patient_person_id'] ?? 0);
+        if (!empty($item['email_relevant']) && $patientId > 0) $patientIds[$patientId] = true;
+    }
+    if ($patientIds === []) return [];
+    $placeholders = implode(',', array_fill(0, count($patientIds), '?'));
+    $stmt = auth_db()->prepare("SELECT id, patient_person_id, event_type, source_type, source_id, status FROM email_queue WHERE patient_person_id IN ({$placeholders}) AND status <> 'cancelled' ORDER BY id DESC");
+    $stmt->execute(array_keys($patientIds));
+    $map = [];
+    while ($row = $stmt->fetch()) {
+        $key = clinic_work_center_email_key($row);
+        if (!isset($map[$key])) $map[$key] = $row;
+    }
+    return $map;
+}
+
+function clinic_work_center_email_key(array $item): string
+{
+    return implode(':', [
+        (int) ($item['patient_person_id'] ?? 0),
+        (string) ($item['email_event_type'] ?? $item['event_type'] ?? ''),
+        (string) ($item['email_source_type'] ?? $item['source_type'] ?? ''),
+        (int) ($item['email_source_id'] ?? $item['source_id'] ?? 0),
+    ]);
+}
+
+/** Apply work filters and stable priority ordering to an already-built snapshot. */
+function clinic_work_center_filter_items(array $items, array $filters = [], int $limit = 1000): array
+{
     $search = strtolower(trim((string) ($filters['search'] ?? '')));
     $kindFilter = trim((string) ($filters['kind'] ?? ''));
     $typeFilter = trim((string) ($filters['type'] ?? ''));

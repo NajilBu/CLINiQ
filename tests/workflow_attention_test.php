@@ -10,7 +10,7 @@ if ($service === false || $center === false || $page === false) {
     throw new RuntimeException('Unable to read Workflow Attention sources.');
 }
 
-foreach (['clinic_work_center_items', 'clinic_work_center_summary', 'clinic_work_center_export', "'workflow'", "'email'", 'compose_email', 'retry_email', 'view_email'] as $expected) {
+foreach (['clinic_work_center_items', 'clinic_work_center_summary', 'clinic_work_center_export', 'clinic_work_center_email_status_map', 'clinic_work_center_filter_items', "'workflow'", "'email'", 'compose_email', 'retry_email', 'view_email', 'SELECT id, patient_person_id, event_type, source_type, source_id, status FROM email_queue', "\$item['email_id']"] as $expected) {
     if (!str_contains($center, $expected)) {
         throw new RuntimeException("Combined work center is missing {$expected}.");
     }

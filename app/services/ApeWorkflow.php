@@ -825,6 +825,19 @@ function ape_has_urgent_action(array $record): bool
     return false;
 }
 
+/** The APE warning is cleared after patient contact; Email Center retains the work record. */
+function ape_show_immediate_attention_warning(array $record, bool $missedExamEmailSent): bool
+{
+    $priority = ape_priority_badge($record);
+    if (($priority['label'] ?? '') === 'Missed' && ape_record_queue($record) === 'examination') {
+        return !$missedExamEmailSent;
+    }
+    foreach (ape_patient_document_action_summaries($record) as $action) {
+        if (($action['priority'] ?? '') === 'overdue') return true;
+    }
+    return false;
+}
+
 function ape_record_stage_label(array $record): string
 {
     if (!ape_initial_upload_phase_is_open($record)
