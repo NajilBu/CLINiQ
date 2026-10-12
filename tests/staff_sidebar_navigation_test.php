@@ -29,7 +29,7 @@ foreach (['staff_sidebar_action_counts', 'app-nav-badge', 'aria-label="Staff nav
     }
 }
 
-foreach (["'Email Center' => 0", 'patient_email_summary()', "['actionable_issues']"] as $marker) {
+foreach (["'Email Center' => 0", 'clinic_work_center_summary(', "['email_issues']"] as $marker) {
     if (!str_contains($view, $marker)) {
         throw new RuntimeException("Email Center sidebar badge must use the existing actionable-email count: {$marker}");
     }
