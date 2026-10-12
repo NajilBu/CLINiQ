@@ -7,11 +7,11 @@ $payload = file_get_contents($root . '/public/reports/export-data.php');
 $exporter = file_get_contents($root . '/public/assets/js/system-report-export.js');
 $chartRenderer = file_get_contents($root . '/public/assets/js/system-report-charts.js');
 $builder = file_get_contents($root . '/app/services/SystemReport.php');
-$download = file_get_contents($root . '/public/reports/download.php');
-$serverPdf = file_get_contents($root . '/app/services/SystemReportPdf.php');
+$renderer = file_get_contents($root . '/app/services/SystemReportRenderer.php');
+$paperPreview = file_get_contents($root . '/public/reports/pdf.php');
 $package = json_decode((string) file_get_contents($root . '/package.json'), true);
 
-if ($payload === false || $exporter === false || $chartRenderer === false || $builder === false || $download === false || $serverPdf === false || !is_array($package)) {
+if ($payload === false || $exporter === false || $chartRenderer === false || $builder === false || $renderer === false || $paperPreview === false || !is_array($package)) {
     throw new RuntimeException('Unable to read report export sources.');
 }
 
@@ -23,7 +23,7 @@ $checks = [
         && !str_contains($payload, 'SELECT ')
         && str_contains($payload, 'csrf_enforce_request();'),
     'report contains six operational sections with appointments inside Visits' => str_contains($builder, "'visits' => 'Visits'")
-        && str_contains($builder, "'ape' => 'APE Workflow'")
+        && str_contains($builder, "'ape' => 'APE Records'")
         && str_contains($builder, "'inventory' => 'Inventory'")
         && str_contains($builder, "'referrals' => 'Referrals'")
         && str_contains($builder, "'alerts' => 'Alerts and Incidents'")
@@ -57,12 +57,10 @@ $checks = [
         && !str_contains($builder, "system_report_chart('Alert Status'")
         && !str_contains($builder, 'Common Complaints')
         && str_contains($exporter, '(section.tables || []).forEach'),
-    'all requested libraries are declared' => isset($package['dependencies']['jspdf'], $package['dependencies']['jspdf-autotable'], $package['dependencies']['exceljs'], $package['dependencies']['pdfjs-dist']),
-    'pdf contains tables and charts from canonical chart rows' => str_contains($exporter, 'chartImage(chart)')
-        && str_contains($exporter, 'chartRows(chart)')
-        && str_contains($exporter, 'autoTable(doc')
-        && str_contains($exporter, 'window.cliniqSystemReportCharts.imageFor')
-        && str_contains($chartRenderer, 'const optionFor = (chart, { dark = false, pdf = false } = {}) =>'),
+    'browser XLSX library is declared' => isset($package['dependencies']['exceljs']),
+    'A4 chart rendering keeps canonical chart rows while XLSX stays table-only' => str_contains($exporter, 'function chartRows(chart)')
+        && str_contains($chartRenderer, 'const optionFor = (chart, { dark = false, pdf = false } = {}) =>')
+        && str_contains($paperPreview, "mount(card.querySelector('.report-chart-visual'), chart, { dark, pdf: true })"),
     'horizontal charts honor bounded decimal scales when supplied' => str_contains($chartRenderer, 'const configuredMax = Number(axisMax);')
         && str_contains($chartRenderer, 'const horizontalAxisMax = horizontalMax + Math.max(1, horizontalMax * 0.16);')
         && str_contains($chartRenderer, 'max: horizontalAxisMax,')
@@ -78,7 +76,7 @@ $checks = [
         && str_contains($chartRenderer, 'placeHorizontalBarLabels(host, instance.w?.config?.plotOptions?.bar?.horizontal);')
         && str_contains($chartRenderer, 'placeHorizontalBarLabels(canvas, instance.w?.config?.plotOptions?.bar?.horizontal);')
         && str_contains($chartRenderer, 'columnWidth: "48%", dataLabels: { position: "top" }')
-        && str_contains($chartRenderer, 'padding: { left: 2, right: 8, top: 42, bottom: 4 }')
+        && str_contains($chartRenderer, 'padding: { left: 2, right: 8, top: 42, bottom: pdfXAxis ? 16 : 4 }')
         && str_contains($chartRenderer, 'offsetY: -18'),
     'empty measures stay compact in both export formats' => str_contains($exporter, 'function emptyChartMessage(chart)')
         && str_contains($exporter, 'function emptyChartsMessage(charts)')
@@ -92,8 +90,10 @@ $checks = [
         && str_contains($exporter, 'function emptyChartsMessage(charts)')
         && str_contains($exporter, 'const { charts, summaries, empty } = chartGroups(section);')
         && str_contains($exporter, 'chart.detail_in_pdf !== false'),
-    'xlsx keeps complete source tables when a diagram is suppressed' => str_contains($exporter, '[...summaries, ...empty].forEach((chart) =>')
-        && str_contains($exporter, 'addDataTable(`${chart.title} data`, chart);'),
+    'xlsx exports branded data tables only, without report chart images or metric cards' => str_contains($exporter, 'const dataTables = [...(section.charts || []), ...(section.tables || [])];')
+        && str_contains($exporter, 'dataTables.forEach((table) => addDataTable(table.title || "Transaction detail", table));')
+        && substr_count($exporter, 'sheet.addImage(') === 2
+        && !str_contains($exporter, 'Diagram summary:'),
     'keyed report sections are normalized once for both browser formats' => str_contains($exporter, 'const sectionsFor = (report)')
         && substr_count($exporter, 'const sections = sectionsFor(report);') === 2
         && !str_contains($exporter, 'report.sections.forEach'),
@@ -127,8 +127,8 @@ $checks = [
         && str_contains($exporter, 'doc.roundedRect(x, y, chartPanel.width, chartPanel.height, 1.5, 1.5, "S")')
         && str_contains($chartRenderer, 'borderRadius: pdf ? 0 : 6')
         && str_contains($exporter, 'for (let start = 0; start < chartDetails.length; start += 3)'),
-    'xlsx keeps numeric values and filters' => str_contains($exporter, 'Number(metric.value) || 0')
-        && str_contains($exporter, 'sheet.autoFilter'),
+    'xlsx keeps numeric source values without applying one invalid filter across separate tables' => str_contains($exporter, 'const rows = chartRows(chart);')
+        && !str_contains($exporter, 'sheet.autoFilter'),
     'xlsx overview is a compact transaction summary rather than duplicate detail' => str_contains($exporter, 'workbook.addWorksheet("Transaction Summary"')
         && str_contains($exporter, 'addSummaryTable("TRANSACTION SUMMARY", summaryRows(report, "transaction_summary"));')
         && str_contains($exporter, 'addSummaryTable("ATTENTION SUMMARY", summaryRows(report, "attention_summary"));')
@@ -139,19 +139,18 @@ $checks = [
         && str_contains($exporter, 'custom_logo_url'),
     'expired CSRF is handled without weakening the shared guard' => str_contains($exporter, 'form has expired|could not be verified')
         && str_contains($exporter, 'Refresh the page and try again.'),
-    'PDF is generated by the protected server fallback' => str_contains($download, 'render_system_report_pdf')
-        && str_contains($download, "header('Content-Type: application/pdf')")
-        && str_contains($serverPdf, '%PDF-1.4')
-        && str_contains($serverPdf, "'Transaction Summary', (array) (\$report['transaction_summary'] ?? [])")
-        && str_contains($serverPdf, "'Attention Summary', (array) (\$report['attention_summary'] ?? [])")
-        && str_contains($serverPdf, '$this->y = 744;')
-        && str_contains($serverPdf, 'public function table(string $title, array $rows): void')
-        && str_contains($serverPdf, "'Measure'")
-        && str_contains($serverPdf, 'private function footer(int $page, int $total): string'),
-    'XLSX chart images render from a paintable off-screen host' => str_contains($chartRenderer, 'pointer-events:none;')
-        && !str_contains($chartRenderer, 'visibility:hidden;')
-        && str_contains($chartRenderer, 'await instance.render();')
-        && str_contains($chartRenderer, 'await instance.dataURI({ scale: 2 })'),
+    'A4 preview owns the frozen browser export payload' => str_contains($renderer, 'function system_report_browser_export_payload')
+        && str_contains($payload, 'system_report_browser_export_payload')
+        && str_contains($paperPreview, 'systemReportExportPayload')
+        && str_contains($paperPreview, 'form.__systemReportPayload = JSON.parse')
+        && str_contains($paperPreview, 'window.print()')
+        && str_contains($paperPreview, "printButton.textContent = 'Preparing PDF…';")
+        && !str_contains($paperPreview, 'download.php')
+        && !is_file($root . '/public/reports/download.php')
+        && !is_file($root . '/app/services/SystemReportPdf.php'),
+    'XLSX retains only the existing branded logo images' => str_contains($exporter, 'if (logoIds.plp) sheet.addImage')
+        && str_contains($exporter, 'if (logoIds.custom) sheet.addImage')
+        && substr_count($exporter, 'sheet.addImage(') === 2,
 ];
 
 foreach ($checks as $label => $passed) {

@@ -12,6 +12,26 @@ function system_report_format_number(float|int $value, int $decimals = 0): strin
     return number_format((float) $value, $decimals);
 }
 
+function system_report_browser_export_payload(array $report, array $remarks, array $preparedBy = []): array
+{
+    $profile = clinic_profile_settings();
+    $fixedLogo = app_url('assets/img/clinic-logo.png');
+    $customLogo = app_url(clinic_profile_logo_path($profile));
+
+    return [
+        'report' => $report,
+        'remarks' => $remarks,
+        'prepared_by' => $preparedBy,
+        'branding' => [
+            'system_name' => $profile['system_name'] ?? 'CLINiQ',
+            'institution_name' => $profile['institution_name'] ?? 'Pamantasan ng Lungsod ng Pasig',
+            'department' => $profile['department'] ?? 'University Health Services',
+            'plp_logo_url' => $fixedLogo,
+            'custom_logo_url' => $customLogo === $fixedLogo ? '' : $customLogo,
+        ],
+    ];
+}
+
 function system_report_chart_type(array|string $chart): string
 {
     if (is_array($chart) && isset($chart['render_type'])) {
@@ -657,7 +677,7 @@ function render_system_report_document(array $report, bool $standalone = false, 
                     <?php if (!$tableOnly && $isDashboard && $sectionKey === 'visits'): ?>
                         <?php $metricGroups = [
                             'Clinical visit activity' => ['Clinical Visits', 'Visits with Vitals', 'Median Time to First Action', 'Median Time to Completion'],
-                            'Appointment activity' => ['For Approval', 'Approved', 'For Completion', 'Completed'],
+                            'Appointment activity' => ['For Approval', 'Scheduled', 'Completed'],
                         ]; ?>
                         <div class="visit-metric-groups">
                             <?php foreach ($metricGroups as $groupTitle => $metricLabels): ?>

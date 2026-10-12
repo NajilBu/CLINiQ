@@ -14,6 +14,42 @@
   const valuesFor = (rows) => rows.map((row) => Number(row.value) || 0);
   const labelsFor = (rows) => rows.map((row) => String(row.label ?? ""));
 
+  const groupedPdfXAxis = (chart, labels) => {
+    const hourLabels = labels.map((label) => label.match(/^(\d{1,2})\s+(AM|PM)$/));
+    if (chart?.title === "Visits by Hour" && hourLabels.every(Boolean)) {
+      const groups = [];
+      hourLabels.forEach((match) => {
+        const title = match[2];
+        const previous = groups.at(-1);
+        if (previous?.title === title) previous.cols += 1;
+        else groups.push({ title, cols: 1 });
+      });
+      return { categories: hourLabels.map((match) => match[1]), groups };
+    }
+
+    const dateLabels = labels.map((label) => label.match(/^([A-Z][a-z]{2})\s+(\d{1,2})$/));
+    if (!dateLabels.every(Boolean)) return null;
+    const groups = [];
+    dateLabels.forEach((match) => {
+      const title = match[1];
+      const previous = groups.at(-1);
+      if (previous?.title === title) previous.cols += 1;
+      else groups.push({ title, cols: 1 });
+    });
+    return { categories: dateLabels.map((match) => match[2]), groups };
+  };
+
+  const hideOverlappingPdfXAxisLabels = (host) => {
+    let right = -Infinity;
+    host.querySelectorAll(".apexcharts-xaxis-texts-g text").forEach((label) => {
+      label.removeAttribute("visibility");
+      const box = label.getBoundingClientRect();
+      if (!box.width || !box.height) return;
+      if (box.left < right + 2) label.setAttribute("visibility", "hidden");
+      else right = box.right;
+    });
+  };
+
   const placeHorizontalBarLabels = (host, horizontal) => {
     if (!horizontal) return;
     const bars = Array.from(host.querySelectorAll(".apexcharts-bar-area"));
@@ -87,6 +123,7 @@
     const axisMax = chart?.axis_max;
     const decimals = chart?.decimals ?? 0;
     const colors = Array.isArray(chart?.colors) ? chart.colors : [];
+    const pdfXAxis = pdf ? groupedPdfXAxis(chart, labels) : null;
 
     if (type === "donut") {
       if (rows.length > 4) return horizontalBarOptions(rows, dark, { axisMax, decimals, colors, pdf });
@@ -138,13 +175,13 @@
       ...baseOptions(dark),
       chart: { ...baseOptions(dark).chart, type: "area", height: "100%" },
       series: [{ name: "Recorded", data: values }],
-      xaxis: { categories: labels, labels: { style: { colors: theme.text, fontSize: "11px", fontWeight: 600 } }, axisBorder: { color: theme.axis } },
+      xaxis: { categories: pdfXAxis?.categories || labels, groups: pdfXAxis?.groups, labels: { style: { colors: theme.text, fontSize: "11px", fontWeight: 600 } }, axisBorder: { color: theme.axis } },
       yaxis: { min: 0, labels: { style: { colors: theme.text, fontSize: "11px", fontWeight: 600 } } },
       stroke: { curve: "smooth", width: 3 },
       fill: { type: "solid", opacity: 0.12 },
       markers: { size: 4 },
       dataLabels: { enabled: true, offsetY: -8, style: { colors: [theme.value], fontSize: "11px", fontWeight: 800 } },
-      grid: { borderColor: theme.grid, padding: { left: 2, right: 8, top: 12, bottom: 0 } },
+      grid: { borderColor: theme.grid, padding: { left: 2, right: 8, top: 12, bottom: pdfXAxis ? 14 : 0 } },
       legend: { show: false },
     };
 
@@ -154,9 +191,9 @@
       ...baseOptions(dark),
       chart: { ...baseOptions(dark).chart, type: "bar", height: "100%" },
       series: [{ name: "Recorded", data: values }],
-      xaxis: { categories: labels, labels: { rotate: labels.length > 5 ? -24 : 0, style: { colors: theme.text, fontSize: "10px", fontWeight: 600 } }, axisBorder: { color: theme.axis } },
+      xaxis: { categories: pdfXAxis?.categories || labels, groups: pdfXAxis?.groups, labels: { rotate: pdfXAxis ? 0 : (labels.length > 5 ? -24 : 0), style: { colors: theme.text, fontSize: "10px", fontWeight: 600 } }, axisBorder: { color: theme.axis } },
       yaxis: { min: 0, labels: { style: { colors: theme.text, fontSize: "11px", fontWeight: 600 } } },
-      grid: { borderColor: theme.grid, padding: { left: 2, right: 8, top: 42, bottom: 4 } },
+      grid: { borderColor: theme.grid, padding: { left: 2, right: 8, top: 42, bottom: pdfXAxis ? 16 : 4 } },
       plotOptions: { bar: { borderRadius: pdf ? 0 : 6, columnWidth: "48%", dataLabels: { position: "top" } } },
       dataLabels: { enabled: true, offsetY: -18, style: { colors: [theme.value], fontSize: "11px", fontWeight: 800 } },
       legend: { show: false },
@@ -194,13 +231,17 @@
       instance = new window.ApexCharts(canvas, optionFor(chart, { dark, pdf }));
       instance.render().then(() => {
         placeHorizontalBarLabels(canvas, instance.w?.config?.plotOptions?.bar?.horizontal);
+        if (pdf) hideOverlappingPdfXAxisLabels(canvas);
       }).catch(() => {
         instance?.destroy();
         host.replaceChildren(...fallback);
       });
       return {
         canvas,
-        resize: () => Promise.resolve(instance?.updateOptions({}, false, false, false)).then(() => placeHorizontalBarLabels(canvas, instance?.w?.config?.plotOptions?.bar?.horizontal)),
+        resize: () => Promise.resolve(instance?.updateOptions({}, false, false, false)).then(() => {
+          placeHorizontalBarLabels(canvas, instance?.w?.config?.plotOptions?.bar?.horizontal);
+          if (pdf) hideOverlappingPdfXAxisLabels(canvas);
+        }),
         destroy: () => instance?.destroy(),
       };
     } catch (_) {

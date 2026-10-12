@@ -1,12 +1,13 @@
 <?php
 
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/ApeWorkflow.php';
 
 function system_report_module_labels(): array
 {
     return [
         'visits' => 'Visits',
-        'ape' => 'APE Workflow',
+        'ape' => 'APE Records',
         'inventory' => 'Inventory',
         'referrals' => 'Referrals',
         'alerts' => 'Alerts and Incidents',
@@ -114,27 +115,48 @@ function system_report_chart_presentation(array $rows, string $renderType, bool 
     return count($rows) <= 6 ? 'diagram' : 'summary';
 }
 
-function system_report_appointment_status_rows(PDO $db, array $range): array
+function system_report_appointment_follow_through_rows(PDO $db, array $range): array
 {
-    $counts = [];
-    foreach (system_report_rows($db, 'SELECT status label, COUNT(*) value FROM appointments WHERE appointment_datetime >= ? AND appointment_datetime < ? GROUP BY status', $range) as $row) {
-        $counts[(string) $row['label']] = (int) $row['value'];
+    return system_report_rows($db, "SELECT 'Scheduled / awaiting check-in' label, COUNT(*) value FROM appointments a LEFT JOIN visits v ON v.appointment_id = a.appointment_id WHERE a.appointment_datetime >= ? AND a.appointment_datetime < ? AND a.status = 'Scheduled' AND v.visit_id IS NULL UNION ALL SELECT 'Checked in' label, COUNT(*) value FROM appointments a INNER JOIN visits v ON v.appointment_id = a.appointment_id WHERE a.appointment_datetime >= ? AND a.appointment_datetime < ? UNION ALL SELECT 'Clinical visit completed' label, COUNT(*) value FROM appointments a INNER JOIN visits v ON v.appointment_id = a.appointment_id WHERE a.appointment_datetime >= ? AND a.appointment_datetime < ? AND v.status = 'Completed' UNION ALL SELECT 'Missed or cancelled' label, COUNT(*) value FROM appointments WHERE appointment_datetime >= ? AND appointment_datetime < ? AND status IN ('No Show', 'Cancelled')", array_merge($range, $range, $range, $range));
+}
+
+function system_report_ape_disposition(array $records): array
+{
+    $summary = ['students_examined' => 0, 'cleared' => 0, 'requires_clinic_action' => 0, 'in_progress' => 0];
+    foreach ($records as $record) {
+        if (ape_record_is_inactive($record)) continue;
+        if (!empty($record['exam_date'])) $summary['students_examined']++;
+
+        $stage = ape_staff_queue_stage($record);
+        if ($stage === 'completed') {
+            $summary['cleared']++;
+        } elseif (in_array($stage, ['final_decision', 'follow_up'], true)) {
+            $summary['requires_clinic_action']++;
+        } else {
+            $summary['in_progress']++;
+        }
     }
 
-    $statuses = [
-        'Pending' => 'For Approval',
-        'Scheduled' => 'Approved',
-        'For Confirmation' => 'For Completion',
-        'Completed' => 'Completed',
-        'Declined' => 'Declined',
-        'Cancelled' => 'Cancelled',
-        'No Show' => 'No Show',
+    $summary['disposition_rows'] = [
+        ['label' => 'Cleared', 'value' => $summary['cleared']],
+        ['label' => 'Requires clinic action', 'value' => $summary['requires_clinic_action']],
+        ['label' => 'In progress', 'value' => $summary['in_progress']],
     ];
+    return $summary;
+}
+
+function system_report_ape_requirement_rows(PDO $db, int $cycleId): array
+{
+    if ($cycleId < 1) return [];
+
+    $counts = [];
+    foreach (system_report_rows($db, "SELECT r.status label, COUNT(*) value FROM ape_requirements r INNER JOIN ape_records ar ON ar.ape_id = r.ape_id WHERE ar.ape_cycle_id = ? AND ar.workflow_status <> 'Inactive' GROUP BY r.status", [$cycleId]) as $row) {
+        $counts[$row['label']] = (int) $row['value'];
+    }
 
     return array_map(
-        static fn(string $status, string $label): array => ['label' => $label, 'value' => $counts[$status] ?? 0],
-        array_keys($statuses),
-        array_values($statuses),
+        static fn(string $status): array => ['label' => $status, 'value' => $counts[$status] ?? 0],
+        ['Missing', 'Submitted', 'Verified', 'Needs Correction'],
     );
 }
 
@@ -203,6 +225,10 @@ function system_report_visit_hours(PDO $db, array $range): array
 
 function system_report_passport_access_by_day(PDO $db, string $dateFrom, string $dateTo): array
 {
+    $start = new DateTimeImmutable($dateFrom);
+    $end = new DateTimeImmutable($dateTo);
+    $days = $start->diff($end)->days + 1;
+    $bucket = $days <= 31 ? 'day' : ($days <= 180 ? 'week' : 'month');
     [, $rangeEnd] = system_report_range($dateFrom, $dateTo);
     $rawRows = system_report_rows($db, 'SELECT DATE(accessed_at) label, COUNT(*) value FROM passport_access_logs WHERE accessed_at >= ? AND accessed_at < ? GROUP BY DATE(accessed_at)', [$dateFrom . ' 00:00:00', $rangeEnd]);
     $counts = [];
@@ -211,10 +237,33 @@ function system_report_passport_access_by_day(PDO $db, string $dateFrom, string 
     }
 
     $rows = [];
-    for ($day = new DateTimeImmutable($dateFrom); $day <= new DateTimeImmutable($dateTo); $day = $day->modify('+1 day')) {
-        $rows[] = ['label' => $day->format('M j'), 'value' => $counts[$day->format('Y-m-d')] ?? 0];
+    $buckets = [];
+    for ($day = $start; $day <= $end; $day = $day->modify('+1 day')) {
+        $value = $counts[$day->format('Y-m-d')] ?? 0;
+        $rows[] = ['label' => $day->format('M j'), 'value' => $value];
+        $key = match ($bucket) {
+            'week' => $day->modify('monday this week')->format('Y-m-d'),
+            'month' => $day->format('Y-m'),
+            default => $day->format('Y-m-d'),
+        };
+        $label = match ($bucket) {
+            'week' => $day->modify('monday this week')->format('M j') . '–' . $day->modify('sunday this week')->format('M j'),
+            'month' => $day->format('M Y'),
+            default => $day->format('M j'),
+        };
+        if (!isset($buckets[$key])) {
+            $buckets[$key] = ['label' => $label, 'value' => 0];
+        }
+        $buckets[$key]['value'] += $value;
     }
-    return $rows;
+    $visualRows = array_values($buckets);
+    $total = array_sum(array_column($visualRows, 'value'));
+    $peak = $visualRows ? array_reduce($visualRows, static fn(array $carry, array $row): array => $row['value'] > $carry['value'] ? $row : $carry, $visualRows[0]) : null;
+    $unit = $bucket === 'day' ? 'day' : ($bucket === 'week' ? 'week' : 'month');
+    $insight = $total > 0 && $peak
+        ? sprintf('%d passport accesses across %d %s%s. Average %.1f per %s. Peak: %s (%d).', $total, count($visualRows), $unit, count($visualRows) === 1 ? '' : 's', $total / max(1, count($visualRows)), $unit, $peak['label'], $peak['value'])
+        : 'No passport accesses were recorded during this period.';
+    return ['title' => 'Passport Access by ' . ucfirst($bucket), 'rows' => $rows, 'visual_rows' => $visualRows, 'insight' => $insight];
 }
 
 function system_report_visit_volume(PDO $db, string $dateFrom, string $dateTo): array
@@ -265,7 +314,7 @@ function system_report_action_summary(PDO $db): array
         ['label' => 'Low-stock medicine', 'detail' => 'medicine item(s) are at or below reorder level.', 'icon' => 'inventory_2', 'tone' => 'amber', 'href' => '../inventory/index.php?tab=medicine&highlight=low-stock', 'sql' => "SELECT COUNT(*) FROM inventory_items WHERE is_active = 1 AND item_type = 'Medicine' AND quantity <= reorder_level"],
         ['label' => 'Overdue equipment loans', 'detail' => 'equipment loan(s) are overdue.', 'icon' => 'assignment_late', 'tone' => 'red', 'href' => '../inventory/index.php?tab=equipment&highlight=active-loans', 'sql' => 'SELECT COUNT(*) FROM equipment_loans WHERE returned_at IS NULL AND due_at < NOW()'],
         ['label' => 'High-risk pending alerts', 'detail' => 'pending alert(s) need urgent review.', 'icon' => 'warning', 'tone' => 'red', 'href' => '../alerts/index.php?status=active&risk=high-critical', 'sql' => "SELECT COUNT(*) FROM nurse_alerts WHERE status = 'Pending' AND risk_level IN ('High', 'Critical')"],
-        ['label' => 'Appointments awaiting completion', 'detail' => 'appointment(s) need completion review.', 'icon' => 'event_available', 'tone' => 'amber', 'href' => '../appointments/index.php?status=For%20Confirmation', 'sql' => "SELECT COUNT(*) FROM appointments WHERE status = 'For Confirmation'"],
+        ['label' => 'Clinical documentation required', 'detail' => 'linked appointment visit(s) are still unfinished.', 'icon' => 'clinical_notes', 'tone' => 'amber', 'href' => '../appointments/index.php?status=For%20Confirmation', 'sql' => "SELECT COUNT(*) FROM appointments a INNER JOIN visits v ON v.appointment_id = a.appointment_id WHERE a.status = 'For Confirmation' AND v.status IN ('Active', 'Unaddressed')"],
         ['label' => 'Incomplete referrals', 'detail' => 'referral(s) are not completed.', 'icon' => 'send', 'tone' => 'amber', 'href' => '../referrals/index.php?status=incomplete', 'sql' => "SELECT COUNT(*) FROM referrals WHERE COALESCE(status, '') <> 'Completed'"],
     ];
 
@@ -301,7 +350,7 @@ function build_system_report(string $dateFrom, string $dateTo, array $modules): 
         $firstActionMinutes = system_report_median(array_column(system_report_rows($newDb, 'SELECT TIMESTAMPDIFF(MINUTE, visit_datetime, addressed_at) value FROM visits WHERE visit_datetime >= ? AND visit_datetime < ? AND addressed_at IS NOT NULL AND addressed_at >= visit_datetime', $range), 'value'));
         $completionMinutes = system_report_median(array_column(system_report_rows($newDb, 'SELECT TIMESTAMPDIFF(MINUTE, visit_datetime, completed_at) value FROM visits WHERE visit_datetime >= ? AND visit_datetime < ? AND completed_at IS NOT NULL AND completed_at >= visit_datetime', $range), 'value'));
         $vitalsCoverage = $visitCount > 0 ? ($visitsWithVitals / $visitCount) * 100 : 0;
-        $appointmentStatusRows = system_report_appointment_status_rows($newDb, $range);
+        $appointmentFollowThroughRows = system_report_appointment_follow_through_rows($newDb, $range);
         $sections['visits'] = [
             'title' => 'Visits',
             'description' => 'Clinic visits recorded and appointment activity scheduled during the selected period.',
@@ -311,8 +360,7 @@ function build_system_report(string $dateFrom, string $dateTo, array $modules): 
                 system_report_metric('Median Time to First Action', $firstActionMinutes ?? 0, $firstActionMinutes === null ? 'no qualifying visits' : 'minutes', 1),
                 system_report_metric('Median Time to Completion', $completionMinutes ?? 0, $completionMinutes === null ? 'no qualifying visits' : 'minutes', 1),
                 system_report_metric('For Approval', system_report_scalar($newDb, "SELECT COUNT(*) FROM appointments WHERE status = 'Pending' AND appointment_datetime >= ? AND appointment_datetime < ?", $range)),
-                system_report_metric('Approved', system_report_scalar($newDb, "SELECT COUNT(*) FROM appointments WHERE status = 'Scheduled' AND appointment_datetime >= ? AND appointment_datetime < ?", $range)),
-                system_report_metric('For Completion', system_report_scalar($newDb, "SELECT COUNT(*) FROM appointments WHERE status = 'For Confirmation' AND appointment_datetime >= ? AND appointment_datetime < ?", $range)),
+                system_report_metric('Scheduled', system_report_scalar($newDb, "SELECT COUNT(*) FROM appointments WHERE status = 'Scheduled' AND appointment_datetime >= ? AND appointment_datetime < ?", $range)),
                 system_report_metric('Completed', system_report_scalar($newDb, "SELECT COUNT(*) FROM appointments WHERE status = 'Completed' AND appointment_datetime >= ? AND appointment_datetime < ?", $range)),
             ],
             'summary_metrics' => [
@@ -320,13 +368,16 @@ function build_system_report(string $dateFrom, string $dateTo, array $modules): 
                 system_report_metric('Clinical Entries Documented During Period', system_report_scalar($newDb, 'SELECT COUNT(*) FROM visit_entries WHERE created_at >= ? AND created_at < ?', $range)),
                 system_report_metric('Visits Completed During Period', system_report_scalar($newDb, 'SELECT COUNT(*) FROM visits WHERE completed_at >= ? AND completed_at < ?', $range)),
             ],
+            'attention_metrics' => [
+                system_report_metric('Visit records being completed by the clinic', system_report_scalar($newDb, "SELECT COUNT(*) FROM appointments a INNER JOIN visits v ON v.appointment_id = a.appointment_id WHERE a.status = 'For Confirmation' AND v.status IN ('Active', 'Unaddressed')"), 'current operational queue'),
+            ],
             'charts' => [
                 system_report_chart('Student Visitors by Recorded Gender', system_report_rows($newDb, "SELECT COALESCE(NULLIF(p.sex, ''), 'Not recorded') label, COUNT(DISTINCT v.patient_person_id) value FROM visits v JOIN students s ON s.person_id = v.patient_person_id JOIN people p ON p.id = v.patient_person_id WHERE v.visit_datetime >= ? AND v.visit_datetime < ? GROUP BY label ORDER BY value DESC, label", $range), 'No student visits were recorded during this period.', 0, 'donut'),
                 system_report_chart('Student Visitors by Year Level', system_report_rows($newDb, "SELECT CASE WHEN student_visitors.year_level IS NULL OR TRIM(student_visitors.year_level) = '' THEN 'Not recorded' ELSE CONCAT('Year ', student_visitors.year_level) END label, COUNT(*) value FROM (SELECT DISTINCT v.patient_person_id, s.year_level FROM visits v JOIN students s ON s.person_id = v.patient_person_id WHERE v.visit_datetime >= ? AND v.visit_datetime < ?) student_visitors GROUP BY label ORDER BY FIELD(label, 'Year 1', 'Year 2', 'Year 3', 'Year 4', 'Not recorded'), label", $range), 'No student visits were recorded during this period.', 0, 'bar', true, '', ['force_diagram' => true]),
-                system_report_chart('Visitor Affiliation', system_report_rows($newDb, "SELECT CASE WHEN v.patient_person_id IS NULL THEN 'Guest' WHEN cs.person_id IS NOT NULL THEN 'Clinic Staff' WHEN s.person_id IS NOT NULL THEN 'Students' WHEN se.role_classification = 'Faculty' THEN 'Faculty' WHEN se.role_classification = 'Non-Teaching Personnel' THEN 'NTP' ELSE 'Guest' END label, COUNT(*) value FROM visits v LEFT JOIN students s ON s.person_id = v.patient_person_id LEFT JOIN school_employees se ON se.person_id = v.patient_person_id LEFT JOIN clinic_staff cs ON cs.person_id = v.patient_person_id WHERE v.visit_datetime >= ? AND v.visit_datetime < ? GROUP BY label ORDER BY FIELD(label, 'Students', 'Faculty', 'NTP', 'Clinic Staff', 'Guest')", $range), 'No visits were recorded during this period.', 0, 'bar', true, '', ['force_diagram' => true]),
-                system_report_chart('Appointment Status', $appointmentStatusRows, 'No appointments were scheduled for this period.', 0, 'bar', true, '', ['visual_rows' => array_values(array_filter($appointmentStatusRows, static fn(array $row): bool => (float) $row['value'] > 0)), 'force_diagram' => true]),
+                system_report_chart('Patients Attended by Doctor', system_report_rows($newDb, "SELECT TRIM(CONCAT_WS(' ', NULLIF(cs.honorific, ''), clinician.first_name, clinician.middle_name, clinician.last_name)) label, COUNT(DISTINCT v.patient_person_id) value FROM visits v INNER JOIN clinic_staff cs ON cs.person_id = v.attended_by_person_id AND cs.staff_role = 'doctor' INNER JOIN people clinician ON clinician.id = cs.person_id WHERE v.visit_datetime >= ? AND v.visit_datetime < ? AND v.patient_person_id IS NOT NULL GROUP BY cs.person_id, label ORDER BY value DESC, label", $range), 'No patients were attended by a doctor during this period.', 0, 'bar', true, '', ['force_diagram' => true]),
+                system_report_chart('Appointment Follow-through', $appointmentFollowThroughRows, 'No scheduled appointment activity was recorded during this period.', 0, 'bar', true, 'Completed clinical visits are included in checked-in appointments.', ['visual_rows' => array_values(array_filter($appointmentFollowThroughRows, static fn(array $row): bool => (float) $row['value'] > 0)), 'force_diagram' => true]),
                 system_report_chart('Visit Source', system_report_rows($newDb, "SELECT COALESCE(NULLIF(visit_source, ''), 'Not specified') label, COUNT(*) value FROM visits WHERE visit_datetime >= ? AND visit_datetime < ? GROUP BY label ORDER BY value DESC", $range)),
-                system_report_chart('Visit Status (Current)', system_report_rows($newDb, "SELECT COALESCE(NULLIF(status, ''), 'Not specified') label, COUNT(*) value FROM visits WHERE visit_datetime >= ? AND visit_datetime < ? GROUP BY label ORDER BY value DESC", $range)),
+                system_report_chart('Visitor Affiliation', system_report_rows($newDb, "SELECT CASE WHEN v.patient_person_id IS NULL THEN 'Guest' WHEN cs.person_id IS NOT NULL THEN 'Clinic Staff' WHEN s.person_id IS NOT NULL THEN 'Students' WHEN se.role_classification = 'Faculty' THEN 'Faculty' WHEN se.role_classification = 'Non-Teaching Personnel' THEN 'NTP' ELSE 'Guest' END label, COUNT(*) value FROM visits v LEFT JOIN students s ON s.person_id = v.patient_person_id LEFT JOIN school_employees se ON se.person_id = v.patient_person_id LEFT JOIN clinic_staff cs ON cs.person_id = v.patient_person_id WHERE v.visit_datetime >= ? AND v.visit_datetime < ? GROUP BY label ORDER BY FIELD(label, 'Students', 'Faculty', 'NTP', 'Clinic Staff', 'Guest')", $range), 'No visits were recorded during this period.', 0, 'bar', true, '', ['force_diagram' => true]),
                 (static function () use ($newDb, $dateFrom, $dateTo): array {
                     $volume = system_report_visit_volume($newDb, $dateFrom, $dateTo);
                     return system_report_chart($volume['title'], $volume['rows'], 'No visits were recorded during the selected reporting period.', 0, 'line', false, $volume['insight']);
@@ -340,21 +391,27 @@ function build_system_report(string $dateFrom, string $dateTo, array $modules): 
     }
 
     if (in_array('ape', $modules, true)) {
+        $apeCycleId = ape_active_cycle_id();
+        $apeRecords = $apeCycleId > 0 ? ape_fetch_records('', null, null, null, $apeCycleId) : [];
+        $apeSnapshot = system_report_ape_disposition($apeRecords);
+        $requirementsNeedingAttention = $apeCycleId > 0
+            ? system_report_scalar($newDb, "SELECT COUNT(DISTINCT ar.ape_id) FROM ape_records ar INNER JOIN ape_requirements r ON r.ape_id = ar.ape_id WHERE ar.ape_cycle_id = ? AND ar.workflow_status <> 'Inactive' AND r.status IN ('Missing', 'Needs Correction')", [$apeCycleId])
+            : 0;
         $sections['ape'] = [
-            'title' => 'APE Workflow',
-            'description' => 'APE examinations, findings, and workflow decisions recorded during the selected period.',
+            'title' => 'APE Records',
+            'description' => 'Current active APE cycle snapshot. Statuses are not filtered by the selected reporting period; the activity table is.',
             'metrics' => [
-                system_report_metric('APE Examinations', system_report_scalar($newDb, 'SELECT COUNT(*) FROM ape_records WHERE exam_date >= ? AND exam_date < ?', [$dateFrom, (new DateTimeImmutable($dateTo))->modify('+1 day')->format('Y-m-d')])),
-                system_report_metric('APE Findings Recorded', system_report_scalar($newDb, 'SELECT COUNT(*) FROM ape_findings WHERE recorded_at >= ? AND recorded_at < ?', $range)),
-                system_report_metric('APE Clearances Approved', system_report_scalar($newDb, "SELECT COUNT(*) FROM ape_activity_logs WHERE action IN ('Cleared patient after APE examination', 'Approved follow-up clearance') AND created_at >= ? AND created_at < ?", $range)),
-                system_report_metric('APE Follow-ups Required', system_report_scalar($newDb, "SELECT COUNT(*) FROM ape_activity_logs WHERE action = 'Required follow-up after APE examination' AND created_at >= ? AND created_at < ?", $range)),
+                system_report_metric('Students Examined', $apeSnapshot['students_examined'], 'current active cycle'),
+                system_report_metric('Cleared', $apeSnapshot['cleared'], 'current active cycle'),
+                system_report_metric('Requires Clinic Action', $apeSnapshot['requires_clinic_action'], 'final decision or follow-up'),
+                system_report_metric('Requirements Needing Attention', $requirementsNeedingAttention, 'unique active-cycle records'),
             ],
             'charts' => [
-                system_report_chart('APE Workflow Events', system_report_rows($newDb, "SELECT CASE WHEN action IN ('Cleared patient after APE examination', 'Approved follow-up clearance') THEN 'Clearance Approved' WHEN action = 'Required follow-up after APE examination' THEN 'Follow-up Required' WHEN action IN ('Recorded APE examination', 'Recorded APE examination and created referral') THEN 'Examination Recorded' WHEN action = 'Resolved clinical follow-up' THEN 'Follow-up Resolved' END label, COUNT(*) value FROM ape_activity_logs WHERE action IN ('Cleared patient after APE examination', 'Approved follow-up clearance', 'Required follow-up after APE examination', 'Recorded APE examination', 'Recorded APE examination and created referral', 'Resolved clinical follow-up') AND created_at >= ? AND created_at < ? GROUP BY label ORDER BY value DESC", $range), 'No APE workflow events were recorded during this period.', 0, 'donut'),
-                system_report_chart('APE Finding Outcome', system_report_rows($newDb, "SELECT COALESCE(NULLIF(result_status, ''), 'Not specified') label, COUNT(*) value FROM ape_findings WHERE recorded_at >= ? AND recorded_at < ? GROUP BY label ORDER BY value DESC", $range), 'No APE findings were recorded during this period.', 0, 'donut'),
+                system_report_chart('Current APE Disposition', $apeSnapshot['disposition_rows'], 'No active APE cycle is currently available.', 0, 'donut'),
+                system_report_chart('APE Requirement Items by Status', system_report_ape_requirement_rows($newDb, $apeCycleId), 'No active APE cycle is currently available.', 0, 'donut'),
             ],
             'tables' => [
-                system_report_chart('APE Activity', system_report_rows($newDb, 'SELECT action label, COUNT(*) value FROM ape_activity_logs WHERE created_at >= ? AND created_at < ? GROUP BY action ORDER BY value DESC, label', $range), 'No APE activity was recorded during this period.'),
+                system_report_chart('APE Activity During Selected Period', system_report_rows($newDb, 'SELECT action label, COUNT(*) value FROM ape_activity_logs WHERE created_at >= ? AND created_at < ? GROUP BY action ORDER BY value DESC, label', $range), 'No APE activity was recorded during this period.'),
             ],
         ];
     }
@@ -418,7 +475,10 @@ function build_system_report(string $dateFrom, string $dateTo, array $modules): 
             ],
             'charts' => [
                 system_report_chart('Alert Risk Level', system_report_rows($newDb, "SELECT COALESCE(NULLIF(risk_level, ''), 'Not assessed') label, COUNT(*) value FROM nurse_alerts WHERE created_at >= ? AND created_at < ? GROUP BY label ORDER BY FIELD(label, 'Critical', 'High', 'Moderate', 'Low', 'Not assessed')", $range), 'No alerts were recorded for this period.', 0, 'bar', true, '', ['colors' => ['#b42318', '#d97706', '#d4a72c', '#58a978', '#64748b']]),
-                system_report_chart('Passport Access by Day', system_report_passport_access_by_day($newDb, $dateFrom, $dateTo), 'No passport accesses were recorded for this period.', 0, 'line'),
+                (static function () use ($newDb, $dateFrom, $dateTo): array {
+                    $passportAccess = system_report_passport_access_by_day($newDb, $dateFrom, $dateTo);
+                    return system_report_chart($passportAccess['title'], $passportAccess['rows'], 'No passport accesses were recorded for this period.', 0, 'line', true, $passportAccess['insight'], ['visual_rows' => $passportAccess['visual_rows']]);
+                })(),
             ],
             'tables' => [],
         ];
@@ -463,7 +523,7 @@ function build_system_report(string $dateFrom, string $dateTo, array $modules): 
         return $metric;
     };
     $transactionSummary = [];
-    foreach (['Clinical Visits', 'Registered Patients Served', 'Clinical Entries Documented During Period', 'APE Examinations', 'APE Findings Recorded', 'APE Clearances Approved', 'APE Follow-ups Required', 'Approved', 'Inventory Transactions', 'Medicine Dispensed', 'Equipment Loans', 'Referrals', 'Alerts', 'Incident Reports'] as $label) {
+    foreach (['Clinical Visits', 'Registered Patients Served', 'Clinical Entries Documented During Period', 'Scheduled', 'Inventory Transactions', 'Medicine Dispensed', 'Equipment Loans', 'Referrals', 'Alerts', 'Incident Reports'] as $label) {
         $metric = $selectedMetric($label);
         if ($metric !== null) $transactionSummary[] = $metric;
     }
@@ -471,7 +531,7 @@ function build_system_report(string $dateFrom, string $dateTo, array $modules): 
     if (isset($sections['visits'])) {
         $attentionSummary[] = system_report_metric('Unaddressed Visits', system_report_scalar($newDb, "SELECT COUNT(*) FROM visits WHERE status = 'Unaddressed' AND visit_datetime >= ? AND visit_datetime < ?", $range));
     }
-    foreach ([['For Approval', 'Appointments for Approval'], ['For Completion', 'Appointments for Completion'], ['Low Stock Items', null], ['Overdue Loans', null], ['Pending Alerts', null], ['High or Critical Risk', 'High or Critical Alerts']] as [$sourceLabel, $displayLabel]) {
+    foreach ([['For Approval', 'Appointments for Approval'], ['Visit record being completed by the clinic', null], ['Low Stock Items', null], ['Overdue Loans', null], ['Pending Alerts', null], ['High or Critical Risk', 'High or Critical Alerts']] as [$sourceLabel, $displayLabel]) {
         $metric = $selectedMetric($sourceLabel, $displayLabel);
         if ($metric !== null) $attentionSummary[] = $metric;
     }

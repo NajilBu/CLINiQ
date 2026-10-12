@@ -9,17 +9,15 @@ $index = file_get_contents($root . '/public/reports/index.php');
 $tables = file_get_contents($root . '/public/reports/tables.php');
 $preview = file_get_contents($root . '/public/reports/preview.php');
 $pdf = file_get_contents($root . '/public/reports/pdf.php');
-$download = file_get_contents($root . '/public/reports/download.php');
-$serverPdf = file_get_contents($root . '/app/services/SystemReportPdf.php');
 $exportPayload = file_get_contents($root . '/public/reports/export-data.php');
 $alerts = file_get_contents($root . '/public/alerts/index.php');
 $referrals = file_get_contents($root . '/public/referrals/index.php');
 
-if ($builder === false || $renderer === false || $index === false || $tables === false || $preview === false || $pdf === false || $download === false || $serverPdf === false || $exportPayload === false || $alerts === false || $referrals === false) {
+if ($builder === false || $renderer === false || $index === false || $tables === false || $preview === false || $pdf === false || $exportPayload === false || $alerts === false || $referrals === false) {
     throw new RuntimeException('Unable to read the report sources.');
 }
 
-foreach (['index.php', 'tables.php', 'preview.php', 'pdf.php', 'download.php'] as $endpoint) {
+foreach (['index.php', 'tables.php', 'preview.php', 'pdf.php'] as $endpoint) {
     $source = file_get_contents($root . '/public/reports/' . $endpoint);
     if ($source === false || !str_contains($source, 'require_report_access();')) {
         throw new RuntimeException("{$endpoint} must enforce report access.");
@@ -105,28 +103,26 @@ $checks = [
         && str_contains($builder, "['label' => 'Other', 'value' => \$other]")
         && str_contains($builder, "'visual_rows' => \$visualRows")
         && str_contains($renderer, "'rows' => \$chart['visual_rows'] ?? \$chart['rows']"),
-    'printable preview is protected and server PDF remains available' => str_contains($preview, 'name="modules[]"')
-        && str_contains($preview, 'The printable PDF uses the same report layout shown below.')
+    'printable preview is protected and is the only PDF source' => str_contains($preview, 'name="modules[]"')
+        && str_contains($preview, 'Open the A4 preview when your remarks are ready.')
         && str_contains($preview, 'formaction="pdf.php"')
-        && str_contains($preview, 'assets/vendor/jspdf/jspdf.umd.min.js')
-        && str_contains($download, 'render_system_report_pdf')
-        && str_contains($download, "header('Content-Type: application/pdf')")
-        && str_contains($serverPdf, '%PDF-1.4')
-        && str_contains($serverPdf, 'Transaction Summary')
+        && str_contains($preview, '>Open A4 Preview</button>')
+        && !str_contains($preview, 'Download XLSX')
         && str_contains($pdf, 'require_report_access();')
         && str_contains($pdf, 'csrf_enforce_request();')
         && str_contains($pdf, "'presentation' => 'paper-preview'")
         && str_contains($pdf, 'paginatePaperPreview(report, gallery)')
         && !str_contains($pdf, 'assets/vendor/pdfjs/pdf.min.js')
         && !str_contains($pdf, 'previewPdf(form, pages)')
-        && str_contains($pdf, 'action="download.php"')
-        && !str_contains($pdf, 'window.print()')
-        && str_contains($pdf, '>Download PDF</button>')
-        && !str_contains($pdf, 'Print / Save PDF')
+        && str_contains($pdf, 'data-report-print disabled')
+        && str_contains($pdf, 'window.print()')
+        && str_contains($pdf, 'systemReportExportPayload')
+        && !str_contains($pdf, 'download.php')
         && str_contains($pdf, 'assets/vendor/apexcharts/apexcharts.min.js')
         && str_contains($pdf, 'assets/js/system-report-charts.js')
         && str_contains($exportPayload, 'build_system_report($dateFrom, $dateTo, $modules)')
-        && str_contains($download, 'csrf_enforce_request'),
+        && !is_file($root . '/public/reports/download.php')
+        && !is_file($root . '/app/services/SystemReportPdf.php'),
     'legacy patient CSV route is retired' => !is_file($root . '/public/reports/export.php'),
     'dashboard CSS cache key changes with the asset' => str_contains($index, "filemtime(__DIR__ . '/../assets/css/reports.css')"),
     'report filters use index-friendly half-open date ranges' => str_contains($builder, 'function system_report_range')

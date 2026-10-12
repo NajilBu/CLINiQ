@@ -25,6 +25,10 @@ foreach ($modules as $module) {
 foreach ($remarks as $module => $remark) {
     $fields .= '<input type="hidden" name="remarks[' . system_report_escape((string) $module) . ']" value="' . system_report_escape((string) $remark) . '">';
 }
+$browserExportPayload = json_encode(
+    system_report_browser_export_payload($report, $remarks, (array) (current_user() ?? [])),
+    JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
+);
 ?>
 <!doctype html>
 <html lang="en">
@@ -126,7 +130,7 @@ foreach ($remarks as $module => $remark) {
         <div><strong>PDF Preview</strong><span>Uses the same dashboard cards and charts as the report preview.</span></div>
         <div class="print-toolbar-actions">
             <form method="post" action="preview.php"><?= $fields ?><button type="submit">Back to Preview</button></form>
-            <form method="post" action="download.php" id="reportExportForm"><?= $fields ?><button type="submit" class="secondary">Download PDF</button><button type="button" class="secondary" data-report-export-format="xlsx">Download XLSX</button></form>
+            <form id="reportExportForm"><?= $fields ?><button type="button" class="secondary" data-report-print disabled>Save PDF</button><button type="button" class="secondary" data-report-export-format="xlsx" disabled>Download XLSX</button></form>
         </div>
     </header>
     <main class="print-report" aria-live="polite">
@@ -135,6 +139,7 @@ foreach ($remarks as $module => $remark) {
             <?= render_system_report_document($report, false, ['presentation' => 'paper-preview', 'remarks_mode' => 'print', 'remarks' => $remarks]) ?>
         </div>
     </main>
+    <script id="systemReportExportPayload" type="application/json"><?= $browserExportPayload ?></script>
     <script src="<?= system_report_escape(app_url('assets/vendor/exceljs/exceljs.min.js')) ?>"></script>
     <script src="<?= system_report_escape(app_url('assets/vendor/apexcharts/apexcharts.min.js')) ?>"></script>
     <script src="<?= system_report_escape(app_url('assets/js/system-report-charts.js?v=' . filemtime(__DIR__ . '/../assets/js/system-report-charts.js'))) ?>"></script>
@@ -144,8 +149,32 @@ foreach ($remarks as $module => $remark) {
             const report = document.querySelector('#systemReportDocument');
             const gallery = document.querySelector('.print-report');
             const status = gallery.querySelector('.report-preview-status');
+            const form = document.getElementById('reportExportForm');
+            const printButton = form.querySelector('[data-report-print]');
+            const exportButton = form.querySelector('[data-report-export-format="xlsx"]');
             const dark = document.documentElement.classList.contains('cliniq-dark');
             const mounted = [];
+
+            try {
+                form.__systemReportPayload = JSON.parse(document.getElementById('systemReportExportPayload').textContent);
+            } catch (_) {
+                status.textContent = 'Unable to prepare the report export.';
+                return;
+            }
+
+            printButton.addEventListener('click', () => {
+                const readyTitle = document.title;
+                const filename = `CLINiQ-Clinic-Transaction-Summary-${form.__systemReportPayload.report.date_from}-to-${form.__systemReportPayload.report.date_to}`;
+                printButton.disabled = true;
+                printButton.textContent = 'Preparing PDF…';
+                document.title = filename;
+                window.addEventListener('afterprint', () => {
+                    document.title = readyTitle;
+                    printButton.textContent = 'Save PDF';
+                    printButton.disabled = false;
+                }, { once: true });
+                window.requestAnimationFrame(() => window.print());
+            });
 
             report.querySelectorAll('[data-report-chart]').forEach((card) => {
                 let chart;
@@ -160,6 +189,8 @@ foreach ($remarks as $module => $remark) {
                     const result = await window.cliniqSystemReportExport.paginatePaperPreview(report, gallery);
                     await Promise.all(mounted.map((instance) => instance.resize()));
                     document.title = `CLINiQ Clinic Transaction Summary (${result.pages} pages)`;
+                    printButton.disabled = false;
+                    exportButton.disabled = false;
                 } catch (error) {
                     status.textContent = error instanceof Error ? error.message : 'Unable to prepare the printable report preview.';
                     gallery.replaceChildren(status);

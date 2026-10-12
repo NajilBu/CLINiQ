@@ -9,7 +9,7 @@ if ($source === false) {
 
 $expectedSections = [
     'visits' => 'Visits',
-    'ape' => 'APE Workflow',
+    'ape' => 'APE Records',
     'inventory' => 'Inventory',
     'referrals' => 'Referrals',
     'alerts' => 'Alerts and Incidents',

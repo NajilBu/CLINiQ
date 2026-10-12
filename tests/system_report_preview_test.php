@@ -55,7 +55,7 @@ $checks = [
         && str_contains($exportScript, 'report-charts--one-chart')
         && !str_contains($source, 'assets/vendor/pdfjs/pdf.min.js')
         && !str_contains($source, 'previewPdf(form, pages)')
-        && !str_contains($source, 'window.print()'),
+        && str_contains($source, 'window.print()'),
     'A4 pagination preserves every Preview Report row and full-width table span' => str_contains($renderer, "elseif (\$chartCardCount === 2 && \$tableCardCount === 1) \$analysisLayoutClass = ' report-charts--two-charts-one-table';")
         && str_contains($renderer, "elseif (\$chartCardCount === 2 && \$tableCardCount === 3) \$analysisLayoutClass = ' report-charts--two-charts-three-tables';")
         && str_contains($renderer, "elseif (\$chartCardCount === 3 && \$tableCardCount === 1) \$analysisLayoutClass = ' report-charts--three-charts-one-table';")
@@ -81,20 +81,21 @@ $checks = [
         && str_contains($preview, "'remarks_mode' => 'input'")
         && str_contains($source, "'remarks_mode' => 'print'")
         && str_contains($source, 'render_system_report_document($report, false')
-        && str_contains($preview, 'Print / Save PDF'),
+        && str_contains($preview, 'Open A4 Preview'),
     'preview and browser exports honor matching transaction content' => str_contains($preview, 'name="modules[]"')
         && str_contains($preview, 'All selected clinic transaction groups are included in this report.')
         && str_contains($preview, 'data-no-loading="true"')
-        && str_contains($preview, 'data-report-export-format="xlsx"')
-        && str_contains($preview, 'formaction="pdf.php"'),
+        && !str_contains($preview, 'data-report-export-format="xlsx"')
+        && str_contains($preview, 'formaction="pdf.php"')
+        && str_contains($source, 'systemReportExportPayload'),
     'download controls cannot expose unloaded icon-font tokens' => !str_contains($preview, 'picture_as_pdfDownload PDF')
         && !str_contains($preview, '>picture_as_pdf</span>Download PDF'),
-    'browser XLSX exporter uses only local bundled libraries' => str_contains($preview, 'assets/vendor/exceljs/exceljs.min.js')
-        && str_contains($preview, 'assets/vendor/jspdf/jspdf.umd.min.js')
-        && str_contains($preview, 'assets/vendor/jspdf-autotable/jspdf.plugin.autotable.min.js')
-        && str_contains($preview, 'assets/vendor/apexcharts/apexcharts.min.js')
-        && str_contains($preview, 'assets/js/system-report-charts.js')
-        && str_contains($preview, 'assets/js/system-report-export.js'),
+    'browser XLSX exporter is available only after the A4 snapshot is ready' => str_contains($source, 'assets/vendor/exceljs/exceljs.min.js')
+        && str_contains($source, 'assets/vendor/apexcharts/apexcharts.min.js')
+        && str_contains($source, 'assets/js/system-report-charts.js')
+        && str_contains($source, 'assets/js/system-report-export.js')
+        && str_contains($source, 'data-report-export-format="xlsx" disabled')
+        && str_contains($source, 'exportButton.disabled = false;'),
     'PDF preview loads the chart runtime before paginating shared dashboard markup' => str_contains($source, 'assets/vendor/apexcharts/apexcharts.min.js')
         && str_contains($source, 'assets/js/system-report-charts.js')
         && str_contains($source, 'assets/js/system-report-export.js')
@@ -120,32 +121,38 @@ $checks = [
     'export payload is protected and canonical' => str_contains($exportPayload, 'require_report_access();')
         && str_contains($exportPayload, '$_SERVER[\'REQUEST_METHOD\'] !== \'POST\'')
         && str_contains($exportPayload, 'build_system_report($dateFrom, $dateTo, $modules)'),
-    'browser exports use the protected canonical payload and chart source' => str_contains($exportScript, 'const data = await payload(form)')
+    'browser XLSX export uses the protected snapshot and keeps data tables only' => str_contains($exportScript, 'const data = await payload(form)')
         && str_contains($exportScript, 'await xlsxExport(data)')
-        && str_contains($exportScript, 'const chartImage = (chart, compact = false) => window.cliniqSystemReportCharts.imageFor')
-        && str_contains($chartScript, 'const imageFor = async (chart, { width = 960, height = 360, pdf = false } = {}) =>')
-        && str_contains($chartScript, 'const image = await instance.dataURI({ scale: 2 });'),
+        && str_contains($exportScript, 'const dataTables = [...(section.charts || []), ...(section.tables || [])];')
+        && substr_count($exportScript, 'sheet.addImage(') === 2,
     'printable PDF preview uses square bar and column corners without changing its layout' => str_contains($source, 'mount(card.querySelector(\'.report-chart-visual\'), chart, { dark, pdf: true })')
         && str_contains($chartScript, 'borderRadius: pdf ? 0 : 6')
+        && str_contains($chartScript, 'const groupedPdfXAxis = (chart, labels) =>')
+        && str_contains($chartScript, 'chart?.title === "Visits by Hour"')
+        && str_contains($chartScript, 'const hideOverlappingPdfXAxisLabels = (host) =>')
+        && str_contains($chartScript, 'if (pdf) hideOverlappingPdfXAxisLabels(canvas);')
         && !str_contains($renderer, 'system_report_paper_chart_is_figure')
         && str_contains($exportScript, 'charts.classList.contains("report-charts--visits")')
         && str_contains($exportScript, 'child.classList.contains("visit-metric-groups")'),
-    'PDF toolbar uses the protected direct-download fallback without opening the printer' => str_contains($source, 'action="download.php"')
-        && str_contains($source, '>Download PDF</button>')
-        && !str_contains($source, 'Print / Save PDF')
-        && !str_contains($source, 'window.print()')
-        && !str_contains($source, 'data-report-export-format="pdf"')
-        && str_contains($preview, 'Print / Save PDF'),
-    'toolbar downloads include selected modules' => str_contains($preview, 'name="modules[]"')
-        && str_contains($exportScript, 'if (form.__systemReportPayload) return form.__systemReportPayload;'),
+    'PDF toolbar prints the prepared A4 pages and keeps XLSX on their snapshot' => str_contains($source, 'data-report-print disabled')
+        && str_contains($source, 'window.print()')
+        && str_contains($source, "printButton.textContent = 'Preparing PDF…';")
+        && str_contains($source, 'CLINiQ-Clinic-Transaction-Summary-${form.__systemReportPayload.report.date_from}-to-${form.__systemReportPayload.report.date_to}')
+        && str_contains($source, 'form.__systemReportPayload = JSON.parse')
+        && !str_contains($source, 'download.php')
+        && !str_contains($source, 'data-report-export-format="pdf"'),
+    'toolbar downloads use the prepared report snapshot' => str_contains($preview, 'name="modules[]"')
+        && str_contains($exportScript, 'if (form.__systemReportPayload) return form.__systemReportPayload;')
+        && !str_contains($source, 'fetch("export-data.php"'),
     'returning from PDF preview preserves report state without placing remarks in the URL' => str_contains($source, 'method="post" action="preview.php"')
         && str_contains($source, 'name="remarks[')
         && str_contains($preview, '$_SERVER[\'REQUEST_METHOD\'] === \'POST\'')
         && str_contains($preview, 'csrf_enforce_request();'),
-    'left logo is fixed and right logo is optional' => str_contains($exportPayload, "app_url('assets/img/clinic-logo.png')")
-        && str_contains($exportPayload, '\'custom_logo_url\' => $customLogo === $fixedLogo ? \'\' : $customLogo'),
-    'download route returns a server PDF while the inline route shares it' => str_contains(file_get_contents(__DIR__ . '/../public/reports/download.php') ?: '', 'render_system_report_pdf')
-        && str_contains(file_get_contents(__DIR__ . '/../public/reports/download.php') ?: '', "header('Content-Type: application/pdf')"),
+    'shared browser payload keeps fixed and optional logos together' => str_contains($renderer, "app_url('assets/img/clinic-logo.png')")
+        && str_contains($renderer, "'custom_logo_url' => \$customLogo === \$fixedLogo ? '' : \$customLogo")
+        && str_contains($exportPayload, 'system_report_browser_export_payload'),
+    'non-matching server PDF download is removed' => !is_file(__DIR__ . '/../public/reports/download.php')
+        && !is_file(__DIR__ . '/../app/services/SystemReportPdf.php'),
 ];
 
 foreach ($checks as $label => $passed) {
