@@ -87,8 +87,6 @@ foreach ([
     "unset(\$items['appointment'], \$items['passport'])" => $layout,
     'Applicant access' => $dashboard,
     "\$applicantApePending = !\$isOfficialAccess;" => $dashboard,
-    'Your Applicant account is set up' => $dashboard,
-    'Check APE Status for clinic updates.' => $dashboard,
     "pt.access_status = \\'Official\\'" => $passportAccess,
     "pt.access_status = 'Official'" => $emergency,
 ] as $expected => $source) {

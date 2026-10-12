@@ -30,6 +30,20 @@ services:
     networks:
       - cliniq_internal
 
+  migrate:
+    image: cliniq-app:latest
+    restart: "no"
+    entrypoint: ["php", "/var/www/html/scripts/database/migrate.php", "--apply"]
+    env_file:
+      - docker/.env
+    environment:
+      MARIADB_ROOT_PASSWORD: ""
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - cliniq_internal
+
   backup:
     image: cliniq-app:latest
     restart: unless-stopped

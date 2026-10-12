@@ -82,7 +82,7 @@ render_student_header('Give Feedback', 'dashboard');
         <h1>Give feedback</h1>
         <p>Tell us about your clinic experience.</p>
     </section>
-    <?php if ($feedbackStarted && !$success): ?><nav class="student-feedback-flow-progress" aria-label="Feedback progress"><span class="is-complete"><strong>1 · Before you begin</strong><small>Consent confirmed</small></span><span class="is-current"><strong>2 · Give feedback</strong><small>Share your experience</small></span></nav><?php endif; ?>
+    <?php if ($feedbackStarted && !$success): ?><nav class="student-feedback-flow-progress" aria-label="Feedback progress"><span class="is-complete"><strong>1 · Required feedback</strong><small>Visit and privacy option confirmed</small></span><span class="is-current"><strong>2 · Give feedback</strong><small>Share your experience</small></span></nav><?php endif; ?>
 
     <?php if ($error): ?>
         <div class="student-note student-note-danger student-feedback-notice" role="alert"><span class="material-symbols-outlined" aria-hidden="true">error</span><span><?= student_e($error) ?></span></div>
@@ -97,9 +97,9 @@ render_student_header('Give Feedback', 'dashboard');
         </section>
     <?php elseif (!$feedbackStarted): ?>
         <section class="student-card student-card-pad student-feedback-visit-summary">
-            <div class="student-card-header"><div><p class="student-feedback-eyebrow">Before you begin</p><h2>Consent is required before the survey</h2></div></div>
-            <p>Choose a completed visit, then confirm participation and privacy consent.</p>
-            <a class="student-button text-decoration-none" href="<?= student_e(student_portal_url('feedback-consent')) ?>">Go to consent page</a>
+            <div class="student-card-header"><div><p class="student-feedback-eyebrow">Required clinic feedback</p><h2>Complete feedback to remain eligible for future appointments</h2></div></div>
+            <p>Select a completed visit and choose whether to submit anonymously before starting the survey.</p>
+            <a class="student-button text-decoration-none" href="<?= student_e(student_portal_url('feedback-consent')) ?>">Start required feedback</a>
         </section>
     <?php else: ?>
         <?php if ($selectedVisit): ?>

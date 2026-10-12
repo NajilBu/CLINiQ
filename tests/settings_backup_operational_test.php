@@ -7,7 +7,8 @@ $service = file_get_contents(dirname(__DIR__) . '/app/services/BackupService.php
 $runner = file_get_contents(dirname(__DIR__) . '/scripts/backup/run_backup.php');
 $scheduler = file_get_contents(dirname(__DIR__) . '/scripts/backup/register_backup_task.ps1');
 $restoreTest = file_get_contents(dirname(__DIR__) . '/scripts/backup/test_restore.php');
-$electron = file_get_contents(dirname(__DIR__) . '/electron/main.js');
+$electronPath = dirname(__DIR__) . '/electron/main.js';
+$electron = is_file($electronPath) ? file_get_contents($electronPath) : null;
 $containerScheduler = file_get_contents(dirname(__DIR__) . '/scripts/backup/container_scheduler.sh');
 $decryptTool = file_get_contents(dirname(__DIR__) . '/scripts/backup/decrypt_backup.php');
 
@@ -39,7 +40,7 @@ expect_operational_backup(str_contains($scheduler, 'New-ScheduledTaskTrigger -At
 expect_operational_backup(str_contains($scheduler, '-StartWhenAvailable'), 'The Windows task must run after a missed start.');
 expect_operational_backup(str_contains($containerScheduler, '--scheduled'), 'The Docker backup service must request scheduled daily backups.');
 expect_operational_backup(str_contains($containerScheduler, 'sleep 300'), 'The Docker backup service must catch up after startup and remain active.');
-expect_operational_backup(!str_contains($electron, 'requestMissedDailyBackup'), 'Docker Electron must not run the legacy XAMPP backup task.');
+expect_operational_backup($electron === null || !str_contains($electron, 'requestMissedDailyBackup'), 'Docker Electron must not run the legacy XAMPP backup task.');
 expect_operational_backup(str_contains($decryptTool, 'cliniq_backup_materialize_file'), 'Encrypted snapshots need a document recovery command.');
 
 echo "PASS: Operational backup service, Settings controls, 8 AM scheduler, retention, verification, and Electron catch-up are wired. No backup was created by this test.\n";

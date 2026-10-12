@@ -57,22 +57,22 @@ render_student_header('Give Feedback', 'dashboard');
         <h1>Give feedback</h1>
         <p>Tell us about your clinic experience.</p>
     </section>
-    <nav class="student-feedback-flow-progress" aria-label="Feedback progress"><span class="is-current"><strong>1 · Before you begin</strong><small>Choose feedback and confirm consent</small></span><span><strong>2 · Give feedback</strong><small>Share your experience</small></span></nav>
+    <nav class="student-feedback-flow-progress" aria-label="Feedback progress"><span class="is-current"><strong>1 · Required feedback</strong><small>Choose a completed visit and privacy option</small></span><span><strong>2 · Give feedback</strong><small>Share your experience</small></span></nav>
 
     <?php if ($error): ?><div class="student-note student-note-danger student-feedback-notice" role="alert"><span class="material-symbols-outlined" aria-hidden="true">error</span><span><?= student_e($error) ?></span></div><?php endif; ?>
     <section class="student-card student-card-pad student-feedback-visit-summary">
-        <div class="student-card-header"><div><p class="student-feedback-eyebrow">Before you begin</p><h2>Would you like to provide clinic feedback?</h2></div><span class="student-badge student-badge-info">Voluntary</span></div>
-        <p class="student-feedback-muted">Your feedback helps improve clinic services. Participation is voluntary.</p>
+        <div class="student-card-header"><div><p class="student-feedback-eyebrow">Required clinic feedback</p><h2>Complete feedback to remain eligible for future appointments</h2></div></div>
+        <p class="student-feedback-muted">Select a completed visit, then continue to the survey. You may submit feedback anonymously; this still clears the requirement.</p>
         <form method="post" class="student-feedback-form">
             <input type="hidden" name="_csrf" value="<?= student_e($csrf) ?>">
             <input type="hidden" name="mode" value="start_feedback">
             <fieldset class="student-feedback-targets">
-                <legend>What would you like to review?</legend>
+                <legend>Select the completed visit to review</legend>
                 <?php foreach ($pendingVisits as $item): $targetValue = 'visit:' . (int) $item['visit_id']; ?>
                     <label class="student-feedback-target-option"><input type="radio" name="feedback_target" value="<?= student_e($targetValue) ?>" <?= $selectedTarget === $targetValue ? 'checked' : '' ?> required><span><strong><?= student_e(date('F j, Y · g:i A', strtotime((string) $item['visit_datetime']))) ?> · <?= student_e($item['visit_purpose'] ?: 'Clinic visit') ?></strong><small>Completed visit · Confidential and linked to this visit</small></span></label>
                 <?php endforeach; ?>
             </fieldset>
-            <label class="student-feedback-consent"><input type="checkbox" name="private_identity" value="1"><span><strong>Keep my identity private</strong><br>Your response still completes the selected visit’s feedback requirement, but staff will not see the visit or your identity.</span></label>
+            <label class="student-feedback-consent"><input type="checkbox" name="private_identity" value="1"><span><strong>Submit feedback anonymously</strong><br>Your response still completes the selected visit’s feedback requirement, but staff will not see the visit or your identity.</span></label>
             <input type="hidden" name="participate" value="1">
             <label class="student-feedback-consent"><input type="checkbox" name="consent" value="1" required><span>I have read the RA 10173 privacy notice and consent to the collection and use of my feedback.</span></label>
             <div class="student-feedback-privacy mt-4">
@@ -81,7 +81,7 @@ render_student_header('Give Feedback', 'dashboard');
                 <details><summary>Read the privacy notice and your rights</summary><div><p>We collect your ratings, comments, and consent record for service quality improvement and clinic reporting. Visit-linked feedback is confidential and may be used for visit-specific follow-up.</p><p>Access is limited to authorized clinic personnel who need it for evaluation, support, or reporting.</p></div></details>
             </div>
             <div class="flex flex-wrap gap-3 mt-4">
-                <button type="submit" class="student-button"><span class="material-symbols-outlined" aria-hidden="true">check</span>Submit</button>
+                <button type="submit" class="student-button"><span class="material-symbols-outlined" aria-hidden="true">check</span>Continue to feedback</button>
                 <a href="<?= student_e(student_portal_url('dashboard')) ?>" class="student-button student-button-secondary text-decoration-none">Not now</a>
             </div>
         </form>

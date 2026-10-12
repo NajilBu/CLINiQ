@@ -9,7 +9,19 @@ function expect(bool $ok, string $message): void {
 }
 $db = auth_db();
 $seed = $db->query('SELECT * FROM ape_records ORDER BY ape_id LIMIT 1')->fetch();
-expect((bool) $seed, 'One existing APE identity is needed for read-only join fixtures.');
+if (!$seed) {
+    $db->beginTransaction();
+    $db->prepare("INSERT INTO people (id_number, first_name, last_name) VALUES (?, 'APE', 'Fixture')")
+        ->execute(['APE-FIXTURE-' . bin2hex(random_bytes(8))]);
+    $patientId = (int) $db->lastInsertId();
+    $db->prepare("INSERT INTO patients (person_id, access_status) VALUES (?, 'Official')")->execute([$patientId]);
+    $db->prepare("INSERT INTO ape_records (patient_id, academic_year) VALUES (?, '2026-2027')")->execute([$patientId]);
+    $seed = $db->query('SELECT * FROM ape_records WHERE patient_id = ' . $patientId)->fetch();
+    register_shutdown_function(static function () use ($db): void {
+        if ($db->inTransaction()) $db->rollBack();
+    });
+}
+expect((bool) $seed, 'The test fixture must provide one APE identity.');
 $seed = array_replace($seed, ['exam_date'=>'2026-09-03', 'patient_vitals_status'=>'Confirmed', 'workflow_status'=>'Follow-up Required', 'clearance_status'=>'For Follow-up', 'follow_up_required'=>1, 'requirement_status'=>'Not Checked', 'requirements_saved_at'=>'2026-09-03 14:00:00', 'follow_up_due_date'=>'2026-09-15']);
 $apeId = (int) $seed['ape_id'];
 $fixturePath = tempnam(ape_document_storage_root(), 'ape-test-');

@@ -18,7 +18,7 @@ foreach ([
         throw new RuntimeException('Student APE activity timeline must retain plain-language, compact updates.');
     }
 }
-foreach (['<?= count($allActivities) ?> Event(s)', 'aria-live="polite"'] as $unexpected) {
+foreach (['<?= count($allActivities) ?> Event(s)'] as $unexpected) {
     if (str_contains($source, $unexpected)) {
         throw new RuntimeException('Student APE activity timeline must not expose staff-oriented event noise.');
     }

@@ -231,6 +231,14 @@ function student_non_enrollment_reasons(): array
     return ['Leave of Absence', 'Graduated', 'Transferred', 'Withdrawn', 'Other'];
 }
 
+function student_enrollment_is_confirmed(int $personId): bool
+{
+    $stmt = auth_db()->prepare('SELECT e.enrollment_status FROM students s LEFT JOIN student_school_year_enrollments e ON e.student_person_id = s.person_id AND e.academic_year COLLATE utf8mb4_unicode_ci = s.academic_year COLLATE utf8mb4_unicode_ci WHERE s.person_id = ? LIMIT 1');
+    $stmt->execute([$personId]);
+    $status = $stmt->fetchColumn();
+    return $status === false || $status === null || $status === 'Enrolled';
+}
+
 function re_enrollment_pending(): bool
 {
     return isset($_SESSION['re_enrollment']) && is_array($_SESSION['re_enrollment']);
@@ -290,7 +298,9 @@ function complete_re_enrollment(string $enrollmentStatus, string $nonEnrollmentR
         $personId = (int) $ctx['person_id'];
         $academicYear = trim((string) ($ctx['academic_year'] ?? '')) ?: student_current_academic_year();
         $db->prepare('UPDATE patients SET guardian_or_contact_number = ?, updated_at = NOW() WHERE person_id = ?')->execute([$contactNumber, $personId]);
-        $db->prepare('UPDATE students SET year_level = ?, section = ?, academic_year = ? WHERE person_id = ?')->execute([$yearLevel, $section, $academicYear, $personId]);
+        if ($enrollmentStatus === 'Still Enrolled') {
+            $db->prepare('UPDATE students SET year_level = ?, section = ?, academic_year = ? WHERE person_id = ?')->execute([$yearLevel, $section, $academicYear, $personId]);
+        }
 
         $declaration = $db->prepare("
             INSERT INTO student_enrollment_declarations
@@ -326,29 +336,15 @@ function complete_re_enrollment(string $enrollmentStatus, string $nonEnrollmentR
             SET a.account_status = 'active',
                 a.status_reason = NULL,
                 a.activated_at = COALESCE(a.activated_at, NOW())
-            WHERE a.id = ? AND a.person_id = ? AND a.account_status = 'inactive'
+            WHERE a.id = ? AND a.person_id = ? AND a.account_status IN ('active', 'inactive')
         ");
-        $stmt->execute([$accountId, $personId]);
-        if ($stmt->rowCount() !== 1) {
-            throw new RuntimeException('Your account could not be reactivated. Please contact the clinic.');
+        if ($enrollmentStatus === 'Still Enrolled') {
+            $stmt->execute([$accountId, $personId]);
+        } else {
+            $db->prepare("UPDATE accounts SET account_status = 'inactive', status_reason = 'Manually deactivated: No longer enrolled' WHERE id = ?")
+                ->execute([$accountId]);
         }
 
-        if ($enrollmentStatus === 'Still Enrolled') {
-            $activeCycle = $db->prepare("SELECT ape_cycle_id FROM ape_cycles WHERE academic_year = ? AND status = 'Active' LIMIT 1");
-            $activeCycle->execute([$academicYear]);
-            $activeCycleId = (int) ($activeCycle->fetchColumn() ?: 0);
-            if ($activeCycleId > 0) {
-                $db->prepare('INSERT IGNORE INTO ape_records (ape_cycle_id, patient_id, academic_year) VALUES (?, ?, ?)')
-                    ->execute([$activeCycleId, $personId, $academicYear]);
-                $apeIdQuery = $db->prepare('SELECT ape_id FROM ape_records WHERE patient_id = ? AND academic_year = ? LIMIT 1');
-                $apeIdQuery->execute([$personId, $academicYear]);
-                $apeId = (int) ($apeIdQuery->fetchColumn() ?: 0);
-                if ($apeId > 0) {
-                    require_once __DIR__ . '/../services/ApeWorkflow.php';
-                    ape_seed_default_requirements($apeId);
-                }
-            }
-        }
         $db->commit();
     } catch (Throwable $e) {
         if ($db->inTransaction()) {
@@ -374,7 +370,9 @@ function complete_re_enrollment(string $enrollmentStatus, string $nonEnrollmentR
             'source_type' => 'account',
             'source_id' => (int) $ctx['account_id'],
             'subject' => '[' . ($clinic['system_name'] ?? 'CLINiQ') . '] Enrollment information confirmed',
-            'message' => 'Your enrollment information for ' . $academicYear . ' was confirmed. Updated year and section: Year ' . $yearLevel . ' - ' . $section . '. Your account is now active.',
+            'message' => $enrollmentStatus === 'Still Enrolled'
+                ? 'Your enrollment information for ' . $academicYear . ' was confirmed. Updated year and section: Year ' . $yearLevel . ' - ' . $section . '. Your account is now active.'
+                : 'Your non-enrollment declaration for ' . $academicYear . ' was recorded. Contact the clinic when you enroll again.',
             'deliver_now' => true,
         ]);
     } catch (Throwable $mailException) {

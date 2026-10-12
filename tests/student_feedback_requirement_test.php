@@ -50,6 +50,12 @@ if (!str_contains($feedbackConsent, 'name="feedback_target"')
     || str_contains($feedbackEntry, 'name="participate"')) {
     throw new RuntimeException('Patient feedback must choose a target and confirm consent on its separate page before showing the survey.');
 }
+if (!str_contains($feedbackConsent, 'Complete feedback to remain eligible for future appointments')
+    || !str_contains($feedbackConsent, 'Submit feedback anonymously')
+    || str_contains($feedbackConsent, 'Would you like to provide clinic feedback?')
+    || str_contains($feedbackConsent, '>Voluntary<')) {
+    throw new RuntimeException('Required feedback must explain future appointment eligibility and preserve the anonymous option without a voluntary prompt.');
+}
 if (str_contains($feedbackEntry, 'About you')
     || str_contains($feedbackEntry, 'name="program"')
     || str_contains($feedbackPage, 'name="program"')

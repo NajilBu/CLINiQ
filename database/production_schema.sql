@@ -661,6 +661,21 @@ CREATE TABLE ape_schedule_batches (
   INDEX idx_ape_batches_category (ape_cycle_id, patient_category, status)
 );
 
+CREATE TABLE ape_schedule_batch_cohorts (
+  batch_cohort_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  ape_cycle_id BIGINT UNSIGNED NOT NULL,
+  batch_id BIGINT UNSIGNED NOT NULL,
+  program_id BIGINT UNSIGNED NOT NULL,
+  year_level VARCHAR(40) NOT NULL,
+  section VARCHAR(80) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (ape_cycle_id) REFERENCES ape_cycles(ape_cycle_id) ON DELETE RESTRICT,
+  FOREIGN KEY (batch_id) REFERENCES ape_schedule_batches(batch_id) ON DELETE CASCADE,
+  FOREIGN KEY (program_id) REFERENCES programs(id) ON DELETE RESTRICT,
+  UNIQUE INDEX uq_ape_batch_cohort (batch_id, program_id, year_level, section),
+  INDEX idx_ape_batch_cohort_lookup (ape_cycle_id, program_id, year_level, section)
+);
+
 CREATE TABLE ape_records (
   ape_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   ape_cycle_id BIGINT UNSIGNED NULL,

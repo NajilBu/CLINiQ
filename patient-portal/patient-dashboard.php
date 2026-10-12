@@ -5,12 +5,116 @@ require_once __DIR__ . '/../app/services/ApeWorkflow.php';
 require_once __DIR__ . '/../app/services/ClinicFeedback.php';
 require_once __DIR__ . '/includes/patient-layout.php';
 
-ensure_appointment_schema();
-ensure_ape_workflow_schema();
-appointment_sync_overdue_confirmations();
-
 $profile = student_require_login();
 $isOfficialAccess = patient_has_official_access($profile);
+$enrollmentPending = student_enrollment_confirmation_required($profile);
+if ($enrollmentPending && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'complete_active_enrollment_confirmation') {
+    csrf_enforce_request();
+    $_SESSION['re_enrollment'] = [
+        'account_id' => (int) ($_SESSION['patient_account_id'] ?? 0),
+        'person_id' => (int) $profile['person_id'],
+        'type' => 'student',
+        'academic_year' => (string) ($profile['academic_year'] ?? student_current_academic_year()),
+    ];
+    try {
+        complete_re_enrollment(
+            (string) ($_POST['enrollment_status'] ?? ''),
+            (string) ($_POST['non_enrollment_reason'] ?? ''),
+            (string) ($_POST['contact_number'] ?? ''),
+            ($_POST['contact_confirmed'] ?? '') === '1' ? '1' : '',
+            (string) ($profile['year_level'] ?? ''),
+            (string) ($profile['section'] ?? '')
+        );
+        header('Location: ' . student_portal_url('dashboard', ['re_enrolled' => 1]));
+        exit;
+    } catch (Throwable $e) {
+        $activeEnrollmentError = $e->getMessage();
+        unset($_SESSION['re_enrollment']);
+    }
+}
+if ($enrollmentPending) {
+    $selectedEnrollmentStatus = trim((string) ($_POST['enrollment_status'] ?? ''));
+    $selectedNonEnrollmentReason = trim((string) ($_POST['non_enrollment_reason'] ?? ''));
+    $contactNumber = trim((string) ($_POST['contact_number'] ?? ($profile['contact_number'] ?? '')));
+    $contactConfirmed = (string) ($_POST['contact_confirmed'] ?? '');
+    $nonEnrollmentReasons = student_non_enrollment_reasons();
+
+    render_student_auth_header('Enrollment confirmation required');
+    ?>
+    <main class="student-auth-wrap student-enrollment-gate-wrap">
+        <section class="student-auth-shell student-enrollment-gate-shell" aria-labelledby="enrollment-confirmation-title">
+            <aside class="student-auth-side student-enrollment-gate-side">
+                <div>
+                    <span class="student-brand-mark"><span class="material-symbols-outlined" aria-hidden="true">school</span></span>
+                    <p class="student-auth-brand-line">Student portal access</p>
+                    <h1 class="student-auth-side-title">One step<br>before you continue.</h1>
+                    <p class="student-auth-side-copy">Confirm your current enrollment status for this school year. Your portal stays locked until this is submitted.</p>
+                </div>
+                <p class="student-auth-side-footnote">This keeps your student clinic record current.</p>
+            </aside>
+            <section class="student-auth-form-side student-enrollment-gate-form">
+                <div class="student-enrollment-gate-status">
+                    <span class="material-symbols-outlined" aria-hidden="true">lock</span>
+                    <span>Enrollment confirmation required</span>
+                </div>
+                <h2 id="enrollment-confirmation-title" class="student-card-title">Confirm your student status</h2>
+                <p class="student-card-copy">You cannot open portal features until you submit this confirmation.</p>
+
+                <?php if (!empty($activeEnrollmentError)): ?>
+                    <div class="student-note student-note-danger student-enrollment-gate-error" role="alert"><span class="material-symbols-outlined" aria-hidden="true">error</span><div><?= student_e($activeEnrollmentError) ?></div></div>
+                <?php endif; ?>
+
+                <form method="post" class="student-enrollment-gate-fields" autocomplete="off">
+                    <input type="hidden" name="_csrf" value="<?= student_e(csrf_token()) ?>">
+                    <input type="hidden" name="action" value="complete_active_enrollment_confirmation">
+                    <div class="student-field">
+                        <label class="student-label" for="active-enrollment-status">Current enrollment status</label>
+                        <select id="active-enrollment-status" name="enrollment_status" class="student-select" required>
+                            <option value="">Select your status</option>
+                            <option value="Still Enrolled" <?= $selectedEnrollmentStatus === 'Still Enrolled' ? 'selected' : '' ?>>Still Enrolled</option>
+                            <option value="Not Currently Enrolled" <?= $selectedEnrollmentStatus === 'Not Currently Enrolled' ? 'selected' : '' ?>>Not Currently Enrolled</option>
+                        </select>
+                    </div>
+                    <div class="student-field" id="active-non-enrollment-reason-field" <?= $selectedEnrollmentStatus === 'Not Currently Enrolled' ? '' : 'hidden' ?>>
+                        <label class="student-label" for="active-non-enrollment-reason">Reason</label>
+                        <select id="active-non-enrollment-reason" name="non_enrollment_reason" class="student-select" <?= $selectedEnrollmentStatus === 'Not Currently Enrolled' ? 'required' : 'disabled' ?>>
+                            <option value="">Select a reason</option>
+                            <?php foreach ($nonEnrollmentReasons as $reason): ?>
+                                <option value="<?= student_e($reason) ?>" <?= $selectedNonEnrollmentReason === $reason ? 'selected' : '' ?>><?= student_e($reason) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="student-field">
+                        <label class="student-label" for="active-contact-number">Contact number</label>
+                        <input id="active-contact-number" name="contact_number" class="student-input" value="<?= student_e($contactNumber) ?>" placeholder="09XXXXXXXXX" required>
+                    </div>
+                    <label class="student-check student-enrollment-gate-check"><input type="checkbox" name="contact_confirmed" value="1" <?= $contactConfirmed === '1' ? 'checked' : '' ?> required><span>I confirm that my enrollment status and contact number are correct.</span></label>
+                    <button type="submit" class="student-button w-full"><span class="material-symbols-outlined" aria-hidden="true">how_to_reg</span> Confirm enrollment status</button>
+                </form>
+                <a href="<?= student_e(student_portal_url('login', ['logout' => 1])) ?>" onclick="localStorage.clear();" class="student-enrollment-gate-signout">Sign out instead</a>
+            </section>
+        </section>
+    </main>
+    <script>
+        (() => {
+            const status = document.getElementById('active-enrollment-status');
+            const reasonField = document.getElementById('active-non-enrollment-reason-field');
+            const reason = document.getElementById('active-non-enrollment-reason');
+            const syncReasonField = () => {
+                const needsReason = status.value === 'Not Currently Enrolled';
+                reasonField.hidden = !needsReason;
+                reason.disabled = !needsReason;
+                reason.required = needsReason;
+                if (!needsReason) reason.value = '';
+            };
+            status.addEventListener('change', syncReasonField);
+            syncReasonField();
+        })();
+    </script>
+    <?php
+    render_student_auth_footer();
+    return;
+}
 $firstRegistrationError = '';
 if (!empty($profile['first_registration'])) {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'complete_first_registration') {
@@ -200,6 +304,9 @@ if (re_enrollment_pending()) {
 }
 
 $patientId = (int) $profile['patient_id'];
+ensure_appointment_schema();
+ensure_ape_workflow_schema();
+appointment_sync_overdue_confirmations();
 $appointmentPatientId = (int) $profile['person_id'];
 $pendingFeedbackVisits = clinic_feedback_pending_completed_visits(auth_db(), $appointmentPatientId);
 $feedbackRequired = count($pendingFeedbackVisits) > 0;

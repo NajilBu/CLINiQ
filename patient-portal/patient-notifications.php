@@ -15,6 +15,12 @@ if ($profile === null || !empty($profile['first_registration'])) {
     exit;
 }
 
+if (student_enrollment_confirmation_required($profile)) {
+    http_response_code(403);
+    echo json_encode(['ok' => false, 'message' => 'Enrollment confirmation is required before portal notifications are available.']);
+    exit;
+}
+
 $patientPersonId = (int) ($profile['person_id'] ?? 0);
 if ($patientPersonId < 1) {
     http_response_code(401);

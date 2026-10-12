@@ -391,7 +391,43 @@ function student_require_login(): array
         }
     }
 
+    if (student_enrollment_confirmation_required($profile)) {
+        $script = basename((string) ($_SERVER['SCRIPT_NAME'] ?? ''));
+        if (!in_array($script, ['patient-dashboard.php', 'patient-login.php'], true)) {
+            header('Location: ' . student_portal_url('dashboard'));
+            exit;
+        }
+    }
+
     return $profile;
+}
+
+function student_enrollment_confirmation_required(array $profile): bool
+{
+    return empty($profile['first_registration'])
+        && ($profile['account_type'] ?? '') === 'student'
+        && (int) ($profile['person_id'] ?? 0) > 0
+        && !student_enrollment_is_confirmed((int) $profile['person_id']);
+}
+
+function student_redirect_pending_enrollment_confirmation(): void
+{
+    $script = basename((string) ($_SERVER['SCRIPT_NAME'] ?? ''));
+    if (in_array($script, [
+        'patient-dashboard.php',
+        'patient-login.php',
+        'patient-notifications.php',
+        'patient-nfc-authorize.php',
+        'update-profile-photo.php',
+    ], true)) {
+        return;
+    }
+
+    $profile = student_current_profile();
+    if (is_array($profile) && student_enrollment_confirmation_required($profile)) {
+        header('Location: ' . student_portal_url('dashboard'));
+        exit;
+    }
 }
 
 function student_require_official_access(string $feature): array
@@ -1505,3 +1541,4 @@ function render_student_auth_footer(): void
 // the shared layout, including lightweight endpoints that do not call the
 // normal login guard themselves.
 student_redirect_pending_onboarding();
+student_redirect_pending_enrollment_confirmation();

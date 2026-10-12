@@ -8,7 +8,7 @@ services:
       MARIADB_ROOT_PASSWORD: cliniq_proof_root
     tmpfs:
       - /var/lib/mysql
-    volumes:
+    volumes: !reset
       - ./database/production_schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
@@ -18,19 +18,39 @@ services:
 
   mailpit:
     image: axllent/mailpit:v1.21
+    networks:
+      - cliniq_internal
     environment:
       MP_SMTP_AUTH_ACCEPT_ANY: "1"
       MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    entrypoint: ["php", "/var/www/html/scripts/database/migrate.php", "--apply"]
+    environment:
+      APP_ENV: development
+      DB_HOST: database
+      DB_PORT: 3306
+      AUTH_DB_NAME: Cliniq_db
+      DB_USER: cliniq_proof
+      DB_PASS: cliniq_proof
+    depends_on:
+      database:
+        condition: service_healthy
 
   app:
     build:
       context: .
       dockerfile: Dockerfile
+    ports: !reset []
     environment:
       APP_ENV: development
       APP_URL: http://app/public
       PATIENT_PORTAL_URL: http://app/patient-portal
       APP_TIMEZONE: Asia/Manila
+      SESSION_SECURE_COOKIE: "false"
       DB_HOST: database
       DB_PORT: 3306
       AUTH_DB_NAME: Cliniq_db
@@ -48,10 +68,15 @@ services:
     depends_on:
       database:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       mailpit:
         condition: service_started
-    volumes:
-      - ./tests:/proof:ro
+    volumes: !override ["./tests:/proof:ro"]
+    tmpfs:
+      - /var/www/html/storage/documents
+      - /var/www/html/public/uploads
+      - /var/lib/php/sessions
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "http://localhost/patient-portal/patient-register.php"]
       interval: 5s

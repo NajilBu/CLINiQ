@@ -8,6 +8,11 @@ if (isset($_GET['logout'])) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'forget_device') {
+    $profile = student_current_profile();
+    if (is_array($profile) && student_enrollment_confirmation_required($profile)) {
+        header('Location: ' . student_portal_url('dashboard'));
+        exit;
+    }
     csrf_enforce_request();
     student_forget_device();
     $destination = ($_POST['return_to'] ?? '') === 'dashboard'

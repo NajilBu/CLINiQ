@@ -374,7 +374,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $actorPersonId
                 );
                 flash_message('success', sprintf(
-                    'APE cycle %s started. %d active patient record(s) created and %d existing record(s) linked.',
+                    'APE cycle %s started. %d Applicant APE record(s) were created automatically and %d existing Applicant record(s) were linked. Select Official student cohorts from APE Scheduling when they are ready.',
                     $cycle['academic_year'],
                     (int) ($cycle['created_records'] ?? 0),
                     (int) ($cycle['adopted_records'] ?? 0)
@@ -391,7 +391,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     (array) ($_POST['promotions'] ?? []),
                     $actorPersonId
                 );
-                $msg = "School year {$result['academic_year']} prepared: {$result['promoted']} promoted, {$result['kept']} retained, and {$result['graduated']} cleared students marked graduated. {$result['reset']} student account(s) set to inactive. Graduates were not sent re-enrollment email.";
+                $msg = "School year {$result['academic_year']} prepared: {$result['promoted']} promoted, {$result['kept']} retained, and {$result['graduated']} cleared students marked graduated. " . (int) ($result['confirmation_required'] ?? 0) . " Official student account(s) now require enrollment confirmation. Graduates were not sent re-enrollment email.";
+                $excludedApplicants = (int) ($result['excluded_applicants'] ?? 0);
+                if ($excludedApplicants > 0) {
+                    $msg .= " {$excludedApplicants} active Applicant account(s) were left unchanged and were not asked to confirm enrollment.";
+                }
                 if (($result['email_queued'] ?? 0) > 0) {
                     $msg .= " {$result['email_queued']} reactivation email(s) queued for delivery.";
                 }
@@ -2888,6 +2892,9 @@ render_clinic_command_header(
                     <p class="clinic-label mb-1">School Year Promotion</p>
                     <h3 class="font-headline text-2xl font-extrabold text-[#17261d] mb-1" id="schoolYearPromotionTitle">Prepare <?= e((string) $schoolYearPromotionPreview['academic_year']) ?></h3>
                     <p class="text-sm font-bold text-slate-500 mb-0">Only fourth-year students cleared in their profile can graduate. Other fourth-year students remain in year four by default.</p>
+                    <?php if ((int) ($schoolYearPromotionPreview['excluded_applicants'] ?? 0) > 0): ?>
+                        <p class="text-sm font-bold text-amber-700 mt-2 mb-0"><?= number_format((int) $schoolYearPromotionPreview['excluded_applicants']) ?> active Applicant account(s) are excluded from this reset. They will not be promoted or asked to confirm enrollment; update their academic details manually when needed.</p>
+                    <?php endif; ?>
                 </div>
                 <button type="button" class="btn btn-ghost" data-close-school-year-promotion aria-label="Close promotion preview"><span class="material-symbols-outlined">close</span></button>
             </header>
@@ -2919,7 +2926,7 @@ render_clinic_command_header(
                 </table>
             </div>
             <footer class="p-5 border-t border-slate-200 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <p class="text-xs font-bold text-slate-500 mb-0"><span data-promotion-count><?= count($schoolYearPromotionPreview['students']) ?></span> student(s) will be processed. Cleared graduates remain inactive and receive no re-enrollment email.</p>
+                <p class="text-xs font-bold text-slate-500 mb-0"><span data-promotion-count><?= count($schoolYearPromotionPreview['students']) ?></span> Official student(s) will be processed. Cleared graduates remain inactive and receive no re-enrollment email.</p>
                 <div class="flex gap-3 justify-end">
                     <button type="button" class="btn btn-secondary" data-close-school-year-promotion>Cancel</button>
                     <button type="submit" class="btn btn-danger" data-confirm-submit data-confirm-type="danger" data-confirm-title="Start the new school year?" data-confirm-message="The reviewed student assignments will be saved, graduating students will be marked, and continuing student accounts will require enrollment confirmation. This school year cannot be processed twice." data-confirm-toast="Promoting student sections...">

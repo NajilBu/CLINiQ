@@ -327,14 +327,14 @@ function patient_email_queue(array $data): int
     return (int) $db->lastInsertId();
 }
 
-function patient_email_recipient(int $patientPersonId): ?array
+function patient_email_recipient(int $patientPersonId, bool $allowInactive = false): ?array
 {
     if ($patientPersonId < 1) return null;
     patient_email_repair_student_address($patientPersonId);
     $stmt = auth_db()->prepare('SELECT p.id, p.first_name, p.middle_name, p.last_name, a.email, a.account_status
         FROM people p INNER JOIN accounts a ON a.person_id = p.id INNER JOIN patients pt ON pt.person_id = p.id
-        WHERE p.id = ? AND a.account_status = \'active\' LIMIT 1');
-    $stmt->execute([$patientPersonId]);
+        WHERE p.id = ? AND (a.account_status = \'active\' OR ?) LIMIT 1');
+    $stmt->execute([$patientPersonId, $allowInactive ? 1 : 0]);
     $row = $stmt->fetch();
     if (!$row || !filter_var((string) ($row['email'] ?? ''), FILTER_VALIDATE_EMAIL)) return null;
     return $row;
@@ -439,7 +439,10 @@ function patient_email_dispatch_event(array $event): int
     }
     if (!$shouldEmail) return 0;
 
-    $recipient = patient_email_recipient($patientId);
+    $recipient = patient_email_recipient(
+        $patientId,
+        $eventType === 'student_re_enrollment' && !empty($event['allow_inactive_recipient'])
+    );
     $clinic = clinic_profile_settings();
     $recipientName = $recipient
         ? (trim($recipient['first_name'] . ' ' . ($recipient['middle_name'] ?? '') . ' ' . $recipient['last_name']) ?: 'Patient')
@@ -762,7 +765,7 @@ function patient_email_due_automations(): void
             FROM student_school_year_enrollments e
             INNER JOIN accounts a ON a.person_id = e.student_person_id
             WHERE e.enrollment_status = 'Pending Confirmation'
-              AND a.account_status = 'inactive'
+              AND a.account_status = 'active'
               AND e.created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)
         ")->fetchAll();
         $week = date('o-W');
@@ -772,7 +775,7 @@ function patient_email_due_automations(): void
                 'enrollment_confirmation',
                 'school_year_enrollment',
                 'Confirm your enrollment',
-                'Please confirm your enrollment for the new school year to restore your patient portal access.',
+                'Please confirm your enrollment for the new school year. Appointment booking remains unavailable until you confirm.',
                 'student_school_year_enrollment',
                 (int) $enrollment['enrollment_id'],
                 null,

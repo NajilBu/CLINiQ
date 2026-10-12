@@ -14,7 +14,17 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-$profile = student_require_login();
+$profile = student_current_profile();
+if ($profile === null) {
+    http_response_code(401);
+    echo json_encode(['error' => 'Your patient session has expired.']);
+    exit;
+}
+if (student_enrollment_confirmation_required($profile)) {
+    http_response_code(403);
+    echo json_encode(['error' => 'Enrollment confirmation is required before Health Passport actions are available.']);
+    exit;
+}
 if (!patient_has_official_access($profile)) {
     http_response_code(403);
     echo json_encode(['error' => 'Health Passport access is unavailable for this account.']);

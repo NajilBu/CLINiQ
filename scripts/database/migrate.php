@@ -244,6 +244,12 @@ function migration_post_baseline_tables(string $migrationDirectory): array
     return array_values(array_unique($tables));
 }
 
+$mode = $argv[1] ?? '';
+if (!in_array($mode, ['--check', '--apply'], true) || count($argv) !== 2) {
+    migration_fail('Usage: php scripts/database/migrate.php --check|--apply');
+}
+$apply = $mode === '--apply';
+
 try {
     $projectRoot = dirname(__DIR__, 2);
     $schemaFile = $projectRoot . '/database/production_schema.sql';
@@ -265,16 +271,20 @@ try {
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
     ]);
-    $pdo->exec("CREATE DATABASE IF NOT EXISTS `{$database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+    if ($apply) {
+        $pdo->exec("CREATE DATABASE IF NOT EXISTS `{$database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+    }
     $pdo->exec("USE `{$database}`");
 
     $tableCount = (int) $pdo->query(
         'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = \'BASE TABLE\''
     )->fetchColumn();
 
-    if ($tableCount === 0) {
+    if ($tableCount === 0 && $apply) {
         echo 'Creating fresh database from production_schema.sql...', PHP_EOL;
         migration_run_sql_file($database, $schemaFile);
+    } elseif ($tableCount === 0) {
+        throw new RuntimeException('Database schema is missing. Run the explicit migration service with --apply.');
     } else {
         $required = array_values(array_diff(
             migration_baseline_tables($schemaFile),
@@ -291,13 +301,17 @@ try {
         }
     }
 
-    $pdo->exec(
-        'CREATE TABLE IF NOT EXISTS schema_migrations (' .
-        'migration VARCHAR(255) PRIMARY KEY, checksum CHAR(64) NOT NULL, ' .
-        'execution_ms INT UNSIGNED NOT NULL DEFAULT 0, ' .
-        'applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP' .
-        ') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
-    );
+    if ($apply) {
+        $pdo->exec(
+            'CREATE TABLE IF NOT EXISTS schema_migrations (' .
+            'migration VARCHAR(255) PRIMARY KEY, checksum CHAR(64) NOT NULL, ' .
+            'execution_ms INT UNSIGNED NOT NULL DEFAULT 0, ' .
+            'applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP' .
+            ') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+        );
+    } elseif (!(bool) $pdo->query("SHOW TABLES LIKE 'schema_migrations'")->fetchColumn()) {
+        throw new RuntimeException('Migration ledger is missing. Run the explicit migration service with --apply.');
+    }
 
     $migrationFiles = migration_files($migrationDirectory);
     $insert = $pdo->prepare(
@@ -305,6 +319,7 @@ try {
     );
     $known = $pdo->query('SELECT migration, checksum FROM schema_migrations')->fetchAll(PDO::FETCH_KEY_PAIR);
 
+    $pending = [];
     foreach ($migrationFiles as $file) {
         $name = basename($file);
         $checksum = hash_file('sha256', $file);
@@ -317,6 +332,11 @@ try {
                 && !migration_checksum_is_known_compatible($name, (string) $known[$name], $checksum, $file)) {
                 throw new RuntimeException('Applied migration was modified: ' . $name);
             }
+            continue;
+        }
+
+        if (!$apply) {
+            $pending[] = $name;
             continue;
         }
 
@@ -333,7 +353,11 @@ try {
         $insert->execute([$name, $checksum, max(0, $elapsedMs)]);
     }
 
-    echo 'Database is ready. Applied migrations: ', count($migrationFiles), PHP_EOL;
+    if ($pending !== []) {
+        throw new RuntimeException('Pending migrations require explicit --apply: ' . implode(', ', $pending));
+    }
+
+    echo $apply ? 'Database migrations applied: ' : 'Database migration check passed: ', count($migrationFiles), PHP_EOL;
     exit(0);
 } catch (Throwable $e) {
     migration_fail($e->getMessage());

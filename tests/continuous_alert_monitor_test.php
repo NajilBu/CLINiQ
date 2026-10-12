@@ -9,9 +9,10 @@ $script = file_get_contents($root . '/public/assets/js/app.js');
 $styles = file_get_contents($root . '/public/assets/css/app.css');
 $settings = file_get_contents($root . '/public/settings/index.php');
 $systemSettings = file_get_contents($root . '/app/services/SystemSettings.php');
-$electron = file_get_contents($root . '/electron/main.js');
+$electronPath = $root . '/electron/main.js';
+$electron = is_file($electronPath) ? file_get_contents($electronPath) : null;
 
-foreach (compact('endpoint', 'layout', 'script', 'styles', 'settings', 'systemSettings', 'electron') as $name => $source) {
+foreach (compact('endpoint', 'layout', 'script', 'styles', 'settings', 'systemSettings') as $name => $source) {
     if ($source === false) {
         throw new RuntimeException("Unable to read continuous alert monitor source: {$name}.");
     }
@@ -98,7 +99,7 @@ foreach ([
     }
 }
 
-if (!str_contains($electron, "app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')")) {
+if ($electron !== null && !str_contains($electron, "app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')")) {
     throw new RuntimeException('Electron does not permit automatic emergency alert playback.');
 }
 

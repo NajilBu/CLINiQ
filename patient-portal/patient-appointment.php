@@ -4,11 +4,11 @@ require_once __DIR__ . '/../app/services/AppointmentWorkflow.php';
 require_once __DIR__ . '/../app/services/ClinicFeedback.php';
 require_once __DIR__ . '/includes/patient-layout.php';
 
+$profile = student_require_official_access('Appointment booking');
 ensure_appointment_schema();
 appointment_sync_overdue_confirmations();
-
-$profile = student_require_official_access('Appointment booking');
 $patientId = (int) $profile['person_id'];
+$enrollmentConfirmed = ($profile['account_type'] ?? '') !== 'student' || student_enrollment_is_confirmed($patientId);
 $db = appointment_db();
 $patientProfileStmt = $db->prepare('SELECT COUNT(*) FROM patients WHERE person_id = ?');
 $patientProfileStmt->execute([$patientId]);
@@ -85,7 +85,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!$hasAppointmentPatientProfile || 
     $blocksForPostMonth = appointment_blocks_for_month($month);
 
     $purposeAppointment = $activeAppointmentsByPurpose[$type] ?? null;
-    if ($type === '' || !in_array($type, $allowedAppointmentPurposes, true)) {
+    if (!$enrollmentConfirmed) {
+        $error = 'Confirm your enrollment on the dashboard before requesting an appointment.';
+    } elseif ($type === '' || !in_array($type, $allowedAppointmentPurposes, true)) {
         $error = 'Please choose an appointment purpose.';
     } elseif ($feedbackRequired) {
         $error = 'Complete all required feedback for your completed clinic visits before requesting another appointment.';
@@ -270,7 +272,12 @@ render_student_header('Appointments', 'appointment');
             <span class="student-badge student-badge-warning" id="appointment-service-status">Choose a purpose</span>
         </div>
         <div class="student-card-pad">
-            <?php if ($feedbackRequired): ?>
+            <?php if (!$enrollmentConfirmed): ?>
+                <div class="student-note student-note-warning student-appointment-feedback-note">
+                    <span class="material-symbols-outlined">school</span>
+                    <div><strong>Confirm enrollment before booking.</strong><br>Your appointment history and cancellation controls remain available. <a href="<?= student_e(student_portal_url('dashboard')) ?>" class="student-auth-link">Confirm your enrollment on the dashboard</a> to request a new appointment.</div>
+                </div>
+            <?php elseif ($feedbackRequired): ?>
                 <div class="student-note student-note-danger student-appointment-feedback-note">
                     <span class="material-symbols-outlined">rate_review</span>
                     <div>

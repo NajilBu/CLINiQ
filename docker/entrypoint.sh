@@ -23,6 +23,6 @@ until php -r 'require "/var/www/html/app/config/database.php"; auth_db()->query(
     sleep 2
 done
 
-php /var/www/html/scripts/database/migrate.php
+php /var/www/html/scripts/database/migrate.php --check
 
 exec "$@"

@@ -21,7 +21,7 @@ foreach (["student_e(\$clinicProfile['system_name']) ?> Patient Portal", 'studen
 
 foreach ([
     'location = / {',
-    'proxy_pass http://$cliniq_app_upstream/patient-portal/patient-welcome.php;',
+    'proxy_pass http://$cliniq_app_upstream/patient-portal/patient-welcome.php$is_args$args;',
     'location = /login',
     'location = /signup',
 ] as $marker) {

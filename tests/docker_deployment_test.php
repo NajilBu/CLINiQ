@@ -29,7 +29,8 @@ $dockerfile = file_get_contents($root . '/Dockerfile');
 $apache = file_get_contents($root . '/docker/apache-cliniq.conf');
 $entrypoint = file_get_contents($root . '/docker/entrypoint.sh');
 $backup = file_get_contents($root . '/app/services/BackupService.php');
-$electron = file_get_contents($root . '/electron/main.js');
+$electronPath = $root . '/electron/main.js';
+$electron = is_file($electronPath) ? file_get_contents($electronPath) : null;
 $scheduler = file_get_contents($root . '/scripts/backup/container_scheduler.sh');
 $gateway = file_get_contents($root . '/docker/public-gateway.conf');
 $dockerignore = file_get_contents($root . '/.dockerignore');
@@ -82,8 +83,8 @@ foreach (['/public/login.php', '/public/visitor-registration.php', '/public/sett
         throw new RuntimeException("Public gateway must not expose {$forbiddenPublicRoute}.");
     }
 }
-if (substr_count($compose, 'MARIADB_ROOT_PASSWORD: ""') !== 3) {
-    throw new RuntimeException('The web, backup, and email-worker containers must not receive the MariaDB root password.');
+if (substr_count($compose, 'MARIADB_ROOT_PASSWORD: ""') !== 4) {
+    throw new RuntimeException('The web, migration, backup, and email-worker containers must not receive the MariaDB root password.');
 }
 if (!str_contains($backup, "tempnam(sys_get_temp_dir(), 'cliniq-restore-')")) {
     throw new RuntimeException('Restore credentials must be created in temporary storage, not the backup volume.');
@@ -93,8 +94,8 @@ foreach (['pdo_mysql', 'default-mysql-client', 'cliniq-entrypoint'] as $expected
         throw new RuntimeException("Docker image is missing {$expected}.");
     }
 }
-if (!str_contains($entrypoint, 'scripts/database/migrate.php')) {
-    throw new RuntimeException('Container startup must run database migrations before Apache.');
+if (!str_contains($entrypoint, 'scripts/database/migrate.php --check')) {
+    throw new RuntimeException('Container startup must verify migration state before Apache without applying migrations.');
 }
 foreach (['app|database|docker|electron|scripts|storage|student|tests|tools|tmp|outputs', 'Require all denied'] as $expected) {
     if (!str_contains($apache, $expected)) {
@@ -111,16 +112,16 @@ foreach (['/var/backups/cliniq', '/usr/bin/mariadb-dump', 'DIRECTORY_SEPARATOR']
         throw new RuntimeException("Backup service is not container-compatible: {$expected}");
     }
 }
-if (!str_contains($electron, "DEFAULT_CLINIC_URL = 'http://localhost:8081/public/'")) {
+if ($electron !== null && !str_contains($electron, "DEFAULT_CLINIC_URL = 'http://localhost:8081/public/'")) {
     throw new RuntimeException('Electron must connect to the local Docker application port.');
 }
-if (str_contains($electron, 'CLINIQ_CLINIC_URL')) {
+if ($electron !== null && str_contains($electron, 'CLINIQ_CLINIC_URL')) {
     throw new RuntimeException('Electron must not permit an alternate clinic backend.');
 }
-if (!str_contains($electron, "new URL('../patient-portal/', clinicBaseUrl)")) {
+if ($electron !== null && !str_contains($electron, "new URL('../patient-portal/', clinicBaseUrl)")) {
     throw new RuntimeException('Patient portal links must remain browser-only in Electron.');
 }
-if (str_contains($electron, 'CLINiQ Daily Backup') || str_contains($electron, 'schtasks.exe')) {
+if ($electron !== null && (str_contains($electron, 'CLINiQ Daily Backup') || str_contains($electron, 'schtasks.exe'))) {
     throw new RuntimeException('Docker Electron must not invoke the legacy XAMPP backup task.');
 }
 foreach (['--scheduled', 'sleep 300', '8:00 AM'] as $expected) {

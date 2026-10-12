@@ -5353,6 +5353,105 @@ html.student-dark .student-cancel-form .student-button-danger:focus-visible {
     display: none !important;
 }
 
+/* Enrollment is a deliberate checkpoint, not another dashboard card. */
+.student-enrollment-gate-wrap {
+    min-height: 100svh;
+    padding: 40px 20px;
+}
+
+.student-enrollment-gate-shell {
+    width: min(100%, 58rem);
+}
+
+.student-enrollment-gate-side .student-brand-mark {
+    display: grid;
+    place-items: center;
+    color: var(--student-primary-dark);
+}
+
+.student-enrollment-gate-side .student-brand-mark .material-symbols-outlined {
+    font-size: 1.8rem;
+}
+
+.student-enrollment-gate-form {
+    display: grid;
+    align-content: center;
+    gap: 1rem;
+}
+
+.student-enrollment-gate-status {
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    width: fit-content;
+    padding: .42rem .7rem;
+    color: var(--student-primary-dark);
+    border: 1px solid color-mix(in srgb, var(--student-primary) 32%, var(--student-border-soft));
+    background: var(--student-primary-soft);
+    font-size: .72rem;
+    font-weight: 800;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+.student-enrollment-gate-status .material-symbols-outlined {
+    font-size: 1rem;
+}
+
+.student-enrollment-gate-fields {
+    display: grid;
+    gap: .9rem;
+}
+
+.student-enrollment-gate-error {
+    margin: 0;
+}
+
+.student-enrollment-gate-check {
+    padding: .75rem;
+    border-left: 3px solid var(--student-primary);
+    background: var(--student-primary-soft);
+}
+
+.student-enrollment-gate-signout {
+    justify-self: start;
+    color: var(--student-muted);
+    font-size: .78rem;
+    font-weight: 700;
+    text-decoration: underline;
+    text-underline-offset: .18rem;
+}
+
+.student-enrollment-gate-signout:hover,
+.student-enrollment-gate-signout:focus-visible {
+    color: var(--student-primary-dark);
+}
+
+html.student-dark .student-enrollment-gate-status,
+html.student-dark .student-enrollment-gate-check {
+    color: var(--student-fg);
+    border-color: var(--student-primary);
+    background: color-mix(in srgb, var(--student-primary) 18%, var(--student-card));
+}
+
+@media (max-width: 640px) {
+    .student-enrollment-gate-wrap {
+        padding: 40px 16px 24px;
+    }
+
+    .student-enrollment-gate-shell {
+        width: 100%;
+    }
+
+    .student-enrollment-gate-form {
+        padding: 1.25rem;
+    }
+
+    .student-enrollment-gate-side {
+        min-height: 14rem;
+    }
+}
+
 /* One geometry rule for information surfaces. Pills, avatars, and status dots
    stay rounded because their shape carries meaning; cards and sheets do not. */
 .student-card,

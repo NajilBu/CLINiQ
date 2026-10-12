@@ -33,7 +33,7 @@ if (strpos($source, "student_portal_url('health-passport'") === false || strpos(
     throw new RuntimeException('Dashboard task destinations must remain available.');
 }
 if (strpos($source, "ORDER BY CASE status\n        WHEN 'Scheduled' THEN 1\n        WHEN 'Pending' THEN 2") === false
-    || strpos($source, "WHEN 'Cancelled' THEN 5") === false) {
+    || strpos($source, "WHEN 'Cancelled' THEN 6") === false) {
     throw new RuntimeException('Dashboard must prioritize approved and pending appointments above cancelled history.');
 }
 if (strpos($source, '$passportMissing[] = \'blood type\';') !== false

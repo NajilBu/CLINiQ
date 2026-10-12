@@ -22,9 +22,10 @@ function ensure_ape_cycle_schema(): void
         throw new RuntimeException('APE cycle schema is missing. Run database/migrations/20260811_create_ape_cycles.sql.');
     }
     $batchTable = $db->query("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ape_schedule_batches'")->fetchColumn();
+    $cohortTable = $db->query("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ape_schedule_batch_cohorts'")->fetchColumn();
     $batchColumn = $db->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ape_records' AND COLUMN_NAME = 'schedule_batch_id'")->fetchColumn();
-    if ((int) $batchTable !== 1 || (int) $batchColumn !== 1) {
-        throw new RuntimeException('APE batch scheduling is missing. Run database/migrations/20260902_create_ape_schedule_batches.sql.');
+    if ((int) $batchTable !== 1 || (int) $batchColumn !== 1 || (int) $cohortTable !== 1) {
+        throw new RuntimeException('APE batch scheduling is missing. Run the APE batch migrations.');
     }
     $schoolYearTable = $db->query("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'student_school_year_enrollments'")->fetchColumn();
     if ((int) $schoolYearTable !== 1) {
@@ -158,10 +159,17 @@ function school_year_promotion_preview(?array $currentCycle = null): array
         INNER JOIN accounts a ON a.person_id = s.person_id AND a.account_status = 'active'
         LEFT JOIN programs pr ON pr.id = s.program_id
         LEFT JOIN graduation_clearances gc ON gc.student_person_id = s.person_id AND gc.batch_year = ? AND gc.revoked_at IS NULL
+        WHERE pt.access_status = 'Official'
         ORDER BY pr.program_code, CAST(s.year_level AS UNSIGNED), s.section, p.last_name, p.first_name
     ");
     $studentsStmt->execute([$batchYear]);
     $students = $studentsStmt->fetchAll();
+    $excludedApplicants = auth_db()->query("
+        SELECT COUNT(*)
+        FROM students s
+        INNER JOIN patients pt ON pt.person_id = s.person_id AND pt.access_status = 'Applicant'
+        INNER JOIN accounts a ON a.person_id = s.person_id AND a.account_status = 'active'
+    ")->fetchColumn();
     foreach ($students as &$student) {
         $student['default_promotion'] = school_year_default_promotion((string) ($student['year_level'] ?? ''), !empty($student['graduation_clearance_id']));
     }
@@ -169,6 +177,7 @@ function school_year_promotion_preview(?array $currentCycle = null): array
     return [
         'academic_year' => $academicYear,
         'students' => $students,
+        'excluded_applicants' => (int) $excludedApplicants,
         'already_processed' => (int) $duplicate->fetchColumn() > 0,
     ];
 }
@@ -210,7 +219,7 @@ function start_ape_cycle(string $academicYear, string $complianceStart, string $
             FROM patients pt
             INNER JOIN accounts a ON a.person_id = pt.person_id
             INNER JOIN students s ON s.person_id = pt.person_id
-            WHERE a.account_status = 'active'
+            WHERE a.account_status = 'active' AND pt.access_status = 'Applicant'
         ");
         $insertRecords->execute([$cycleId, $academicYear]);
         $created = $insertRecords->rowCount();
@@ -219,8 +228,9 @@ function start_ape_cycle(string $academicYear, string $complianceStart, string $
             UPDATE ape_records ar
             INNER JOIN accounts a ON a.person_id = ar.patient_id AND a.account_status = 'active'
             INNER JOIN students s ON s.person_id = ar.patient_id
+            INNER JOIN patients pt ON pt.person_id = ar.patient_id
             SET ar.ape_cycle_id = ?
-            WHERE ar.academic_year = ? AND ar.ape_cycle_id IS NULL
+            WHERE ar.academic_year = ? AND ar.ape_cycle_id IS NULL AND pt.access_status = 'Applicant'
         ");
         $adoptRecords->execute([$cycleId, $academicYear]);
         $adopted = $adoptRecords->rowCount();
@@ -525,25 +535,32 @@ function ape_schedule_candidates(int $cycleId): array
 {
     ensure_ape_cycle_schema();
     $stmt = auth_db()->prepare("
-        SELECT ar.ape_id,
+        SELECT pt.person_id AS patient_id,
                p.id_number,
                TRIM(CONCAT_WS(' ', p.first_name, p.middle_name, p.last_name)) AS patient_name,
                 'Student' AS patient_category,
+               s.program_id,
                COALESCE(pr.program_code, '') AS program_code,
                COALESCE(s.year_level, '') AS year_level,
                COALESCE(s.section, '') AS section
-        FROM ape_records ar
-        JOIN patients pt ON pt.person_id = ar.patient_id
+        FROM patients pt
         JOIN people p ON p.id = pt.person_id
         JOIN accounts a ON a.person_id = pt.person_id AND a.account_status = 'active'
-         INNER JOIN students s ON s.person_id = pt.person_id
+        INNER JOIN students s ON s.person_id = pt.person_id
         LEFT JOIN programs pr ON pr.id = s.program_id
-        WHERE ar.ape_cycle_id = ?
-           AND ar.schedule_batch_id IS NULL
-           AND ar.entry_mode = 'Student Scheduled'
-           AND ar.workflow_status NOT IN ('Inactive', 'Cleared')
-           AND ar.exam_date IS NULL
-         ORDER BY p.last_name, p.first_name, ar.ape_id
+        WHERE pt.access_status = 'Official'
+          AND s.program_id IS NOT NULL
+          AND TRIM(COALESCE(s.year_level, '')) <> ''
+          AND TRIM(COALESCE(s.section, '')) <> ''
+          AND NOT EXISTS (
+              SELECT 1
+              FROM ape_schedule_batch_cohorts c
+              JOIN ape_schedule_batches b ON b.batch_id = c.batch_id
+              WHERE c.ape_cycle_id = ? AND c.program_id = s.program_id
+                AND c.year_level = s.year_level AND c.section = s.section
+                AND b.status <> 'Cancelled'
+          )
+        ORDER BY p.last_name, p.first_name, pt.person_id
     ");
     $stmt->execute([$cycleId]);
     return $stmt->fetchAll();
@@ -555,8 +572,8 @@ function ape_schedule_candidate_groups(int $cycleId): array
     foreach (ape_schedule_candidates($cycleId) as $candidate) {
         $category = (string) $candidate['patient_category'];
         $program = trim((string) $candidate['program_code']) ?: 'No Program';
-        $year = trim((string) $candidate['year_level']) ?: 'No Year';
-        $section = trim((string) $candidate['section']) ?: 'No Section';
+        $year = trim((string) $candidate['year_level']);
+        $section = trim((string) $candidate['section']);
         $identity = [$category, $program, $year, $section];
         $label = $program . ' • Year ' . $year . ' • Section ' . $section;
         $detail = 'Complete student section';
@@ -569,11 +586,14 @@ function ape_schedule_candidate_groups(int $cycleId): array
                 'group_label' => $label,
                 'group_detail' => $detail,
                 'patient_count' => 0,
-                'ape_ids' => [],
+                'patient_ids' => [],
+                'program_id' => (int) $candidate['program_id'],
+                'year_level' => $year,
+                'section' => $section,
             ];
         }
         $groups[$key]['patient_count']++;
-        $groups[$key]['ape_ids'][] = (int) $candidate['ape_id'];
+        $groups[$key]['patient_ids'][] = (int) $candidate['patient_id'];
     }
 
     $groups = array_values($groups);
@@ -619,16 +639,18 @@ function create_ape_schedule_batch(array $input, ?int $actorPersonId): array
     foreach (ape_schedule_candidate_groups($cycleId) as $group) {
         $availableGroups[$group['group_key']] = $group;
     }
-    $selectedIds = [];
+    $selectedPatientIds = [];
+    $selectedGroups = [];
     foreach ($selectedGroupKeys as $groupKey) {
         $group = $availableGroups[$groupKey] ?? null;
         if (!$group) {
             throw new RuntimeException('A selected student section is no longer available.');
         }
-        $selectedIds = array_merge($selectedIds, $group['ape_ids']);
+        $selectedPatientIds = array_merge($selectedPatientIds, $group['patient_ids']);
+        $selectedGroups[] = $group;
     }
-    $selectedIds = array_values(array_unique(array_map('intval', $selectedIds)));
-    if (count($selectedIds) > $capacity) {
+    $selectedPatientIds = array_values(array_unique(array_map('intval', $selectedPatientIds)));
+    if (count($selectedPatientIds) > $capacity) {
         throw new InvalidArgumentException('The selected groups exceed the patient limit.');
     }
 
@@ -709,23 +731,27 @@ function create_ape_schedule_batch(array $input, ?int $actorPersonId): array
             );
         }
 
-        $placeholders = implode(',', array_fill(0, count($selectedIds), '?'));
+        $placeholders = implode(',', array_fill(0, count($selectedPatientIds), '?'));
+        $createRecords = $db->prepare("INSERT IGNORE INTO ape_records (ape_cycle_id, patient_id, academic_year) SELECT ?, pt.person_id, ? FROM patients pt JOIN accounts a ON a.person_id = pt.person_id AND a.account_status = 'active' WHERE pt.access_status = 'Official' AND pt.person_id IN ({$placeholders})");
+        $createRecords->execute(array_merge([$cycleId, (string) $cycleRow['academic_year']], $selectedPatientIds));
+        $seed = $db->prepare("INSERT IGNORE INTO ape_requirements (ape_id, requirement_name, status) SELECT ar.ape_id, ?, 'Missing' FROM ape_records ar WHERE ar.ape_cycle_id = ? AND ar.patient_id IN ({$placeholders})");
+        foreach (ape_default_requirements() as $requirement) $seed->execute(array_merge([$requirement, $cycleId], $selectedPatientIds));
         $candidate = $db->prepare("
             SELECT ar.ape_id, ar.patient_id
             FROM ape_records ar
             JOIN patients pt ON pt.person_id = ar.patient_id
             JOIN accounts a ON a.person_id = pt.person_id AND a.account_status = 'active'
             INNER JOIN students s ON s.person_id = pt.person_id
-            WHERE ar.ape_cycle_id = ? AND ar.schedule_batch_id IS NULL
+            WHERE pt.access_status = 'Official' AND ar.ape_cycle_id = ? AND ar.schedule_batch_id IS NULL
               AND ar.entry_mode = 'Student Scheduled'
               AND ar.workflow_status NOT IN ('Inactive', 'Cleared')
               AND ar.exam_date IS NULL
-              AND ar.ape_id IN ({$placeholders})
+               AND ar.patient_id IN ({$placeholders})
             FOR UPDATE
         ");
-        $candidate->execute(array_merge([$cycleId], $selectedIds));
+        $candidate->execute(array_merge([$cycleId], $selectedPatientIds));
         $candidateRows = $candidate->fetchAll();
-        if (count($candidateRows) !== count($selectedIds)) {
+        if (count($candidateRows) !== count($selectedPatientIds)) {
             throw new RuntimeException('One or more selected patients are inactive, already assigned, or no longer available.');
         }
         $insert = $db->prepare("
@@ -735,6 +761,13 @@ function create_ape_schedule_batch(array $input, ?int $actorPersonId): array
         ");
         $insert->execute([$cycleId, $batchName, $category, $scheduleDate, $startTime, $endTime, $capacity, $actorPersonId]);
         $batchId = (int) $db->lastInsertId();
+        $alreadyScheduled = $db->prepare("SELECT 1 FROM ape_schedule_batch_cohorts c JOIN ape_schedule_batches b ON b.batch_id = c.batch_id WHERE c.ape_cycle_id = ? AND c.program_id = ? AND c.year_level = ? AND c.section = ? AND b.status <> 'Cancelled' LIMIT 1 FOR UPDATE");
+        $insertCohort = $db->prepare('INSERT INTO ape_schedule_batch_cohorts (ape_cycle_id, batch_id, program_id, year_level, section) VALUES (?, ?, ?, ?, ?)');
+        foreach ($selectedGroups as $group) {
+            $alreadyScheduled->execute([$cycleId, $group['program_id'], $group['year_level'], $group['section']]);
+            if ($alreadyScheduled->fetchColumn()) throw new RuntimeException('A selected student section is no longer available.');
+            $insertCohort->execute([$cycleId, $batchId, $group['program_id'], $group['year_level'], $group['section']]);
+        }
 
         $assign = $db->prepare("
             UPDATE ape_records
@@ -743,6 +776,7 @@ function create_ape_schedule_batch(array $input, ?int $actorPersonId): array
             WHERE ape_cycle_id = ? AND schedule_batch_id IS NULL
               AND entry_mode = 'Student Scheduled' AND ape_id IN ({$placeholders})
         ");
+        $selectedIds = array_map(static fn(array $row): int => (int) $row['ape_id'], $candidateRows);
         $assign->execute(array_merge([$batchId, $cycleId], $selectedIds));
         if ($assign->rowCount() !== count($selectedIds)) {
             throw new RuntimeException('Not all selected patients could be assigned. No batch was saved.');
@@ -945,10 +979,16 @@ function reset_school_year_accounts(string $academicYear = '', array $submittedP
         INNER JOIN people p ON p.id = a.person_id
         INNER JOIN students s ON s.person_id = p.id
         LEFT JOIN graduation_clearances gc ON gc.student_person_id = s.person_id AND gc.batch_year = {$batchYear} AND gc.revoked_at IS NULL
-        WHERE a.account_status = 'active'
+        WHERE a.account_status = 'active' AND pt.access_status = 'Official'
         FOR UPDATE
         ");
         $students = $fetch->fetchAll();
+        $excludedApplicants = (int) $db->query("
+            SELECT COUNT(*)
+            FROM students s
+            INNER JOIN patients pt ON pt.person_id = s.person_id AND pt.access_status = 'Applicant'
+            INNER JOIN accounts a ON a.person_id = s.person_id AND a.account_status = 'active'
+        ")->fetchColumn();
 
         $saveYear = $db->prepare("
             INSERT INTO student_school_year_enrollments
@@ -959,13 +999,21 @@ function reset_school_year_accounts(string $academicYear = '', array $submittedP
                 enrollment_status = VALUES(enrollment_status), non_enrollment_reason = VALUES(non_enrollment_reason),
                 promotion_source = VALUES(promotion_source), promoted_by_person_id = VALUES(promoted_by_person_id)
         ");
+        $snapshotYear = $db->prepare("
+            INSERT IGNORE INTO student_school_year_enrollments
+                (student_person_id, academic_year, program_id, year_level, section, enrollment_status, non_enrollment_reason, promotion_source, promoted_by_person_id)
+            VALUES (?, ?, ?, ?, ?, 'Enrolled', NULL, 'Snapshot', ?)
+        ");
         $updateStudent = $db->prepare('UPDATE students SET year_level = ?, section = ?, academic_year = ? WHERE person_id = ?');
         $updateGraduatedStudent = $db->prepare('UPDATE students SET academic_year = ? WHERE person_id = ?');
         $deactivate = $db->prepare("UPDATE accounts SET account_status = 'inactive', status_reason = ? WHERE id = ? AND account_status = 'active'");
+        $previousPending = $db->prepare("SELECT 1 FROM student_school_year_enrollments WHERE student_person_id = ? AND academic_year = ? AND enrollment_status = 'Pending Confirmation' LIMIT 1");
         $promoted = 0;
         $kept = 0;
         $graduated = 0;
+        $confirmationRequired = 0;
         $notificationPatients = [];
+        $deactivatedPatients = [];
 
         foreach ($students as $student) {
             $personId = (int) $student['person_id'];
@@ -988,7 +1036,9 @@ function reset_school_year_accounts(string $academicYear = '', array $submittedP
             }
 
             $previousAcademicYear = trim((string) ($student['academic_year'] ?? '')) ?: (string) $currentCycle['academic_year'];
-            $saveYear->execute([$personId, $previousAcademicYear, $student['program_id'], $currentYearLevel, $student['section'], 'Enrolled', null, 'Snapshot', $actorPersonId]);
+            $previousPending->execute([$personId, (string) $currentCycle['academic_year']]);
+            $wasPreviouslyPending = (bool) $previousPending->fetchColumn();
+            $snapshotYear->execute([$personId, $previousAcademicYear, $student['program_id'], $currentYearLevel, $student['section'], $actorPersonId]);
             $source = $target === school_year_default_promotion($currentYearLevel, $graduationCleared)
                 && $targetSection === strtoupper(trim((string) ($student['section'] ?? '')))
                 ? 'Automatic' : 'Manual';
@@ -1002,10 +1052,17 @@ function reset_school_year_accounts(string $academicYear = '', array $submittedP
             }
 
             $updateStudent->execute([$target, $targetSection, $academicYear, $personId]);
-            $deactivate->execute(['New school year enrollment status required', (int) $student['account_id']]);
+            if ($wasPreviouslyPending) {
+                $deactivate->execute(['Manually deactivated: Enrollment was not confirmed for two consecutive school years.', (int) $student['account_id']]);
+                if ($deactivate->rowCount() === 1) {
+                    $deactivatedPatients[] = $student;
+                }
+            } else {
+                $notificationPatients[] = $student;
+                $confirmationRequired++;
+            }
             $saveYear->execute([$personId, $academicYear, $student['program_id'], $target, $targetSection, 'Pending Confirmation', null, $source, $actorPersonId]);
             (int) $target > (int) $currentYearLevel ? $promoted++ : $kept++;
-            $notificationPatients[] = $student;
         }
 
         $db->commit();
@@ -1058,16 +1115,34 @@ function reset_school_year_accounts(string $academicYear = '', array $submittedP
             $queued++;
         }
     }
+    foreach ($deactivatedPatients as $patient) {
+        patient_email_dispatch_event([
+            'patient_person_id' => (int) $patient['person_id'],
+            'event_type' => 'student_re_enrollment',
+            'automation_key' => 'school_year_enrollment',
+            'source_type' => 'student_school_year_enrollment',
+            'source_id' => (int) $patient['person_id'],
+            'dedupe_suffix' => 'deactivated-' . $academicYear,
+            'queue_key' => $queueKey,
+            'origin' => 'automatic',
+            'created_by_person_id' => $actorPersonId,
+            'subject' => '[' . $clinicName . '] Portal access deactivated',
+            'message' => 'Your enrollment was not confirmed for two consecutive school years, so your portal account has been deactivated. Contact the clinic if your enrollment changes.',
+            'allow_inactive_recipient' => true,
+        ]);
+    }
 
     return [
         'reset' => $promoted + $kept + $graduated,
         'promoted' => $promoted,
         'kept' => $kept,
         'graduated' => $graduated,
+        'confirmation_required' => $confirmationRequired,
         'email_queue_key' => $queueKey,
         'email_queued' => $queued,
         'emailed' => 0,
         'failed' => 0,
         'academic_year' => $academicYear,
+        'excluded_applicants' => $excludedApplicants,
     ];
 }
