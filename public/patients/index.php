@@ -96,7 +96,7 @@ foreach ($patients as $patientIndex => $patient) {
         'sexIconHtml' => $sexIconHtml,
         'nameSort' => trim($patient['last_name'] . ' ' . $patient['first_name'] . ' ' . ($patient['middle_name'] ?? '')),
         'nameHtml' => '<div class="flex items-center gap-3" data-tooltip-text="' . e($fullName) . '">' . $avatarHtml . '<strong class="text-sm text-slate-800">' . e($fullName) . '</strong></div>',
-        'patientType' => $patient['patient_type'] === 'Non-Teaching Personnel' ? 'NTP' : $patient['patient_type'],
+        'patientType' => patient_category_label($patient['patient_type'] ?? ''),
         'courseSection' => $patient['course_section'] ?: 'Patient',
         'guardianContact' => $patient['guardian_contact'] ?: '-',
     ];

@@ -232,7 +232,7 @@ $equipmentInventory = cliniq_inventory_db()->query("SELECT item_id AS id, item_n
 
 $isGuestVisit = empty($visit['patient_id']);
 $fullName = trim((string) ($visit['first_name'] ?? '') . ' ' . (string) ($visit['last_name'] ?? ''));
-$fullName = $fullName !== '' ? $fullName : (trim((string) ($visit['guest_name'] ?? '')) ?: 'Visitor / Guest');
+$fullName = $fullName !== '' ? $fullName : (trim((string) ($visit['guest_name'] ?? '')) ?: 'Guest');
 $idLabel = trim((string) ($visit['id_number'] ?? '')) ?: 'No ID required';
 $status = $visit['status'] ?: 'Unaddressed';
 $isProfileMode = $entryPoint === 'profile';

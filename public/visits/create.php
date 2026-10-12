@@ -26,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($subjectType === 'guest') {
             $guestName = trim((string) ($_POST['guest_name'] ?? '')) ?: null;
             if ($guestName === null) {
-                throw new InvalidArgumentException('Enter the visitor / guest name before saving the visit.');
+                throw new InvalidArgumentException('Enter the guest name before saving the visit.');
             }
         } elseif ($postedStudentNumber !== '') {
             if (!is_valid_id_number($postedStudentNumber)) {
@@ -130,7 +130,7 @@ render_clinic_command_header(
                 <label class="clinic-label" for="visitSubjectType">Visit For</label>
                 <select class="record-sheet-field px-4" id="visitSubjectType" name="visit_subject_type" required>
                     <option value="registered">Registered Patient</option>
-                    <option value="guest">Visitor / Guest</option>
+                    <option value="guest">Guest</option>
                 </select>
             </div>
             <div>
@@ -152,7 +152,7 @@ render_clinic_command_header(
             </div>
             <div>
                 <label class="clinic-label" for="patientTypeDisplay">Patient Type</label>
-                <input class="record-sheet-field px-4" id="patientTypeDisplay" value="<?= e($preselectedPatient['patient_type'] ?? 'Enter ID number') ?>" readonly>
+                <input class="record-sheet-field px-4" id="patientTypeDisplay" value="<?= e($preselectedPatient ? patient_category_label($preselectedPatient['patient_type'] ?? '') : 'Enter ID number') ?>" readonly>
             </div>
             <div>
                 <label class="clinic-label">Course / Department</label>
@@ -372,7 +372,7 @@ const visitPatients = <?= json_encode(array_map(static function (array $patient)
         'name' => trim($patient['first_name'] . ' ' . $patient['last_name']),
         'course' => $patient['course_section'] ?: 'Not specified',
         'sex' => $patient['sex'] ?: 'Not specified',
-        'type' => $patient['patient_type'],
+        'type' => $patient['patient_type_display'] ?? patient_category_label($patient['patient_type'] ?? ''),
     ];
 }, $patients), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
 const visitPatientsByStudentNumber = new Map(visitPatients.map((patient) => [patient.studentNumber, patient]));
@@ -411,10 +411,10 @@ function updatePatientLookup() {
         patientIdInput.value = '';
         patientNameDisplay.readOnly = false;
         patientNameDisplay.value = guestNameInput.value;
-        patientCourseDisplay.value = 'Visitor / Guest';
+        patientCourseDisplay.value = 'Guest';
         patientSexDisplay.value = 'Not specified';
-        patientTypeDisplay.value = 'Visitor / Guest';
-        setLookupStatus('Guest visit: ID number is not required. Visitor / guest name is required.');
+        patientTypeDisplay.value = 'Guest';
+        setLookupStatus('Guest visit: ID number is not required. Guest name is required.');
         return;
     }
     patientNameDisplay.readOnly = true;
@@ -452,7 +452,7 @@ function syncVisitSubjectType() {
     idField.disabled = isGuest;
     idField.closest('div')?.classList.toggle('opacity-60', isGuest);
     guestNameInput.value = isGuest && patientNameDisplay.value !== 'Enter ID number' ? patientNameDisplay.value : '';
-    patientNameDisplay.placeholder = isGuest ? 'Enter visitor / guest name' : '';
+    patientNameDisplay.placeholder = isGuest ? 'Enter guest name' : '';
     patientNameDisplay.required = isGuest;
     if (isGuest) {
         patientNameDisplay.readOnly = false;
@@ -480,7 +480,7 @@ document.getElementById('visitForm')?.addEventListener('submit', (event) => {
         if (!guestNameInput.value) {
             event.preventDefault();
             patientNameDisplay.focus();
-            setLookupStatus('Enter the visitor / guest name before saving the visit.', 'missing');
+            setLookupStatus('Enter the guest name before saving the visit.', 'missing');
         }
         return;
     }

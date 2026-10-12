@@ -672,7 +672,7 @@ function default_dropdown_option_groups(): array
         'department' => [
             'label' => 'Course / Department Suggestions',
             'description' => 'Used as suggestions for visitor course or department fields.',
-            'options' => ['College of Computer Studies', 'College of Nursing', 'Arts & Sciences', 'Administrative Office', 'Guest / Visitor'],
+            'options' => ['College of Computer Studies', 'College of Nursing', 'Arts & Sciences', 'Administrative Office', 'Guest'],
         ],
         'student_program' => [
             'label' => 'Student Program',

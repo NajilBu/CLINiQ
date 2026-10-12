@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../helpers/patient_category.php';
 require_once __DIR__ . '/CliniqInventoryWorkflow.php';
 require_once __DIR__ . '/AuditLog.php';
 require_once __DIR__ . '/PatientNotification.php';
@@ -82,7 +83,10 @@ function cliniq_visit_patients(string $search = '', int $limit = 500): array
         LIMIT {$limit}
     ");
     $stmt->execute($params);
-    return $stmt->fetchAll();
+    return array_map(static function (array $patient): array {
+        $patient['patient_type_display'] = patient_category_label($patient['patient_type'] ?? '');
+        return $patient;
+    }, $stmt->fetchAll());
 }
 
 function cliniq_visit_patient_by_id_number(string $idNumber): ?array
@@ -117,7 +121,12 @@ function cliniq_visit_patient_by_id_number(string $idNumber): ?array
         LIMIT 1
     ");
     $stmt->execute([$preferredId, $alternateId, $preferredId]);
-    return $stmt->fetch() ?: null;
+    $patient = $stmt->fetch() ?: null;
+    if ($patient) {
+        $patient['patient_type_display'] = patient_category_label($patient['patient_type'] ?? '');
+    }
+
+    return $patient;
 }
 
 function cliniq_visit_patient_exists(int $personId): bool

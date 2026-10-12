@@ -237,7 +237,7 @@ $portalAccessStyle = $portalAccess === 'Official' ? 'text-emerald-700' : ($porta
 $courseLabel = $patient['course_section'] ?: $patient['patient_type'];
 $lastVisitLabel = $latestVisit ? date('M d, Y g:i A', strtotime($latestVisit['visit_datetime'])) : 'No visits yet';
 $affiliationLabel = 'Classification';
-$affiliationValue = $patient['patient_type'];
+$affiliationValue = patient_category_label($patient['patient_type'] ?? '');
 $profileDetailLabel = 'Profile Details';
 $profileDetailValue = 'No additional profile details recorded';
 if ($patient['patient_type'] === 'Student') {

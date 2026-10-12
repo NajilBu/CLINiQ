@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../helpers/data_normalization.php';
 require_once __DIR__ . '/../helpers/emergency_contact.php';
+require_once __DIR__ . '/../helpers/patient_category.php';
 require_once __DIR__ . '/AuditLog.php';
 
 function cliniq_patient_profile_db(): PDO

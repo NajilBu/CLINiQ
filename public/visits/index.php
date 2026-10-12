@@ -134,7 +134,7 @@ $visitColumns = [
 $visitRows = [];
 foreach ($visits as $visit) {
     $fullName = trim((string) ($visit['first_name'] ?? '') . ' ' . (string) ($visit['last_name'] ?? ''));
-    $fullName = $fullName !== '' ? $fullName : (trim((string) ($visit['guest_name'] ?? '')) ?: 'Visitor / Guest');
+    $fullName = $fullName !== '' ? $fullName : (trim((string) ($visit['guest_name'] ?? '')) ?: 'Guest');
     $idLabel = trim((string) ($visit['id_number'] ?? '')) ?: 'No ID required';
     $visitStatus = $visit['status'] ?? 'Unaddressed';
 

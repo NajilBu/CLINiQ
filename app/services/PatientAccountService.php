@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../helpers/student_id.php';
 require_once __DIR__ . '/../helpers/data_normalization.php';
+require_once __DIR__ . '/../helpers/patient_category.php';
 require_once __DIR__ . '/ApeWorkflow.php';
 require_once __DIR__ . '/ApeCycleService.php';
 require_once __DIR__ . '/AuditLog.php';
@@ -29,9 +30,9 @@ function patient_account_type(string $value): string
 function patient_account_type_label(string $value): string
 {
     return match (patient_account_type($value)) {
-        'student' => 'Student',
+        'student' => 'Students',
         'faculty' => 'Faculty',
-        default => 'Non-Teaching Personnel (NTP)',
+        default => 'NTP',
     };
 }
 
@@ -618,7 +619,7 @@ function create_inactive_patient_account(array $input): array
                 ORDER BY started_at DESC
                 LIMIT 1
             ")->fetch();
-            if ($activeCycle && $type === 'student') {
+            if ($activeCycle && $type === 'student' && $accessStatus === 'Applicant') {
                 // Only create the record if one doesn't already exist for this patient + cycle.
                 $existsCheck = $db->prepare('
                     SELECT COUNT(*) FROM ape_records
