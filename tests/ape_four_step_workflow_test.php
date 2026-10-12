@@ -12,9 +12,9 @@ function expect_four_step(bool $condition, string $message): void
 $steps = ape_workflow_steps();
 expect_four_step(count($steps) === 4, 'APE must contain exactly four workflow steps.');
 expect_four_step($steps === [
-    'Digital Keeping',
+    'Document submission',
     'Examination',
-    'Final Decision or Follow-up',
+    'Clinical decision or follow-up',
     'Completed',
 ], 'APE workflow labels or order changed unexpectedly.');
 
@@ -38,7 +38,7 @@ expect_four_step(ape_initial_upload_phase_is_open($waiting), 'Initial uploads mu
 expect_four_step(!ape_initial_upload_phase_is_open(array_replace($waiting, ['batch_status' => 'Cancelled'])), 'A cancelled batch must close pre-examination uploads.');
 expect_four_step(ape_initial_upload_phase_is_open(array_replace($unscheduledUpload, ['exam_date' => '2026-09-15'])), 'Post-examination document corrections must remain available.');
 expect_four_step(ape_initial_upload_phase_is_open(array_replace($unscheduledUpload, ['entry_mode' => 'Clinic Manual'])), 'Clinic-manual APEs must remain exempt from batch scheduling.');
-expect_four_step(ape_student_progress($unscheduledUpload)['stage_label'] === 'Waiting for Schedule', 'An unscheduled student must not be shown as already in Digital Keeping.');
+expect_four_step(ape_student_progress($unscheduledUpload)['stage_label'] === 'Waiting for the clinic to schedule your examination', 'An unscheduled student must not be shown as already in document submission.');
 $patientUploadSource = file_get_contents(__DIR__ . '/../patient-portal/patient-ape-status.php');
 $staffUploadSource = file_get_contents(__DIR__ . '/../public/ape/view.php');
 expect_four_step(str_contains($patientUploadSource, 'if (!ape_initial_upload_phase_is_open($apeRecord))'), 'The patient upload endpoint must enforce the batch gate.');
@@ -336,11 +336,11 @@ expect_four_step(str_contains($patientStatusSource, '$studentProgress = ape_stud
 expect_four_step(str_contains($patientStatusSource, '$documentsAwaitingClinicReview && $physicalExaminationScheduled => \'Attend your scheduled physical examination\'')
     && str_contains($patientStatusSource, 'Attend your physical examination at the school clinic')
     && str_contains($patientStatusSource, '$nextActionHeading = $documentsAwaitingClinicReview && !$physicalExaminationScheduled ? \'Current status\' : \'Next action\';'), 'Submitted documents awaiting review must retain a scheduled physical examination reminder without becoming an upload action.');
-expect_four_step(str_contains($patientStatusSource, '$canUploadDocuments = $apeRecord') && !str_contains($patientStatusSource, '$canUploadDocuments = $apeRecord\n    && $hasScheduledBatch'), 'Document controls must not require a scheduled batch.');
+expect_four_step(str_contains($patientStatusSource, '$canUploadDocuments = !$apeReadOnly && $apeRecord') && !str_contains($patientStatusSource, '&& $hasScheduledBatch'), 'Document controls must not require a scheduled batch.');
 expect_four_step(!str_contains($patientStatusSource, 'Attach a file for every required APE document before submitting.') && !str_contains($patientStatusSource, 'patient-document-more'), 'Students must be able to submit available APE documents incrementally with visible document actions.');
 expect_four_step(str_contains($patientStatusSource, '$apePercent = $studentProgress[\'percent\'];'), 'The APE status page must display the student-facing progress percentage.');
 expect_four_step(str_contains($patientStatusSource, "\$stepClass = \$isDone ? 'is-done' : (\$isActive ? 'is-current' : 'is-locked');"), 'Every later unfinished APE step must remain closed until its predecessor is complete.');
-expect_four_step(str_contains($patientStatusSource, "'action' => \$verification === 'Needs Correction' ? 'Replace'"), 'A returned document must give the student a replacement-upload action.');
+expect_four_step(str_contains($patientStatusSource, "'action' => \$verification === 'Needs Correction' ? 'Replace file'"), 'A returned document must give the student a replacement-upload action.');
 expect_four_step(str_contains($patientDashboardSource, '$apeProgress = ape_student_progress($latestApe ?? []);'), 'The dashboard must use the student-display progress resolver.');
 expect_four_step(str_contains($patientStatusSource, 'follow-up documents. Upload them below'), 'Students must receive Follow-up document instructions without being sent back to Step 1.');
 expect_four_step(str_contains($patientDashboardSource, '&& !$apeDocumentsAwaitingClinicReview')

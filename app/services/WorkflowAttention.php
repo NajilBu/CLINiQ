@@ -86,8 +86,10 @@ function workflow_attention_items(array $filters = [], int $limit = 500): array
     }
 
     $appointmentRows = $db->query("SELECT a.appointment_id, a.patient_id, a.appointment_datetime, a.status, a.purpose,
-            a.created_at, TRIM(CONCAT_WS(' ', p.first_name, p.middle_name, p.last_name)) patient_name
+            a.created_at, v.visit_id AS linked_visit_id, v.status AS linked_visit_status,
+            TRIM(CONCAT_WS(' ', p.first_name, p.middle_name, p.last_name)) patient_name
         FROM appointments a INNER JOIN people p ON p.id = a.patient_id
+        LEFT JOIN visits v ON v.appointment_id = a.appointment_id
         WHERE a.status IN ('Pending', 'For Confirmation', 'Scheduled')
         ORDER BY a.appointment_datetime, a.appointment_id")->fetchAll();
     foreach ($appointmentRows as $row) {
@@ -96,8 +98,8 @@ function workflow_attention_items(array $filters = [], int $limit = 500): array
         $add($items, [
             'type' => 'appointment_' . strtolower(str_replace(' ', '_', $status)),
             'label' => 'Appointment',
-            'title' => $status === 'Scheduled' ? ($isPast ? 'Appointment needs review' : 'Upcoming appointment') : ($status === 'For Confirmation' ? 'Appointment needs completion review' : 'Appointment request needs review'),
-            'explanation' => $status === 'Scheduled' ? 'This appointment is scheduled and remains visible for clinic coordination.' : ($status === 'For Confirmation' ? 'This appointment time has passed and is waiting for completion review.' : 'This appointment request is waiting for clinic approval.'),
+            'title' => $status === 'Scheduled' ? ($isPast ? 'Appointment needs review' : 'Upcoming appointment') : ($status === 'For Confirmation' ? (!empty($row['linked_visit_id']) ? 'Clinical documentation required' : 'Legacy attendance review') : 'Appointment request needs review'),
+            'explanation' => $status === 'Scheduled' ? 'This appointment is scheduled and remains visible for clinic coordination.' : ($status === 'For Confirmation' ? (!empty($row['linked_visit_id']) ? 'The linked clinical visit is not yet complete.' : 'This historical appointment has no linked clinical visit and needs an attendance decision.') : 'This appointment request is waiting for clinic approval.'),
             'patient_name' => (string) ($row['patient_name'] ?: 'Patient'),
             'priority' => $isPast ? 'overdue' : ($status === 'Scheduled' ? 'scheduled' : 'clinic_action'),
             'status' => $status,
@@ -109,8 +111,8 @@ function workflow_attention_items(array $filters = [], int $limit = 500): array
             'patient_person_id' => (int) $row['patient_id'],
             'action_label' => 'Review appointment',
             'source_url' => '../appointments/index.php?status=' . rawurlencode($status),
-            'email_relevant' => $status === 'For Confirmation',
-            'email_event_type' => $status === 'For Confirmation' ? 'appointment_confirmation_required' : '',
+            'email_relevant' => false,
+            'email_event_type' => '',
         ]);
     }
 

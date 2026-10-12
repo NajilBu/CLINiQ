@@ -101,7 +101,7 @@ foreach ([
     'Still Enrolled',
     'Not Currently Enrolled',
     'name="non_enrollment_reason"',
-    'complete_re_enrollment($selectedEnrollmentStatus, $selectedNonEnrollmentReason,',
+    'complete_student_enrollment_confirmation(',
 ] as $expected) {
     if (!str_contains((string) $patientDashboard, $expected)) {
         throw new RuntimeException("The student enrollment declaration form is missing: {$expected}");
@@ -116,7 +116,7 @@ if (preg_match('/<textarea[^>]*name=["\'](?:explanation|reason)["\']/i', (string
 foreach ([
     'INSERT INTO student_enrollment_declarations',
     "SET a.account_status = 'active'",
-    "['Leave of Absence', 'Graduated', 'Transferred', 'Withdrawn', 'Other']",
+    "return dropdown_options('non_enrollment_reason');",
 ] as $expected) {
     if (!str_contains((string) $authHelper, $expected)) {
         throw new RuntimeException("The immediate student reactivation workflow is missing: {$expected}");
@@ -161,13 +161,11 @@ if (!str_contains($cycleService, "'Pending Confirmation'")
     throw new RuntimeException('Pending enrollment must keep the first cycle active and deactivate only on the second consecutive cycle.');
 }
 if (!str_contains((string) $patientLayout, 'function student_enrollment_confirmation_required')
-    || !str_contains((string) $patientLayout, 'student_redirect_pending_enrollment_confirmation()')
-    || !str_contains((string) $patientLayout, "'patient-dashboard.php', 'patient-login.php'")
-    || !str_contains((string) $patientDashboard, "render_student_auth_header('Enrollment confirmation required')")
+    || str_contains((string) $patientLayout, 'student_redirect_pending_enrollment_confirmation()')
+    || !str_contains((string) $patientDashboard, 'request_enrollment_correction')
     || !str_contains((string) $patientDashboard, 'name="_csrf"')
-    || !str_contains((string) $patientNotifications, 'http_response_code(403)')
-    || !str_contains((string) $patientNfcAuthorize, 'Enrollment confirmation is required')) {
-    throw new RuntimeException('Pending active students must be locked to the enrollment checkpoint until they submit a response.');
+    || !str_contains((string) $patientAppointment, 'Confirm your enrollment on the dashboard before requesting an appointment.')) {
+    throw new RuntimeException('Pending students must keep portal access while appointment creation remains blocked until confirmation.');
 }
 
 $repairScript = file_get_contents(dirname(__DIR__) . '/scripts/database/repair_current_official_enrollments.php');

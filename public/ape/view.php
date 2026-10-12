@@ -137,6 +137,20 @@ if (!$record) {
     exit;
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_ape_amendment') {
+    try {
+        if (!in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor'], true)) {
+            throw new RuntimeException('Only administrators and doctors can add a historical APE amendment.');
+        }
+        ape_add_record_amendment($id, (int) ($apeUser['person_id'] ?? 0), (string) ($_POST['amendment_reason'] ?? ''), (string) ($_POST['amendment_note'] ?? ''));
+        flash_message('success', 'Historical APE amendment added. The original record was not changed.');
+    } catch (Throwable $e) {
+        flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $e->getMessage());
+    }
+    header('Location: view.php?id=' . $id);
+    exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reschedule_ape_record') {
     try {
         if (!in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor'], true)) {
@@ -159,14 +173,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $successMessage = null;
     $apeDb = auth_db();
     $storedClinicDocument = null;
-    $clinicalActions = ['record_examination', 'update_clinical_information', 'finalize_exam_clear', 'finalize_exam_follow_up', 'resolve_clinical_follow_up'];
+    $clinicalActions = ['record_examination', 'update_clinical_information', 'finalize_exam_clear', 'finalize_exam_follow_up', 'resolve_clinical_follow_up', 'request_document_correction', 'return_clearance'];
 
     try {
         if ($staffPersonId <= 0) {
             throw new RuntimeException('Your staff account is not ready to manage this APE record. Please contact an administrator.');
         }
         if (in_array($action, $clinicalActions, true) && !$canRecordApeExam) {
-            throw new RuntimeException('Only administrators, doctors, and nurses can record or finalize an APE examination.');
+            throw new RuntimeException('Only administrators, doctors, and nurses can manage clinical APE decisions.');
         }
         if ($action === 'upload_clinic_document' && !$canUploadApeDocument) {
             throw new RuntimeException('Only authorized clinic staff can submit documents for a patient.');
@@ -179,6 +193,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$record) {
             throw new RuntimeException('APE record no longer exists.');
         }
+        ape_assert_record_mutation_allowed($record);
 
         if (in_array($action, ['mark_ape_inactive', 'reopen_ape_record'], true)) {
             if (!in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor'], true)) {
@@ -189,7 +204,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new RuntimeException('This APE record is already inactive.');
                 }
                 $reason = trim((string) ($_POST['inactive_reason'] ?? ''));
-                if (!in_array($reason, ['Withdrew from school', 'Transferred', 'No longer enrolled', 'Duplicate record', 'Declined APE', 'Other'], true)) {
+                if (!in_array($reason, dropdown_options('ape_inactive_reason'), true)) {
                     throw new InvalidArgumentException('Select a valid reason for making this APE record inactive.');
                 }
                 $details = trim((string) ($_POST['inactive_details'] ?? ''));
@@ -589,8 +604,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ape_assert_documents_available($apeDb, $id);
             $stmt = $apeDb->prepare("UPDATE ape_records SET clearance_status = 'Cleared', follow_up_required = 0, workflow_status = 'Cleared', reviewed_by_person_id = ? WHERE ape_id = ?");
             $stmt->execute([$staffPersonId, $id]);
-            $document = $apeDb->prepare("UPDATE ape_documents SET verification_status = 'Verified', verified_by_person_id = ?, verified_at = NOW() WHERE ape_id = ? AND document_type = 'Clearance'");
-            $document->execute([$staffPersonId, $id]);
+            $document = $apeDb->prepare("UPDATE ape_documents SET verification_status = 'Verified', verified_by_person_id = ?, verified_at = NOW() WHERE ape_id = ? AND document_type = 'Clearance' AND verification_status = 'Pending' AND document_id = (SELECT latest.document_id FROM (SELECT MAX(document_id) AS document_id FROM ape_documents WHERE ape_id = ? AND document_type = 'Clearance') latest)");
+            $document->execute([$staffPersonId, $id, $id]);
+            if ($document->rowCount() !== 1) {
+                throw new RuntimeException('The current clearance document is no longer available. Refresh and try again.');
+            }
             $requirement = $apeDb->prepare("UPDATE ape_requirements SET status = 'Verified', checked_by_person_id = ?, checked_at = NOW() WHERE ape_id = ? AND requirement_name = 'Follow-up clearance'");
             $requirement->execute([$staffPersonId, $id]);
             patient_access_promote_after_ape_clearance($apeDb, (int) $record['patient_id'], $id, $staffPersonId);
@@ -599,13 +617,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!ape_explicit_clearance_required($record)) {
                 throw new RuntimeException('No explicit clearance document is required for this follow-up.');
             }
-            $missingItems = trim((string) ($_POST['missing_items'] ?? '')) ?: 'Clearance correction required.';
-            $stmt = $apeDb->prepare("UPDATE ape_records SET clearance_status = 'For Follow-up', workflow_status = 'Follow-up Required' WHERE ape_id = ?");
-            $stmt->execute([$id]);
-            $document = $apeDb->prepare("UPDATE ape_documents SET verification_status = 'Needs Correction', verified_by_person_id = ?, verified_at = NOW() WHERE ape_id = ? AND document_type = 'Clearance'");
-            $document->execute([$staffPersonId, $id]);
-            $requirement = $apeDb->prepare("INSERT INTO ape_requirements (ape_id, requirement_name, status, remarks) VALUES (?, 'Follow-up clearance', 'Needs Correction', ?) ON DUPLICATE KEY UPDATE status = 'Needs Correction', remarks = VALUES(remarks)");
-            $requirement->execute([$id, $missingItems]);
+            $missingItems = trim((string) ($_POST['missing_items'] ?? ''));
+            if ($missingItems === '') {
+                throw new InvalidArgumentException('Enter the reason the clearance must be corrected.');
+            }
+            $returnSchedule = ape_return_schedule((string) ($_POST['follow_up_due_date'] ?? ''));
+            $stmt = $apeDb->prepare("UPDATE ape_records SET clearance_status = 'For Follow-up', workflow_status = 'Follow-up Required', follow_up_due_date = ? WHERE ape_id = ?");
+            $stmt->execute([$returnSchedule['date'], $id]);
+            $document = $apeDb->prepare("UPDATE ape_documents SET verification_status = 'Needs Correction', verified_by_person_id = ?, verified_at = NOW() WHERE ape_id = ? AND document_type = 'Clearance' AND verification_status = 'Pending' AND document_id = (SELECT latest.document_id FROM (SELECT MAX(document_id) AS document_id FROM ape_documents WHERE ape_id = ? AND document_type = 'Clearance') latest)");
+            $document->execute([$staffPersonId, $id, $id]);
+            if ($document->rowCount() !== 1) {
+                throw new RuntimeException('There is no submitted clearance document to return.');
+            }
+            $requirement = $apeDb->prepare("INSERT INTO ape_requirements (ape_id, requirement_name, status, remarks, upload_group, upload_due_date) VALUES (?, 'Follow-up clearance', 'Needs Correction', ?, 'follow_up', ?) ON DUPLICATE KEY UPDATE status = 'Needs Correction', remarks = VALUES(remarks), upload_group = 'follow_up', upload_due_date = VALUES(upload_due_date)");
+            $requirement->execute([$id, $missingItems, $returnSchedule['date']]);
             $activityLabel = 'Returned clearance for correction';
             $activityNotes = $missingItems;
         } elseif ($action === 'save_notes') {
@@ -676,7 +701,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($activityLabel) {
-            ape_log_activity($id, $staffPersonId, $activityLabel, $activityNotes);
+            $activityId = ape_log_activity($id, $staffPersonId, $activityLabel, $activityNotes);
             $updatedRecord = fetch_ape_record($id);
             $patientNoteChanged = trim((string) ($updatedRecord['patient_visible_note'] ?? ''))
                 !== trim((string) ($record['patient_visible_note'] ?? ''));
@@ -687,7 +712,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $emailMessage = $action === 'return_clearance'
                     ? 'Your submitted APE clearance needs correction. Please open your APE status for the clinic instructions.'
                     : 'One or more APE documents need correction. Please open your APE status and submit the requested documents.';
-                patient_email_queue_notification((int) $updatedRecord['patient_id'], $action === 'return_clearance' ? 'ape_clearance_correction' : 'ape_document_correction_required', 'ape_corrections', $action === 'return_clearance' ? 'APE clearance correction required' : 'APE document correction required', $emailMessage, 'ape', $id, $staffPersonId);
+                patient_email_queue_notification((int) $updatedRecord['patient_id'], $action === 'return_clearance' ? 'ape_clearance_correction' : 'ape_document_correction_required', 'ape_corrections', $action === 'return_clearance' ? 'APE clearance correction required' : 'APE document correction required', $emailMessage, 'ape', $id, $staffPersonId, null, (string) $activityId);
             }
             if (in_array($action, ['finalize_exam_follow_up', 'keep_follow_up_open'], true)) {
                 patient_email_queue_notification((int) $updatedRecord['patient_id'], 'ape_follow_up_required', 'ape_follow_up_reminders', 'APE follow-up required', 'The clinic requires follow-up for your APE. Please open your APE status for the required action and due date.', 'ape', $id, $staffPersonId);
@@ -718,6 +743,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $record = fetch_ape_record($id);
+$apeAmendments = ape_record_amendments($id);
+$cycleReadOnly = !ape_record_mutation_allowed($record);
+if ($cycleReadOnly) {
+    $canRecordApeExam = false;
+    $canUploadApeDocument = false;
+}
 $fullName = trim($record['first_name'] . ' ' . $record['last_name']);
 $isClinicManagedApe = ($record['entry_mode'] ?? '') === 'Clinic Manual';
 $queueKey = ape_record_queue($record);
@@ -827,7 +858,7 @@ foreach ($reviewDocuments as $document) {
 $reviewDocuments = array_values($latestReviewDocuments);
 $pendingReviewDocuments = array_values(array_filter($reviewDocuments, static fn(array $document): bool => $document['verification_status'] === 'Pending'));
 $reviewAwaitingCount = count($pendingReviewDocuments);
-$reviewWorkspaceActive = $examSaved && !$apeIsCompleted && $reviewUploadGroup !== null;
+$reviewWorkspaceActive = !$cycleReadOnly && $examSaved && !$apeIsCompleted && $reviewUploadGroup !== null;
 $flowPanelTitle = $reviewWorkspaceActive ? 'Document Review' : $queue['title'];
 $flowPanelAction = $reviewWorkspaceActive ? 'Review submitted documents' : $next['label'];
 $showRequirementsChecklist = !$apeIsCompleted && !$examSaved;
@@ -1667,6 +1698,7 @@ render_header(($isClinicManagedApe ? 'Faculty & NTP APE Record - ' : 'APE Record
                             <div data-document-review-pane="return" hidden>
                                 <form method="post" class="space-y-3" id="apeCorrectionForm">
                                     <input type="hidden" name="action" value="request_document_correction">
+                                    <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
                                     <input type="hidden" name="review_group" value="<?= e($reviewUploadGroup) ?>">
                                     <div class="ape-review-decision-copy is-return"><span class="material-symbols-outlined" aria-hidden="true">assignment_return</span><p class="mb-0">Select at least one pending file in the list, then <?= $isClinicManagedApe ? 'record clear correction instructions' : 'give the student clear instructions' ?> and a due date.</p></div>
                                     <label class="clinic-label" for="apeResubmissionReason">Required correction instructions</label>
@@ -1855,8 +1887,11 @@ render_header(($isClinicManagedApe ? 'Faculty & NTP APE Record - ' : 'APE Record
                             </form>
                             <form method="post" class="ape-flow-action muted space-y-3">
                                 <input type="hidden" name="action" value="return_clearance">
+                                <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
                                 <label class="clinic-label">Reason for Return</label>
-                                <textarea class="clinic-textarea" name="missing_items" rows="3" placeholder="Reason for returning clearance..."><?= e($record['missing_items']) ?></textarea>
+                                <textarea class="clinic-textarea" name="missing_items" rows="3" placeholder="Reason for returning clearance..." required><?= e($record['missing_items']) ?></textarea>
+                                <label class="clinic-label">Return due date</label>
+                                <input class="clinic-input" type="date" name="follow_up_due_date" min="<?= e(date('Y-m-d')) ?>" required>
                                 <button class="btn btn-outline w-full" style="color:#b45309;border-color:rgba(180,83,9,0.2);" data-confirm-submit data-confirm-type="danger" data-confirm-title="Return clearance for correction?" data-confirm-message="This will return the clearance document to the patient for correction." data-confirm-toast="Returning clearance..."><span class="material-symbols-outlined text-[18px]">assignment_return</span> Return for Correction</button>
                             </form>
                         <?php endif; ?>
@@ -2145,7 +2180,15 @@ render_header(($isClinicManagedApe ? 'Faculty & NTP APE Record - ' : 'APE Record
             </section>
         <?php endif; ?>
     </section>
-    <?php if (in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor'], true)): ?>
+    <?php if (!ape_record_mutation_allowed($record)): ?>
+        <section class="clinic-card p-5 md:p-6 mt-5 border border-slate-200">
+            <p class="clinic-label mb-1">Previous APE record</p><h2 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">View-only cycle<?= !empty($record['academic_year']) ? ' · ' . e((string) $record['academic_year']) : '' ?></h2>
+            <p class="text-sm font-bold text-slate-500">The original record cannot be changed. Clinic correction notes are dated and added separately.</p>
+            <?php foreach ($apeAmendments as $amendment): ?><div class="rounded-xl border border-slate-200 p-3 mt-3"><strong><?= e((string) $amendment['reason']) ?></strong><p class="mb-1 mt-1 whitespace-pre-wrap"><?= e((string) $amendment['correction_note']) ?></p><small><?= e((string) ($amendment['author_name'] ?? 'Clinic staff')) ?> · <?= e(date('M d, Y g:i A', strtotime((string) $amendment['created_at']))) ?></small></div><?php endforeach; ?>
+            <?php if (in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor'], true)): ?><form method="post" class="grid gap-3 mt-4"><input type="hidden" name="action" value="add_ape_amendment"><label class="clinic-label">Reason<input class="clinic-input mt-1" name="amendment_reason" maxlength="500" required></label><label class="clinic-label">Patient-visible correction note<textarea class="clinic-textarea mt-1" name="amendment_note" maxlength="5000" required></textarea></label><button class="btn btn-outline justify-center">Add correction note</button></form><?php endif; ?>
+        </section>
+    <?php endif; ?>
+    <?php if (ape_record_mutation_allowed($record) && in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor'], true)): ?>
         <section class="clinic-card p-5 md:p-6 mt-5 <?= $apeIsInactive ? 'border border-amber-200 bg-amber-50/60' : 'border border-rose-200 bg-rose-50/40' ?>">
             <?php if ($apeIsInactive): ?>
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -2156,7 +2199,7 @@ render_header(($isClinicManagedApe ? 'Faculty & NTP APE Record - ' : 'APE Record
                 <div class="mb-4"><p class="clinic-label text-rose-800 mb-1">Doctor / administrator control</p><h2 class="font-headline text-lg font-extrabold text-rose-950 mb-1">Make this APE record inactive</h2><p class="text-sm font-bold text-rose-900 mb-0">Use only when the student withdrew, transferred, is no longer enrolled, declined APE, or has a duplicate record. This preserves documents and history while stopping APE work and reminders.</p></div>
                 <form method="post" class="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3 items-end">
                     <input type="hidden" name="action" value="mark_ape_inactive">
-                    <label class="clinic-label">Reason<select class="clinic-select mt-2" name="inactive_reason" required><option value="">Select a reason</option><?php foreach (['Withdrew from school', 'Transferred', 'No longer enrolled', 'Duplicate record', 'Declined APE', 'Other'] as $reason): ?><option value="<?= e($reason) ?>"><?= e($reason) ?></option><?php endforeach; ?></select></label>
+                    <label class="clinic-label">Reason<select class="clinic-select mt-2" name="inactive_reason" required><option value="">Select a reason</option><?php foreach (dropdown_options('ape_inactive_reason') as $reason): ?><option value="<?= e($reason) ?>"><?= e($reason) ?></option><?php endforeach; ?></select></label>
                     <label class="clinic-label">Details for Other<input class="clinic-input mt-2" name="inactive_details" maxlength="500" placeholder="Required only when Other is selected"></label>
                     <button class="btn btn-outline" data-confirm-submit data-confirm-type="danger" data-confirm-title="Make this APE record inactive?" data-confirm-message="The student will be removed from any future APE batch. Documents and history will be retained; only a doctor or administrator can reopen it." data-confirm-toast="Updating APE record..."><span class="material-symbols-outlined text-[18px]">block</span> Make inactive</button>
                 </form>

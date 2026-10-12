@@ -38,6 +38,18 @@ if ($activeQueue !== 'all' && $activeQueue !== $combinedFinalDecisionQueue && !i
 }
 
 $activeApeCycle = ape_cycle_current();
+$apeCycles = auth_db()->query('SELECT ape_cycle_id, academic_year, status FROM ape_cycles ORDER BY started_at DESC, ape_cycle_id DESC')->fetchAll();
+$requestedCycleId = (int) ($_GET['cycle'] ?? 0);
+$selectedCycle = null;
+foreach ($apeCycles as $cycle) {
+    if ((int) $cycle['ape_cycle_id'] === $requestedCycleId) {
+        $selectedCycle = $cycle;
+        break;
+    }
+}
+$selectedCycle ??= $activeApeCycle;
+$selectedCycleId = (int) ($selectedCycle['ape_cycle_id'] ?? 0);
+$historicalCycleView = $selectedCycleId > 0 && (string) ($selectedCycle['status'] ?? '') !== 'Active';
 $apeUser = current_user() ?? [];
 $schoolYearBatches = [];
 $scheduledBatchesById = [];
@@ -93,8 +105,8 @@ if ($search !== '') {
 }
 $_SESSION['ape_work_queue_state'] = $persistedApeState;
 
-$overallRecords = ape_fetch_records();
-$scopeRecords = ape_fetch_records($search, null, null, $selectedBatchId);
+$overallRecords = ape_fetch_records('', null, null, null, $selectedCycleId);
+$scopeRecords = ape_fetch_records($search, null, null, $historicalCycleView ? null : $selectedBatchId, $selectedCycleId);
 $scopeRecords = array_values(array_filter($scopeRecords, static function (array $record) use ($populationScope): bool {
     $isClinicManual = ($record['entry_mode'] ?? '') === 'Clinic Manual';
     return $populationScope === 'faculty_ntp' ? $isClinicManual : !$isClinicManual;
@@ -114,13 +126,16 @@ $batchIndicator = $selectedBatch !== null
     : 'Overall';
 $scopeDescription = $selectedBatch !== null
     ? 'All queues and totals show only patients assigned to ' . (string) $selectedBatch['batch_name'] . '. Choose Overall to show every batch.'
+    : ($historicalCycleView
+        ? 'Viewing the ' . (string) ($selectedCycle['academic_year'] ?? '') . ' cycle. Historical records are read-only.'
     : ($populationScope === 'faculty_ntp'
         ? 'All queues and totals show clinic-manual Faculty and NTP records only.'
-        : 'All queues and totals show student records from every batch.');
+        : 'All queues and totals show student records from every batch.'));
 $scopeCountLabel = $populationScope === 'faculty_ntp' ? 'Faculty & NTP records' : ($selectedBatch !== null ? 'Selected batch' : 'Student records');
 $batchQuerySuffix = $populationScope === 'faculty_ntp'
     ? '&scope=overall&population=faculty_ntp'
     : ($selectedBatchId !== null ? '&batch=' . $selectedBatchId : '&scope=overall&selection=overall');
+$batchQuerySuffix .= $selectedCycleId > 0 ? '&cycle=' . $selectedCycleId : '';
 
 $recordsByQueue = array_fill_keys(array_keys($queues), []);
 foreach ($allRecords as $record) {
@@ -284,46 +299,63 @@ render_clinic_command_header(
 <section class="clinic-card p-6" data-filter-region="ape-work-queue" aria-live="polite">
     <form method="get" data-table-filter="ape-work-queue" data-filter-region="ape-work-queue">
     <div class="ape-work-queue-toolbar-shell mb-5">
-        <div class="ape-work-queue-heading min-w-0">
-            <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Work Queue Map</h2>
-            <p class="text-xs font-bold text-slate-500 mb-0"><?= e($scopeDescription) ?></p>
-        </div>
         <div class="ape-work-queue-toolbar">
-            <div class="ape-work-queue-toolbar-actions">
-            <?php if (in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor'], true)): ?>
-                <a href="scheduling.php" class="btn btn-outline ape-work-queue-scheduling text-decoration-none">
-                    <span class="material-symbols-outlined text-[18px]">calendar_month</span>
-                    Manage Scheduling
-                </a>
-            <?php endif; ?>
-            <div class="ape-work-queue-population flex rounded-xl border border-outline-variant overflow-hidden" role="group" aria-label="APE population">
-                <?php
-                $studentScopeQuery = ['queue' => $activeQueue, 'population' => 'students'];
-                if ($search !== '') $studentScopeQuery['q'] = $search;
-                if ($selectedBatchId !== null) $studentScopeQuery['batch'] = $selectedBatchId;
-                elseif ($populationScope === 'students' && $overallRequested) {
-                    $studentScopeQuery['scope'] = 'overall';
-                    $studentScopeQuery['selection'] = 'overall';
-                }
-                $employeeScopeQuery = ['queue' => 'examination', 'scope' => 'overall', 'population' => 'faculty_ntp'];
-                if ($search !== '') $employeeScopeQuery['q'] = $search;
-                ?>
-                <a href="?<?= e(http_build_query($studentScopeQuery)) ?>" class="px-4 py-3 text-sm font-extrabold text-decoration-none whitespace-nowrap <?= $populationScope === 'students' ? 'bg-primary text-white' : 'bg-white text-slate-700 hover:bg-slate-50' ?>">Students</a>
-                <a href="?<?= e(http_build_query($employeeScopeQuery)) ?>" class="px-4 py-3 text-sm font-extrabold text-decoration-none whitespace-nowrap border-l border-outline-variant <?= $populationScope === 'faculty_ntp' ? 'bg-primary text-white' : 'bg-white text-slate-700 hover:bg-slate-50' ?>">Faculty &amp; NTP</a>
-            </div>
-            <button type="button" onclick="showModal('apeBatchPickerModal')" class="ape-work-queue-batch min-h-12 px-4 py-2 rounded-xl border border-outline-variant bg-primary-fixed flex items-center gap-3 text-left hover:border-primary transition-colors" title="<?= e($selectedBatch !== null ? 'All queues are filtered to this batch. Choose another batch or Overall.' : 'Overall view includes records from every batch.') ?>">
-                <span class="material-symbols-outlined text-primary text-[20px]">event_available</span>
-                <div class="min-w-0">
-                    <p class="text-[9px] font-black uppercase tracking-widest text-primary mb-0">Scheduled Batch</p>
-                    <p class="text-xs font-extrabold text-slate-700 mb-0 whitespace-nowrap"><?= e($batchIndicator) ?></p>
+            <div class="ape-work-queue-titlebar">
+                <div class="ape-work-queue-heading min-w-0">
+                    <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Work Queue Map</h2>
+                    <p class="text-xs font-bold text-slate-500 mb-0">Track every APE queue for the selected school year and batch.</p>
                 </div>
-                <span class="material-symbols-outlined text-primary text-[18px]">expand_more</span>
-            </button>
+                <div class="ape-work-queue-search search-input-wrap">
+                    <span class="search-icon material-symbols-outlined">search</span>
+                    <input type="text" name="q" value="<?= e($search) ?>" placeholder="Search APE records..." class="search-input">
+                </div>
             </div>
-            <div class="ape-work-queue-search search-input-wrap">
-                <span class="search-icon material-symbols-outlined">search</span>
-                <input type="text" name="q" value="<?= e($search) ?>" placeholder="Search APE records..." class="search-input">
+            <div class="ape-work-queue-filters">
+                <div class="ape-work-queue-filter ape-work-queue-cycle">
+                    <label for="ape-cycle-history">School year</label>
+                    <select id="ape-cycle-history" name="cycle" class="clinic-select" onchange="this.form.submit()">
+                        <?php foreach ($apeCycles as $cycle): ?>
+                            <option value="<?= (int) $cycle['ape_cycle_id'] ?>" <?= (int) $cycle['ape_cycle_id'] === $selectedCycleId ? 'selected' : '' ?>><?= e((string) $cycle['academic_year']) ?> · <?= e((string) $cycle['status']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="ape-work-queue-filter ape-work-queue-group">
+                    <span>Patient group</span>
+                    <div class="ape-work-queue-population flex rounded-xl border border-outline-variant overflow-hidden" role="group" aria-label="APE population">
+                        <?php
+                        $studentScopeQuery = ['queue' => $activeQueue, 'population' => 'students'];
+                        if ($search !== '') $studentScopeQuery['q'] = $search;
+                        if ($selectedBatchId !== null) $studentScopeQuery['batch'] = $selectedBatchId;
+                        elseif ($populationScope === 'students' && $overallRequested) {
+                            $studentScopeQuery['scope'] = 'overall';
+                            $studentScopeQuery['selection'] = 'overall';
+                        }
+                        $employeeScopeQuery = ['queue' => 'examination', 'scope' => 'overall', 'population' => 'faculty_ntp'];
+                        if ($search !== '') $employeeScopeQuery['q'] = $search;
+                        ?>
+                        <a href="?<?= e(http_build_query($studentScopeQuery)) ?>" class="px-4 py-3 text-sm font-extrabold text-decoration-none whitespace-nowrap <?= $populationScope === 'students' ? 'bg-primary text-white' : 'bg-white text-slate-700 hover:bg-slate-50' ?>">Students</a>
+                        <a href="?<?= e(http_build_query($employeeScopeQuery)) ?>" class="px-4 py-3 text-sm font-extrabold text-decoration-none whitespace-nowrap border-l border-outline-variant <?= $populationScope === 'faculty_ntp' ? 'bg-primary text-white' : 'bg-white text-slate-700 hover:bg-slate-50' ?>">Faculty &amp; NTP</a>
+                    </div>
+                </div>
+                <div class="ape-work-queue-filter ape-work-queue-batch-filter">
+                    <span>Scheduled batch</span>
+                    <button type="button" onclick="showModal('apeBatchPickerModal')" class="ape-work-queue-batch min-h-12 px-4 py-2 rounded-xl border border-outline-variant bg-primary-fixed flex items-center gap-3 text-left hover:border-primary transition-colors" title="<?= e($selectedBatch !== null ? 'All queues are filtered to this batch. Choose another batch or Overall.' : 'Overall view includes records from every batch.') ?>">
+                        <span class="material-symbols-outlined text-primary text-[20px]">event_available</span>
+                        <span class="text-xs font-extrabold text-slate-700 whitespace-nowrap"><?= e($batchIndicator) ?></span>
+                        <span class="material-symbols-outlined text-primary text-[18px] ml-auto">expand_more</span>
+                    </button>
+                </div>
+                <?php if (in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor'], true)): ?>
+                    <a href="scheduling.php" class="btn btn-outline ape-work-queue-scheduling text-decoration-none">
+                        <span class="material-symbols-outlined text-[18px]">settings</span>
+                        Manage Scheduling
+                    </a>
+                <?php endif; ?>
             </div>
+            <p class="ape-work-queue-scope mb-0">
+                <span class="material-symbols-outlined" aria-hidden="true">info</span>
+                <?= e($scopeDescription) ?>
+            </p>
             <?php if ($activeQueue !== 'all'): ?>
                 <input type="hidden" name="queue" value="<?= e($activeQueue) ?>">
             <?php endif; ?>

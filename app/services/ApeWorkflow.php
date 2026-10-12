@@ -6,9 +6,9 @@ require_once __DIR__ . '/AuditLog.php';
 function ape_workflow_steps(): array
 {
     return [
-        'Digital Keeping',
+        'Document submission',
         'Examination',
-        'Final Decision or Follow-up',
+        'Clinical decision or follow-up',
         'Completed',
     ];
 }
@@ -125,8 +125,8 @@ function ape_work_queues(): array
 {
     return [
         'digital_submission' => [
-            'title' => 'Digital Keeping',
-            'short_title' => 'Digital Keeping',
+            'title' => 'Document submission',
+            'short_title' => 'Document submission',
             'description' => 'Patients may upload required documents before examination and complete regular uploads within seven days afterward.',
             'icon' => 'upload_file',
         ],
@@ -137,8 +137,8 @@ function ape_work_queues(): array
             'icon' => 'stethoscope',
         ],
         'final_decision' => [
-            'title' => 'Final Decision',
-            'short_title' => 'Final Decision',
+            'title' => 'Clinical clearance decision',
+            'short_title' => 'Clinical decision',
             'description' => 'Clinic staff reviews the completed examination here while any remaining regular documents are submitted and archived.',
             'icon' => 'clinical_notes',
         ],
@@ -302,6 +302,11 @@ function ape_initial_uploads_present(array $record): bool
     return (int) ($record['requirement_count'] ?? 0) > 0
         && (int) ($record['unassigned_upload_count'] ?? 1) === 0
         && (int) ($record['required_document_count'] ?? 0) >= (int) ($record['initial_requirement_count'] ?? 0);
+}
+
+function ape_requirement_document_type(string $requirementName): string
+{
+    return $requirementName === 'Follow-up clearance' ? 'Clearance' : $requirementName;
 }
 
 function ape_upload_requirement_names(array $requirements, string $group = 'initial'): array
@@ -842,7 +847,7 @@ function ape_record_stage_label(array $record): string
 {
     if (!ape_initial_upload_phase_is_open($record)
         && !in_array('Cleared', [$record['workflow_status'] ?? '', $record['clearance_status'] ?? ''], true)) {
-        return 'Waiting for Schedule';
+        return 'Waiting for the clinic to schedule your examination';
     }
     $queueKey = ape_record_queue($record);
     $queues = ape_work_queues();
@@ -1039,9 +1044,9 @@ function ape_student_progress(array $record): array
         'percent' => $completedCount * 25,
         'active_step' => $activeStep,
         'stage_label' => match ($activeStep) {
-            1 => ape_initial_upload_phase_is_open($record) ? 'Digital Keeping' : 'Waiting for Schedule',
+            1 => ape_initial_upload_phase_is_open($record) ? 'Document submission' : 'Waiting for the clinic to schedule your examination',
             2 => 'Examination',
-            3 => 'Final Decision or Follow-up',
+            3 => 'Clinical decision or follow-up',
             4 => 'Completed',
         },
     ];
@@ -1551,6 +1556,7 @@ function ape_record_select_sql(): string
         SELECT
             ar.*,
             ar.ape_id AS id,
+            ac.status AS cycle_status,
             batch.batch_name,
             batch.patient_category AS batch_patient_category,
             batch.schedule_date AS batch_schedule_date,
@@ -1609,11 +1615,12 @@ function ape_record_select_sql(): string
                 LIMIT 1
             ), 'Pending') AS verification_status,
             COALESCE(
-                TRIM(CONCAT_WS(' ', reviewer.first_name, reviewer.middle_name, reviewer.last_name)),
+                TRIM(CONCAT_WS(' ', NULLIF(reviewer_staff.honorific, ''), reviewer.first_name, reviewer.middle_name, reviewer.last_name)),
                 (
-                    SELECT TRIM(CONCAT_WS(' ', verifier.first_name, verifier.middle_name, verifier.last_name))
+                    SELECT TRIM(CONCAT_WS(' ', NULLIF(verifier_staff.honorific, ''), verifier.first_name, verifier.middle_name, verifier.last_name))
                     FROM ape_documents verified_document
                     JOIN people verifier ON verifier.id = verified_document.verified_by_person_id
+                    LEFT JOIN clinic_staff verifier_staff ON verifier_staff.person_id = verifier.id
                     WHERE verified_document.ape_id = ar.ape_id
                     ORDER BY verified_document.verified_at DESC, verified_document.document_id DESC
                     LIMIT 1
@@ -1697,13 +1704,31 @@ function ape_record_select_sql(): string
     ";
 }
 
-function ape_fetch_records(string $search = '', ?int $limit = null, ?string $scheduleDate = null, ?int $scheduleBatchId = null): array
+function ape_active_cycle_id(): int
+{
+    try {
+        return (int) auth_db()->query("SELECT ape_cycle_id FROM ape_cycles WHERE status = 'Active' ORDER BY started_at DESC LIMIT 1")->fetchColumn();
+    } catch (Throwable) {
+        return 0;
+    }
+}
+
+function ape_fetch_records(string $search = '', ?int $limit = null, ?string $scheduleDate = null, ?int $scheduleBatchId = null, ?int $cycleId = null): array
 {
     $sql = ape_record_select_sql();
     $params = [];
+    if ($cycleId === null) {
+        $cycleId = ape_active_cycle_id();
+    }
     // Normal operational queues exclude inactive records; a deliberate staff
     // search may still retrieve one so a doctor can review or reopen it.
     $conditions = $search === '' ? ["ar.workflow_status <> 'Inactive'"] : [];
+    if ($cycleId > 0) {
+        $conditions[] = 'ar.ape_cycle_id = ?';
+        $params[] = $cycleId;
+    } else {
+        $conditions[] = '1 = 0';
+    }
     if ($scheduleBatchId !== null) {
         $conditions[] = "batch.batch_id = ? AND batch.status = 'Scheduled'";
         $params[] = $scheduleBatchId;
@@ -1753,14 +1778,17 @@ function ape_fetch_record(int $apeId): ?array
     return $stmt->fetch() ?: null;
 }
 
-function ape_fetch_patient_record(int $patientId): ?array
+function ape_fetch_patient_record(int $patientId, ?int $cycleId = null): ?array
 {
+    if ($cycleId === null) {
+        $cycleId = ape_active_cycle_id();
+    }
     $stmt = auth_db()->prepare(ape_record_select_sql() . '
-        WHERE ar.patient_id = ?
+        WHERE ar.patient_id = ?' . ($cycleId > 0 ? ' AND ar.ape_cycle_id = ?' : ' AND 1 = 0') . '
         ORDER BY ar.updated_at DESC, ar.created_at DESC
         LIMIT 1
     ');
-    $stmt->execute([$patientId]);
+    $stmt->execute($cycleId > 0 ? [$patientId, $cycleId] : [$patientId]);
     return $stmt->fetch() ?: null;
 }
 
@@ -1774,13 +1802,48 @@ function ape_fetch_patient_records(int $patientId): array
     return $stmt->fetchAll();
 }
 
+function ape_record_mutation_allowed(array $record): bool
+{
+    return (int) ($record['ape_cycle_id'] ?? 0) > 0 && (string) ($record['cycle_status'] ?? '') === 'Active';
+}
+
+function ape_assert_record_mutation_allowed(array $record): void
+{
+    if (!ape_record_mutation_allowed($record)) {
+        throw new RuntimeException('This APE cycle is closed or archived. Its records are read-only.');
+    }
+}
+
+function ape_record_amendments(int $apeId): array
+{
+    $stmt = auth_db()->prepare('SELECT a.*, TRIM(CONCAT_WS(" ", author.first_name, author.middle_name, author.last_name)) AS author_name FROM ape_record_amendments a JOIN people author ON author.id = a.created_by_person_id WHERE a.ape_id = ? ORDER BY a.created_at ASC, a.amendment_id ASC');
+    $stmt->execute([$apeId]);
+    return $stmt->fetchAll();
+}
+
+function ape_add_record_amendment(int $apeId, int $authorId, string $reason, string $note): void
+{
+    $reason = trim($reason);
+    $note = trim($note);
+    if ($reason === '' || mb_strlen($reason) > 500 || $note === '' || mb_strlen($note) > 5000) {
+        throw new InvalidArgumentException('Provide an amendment reason and correction note within the allowed length.');
+    }
+    $record = ape_fetch_record($apeId);
+    if (!$record || !in_array((string) ($record['cycle_status'] ?? ''), ['Closed', 'Archived'], true)) {
+        throw new InvalidArgumentException('Amendments are available only for closed or archived APE records.');
+    }
+    auth_db()->prepare('INSERT INTO ape_record_amendments (ape_id, reason, correction_note, created_by_person_id) VALUES (?, ?, ?, ?)')->execute([$apeId, $reason, $note, $authorId]);
+    ape_log_activity($apeId, $authorId, 'Added historical APE amendment', $reason);
+}
+
 function ape_requirements_for_record(int $apeId): array
 {
     $stmt = auth_db()->prepare("
         SELECT r.*, COALESCE(r.upload_group, 'initial') AS upload_group,
-               TRIM(CONCAT_WS(' ', checker.first_name, checker.middle_name, checker.last_name)) AS checked_by_name
+               TRIM(CONCAT_WS(' ', NULLIF(checker_staff.honorific, ''), checker.first_name, checker.middle_name, checker.last_name)) AS checked_by_name
         FROM ape_requirements r
         LEFT JOIN people checker ON checker.id = r.checked_by_person_id
+        LEFT JOIN clinic_staff checker_staff ON checker_staff.person_id = checker.id
         WHERE r.ape_id = ?
         ORDER BY r.requirement_id ASC
     ");
@@ -1794,7 +1857,7 @@ function ape_requirements_for_record(int $apeId): array
         }
     }
     foreach ($requirements as &$requirement) {
-        $requirement['_latest_document'] = $latestByType[(string) $requirement['requirement_name']] ?? null;
+        $requirement['_latest_document'] = $latestByType[ape_requirement_document_type((string) $requirement['requirement_name'])] ?? null;
     }
     unset($requirement);
     return $requirements;
@@ -1804,11 +1867,13 @@ function ape_documents_for_record(int $apeId): array
 {
     $stmt = auth_db()->prepare("
         SELECT d.*,
-               TRIM(CONCAT_WS(' ', uploader.first_name, uploader.middle_name, uploader.last_name)) AS uploaded_by_name,
-               TRIM(CONCAT_WS(' ', verifier.first_name, verifier.middle_name, verifier.last_name)) AS verified_by_name
+               TRIM(CONCAT_WS(' ', NULLIF(uploader_staff.honorific, ''), uploader.first_name, uploader.middle_name, uploader.last_name)) AS uploaded_by_name,
+               TRIM(CONCAT_WS(' ', NULLIF(verifier_staff.honorific, ''), verifier.first_name, verifier.middle_name, verifier.last_name)) AS verified_by_name
         FROM ape_documents d
         LEFT JOIN people uploader ON uploader.id = d.uploaded_by_person_id
         LEFT JOIN people verifier ON verifier.id = d.verified_by_person_id
+        LEFT JOIN clinic_staff uploader_staff ON uploader_staff.person_id = uploader.id
+        LEFT JOIN clinic_staff verifier_staff ON verifier_staff.person_id = verifier.id
         WHERE d.ape_id = ?
         ORDER BY d.uploaded_at DESC, d.document_id DESC
     ");
@@ -1819,9 +1884,10 @@ function ape_documents_for_record(int $apeId): array
 function ape_findings_for_record(int $apeId): array
 {
     $stmt = auth_db()->prepare("
-        SELECT f.*, TRIM(CONCAT_WS(' ', recorder.first_name, recorder.middle_name, recorder.last_name)) AS recorded_by_name
+        SELECT f.*, TRIM(CONCAT_WS(' ', NULLIF(recorder_staff.honorific, ''), recorder.first_name, recorder.middle_name, recorder.last_name)) AS recorded_by_name
         FROM ape_findings f
         LEFT JOIN people recorder ON recorder.id = f.recorded_by_person_id
+        LEFT JOIN clinic_staff recorder_staff ON recorder_staff.person_id = recorder.id
         WHERE f.ape_id = ?
         ORDER BY f.recorded_at DESC, f.finding_id DESC
     ");
@@ -1834,10 +1900,11 @@ function ape_activities_for_patient_record(int $apeId, int $patientId, int $limi
     $limit = max(1, min(200, $limit));
     $stmt = auth_db()->prepare("
         SELECT l.*, l.action AS action_label,
-               TRIM(CONCAT_WS(' ', actor.first_name, actor.middle_name, actor.last_name)) AS user_name
+               TRIM(CONCAT_WS(' ', NULLIF(actor_staff.honorific, ''), actor.first_name, actor.middle_name, actor.last_name)) AS user_name
         FROM ape_activity_logs l
         INNER JOIN ape_records ar ON ar.ape_id = l.ape_id AND ar.patient_id = ?
         LEFT JOIN people actor ON actor.id = l.performed_by_person_id
+        LEFT JOIN clinic_staff actor_staff ON actor_staff.person_id = actor.id
         WHERE l.ape_id = ?
         ORDER BY l.created_at DESC, l.activity_id DESC
         LIMIT {$limit}
@@ -1862,11 +1929,13 @@ function ape_seed_default_requirements(int $apeId, string $status = 'Missing'): 
     }
 }
 
-function ape_log_activity(int $apeRecordId, ?int $personId, string $actionLabel, ?string $notes = null): void
+function ape_log_activity(int $apeRecordId, ?int $personId, string $actionLabel, ?string $notes = null): int
 {
     $stmt = auth_db()->prepare('INSERT INTO ape_activity_logs (ape_id, performed_by_person_id, action, notes) VALUES (?, ?, ?, ?)');
     $stmt->execute([$apeRecordId, $personId ?: null, $actionLabel, $notes]);
+    $activityId = (int) auth_db()->lastInsertId();
     audit_log_event('ape', $actionLabel, $personId ?: null, 'staff', 'ape_record', $apeRecordId, ['notes' => $notes]);
+    return $activityId;
 }
 
 function ape_document_storage_root(): string

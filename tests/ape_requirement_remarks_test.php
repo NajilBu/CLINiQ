@@ -30,6 +30,12 @@ $requirements = [[
 ]];
 
 expect_requirement_remarks(
+    ape_requirement_document_type('Follow-up clearance') === 'Clearance'
+        && ape_requirement_document_type('TB clearance certificate') === 'TB clearance certificate',
+    'The special clearance requirement must map to the Clearance document type without changing normal requirements.'
+);
+
+expect_requirement_remarks(
     ape_phase_three_review_group($record, $requirements) === 'follow_up',
     'A returned requirement must remain in the Follow-up Phase 3 group.'
 );
@@ -65,6 +71,39 @@ expect_requirement_remarks(
 expect_requirement_remarks(
     str_contains($view, 'name="missing_items"') && str_contains($view, 'name="follow_up_due_date"'),
     'The Phase 3 return panel must expose both required staff fields.'
+);
+expect_requirement_remarks(
+    str_contains($view, "'request_document_correction', 'return_clearance'")
+        && str_contains($view, 'Only administrators, doctors, and nurses can manage clinical APE decisions.'),
+    'Only clinical staff may return APE documents or clearances for correction.'
+);
+expect_requirement_remarks(
+    str_contains($view, "Enter the reason the clearance must be corrected.")
+        && str_contains($view, "INSERT INTO ape_requirements (ape_id, requirement_name, status, remarks, upload_group, upload_due_date)"),
+    'Clearance returns must require instructions and preserve their follow-up deadline.'
+);
+$workflow = file_get_contents(dirname(__DIR__) . '/app/services/ApeWorkflow.php');
+expect_requirement_remarks(
+    $workflow !== false
+        && str_contains($view, 'null, (string) $activityId')
+        && str_contains($workflow, 'function ape_log_activity(int $apeRecordId, ?int $personId, string $actionLabel, ?string $notes = null): int'),
+    'Each correction email must be deduplicated by its own activity-log event.'
+);
+$patientStatus = file_get_contents(dirname(__DIR__) . '/patient-portal/patient-ape-status.php');
+expect_requirement_remarks(
+    $patientStatus !== false && str_contains($patientStatus, 'name="_csrf" value="<?= student_e(csrf_token()) ?>"'),
+    'Student APE uploads must include a server-rendered CSRF token.'
+);
+expect_requirement_remarks(
+    str_contains($view, "document_type = 'Clearance' AND verification_status = 'Pending' AND document_id = (SELECT latest.document_id")
+        && str_contains($view, 'There is no submitted clearance document to return.')
+        && $patientStatus !== false
+        && str_contains($patientStatus, "ape_requirement_document_type((string) \$uploadRequirement['requirement_name'])"),
+    'Clearance corrections must replace the current Clearance file without changing historical uploads.'
+);
+expect_requirement_remarks(
+    substr_count($view, 'name="_csrf" value="<?= e(csrf_token()) ?>"') >= 2,
+    'Staff correction forms must include server-rendered CSRF tokens.'
 );
 
 echo "APE Phase 3 requirement instruction test passed. No database writes.\n";

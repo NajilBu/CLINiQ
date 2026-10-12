@@ -227,8 +227,8 @@ render_clinic_command_header(
                     <div class="w-12 h-12 rounded-xl bg-[var(--cliniq-surface-low)] text-[var(--cliniq-primary)] flex items-center justify-center mb-4">
                         <span class="material-symbols-outlined text-[26px]">groups</span>
                     </div>
-                    <h3 class="font-headline text-2xl font-extrabold text-[#17261d] mb-1" id="apeBatchModalTitle">Create Student APE Batch</h3>
-                    <p class="text-sm font-bold text-slate-500 mb-0">Select complete student sections for this examination batch. The list shows 5 sections per page.</p>
+                    <h3 class="font-headline text-2xl font-extrabold text-[#17261d] mb-1" id="apeBatchModalTitle">Schedule Student Examination Groups</h3>
+                    <p class="text-sm font-bold text-slate-500 mb-0">Select complete student program, year, and section groups for this examination. The list shows 5 groups per page.</p>
                 </div>
                 <button type="button" class="btn btn-secondary !p-3" id="closeApeBatchModalButton" aria-label="Close batch form">
                     <span class="material-symbols-outlined">close</span>
@@ -241,8 +241,8 @@ render_clinic_command_header(
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label class="clinic-label" for="apeBatchName">Batch Name</label>
-                        <input class="clinic-input" id="apeBatchName" name="batch_name" maxlength="120" placeholder="Student Batch A" aria-describedby="apeBatchNameError" required>
+                        <label class="clinic-label" for="apeBatchName">Examination Group Name</label>
+                        <input class="clinic-input" id="apeBatchName" name="batch_name" maxlength="120" placeholder="Student examination group A" aria-describedby="apeBatchNameError" required>
                         <p class="hidden text-xs font-bold text-red-600 mt-2 mb-0" id="apeBatchNameError"></p>
                     </div>
                     <div>
@@ -271,8 +271,8 @@ render_clinic_command_header(
 
                 <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-4">
                     <div>
-                        <label class="clinic-label" for="apeBatchSearch">Search Student Sections</label>
-                        <input class="clinic-input" id="apeBatchSearch" type="search" placeholder="Search a student section">
+                        <label class="clinic-label" for="apeBatchSearch">Search Student Groups</label>
+                        <input class="clinic-input" id="apeBatchSearch" type="search" placeholder="Search by program, year, or section">
                     </div>
                     <div class="flex items-center justify-between gap-3">
                         <p class="text-xs font-black uppercase tracking-wider text-slate-500 mb-0"><span id="apeBatchSelectedCount">0</span> / <span id="apeBatchLimitCount">50</span> patients selected</p>
@@ -294,7 +294,7 @@ render_clinic_command_header(
                                 </span>
                             </label>
                         <?php endforeach; ?>
-                        <div class="hidden px-4 py-8 text-center text-sm font-bold text-slate-500" id="apeBatchEmptyState">No available student sections match your search.</div>
+                        <div class="hidden px-4 py-8 text-center text-sm font-bold text-slate-500" id="apeBatchEmptyState">No available student groups match your search.</div>
                     </div>
                     <nav class="flex items-center justify-center gap-2" aria-label="Batch group pages" id="apeBatchPagination">
                         <button type="button" class="btn btn-secondary !p-3" id="apeBatchPreviousPage" aria-label="Previous page"><span class="material-symbols-outlined">chevron_left</span></button>
@@ -306,7 +306,7 @@ render_clinic_command_header(
                 <p class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-bold text-red-700" id="apeBatchFormError" role="alert"></p>
                 <div class="grid grid-cols-2 gap-3">
                     <button type="button" class="btn btn-secondary justify-center" id="cancelApeBatchButton">Cancel</button>
-                    <button type="submit" class="btn btn-primary justify-center" id="createApeBatchButton">Create Batch</button>
+                    <button type="submit" class="btn btn-primary justify-center" id="createApeBatchButton">Schedule Group</button>
                 </div>
             </form>
         </div>

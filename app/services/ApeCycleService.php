@@ -89,13 +89,16 @@ function ape_cycle_fetch(int $cycleId): ?array
     ensure_ape_cycle_schema();
     $stmt = auth_db()->prepare("
         SELECT ac.*,
-               TRIM(CONCAT_WS(' ', starter.first_name, starter.middle_name, starter.last_name)) AS started_by_name,
-               TRIM(CONCAT_WS(' ', closer.first_name, closer.middle_name, closer.last_name)) AS closed_by_name,
-               TRIM(CONCAT_WS(' ', archiver.first_name, archiver.middle_name, archiver.last_name)) AS archived_by_name
+               TRIM(CONCAT_WS(' ', NULLIF(starter_staff.honorific, ''), starter.first_name, starter.middle_name, starter.last_name)) AS started_by_name,
+               TRIM(CONCAT_WS(' ', NULLIF(closer_staff.honorific, ''), closer.first_name, closer.middle_name, closer.last_name)) AS closed_by_name,
+               TRIM(CONCAT_WS(' ', NULLIF(archiver_staff.honorific, ''), archiver.first_name, archiver.middle_name, archiver.last_name)) AS archived_by_name
         FROM ape_cycles ac
         LEFT JOIN people starter ON starter.id = ac.started_by_person_id
         LEFT JOIN people closer ON closer.id = ac.closed_by_person_id
         LEFT JOIN people archiver ON archiver.id = ac.archived_by_person_id
+        LEFT JOIN clinic_staff starter_staff ON starter_staff.person_id = starter.id
+        LEFT JOIN clinic_staff closer_staff ON closer_staff.person_id = closer.id
+        LEFT JOIN clinic_staff archiver_staff ON archiver_staff.person_id = archiver.id
         WHERE ac.ape_cycle_id = ?
         LIMIT 1
     ");
@@ -519,10 +522,11 @@ function ape_schedule_batches(int $cycleId): array
     $stmt = auth_db()->prepare("
         SELECT b.*,
                COUNT(ar.ape_id) AS assigned_count,
-               TRIM(CONCAT_WS(' ', creator.first_name, creator.middle_name, creator.last_name)) AS created_by_name
+               TRIM(CONCAT_WS(' ', NULLIF(creator_staff.honorific, ''), creator.first_name, creator.middle_name, creator.last_name)) AS created_by_name
         FROM ape_schedule_batches b
         LEFT JOIN ape_records ar ON ar.schedule_batch_id = b.batch_id
         LEFT JOIN people creator ON creator.id = b.created_by_person_id
+        LEFT JOIN clinic_staff creator_staff ON creator_staff.person_id = creator.id
         WHERE b.ape_cycle_id = ?
         GROUP BY b.batch_id
         ORDER BY b.schedule_date, b.start_time, b.batch_id
@@ -826,6 +830,11 @@ function cancel_ape_schedule_batch(int $batchId, int $cycleId, ?int $actorPerson
     $db = auth_db();
     $db->beginTransaction();
     try {
+        $cycle = $db->prepare("SELECT ape_cycle_id FROM ape_cycles WHERE ape_cycle_id = ? AND status = 'Active' FOR UPDATE");
+        $cycle->execute([$cycleId]);
+        if (!$cycle->fetchColumn()) {
+            throw new RuntimeException('Only an active APE cycle can change schedule batches.');
+        }
         $batch = $db->prepare("
             SELECT batch_name, schedule_date, start_time, end_time FROM ape_schedule_batches
             WHERE batch_id = ? AND ape_cycle_id = ? AND status = 'Scheduled'
@@ -886,12 +895,13 @@ function reschedule_ape_record(int $apeId, int $targetBatchId, ?int $actorPerson
     $db = auth_db();
     $db->beginTransaction();
     try {
-        $record = $db->prepare('SELECT ape_id, ape_cycle_id, patient_id, schedule_batch_id, exam_date, entry_mode, workflow_status FROM ape_records WHERE ape_id = ? FOR UPDATE');
+        $record = $db->prepare("SELECT ar.ape_id, ar.ape_cycle_id, ar.patient_id, ar.schedule_batch_id, ar.exam_date, ar.entry_mode, ar.workflow_status, ac.status AS cycle_status FROM ape_records ar LEFT JOIN ape_cycles ac ON ac.ape_cycle_id = ar.ape_cycle_id WHERE ar.ape_id = ? FOR UPDATE");
         $record->execute([$apeId]);
         $record = $record->fetch();
         if (!$record || ($record['entry_mode'] ?? '') !== 'Student Scheduled') {
             throw new RuntimeException('Only a scheduled student APE can be moved to another batch.');
         }
+        ape_assert_record_mutation_allowed($record);
         if (!empty($record['exam_date'])) {
             throw new RuntimeException('An examined APE cannot be rescheduled.');
         }

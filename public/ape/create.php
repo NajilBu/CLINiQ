@@ -2,8 +2,10 @@
 
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/ApeWorkflow.php';
+require_once __DIR__ . '/../../app/services/ApeCycleService.php';
 require_login();
 ensure_ape_workflow_schema();
+ensure_ape_cycle_schema();
 
 $apeUser = current_user() ?? [];
 if (!in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor', 'nurse'], true)) {
@@ -13,6 +15,12 @@ if (!in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor', 'nurse'], t
 }
 
 $apeDb = auth_db();
+$activeCycle = $apeDb->query("SELECT ape_cycle_id, academic_year FROM ape_cycles WHERE status = 'Active' ORDER BY started_at DESC LIMIT 1")->fetch() ?: null;
+if ($activeCycle === null) {
+    flash_message('error', 'Start an APE cycle before creating a manual APE record.');
+    header('Location: index.php');
+    exit;
+}
 $patients = $apeDb->query("
     SELECT pt.person_id AS id, p.id_number, p.first_name, p.last_name,
            se.role_classification AS patient_type,
@@ -32,18 +40,15 @@ $appointmentOptions = $apeDb->query("
     ORDER BY a.appointment_datetime DESC
     LIMIT 200
 ")->fetchAll();
-$currentYear = (int) date('Y');
 $selectedManualPatientId = filter_input(INPUT_GET, 'patient_id', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: 0;
-$academicYear = (int) date('n') >= 6
-    ? $currentYear . '-' . ($currentYear + 1)
-    : ($currentYear - 1) . '-' . $currentYear;
+$academicYear = (string) $activeCycle['academic_year'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $storedFile = null;
     try {
         $patientId = (int) ($_POST['patient_id'] ?? 0);
         $staffPersonId = (int) (current_user()['person_id'] ?? 0);
-        $academicYear = trim((string) ($_POST['academic_year'] ?? ''));
+        $academicYear = (string) $activeCycle['academic_year'];
         $appointmentId = (int) ($_POST['appointment_id'] ?? 0) ?: null;
         $requirementStatus = 'Checked';
         $verificationStatus = 'Verified';
@@ -51,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $clinicalRemarks = trim((string) ($_POST['clinical_remarks'] ?? ''));
 
         if ($patientId <= 0 || $staffPersonId <= 0 || $academicYear === '') {
-            throw new InvalidArgumentException('Patient, academic year, and clinic staff identity are required.');
+            throw new InvalidArgumentException('Patient and clinic staff identity are required.');
         }
         if (!preg_match('/^(\d{4})-(\d{4})$/', $academicYear, $yearParts) || (int) $yearParts[2] !== (int) $yearParts[1] + 1) {
             throw new InvalidArgumentException('Academic year must use consecutive years, such as 2026-2027.');
@@ -97,13 +102,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $apeDb->beginTransaction();
         $stmt = $apeDb->prepare("
             INSERT INTO ape_records (
-                patient_id, academic_year, exam_date, appointment_id,
+                ape_cycle_id, patient_id, academic_year, exam_date, appointment_id,
                 entry_mode, requirement_status, workflow_status, clearance_status,
                 follow_up_required, clinical_remarks, patient_visible_note,
                 reviewed_by_person_id
-            ) VALUES (?, ?, ?, ?, 'Clinic Manual', ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, 'Clinic Manual', ?, ?, ?, ?, ?, ?, ?)
         ");
         $stmt->execute([
+            (int) $activeCycle['ape_cycle_id'],
             $patientId,
             $academicYear,
             trim((string) ($_POST['exam_date'] ?? '')) ?: null,
@@ -205,8 +211,8 @@ render_header('Add APE Record');
                     </select>
                 </div>
                 <div class="md:col-span-2">
-                    <label class="clinic-label">Academic Year</label>
-                    <input class="clinic-input" name="academic_year" value="<?= e($academicYear) ?>" placeholder="2026-2027" required>
+                    <label class="clinic-label">Active APE Cycle</label>
+                    <div class="clinic-input bg-slate-50 text-slate-600"><?= e($academicYear) ?></div>
                 </div>
                 <p class="md:col-span-2 text-xs font-bold text-slate-500 mb-0">This entry is clinic-managed: its submitted document is marked verified and no patient-side APE action is created.</p>
             </div>

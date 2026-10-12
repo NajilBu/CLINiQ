@@ -9,7 +9,17 @@ if (($profile['account_type'] ?? '') !== 'student') {
 }
 $patientId = (int) $profile['person_id'];
 ensure_ape_workflow_schema();
-$apeRecord = ape_fetch_patient_record($patientId);
+$studentApeRecords = ape_fetch_patient_records($patientId);
+$requestedApeCycleId = (int) ($_GET['cycle'] ?? 0);
+$apeRecord = $requestedApeCycleId > 0 ? ape_fetch_patient_record($patientId, $requestedApeCycleId) : ape_fetch_patient_record($patientId);
+$studentApeCycles = [];
+foreach ($studentApeRecords as $studentApeHistoryRecord) {
+    $studentApeCycles[(int) ($studentApeHistoryRecord['ape_cycle_id'] ?? 0)] = [
+        'ape_cycle_id' => (int) ($studentApeHistoryRecord['ape_cycle_id'] ?? 0),
+        'academic_year' => (string) ($studentApeHistoryRecord['academic_year'] ?? ''),
+        'cycle_status' => (string) ($studentApeHistoryRecord['cycle_status'] ?? ''),
+    ];
+}
 $uploadError = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'upload_ape_documents') {
@@ -19,6 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
         if (!$apeRecord) {
             throw new RuntimeException('The clinic must create your APE record before you can upload documents.');
         }
+        ape_assert_record_mutation_allowed($apeRecord);
         if (ape_record_is_inactive($apeRecord)) {
             throw new RuntimeException('Your APE record is currently inactive. Please contact the clinic if you need help continuing the process.');
         }
@@ -32,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
         $uploadRequirements = ape_requirements_for_record((int) $apeRecord['ape_id']);
         $documentTypesByKey = [];
         foreach ($uploadRequirements as $uploadRequirement) {
-            $documentTypesByKey['r' . (int) $uploadRequirement['requirement_id']] = $uploadRequirement['requirement_name'];
+            $documentTypesByKey['r' . (int) $uploadRequirement['requirement_id']] = ape_requirement_document_type((string) $uploadRequirement['requirement_name']);
         }
         if (!$documentTypesByKey) {
             throw new RuntimeException('The clinic has not listed any APE requirements for upload yet.');
@@ -159,11 +170,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
     }
 }
 
-$apeRecord = ape_fetch_patient_record($patientId);
+$apeRecord = $requestedApeCycleId > 0 ? ape_fetch_patient_record($patientId, $requestedApeCycleId) : ape_fetch_patient_record($patientId);
 $requirements = $apeRecord ? ape_requirements_for_record((int) $apeRecord['ape_id']) : [];
 $uploadedDocuments = $apeRecord ? ape_documents_for_record((int) $apeRecord['ape_id']) : [];
 $findings = $apeRecord ? ape_findings_for_record((int) $apeRecord['ape_id']) : [];
 $allActivities = $apeRecord ? ape_activities_for_patient_record((int) $apeRecord['ape_id'], $patientId, 200) : [];
+$apeAmendments = $apeRecord ? ape_record_amendments((int) $apeRecord['ape_id']) : [];
 $studentActivityLabels = [
     'Created APE record' => ['Your APE record was opened', 'assignment_turned_in'],
     'Faculty/NTP APE record populated' => ['Your APE record was opened', 'assignment_turned_in'],
@@ -197,6 +209,7 @@ $historyPage = max(1, min($historyTotalPages, (int) ($_GET['ape_history_page'] ?
 $activities = array_slice($studentActivities, ($historyPage - 1) * $historyLimit, $historyLimit);
 $apeStatus = $apeRecord['workflow_status'] ?? 'Not Started';
 $apeIsInactive = ape_record_is_inactive($apeRecord ?? []);
+$apeReadOnly = $apeRecord && !ape_record_mutation_allowed($apeRecord);
 $clearanceStatus = $apeRecord['clearance_status'] ?? 'Pending';
 $studentNote = trim((string) ($apeRecord['patient_visible_note'] ?? ''));
 $missingItems = trim((string) ($apeRecord['missing_items'] ?? ''));
@@ -252,7 +265,7 @@ $stepThreeDocumentUploadRequired = $examCompleted
     && $apeStatus !== 'Cleared'
     && ($actionableFollowUpUploads !== [] || $actionablePostExamReplacements !== []);
 $studentDocumentsStillNeeded = $examCompleted && !$allRequiredDocumentsUploaded;
-$canUploadDocuments = $apeRecord
+$canUploadDocuments = !$apeReadOnly && $apeRecord
     && !$apeIsInactive
     && $clearanceStatus !== 'Cleared'
     && $apeStatus !== 'Cleared'
@@ -316,18 +329,18 @@ $showActivity = (bool) $apeRecord;
 $headerBadge = $clearanceStatus === 'Cleared' ? 'student-badge-success' : ($actionNeeded ? 'student-badge-warning' : 'student-badge-info');
 $actionBadgeLabel = match (true) {
     $apeIsInactive => 'Record Inactive',
-    !$initialUploadPhaseOpen && $clearanceStatus !== 'Cleared' => 'Waiting for Schedule',
+    !$initialUploadPhaseOpen && $clearanceStatus !== 'Cleared' => 'Waiting for the clinic to schedule your examination',
     $documentsNeedCorrection => 'Correction Needed',
     $studentDocumentsStillNeeded => 'Documents Needed',
-    $studentProgress['active_step'] === 1 => 'Digital Keeping',
+    $studentProgress['active_step'] === 1 => 'Document submission',
     $apeQueue === 'follow_up' && (int) ($apeRecord['deferred_requirement_count'] ?? 0) > 0 && !ape_deferred_submission_complete($apeRecord) => 'Follow-up Documents Needed',
     $studentProgress['active_step'] === 3 => 'Under Clinic Review',
     $studentProgress['active_step'] === 4 => 'Completed',
-    $apeQueue === 'digital_submission' => $documentsAwaitingReview ? 'Under Clinic Review' : 'Digital Keeping',
+    $apeQueue === 'digital_submission' => $documentsAwaitingReview ? 'Submitted — waiting for clinic review' : 'Document submission',
     $apeQueue === 'follow_up' => 'Follow-up Required',
     $requirementsNeedCorrection => 'Correction Needed',
     $apeStatus === 'Follow-up Required' => 'Follow-up Required',
-    $apeQueue === 'examination' => ape_examination_is_available($apeRecord) ? 'Examination Now' : 'Waiting for Schedule',
+    $apeQueue === 'examination' => ape_examination_is_available($apeRecord) ? 'Examination Now' : 'Waiting for the clinic to schedule your examination',
     $documentsAwaitingReview => 'Under Clinic Review',
     $apeStatus === 'Reviewed' => 'Final Decision Pending',
     default => 'Current Step',
@@ -369,7 +382,7 @@ $flowSteps = [
     [
         'number' => 3,
         'icon' => 'medical_services',
-        'title' => 'Final Decision or Follow-up',
+        'title' => 'Clinical decision or follow-up',
         'copy' => $studentProgress['steps'][3]['active']
             ? ($stepThreeDocumentUploadRequired
                 ? 'The clinic requested document follow-up. Submit the required files below, then the clinic will review them.'
@@ -408,7 +421,8 @@ foreach ($requirements as $requirement) {
     $name = $requirement['requirement_name'];
     $icon = $documentIcons[$name] ?? 'upload_file';
     $documentKey = 'r' . (int) $requirement['requirement_id'];
-    $uploadedDocument = $latestDocumentByType[$name] ?? null;
+    $documentType = ape_requirement_document_type((string) $name);
+    $uploadedDocument = $latestDocumentByType[$documentType] ?? null;
     if ($uploadedDocument) {
         $verification = $uploadedDocument['verification_status'];
         $fileExtension = strtolower(pathinfo((string) ($uploadedDocument['original_filename'] ?? ''), PATHINFO_EXTENSION));
@@ -433,7 +447,7 @@ foreach ($requirements as $requirement) {
                 'Needs Correction' => $requirement['remarks'] ?? 'The clinic requested a corrected copy.',
                 default => 'Uploaded and waiting for clinic verification.',
             },
-            'action' => $verification === 'Needs Correction' ? 'Replace' : ($verification === 'Verified' ? 'Verified' : 'Under Review'),
+            'action' => $verification === 'Needs Correction' ? 'Replace file' : ($verification === 'Verified' ? 'Verified' : 'Waiting for clinic review'),
             'button' => $verification === 'Needs Correction' && $canUploadDocuments ? 'student-button' : 'student-button-secondary student-button-disabled',
             'disabled' => $verification !== 'Needs Correction' || !$canUploadDocuments,
         ];
@@ -502,6 +516,20 @@ render_student_header('APE Status', 'ape');
         <?= student_e($clearanceStatus) ?>
     </span>
 </section>
+
+<?php if ($studentApeCycles): ?>
+    <form method="get" class="student-card student-card-pad mb-4">
+        <label class="student-label" for="ape-cycle-history">APE school year</label>
+        <select id="ape-cycle-history" name="cycle" class="student-select" onchange="this.form.submit()">
+            <?php foreach ($studentApeCycles as $cycle): ?><option value="<?= (int) $cycle['ape_cycle_id'] ?>" <?= (int) ($apeRecord['ape_cycle_id'] ?? 0) === (int) $cycle['ape_cycle_id'] ? 'selected' : '' ?>><?= student_e($cycle['academic_year']) ?><?= $cycle['cycle_status'] !== '' ? ' · ' . student_e($cycle['cycle_status']) : '' ?></option><?php endforeach; ?>
+        </select>
+        <?php if ($apeReadOnly): ?><p class="student-card-copy mt-2 mb-0">This APE from a previous school year can be viewed but cannot be changed.</p><?php endif; ?>
+    </form>
+<?php endif; ?>
+
+<?php if ($apeAmendments): ?>
+            <section class="student-card student-card-pad mb-4"><h2 class="student-card-title">Clinic correction notes</h2><p class="student-card-copy">Notes added by the clinic to explain corrections to this previous APE record.</p><?php foreach ($apeAmendments as $amendment): ?><div class="student-note student-note-info mt-3"><div><strong><?= student_e((string) $amendment['reason']) ?></strong><br><?= student_e((string) $amendment['correction_note']) ?></div></div><?php endforeach; ?></section>
+<?php endif; ?>
 
 <?php if (isset($_GET['uploaded'])): ?>
     <div class="student-note student-note-success student-toast" data-student-toast role="status" aria-live="polite">
@@ -584,7 +612,7 @@ render_student_header('APE Status', 'ape');
             <div class="student-ape-mobile-batch">
                 <span class="material-symbols-outlined">event_available</span>
                 <div>
-                    <span class="student-eyebrow">APE batch</span>
+            <span class="student-eyebrow">Scheduled examination group</span>
                     <strong><?= student_e($apeRecord['batch_name']) ?></strong>
                     <span><?= student_e($batchScheduleLabel) ?></span>
                 </div>
@@ -614,7 +642,7 @@ render_student_header('APE Status', 'ape');
                     $isActive = $isCurrent && !$waitingForSchedule;
                     $stepClass = $isDone ? 'is-done' : ($isActive ? 'is-current' : 'is-locked');
                     $badgeClass = ($isDone || $isSubmitted) ? 'student-badge-success' : ($isActive ? 'student-badge-warning' : 'student-badge-info');
-                    $badgeLabel = $waitingForSchedule ? 'Waiting for schedule' : ($isSubmitted ? 'Submitted' : ($isDone ? 'Done' : ($isActive ? ($stepNumber === 1 ? 'In Progress' : 'Current') : ($uploadsRemainOpen ? 'Uploads open' : 'Next'))));
+                    $badgeLabel = $waitingForSchedule ? 'Waiting for clinic schedule' : ($isSubmitted ? 'Submitted' : ($isDone ? 'Done' : ($isActive ? ($stepNumber === 1 ? 'In Progress' : 'Current') : ($uploadsRemainOpen ? 'Uploads open' : 'Next'))));
                     $stepTitle = $step['title'];
                     $stepCopy = $step['copy'];
                     ?>
@@ -658,6 +686,7 @@ render_student_header('APE Status', 'ape');
         <div class="student-card-pad">
             <form method="post" enctype="multipart/form-data" id="ape-batch-upload-form" data-no-loading>
                 <input type="hidden" name="action" value="upload_ape_documents">
+                <input type="hidden" name="_csrf" value="<?= student_e(csrf_token()) ?>">
                 <p class="ape-document-guidance"><span class="material-symbols-outlined" aria-hidden="true">lock</span><span>Upload clinic-requested files only. <a href="<?= student_e(student_legal_url('privacy')) ?>" target="_blank" rel="noopener" class="student-auth-link">Privacy Notice</a></span></p>
             <?php if ($missingDocumentCount > 0): ?>
                 <details class="ape-missing-documents mb-4">
