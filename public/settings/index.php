@@ -29,16 +29,12 @@ $dropdownCategoryLabels = [
 ];
 $dropdownGroupCategories = [
     'person_category' => 'students',
-    'year_level' => 'students',
-    'department' => 'students',
-    'student_program' => 'students',
     'student_section' => 'students',
+    'employment_type' => 'students',
+    'non_enrollment_reason' => 'students',
     'blood_type' => 'students',
     'guardian_relationship' => 'students',
-    'appointment_purpose' => 'students',
-    'visit_status' => 'visits',
     'visit_purpose' => 'visits',
-    'visit_source' => 'visits',
     'referral_type' => 'visits',
     'incident_type' => 'incidents',
     'incident_condition' => 'incidents',
@@ -46,9 +42,7 @@ $dropdownGroupCategories = [
     'incident_bleeding' => 'incidents',
     'incident_pain_level' => 'incidents',
     'incident_mobility' => 'incidents',
-    'ape_requirement_status' => 'ape',
-    'ape_verification_status' => 'ape',
-    'ape_workflow_status' => 'ape',
+    'ape_inactive_reason' => 'ape',
     'inventory_return_condition' => 'inventory',
 ];
 ensure_staff_profiles_schema();
@@ -161,9 +155,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 update_staff_profile($_POST);
                 audit_log_event('accounts', 'staff_profile_updated', $updatedBy, 'staff', 'account', (int) ($_POST['user_id'] ?? 0) ?: null);
                 if ((int) ($_POST['user_id'] ?? 0) === (int) ($user['id'] ?? 0)) {
-                    $_SESSION['user']['name'] = trim((string) ($_POST['name'] ?? $user['name']));
+                    $staffName = trim((string) ($_POST['name'] ?? $user['name']));
+                    $_SESSION['user']['name'] = staff_display_name($staffName, normalize_staff_honorific($_POST['honorific'] ?? ''));
                     $_SESSION['user']['id_number'] = strtoupper(trim((string) ($_POST['id_number'] ?? $user['id_number'])));
-                    [$firstName, $middleName, $lastName] = split_staff_profile_name($_SESSION['user']['name']);
+                    [$firstName, $middleName, $lastName] = split_staff_profile_name($staffName);
                     $_SESSION['user']['email'] = strtolower(str_replace(' ', '', $lastName) . '_' . str_replace(' ', '', $firstName)) . '@plpasig.edu.ph';
                     $_SESSION['user']['role'] = normalize_staff_profile_role((string) ($_POST['role'] ?? $user['role']));
                 }
@@ -374,7 +369,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $actorPersonId
                 );
                 flash_message('success', sprintf(
-                    'APE cycle %s started. %d Applicant APE record(s) were created automatically and %d existing Applicant record(s) were linked. Select Official student cohorts from APE Scheduling when they are ready.',
+                    'APE cycle %s started. %d student APE record(s) were created automatically and %d existing student record(s) were linked. Schedule other student groups by program, year, and section when they are ready.',
                     $cycle['academic_year'],
                     (int) ($cycle['created_records'] ?? 0),
                     (int) ($cycle['adopted_records'] ?? 0)
@@ -407,6 +402,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $queueParam = isset($result['email_queue_key']) ? '&email_queue=' . rawurlencode((string) $result['email_queue_key']) : '';
         header('Location: index.php?tab=ape-cycle' . $queueParam);
+        exit;
+    }
+
+    if (in_array($action, ['save_settings_department', 'save_settings_program'], true)) {
+        if (!$canManageSettings) {
+            flash_message('error', 'You do not have permission to manage academic reference data.');
+            header('Location: index.php?tab=dropdowns');
+            exit;
+        }
+        try {
+            if ($action === 'save_settings_department') {
+                save_settings_department((int) ($_POST['department_id'] ?? 0), (string) ($_POST['code'] ?? ''), (string) ($_POST['name'] ?? ''), !empty($_POST['active']), $updatedBy);
+                flash_message('success', 'Department saved.');
+            } else {
+                save_settings_program((int) ($_POST['program_id'] ?? 0), (int) ($_POST['department_id'] ?? 0), (string) ($_POST['code'] ?? ''), (string) ($_POST['name'] ?? ''), !empty($_POST['active']), $updatedBy);
+                flash_message('success', 'Program saved.');
+            }
+        } catch (Throwable $e) {
+            flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $e->getMessage());
+        }
+        header('Location: index.php?tab=academic-references');
         exit;
     }
 
@@ -637,6 +653,7 @@ $customThemeColor = $themeSettings['custom_color'];
 $darkModeEnabled = (bool) ($themeSettings['dark_mode'] ?? false);
 $staffProfiles = staff_profiles();
 $staffRoles = staff_profile_roles();
+$staffHonorifics = staff_honorific_options();
 $settings = risk_settings();
 $mailSettings = mail_settings();
 $mailConfigured = mail_settings_configured();
@@ -682,8 +699,8 @@ if ($canManageApeCycles) {
         ensure_ape_cycle_schema();
         $apePatientCounts = auth_db()->query("
             SELECT
-                SUM(CASE WHEN a.account_status = 'active' THEN 1 ELSE 0 END) AS active_count,
-                SUM(CASE WHEN a.account_status <> 'active' THEN 1 ELSE 0 END) AS excluded_count
+                SUM(CASE WHEN a.account_status = 'active' AND pt.access_status = 'Applicant' AND EXISTS (SELECT 1 FROM students s WHERE s.person_id = pt.person_id) THEN 1 ELSE 0 END) AS active_count,
+                SUM(CASE WHEN NOT (a.account_status = 'active' AND pt.access_status = 'Applicant' AND EXISTS (SELECT 1 FROM students s WHERE s.person_id = pt.person_id)) THEN 1 ELSE 0 END) AS excluded_count
             FROM patients pt
             INNER JOIN accounts a ON a.person_id = pt.person_id
         ")->fetch() ?: [];
@@ -722,27 +739,24 @@ $defaultApeSchoolYear = $apeYearStart . '-' . ($apeYearStart + 1);
 $defaultApeStartDate = $apeYearStart . '-06-01';
 $defaultApeEndDate = ($apeYearStart + 1) . '-05-31';
 $dropdownGroups = dropdown_option_groups();
-$currentDropdownGroup = (string) ($_GET['group'] ?? array_key_first($dropdownGroups));
-if (!isset($dropdownGroups[$currentDropdownGroup])) {
-    $currentDropdownGroup = (string) array_key_first($dropdownGroups);
-}
-$currentDropdownCategory = (string) ($_GET['category'] ?? ($dropdownGroupCategories[$currentDropdownGroup] ?? 'students'));
-if (!isset($dropdownCategoryLabels[$currentDropdownCategory])) {
-    $currentDropdownCategory = $dropdownGroupCategories[$currentDropdownGroup] ?? 'students';
-}
+$settingsDepartments = settings_departments();
+$settingsPrograms = settings_programs();
 $dropdownGroupsByCategory = [];
 foreach ($dropdownGroups as $groupKey => $group) {
     $category = $dropdownGroupCategories[$groupKey] ?? 'students';
     $dropdownGroupsByCategory[$category][$groupKey] = $group;
 }
-if (!isset($dropdownGroupsByCategory[$currentDropdownCategory])) {
-    $currentDropdownCategory = array_key_first($dropdownGroupsByCategory);
+$requestedDropdownGroup = (string) ($_GET['group'] ?? '');
+$currentDropdownCategory = (string) ($_GET['category'] ?? ($dropdownGroupCategories[$requestedDropdownGroup] ?? 'students'));
+if (!isset($dropdownCategoryLabels[$currentDropdownCategory])) {
+    $currentDropdownCategory = $dropdownGroupCategories[$requestedDropdownGroup] ?? 'students';
 }
+$currentDropdownGroup = $requestedDropdownGroup;
 if (!isset($dropdownGroupsByCategory[$currentDropdownCategory][$currentDropdownGroup])) {
     $currentDropdownGroup = (string) array_key_first($dropdownGroupsByCategory[$currentDropdownCategory]);
 }
 $currentTab = $_GET['tab'] ?? 'general';
-if (!in_array($currentTab, ['general', 'account', 'ape-cycle', 'dropdowns', 'clinical', 'email', 'backup', 'maintenance'], true)) {
+if (!in_array($currentTab, ['general', 'account', 'ape-cycle', 'dropdowns', 'academic-references', 'clinical', 'email', 'backup', 'maintenance'], true)) {
     $currentTab = 'general';
 }
 if ($currentTab === 'ape-cycle' && !$canManageApeCycles) {
@@ -794,6 +808,10 @@ render_clinic_command_header(
         <a href="index.php?tab=dropdowns" class="settings-tab-link <?= $currentTab === 'dropdowns' ? 'active' : '' ?> text-decoration-none" data-settings-tab="dropdowns" data-no-ajax="true">
             <span class="material-symbols-outlined">list_alt</span>
             <span>Dropdowns</span>
+        </a>
+        <a href="index.php?tab=academic-references" class="settings-tab-link <?= $currentTab === 'academic-references' ? 'active' : '' ?> text-decoration-none" data-settings-tab="academic-references" data-no-ajax="true">
+            <span class="material-symbols-outlined">account_tree</span>
+            <span>Programs &amp; Departments</span>
         </a>
         <a href="index.php?tab=clinical" class="settings-tab-link <?= $currentTab === 'clinical' ? 'active' : '' ?> text-decoration-none" data-settings-tab="clinical" data-no-ajax="true">
             <span class="material-symbols-outlined">emergency</span>
@@ -1111,8 +1129,16 @@ render_clinic_command_header(
                                 <input type="hidden" name="action" value="create_staff_profile">
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div class="settings-field">
+                                        <label class="clinic-label" for="new_staff_honorific">Honorific</label>
+                                        <select class="settings-input" id="new_staff_honorific" name="honorific">
+                                            <?php foreach ($staffHonorifics as $honorificValue => $honorificLabel): ?>
+                                                <option value="<?= e($honorificValue) ?>"><?= e($honorificLabel) ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                    <div class="settings-field">
                                         <label class="clinic-label" for="new_staff_name">Full Name</label>
-                                        <input class="settings-input" id="new_staff_name" name="name" placeholder="Dr. Maria Santos" maxlength="100" data-person-name title="Use letters, spaces, apostrophes, periods, and hyphens only." required>
+                                        <input class="settings-input" id="new_staff_name" name="name" placeholder="Maria Santos" maxlength="100" data-person-name title="Use letters, spaces, apostrophes, periods, and hyphens only." required>
                                     </div>
                                     <div class="settings-field">
                                         <label class="clinic-label" for="new_staff_email">Email Address</label>
@@ -1160,7 +1186,7 @@ render_clinic_command_header(
                         <?php foreach ($staffProfiles as $staffProfile): ?>
                             <?php $staffId = (int) $staffProfile['id']; ?>
                             <button type="button" class="settings-profile-row" onclick="showModal('staffProfileModal_<?= $staffId ?>')" aria-label="Open <?= e($staffProfile['name']) ?> staff profile">
-                                <div class="settings-profile-avatar <?= avatar_color($staffProfile['name']) ?>"><?= initials($staffProfile['name']) ?></div>
+                                <div class="settings-profile-avatar <?= avatar_color($staffProfile['legal_name']) ?>"><?= initials($staffProfile['legal_name']) ?></div>
                                 <div class="settings-profile-row-copy">
                                     <strong><?= e($staffProfile['name']) ?></strong>
                                     <span>Click to view and manage this profile</span>
@@ -1173,7 +1199,7 @@ render_clinic_command_header(
                                 <div class="modal-content bg-white rounded-[2rem] p-6 w-full max-w-3xl shadow-2xl">
                                     <div class="flex items-start justify-between gap-4 mb-5">
                                         <div class="flex items-center gap-3 min-w-0">
-                                            <div class="settings-profile-avatar <?= avatar_color($staffProfile['name']) ?>"><?= initials($staffProfile['name']) ?></div>
+                                            <div class="settings-profile-avatar <?= avatar_color($staffProfile['legal_name']) ?>"><?= initials($staffProfile['legal_name']) ?></div>
                                             <div class="min-w-0">
                                                 <h3 class="font-headline text-xl font-extrabold text-[#17261d] truncate mb-1"><?= e($staffProfile['name']) ?></h3>
                                                 <span class="badge badge-in-progress"><?= e(staff_profile_role_label((string) $staffProfile['role'])) ?></span>
@@ -1189,8 +1215,16 @@ render_clinic_command_header(
                                         <input type="hidden" name="user_id" value="<?= $staffId ?>">
                                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <div class="settings-field">
+                                                <label class="clinic-label" for="staff_honorific_<?= $staffId ?>">Honorific</label>
+                                                <select class="settings-input" id="staff_honorific_<?= $staffId ?>" name="honorific" <?= !$canManageStaffProfiles ? 'disabled' : '' ?>>
+                                                    <?php foreach ($staffHonorifics as $honorificValue => $honorificLabel): ?>
+                                                        <option value="<?= e($honorificValue) ?>" <?= ($staffProfile['honorific'] ?? '') === $honorificValue ? 'selected' : '' ?>><?= e($honorificLabel) ?></option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                            </div>
+                                            <div class="settings-field">
                                                 <label class="clinic-label" for="staff_name_<?= $staffId ?>">Name</label>
-                                                <input class="settings-input staff-name-input" id="staff_name_<?= $staffId ?>" name="name" value="<?= e($staffProfile['name']) ?>" <?= !$canManageStaffProfiles ? 'readonly' : '' ?> required>
+                                                <input class="settings-input staff-name-input" id="staff_name_<?= $staffId ?>" name="name" value="<?= e($staffProfile['legal_name']) ?>" <?= !$canManageStaffProfiles ? 'readonly' : '' ?> required>
                                             </div>
                                             <div class="settings-field">
                                                 <label class="clinic-label" for="staff_email_<?= $staffId ?>">Email</label>
@@ -1286,6 +1320,9 @@ render_clinic_command_header(
                 <section>
                     <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Dropdown Options</h2>
                     <p class="text-xs font-bold text-slate-500 mb-5">Edit the options shown in clinic forms. Deleted options disappear from future forms but old records keep their saved text.</p>
+                    <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600 mb-5">
+                        <strong class="text-slate-800">System-controlled dropdowns stay fixed.</strong> Appointment and APE workflow states, roles, risk levels, time and date pickers, reports, filters, and live record selectors are not editable because they control validation, scheduling, or access.
+                    </div>
                     <?php if (!$canManageSettings): ?>
                         <div class="rounded-xl bg-amber-50 border border-amber-100 text-amber-800 px-4 py-3 text-sm font-bold mb-5">
                             Dropdown options can be managed only by administrators, doctors, or IT experts.
@@ -1308,7 +1345,7 @@ render_clinic_command_header(
                         <?php endforeach; ?>
                     </nav>
 
-                    <div class="grid grid-cols-1 xl:grid-cols-[0.42fr_0.58fr] gap-5">
+                    <div class="grid grid-cols-1 xl:grid-cols-[0.42fr_0.58fr] gap-5" data-dropdown-editor-grid>
                         <nav class="settings-section settings-dropdown-group-list" aria-label="Dropdown groups">
                             <?php foreach ($dropdownCategoryLabels as $categoryKey => $categoryLabel): ?>
                                 <?php $categoryGroups = $dropdownGroupsByCategory[$categoryKey] ?? []; ?>
@@ -1403,6 +1440,35 @@ render_clinic_command_header(
                                 </div>
                             <?php endforeach; ?>
                         </div>
+                    </div>
+                </section>
+            </div>
+
+            <div id="settings-academic-references" class="settings-tab-panel <?= $currentTab === 'academic-references' ? 'active' : '' ?> space-y-6">
+                <section class="settings-section">
+                    <div class="mb-5">
+                        <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Programs &amp; Departments</h2>
+                        <p class="settings-help mb-0">This is the source used by student onboarding and patient profiles. Deactivate a record to hide it from future forms; existing records keep their links.</p>
+                    </div>
+                    <div class="settings-reference-manager">
+                        <section class="settings-reference-section" aria-labelledby="department-manager-title">
+                            <div class="settings-reference-section-heading"><div><p class="clinic-label mb-1">Academic structure</p><h3 class="font-headline text-base font-extrabold text-[#17261d] mb-0" id="department-manager-title">Departments</h3></div><span class="settings-reference-count"><?= count($settingsDepartments) ?> records</span></div>
+                            <div class="settings-reference-list">
+                            <?php foreach ($settingsDepartments as $department): ?>
+                                <form method="post" class="settings-reference-row settings-department-row"><input type="hidden" name="action" value="save_settings_department"><input type="hidden" name="department_id" value="<?= (int) $department['id'] ?>"><label class="clinic-label">Code<input class="settings-input" name="code" maxlength="20" value="<?= e($department['code']) ?>" required></label><label class="clinic-label">Name<input class="settings-input" name="name" maxlength="160" value="<?= e($department['name']) ?>" required></label><label class="settings-switch-inline settings-reference-active"><input type="checkbox" name="active" value="1" <?= !empty($department['active']) ? 'checked' : '' ?>>Active</label><button class="btn btn-outline" <?= !$canManageSettings ? 'disabled' : '' ?>>Save</button></form>
+                            <?php endforeach; ?>
+                            </div>
+                            <form method="post" class="settings-reference-add settings-reference-row settings-department-row"><input type="hidden" name="action" value="save_settings_department"><label class="clinic-label">Code<input class="settings-input" name="code" maxlength="20" placeholder="e.g. CCS" required></label><label class="clinic-label">New department<input class="settings-input" name="name" maxlength="160" placeholder="Department name" required></label><label class="settings-switch-inline settings-reference-active"><input type="checkbox" name="active" value="1" checked>Active</label><button class="btn btn-primary" <?= !$canManageSettings ? 'disabled' : '' ?>>Add department</button></form>
+                        </section>
+                        <section class="settings-reference-section" aria-labelledby="program-manager-title">
+                            <div class="settings-reference-section-heading"><div><p class="clinic-label mb-1">Available to students</p><h3 class="font-headline text-base font-extrabold text-[#17261d] mb-0" id="program-manager-title">Programs</h3></div><span class="settings-reference-count"><?= count($settingsPrograms) ?> records</span></div>
+                            <div class="settings-reference-list">
+                            <?php foreach ($settingsPrograms as $program): ?>
+                                <form method="post" class="settings-reference-row settings-program-row"><input type="hidden" name="action" value="save_settings_program"><input type="hidden" name="program_id" value="<?= (int) $program['id'] ?>"><label class="clinic-label">Department<select class="settings-input" name="department_id" required><?php foreach ($settingsDepartments as $department): ?><option value="<?= (int) $department['id'] ?>" <?= (int) $program['department_id'] === (int) $department['id'] ? 'selected' : '' ?>><?= e($department['code']) ?></option><?php endforeach; ?></select></label><label class="clinic-label">Code<input class="settings-input" name="code" maxlength="20" value="<?= e($program['code']) ?>" required></label><label class="clinic-label">Name<input class="settings-input" name="name" maxlength="200" value="<?= e($program['name']) ?>" required></label><label class="settings-switch-inline settings-reference-active"><input type="checkbox" name="active" value="1" <?= !empty($program['active']) ? 'checked' : '' ?>>Active</label><button class="btn btn-outline" <?= !$canManageSettings ? 'disabled' : '' ?>>Save</button></form>
+                            <?php endforeach; ?>
+                            </div>
+                            <form method="post" class="settings-reference-add settings-reference-row settings-program-row"><input type="hidden" name="action" value="save_settings_program"><label class="clinic-label">Department<select class="settings-input" name="department_id" required><option value="">Select</option><?php foreach ($settingsDepartments as $department): if (empty($department['active'])) continue; ?><option value="<?= (int) $department['id'] ?>"><?= e($department['code']) ?></option><?php endforeach; ?></select></label><label class="clinic-label">Code<input class="settings-input" name="code" maxlength="20" placeholder="e.g. BSIT" required></label><label class="clinic-label">New program<input class="settings-input" name="name" maxlength="200" placeholder="Program name" required></label><label class="settings-switch-inline settings-reference-active"><input type="checkbox" name="active" value="1" checked>Active</label><button class="btn btn-primary" <?= !$canManageSettings ? 'disabled' : '' ?>>Add program</button></form>
+                        </section>
                     </div>
                 </section>
             </div>
@@ -1567,7 +1633,7 @@ render_clinic_command_header(
                         <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                             <div>
                                 <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Annual Physical Examination Cycle</h2>
-                                <p class="text-xs font-bold text-slate-500 mb-0">Prepare one APE cycle per school year for every patient with an active account.</p>
+                                <p class="text-xs font-bold text-slate-500 mb-0">Starting a cycle creates records automatically for students completing APE requirements. Add students with clinic services enabled by selecting their program, year, and section in APE Scheduling.</p>
                             </div>
                             <?php
                             $apeCycleStatus = (string) ($apeCurrentCycle['status'] ?? 'Not Started');
@@ -1691,7 +1757,7 @@ render_clinic_command_header(
                                 <strong class="font-headline text-3xl text-[#17261d]" id="apeActivePatientCount"><?= number_format($activeApePatientCount) ?></strong>
                                 <span class="text-xs font-bold text-slate-500 pb-1">active patient(s)</span>
                             </div>
-                            <p class="settings-help mt-3 mb-0">Starting a cycle creates one APE record for each active patient who does not already have one for that school year.</p>
+                            <p class="settings-help mt-3 mb-0">Starting a cycle creates APE records for active Student Applicants. Schedule Official students by program, year, and section from APE Scheduling.</p>
                         </div>
                         <div class="settings-section">
                             <p class="clinic-label mb-2">Patients Excluded</p>
@@ -1732,7 +1798,7 @@ render_clinic_command_header(
                             <div>
                                 <p class="clinic-label mb-2">Cycle Preview</p>
                                 <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1" id="apeCyclePreviewTitle">School Year <?= e($defaultApeSchoolYear) ?></h3>
-                                <p class="settings-help mb-0"><span id="apeCyclePreviewCount"><?= number_format($activeApePatientCount) ?></span> active patient(s) &bull; <span id="apeCyclePreviewDates"><?= e(date('M j, Y', strtotime($defaultApeStartDate))) ?> to <?= e(date('M j, Y', strtotime($defaultApeEndDate))) ?></span></p>
+                                <p class="settings-help mb-0"><span id="apeCyclePreviewCount"><?= number_format($activeApePatientCount) ?></span> active Student Applicant(s) &bull; <span id="apeCyclePreviewDates"><?= e(date('M j, Y', strtotime($defaultApeStartDate))) ?> to <?= e(date('M j, Y', strtotime($defaultApeEndDate))) ?></span></p>
                             </div>
                             <button type="button" class="btn btn-primary justify-center shrink-0" id="startApeCycleButton" <?= $activeApePatientCount < 1 ? 'disabled' : '' ?>>
                                 <span class="material-symbols-outlined text-[18px]">play_circle</span>
@@ -1740,7 +1806,7 @@ render_clinic_command_header(
                             </button>
                         </div>
                         <?php if ($activeApePatientCount < 1): ?>
-                            <p class="settings-help mt-3 mb-0">A cycle cannot start because there are no active patient accounts.</p>
+                            <p class="settings-help mt-3 mb-0">A cycle cannot start because there are no active Student Applicants.</p>
                         <?php endif; ?>
                     </section>
                     <?php endif; ?>
@@ -2864,10 +2930,10 @@ render_clinic_command_header(
             <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3 text-sm">
                 <div class="flex justify-between gap-4"><span class="font-bold text-slate-500">School Year</span><strong id="apeConfirmSchoolYear"></strong></div>
                 <div class="flex justify-between gap-4"><span class="font-bold text-slate-500">Compliance Period</span><strong class="text-right" id="apeConfirmDates"></strong></div>
-                <div class="flex justify-between gap-4"><span class="font-bold text-slate-500">Active Patients</span><strong><?= number_format($activeApePatientCount) ?></strong></div>
+                <div class="flex justify-between gap-4"><span class="font-bold text-slate-500">Active Student Applicants</span><strong><?= number_format($activeApePatientCount) ?></strong></div>
             </div>
             <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-bold text-amber-800">
-                This creates the cycle and one APE record for every active patient. The action cannot be repeated for the same school year.
+                This creates one APE record for each active student completing APE requirements. Students with clinic services enabled are scheduled later by their program, year, and section.
             </div>
             <form method="post" data-no-ajax="true" id="apeStartCycleForm">
                 <input type="hidden" name="action" value="start_ape_cycle">
@@ -3023,7 +3089,7 @@ render_clinic_command_header(
                 } else if (periodStart.value > periodEnd.value) {
                     message = 'The compliance end date must be on or after the start date.';
                 } else if (patientCount < 1) {
-                    message = 'There are no active patient accounts to include.';
+                    message = 'There are no active Student Applicants to include.';
                 }
                 error.textContent = message;
                 error.classList.toggle('hidden', !message);

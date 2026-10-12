@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../helpers/data_normalization.php';
 require_once __DIR__ . '/AccountValidation.php';
+require_once __DIR__ . '/AuditLog.php';
 
 function ensure_system_settings_schema(): void
 {
@@ -93,6 +94,32 @@ function staff_profile_roles(): array
     ];
 }
 
+function staff_honorific_options(): array
+{
+    return [
+        '' => 'None',
+        'Dr.' => 'Dr.',
+        'Mr.' => 'Mr.',
+        'Ms.' => 'Ms.',
+        'Mrs.' => 'Mrs.',
+    ];
+}
+
+function normalize_staff_honorific(?string $honorific): ?string
+{
+    $honorific = trim((string) $honorific);
+    if (!array_key_exists($honorific, staff_honorific_options())) {
+        throw new InvalidArgumentException('Select a valid staff honorific.');
+    }
+
+    return $honorific !== '' ? $honorific : null;
+}
+
+function staff_display_name(string $name, ?string $honorific = null): string
+{
+    return trim(($honorific ? trim($honorific) . ' ' : '') . trim($name));
+}
+
 function normalize_staff_profile_role(string $role): string
 {
     return array_key_exists($role, staff_profile_roles()) ? $role : 'nurse';
@@ -102,14 +129,15 @@ function staff_profiles(): array
 {
     ensure_staff_profiles_schema();
 
-    return auth_db()->query('
+    $profiles = auth_db()->query('
         SELECT
             pe.id,
             pe.id_number,
             pe.profile_photo_path,
-            TRIM(CONCAT_WS(" ", pe.first_name, pe.middle_name, pe.last_name)) AS name,
+            TRIM(CONCAT_WS(" ", pe.first_name, pe.middle_name, pe.last_name)) AS legal_name,
             a.email,
             cs.staff_role AS role,
+            cs.honorific,
             cs.position_title,
             a.account_status,
             a.created_at
@@ -118,6 +146,13 @@ function staff_profiles(): array
         JOIN accounts a ON a.person_id = pe.id
         ORDER BY FIELD(cs.staff_role, "doctor", "nurse", "admin"), pe.last_name, pe.first_name, pe.id_number
     ')->fetchAll();
+
+    foreach ($profiles as &$profile) {
+        $profile['name'] = staff_display_name((string) $profile['legal_name'], $profile['honorific'] ?? null);
+    }
+    unset($profile);
+
+    return $profiles;
 }
 
 function staff_profile_role_label(string $role): string
@@ -132,6 +167,7 @@ function create_staff_profile(array $input): void
     $name = cliniq_normalize_person_name($input['name'] ?? '');
     $idNumber = trim((string) ($input['id_number'] ?? $input['email'] ?? ''));
     $role = normalize_staff_profile_role((string) ($input['role'] ?? 'staff'));
+    $honorific = normalize_staff_honorific($input['honorific'] ?? '');
     $password = (string) ($input['password'] ?? '');
     $passwordConfirmation = (string) ($input['password_confirmation'] ?? '');
 
@@ -170,10 +206,10 @@ function create_staff_profile(array $input): void
 
         $departmentId = staff_profile_default_department_id();
         $stmt = $db->prepare('
-            INSERT INTO clinic_staff (person_id, department_id, staff_role, position_title)
+            INSERT INTO clinic_staff (person_id, department_id, staff_role, honorific)
             VALUES (?, ?, ?, ?)
         ');
-        $stmt->execute([$personId, $departmentId, $role, staff_profile_role_label($role)]);
+        $stmt->execute([$personId, $departmentId, $role, $honorific]);
 
         $stmt = $db->prepare('
             INSERT INTO patients (person_id, emergency_token, token_enabled)
@@ -209,6 +245,7 @@ function update_staff_profile(array $input): void
     $name = cliniq_normalize_person_name($input['name'] ?? '');
     $idNumber = trim((string) ($input['id_number'] ?? $input['email'] ?? ''));
     $role = normalize_staff_profile_role((string) ($input['role'] ?? 'staff'));
+    $honorific = normalize_staff_honorific($input['honorific'] ?? '');
 
     if ($id <= 0) {
         throw new InvalidArgumentException('Select a staff profile to update.');
@@ -242,8 +279,8 @@ function update_staff_profile(array $input): void
         $stmt = $db->prepare('UPDATE accounts SET email = ? WHERE person_id = ?');
         $stmt->execute([$email, $id]);
 
-        $stmt = $db->prepare('UPDATE clinic_staff SET staff_role = ?, position_title = ? WHERE person_id = ?');
-        $stmt->execute([$role, staff_profile_role_label($role), $id]);
+        $stmt = $db->prepare('UPDATE clinic_staff SET staff_role = ?, honorific = ? WHERE person_id = ?');
+        $stmt->execute([$role, $honorific, $id]);
 
         $db->commit();
     } catch (Throwable $e) {
@@ -662,27 +699,27 @@ function default_dropdown_option_groups(): array
         'person_category' => [
             'label' => 'Person Category',
             'description' => 'Used for visitor and emergency patient registration.',
-            'options' => ['Student', 'Staff', 'Faculty', 'Guest'],
-        ],
-        'year_level' => [
-            'label' => 'Year Level',
-            'description' => 'Used for student-facing and visitor forms.',
-            'options' => ['1st Year', '2nd Year', '3rd Year', '4th Year'],
-        ],
-        'department' => [
-            'label' => 'Course / Department Suggestions',
-            'description' => 'Used as suggestions for visitor course or department fields.',
-            'options' => ['College of Computer Studies', 'College of Nursing', 'Arts & Sciences', 'Administrative Office', 'Guest'],
-        ],
-        'student_program' => [
-            'label' => 'Student Program',
-            'description' => 'Used on the student registration program dropdown.',
-            'options' => ['BSIT'],
+            'options' => ['Student', 'Staff', 'Faculty', 'Non-Teaching Personnel'],
         ],
         'student_section' => [
             'label' => 'Student Section',
-            'description' => 'Used on the student registration section dropdown.',
+            'description' => 'Used for student account registration and profile updates.',
             'options' => ['A', 'B', 'C', 'D', 'E'],
+        ],
+        'employment_type' => [
+            'label' => 'Employment Type',
+            'description' => 'Used for faculty and personnel profile updates.',
+            'options' => ['Full-time', 'Part-time'],
+        ],
+        'non_enrollment_reason' => [
+            'label' => 'Non-enrollment Reason',
+            'description' => 'Used when students confirm they are no longer enrolled.',
+            'options' => ['Leave of Absence', 'Graduated', 'Transferred', 'Withdrawn', 'Other'],
+        ],
+        'ape_inactive_reason' => [
+            'label' => 'APE Inactive Reason',
+            'description' => 'Used when a clinic user removes an APE record from future batches.',
+            'options' => ['Withdrew from school', 'Transferred', 'No longer enrolled', 'Duplicate record', 'Declined APE', 'Other'],
         ],
         'blood_type' => [
             'label' => 'Blood Type',
@@ -694,25 +731,10 @@ function default_dropdown_option_groups(): array
             'description' => 'Used on the student emergency contact form.',
             'options' => ['Mother', 'Father', 'Parent', 'Sibling', 'Spouse', 'Relative', 'Guardian', 'Other'],
         ],
-        'appointment_purpose' => [
-            'label' => 'Appointment Purpose',
-            'description' => 'Used on the student appointment request form.',
-            'options' => ['Medical Consult', 'Dental'],
-        ],
-        'visit_status' => [
-            'label' => 'Visit Status',
-            'description' => 'Used on clinic visit forms and filters.',
-            'options' => ['Unaddressed', 'Active', 'Completed', 'Cancelled'],
-        ],
         'visit_purpose' => [
             'label' => 'Visit Purpose',
             'description' => 'Used for clinic visit purpose filters and records.',
             'options' => ['Medical Consult', 'Health Monitoring', 'Pain Management', 'Dental Consult', 'Wound Care', 'APE', 'Emergency', 'Other'],
-        ],
-        'visit_source' => [
-            'label' => 'Visit Source',
-            'description' => 'Used internally for how a clinic visit was created.',
-            'options' => ['Self Logbook', 'Staff Recorded', 'Nurse Emergency'],
         ],
         'referral_type' => [
             'label' => 'Referral Type',
@@ -753,21 +775,6 @@ function default_dropdown_option_groups(): array
             'label' => 'Incident Mobility',
             'description' => 'Used on emergency incident reports.',
             'options' => ['Can walk', 'Needs assistance', 'Cannot stand or walk'],
-        ],
-        'ape_requirement_status' => [
-            'label' => 'APE Requirement Status',
-            'description' => 'Used when creating and reviewing APE records.',
-            'options' => ['Not Checked', 'Checked', 'Needs Correction'],
-        ],
-        'ape_verification_status' => [
-            'label' => 'APE Verification Status',
-            'description' => 'Used when creating and reviewing APE records.',
-            'options' => ['Pending', 'Verified', 'Needs Correction'],
-        ],
-        'ape_workflow_status' => [
-            'label' => 'APE Workflow Status',
-            'description' => 'Used for APE workflow states.',
-            'options' => ['Registered', 'Batch Assigned', 'Requirements Checked', 'Submitted', 'Reviewed', 'Scheduled', 'Exam Done', 'Follow-up Required', 'Cleared'],
         ],
     ];
 }
@@ -915,6 +922,68 @@ function delete_dropdown_option(string $groupKey, string $optionId, ?int $update
     ));
 
     save_dropdown_option_groups($groups, $updatedBy);
+}
+
+/** @return array<int,array{id:int,code:string,name:string,active:bool}> */
+function settings_departments(): array
+{
+    return auth_db()->query('SELECT id, department_code AS code, department_name AS name, is_active AS active FROM departments ORDER BY department_name, department_code')->fetchAll();
+}
+
+/** @return array<int,array{id:int,department_id:int,code:string,name:string,active:bool}> */
+function settings_programs(): array
+{
+    return auth_db()->query('SELECT id, department_id, program_code AS code, program_name AS name, is_active AS active FROM programs ORDER BY program_name, program_code')->fetchAll();
+}
+
+function settings_reference_code(string $value, string $label): string
+{
+    $value = strtoupper(trim($value));
+    if (!preg_match('/^[A-Z0-9]+(?:-[A-Z0-9]+)*$/', $value)) {
+        throw new InvalidArgumentException("Enter a valid {$label} code.");
+    }
+    return $value;
+}
+
+function save_settings_department(int $id, string $code, string $name, bool $active, ?int $updatedBy = null): void
+{
+    $code = settings_reference_code($code, 'department');
+    $name = trim($name);
+    if ($name === '' || mb_strlen($name) > 160) throw new InvalidArgumentException('Enter a department name up to 160 characters.');
+    $db = auth_db();
+    if ($id > 0) {
+        $exists = $db->prepare('SELECT 1 FROM departments WHERE id = ?');
+        $exists->execute([$id]);
+        if (!$exists->fetchColumn()) throw new InvalidArgumentException('Select a valid department.');
+        $stmt = $db->prepare('UPDATE departments SET department_code = ?, department_name = ?, is_active = ? WHERE id = ?');
+        $stmt->execute([$code, $name, $active ? 1 : 0, $id]);
+        audit_log_event('settings', 'department_updated', $updatedBy, 'staff', 'department', $id, ['code' => $code, 'active' => $active]);
+        return;
+    }
+    $db->prepare('INSERT INTO departments (department_code, department_name, is_active) VALUES (?, ?, ?)')->execute([$code, $name, $active ? 1 : 0]);
+    audit_log_event('settings', 'department_created', $updatedBy, 'staff', 'department', (int) $db->lastInsertId(), ['code' => $code, 'active' => $active]);
+}
+
+function save_settings_program(int $id, int $departmentId, string $code, string $name, bool $active, ?int $updatedBy = null): void
+{
+    $code = settings_reference_code($code, 'program');
+    $name = trim($name);
+    if ($departmentId < 1 || $name === '' || mb_strlen($name) > 200) throw new InvalidArgumentException('Choose a department and enter a program name up to 200 characters.');
+    $db = auth_db();
+    $department = $db->prepare('SELECT 1 FROM departments WHERE id = ?');
+    $department->execute([$departmentId]);
+    if (!$department->fetchColumn()) throw new InvalidArgumentException('Choose a valid department.');
+    if ($id > 0) {
+        $exists = $db->prepare('SELECT 1 FROM programs WHERE id = ?');
+        $exists->execute([$id]);
+        if (!$exists->fetchColumn()) throw new InvalidArgumentException('Select a valid program.');
+        $stmt = $db->prepare('UPDATE programs SET department_id = ?, program_code = ?, program_name = ?, is_active = ? WHERE id = ?');
+        $stmt->execute([$departmentId, $code, $name, $active ? 1 : 0, $id]);
+        audit_log_event('settings', 'program_updated', $updatedBy, 'staff', 'program', $id, ['code' => $code, 'department_id' => $departmentId, 'active' => $active]);
+        return;
+    }
+    $db->prepare('INSERT INTO programs (department_id, program_code, program_name, is_active) VALUES (?, ?, ?, ?)')->execute([$departmentId, $code, $name, $active ? 1 : 0]);
+    audit_log_event('settings', 'program_created', $updatedBy, 'staff', 'program', (int) $db->lastInsertId(), ['code' => $code, 'department_id' => $departmentId, 'active' => $active]);
 }
 
 function default_clinic_profile_settings(): array
@@ -1589,16 +1658,16 @@ function cliniq_mail_template_definitions(): array
             ],
         ],
         'patient_access_restricted' => [
-            'label' => 'Patient Access Restricted',
-            'description' => 'Sent when patient portal access becomes restricted.',
+            'label' => 'Clinic Access Pending APE Completion',
+            'description' => 'Sent when Health Passport and appointment booking are unavailable until APE clearance is complete.',
             'icon' => 'lock',
             'action_hint' => 'The button opens the patient portal dashboard.',
             'allowed_placeholders' => ['{{patient_name}}', '{{clinic_name}}'],
             'required_placeholders' => ['{{patient_name}}', '{{clinic_name}}'],
             'default' => [
-                'subject' => '[{{clinic_name}}] Your patient portal access changed',
-                'heading' => 'Your portal access changed, {{patient_name}}',
-                'message' => 'Your patient portal access is currently restricted while your clinic account is under review. Please contact the clinic if you need assistance.',
+                'subject' => '[{{clinic_name}}] Clinic access pending APE completion',
+                'heading' => 'Clinic access pending APE completion, {{patient_name}}',
+                'message' => 'Your Health Passport and appointment booking will be available after the clinic completes your APE clearance. Please contact the clinic if you need assistance.',
                 'button_label' => 'Open Patient Portal',
                 'footer' => 'Contact {{clinic_name}} for more information about your account status.',
             ],
@@ -1722,7 +1791,7 @@ function cliniq_mail_recipients(): array
     $rows = auth_db()->query("
         SELECT
             a.id AS account_id,
-            TRIM(CONCAT_WS(' ', p.first_name, p.middle_name, p.last_name)) AS name,
+            TRIM(CONCAT_WS(' ', NULLIF(cs.honorific, ''), p.first_name, p.middle_name, p.last_name)) AS name,
             a.email,
             CASE
                 WHEN cs.person_id IS NOT NULL THEN 'Clinic Staff'

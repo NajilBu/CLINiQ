@@ -10,6 +10,8 @@ services:
       - /var/lib/mysql
     volumes: !reset
       - ./database/production_schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+    networks:
+      - cliniq_internal
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 5s
@@ -39,6 +41,8 @@ services:
     depends_on:
       database:
         condition: service_healthy
+    networks:
+      - cliniq_internal
 
   app:
     build:
@@ -72,6 +76,8 @@ services:
         condition: service_completed_successfully
       mailpit:
         condition: service_started
+    networks:
+      - cliniq_internal
     volumes: !override ["./tests:/proof:ro"]
     tmpfs:
       - /var/www/html/storage/documents
@@ -82,3 +88,8 @@ services:
       interval: 5s
       timeout: 3s
       retries: 30
+
+networks:
+  cliniq_internal:
+    name: cliniq-registration-proof
+    driver: bridge

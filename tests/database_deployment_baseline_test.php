@@ -17,14 +17,14 @@ if ($schema === false || $runner === false || $envLoader === false) {
 preg_match_all('/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`?([a-zA-Z0-9_]+)`?/i', $schema, $matches);
 $tables = array_values(array_unique($matches[1] ?? []));
 
-foreach (['people', 'patients', 'patient_notifications', 'patient_registration_verifications', 'student_enrollment_declarations', 'student_school_year_enrollments', 'graduation_clearances', 'visits', 'appointments', 'ape_schedule_batch_cohorts', 'ape_records', 'ape_documents', 'clinic_feedback', 'login_attempts', 'schema_migrations'] as $table) {
+foreach (['people', 'patients', 'patient_notifications', 'patient_registration_verifications', 'student_enrollment_declarations', 'student_school_year_enrollments', 'student_enrollment_correction_requests', 'graduation_clearances', 'visits', 'appointments', 'ape_schedule_batch_cohorts', 'ape_records', 'ape_record_amendments', 'ape_documents', 'clinic_feedback', 'login_attempts', 'schema_migrations'] as $table) {
     if (!in_array($table, $tables, true)) {
         throw new RuntimeException("Production baseline is missing {$table}.");
     }
 }
 
-if (count($tables) !== 40) {
-    throw new RuntimeException('Expected 40 production tables including APE batch cohorts; found ' . count($tables) . '.');
+if (count($tables) !== 42) {
+    throw new RuntimeException('Expected 42 production tables including APE history and enrollment corrections; found ' . count($tables) . '.');
 }
 
 if (!preg_match('/CREATE TABLE accounts \([\s\S]*?status_reason VARCHAR\(255\) NULL,/i', $schema)) {
@@ -47,6 +47,12 @@ if (!str_contains($runner, 'Existing database is not a complete CLINiQ baseline'
 }
 if (!str_contains($runner, 'migration_post_baseline_tables')) {
     throw new RuntimeException('Existing databases must be checked before post-baseline tables are migrated.');
+}
+if (!str_contains($runner, '$freshSchema') || !str_contains($runner, 'if ($freshSchema || strcmp($name, CLINIQ_BASELINE_THROUGH) <= 0)')) {
+    throw new RuntimeException('A fresh canonical schema must baseline its represented migrations instead of replaying them.');
+}
+if (strpos($schema, 'CREATE TABLE clinic_staff') > strpos($schema, 'CREATE TABLE student_enrollment_correction_requests')) {
+    throw new RuntimeException('Enrollment correction requests must be declared after clinic staff for its reviewer foreign key.');
 }
 if (!str_contains($runner, "'20260923_z_email_center_operations.sql'")) {
     throw new RuntimeException('Migration runner must recognize the verified historical email-center checksum.');

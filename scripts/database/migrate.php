@@ -280,9 +280,11 @@ try {
         'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = \'BASE TABLE\''
     )->fetchColumn();
 
+    $freshSchema = false;
     if ($tableCount === 0 && $apply) {
         echo 'Creating fresh database from production_schema.sql...', PHP_EOL;
         migration_run_sql_file($database, $schemaFile);
+        $freshSchema = true;
     } elseif ($tableCount === 0) {
         throw new RuntimeException('Database schema is missing. Run the explicit migration service with --apply.');
     } else {
@@ -340,7 +342,7 @@ try {
             continue;
         }
 
-        if (strcmp($name, CLINIQ_BASELINE_THROUGH) <= 0) {
+        if ($freshSchema || strcmp($name, CLINIQ_BASELINE_THROUGH) <= 0) {
             $insert->execute([$name, $checksum, 0]);
             echo 'Baselined: ', $name, PHP_EOL;
             continue;

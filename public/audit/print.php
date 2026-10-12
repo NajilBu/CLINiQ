@@ -55,7 +55,7 @@ if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateTo)) {
 $whereSql = implode(' AND ', $where);
 
 $stmt = auth_db()->prepare("SELECT a.*,
-        TRIM(CONCAT_WS(' ', p.first_name, p.middle_name, p.last_name)) AS actor_name,
+        TRIM(CONCAT_WS(' ', NULLIF(actor_staff.honorific, ''), p.first_name, p.middle_name, p.last_name)) AS actor_name,
         p.id_number AS actor_id_number,
         COALESCE(
             NULLIF(TRIM(CONCAT_WS(' ', direct_target.first_name, direct_target.middle_name, direct_target.last_name)), ''),
@@ -68,6 +68,7 @@ $stmt = auth_db()->prepare("SELECT a.*,
         inventory_item.item_name AS target_item_name
     FROM audit_logs a
     LEFT JOIN people p ON p.id = a.actor_person_id
+    LEFT JOIN clinic_staff actor_staff ON actor_staff.person_id = p.id
     LEFT JOIN people direct_target ON direct_target.id = a.target_id AND a.target_type IN ('person', 'patient')
     LEFT JOIN accounts target_account ON target_account.id = a.target_id AND a.target_type = 'account'
     LEFT JOIN people account_target ON account_target.id = target_account.person_id

@@ -202,11 +202,34 @@ CREATE TABLE clinic_staff (
   department_id BIGINT UNSIGNED NULL,
   staff_role ENUM('admin', 'doctor', 'nurse', 'staff', 'it_expert')
     NOT NULL DEFAULT 'staff',
+  honorific VARCHAR(8) NULL,
   position_title VARCHAR(160) NULL,
   FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE CASCADE,
   FOREIGN KEY (department_id) REFERENCES departments(id),
   INDEX idx_clinic_staff_department (department_id),
   INDEX idx_clinic_staff_role (staff_role)
+);
+
+CREATE TABLE student_enrollment_correction_requests (
+  request_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  student_person_id BIGINT UNSIGNED NOT NULL,
+  academic_year VARCHAR(20) NOT NULL,
+  current_year_level VARCHAR(40) NULL,
+  current_section VARCHAR(80) NULL,
+  requested_year_level VARCHAR(40) NOT NULL,
+  requested_section VARCHAR(80) NOT NULL,
+  request_note TEXT NOT NULL,
+  status ENUM('Pending', 'Approved', 'Rejected') NOT NULL DEFAULT 'Pending',
+  pending_slot TINYINT GENERATED ALWAYS AS (CASE WHEN status = 'Pending' THEN 1 ELSE NULL END) STORED,
+  reviewed_by_person_id BIGINT UNSIGNED NULL,
+  review_note TEXT NULL,
+  reviewed_at TIMESTAMP NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_enrollment_correction_student FOREIGN KEY (student_person_id) REFERENCES students(person_id) ON DELETE CASCADE,
+  CONSTRAINT fk_enrollment_correction_reviewer FOREIGN KEY (reviewed_by_person_id) REFERENCES clinic_staff(person_id) ON DELETE SET NULL,
+  UNIQUE INDEX uq_enrollment_correction_pending (student_person_id, academic_year, pending_slot),
+  INDEX idx_enrollment_correction_review (status, academic_year, created_at)
 );
 
 -- A patient profile may belong to a student, school employee,
@@ -292,6 +315,7 @@ CREATE TABLE audit_logs (
 
 CREATE TABLE nurse_alerts (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  incident_report_id BIGINT UNSIGNED NULL UNIQUE,
   patient_id BIGINT UNSIGNED NULL,
   reporter_name VARCHAR(120) NOT NULL,
   reporter_role VARCHAR(80) NULL,
@@ -341,8 +365,13 @@ CREATE TABLE incident_reports (
   INDEX idx_incident_reports_status_reported (status, reported_at)
 );
 
+ALTER TABLE nurse_alerts
+  ADD CONSTRAINT fk_nurse_alerts_incident_report
+    FOREIGN KEY (incident_report_id) REFERENCES incident_reports(id) ON DELETE SET NULL;
+
 CREATE TABLE visits (
   visit_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  appointment_id BIGINT UNSIGNED NULL,
   patient_person_id BIGINT UNSIGNED NOT NULL,
   visit_datetime DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   addressed_at DATETIME NULL,
@@ -366,6 +395,7 @@ CREATE TABLE visits (
     FOREIGN KEY (attended_by_person_id) REFERENCES clinic_staff(person_id)
     ON DELETE SET NULL,
   INDEX idx_visits_patient_datetime (patient_person_id, visit_datetime),
+  UNIQUE INDEX uq_visits_appointment (appointment_id),
   INDEX idx_visits_status (status),
   INDEX idx_visits_recorded_by (recorded_by_person_id),
   INDEX idx_visits_attended_by (attended_by_person_id)
@@ -581,6 +611,11 @@ CREATE TABLE appointments (
   UNIQUE INDEX uq_appointments_reserved_slot (reserved_slot, purpose)
 );
 
+ALTER TABLE visits
+  ADD CONSTRAINT fk_visits_appointment
+    FOREIGN KEY (appointment_id) REFERENCES appointments(appointment_id)
+    ON DELETE SET NULL;
+
 CREATE TABLE appointment_availability_blocks (
   availability_block_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   block_date DATE NOT NULL,
@@ -724,6 +759,18 @@ CREATE TABLE ape_records (
   INDEX idx_ape_records_cycle (ape_cycle_id),
   INDEX idx_ape_records_schedule_batch (schedule_batch_id),
   INDEX idx_ape_records_reviewed_by (reviewed_by_person_id)
+);
+
+CREATE TABLE ape_record_amendments (
+  amendment_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  ape_id BIGINT UNSIGNED NOT NULL,
+  reason VARCHAR(500) NOT NULL,
+  correction_note TEXT NOT NULL,
+  created_by_person_id BIGINT UNSIGNED NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_ape_amendment_record FOREIGN KEY (ape_id) REFERENCES ape_records(ape_id) ON DELETE RESTRICT,
+  CONSTRAINT fk_ape_amendment_author FOREIGN KEY (created_by_person_id) REFERENCES clinic_staff(person_id) ON DELETE RESTRICT,
+  INDEX idx_ape_amendments_record (ape_id, created_at, amendment_id)
 );
 
 CREATE TABLE ape_requirements (

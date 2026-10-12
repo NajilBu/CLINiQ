@@ -10,7 +10,7 @@ const VISITOR_REGISTERED_ONLY_REASONS = [VISITOR_REASON_BORROW_EQUIPMENT, 'APE']
 $errors = [];
 $success = null;
 $reasonOptions = array_values(array_unique(array_merge(visit_purposes(), [VISITOR_REASON_BORROW_EQUIPMENT])));
-$categoryOptions = ['Student', 'Staff', 'Faculty', 'Non-Teaching Personnel'];
+$categoryOptions = dropdown_options('person_category');
 $equipmentItems = cliniq_inventory_db()->query("
     SELECT item_id AS id, item_name, quantity, unit
     FROM inventory_items
@@ -227,7 +227,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'guest_name' => $isGuest ? $form['full_name'] : null,
             'chief_complaint' => mb_substr($patientConcern, 0, 255),
             'status' => 'Unaddressed',
-            'visit_purpose' => normalize_visit_purpose($form['reason']),
+            'visit_purpose' => normalize_visit_purpose($form['reason'], [VISITOR_REASON_BORROW_EQUIPMENT]),
             'visit_source' => 'Self Logbook',
             'action_taken' => 'Visitor/patient self-registration. Awaiting clinic assessment.',
         ], [
@@ -641,12 +641,7 @@ $theme = active_cliniq_theme();
                             <label class="visit-label" for="department" id="studentDetailLabel"><?= $form['category'] === 'Student' ? 'Section' : 'Department' ?></label>
                             <div class="visit-field">
                                 <span class="material-symbols-outlined">school</span>
-                                <input class="visit-input <?= isset($errors['department']) ? 'input-error' : '' ?>" id="department" name="department" value="<?= e($form['department']) ?>" list="departmentOptions" placeholder="<?= $form['category'] === 'Student' ? 'e.g. BSIT-4D' : 'Select department' ?>" required>
-                                <datalist id="departmentOptions">
-                                    <?php foreach (dropdown_options('department') as $department): ?>
-                                        <option value="<?= e($department) ?>"></option>
-                                    <?php endforeach; ?>
-                                </datalist>
+                                <input class="visit-input <?= isset($errors['department']) ? 'input-error' : '' ?>" id="department" name="department" value="<?= e($form['department']) ?>" placeholder="<?= $form['category'] === 'Student' ? 'e.g. BSIT-4D' : 'Department or office' ?>" required>
                             </div>
                         </div>
 
