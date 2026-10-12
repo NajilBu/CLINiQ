@@ -721,6 +721,7 @@ function render_footer(): void
  */
 function render_ag_grid(string $gridId, array $columns, array $rows, array $options = []): void
 {
+    $showRowNumber = $options['showRowNumber'] ?? true;
     $hasRowNumberColumn = false;
     foreach ($columns as $column) {
         if (($column['field'] ?? '') === 'rowNumber') {
@@ -728,7 +729,7 @@ function render_ag_grid(string $gridId, array $columns, array $rows, array $opti
             break;
         }
     }
-    if (!$hasRowNumberColumn) {
+    if ($showRowNumber && !$hasRowNumberColumn) {
         array_unshift($columns, [
             'headerName' => 'No.',
             'field' => 'rowNumber',
@@ -741,12 +742,14 @@ function render_ag_grid(string $gridId, array $columns, array $rows, array $opti
             'filter' => false,
         ]);
     }
-    foreach ($rows as $rowIndex => &$row) {
-        if (!array_key_exists('rowNumber', $row)) {
-            $row['rowNumber'] = $rowIndex + 1;
+    if ($showRowNumber) {
+        foreach ($rows as $rowIndex => &$row) {
+            if (!array_key_exists('rowNumber', $row)) {
+                $row['rowNumber'] = $rowIndex + 1;
+            }
         }
+        unset($row);
     }
-    unset($row);
 
     $pageSize = $options['pageSize'] ?? 25;
     $height = $options['height'] ?? 'standard';

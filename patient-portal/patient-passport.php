@@ -74,7 +74,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $passport['secondary_contact'] = trim((string) ($_POST['secondary_contact'] ?? ''));
     if ($passport['allergies'] === '') throw new InvalidArgumentException('Enter your allergies, or type “None” if you have no known allergies.');
     if ($passport['instructions'] === '') throw new InvalidArgumentException('Enter emergency instructions so responders know what to do.');
-    $contact = cliniq_validate_emergency_contact($passport, dropdown_options('guardian_relationship'));
+    $relationshipOptions = dropdown_options('guardian_relationship');
+    if ($passport['relationship'] !== '' && !in_array($passport['relationship'], $relationshipOptions, true)) {
+        $relationshipOptions[] = $passport['relationship'];
+    }
+    $contact = cliniq_validate_emergency_contact($passport, $relationshipOptions);
     $passport['guardian_name'] = $contact['guardian_name'];
     $passport['relationship'] = $contact['relationship'];
     $passport['primary_contact'] = $contact['primary_contact'];
@@ -371,6 +375,7 @@ render_student_header('Emergency Health Passport', 'passport');
                         <select id="relationship" name="relationship" class="student-select" required>
                             <?php
                             $rels = dropdown_options('guardian_relationship');
+                            if ($passport['relationship'] !== '' && !in_array($passport['relationship'], $rels, true)) $rels[] = $passport['relationship'];
                             foreach ($rels as $r):
                             ?>
                                 <option value="<?= student_e($r) ?>" <?= $passport['relationship'] === $r ? 'selected' : '' ?>><?= student_e($r) ?></option>

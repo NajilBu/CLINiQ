@@ -27,7 +27,7 @@ render_student_header('Help & FAQs', 'help');
         </div>
         <div class="patient-help-accordion-list">
             <details class="patient-help-accordion"><summary>How do I create my portal account?</summary><div class="patient-help-answer">Start from the student registration page, verify your identity and email, then complete the required profile details.<a href="<?= student_e(student_portal_url('signup')) ?>">Open student registration <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></a></div></details>
-            <details class="patient-help-accordion"><summary>What is the difference between Applicant and Official access?</summary><div class="patient-help-answer">Applicant access lets you complete required APE steps. Appointment booking and the Health Passport become available after the clinic marks your account as Official.</div></details>
+            <details class="patient-help-accordion"><summary>When are clinic services available?</summary><div class="patient-help-answer">While your APE is being completed, you can finish its required steps. The Health Passport and appointment booking become available after the clinic completes your APE clearance.</div></details>
             <details class="patient-help-accordion"><summary>What if I cannot sign in or forgot my password?</summary><div class="patient-help-answer">Use the password recovery page to request a reset link for your portal account.<a href="<?= student_e(student_portal_url('forgot-password')) ?>">Recover portal access <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></a></div></details>
         </div>
     </section>
@@ -56,7 +56,7 @@ render_student_header('Help & FAQs', 'help');
             <span class="patient-help-category-icon material-symbols-outlined" aria-hidden="true">event_available</span>
         </div>
         <div class="patient-help-accordion-list">
-            <details class="patient-help-accordion"><summary>When can I request an appointment?</summary><div class="patient-help-answer">Appointment booking is available to Official accounts. If you have Applicant access, complete your APE requirements or contact the clinic for assistance.</div></details>
+            <details class="patient-help-accordion"><summary>When can I request an appointment?</summary><div class="patient-help-answer">Appointment booking becomes available after the clinic completes your APE clearance. Until then, complete your APE requirements or contact the clinic for assistance.</div></details>
             <details class="patient-help-accordion"><summary>How do I request or check a clinic visit?</summary><div class="patient-help-answer">Use the Appointments page to choose an available schedule and review your recent appointment requests and their status.<a href="<?= student_e(student_portal_url('appointments')) ?>">Open Appointments <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></a></div></details>
             <details class="patient-help-accordion"><summary>Can I change or cancel an appointment?</summary><div class="patient-help-answer">Open the Appointments page and use the available actions on your request. If there is no action available, contact or visit the clinic.</div></details>
         </div>

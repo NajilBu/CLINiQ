@@ -135,6 +135,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'patie
     exit;
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'review_enrollment_correction') {
+    try {
+        if (!csrf_request_is_valid() || !can_manage_patient_accounts($user)) {
+            throw new InvalidArgumentException('Only administrators can review enrollment placement corrections.');
+        }
+        review_student_enrollment_correction_request((int) ($_POST['request_id'] ?? 0), (int) ($user['person_id'] ?? 0), (string) ($_POST['decision'] ?? ''), (string) ($_POST['review_note'] ?? ''));
+        flash_message('success', 'Enrollment placement correction reviewed.');
+    } catch (Throwable $e) {
+        flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $e->getMessage());
+    }
+    header('Location: view.php?id=' . (int) $patient['person_id']);
+    exit;
+}
+
 $isFourthYearStudent = ($patient['patient_type'] ?? '') === 'Student' && trim((string) ($patient['year_level'] ?? '')) === '4';
 $isGraduated = $isFourthYearStudent && graduation_is_graduated((int) $patient['person_id']);
 $graduationBatchYear = null;
@@ -148,25 +162,49 @@ $visits = cliniq_patient_profile_history((int) $patient['person_id']);
 ensure_ape_workflow_schema();
 ensure_alert_workflow_schema();
 $alertStmt = auth_db()->prepare('
-    SELECT a.*,
-           TRIM(CONCAT_WS(" ", rp.first_name, rp.middle_name, rp.last_name)) AS resolved_by_name
+    SELECT a.*, ir.id AS linked_incident_report_id,
+           TRIM(CONCAT_WS(" ", NULLIF(resolver_staff.honorific, ""), rp.first_name, rp.middle_name, rp.last_name)) AS resolved_by_name
     FROM nurse_alerts a
+    LEFT JOIN incident_reports ir ON ir.id = a.incident_report_id
     LEFT JOIN people rp ON rp.id = a.resolved_by
+    LEFT JOIN clinic_staff resolver_staff ON resolver_staff.person_id = rp.id
     WHERE a.patient_id = ?
     ORDER BY a.created_at DESC, a.id DESC
 ');
 $alertStmt->execute([(int) $patient['person_id']]);
 $alertReports = $alertStmt->fetchAll();
+$unlinkedIncidentStmt = auth_db()->prepare('
+    SELECT ir.*
+    FROM incident_reports ir
+    LEFT JOIN nurse_alerts a ON a.incident_report_id = ir.id
+    WHERE ir.patient_id = ? AND a.id IS NULL
+    ORDER BY ir.reported_at DESC, ir.id DESC
+');
+$unlinkedIncidentStmt->execute([(int) $patient['person_id']]);
+foreach ($unlinkedIncidentStmt->fetchAll() as $incident) {
+    $alertReports[] = [
+        'id' => 0,
+        'incident_report_id' => (int) $incident['id'],
+        'status' => (string) ($incident['status'] ?? 'New'),
+        'risk_level' => (string) ($incident['reporter_risk_rating'] ?? 'Not assessed'),
+        'created_at' => (string) ($incident['reported_at'] ?? ''),
+        'reporter_name' => (string) ($incident['reporter_name'] ?? ''),
+        'reporter_role' => 'Emergency Passport',
+        'location' => (string) ($incident['location'] ?? ''),
+        'concern' => 'Emergency passport incident report',
+        'details' => (string) ($incident['notes'] ?? ''),
+        'incident_type' => '',
+        'resolution_report' => '',
+        'resolved_by_name' => '',
+        'is_unlinked_incident' => true,
+    ];
+}
+usort($alertReports, static fn(array $left, array $right): int => strcmp((string) ($right['created_at'] ?? ''), (string) ($left['created_at'] ?? '')));
 $apeRecords = ape_fetch_patient_records((int) $patient['person_id']);
+$enrollmentCorrectionRequest = null;
+try { $enrollmentCorrectionRequest = student_enrollment_correction_request_for_student((int) $patient['person_id']); } catch (Throwable) { }
 $latestApeRecord = $apeRecords[0] ?? null;
-$completedApeRecords = array_values(array_filter(
-    $apeRecords,
-    static fn(array $apeRecord): bool => ape_record_queue($apeRecord) === 'completed'
-));
-$documentCount = array_sum(array_map(
-    static fn(array $apeRecord): int => (int) ($apeRecord['document_count'] ?? 0),
-    $apeRecords
-));
+$completedApeRecords = $apeRecords;
 
 $refStmt = auth_db()->prepare('
     SELECT r.*, TRIM(CONCAT_WS(" ", pe.first_name, pe.middle_name, pe.last_name)) AS referred_by_name
@@ -180,13 +218,19 @@ $referrals = $refStmt->fetchAll();
 
 ensure_appointment_schema();
 $appointmentStmt = appointment_db()->prepare('
-    SELECT appointment_id, appointment_datetime, purpose, status, notes, cancellation_reason, created_at
+    SELECT appointment_id, appointment_datetime, purpose, request_source, status, notes, cancellation_reason, created_at
     FROM appointments
     WHERE patient_id = ?
     ORDER BY appointment_datetime ASC, created_at DESC
 ');
 $appointmentStmt->execute([(int) $patient['person_id']]);
 $appointments = $appointmentStmt->fetchAll();
+$linkedVisitAppointmentStmt = auth_db()->prepare('
+    SELECT appointment_id
+    FROM visits
+    WHERE patient_person_id = ? AND appointment_id IS NOT NULL
+');
+$linkedVisitAppointmentStmt->execute([(int) $patient['person_id']]);
 $nowTimestamp = time();
 $upcomingAppointments = [];
 $appointmentHistory = [];
@@ -204,17 +248,40 @@ usort($appointmentHistory, static function (array $left, array $right): int {
         <=> (strtotime((string) ($left['appointment_datetime'] ?? '')) ?: 0);
 });
 $nextAppointment = $upcomingAppointments[0] ?? null;
-
-$latestVisit = null;
-foreach ($visits as $visit) {
-    if (!$latestVisit || strtotime($visit['visit_datetime']) > strtotime($latestVisit['visit_datetime'])) {
-        $latestVisit = $visit;
+$linkedVisitAppointmentIds = [];
+foreach ($linkedVisitAppointmentStmt->fetchAll() as $linkedVisitAppointment) {
+    $linkedAppointmentId = (int) ($linkedVisitAppointment['appointment_id'] ?? 0);
+    if ($linkedAppointmentId > 0) {
+        $linkedVisitAppointmentIds[$linkedAppointmentId] = true;
     }
 }
-$attentionVisitCount = count(array_filter(
-    $visits,
-    fn(array $visit): bool => in_array(($visit['status'] ?? 'Unaddressed'), ['Unaddressed', 'Active'], true)
-));
+$careTimelineRecords = [];
+foreach ($visits as $visit) {
+    $careTimelineRecords[] = [
+        'type' => 'visit',
+        'timestamp' => (string) ($visit['visit_datetime'] ?? ''),
+        'record' => $visit,
+    ];
+}
+foreach ($appointments as $appointment) {
+    if ((string) ($appointment['status'] ?? '') !== 'Completed') {
+        continue;
+    }
+    if (isset($linkedVisitAppointmentIds[(int) ($appointment['appointment_id'] ?? 0)])) {
+        continue;
+    }
+    $careTimelineRecords[] = [
+        'type' => 'appointment',
+        'timestamp' => (string) ($appointment['appointment_datetime'] ?? ''),
+        'record' => $appointment,
+    ];
+}
+usort($careTimelineRecords, static function (array $left, array $right): int {
+    return (strtotime((string) ($right['timestamp'] ?? '')) ?: 0)
+        <=> (strtotime((string) ($left['timestamp'] ?? '')) ?: 0);
+});
+
+$latestCareRecord = $careTimelineRecords[0] ?? null;
 $birthdateLabel = $patient['birthdate'] ? date('F j, Y', strtotime($patient['birthdate'])) : 'Not specified';
 $ageLabel = 'Not specified';
 if ($patient['birthdate']) {
@@ -235,7 +302,72 @@ $accountStatusIcon = $accountStatus === 'active' ? 'verified_user' : ($accountSt
 $portalAccess = trim((string) ($patient['access_status'] ?? '')) ?: 'Not available';
 $portalAccessStyle = $portalAccess === 'Official' ? 'text-emerald-700' : ($portalAccess === 'Applicant' ? 'text-amber-700' : 'text-slate-600');
 $courseLabel = $patient['course_section'] ?: $patient['patient_type'];
-$lastVisitLabel = $latestVisit ? date('M d, Y g:i A', strtotime($latestVisit['visit_datetime'])) : 'No visits yet';
+$latestCareLabel = $latestCareRecord
+    ? date('M d, Y g:i A', strtotime((string) $latestCareRecord['timestamp']))
+    : 'No care records yet';
+$openReferrals = array_values(array_filter(
+    $referrals,
+    static fn(array $referral): bool => !in_array((string) ($referral['status'] ?? ''), ['Completed', 'Cancelled'], true)
+));
+$latestApeDocumentCount = (int) ($latestApeRecord['document_count'] ?? 0);
+$latestApeRequirementCount = (int) ($latestApeRecord['requirement_count'] ?? 0);
+$latestApeDeadline = $latestApeRecord ? ape_deadline_status($latestApeRecord) : null;
+$openCareItems = [];
+$addOpenCareItem = static function (array $item) use (&$openCareItems): void {
+    $item['url'] = (string) ($item['url'] ?? '');
+    $openCareItems[] = $item;
+};
+foreach ($visits as $visit) {
+    if (!in_array((string) ($visit['status'] ?? ''), ['Unaddressed', 'Active'], true)) continue;
+    $addOpenCareItem([
+        'type' => 'Visit',
+        'title' => (string) ($visit['chief_complaint'] ?: 'Clinic visit needs attention'),
+        'detail' => (string) ($visit['status'] ?? 'Unaddressed'),
+        'url' => app_url('visits/view.php?id=' . (int) $visit['id'] . '&from=profile'),
+    ]);
+}
+foreach ($alertReports as $alert) {
+    if (in_array((string) ($alert['status'] ?? ''), ['Resolved', 'Cancelled'], true)) continue;
+    $alertId = (int) ($alert['id'] ?? 0);
+    $addOpenCareItem([
+        'type' => !empty($alert['incident_report_id']) ? 'Emergency alert' : 'Alert',
+        'title' => (string) ($alert['concern'] ?? 'Alert needs attention'),
+        'detail' => (string) ($alert['status'] ?? 'Pending'),
+        'url' => $alertId > 0 ? app_url('alerts/view.php?id=' . $alertId . '&from=profile') : app_url('patients/view.php?id=' . $id . '#profile-history'),
+    ]);
+}
+foreach ($apeRecords as $apeRecord) {
+    foreach (ape_patient_document_action_summaries($apeRecord) as $apeAction) {
+        $sourceUrl = ltrim(preg_replace('#^\.\./#', '', (string) ($apeAction['source_url'] ?? 'ape/view.php?id=' . (int) $apeRecord['id'])) ?? '', '/');
+        $addOpenCareItem([
+            'type' => 'APE',
+            'title' => (string) ($apeAction['title'] ?? 'APE review needed'),
+            'detail' => (string) ($apeAction['status'] ?? 'Pending'),
+            'due_at' => (string) ($apeAction['due_at'] ?? ''),
+            'url' => app_url($sourceUrl),
+        ]);
+    }
+}
+foreach ($appointments as $appointment) {
+    $status = (string) ($appointment['status'] ?? '');
+    $isPastScheduled = $status === 'Scheduled' && (strtotime((string) ($appointment['appointment_datetime'] ?? '')) ?: 0) < $nowTimestamp;
+    if (!in_array($status, ['Pending', 'For Confirmation'], true) && !$isPastScheduled) continue;
+    $addOpenCareItem([
+        'type' => 'Appointment',
+        'title' => (string) ($appointment['purpose'] ?? 'Appointment needs review'),
+        'detail' => $isPastScheduled ? 'Past scheduled appointment' : appointment_status_display_label($status),
+        'url' => app_url('appointments/view.php?id=' . (int) $appointment['appointment_id'] . '&status=' . rawurlencode($status)),
+    ]);
+}
+foreach ($openReferrals as $referral) {
+    $addOpenCareItem([
+        'type' => 'Referral',
+        'title' => (string) ($referral['referred_to'] ?? 'Referral needs follow-up'),
+        'detail' => (string) ($referral['status'] ?? 'Open'),
+        'url' => app_url('referrals/index.php?status=incomplete'),
+    ]);
+}
+usort($openCareItems, static fn(array $left, array $right): int => strcmp((string) ($left['due_at'] ?? ''), (string) ($right['due_at'] ?? '')));
 $affiliationLabel = 'Classification';
 $affiliationValue = patient_category_label($patient['patient_type'] ?? '');
 $profileDetailLabel = 'Profile Details';
@@ -550,19 +682,20 @@ render_header($fullName . ' - Patient Profile');
                         <?php if (can_manage_patient_accounts($user)): ?>
                             <button type="button" class="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-black uppercase tracking-wide <?= e($accountStatusStyle) ?>" onclick="showModal('patientAccountStatusModal')" aria-haspopup="dialog">
                                 <span class="material-symbols-outlined text-[15px]" aria-hidden="true"><?= e($accountStatusIcon) ?></span>
-                                Account <?= e($accountStatusLabel) ?>
+                                Portal Account: <?= e($accountStatusLabel) ?>
                             </button>
                         <?php else: ?>
                             <span class="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-black uppercase tracking-wide <?= e($accountStatusStyle) ?>">
                                 <span class="material-symbols-outlined text-[15px]" aria-hidden="true"><?= e($accountStatusIcon) ?></span>
-                                Account <?= e($accountStatusLabel) ?>
+                                Portal Account: <?= e($accountStatusLabel) ?>
                             </span>
                         <?php endif; ?>
                     </div>
                     <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs font-bold text-slate-500">
                         <span><?= e($emailLabel) ?></span>
                         <?php if ($isGraduated): ?><span class="text-emerald-700">Graduated</span><?php elseif ($graduationClearance): ?><span class="text-emerald-700">Cleared for Graduation · Batch <?= (int) $graduationClearance['batch_year'] ?></span><?php endif; ?>
-                        <span>Emergency: <?= e($patient['guardian_name'] ?: 'Not specified') ?></span>
+                        <?php $hasEmergencyContact = trim((string) ($patient['guardian_name'] ?? '')) !== '' && trim((string) ($patient['guardian_contact'] ?? '')) !== ''; ?>
+                        <span class="<?= $hasEmergencyContact ? 'text-emerald-700' : 'text-amber-700' ?>">Emergency contact: <?= $hasEmergencyContact ? 'on file' : 'incomplete' ?></span>
                     </div>
                 </div>
             </div>
@@ -608,6 +741,14 @@ render_header($fullName . ' - Patient Profile');
             </div>
         </div>
     </section>
+
+    <?php if (can_manage_patient_accounts($user) && $enrollmentCorrectionRequest && ($enrollmentCorrectionRequest['status'] ?? '') === 'Pending'): ?>
+        <section class="clinic-card p-5 mb-6 border border-amber-200 bg-amber-50/40">
+            <p class="clinic-label text-amber-800 mb-1">Enrollment placement correction</p>
+            <p class="text-sm font-bold text-slate-700 mb-3">Requested Year <?= e((string) $enrollmentCorrectionRequest['requested_year_level']) ?> · <?= e((string) $enrollmentCorrectionRequest['requested_section']) ?><br><span class="text-slate-500 whitespace-pre-wrap"><?= e((string) $enrollmentCorrectionRequest['request_note']) ?></span></p>
+            <form method="post" class="grid gap-3"><input type="hidden" name="action" value="review_enrollment_correction"><input type="hidden" name="request_id" value="<?= (int) $enrollmentCorrectionRequest['request_id'] ?>"><label class="clinic-label">Review note<input class="clinic-input mt-1" name="review_note" maxlength="1000"></label><div class="flex gap-2"><button class="btn btn-primary" name="decision" value="Approved">Approve placement</button><button class="btn btn-outline" name="decision" value="Rejected">Reject request</button></div></form>
+        </section>
+    <?php endif; ?>
 
     <?php if (can_manage_patient_accounts($user)): ?>
         <div class="modal-backdrop" id="patientAccountStatusModal" role="dialog" aria-modal="true" aria-labelledby="patientAccountStatusTitle" style="display:none">
@@ -690,6 +831,7 @@ render_header($fullName . ' - Patient Profile');
             'overview' => ['Overview', 'dashboard'],
             'appointments' => ['Appointments', 'event'],
             'clinical' => ['Clinical', 'medical_information'],
+            'attention' => ['Attention (' . count($openCareItems) . ')', 'priority_high'],
             'history' => ['History', 'history'],
         ] as $tabId => [$tabLabel, $tabIcon]): ?>
             <button type="button" class="patient-profile-tab" role="tab" id="profile-tab-<?= e($tabId) ?>" aria-controls="profile-panel-<?= e($tabId) ?>" aria-selected="<?= $tabId === 'overview' ? 'true' : 'false' ?>" tabindex="<?= $tabId === 'overview' ? '0' : '-1' ?>" data-profile-tab="<?= e($tabId) ?>">
@@ -701,27 +843,35 @@ render_header($fullName . ' - Patient Profile');
     <section id="profile-panel-overview" role="tabpanel" aria-labelledby="profile-tab-overview" data-profile-panel="overview" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <div class="patient-profile-card p-5 flex items-center gap-4">
             <div class="w-12 h-12 rounded-2xl bg-primary-fixed text-primary flex items-center justify-center shrink-0"><span class="material-symbols-outlined">clinical_notes</span></div>
-            <div><p class="clinic-label mb-1">Total Visits</p><p class="font-headline text-3xl font-extrabold text-slate-800 leading-none m-0"><?= count($visits) ?></p></div>
+            <div><p class="clinic-label mb-1">Care Records</p><p class="font-headline text-3xl font-extrabold text-slate-800 leading-none m-0"><?= count($careTimelineRecords) ?></p></div>
         </div>
         <div class="patient-profile-card p-5 flex items-center gap-4">
             <div class="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined">schedule</span></div>
-            <div class="min-w-0"><p class="clinic-label mb-1">Latest Visit</p><p class="text-sm font-extrabold text-slate-800 leading-snug m-0"><?= e($lastVisitLabel) ?></p></div>
+            <div class="min-w-0"><p class="clinic-label mb-1">Latest Care</p><p class="text-sm font-extrabold text-slate-800 leading-snug m-0"><?= e($latestCareLabel) ?></p></div>
         </div>
-        <div class="patient-profile-card p-5 flex items-center gap-4">
+        <button type="button" class="patient-profile-card p-5 flex items-center gap-4 text-left" data-open-care-items aria-controls="profile-panel-attention">
             <div class="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined">priority_high</span></div>
-            <div><p class="clinic-label mb-1">Needs Attention</p><p class="font-headline text-3xl font-extrabold text-slate-800 leading-none m-0"><?= $attentionVisitCount + count(array_filter($alertReports, static fn(array $alert): bool => ($alert['status'] ?? '') !== 'Resolved')) ?></p></div>
-        </div>
+            <div><p class="clinic-label mb-1">Needs Attention</p><p class="font-headline text-3xl font-extrabold text-slate-800 leading-none m-0"><?= count($openCareItems) ?></p><p class="text-xs font-bold text-primary mt-2 mb-0">Open care items</p></div>
+        </button>
         <div class="patient-profile-card p-5 flex items-center gap-4">
             <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined">folder_open</span></div>
-            <div><p class="clinic-label mb-1">APE Documents</p><p class="font-headline text-3xl font-extrabold text-slate-800 leading-none m-0"><?= $documentCount ?></p></div>
+            <div><p class="clinic-label mb-1">APE Documents</p><p class="font-headline text-3xl font-extrabold text-slate-800 leading-none m-0"><?= $latestApeDocumentCount ?> / <?= $latestApeRequirementCount ?></p></div>
         </div>
         <div class="patient-profile-card p-5 sm:col-span-2 xl:col-span-4">
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="patient-profile-note <?= $latestApeRecord ? '' : 'warning' ?>"><span class="clinic-label">APE status</span><strong><?= e($latestApeRecord ? $apeWorkflowLabel : 'No APE record') ?></strong></div>
+                <div class="patient-profile-note <?= $latestApeRecord ? '' : 'warning' ?>"><span class="clinic-label">APE status</span><strong><?= e($latestApeRecord ? ($apeWorkflowLabel . (!empty($latestApeRecord['academic_year']) ? ' · ' . $latestApeRecord['academic_year'] : '')) : 'No APE record') ?></strong><?php if ($latestApeDeadline): ?><span class="text-xs font-bold <?= $latestApeDeadline['label'] === 'Overdue' ? 'text-red-700' : 'text-slate-500' ?>"><?= e($latestApeDeadline['label']) ?> · due <?= e(date('M j, Y', strtotime($latestApeDeadline['due_date']))) ?></span><?php endif; ?></div>
                 <div class="patient-profile-note"><span class="clinic-label">Upcoming appointment</span><strong><?= $nextAppointment ? e(date('M j, Y g:i A', strtotime($nextAppointment['appointment_datetime']))) : 'None scheduled' ?></strong></div>
-                <div class="patient-profile-note"><span class="clinic-label">Current referrals</span><strong><?= count($referrals) ?> record<?= count($referrals) === 1 ? '' : 's' ?></strong></div>
+                <div class="patient-profile-note"><span class="clinic-label">Open referrals</span><strong><?= count($openReferrals) ?> record<?= count($openReferrals) === 1 ? '' : 's' ?></strong></div>
             </div>
         </div>
+    </section>
+
+    <section id="profile-panel-attention" role="tabpanel" aria-labelledby="profile-tab-attention" data-profile-panel="attention" hidden class="clinic-card overflow-hidden">
+        <div class="p-5 md:p-6 border-b border-slate-100 flex items-center justify-between gap-3">
+            <div><p class="clinic-label mb-1">Student-specific work</p><h2 class="font-headline text-2xl font-extrabold text-[#17261d] m-0">Open Care Items</h2><p class="text-sm font-bold text-slate-500 mt-1 mb-0">Only unresolved care, safety, appointment, APE, and referral work appears here.</p></div>
+            <span class="badge <?= $openCareItems ? 'badge-pending' : 'badge-completed' ?>"><?= count($openCareItems) ?> item<?= count($openCareItems) === 1 ? '' : 's' ?></span>
+        </div>
+        <?php if ($openCareItems): ?><div class="divide-y divide-slate-100"><?php foreach ($openCareItems as $item): ?><a href="<?= e($item['url']) ?>" class="p-5 flex items-center justify-between gap-4 text-decoration-none hover:bg-slate-50/70"><div><p class="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-1"><?= e($item['type']) ?></p><strong class="text-sm text-slate-800"><?= e($item['title']) ?></strong><p class="text-xs font-bold text-slate-500 mt-1 mb-0"><?= e($item['detail']) ?><?= !empty($item['due_at']) ? ' · due ' . e(date('M j, Y', strtotime($item['due_at']))) : '' ?></p></div><span class="material-symbols-outlined text-primary" aria-hidden="true">arrow_forward</span></a><?php endforeach; ?></div><?php else: ?><div class="empty-state py-10"><span class="material-symbols-outlined">task_alt</span><p class="empty-state-title">No open care items</p><p class="empty-state-text">This student has no unresolved profile work at this time.</p></div><?php endif; ?>
     </section>
 
     <section id="profile-panel-appointments" role="tabpanel" aria-labelledby="profile-tab-appointments" data-profile-panel="appointments" hidden class="clinic-card overflow-hidden">
@@ -750,45 +900,7 @@ render_header($fullName . ' - Patient Profile');
         </div>
     </section>
 
-    <section class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 hidden" aria-hidden="true">
-        <div class="patient-profile-card p-5 flex items-center gap-4">
-            <div class="w-12 h-12 rounded-2xl bg-primary-fixed text-primary flex items-center justify-center shrink-0">
-                <span class="material-symbols-outlined">clinical_notes</span>
-            </div>
-            <div>
-                <p class="clinic-label mb-1">Total Visits</p>
-                <p class="font-headline text-3xl font-extrabold text-slate-800 leading-none m-0"><?= count($visits) ?></p>
-            </div>
-        </div>
-        <div class="patient-profile-card p-5 flex items-center gap-4">
-            <div class="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                <span class="material-symbols-outlined">schedule</span>
-            </div>
-            <div class="min-w-0">
-                <p class="clinic-label mb-1">Latest Visit</p>
-                <p class="text-sm font-extrabold text-slate-800 leading-snug m-0"><?= e($lastVisitLabel) ?></p>
-            </div>
-        </div>
-        <div class="patient-profile-card p-5 flex items-center gap-4">
-            <div class="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-                <span class="material-symbols-outlined">priority_high</span>
-            </div>
-            <div>
-                <p class="clinic-label mb-1">Needs Attention</p>
-                <p class="font-headline text-3xl font-extrabold text-slate-800 leading-none m-0"><?= $attentionVisitCount ?></p>
-            </div>
-        </div>
-        <div class="patient-profile-card p-5 flex items-center gap-4">
-            <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
-                <span class="material-symbols-outlined">folder_open</span>
-            </div>
-            <div>
-                <p class="clinic-label mb-1">Documents</p>
-                <p class="font-headline text-3xl font-extrabold text-slate-800 leading-none m-0"><?= $documentCount ?></p>
-            </div>
-        </div>
-    </section>
-
+    <?php ob_start(); ?>
     <section class="clinic-card overflow-hidden" data-profile-panel="history" hidden>
         <div class="p-4 md:p-5 border-b border-slate-100 flex items-center justify-between gap-3">
             <div class="flex items-center gap-3">
@@ -807,6 +919,8 @@ render_header($fullName . ' - Patient Profile');
                 <?php foreach ($alertReports as $alert): ?>
                     <?php
                     $alertRecordId = (int) ($alert['id'] ?? $alert['alert_id'] ?? 0);
+                    $isEmergencyPassportAlert = !empty($alert['linked_incident_report_id']) || !empty($alert['incident_report_id']) || ($alert['reporter_role'] ?? '') === 'Emergency Passport';
+                    $isUnlinkedIncident = !empty($alert['is_unlinked_incident']);
                     $alertStatus = trim((string) ($alert['status'] ?? 'Pending')) ?: 'Pending';
                     $alertRisk = trim((string) ($alert['risk_level'] ?? 'Not assessed')) ?: 'Not assessed';
                     $alertDate = (string) ($alert['created_at'] ?? '');
@@ -823,6 +937,9 @@ render_header($fullName . ' - Patient Profile');
                                     <span class="mb-2 flex flex-wrap items-center gap-2">
                                         <span class="badge <?= e(status_badge_class($alertStatus)) ?>"><?= e($alertStatus) ?></span>
                                         <span class="badge <?= $alertRisk === 'Critical' || $alertRisk === 'High' ? 'badge-critical' : 'badge-pending' ?>"><?= e($alertRisk) ?> risk</span>
+                                        <?php if ($isEmergencyPassportAlert): ?>
+                                            <span class="text-[11px] font-black uppercase tracking-widest text-slate-400">Emergency Passport</span>
+                                        <?php endif; ?>
                                         <?php if (trim((string) ($alert['incident_type'] ?? '')) !== ''): ?>
                                             <span class="text-[11px] font-black uppercase tracking-widest text-slate-400"><?= e($alert['incident_type']) ?></span>
                                         <?php endif; ?>
@@ -837,12 +954,12 @@ render_header($fullName . ' - Patient Profile');
                             </span>
                         </button>
                         <div id="alert-details-<?= $alertRecordId ?>" class="mt-3 hidden rounded-2xl bg-slate-50 p-4" data-alert-details>
-                            <div class="mb-4 flex justify-end">
+                            <?php if (!$isUnlinkedIncident): ?><div class="mb-4 flex justify-end">
                                 <a href="<?= e(app_url('alerts/view.php?id=' . $alertRecordId . '&from=profile')) ?>" class="btn btn-sm btn-outline text-decoration-none" data-alert-open-report>
                                     <span class="material-symbols-outlined text-[16px]">open_in_new</span>
                                     Open full report
                                 </a>
-                            </div>
+                            </div><?php endif; ?>
                             <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
                                 <div>
                                     <p class="clinic-label mb-2">Report details</p>
@@ -881,6 +998,7 @@ render_header($fullName . ' - Patient Profile');
             </div>
         <?php endif; ?>
     </section>
+    <?php $alertHistoryHtml = ob_get_clean(); ?>
 
     <section class="clinic-card overflow-hidden" data-profile-panel="clinical" hidden>
         <div class="p-5 md:p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -941,15 +1059,15 @@ render_header($fullName . ' - Patient Profile');
                         <strong class="whitespace-pre-wrap text-slate-600"><?= e($declaredHealthItems['Allergies'] !== '' ? $declaredHealthItems['Allergies'] : 'None declared') ?></strong>
                     </div>
                     <div class="patient-profile-note">
-                        <span class="clinic-label">Doctor-confirmed medical conditions</span>
+                    <span class="clinic-label">Recorded Conditions</span>
                         <strong class="whitespace-pre-wrap text-slate-600"><?= e($declaredHealthItems['Existing conditions'] !== '' ? $declaredHealthItems['Existing conditions'] : 'None declared') ?></strong>
                     </div>
                     <div class="patient-profile-note">
-                        <span class="clinic-label">Current medications recorded during APE</span>
+                    <span class="clinic-label">Recorded Medications</span>
                         <strong class="whitespace-pre-wrap text-slate-600"><?= e($declaredHealthItems['Medications'] !== '' ? $declaredHealthItems['Medications'] : 'None declared') ?></strong>
                     </div>
                     <div class="patient-profile-note">
-                        <span class="clinic-label">Clinic-recorded blood type</span>
+                    <span class="clinic-label">Recorded Blood Type</span>
                         <strong class="text-slate-600"><?= e($patient['blood_type'] ?: 'Not recorded') ?></strong>
                     </div>
                     <?php if (!$hasDeclaredHealth): ?>
@@ -1005,12 +1123,16 @@ render_header($fullName . ' - Patient Profile');
                         <strong><?= e($emailLabel) ?></strong>
                     </div>
                     <div class="patient-profile-field md:col-span-2">
-                        <span class="clinic-label">Guardian</span>
+                        <span class="clinic-label">Emergency Contact</span>
                         <strong>
                             <?= e($patient['guardian_name'] ?: 'Not specified') ?>
-                            <?php if ($patient['guardian_contact']): ?>
-                                <span class="text-slate-400">&bull;</span> <?= e($patient['guardian_contact']) ?>
+                            <?php if ($patient['guardian_relationship']): ?>
+                                <span class="text-slate-400">&bull;</span> <?= e($patient['guardian_relationship']) ?>
                             <?php endif; ?>
+                            <?php if ($patient['guardian_contact']): ?>
+                                <span class="text-slate-400">&bull;</span> Primary: <?= e($patient['guardian_contact']) ?>
+                            <?php endif; ?>
+                            <?php if ($patient['secondary_contact']): ?><span class="text-slate-400">&bull;</span> Backup: <?= e($patient['secondary_contact']) ?><?php endif; ?>
                         </strong>
                     </div>
                 </div>
@@ -1099,7 +1221,7 @@ render_header($fullName . ' - Patient Profile');
                 </div>
                 <div>
                     <h2 class="font-headline text-xl font-extrabold text-[#17261d] m-0">Care Timeline</h2>
-                    <p class="text-xs font-bold text-slate-500 m-0"><?= count($visits) ?> visit record(s), newest records shown first.</p>
+                    <p class="text-xs font-bold text-slate-500 m-0"><?= count($careTimelineRecords) ?> care record(s), newest records shown first.</p>
                 </div>
             </div>
             <a class="btn btn-sm btn-outline text-decoration-none" href="<?= app_url('visits/index.php?q=' . rawurlencode((string) $patient['id_number']) . '&status=all') ?>">
@@ -1108,16 +1230,64 @@ render_header($fullName . ' - Patient Profile');
             </a>
         </div>
 
-        <?php if ($visits): ?>
+        <?php if ($careTimelineRecords): ?>
             <div class="care-timeline-toolbar" data-care-filters>
                 <label class="care-timeline-filter">
                     <span class="clinic-label">Search records</span>
-                    <input type="search" class="clinic-input" data-care-search placeholder="Complaint, diagnosis, treatment, medicine...">
+                    <input type="search" class="clinic-input" data-care-search placeholder="Visit, appointment, complaint, diagnosis...">
                 </label>
             </div>
             <div class="patient-profile-timeline divide-y divide-outline-variant/10" data-care-timeline>
-                <?php foreach ($visits as $visitIndex => $visit): ?>
+                <?php foreach ($careTimelineRecords as $visitIndex => $timelineRecord): ?>
+                    <?php if ($timelineRecord['type'] === 'appointment'): ?>
+                        <?php
+                        $appointment = $timelineRecord['record'];
+                        $appointmentStatus = (string) ($appointment['status'] ?? 'Completed');
+                        $appointmentDate = (string) ($appointment['appointment_datetime'] ?? '');
+                        $appointmentPurpose = trim((string) ($appointment['purpose'] ?? '')) ?: 'Clinic appointment';
+                        $appointmentSource = trim((string) ($appointment['request_source'] ?? '')) ?: 'Clinic Staff';
+                        $appointmentNotes = trim((string) ($appointment['notes'] ?? ''));
+                        $appointmentSearchText = strtolower(implode(' ', [$appointmentPurpose, $appointmentStatus, $appointmentNotes, 'clinic appointment']));
+                        ?>
+                        <article class="patient-profile-event <?= $visitIndex === 0 ? '' : 'is-collapsed' ?> cursor-pointer"
+                                 tabindex="0"
+                                 data-care-event
+                                 data-care-search-text="<?= e($appointmentSearchText) ?>"
+                                 data-care-status-value="<?= e(strtolower($appointmentStatus)) ?>"
+                                 data-care-date-value="<?= $appointmentDate !== '' ? e(date('Y-m-d', strtotime($appointmentDate))) : '' ?>">
+                            <div class="patient-profile-event-icon">
+                                <span class="material-symbols-outlined">event</span>
+                            </div>
+                            <div class="patient-profile-event-content">
+                                <div class="flex flex-wrap items-center gap-2 mb-2">
+                                    <span class="badge <?= e(appointment_status_badge_class($appointmentStatus)) ?>"><?= e(appointment_status_display_label($appointmentStatus)) ?></span>
+                                    <span class="text-[11px] font-black uppercase tracking-widest text-slate-400">Completed appointment — no encounter note recorded · <?= e($appointmentSource) ?></span>
+                                </div>
+                                <h3 class="text-base font-extrabold text-slate-900 mb-1"><?= e($appointmentPurpose) ?></h3>
+                                <div data-care-details>
+                                    <?php if ($appointmentNotes !== ''): ?>
+                                        <p class="text-sm font-bold text-slate-500 mb-2 whitespace-pre-wrap"><?= e($appointmentNotes) ?></p>
+                                    <?php else: ?>
+                                        <p class="text-xs font-bold text-slate-400 mb-0">No appointment notes were recorded.</p>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                            <div class="patient-profile-event-meta">
+                                <p class="text-xs font-extrabold text-slate-500 mb-0"><?= $appointmentDate !== '' ? e(date('M d, Y', strtotime($appointmentDate))) : 'Date not recorded' ?></p>
+                                <p class="text-[11px] font-bold text-slate-400 mb-2"><?= $appointmentDate !== '' ? e(date('g:i A', strtotime($appointmentDate))) : '' ?></p>
+                                <button type="button" class="care-timeline-toggle mb-2" data-care-toggle aria-expanded="<?= $visitIndex === 0 ? 'true' : 'false' ?>">
+                                    <span data-care-toggle-label><?= $visitIndex === 0 ? 'Collapse' : 'Expand' ?></span>
+                                    <span class="material-symbols-outlined" aria-hidden="true">expand_less</span>
+                                </button>
+                                <a href="<?= e(app_url('appointments/view.php?id=' . (int) ($appointment['appointment_id'] ?? 0) . '&status=Completed')) ?>" class="text-xs font-black text-primary inline-flex items-center gap-1 text-decoration-none">
+                                    Open record
+                                    <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+                                </a>
+                            </div>
+                        </article>
+                    <?php else: ?>
                     <?php
+                    $visit = $timelineRecord['record'];
                     $visitStatus = $visit['status'] ?? 'Unaddressed';
                     $visitPurpose = $visit['visit_purpose'] ?: 'General Visit';
                     $visitSource = $visit['visit_source'] ?: 'Staff Recorded';
@@ -1284,22 +1454,25 @@ render_header($fullName . ' - Patient Profile');
                             </a>
                         </div>
                     </article>
+                    <?php endif; ?>
                 <?php endforeach; ?>
             </div>
             <div class="hidden px-5 py-8 text-center" data-care-no-results>
                 <span class="material-symbols-outlined text-4xl text-slate-300">search_off</span>
-                <p class="text-sm font-extrabold text-slate-600 mt-2 mb-1">No matching visits</p>
+                <p class="text-sm font-extrabold text-slate-600 mt-2 mb-1">No matching care records</p>
                 <p class="text-xs font-bold text-slate-400 m-0">Change or clear the Care Timeline search.</p>
             </div>
             <div class="care-timeline-pagination pagination justify-center" data-care-pagination aria-label="Care Timeline pages"></div>
         <?php else: ?>
             <div class="empty-state">
                 <span class="material-symbols-outlined">clinical_notes</span>
-                <p class="empty-state-title">No visits recorded</p>
-                <p class="empty-state-text">This patient has no clinic visit history yet.</p>
+                <p class="empty-state-title">No care records</p>
+                <p class="empty-state-text">This patient has no completed appointments or clinic visits yet.</p>
             </div>
         <?php endif; ?>
     </section>
+
+    <?= $alertHistoryHtml ?>
 
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-6" data-profile-panel="history" hidden>
         <section class="clinic-card overflow-hidden">
@@ -1310,7 +1483,7 @@ render_header($fullName . ' - Patient Profile');
                     </div>
                     <div>
                         <h2 class="font-headline text-lg font-extrabold text-[#17261d] m-0">APE Records</h2>
-                        <p class="text-xs font-bold text-slate-500 m-0">Completed annual physical examination history.</p>
+                        <p class="text-xs font-bold text-slate-500 m-0">Annual physical examination history by school year.</p>
                     </div>
                 </div>
                 <span class="badge badge-pending"><?= count($completedApeRecords) ?> record(s)</span>
@@ -1326,13 +1499,13 @@ render_header($fullName . ' - Patient Profile');
                         ?>
                         <a href="<?= e(app_url('ape/view.php?id=' . (int) $ape['id'])) ?>" class="p-5 flex items-center justify-between gap-4 text-decoration-none hover:bg-slate-50/70 transition-colors">
                             <div class="min-w-0">
-                                <p class="text-sm font-extrabold text-slate-800 mb-1">Completed APE</p>
+                                <p class="text-sm font-extrabold text-slate-800 mb-1">APE · <?= e((string) ($ape['academic_year'] ?? 'School year not recorded')) ?></p>
                                 <p class="text-xs font-bold text-slate-400 m-0">
-                                    <?= $completedAt !== '' ? 'Completed ' . e(date('M d, Y', strtotime($completedAt))) : 'Completion date not recorded' ?>
+                                    <?= $completedAt !== '' ? 'Last updated ' . e(date('M d, Y', strtotime($completedAt))) : 'No update date recorded' ?>
                                 </p>
                             </div>
                             <div class="flex items-center gap-3 shrink-0">
-                                <span class="badge badge-completed">Completed</span>
+                                <span class="badge <?= ape_record_mutation_allowed($ape) ? 'badge-pending' : 'badge-completed' ?>"><?= e((string) ($ape['cycle_status'] ?? $ape['workflow_status'] ?? 'Historical')) ?></span>
                                 <span class="text-xs font-black text-primary inline-flex items-center gap-1">
                                     Open record
                                     <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
@@ -1344,8 +1517,8 @@ render_header($fullName . ' - Patient Profile');
             <?php else: ?>
                 <div class="empty-state">
                     <span class="material-symbols-outlined">assignment_turned_in</span>
-                    <p class="empty-state-title">No completed APE records</p>
-                    <p class="empty-state-text">An APE record will appear here after phase five is completed.</p>
+                    <p class="empty-state-title">No APE records</p>
+                    <p class="empty-state-text">APE history will appear here when a cycle creates or assigns a record.</p>
                 </div>
             <?php endif; ?>
         </section>
@@ -1370,9 +1543,10 @@ render_header($fullName . ' - Patient Profile');
                             <div class="min-w-0">
                                 <p class="text-sm font-extrabold text-slate-800 mb-1"><?= e($ref['referred_to']) ?></p>
                                 <p class="text-xs font-bold text-slate-500 mb-1"><?= e($ref['reason']) ?></p>
+                                <?php if (trim((string) ($ref['remarks'] ?? '')) !== ''): ?><p class="text-xs font-bold text-slate-500 mb-1">Outcome: <?= e($ref['remarks']) ?></p><?php endif; ?>
                                 <p class="text-xs font-bold text-slate-400 m-0"><?= e(date('M d, Y', strtotime($ref['referral_date']))) ?></p>
                             </div>
-                            <span class="badge <?= status_badge_class($ref['status']) ?>"><?= e($ref['status']) ?></span>
+                            <div class="flex items-center gap-3 shrink-0"><span class="badge <?= status_badge_class($ref['status']) ?>"><?= e($ref['status']) ?></span><?php if ((int) ($ref['visit_id'] ?? 0) > 0): ?><a href="<?= e(app_url('visits/view.php?id=' . (int) $ref['visit_id'] . '&from=profile')) ?>" class="text-xs font-black text-primary text-decoration-none">Open visit</a><?php endif; ?></div>
                         </div>
                     <?php endforeach; ?>
                 </div>
@@ -1490,6 +1664,7 @@ render_header($fullName . ' - Patient Profile');
 
     const requestedTab = window.location.hash.replace('#profile-', '');
     activateProfileTab(validProfileTabs.has(requestedTab) ? requestedTab : 'overview', false);
+    document.querySelector('[data-open-care-items]')?.addEventListener('click', () => activateProfileTab('attention'));
 
     const openEmailComposer = document.getElementById('openPatientEmailComposerButton');
     const closeEmailComposer = document.getElementById('closePatientEmailComposerButton');

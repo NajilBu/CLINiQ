@@ -9,6 +9,7 @@ require_once __DIR__ . '/ApeCycleService.php';
 require_once __DIR__ . '/AuditLog.php';
 require_once __DIR__ . '/PatientAccessStatus.php';
 require_once __DIR__ . '/AccountValidation.php';
+require_once __DIR__ . '/SystemSettings.php';
 
 function can_manage_patient_accounts(?array $user): bool
 {
@@ -219,15 +220,11 @@ function patient_account_default_email(string $firstName, string $lastName): str
 
 function normalize_faculty_employment_type(string $value): string
 {
-    $normalized = preg_replace('/[^a-z]+/', '', strtolower(trim($value))) ?? '';
-
-    return match ($normalized) {
-        'fulltime' => 'Full-time',
-        'parttime' => 'Part-time',
-        default => throw new InvalidArgumentException(
-            'Faculty employment type must be Full-time or Part-time.'
-        ),
-    };
+    $value = trim($value);
+    if (!in_array($value, dropdown_options('employment_type'), true)) {
+        throw new InvalidArgumentException('Select an active faculty employment type.');
+    }
+    return $value;
 }
 
 function patient_account_normalize_id_number(string $idNumber, string $type): string
@@ -407,8 +404,8 @@ function normalize_student_year_level(string $value): string
 function normalize_student_section_code(string $value): string
 {
     $code = strtoupper(trim($value));
-    if (!in_array($code, ['A', 'B', 'C', 'D', 'E'], true)) {
-        throw new InvalidArgumentException('Student section code must be A, B, C, D, or E.');
+    if (!in_array($code, array_map('strtoupper', dropdown_options('student_section')), true)) {
+        throw new InvalidArgumentException('Select an active student section.');
     }
 
     return $code;

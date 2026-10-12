@@ -301,10 +301,11 @@ function cliniq_inventory_entry_dispensings(array $entryIds): array
         SELECT d.dispensing_id AS id, d.dispensing_id, d.entry_id, d.item_id,
                d.quantity, d.remarks, d.dispensed_at,
                i.item_name, i.item_type, i.unit,
-               TRIM(CONCAT_WS(' ', pe.first_name, pe.middle_name, pe.last_name)) AS dispensed_by_name
+               TRIM(CONCAT_WS(' ', NULLIF(dispensed_staff.honorific, ''), pe.first_name, pe.middle_name, pe.last_name)) AS dispensed_by_name
         FROM medicine_dispensings d
         JOIN inventory_items i ON i.item_id = d.item_id
         LEFT JOIN people pe ON pe.id = d.dispensed_by_person_id
+        LEFT JOIN clinic_staff dispensed_staff ON dispensed_staff.person_id = pe.id
         WHERE d.entry_id IN ({$placeholders})
         ORDER BY d.dispensed_at, d.dispensing_id
     ");
@@ -321,10 +322,11 @@ function cliniq_inventory_transactions(?int $limit = null): array
 {
     $sql = "
         SELECT t.*, i.item_name, i.item_type, i.unit,
-               TRIM(CONCAT_WS(' ', pe.first_name, pe.middle_name, pe.last_name)) AS performed_by_name
+               TRIM(CONCAT_WS(' ', NULLIF(performed_staff.honorific, ''), pe.first_name, pe.middle_name, pe.last_name)) AS performed_by_name
         FROM inventory_transactions t
         JOIN inventory_items i ON i.item_id = t.item_id
         LEFT JOIN people pe ON pe.id = t.performed_by_person_id
+        LEFT JOIN clinic_staff performed_staff ON performed_staff.person_id = pe.id
         ORDER BY t.created_at DESC, t.transaction_id DESC
     ";
     if ($limit !== null) {

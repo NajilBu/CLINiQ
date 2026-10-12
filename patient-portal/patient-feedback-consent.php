@@ -62,7 +62,7 @@ render_student_header('Give Feedback', 'dashboard');
     <?php if ($error): ?><div class="student-note student-note-danger student-feedback-notice" role="alert"><span class="material-symbols-outlined" aria-hidden="true">error</span><span><?= student_e($error) ?></span></div><?php endif; ?>
     <section class="student-card student-card-pad student-feedback-visit-summary">
         <div class="student-card-header"><div><p class="student-feedback-eyebrow">Required clinic feedback</p><h2>Complete feedback to remain eligible for future appointments</h2></div></div>
-        <p class="student-feedback-muted">Select a completed visit, then continue to the survey. You may submit feedback anonymously; this still clears the requirement.</p>
+        <p class="student-feedback-muted">Select a completed visit, then continue to the survey. Anonymous feedback still clears this requirement.</p>
         <form method="post" class="student-feedback-form">
             <input type="hidden" name="_csrf" value="<?= student_e($csrf) ?>">
             <input type="hidden" name="mode" value="start_feedback">
@@ -72,11 +72,11 @@ render_student_header('Give Feedback', 'dashboard');
                     <label class="student-feedback-target-option"><input type="radio" name="feedback_target" value="<?= student_e($targetValue) ?>" <?= $selectedTarget === $targetValue ? 'checked' : '' ?> required><span><strong><?= student_e(date('F j, Y · g:i A', strtotime((string) $item['visit_datetime']))) ?> · <?= student_e($item['visit_purpose'] ?: 'Clinic visit') ?></strong><small>Completed visit · Confidential and linked to this visit</small></span></label>
                 <?php endforeach; ?>
             </fieldset>
-            <label class="student-feedback-consent"><input type="checkbox" name="private_identity" value="1"><span><strong>Submit feedback anonymously</strong><br>Your response still completes the selected visit’s feedback requirement, but staff will not see the visit or your identity.</span></label>
+            <label class="student-feedback-consent"><input type="checkbox" name="private_identity" value="1"><span><strong>Submit feedback anonymously</strong><br>Clinic feedback reports will not show your identity or selected visit. The system keeps a protected link only to record that this requirement was completed.</span></label>
             <input type="hidden" name="participate" value="1">
-            <label class="student-feedback-consent"><input type="checkbox" name="consent" value="1" required><span>I have read the RA 10173 privacy notice and consent to the collection and use of my feedback.</span></label>
+            <label class="student-feedback-consent"><input type="checkbox" name="consent" value="1" required><span>I have read the Data Privacy Act of 2012 (RA 10173) notice and consent to the collection and use of my feedback.</span></label>
             <div class="student-feedback-privacy mt-4">
-                <p><strong>Data privacy notice — RA 10173</strong></p>
+                <p><strong>Data privacy notice — Data Privacy Act of 2012 (RA 10173)</strong></p>
                 <p>Your feedback is collected under the Data Privacy Act of 2012 (Republic Act No. 10173) to evaluate and improve clinic services.</p>
                 <details><summary>Read the privacy notice and your rights</summary><div><p>We collect your ratings, comments, and consent record for service quality improvement and clinic reporting. Visit-linked feedback is confidential and may be used for visit-specific follow-up.</p><p>Access is limited to authorized clinic personnel who need it for evaluation, support, or reporting.</p></div></details>
             </div>

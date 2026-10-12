@@ -85,7 +85,7 @@ foreach ([
     "\$profile = student_require_official_access('Health Passport');" => $passport,
     "function student_require_official_access(" => $layout,
     "unset(\$items['appointment'], \$items['passport'])" => $layout,
-    'Applicant access' => $dashboard,
+    'Clinic access pending APE completion' => $dashboard,
     "\$applicantApePending = !\$isOfficialAccess;" => $dashboard,
     "pt.access_status = \\'Official\\'" => $passportAccess,
     "pt.access_status = 'Official'" => $emergency,

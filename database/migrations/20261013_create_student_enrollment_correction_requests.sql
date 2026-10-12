@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS student_enrollment_correction_requests (
+  request_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  student_person_id BIGINT UNSIGNED NOT NULL,
+  academic_year VARCHAR(20) NOT NULL,
+  current_year_level VARCHAR(40) NULL,
+  current_section VARCHAR(80) NULL,
+  requested_year_level VARCHAR(40) NOT NULL,
+  requested_section VARCHAR(80) NOT NULL,
+  request_note TEXT NOT NULL,
+  status ENUM('Pending', 'Approved', 'Rejected') NOT NULL DEFAULT 'Pending',
+  pending_slot TINYINT GENERATED ALWAYS AS (CASE WHEN status = 'Pending' THEN 1 ELSE NULL END) STORED,
+  reviewed_by_person_id BIGINT UNSIGNED NULL,
+  review_note TEXT NULL,
+  reviewed_at TIMESTAMP NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_enrollment_correction_student FOREIGN KEY (student_person_id) REFERENCES students(person_id) ON DELETE CASCADE,
+  CONSTRAINT fk_enrollment_correction_reviewer FOREIGN KEY (reviewed_by_person_id) REFERENCES clinic_staff(person_id) ON DELETE SET NULL,
+  UNIQUE INDEX uq_enrollment_correction_pending (student_person_id, academic_year, pending_slot),
+  INDEX idx_enrollment_correction_review (status, academic_year, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

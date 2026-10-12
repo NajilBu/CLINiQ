@@ -13,8 +13,8 @@ if (!$patient) {
     exit;
 }
 
-$programOptions = cliniq_patient_profile_programs();
-$departmentOptions = cliniq_patient_profile_departments();
+$programOptions = cliniq_patient_profile_programs(false);
+$departmentOptions = cliniq_patient_profile_departments(false);
 $relationshipOptions = dropdown_options('guardian_relationship');
 $user = current_user() ?? [];
 $canManageAccount = can_manage_patient_accounts($user);
@@ -23,6 +23,9 @@ $hasEmergencyContact = trim((string) ($patient['guardian_name'] ?? '')) !== ''
     || trim((string) ($patient['guardian_contact'] ?? '')) !== ''
     || trim((string) ($patient['secondary_contact'] ?? '')) !== '';
 $defaultGuardianRelationship = $hasEmergencyContact ? ((string) ($patient['guardian_relationship'] ?: 'Guardian')) : '';
+if ($defaultGuardianRelationship !== '' && !in_array($defaultGuardianRelationship, $relationshipOptions, true)) {
+    $relationshipOptions[] = $defaultGuardianRelationship;
+}
 $editableFields = ['id_number', 'first_name', 'middle_name', 'last_name', 'birthdate', 'sex', 'program_id', 'year_level', 'section', 'academic_year', 'department_id', 'employment_type', 'position_title', 'blood_type', 'guardian_name', 'guardian_relationship', 'guardian_contact', 'secondary_contact', 'emergency_instructions', 'email'];
 $editValues = is_array($_SESSION['patient_profile_edit_values'] ?? null) ? $_SESSION['patient_profile_edit_values'] : [];
 $editErrors = is_array($_SESSION['patient_profile_edit_errors'] ?? null) ? $_SESSION['patient_profile_edit_errors'] : [];
@@ -136,8 +139,9 @@ render_clinic_command_header(
                 <select class="clinic-select" name="program_id" required<?= $fieldInvalid('program_id') ?>>
                     <option value="">Select program</option>
                     <?php foreach ($programOptions as $program): ?>
-                        <option value="<?= (int) $program['id'] ?>" <?= (int) $formValue('program_id', $patient['program_id']) === (int) $program['id'] ? 'selected' : '' ?>>
-                            <?= e($program['code'] . ' — ' . $program['name']) ?>
+                        <?php $isCurrentProgram = (int) $formValue('program_id', $patient['program_id']) === (int) $program['id']; if (empty($program['active']) && !$isCurrentProgram) continue; ?>
+                        <option value="<?= (int) $program['id'] ?>" <?= $isCurrentProgram ? 'selected' : '' ?>>
+                            <?= e($program['code'] . ' — ' . $program['name'] . (empty($program['active']) ? ' (inactive)' : '')) ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
@@ -155,7 +159,7 @@ render_clinic_command_header(
             <div>
                 <label class="clinic-label">Section Code</label>
                 <select class="clinic-select" name="section" required<?= $fieldInvalid('section') ?>>
-                    <?php foreach (['A', 'B', 'C', 'D', 'E'] as $section): ?>
+                    <?php $savedSection = strtoupper($formValue('section', $patient['section'])); $sectionOptions = dropdown_options('student_section'); if ($savedSection !== '' && !in_array($savedSection, array_map('strtoupper', $sectionOptions), true)) $sectionOptions[] = $savedSection; foreach ($sectionOptions as $section): ?>
                         <option value="<?= $section ?>" <?= strtoupper($formValue('section', $patient['section'])) === $section ? 'selected' : '' ?>><?= $section ?></option>
                     <?php endforeach; ?>
                 </select>
@@ -172,8 +176,9 @@ render_clinic_command_header(
                 <select class="clinic-select" name="department_id" required<?= $fieldInvalid('department_id') ?>>
                     <option value="">Select department</option>
                     <?php foreach ($departmentOptions as $department): ?>
-                        <option value="<?= (int) $department['id'] ?>" <?= (int) $formValue('department_id', $patient['employee_department_id']) === (int) $department['id'] ? 'selected' : '' ?>>
-                            <?= e($department['code'] . ' — ' . $department['name']) ?>
+                        <?php $isCurrentDepartment = (int) $formValue('department_id', $patient['employee_department_id']) === (int) $department['id']; if (empty($department['active']) && !$isCurrentDepartment) continue; ?>
+                        <option value="<?= (int) $department['id'] ?>" <?= $isCurrentDepartment ? 'selected' : '' ?>>
+                            <?= e($department['code'] . ' — ' . $department['name'] . (empty($department['active']) ? ' (inactive)' : '')) ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
@@ -182,7 +187,7 @@ render_clinic_command_header(
             <div>
                 <label class="clinic-label">Employment Type</label>
                 <select class="clinic-select" name="employment_type" required<?= $fieldInvalid('employment_type') ?>>
-                    <?php foreach (['Full-time', 'Part-time'] as $employmentType): ?>
+                    <?php $savedEmploymentType = $formValue('employment_type', $patient['employment_type']); $employmentOptions = dropdown_options('employment_type'); if ($savedEmploymentType !== '' && !in_array($savedEmploymentType, $employmentOptions, true)) $employmentOptions[] = $savedEmploymentType; foreach ($employmentOptions as $employmentType): ?>
                         <option value="<?= e($employmentType) ?>" <?= $formValue('employment_type', $patient['employment_type']) === $employmentType ? 'selected' : '' ?>><?= e($employmentType) ?></option>
                     <?php endforeach; ?>
                 </select>

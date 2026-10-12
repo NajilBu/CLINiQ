@@ -77,11 +77,11 @@ function begin_first_registration(array $account): string
             'account_id' => $accountId,
             'person_id' => $personId,
             'id_number' => $idNumber,
-            'name' => trim(implode(' ', array_filter([
+            'name' => staff_display_name(trim(implode(' ', array_filter([
                 $account['first_name'] ?? '',
                 $account['middle_name'] ?? '',
                 $account['last_name'] ?? '',
-            ]))),
+            ]))), $account['honorific'] ?? null),
             'email' => $account['email'] ?? (strtolower(str_replace(' ', '', $account['last_name'] ?? '') . '_' . str_replace(' ', '', $account['first_name'] ?? '')) . '@plpasig.edu.ph'),
             'role' => (string) ($account['staff_role'] ?? 'staff'),
             'profile_photo_path' => profile_photo_normalize_path($account['profile_photo_path'] ?? null),
@@ -172,50 +172,6 @@ function complete_first_registration(string $password, string $confirmPassword, 
     }
 }
 
-/**
- * Begin the re-enrollment confirmation flow for a returning student whose
- * account was reset at the start of a new school year.
- * Unlike first_registration, no password change is required.
- */
-function begin_re_enrollment(array $account): void
-{
-    if ((string) ($account['account_type'] ?? '') !== 'student') {
-        throw new RuntimeException('Only student accounts can complete school-year enrollment confirmation.');
-    }
-    if (session_status() !== PHP_SESSION_ACTIVE) {
-        session_start();
-    }
-    session_regenerate_id(true);
-    $academicYear = student_current_academic_year();
-    $studentDetails = [];
-    try {
-        $yearQuery = auth_db()->prepare('SELECT s.academic_year, s.year_level, s.section, p.first_name, p.last_name, pt.guardian_or_contact_number, pt.secondary_contact_number FROM students s INNER JOIN people p ON p.id = s.person_id LEFT JOIN patients pt ON pt.person_id = s.person_id WHERE s.person_id = ? LIMIT 1');
-        $yearQuery->execute([(int) ($account['person_id'] ?? 0)]);
-        $studentDetails = $yearQuery->fetch() ?: [];
-        $storedAcademicYear = trim((string) ($studentDetails['academic_year'] ?? ''));
-        if ($storedAcademicYear !== '') {
-            $academicYear = $storedAcademicYear;
-        }
-    } catch (Throwable $e) {
-        // Fall back to the calendar-derived school year on legacy schemas.
-    }
-    $_SESSION['patient_legacy_id'] = (int) ($account['person_id'] ?? 0);
-    $_SESSION['patient_account_id'] = (int) ($account['account_id'] ?? 0);
-    $_SESSION['patient_person_id'] = (int) ($account['person_id'] ?? 0);
-    $_SESSION['re_enrollment'] = [
-        'account_id' => (int) ($account['account_id'] ?? 0),
-        'person_id'  => (int) ($account['person_id'] ?? 0),
-        'type'       => (string) ($account['account_type'] ?? 'patient'),
-        'academic_year' => $academicYear,
-        'year_level' => (string) ($studentDetails['year_level'] ?? ''),
-        'section' => strtoupper(trim((string) ($studentDetails['section'] ?? ''))),
-        'first_name' => (string) ($studentDetails['first_name'] ?? ''),
-        'last_name' => (string) ($studentDetails['last_name'] ?? ''),
-        'contact_number' => (string) ($studentDetails['guardian_or_contact_number'] ?? ''),
-        'secondary_contact_number' => (string) ($studentDetails['secondary_contact_number'] ?? ''),
-    ];
-}
-
 function student_current_academic_year(?DateTimeImmutable $today = null): string
 {
     $today ??= new DateTimeImmutable('today');
@@ -228,7 +184,7 @@ function student_current_academic_year(?DateTimeImmutable $today = null): string
 
 function student_non_enrollment_reasons(): array
 {
-    return ['Leave of Absence', 'Graduated', 'Transferred', 'Withdrawn', 'Other'];
+    return dropdown_options('non_enrollment_reason');
 }
 
 function student_enrollment_is_confirmed(int $personId): bool
@@ -239,29 +195,14 @@ function student_enrollment_is_confirmed(int $personId): bool
     return $status === false || $status === null || $status === 'Enrolled';
 }
 
-function re_enrollment_pending(): bool
-{
-    return isset($_SESSION['re_enrollment']) && is_array($_SESSION['re_enrollment']);
-}
-
-function re_enrollment_context(): ?array
-{
-    $ctx = $_SESSION['re_enrollment'] ?? null;
-    return is_array($ctx) ? $ctx : null;
-}
-
 /**
- * Confirm student re-enrollment and reactivate the student account.
+ * Confirm the current school-year enrollment without letting the student rewrite
+ * clinic-assigned placement data.
  */
-function complete_re_enrollment(string $enrollmentStatus, string $nonEnrollmentReason = '', string $contactNumber = '', string $contactConfirmed = '', string $yearLevel = '', string $section = ''): void
+function complete_student_enrollment_confirmation(int $accountId, int $personId, string $enrollmentStatus, string $nonEnrollmentReason = '', string $contactNumber = '', string $contactConfirmed = ''): void
 {
-    $ctx = re_enrollment_context();
-    if ($ctx === null) {
-        throw new RuntimeException('Re-enrollment session has expired. Please log in again.');
-    }
-    if ((string) ($ctx['type'] ?? '') !== 'student') {
-        unset($_SESSION['re_enrollment']);
-        throw new RuntimeException('Only student accounts can complete school-year enrollment confirmation.');
+    if ($accountId <= 0 || $personId <= 0) {
+        throw new RuntimeException('Your signed-in student account is unavailable. Please sign in again.');
     }
     $enrollmentStatus = trim($enrollmentStatus);
     $nonEnrollmentReason = trim($nonEnrollmentReason);
@@ -280,27 +221,32 @@ function complete_re_enrollment(string $enrollmentStatus, string $nonEnrollmentR
         throw new InvalidArgumentException('Enter a valid contact number so the clinic can reach you.');
     }
     if ($contactConfirmed !== '1') {
-        throw new InvalidArgumentException('Confirm that your section and contact information are correct.');
-    }
-    $yearLevel = trim($yearLevel);
-    $section = strtoupper(trim($section));
-    if (!in_array($yearLevel, ['1', '2', '3', '4'], true)) {
-        throw new InvalidArgumentException('Select a valid year level.');
-    }
-    if ($section === '' || !preg_match('/^[A-Z0-9][A-Z0-9 .-]{0,79}$/', $section)) {
-        throw new InvalidArgumentException('Enter a valid section.');
+        throw new InvalidArgumentException('Confirm that your enrollment status and contact information are correct.');
     }
 
     $db = auth_db();
     $db->beginTransaction();
     try {
-        $accountId = (int) $ctx['account_id'];
-        $personId = (int) $ctx['person_id'];
-        $academicYear = trim((string) ($ctx['academic_year'] ?? '')) ?: student_current_academic_year();
-        $db->prepare('UPDATE patients SET guardian_or_contact_number = ?, updated_at = NOW() WHERE person_id = ?')->execute([$contactNumber, $personId]);
-        if ($enrollmentStatus === 'Still Enrolled') {
-            $db->prepare('UPDATE students SET year_level = ?, section = ?, academic_year = ? WHERE person_id = ?')->execute([$yearLevel, $section, $academicYear, $personId]);
+        $account = $db->prepare('SELECT a.id FROM accounts a INNER JOIN students s ON s.person_id = a.person_id WHERE a.id = ? AND a.person_id = ? FOR UPDATE');
+        $account->execute([$accountId, $personId]);
+        if (!$account->fetchColumn()) {
+            throw new RuntimeException('Your signed-in student account is unavailable. Please sign in again.');
         }
+        $placement = $db->prepare('SELECT academic_year, year_level, section FROM students WHERE person_id = ? FOR UPDATE');
+        $placement->execute([$personId]);
+        $storedPlacement = $placement->fetch() ?: [];
+        $academicYear = trim((string) ($storedPlacement['academic_year'] ?? ''));
+        if ($academicYear === '') {
+            throw new RuntimeException('Your current school-year placement is unavailable. Please contact the clinic.');
+        }
+        $yearLevel = (string) ($storedPlacement['year_level'] ?? '');
+        $section = (string) ($storedPlacement['section'] ?? '');
+        $history = $db->prepare('SELECT enrollment_status FROM student_school_year_enrollments WHERE student_person_id = ? AND academic_year = ? FOR UPDATE');
+        $history->execute([$personId, $academicYear]);
+        if ((string) $history->fetchColumn() !== 'Pending Confirmation') {
+            throw new RuntimeException('Your enrollment status was already updated. Refresh the dashboard to continue.');
+        }
+        $db->prepare('UPDATE patients SET guardian_or_contact_number = ?, updated_at = NOW() WHERE person_id = ?')->execute([$contactNumber, $personId]);
 
         $declaration = $db->prepare("
             INSERT INTO student_enrollment_declarations
@@ -353,8 +299,8 @@ function complete_re_enrollment(string $enrollmentStatus, string $nonEnrollmentR
         throw $e;
     }
 
-    audit_log_event('auth', 'student_enrollment_declared', (int) $ctx['person_id'], 'student', 'account', (int) $ctx['account_id'], [
-        'academic_year' => (string) ($ctx['academic_year'] ?? student_current_academic_year()),
+    audit_log_event('auth', 'student_enrollment_declared', $personId, 'student', 'account', $accountId, [
+        'academic_year' => $academicYear,
         'enrollment_status' => $enrollmentStatus,
         'non_enrollment_reason' => $nonEnrollmentReason !== '' ? $nonEnrollmentReason : null,
         'year_level' => $yearLevel,
@@ -364,21 +310,106 @@ function complete_re_enrollment(string $enrollmentStatus, string $nonEnrollmentR
     try {
         $clinic = clinic_profile_settings();
         patient_email_dispatch_event([
-            'patient_person_id' => (int) $ctx['person_id'],
+            'patient_person_id' => $personId,
             'event_type' => 'enrollment_confirmation',
             'origin' => 'system',
             'source_type' => 'account',
-            'source_id' => (int) $ctx['account_id'],
+            'source_id' => $accountId,
             'subject' => '[' . ($clinic['system_name'] ?? 'CLINiQ') . '] Enrollment information confirmed',
             'message' => $enrollmentStatus === 'Still Enrolled'
-                ? 'Your enrollment information for ' . $academicYear . ' was confirmed. Updated year and section: Year ' . $yearLevel . ' - ' . $section . '. Your account is now active.'
+                ? 'Your enrollment information for ' . $academicYear . ' was confirmed. Your clinic-assigned placement remains Year ' . $yearLevel . ' - ' . $section . '.'
                 : 'Your non-enrollment declaration for ' . $academicYear . ' was recorded. Contact the clinic when you enroll again.',
             'deliver_now' => true,
         ]);
     } catch (Throwable $mailException) {
         error_log('[CLINiQ Re-enrollment] Confirmation email failed: ' . $mailException->getMessage());
     }
-    unset($_SESSION['re_enrollment']);
+}
+
+function student_enrollment_correction_request(int $personId, string $yearLevel, string $section, string $note): void
+{
+    $yearLevel = trim($yearLevel);
+    $section = strtoupper(trim($section));
+    $note = trim($note);
+    if (!in_array($yearLevel, ['1', '2', '3', '4'], true)) {
+        throw new InvalidArgumentException('Select the year level you believe is correct.');
+    }
+    if ($section === '' || !preg_match('/^[A-Z0-9][A-Z0-9 .-]{0,79}$/', $section)) {
+        throw new InvalidArgumentException('Enter a valid requested section.');
+    }
+    if ($note === '' || mb_strlen($note) > 1000) {
+        throw new InvalidArgumentException('Explain the placement correction in no more than 1,000 characters.');
+    }
+
+    $db = auth_db();
+    $placement = $db->prepare("SELECT s.academic_year, s.year_level, s.section, e.enrollment_status FROM students s LEFT JOIN student_school_year_enrollments e ON e.student_person_id = s.person_id AND e.academic_year COLLATE utf8mb4_unicode_ci = s.academic_year COLLATE utf8mb4_unicode_ci WHERE s.person_id = ? LIMIT 1");
+    $placement->execute([$personId]);
+    $current = $placement->fetch();
+    if (!$current || (string) ($current['enrollment_status'] ?? '') !== 'Pending Confirmation') {
+        throw new RuntimeException('A placement correction can only be requested while enrollment confirmation is pending.');
+    }
+
+    $request = $db->prepare("INSERT INTO student_enrollment_correction_requests (student_person_id, academic_year, current_year_level, current_section, requested_year_level, requested_section, request_note) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    try {
+        $request->execute([$personId, (string) $current['academic_year'], $current['year_level'], $current['section'], $yearLevel, $section, $note]);
+    } catch (PDOException $e) {
+        if ((string) $e->getCode() === '23000') {
+            throw new InvalidArgumentException('You already have a pending placement correction request for this school year.');
+        }
+        throw $e;
+    }
+    audit_log_event('auth', 'student_enrollment_correction_requested', $personId, 'student', 'student', $personId, ['academic_year' => $current['academic_year']]);
+}
+
+function student_enrollment_correction_request_for_student(int $personId): ?array
+{
+    $stmt = auth_db()->prepare("SELECT * FROM student_enrollment_correction_requests WHERE student_person_id = ? ORDER BY created_at DESC, request_id DESC LIMIT 1");
+    $stmt->execute([$personId]);
+    return $stmt->fetch() ?: null;
+}
+
+function review_student_enrollment_correction_request(int $requestId, int $reviewerId, string $decision, string $reviewNote = ''): void
+{
+    if (!in_array($decision, ['Approved', 'Rejected'], true)) {
+        throw new InvalidArgumentException('Choose whether to approve or reject the placement correction.');
+    }
+    $reviewNote = trim($reviewNote);
+    if ($decision === 'Rejected' && $reviewNote === '') {
+        throw new InvalidArgumentException('Explain why the placement correction was rejected.');
+    }
+    if (mb_strlen($reviewNote) > 1000) {
+        throw new InvalidArgumentException('Review notes may not exceed 1,000 characters.');
+    }
+    $db = auth_db();
+    $db->beginTransaction();
+    try {
+        $request = $db->prepare('SELECT * FROM student_enrollment_correction_requests WHERE request_id = ? FOR UPDATE');
+        $request->execute([$requestId]);
+        $row = $request->fetch();
+        if (!$row || (string) $row['status'] !== 'Pending') {
+            throw new InvalidArgumentException('This placement correction is no longer pending.');
+        }
+        if ($decision === 'Approved') {
+            $history = $db->prepare('SELECT enrollment_status FROM student_school_year_enrollments WHERE student_person_id = ? AND academic_year = ? FOR UPDATE');
+            $history->execute([$row['student_person_id'], $row['academic_year']]);
+            if ((string) $history->fetchColumn() !== 'Pending Confirmation') {
+                throw new InvalidArgumentException('The student has already updated this enrollment status.');
+            }
+            $student = $db->prepare('SELECT person_id FROM students WHERE person_id = ? AND academic_year = ? FOR UPDATE');
+            $student->execute([$row['student_person_id'], $row['academic_year']]);
+            if (!$student->fetchColumn()) {
+                throw new InvalidArgumentException('The student no longer has this current school-year placement.');
+            }
+            $db->prepare('UPDATE students SET year_level = ?, section = ? WHERE person_id = ? AND academic_year = ?')->execute([$row['requested_year_level'], $row['requested_section'], $row['student_person_id'], $row['academic_year']]);
+            $db->prepare("UPDATE student_school_year_enrollments SET year_level = ?, section = ?, promotion_source = 'Clinic Correction' WHERE student_person_id = ? AND academic_year = ?")->execute([$row['requested_year_level'], $row['requested_section'], $row['student_person_id'], $row['academic_year']]);
+        }
+        $db->prepare('UPDATE student_enrollment_correction_requests SET status = ?, reviewed_by_person_id = ?, review_note = ?, reviewed_at = NOW() WHERE request_id = ?')->execute([$decision, $reviewerId, $reviewNote !== '' ? $reviewNote : null, $requestId]);
+        $db->commit();
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) $db->rollBack();
+        throw $e;
+    }
+    audit_log_event('auth', 'student_enrollment_correction_' . strtolower($decision), $reviewerId, 'staff', 'student', (int) $row['student_person_id'], ['request_id' => $requestId, 'academic_year' => $row['academic_year']]);
 }
 
 function require_login(): void
@@ -433,7 +464,8 @@ function login_attempt(string $idNumber, string $password): bool
             p.middle_name,
             p.last_name,
             p.profile_photo_path,
-            cs.staff_role
+            cs.staff_role,
+            cs.honorific
         FROM accounts a
         JOIN people p ON p.id = a.person_id
         JOIN clinic_staff cs ON cs.person_id = p.id
@@ -475,11 +507,11 @@ function login_attempt(string $idNumber, string $password): bool
         return false;
     }
 
-    $name = trim(implode(' ', array_filter([
+    $name = staff_display_name(trim(implode(' ', array_filter([
         $account['first_name'],
         $account['middle_name'],
         $account['last_name'],
-    ])));
+    ]))), $account['honorific'] ?? null);
 
     $_SESSION['user'] = [
         'id' => (int) $account['person_id'],

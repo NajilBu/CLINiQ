@@ -355,22 +355,6 @@ function student_require_login(): array
     }
     $profile = student_current_profile();
     if ($profile === null) {
-        // Allow re-enrollment sessions (school-year reset) through even while account is inactive.
-        if (re_enrollment_pending()) {
-            return [
-                'patient_id'       => 0,
-                'person_id'        => (int) (re_enrollment_context()['person_id'] ?? 0),
-                'name'             => '',
-                'first_name'       => '',
-                'student_id'       => '',
-                'course'           => '',
-                'email'            => '',
-                'account_status'   => 'inactive',
-                'first_registration' => false,
-                're_enrollment'    => true,
-                'account_type'     => (string) (re_enrollment_context()['type'] ?? 'patient'),
-            ];
-        }
         header('Location: ' . student_portal_url('login'));
         exit;
     }
@@ -378,22 +362,6 @@ function student_require_login(): array
     if (!empty($profile['first_registration'])) {
         $script = basename((string) ($_SERVER['SCRIPT_NAME'] ?? ''));
         if (!in_array($script, ['patient-dashboard.php', 'patient-help.php', 'patient-login.php'], true)) {
-            header('Location: ' . student_portal_url('dashboard'));
-            exit;
-        }
-    }
-
-    if (re_enrollment_pending()) {
-        $script = basename((string) ($_SERVER['SCRIPT_NAME'] ?? ''));
-        if (!in_array($script, ['patient-dashboard.php', 'patient-help.php', 'patient-login.php'], true)) {
-            header('Location: ' . student_portal_url('dashboard'));
-            exit;
-        }
-    }
-
-    if (student_enrollment_confirmation_required($profile)) {
-        $script = basename((string) ($_SERVER['SCRIPT_NAME'] ?? ''));
-        if (!in_array($script, ['patient-dashboard.php', 'patient-login.php'], true)) {
             header('Location: ' . student_portal_url('dashboard'));
             exit;
         }
@@ -410,25 +378,6 @@ function student_enrollment_confirmation_required(array $profile): bool
         && !student_enrollment_is_confirmed((int) $profile['person_id']);
 }
 
-function student_redirect_pending_enrollment_confirmation(): void
-{
-    $script = basename((string) ($_SERVER['SCRIPT_NAME'] ?? ''));
-    if (in_array($script, [
-        'patient-dashboard.php',
-        'patient-login.php',
-        'patient-notifications.php',
-        'patient-nfc-authorize.php',
-        'update-profile-photo.php',
-    ], true)) {
-        return;
-    }
-
-    $profile = student_current_profile();
-    if (is_array($profile) && student_enrollment_confirmation_required($profile)) {
-        header('Location: ' . student_portal_url('dashboard'));
-        exit;
-    }
-}
 
 function student_require_official_access(string $feature): array
 {
@@ -1541,4 +1490,3 @@ function render_student_auth_footer(): void
 // the shared layout, including lightweight endpoints that do not call the
 // normal login guard themselves.
 student_redirect_pending_onboarding();
-student_redirect_pending_enrollment_confirmation();

@@ -59,7 +59,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $schoolYearReset = (string) ($patient['status_reason'] ?? '') === 'New school year enrollment status required';
                 $awaitingInitialActivation = (string) ($patient['status_reason'] ?? '') === 'Awaiting initial account activation';
                 if ($wasActivated && $schoolYearReset && ($patient['account_type'] ?? '') === 'student') {
-                    begin_re_enrollment($patient);
+                    $db->prepare("UPDATE accounts SET account_status = 'active', status_reason = NULL WHERE id = ?")
+                        ->execute([(int) $patient['account_id']]);
+                    student_start_session();
+                    $_SESSION['patient_legacy_id'] = (int) $patient['legacy_patient_id'];
+                    $_SESSION['patient_account_id'] = (int) $patient['account_id'];
+                    $_SESSION['patient_person_id'] = (int) $patient['person_id'];
+                    student_record_successful_login((int) $patient['account_id']);
                 } elseif (!$wasActivated && $awaitingInitialActivation) {
                     begin_first_registration($patient);
                 } else {

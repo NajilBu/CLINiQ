@@ -129,32 +129,21 @@ $db->prepare("INSERT INTO appointments (patient_id, appointment_datetime, purpos
 $overdueAppointmentId = (int) $db->lastInsertId();
 
 $dashboard = $request('/patient-portal/patient-dashboard.php', $pendingSession);
-$assert($dashboard['status'] === 200, 'A Pending Official must reach the checkpoint dashboard (received HTTP ' . $dashboard['status'] . ').');
-$assert(str_contains($dashboard['body'], 'Enrollment confirmation required'), 'The Pending Official dashboard must render only the checkpoint.');
-$assert(!str_contains($dashboard['body'], 'Welcome back,'), 'The Pending Official dashboard must not render normal portal content.');
+$assert($dashboard['status'] === 200, 'A Pending Official must reach the dashboard (received HTTP ' . $dashboard['status'] . ').');
+$assert(str_contains($dashboard['body'], 'Confirm your enrollment'), 'The Pending Official dashboard must show the non-blocking confirmation card.');
+$assert(str_contains($dashboard['body'], 'Welcome back,'), 'The Pending Official dashboard must retain normal portal content.');
 $status = (string) $db->query("SELECT status FROM appointments WHERE appointment_id = {$overdueAppointmentId}")->fetchColumn();
-$assert($status === 'Scheduled', 'A locked dashboard request must not synchronize overdue appointments.');
+$assert($status === 'Scheduled', 'A pending-student dashboard request must not alter existing appointments.');
 
 foreach ([
-    '/patient-portal/patient-appointment.php',
     '/patient-portal/patient-passport.php',
     '/patient-portal/patient-ape-status.php',
-    '/patient-portal/patient-ape-document.php?id=1',
 ] as $path) {
     $response = $request($path, $pendingSession);
-    $assert($response['status'] === 302 && $location($response) === '/dashboard', "Pending Official route must redirect to the checkpoint: {$path}");
+    $assert($response['status'] === 200, "Pending Official must retain portal access: {$path}");
 }
-
-$profilePhoto = $request('/patient-portal/update-profile-photo.php', $pendingSession, 'POST', ['_csrf' => $pendingSession['csrf']]);
-$assert($profilePhoto['status'] === 302 && $location($profilePhoto) === '/dashboard', 'Pending Official profile-photo upload must redirect to the checkpoint before processing.');
-
-$notifications = $request('/patient-portal/patient-notifications.php', $pendingSession);
-$assert($notifications['status'] === 403 && !str_contains($notifications['body'], 'notification_id'), 'Pending Official notifications must return a non-sensitive 403 response.');
-$nfc = $request('/patient-portal/patient-nfc-authorize.php', $pendingSession, 'POST', ['_csrf' => $pendingSession['csrf']]);
-$assert($nfc['status'] === 403, 'Pending Official NFC authorization must be denied before any action.');
-$photoPath = $db->prepare('SELECT profile_photo_path FROM people WHERE id = ?');
-$photoPath->execute([$pending['person_id']]);
-$assert($photoPath->fetchColumn() === null, 'Pending Official profile-photo requests must not mutate the profile.');
+$pendingAppointments = $request('/patient-portal/patient-appointment.php', $pendingSession);
+$assert($pendingAppointments['status'] === 200 && str_contains($pendingAppointments['body'], 'Confirm your enrollment'), 'A Pending Official must see the booking block without losing appointment history access.');
 
 $confirmation = $request('/patient-portal/patient-dashboard.php', $pendingSession, 'POST', [
     '_csrf' => $pendingSession['csrf'],
@@ -163,18 +152,20 @@ $confirmation = $request('/patient-portal/patient-dashboard.php', $pendingSessio
     'contact_number' => '09171234567',
     'contact_confirmed' => '1',
 ]);
-$assert($confirmation['status'] === 302 && $location($confirmation) === '/dashboard?re_enrolled=1', 'Still Enrolled confirmation must redirect to the unlocked dashboard.');
+$confirmationSummary = trim((string) preg_replace('/\s+/', ' ', strip_tags($confirmation['body'])));
+preg_match('/student-note-danger[^>]*>(.*?)<\/div>/s', $confirmation['body'], $confirmationError);
+$assert($confirmation['status'] === 302 && $location($confirmation) === '/dashboard?re_enrolled=1', 'Still Enrolled confirmation must redirect to the unlocked dashboard (received HTTP ' . $confirmation['status'] . ' to ' . $location($confirmation) . '; ' . ($confirmationError[1] ?? substr($confirmationSummary, 0, 240)) . ').');
 $history = $db->prepare("SELECT enrollment_status FROM student_school_year_enrollments WHERE student_person_id = ? AND academic_year = '2026-2027'");
 $history->execute([$pending['person_id']]);
 $assert($history->fetchColumn() === 'Enrolled', 'Still Enrolled confirmation must update current-year history.');
 $unlocked = $request('/patient-portal/patient-dashboard.php', $pendingSession);
-$assert($unlocked['status'] === 200 && !str_contains($unlocked['body'], 'Enrollment confirmation required'), 'Confirmed Official must regain normal dashboard access.');
+$assert($unlocked['status'] === 200 && !str_contains($unlocked['body'], 'Confirm your enrollment'), 'Confirmed Official must remove the enrollment confirmation card.');
 $appointments = $request('/patient-portal/patient-appointment.php', $pendingSession);
 $assert($appointments['status'] === 200, 'Confirmed Official must regain appointment access.');
 
 $enrolledDashboard = $request('/patient-portal/patient-dashboard.php', $enrolledSession);
-$assert($enrolledDashboard['status'] === 200 && !str_contains($enrolledDashboard['body'], 'Enrollment confirmation required'), 'Enrolled Official must retain normal dashboard access.');
+$assert($enrolledDashboard['status'] === 200 && !str_contains($enrolledDashboard['body'], 'Confirm your enrollment'), 'Enrolled Official must retain normal dashboard access.');
 $applicantDashboard = $request('/patient-portal/patient-dashboard.php', $applicantSession);
-$assert($applicantDashboard['status'] === 200 && !str_contains($applicantDashboard['body'], 'Enrollment confirmation required'), 'Applicant must not be asked for enrollment confirmation (received HTTP ' . $applicantDashboard['status'] . ').');
+$assert($applicantDashboard['status'] === 200 && !str_contains($applicantDashboard['body'], 'Confirm your enrollment'), 'Applicant must not be asked for enrollment confirmation (received HTTP ' . $applicantDashboard['status'] . ').');
 
 echo "Student enrollment checkpoint isolated HTTP proof passed ({$assertions} assertions).\n";

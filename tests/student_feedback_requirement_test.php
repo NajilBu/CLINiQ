@@ -36,7 +36,7 @@ if (!str_contains($feedbackEntry, 'student_require_login()')
 }
 if (!str_contains($feedbackEntry, 'Reason for visit')
     || !str_contains($feedbackEntry, 'Patient concern')
-    || !str_contains($feedbackConsent, 'RA 10173')
+    || !str_contains($feedbackConsent, 'Data Privacy Act of 2012 (RA 10173)')
     || !str_contains($feedbackConsent, '<details>')
     || !str_contains($feedbackEntry, 'student_feedback_consented')
     || !str_contains($clinicSurvey, 'clinic-feedback.php')
@@ -77,9 +77,9 @@ if (!str_contains($feedbackCss, '.feedback-report')
 if (str_contains($feedbackPage, 'Visit #')) {
     throw new RuntimeException('Public feedback must not expose internal visit numbers.');
 }
-if (!str_contains($feedbackPage, 'RA 10173')
+if (!str_contains($feedbackPage, 'Data Privacy Act of 2012 (RA 10173)')
     || !str_contains($feedbackPage, 'class="feedback-privacy"')
-    || !str_contains($feedbackPage, 'I have read the RA 10173 privacy notice')) {
+    || !str_contains($feedbackPage, 'I have read the Data Privacy Act of 2012 (RA 10173) notice')) {
     throw new RuntimeException('Public feedback is missing the collapsible RA 10173 notice and agreement.');
 }
 if (!str_contains($dashboard, 'clinic_feedback_pending_completed_visits')

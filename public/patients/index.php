@@ -4,6 +4,14 @@ require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/CliniqPatientProfile.php';
 require_login();
 $user = current_user() ?? [];
+$pendingPlacementCorrections = [];
+if (($user['role'] ?? '') === 'admin') {
+    try {
+        $pendingPlacementCorrections = auth_db()->query("SELECT r.request_id, r.requested_year_level, r.requested_section, r.created_at, p.id AS person_id, p.first_name, p.last_name FROM student_enrollment_correction_requests r INNER JOIN people p ON p.id = r.student_person_id WHERE r.status = 'Pending' ORDER BY r.created_at ASC, r.request_id ASC")->fetchAll();
+    } catch (Throwable) {
+        // The queue appears after the enrollment-correction migration is applied.
+    }
+}
 
 // ── Search & pagination ─────────────────────────────────────
 $search = trim($_GET['q'] ?? '');
@@ -63,13 +71,14 @@ $filteredRows = count($patients);
 $totalRows = $filteredRows;
 
 $patientColumns = [
-    ['headerName' => 'No.', 'field' => 'rowNumber', 'width' => 70, 'minWidth' => 70, 'maxWidth' => 70, 'flex' => 0, 'suppressSizeToFit' => true, 'sortable' => false, 'filter' => false],
     ['headerName' => 'ID Number', 'field' => 'idNumber', 'width' => 150],
-    ['headerName' => '', 'field' => 'sexIconHtml', 'cellRenderer' => 'html', 'width' => 52, 'minWidth' => 52, 'maxWidth' => 52, 'flex' => 0, 'suppressSizeToFit' => true, 'sortable' => false, 'filter' => false, 'headerClass' => 'patient-sex-indicator-header', 'cellClass' => 'patient-sex-indicator-cell'],
+    ['headerName' => 'Sex', 'field' => 'sexIconHtml', 'cellRenderer' => 'html', 'width' => 52, 'minWidth' => 52, 'maxWidth' => 52, 'flex' => 0, 'suppressSizeToFit' => true, 'sortable' => false, 'filter' => false, 'headerClass' => 'patient-sex-indicator-header', 'cellClass' => 'patient-sex-indicator-cell'],
     ['headerName' => 'Name', 'field' => 'nameHtml', 'cellRenderer' => 'html', 'sortField' => 'nameSort', 'minWidth' => 240],
     ['headerName' => 'Patient Type', 'field' => 'patientType', 'minWidth' => 150],
     ['headerName' => 'Program / Department', 'field' => 'courseSection', 'minWidth' => 190],
-    ['headerName' => 'Contact', 'field' => 'guardianContact', 'minWidth' => 170],
+    ['headerName' => 'Contact', 'field' => 'contactStatusHtml', 'cellRenderer' => 'html', 'minWidth' => 170],
+    ['headerName' => 'Account Status', 'field' => 'accountStatusHtml', 'cellRenderer' => 'html', 'sortField' => 'accountStatusSort', 'minWidth' => 150],
+    ['headerName' => 'Last Visit', 'field' => 'lastVisit', 'sortField' => 'lastVisitSort', 'sortType' => 'date', 'minWidth' => 140],
 ];
 $patientRows = [];
 foreach ($patients as $patientIndex => $patient) {
@@ -89,16 +98,27 @@ foreach ($patients as $patientIndex => $patient) {
         'male', 'm' => '<span class="material-symbols-outlined patient-sex-icon patient-sex-icon-male" aria-label="Male" title="Male">male</span>',
         default => '',
     };
+    $hasContact = trim((string) ($patient['guardian_contact'] ?? '')) !== ''
+        || trim((string) ($patient['secondary_contact'] ?? '')) !== '';
+    $accountStatus = trim((string) ($patient['account_status'] ?? ''));
+    $lastVisitAt = trim((string) ($patient['last_visit_at'] ?? ''));
     $patientRows[] = [
         'rowUrl' => 'view.php?id=' . (int)$patient['id'],
-        'rowNumber' => $patientIndex + 1,
         'idNumber' => $patient['id_number'],
         'sexIconHtml' => $sexIconHtml,
         'nameSort' => trim($patient['last_name'] . ' ' . $patient['first_name'] . ' ' . ($patient['middle_name'] ?? '')),
         'nameHtml' => '<div class="flex items-center gap-3" data-tooltip-text="' . e($fullName) . '">' . $avatarHtml . '<strong class="text-sm text-slate-800">' . e($fullName) . '</strong></div>',
         'patientType' => patient_category_label($patient['patient_type'] ?? ''),
         'courseSection' => $patient['course_section'] ?: 'Patient',
-        'guardianContact' => $patient['guardian_contact'] ?: '-',
+        'contactStatusHtml' => $hasContact
+            ? '<span class="badge badge-active">On file</span>'
+            : '<span class="badge badge-cancelled">Missing</span>',
+        'accountStatusSort' => $accountStatus,
+        'accountStatusHtml' => $accountStatus !== ''
+            ? '<span class="badge ' . e(status_badge_class($accountStatus)) . '">' . e(ucfirst($accountStatus)) . '</span>'
+            : '<span class="badge badge-cancelled">No account</span>',
+        'lastVisitSort' => $lastVisitAt,
+        'lastVisit' => $lastVisitAt !== '' ? date('M j, Y', strtotime($lastVisitAt)) : 'Never visited',
     ];
 }
 
@@ -114,6 +134,17 @@ render_header('Patients');
         : '')
     . ' <a href="' . e(app_url('patients/graduates.php')) . '" class="btn btn-outline text-decoration-none"><span class="material-symbols-outlined">school</span> Graduates</a>'
 ); ?>
+
+<?php if ($pendingPlacementCorrections): ?>
+    <section class="clinic-card p-5 mb-5" aria-labelledby="placement-corrections-title">
+        <div class="flex items-center gap-3 mb-3"><span class="material-symbols-outlined text-amber-700">school</span><div><h2 id="placement-corrections-title" class="font-headline text-lg font-extrabold text-[#1c2a59] mb-0">Pending placement corrections (<?= count($pendingPlacementCorrections) ?>)</h2><p class="text-xs font-bold text-slate-500 mb-0">Review each request before the student confirms enrollment.</p></div></div>
+        <div class="grid gap-2">
+            <?php foreach ($pendingPlacementCorrections as $correction): ?>
+                <a class="text-decoration-none rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50" href="view.php?id=<?= (int) $correction['person_id'] ?>"><?= e(trim($correction['first_name'] . ' ' . $correction['last_name'])) ?> — requested Year <?= e((string) $correction['requested_year_level']) ?>, <?= e((string) $correction['requested_section']) ?></a>
+            <?php endforeach; ?>
+        </div>
+    </section>
+<?php endif; ?>
 
 <!-- ═══ Patient Registry ═══ -->
 <section class="bg-white rounded-[2rem] border border-outline-variant/20 shadow-sm overflow-hidden">
@@ -223,6 +254,7 @@ render_header('Patients');
     <?php render_ag_grid('patientsGrid', $patientColumns, $patientRows, [
         'searchInput' => 'patientsGridSearch',
         'normalizeStudentIdSearch' => true,
+        'showRowNumber' => false,
         'pageSize' => $perPage,
         'pagination' => true,
         'paginationControls' => 'patientsPagination',

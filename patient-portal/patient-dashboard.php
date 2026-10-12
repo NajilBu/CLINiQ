@@ -8,112 +8,47 @@ require_once __DIR__ . '/includes/patient-layout.php';
 $profile = student_require_login();
 $isOfficialAccess = patient_has_official_access($profile);
 $enrollmentPending = student_enrollment_confirmation_required($profile);
+$activeEnrollmentError = '';
+$enrollmentCorrectionError = '';
+$enrollmentCorrection = null;
+if ($enrollmentPending) {
+    try {
+        $enrollmentCorrection = student_enrollment_correction_request_for_student((int) $profile['person_id']);
+    } catch (Throwable) {
+        // The migration gate keeps this unavailable until its table exists.
+    }
+}
+if ($enrollmentPending && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'request_enrollment_correction') {
+    try {
+        csrf_enforce_request();
+        student_enrollment_correction_request(
+            (int) $profile['person_id'],
+            (string) ($_POST['requested_year_level'] ?? ''),
+            (string) ($_POST['requested_section'] ?? ''),
+            (string) ($_POST['request_note'] ?? '')
+        );
+        header('Location: ' . student_portal_url('dashboard', ['placement_requested' => 1]));
+        exit;
+    } catch (Throwable $e) {
+        $enrollmentCorrectionError = $e->getMessage();
+    }
+}
 if ($enrollmentPending && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'complete_active_enrollment_confirmation') {
     csrf_enforce_request();
-    $_SESSION['re_enrollment'] = [
-        'account_id' => (int) ($_SESSION['patient_account_id'] ?? 0),
-        'person_id' => (int) $profile['person_id'],
-        'type' => 'student',
-        'academic_year' => (string) ($profile['academic_year'] ?? student_current_academic_year()),
-    ];
     try {
-        complete_re_enrollment(
+        complete_student_enrollment_confirmation(
+            (int) ($_SESSION['patient_account_id'] ?? 0),
+            (int) $profile['person_id'],
             (string) ($_POST['enrollment_status'] ?? ''),
             (string) ($_POST['non_enrollment_reason'] ?? ''),
             (string) ($_POST['contact_number'] ?? ''),
-            ($_POST['contact_confirmed'] ?? '') === '1' ? '1' : '',
-            (string) ($profile['year_level'] ?? ''),
-            (string) ($profile['section'] ?? '')
+            ($_POST['contact_confirmed'] ?? '') === '1' ? '1' : ''
         );
         header('Location: ' . student_portal_url('dashboard', ['re_enrolled' => 1]));
         exit;
     } catch (Throwable $e) {
         $activeEnrollmentError = $e->getMessage();
-        unset($_SESSION['re_enrollment']);
     }
-}
-if ($enrollmentPending) {
-    $selectedEnrollmentStatus = trim((string) ($_POST['enrollment_status'] ?? ''));
-    $selectedNonEnrollmentReason = trim((string) ($_POST['non_enrollment_reason'] ?? ''));
-    $contactNumber = trim((string) ($_POST['contact_number'] ?? ($profile['contact_number'] ?? '')));
-    $contactConfirmed = (string) ($_POST['contact_confirmed'] ?? '');
-    $nonEnrollmentReasons = student_non_enrollment_reasons();
-
-    render_student_auth_header('Enrollment confirmation required');
-    ?>
-    <main class="student-auth-wrap student-enrollment-gate-wrap">
-        <section class="student-auth-shell student-enrollment-gate-shell" aria-labelledby="enrollment-confirmation-title">
-            <aside class="student-auth-side student-enrollment-gate-side">
-                <div>
-                    <span class="student-brand-mark"><span class="material-symbols-outlined" aria-hidden="true">school</span></span>
-                    <p class="student-auth-brand-line">Student portal access</p>
-                    <h1 class="student-auth-side-title">One step<br>before you continue.</h1>
-                    <p class="student-auth-side-copy">Confirm your current enrollment status for this school year. Your portal stays locked until this is submitted.</p>
-                </div>
-                <p class="student-auth-side-footnote">This keeps your student clinic record current.</p>
-            </aside>
-            <section class="student-auth-form-side student-enrollment-gate-form">
-                <div class="student-enrollment-gate-status">
-                    <span class="material-symbols-outlined" aria-hidden="true">lock</span>
-                    <span>Enrollment confirmation required</span>
-                </div>
-                <h2 id="enrollment-confirmation-title" class="student-card-title">Confirm your student status</h2>
-                <p class="student-card-copy">You cannot open portal features until you submit this confirmation.</p>
-
-                <?php if (!empty($activeEnrollmentError)): ?>
-                    <div class="student-note student-note-danger student-enrollment-gate-error" role="alert"><span class="material-symbols-outlined" aria-hidden="true">error</span><div><?= student_e($activeEnrollmentError) ?></div></div>
-                <?php endif; ?>
-
-                <form method="post" class="student-enrollment-gate-fields" autocomplete="off">
-                    <input type="hidden" name="_csrf" value="<?= student_e(csrf_token()) ?>">
-                    <input type="hidden" name="action" value="complete_active_enrollment_confirmation">
-                    <div class="student-field">
-                        <label class="student-label" for="active-enrollment-status">Current enrollment status</label>
-                        <select id="active-enrollment-status" name="enrollment_status" class="student-select" required>
-                            <option value="">Select your status</option>
-                            <option value="Still Enrolled" <?= $selectedEnrollmentStatus === 'Still Enrolled' ? 'selected' : '' ?>>Still Enrolled</option>
-                            <option value="Not Currently Enrolled" <?= $selectedEnrollmentStatus === 'Not Currently Enrolled' ? 'selected' : '' ?>>Not Currently Enrolled</option>
-                        </select>
-                    </div>
-                    <div class="student-field" id="active-non-enrollment-reason-field" <?= $selectedEnrollmentStatus === 'Not Currently Enrolled' ? '' : 'hidden' ?>>
-                        <label class="student-label" for="active-non-enrollment-reason">Reason</label>
-                        <select id="active-non-enrollment-reason" name="non_enrollment_reason" class="student-select" <?= $selectedEnrollmentStatus === 'Not Currently Enrolled' ? 'required' : 'disabled' ?>>
-                            <option value="">Select a reason</option>
-                            <?php foreach ($nonEnrollmentReasons as $reason): ?>
-                                <option value="<?= student_e($reason) ?>" <?= $selectedNonEnrollmentReason === $reason ? 'selected' : '' ?>><?= student_e($reason) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="student-field">
-                        <label class="student-label" for="active-contact-number">Contact number</label>
-                        <input id="active-contact-number" name="contact_number" class="student-input" value="<?= student_e($contactNumber) ?>" placeholder="09XXXXXXXXX" required>
-                    </div>
-                    <label class="student-check student-enrollment-gate-check"><input type="checkbox" name="contact_confirmed" value="1" <?= $contactConfirmed === '1' ? 'checked' : '' ?> required><span>I confirm that my enrollment status and contact number are correct.</span></label>
-                    <button type="submit" class="student-button w-full"><span class="material-symbols-outlined" aria-hidden="true">how_to_reg</span> Confirm enrollment status</button>
-                </form>
-                <a href="<?= student_e(student_portal_url('login', ['logout' => 1])) ?>" onclick="localStorage.clear();" class="student-enrollment-gate-signout">Sign out instead</a>
-            </section>
-        </section>
-    </main>
-    <script>
-        (() => {
-            const status = document.getElementById('active-enrollment-status');
-            const reasonField = document.getElementById('active-non-enrollment-reason-field');
-            const reason = document.getElementById('active-non-enrollment-reason');
-            const syncReasonField = () => {
-                const needsReason = status.value === 'Not Currently Enrolled';
-                reasonField.hidden = !needsReason;
-                reason.disabled = !needsReason;
-                reason.required = needsReason;
-                if (!needsReason) reason.value = '';
-            };
-            status.addEventListener('change', syncReasonField);
-            syncReasonField();
-        })();
-    </script>
-    <?php
-    render_student_auth_footer();
-    return;
 }
 $firstRegistrationError = '';
 if (!empty($profile['first_registration'])) {
@@ -181,123 +116,6 @@ if (!empty($profile['first_registration'])) {
             </button>
         </form>
     </section>
-    <?php
-    render_student_footer();
-    return;
-}
-
-// Student re-enrollment confirmation (school-year reset flow)
-if (re_enrollment_pending()) {
-    $reCtx = re_enrollment_context();
-    if ((string) ($reCtx['type'] ?? '') !== 'student') {
-        unset($_SESSION['re_enrollment']);
-        header('Location: ' . student_portal_url('login'));
-        exit;
-    }
-    $reEnrollError = '';
-    $selectedEnrollmentStatus = trim((string) ($_POST['enrollment_status'] ?? ''));
-    $selectedNonEnrollmentReason = trim((string) ($_POST['non_enrollment_reason'] ?? ''));
-    $contactNumber = trim((string) ($_POST['contact_number'] ?? ($reCtx['contact_number'] ?? '')));
-    $contactConfirmed = (string) ($_POST['contact_confirmed'] ?? '');
-    $yearLevel = trim((string) ($_POST['year_level'] ?? ($reCtx['year_level'] ?? '')));
-    $section = strtoupper(trim((string) ($_POST['section'] ?? ($reCtx['section'] ?? ''))));
-    $nonEnrollmentReasons = student_non_enrollment_reasons();
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'complete_re_enrollment') {
-        try {
-            complete_re_enrollment($selectedEnrollmentStatus, $selectedNonEnrollmentReason, $contactNumber, $contactConfirmed, $yearLevel, $section);
-            header('Location: ' . student_portal_url('dashboard', ['re_enrolled' => 1]));
-            exit;
-        } catch (Throwable $e) {
-            $reEnrollError = $e->getMessage();
-        }
-    }
-    render_student_header('Confirm Re-enrollment', 'dashboard');
-    ?>
-    <section class="student-page-header">
-        <div>
-            <p class="student-eyebrow">New School Year</p>
-            <h1 class="student-title">Update your enrollment status</h1>
-            <p class="student-subtitle">Confirm your enrollment for the new school year.</p>
-        </div>
-        <span class="student-badge student-badge-warning">
-            <span class="material-symbols-outlined text-[14px]">how_to_reg</span>
-            Confirmation Required
-        </span>
-    </section>
-
-    <section class="student-card student-card-pad max-w-2xl mx-auto">
-        <div class="flex items-start gap-4 mb-5">
-            <span class="student-icon-box">
-                <span class="material-symbols-outlined">school</span>
-            </span>
-            <div>
-                <h2 class="student-card-title">Enrollment Declaration</h2>
-                <p class="student-card-copy">Review your updated student information and confirm your enrollment for <?= student_e((string) ($reCtx['academic_year'] ?? student_current_academic_year())) ?>.</p>
-            </div>
-        </div>
-
-        <?php if ($reEnrollError !== ''): ?>
-            <div class="student-note student-note-danger mb-4">
-                <span class="material-symbols-outlined">error</span>
-                <div><?= student_e($reEnrollError) ?></div>
-            </div>
-        <?php endif; ?>
-
-        <div class="student-note student-note-warning mb-5">
-            <span class="material-symbols-outlined">info</span>
-            <div>Your response will be recorded and your portal access will resume immediately after submission.</div>
-        </div>
-
-        <div class="grid gap-4 sm:grid-cols-2 mb-5">
-            <div class="student-field"><label class="student-label" for="year-level">Year Level</label><select id="year-level" name="year_level" class="student-select" required><?php foreach (['1','2','3','4'] as $option): ?><option value="<?= $option ?>" <?= $yearLevel === $option ? 'selected' : '' ?>>Year <?= $option ?></option><?php endforeach; ?></select></div>
-            <div class="student-field"><label class="student-label" for="section">Section</label><input id="section" name="section" class="student-input" value="<?= student_e($section) ?>" maxlength="80" required><p class="text-xs font-bold text-slate-500 mt-1 mb-0">Review or correct the section assigned for this school year.</p></div>
-            <div class="student-field"><label class="student-label" for="contact-number">Contact Number</label><input id="contact-number" name="contact_number" class="student-input" value="<?= student_e($contactNumber) ?>" placeholder="09XXXXXXXXX" required></div>
-        </div>
-
-        <form method="post" id="re-enrollment-form" class="space-y-5">
-            <input type="hidden" name="action" value="complete_re_enrollment">
-            <div class="student-field">
-                <label class="student-label" for="enrollment-status">Current Enrollment Status</label>
-                <select id="enrollment-status" name="enrollment_status" class="student-select" required>
-                    <option value="">Select your status</option>
-                    <option value="Still Enrolled" <?= $selectedEnrollmentStatus === 'Still Enrolled' ? 'selected' : '' ?>>Still Enrolled</option>
-                    <option value="Not Currently Enrolled" <?= $selectedEnrollmentStatus === 'Not Currently Enrolled' ? 'selected' : '' ?>>Not Currently Enrolled</option>
-                </select>
-            </div>
-            <div class="student-field" id="non-enrollment-reason-field" <?= $selectedEnrollmentStatus === 'Not Currently Enrolled' ? '' : 'hidden' ?>>
-                <label class="student-label" for="non-enrollment-reason">Reason</label>
-                <select id="non-enrollment-reason" name="non_enrollment_reason" class="student-select" <?= $selectedEnrollmentStatus === 'Not Currently Enrolled' ? 'required' : 'disabled' ?>>
-                    <option value="">Select a reason</option>
-                    <?php foreach ($nonEnrollmentReasons as $reason): ?>
-                        <option value="<?= student_e($reason) ?>" <?= $selectedNonEnrollmentReason === $reason ? 'selected' : '' ?>><?= student_e($reason) ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <label class="flex items-start gap-3 text-xs font-bold text-slate-600"><input type="checkbox" name="contact_confirmed" value="1" <?= $contactConfirmed === '1' ? 'checked' : '' ?> required><span>I confirm that my year/section and contact information above are correct.</span></label>
-            <button type="submit" class="student-button w-full" data-confirm-submit data-confirm-type="primary" data-confirm-title="Submit enrollment declaration?" data-confirm-message="Your response will be recorded and your account will be reactivated immediately." data-confirm-toast="Submitting...">
-                <span class="material-symbols-outlined">how_to_reg</span>
-                Submit and Continue
-            </button>
-        </form>
-    </section>
-    <script>
-        (() => {
-            const status = document.getElementById('enrollment-status');
-            const reasonField = document.getElementById('non-enrollment-reason-field');
-            const reason = document.getElementById('non-enrollment-reason');
-            const syncReasonField = () => {
-                const needsReason = status.value === 'Not Currently Enrolled';
-                reasonField.hidden = !needsReason;
-                reason.disabled = !needsReason;
-                reason.required = needsReason;
-                if (!needsReason) {
-                    reason.value = '';
-                }
-            };
-            status.addEventListener('change', syncReasonField);
-            syncReasonField();
-        })();
-    </script>
     <?php
     render_student_footer();
     return;
@@ -489,7 +307,7 @@ $apePhaseLabel = match (true) {
 $apePhaseStatus = match (true) {
     !$latestApe => 'Not Started',
     ($latestApe['clearance_status'] ?? '') === 'Cleared' => 'Completed',
-    !$apeInitialUploadPhaseOpen => 'Waiting for Schedule',
+    !$apeInitialUploadPhaseOpen => 'Waiting for the clinic to schedule your examination',
     $apeDocumentsNeedCorrection => 'Correction Needed',
     $apeProgress['active_step'] === 1 => 'Upload Required',
     $apeProgress['active_step'] === 3 => 'Awaiting Decision',
@@ -498,23 +316,23 @@ $apePhaseStatus = match (true) {
     $apeStatus === 'Follow-up Required' => 'Follow-up Required',
     $apeDocumentsAwaitingClinicReview => 'Under Clinic Review',
     $apeQueue === 'examination' && $hasScheduledApeBatch => 'Scheduled',
-    $apeQueue === 'examination' => 'Waiting for Schedule',
+    $apeQueue === 'examination' => 'Waiting for the clinic to schedule your examination',
     default => $apeStatus,
 };
 $apeActionStatus = match (true) {
     !$latestApe => 'Not Started',
     ($latestApe['clearance_status'] ?? '') === 'Cleared' => 'Complete',
-    !$apeInitialUploadPhaseOpen => 'Waiting for Schedule',
-    $apeDocumentsNeedCorrection => 'Needs Correction',
+    !$apeInitialUploadPhaseOpen => 'Waiting for the clinic to schedule your examination',
+    $apeDocumentsNeedCorrection => 'Action needed: submit a corrected file',
     $apeProgress['active_step'] === 1 => 'Upload Required',
     $apeProgress['active_step'] === 3 => 'Awaiting Decision',
     $apeProgress['active_step'] === 4 => 'Follow-up Required',
-    $apeRequirementsNeedCorrection => 'Needs Correction',
+    $apeRequirementsNeedCorrection => 'Action needed: submit a corrected file',
     $apeQueue === 'digital_submission' && !$apeAllDocumentsUploaded => 'Upload Required',
-    $apeDocumentsAwaitingClinicReview => 'Under Review',
+    $apeDocumentsAwaitingClinicReview => 'Submitted — waiting for clinic review',
     $apeQueue === 'digital_submission' => 'Documents Complete',
     $apeQueue === 'examination' && $hasScheduledApeBatch => 'Scheduled',
-    $apeQueue === 'examination' => 'Waiting for Schedule',
+    $apeQueue === 'examination' => 'Waiting for the clinic to schedule your examination',
     $apeQueue === 'follow_up' => 'Follow-up Required',
     default => 'In Progress',
 };
@@ -526,8 +344,8 @@ $apePhaseBadgeClass = match ($apePhaseStatus) {
 };
 $apeActionBadgeClass = match ($apeActionStatus) {
     'Complete', 'Documents Complete' => 'student-badge-success',
-    'Needs Correction', 'Follow-up Required' => 'student-badge-danger',
-    'Under Review', 'Scheduled' => 'student-badge-info',
+    'Action needed: submit a corrected file', 'Follow-up Required' => 'student-badge-danger',
+    'Submitted — waiting for clinic review', 'Scheduled' => 'student-badge-info',
     default => 'student-badge-warning',
 };
 $passportMissing = [];
@@ -587,7 +405,7 @@ $profileDetailLabel = match ($profile['account_type'] ?? 'patient') {
     'faculty', 'school_personnel' => 'Department',
     default => 'Affiliation',
 };
-$accountBadgeLabel = $isOfficialAccess ? 'Official' : 'Applicant';
+$accountBadgeLabel = $isOfficialAccess ? 'Clinic services enabled' : 'Clinic access pending APE completion';
 
 $appointmentStatus = $latestAppointment['status'] ?? 'No Request';
 $appointmentBadgeClass = match ($appointmentStatus) {
@@ -609,11 +427,11 @@ $appointmentIcon = match ($appointmentStatus) {
 $appointmentSummary = match ($appointmentStatus) {
     'Pending' => 'Your request was sent to the clinic. Please wait for approval before going to the clinic.',
     'Scheduled' => 'Please arrive 10 minutes before your scheduled time.',
-    'For Confirmation' => 'Your appointment time has passed. Clinic staff will mark it completed or no-show.',
+    'For Confirmation' => 'Clinic staff are completing the visit documentation for this appointment.',
     'Completed' => 'This appointment has been completed.',
     'Declined' => 'This appointment request was declined by the clinic.',
     'Cancelled' => 'This appointment was cancelled.',
-    'No Show' => 'This appointment was marked as no-show by the clinic.',
+    'No Show' => 'This appointment was marked as missed by the clinic. Contact the clinic if you need to arrange another appointment.',
     default => 'Manage your appointment request from the appointment page.',
 };
 $appointmentDisplayStatus = appointment_status_display_label($appointmentStatus);
@@ -623,6 +441,57 @@ $liveServiceStatuses = appointment_live_service_statuses();
 
 render_student_header('Dashboard', 'dashboard');
 ?>
+
+<?php if ($enrollmentPending): ?>
+    <section class="student-card student-card-pad mb-4" aria-labelledby="enrollment-confirmation-title">
+        <p class="student-eyebrow">School year confirmation</p>
+        <h2 id="enrollment-confirmation-title" class="student-card-title">Confirm your enrollment</h2>
+        <p class="student-card-copy">You can keep using the portal. New appointment requests stay unavailable until this is confirmed.</p>
+        <div class="grid gap-3 sm:grid-cols-2 my-4 text-sm font-bold text-slate-700">
+            <div><span class="student-label">Academic year</span><div><?= student_e((string) ($profile['academic_year'] ?? '')) ?></div></div>
+            <div><span class="student-label">Program</span><div><?= student_e((string) ($profile['course'] ?? 'Not assigned')) ?></div></div>
+            <div><span class="student-label">Year level</span><div>Year <?= student_e((string) ($profile['year_level'] ?? 'Not assigned')) ?></div></div>
+            <div><span class="student-label">Section</span><div><?= student_e((string) ($profile['section'] ?? 'Not assigned')) ?></div></div>
+        </div>
+        <?php if ($enrollmentCorrection && ($enrollmentCorrection['status'] ?? '') === 'Pending'): ?>
+            <div class="student-note student-note-warning mb-4"><span class="material-symbols-outlined">hourglass_top</span><div>Your placement correction request is awaiting clinic review. You may still confirm enrollment once the placement shown above is correct.</div></div>
+        <?php elseif ($enrollmentCorrection && ($enrollmentCorrection['status'] ?? '') !== 'Pending'): ?>
+            <div class="student-note <?= ($enrollmentCorrection['status'] ?? '') === 'Approved' ? 'student-note-success' : 'student-note-warning' ?> mb-4"><span class="material-symbols-outlined">info</span><div>Placement correction <?= student_e(strtolower((string) $enrollmentCorrection['status'])) ?><?= !empty($enrollmentCorrection['review_note']) ? ': ' . student_e((string) $enrollmentCorrection['review_note']) : '' ?>.</div></div>
+        <?php endif; ?>
+        <form method="post" class="grid gap-4">
+            <input type="hidden" name="_csrf" value="<?= student_e(csrf_token()) ?>">
+            <input type="hidden" name="action" value="complete_active_enrollment_confirmation">
+            <?php if ($activeEnrollmentError !== ''): ?><div class="student-note student-note-danger"><?= student_e($activeEnrollmentError) ?></div><?php endif; ?>
+            <div class="student-field"><label class="student-label" for="active-enrollment-status">Enrollment status</label><select id="active-enrollment-status" name="enrollment_status" class="student-select" required><option value="Still Enrolled">Still Enrolled</option><option value="Not Currently Enrolled">Not Currently Enrolled</option></select></div>
+            <div class="student-field" id="active-non-enrollment-reason-field" hidden><label class="student-label" for="active-non-enrollment-reason">If not enrolled, reason</label><select id="active-non-enrollment-reason" name="non_enrollment_reason" class="student-select" disabled><option value="">Select a reason</option><?php foreach (student_non_enrollment_reasons() as $reason): ?><option value="<?= student_e($reason) ?>"><?= student_e($reason) ?></option><?php endforeach; ?></select></div>
+            <div class="student-field"><label class="student-label" for="active-contact-number">Contact number</label><input id="active-contact-number" name="contact_number" class="student-input" value="<?= student_e((string) ($profile['contact_number'] ?? '')) ?>" required></div>
+            <label class="student-check"><input type="checkbox" name="contact_confirmed" value="1" required><span>I confirm that my enrollment status and contact information are correct.</span></label>
+            <button class="student-button" type="submit">Save enrollment status</button>
+        </form>
+        <?php if (!$enrollmentCorrection || ($enrollmentCorrection['status'] ?? '') !== 'Pending'): ?>
+            <details class="mt-4"><summary class="font-bold cursor-pointer">Incorrect placement?</summary>
+                <?php if ($enrollmentCorrectionError !== ''): ?><p class="student-note student-note-danger mt-3"><?= student_e($enrollmentCorrectionError) ?></p><?php endif; ?>
+                <form method="post" class="grid gap-3 mt-3"><input type="hidden" name="_csrf" value="<?= student_e(csrf_token()) ?>"><input type="hidden" name="action" value="request_enrollment_correction"><div class="student-field"><label class="student-label" for="requested-year">Requested year level</label><select id="requested-year" name="requested_year_level" class="student-select" required><?php foreach (['1','2','3','4'] as $year): ?><option value="<?= $year ?>">Year <?= $year ?></option><?php endforeach; ?></select></div><div class="student-field"><label class="student-label" for="requested-section">Requested section</label><input id="requested-section" name="requested_section" class="student-input" maxlength="80" required></div><div class="student-field"><label class="student-label" for="placement-note">Why is this placement incorrect?</label><textarea id="placement-note" name="request_note" class="student-input" maxlength="1000" required></textarea></div><button type="submit" class="student-button">Send correction request</button></form>
+            </details>
+        <?php endif; ?>
+    </section>
+    <script>
+        (() => {
+            const status = document.getElementById('active-enrollment-status');
+            const reasonField = document.getElementById('active-non-enrollment-reason-field');
+            const reason = document.getElementById('active-non-enrollment-reason');
+            const syncReason = () => {
+                const required = status.value === 'Not Currently Enrolled';
+                reasonField.hidden = !required;
+                reason.disabled = !required;
+                reason.required = required;
+                if (!required) reason.value = '';
+            };
+            status.addEventListener('change', syncReason);
+            syncReason();
+        })();
+    </script>
+<?php endif; ?>
 
 <?php if (isset($_GET['activated'])): ?>
     <div class="student-note student-note-success student-toast" data-student-toast role="status" aria-live="polite">
@@ -653,7 +522,7 @@ render_student_header('Dashboard', 'dashboard');
     </span>
 </div>
 <?php if (!$isOfficialAccess): ?>
-    <p class="student-dashboard-applicant-hint">APE clearance unlocks Passport and appointments.</p>
+    <p class="student-dashboard-applicant-hint">Clinic services become available after the clinic completes your APE clearance.</p>
 <?php endif; ?>
 <?php if ($hasScheduledApeBatch): ?>
     <a href="<?= student_e(student_portal_url('ape-status')) ?>" class="student-dashboard-batch-summary text-decoration-none">
@@ -667,7 +536,7 @@ render_student_header('Dashboard', 'dashboard');
 <?php if (!$isOfficialAccess): ?>
     <div class="student-note student-note-warning student-dashboard-applicant-warning mb-4" role="status">
         <span class="material-symbols-outlined">lock_clock</span>
-        <div><strong>Applicant access</strong><br>Complete your APE and receive final clinic clearance to unlock your Health Passport and appointment booking.</div>
+        <div><strong>Clinic access pending APE completion</strong><br>Complete your APE requirements. The clinic will enable your Health Passport and appointment booking after clearance.</div>
     </div>
 <?php endif; ?>
 
@@ -831,7 +700,7 @@ render_student_header('Dashboard', 'dashboard');
         <span class="material-symbols-outlined student-dashboard-summary-arrow" aria-hidden="true">chevron_right</span>
     </a>
     <?php else: ?>
-    <div class="student-dashboard-summary-row" aria-label="Appointments locked for Applicant access">
+    <div class="student-dashboard-summary-row" aria-label="Appointments unavailable until APE clearance">
         <span class="student-icon-box"><span class="material-symbols-outlined">lock</span></span>
         <span class="student-dashboard-summary-copy"><strong>Appointments</strong><span>Available after final APE clearance</span></span>
         <span class="student-badge student-badge-warning">Locked</span>
@@ -919,7 +788,7 @@ render_student_header('Dashboard', 'dashboard');
         </div>
     </section>
 
-    <section class="student-card student-span-4<?= $isOfficialAccess ? ' student-clickable-card' : '' ?> student-dashboard-duplicate student-dashboard-appointment-card"<?= $isOfficialAccess ? ' data-href="' . student_e(student_portal_url('appointments')) . '" role="link" tabindex="0" aria-label="Open appointment page"' : ' aria-label="Appointments locked for Applicant access"' ?>>
+    <section class="student-card student-span-4<?= $isOfficialAccess ? ' student-clickable-card' : '' ?> student-dashboard-duplicate student-dashboard-appointment-card"<?= $isOfficialAccess ? ' data-href="' . student_e(student_portal_url('appointments')) . '" role="link" tabindex="0" aria-label="Open appointment page"' : ' aria-label="Appointments unavailable until APE clearance"' ?>>
         <div class="student-card-header">
             <div>
                 <h2 class="student-card-title">Appointment</h2>
@@ -931,7 +800,7 @@ render_student_header('Dashboard', 'dashboard');
             <?php if (!$isOfficialAccess): ?>
                 <div class="student-note student-note-warning mb-4">
                     <span class="material-symbols-outlined">lock</span>
-                    <div><strong>Applicant access</strong><br>Appointment booking unlocks after final APE clearance.</div>
+                    <div><strong>Clinic access pending APE completion</strong><br>Appointment booking becomes available after the clinic completes your APE clearance.</div>
                 </div>
             <?php elseif ($latestAppointment): ?>
                 <div class="student-note <?= student_e($appointmentNoteClass) ?> mb-4">
@@ -971,7 +840,7 @@ render_student_header('Dashboard', 'dashboard');
     <div class="student-card-header">
         <div>
             <h2 id="clinic-service-status-title" class="student-card-title">Clinic service status</h2>
-            <p class="student-card-copy"><?= $isOfficialAccess ? 'Current walk-in availability. Check with reception before coming in.' : 'Clinic service access unlocks after final APE clearance.' ?></p>
+            <p class="student-card-copy"><?= $isOfficialAccess ? 'Current walk-in availability. Check with reception before coming in.' : 'Clinic services become available after the clinic completes your APE clearance.' ?></p>
         </div>
         <?php if ($isOfficialAccess): ?>
         <form method="get" action="<?= student_e(student_portal_url('dashboard')) ?>">
@@ -983,7 +852,7 @@ render_student_header('Dashboard', 'dashboard');
         <?php if (!$isOfficialAccess): ?>
             <div class="student-note student-note-warning mb-0 sm:col-span-2" role="status">
                 <span class="material-symbols-outlined" aria-hidden="true">lock</span>
-                <div><strong>Applicant access</strong><br>Clinic service access unlocks after final APE clearance.</div>
+                <div><strong>Clinic access pending APE completion</strong><br>Clinic services become available after the clinic completes your APE clearance.</div>
             </div>
         <?php else: ?>
         <?php foreach ($liveServiceStatuses as $service => $serviceStatus): ?>

@@ -152,7 +152,8 @@ expect_action_feedback(str_contains($publicFeedback, "action.value = 'start_link
 expect_action_feedback(str_contains($publicFeedback, "'anonymous' => (\$_POST['private_identity'] ?? '') === '1'"), 'Private linked feedback must set the existing anonymous flag.');
 
 $staffFeedbackReport = action_feedback_source($root, 'public/feedback/index.php');
-expect_action_feedback(str_contains($staffFeedbackReport, 'Identity-private feedback. Visit and student details are withheld.'), 'Staff feedback reports must hide visit details for private feedback.');
+expect_action_feedback(str_contains($staffFeedbackReport, "if (!empty(\$row['is_anonymous']))")
+    && str_contains($staffFeedbackReport, 'The student and selected visit are not shown in this report.'), 'Staff feedback reports must hide visit details for private feedback.');
 foreach ([
     'patient-portal/patient-ape-status.php',
     'patient-portal/patient-feedback.php',

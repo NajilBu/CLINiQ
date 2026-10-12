@@ -302,8 +302,7 @@ render_clinic_command_header(
                     </select>
                     <select class="clinic-input hidden" id="faculty_employment_type" name="year_level_or_employment_type" aria-describedby="year_level_or_employment_type_hint" disabled>
                         <option value="">Select employment type</option>
-                        <option value="Full-time" <?= $selectedYearEmployment === 'Full-time' ? 'selected' : '' ?>>Full-time</option>
-                        <option value="Part-time" <?= $selectedYearEmployment === 'Part-time' ? 'selected' : '' ?>>Part-time</option>
+                        <?php foreach (dropdown_options('employment_type') as $employmentType): ?><option value="<?= e($employmentType) ?>" <?= $selectedYearEmployment === $employmentType ? 'selected' : '' ?>><?= e($employmentType) ?></option><?php endforeach; ?>
                     </select>
                     <p class="text-[11px] font-bold text-slate-500 mt-1" id="year_level_or_employment_type_hint">Choose 1 to 4.</p>
                 </div>
@@ -312,11 +311,7 @@ render_clinic_command_header(
                     <input class="clinic-input hidden" id="section_or_position" name="section_or_position" value="<?= e($selectedSectionPosition) ?>" placeholder="Position" aria-describedby="section_or_position_hint" maxlength="100" disabled>
                     <select class="clinic-input" id="student_section_code" name="section_or_position" aria-describedby="section_or_position_hint" required>
                         <option value="">Select section code</option>
-                        <option value="A" <?= strtoupper($selectedSectionPosition) === 'A' ? 'selected' : '' ?>>A</option>
-                        <option value="B" <?= strtoupper($selectedSectionPosition) === 'B' ? 'selected' : '' ?>>B</option>
-                        <option value="C" <?= strtoupper($selectedSectionPosition) === 'C' ? 'selected' : '' ?>>C</option>
-                        <option value="D" <?= strtoupper($selectedSectionPosition) === 'D' ? 'selected' : '' ?>>D</option>
-                        <option value="E" <?= strtoupper($selectedSectionPosition) === 'E' ? 'selected' : '' ?>>E</option>
+                        <?php foreach (dropdown_options('student_section') as $section): ?><option value="<?= e($section) ?>" <?= strtoupper($selectedSectionPosition) === strtoupper($section) ? 'selected' : '' ?>><?= e($section) ?></option><?php endforeach; ?>
                     </select>
                     <p class="text-[11px] font-bold text-slate-500 mt-1" id="section_or_position_hint">Choose A to E. Program, year level, and section are stored separately.</p>
                 </div>

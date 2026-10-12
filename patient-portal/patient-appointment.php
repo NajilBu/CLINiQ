@@ -520,13 +520,13 @@ render_student_header('Appointments', 'appointment');
                 };
                 $displayStatus = match ($status) {
                     'Pending' => 'Awaiting Clinic',
-                    'For Confirmation' => 'For Completion',
+                    'For Confirmation' => 'Clinic Review',
                     default => $status,
                 };
                 $statusCopy = match ($status) {
                     'Scheduled' => 'Your visit is confirmed. Please arrive 10 minutes before your scheduled time.',
                     'Pending' => 'Awaiting clinic approval. Please do not visit the clinic until your request is confirmed.',
-                    'For Confirmation' => 'Your appointment time has passed. Clinic staff are recording the visit outcome.',
+                    'For Confirmation' => 'Clinic staff are completing the visit documentation for this appointment.',
                     default => 'This appointment still needs clinic action.',
                 };
                 ?>

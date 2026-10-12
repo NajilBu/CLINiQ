@@ -5,6 +5,7 @@ require_once __DIR__ . '/../helpers/data_normalization.php';
 require_once __DIR__ . '/../helpers/emergency_contact.php';
 require_once __DIR__ . '/../helpers/patient_category.php';
 require_once __DIR__ . '/AuditLog.php';
+require_once __DIR__ . '/SystemSettings.php';
 
 function cliniq_patient_profile_db(): PDO
 {
@@ -55,6 +56,7 @@ function cliniq_patient_profile_select(): string
             pt.existing_conditions,
             pt.medications,
             pt.updated_at,
+            lv.last_visit_at,
             pt.height_cm,
             pt.weight_kg,
             pt.bmi,
@@ -88,6 +90,11 @@ function cliniq_patient_profile_select(): string
         LEFT JOIN departments ed ON ed.id = se.department_id
         LEFT JOIN clinic_staff cs ON cs.person_id = pe.id
         LEFT JOIN departments cd ON cd.id = cs.department_id
+        LEFT JOIN (
+            SELECT patient_person_id, MAX(visit_datetime) AS last_visit_at
+            FROM visits
+            GROUP BY patient_person_id
+        ) lv ON lv.patient_person_id = pt.person_id
         LEFT JOIN (
             SELECT vs1.*
             FROM vital_signs vs1
@@ -146,24 +153,24 @@ function cliniq_patient_profile_count(string $search = ''): int
     return (int) $stmt->fetchColumn();
 }
 
-/** @return array<int,array{id:int,code:string,name:string}> */
-function cliniq_patient_profile_programs(): array
+/** @return array<int,array{id:int,code:string,name:string,active:bool}> */
+function cliniq_patient_profile_programs(bool $activeOnly = true): array
 {
     return cliniq_patient_profile_db()->query("
-        SELECT id, program_code AS code, program_name AS name
+        SELECT id, program_code AS code, program_name AS name, is_active AS active
         FROM programs
-        WHERE is_active = 1
+        " . ($activeOnly ? 'WHERE is_active = 1' : '') . "
         ORDER BY program_code
     ")->fetchAll();
 }
 
-/** @return array<int,array{id:int,code:string,name:string}> */
-function cliniq_patient_profile_departments(): array
+/** @return array<int,array{id:int,code:string,name:string,active:bool}> */
+function cliniq_patient_profile_departments(bool $activeOnly = true): array
 {
     return cliniq_patient_profile_db()->query("
-        SELECT id, department_code AS code, department_name AS name
+        SELECT id, department_code AS code, department_name AS name, is_active AS active
         FROM departments
-        WHERE is_active = 1
+        " . ($activeOnly ? 'WHERE is_active = 1' : '') . "
         ORDER BY department_code
     ")->fetchAll();
 }
@@ -210,8 +217,9 @@ function cliniq_patient_profile_update(int $personId, array $data, ?int $actorPe
     if ($sex !== '' && !in_array($sex, ['Male', 'Female', 'Other'], true)) {
         throw new InvalidArgumentException('Select a valid sex.');
     }
-    if (strlen($bloodType) > 10) {
-        throw new InvalidArgumentException('Blood type must not exceed 10 characters.');
+    $currentBloodType = cliniq_normalize_blood_type($profile['blood_type'] ?? '');
+    if (strlen($bloodType) > 10 || ($bloodType !== '' && !in_array($bloodType, dropdown_options('blood_type'), true) && $bloodType !== $currentBloodType)) {
+        throw new InvalidArgumentException('Select an active blood type.');
     }
     if ($email !== '' && (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 254)) {
         throw new InvalidArgumentException('Enter a valid email address.');
@@ -228,7 +236,7 @@ function cliniq_patient_profile_update(int $personId, array $data, ?int $actorPe
             'relationship' => $guardianRelationship,
             'primary_contact' => $guardianRaw,
             'secondary_contact' => $secondaryRaw,
-        ], dropdown_options('guardian_relationship'));
+        ], array_values(array_unique(array_filter(array_merge(dropdown_options('guardian_relationship'), [(string) ($profile['guardian_relationship'] ?? '')])))));
         $guardianName = $contact['guardian_name'];
         $guardianRelationship = $contact['relationship'];
         $guardianContact = $contact['primary_contact'];
@@ -292,12 +300,15 @@ function cliniq_patient_profile_update(int $personId, array $data, ?int $actorPe
             $yearLevel = trim((string) ($data['year_level'] ?? ''));
             $section = strtoupper(trim((string) ($data['section'] ?? '')));
             $academicYear = trim((string) ($data['academic_year'] ?? ''));
-            if ($programId < 1 || !in_array($yearLevel, ['1', '2', '3', '4'], true) || !in_array($section, ['A', 'B', 'C', 'D', 'E'], true)) {
+            $currentProgramId = (int) ($profile['program_id'] ?? 0);
+            $currentSection = strtoupper(trim((string) ($profile['section'] ?? '')));
+            $sectionIsCurrentInactiveValue = $section !== '' && $section === $currentSection;
+            if ($programId < 1 || !in_array($yearLevel, ['1', '2', '3', '4'], true) || (!in_array($section, array_map('strtoupper', dropdown_options('student_section')), true) && !$sectionIsCurrentInactiveValue)) {
                 throw new InvalidArgumentException('Select a valid program, year level, and section.');
             }
             $programStmt = $db->prepare('SELECT 1 FROM programs WHERE id = ? AND is_active = 1 LIMIT 1');
             $programStmt->execute([$programId]);
-            if (!$programStmt->fetchColumn()) {
+            if (!$programStmt->fetchColumn() && $programId !== $currentProgramId) {
                 throw new InvalidArgumentException('The selected program is not active.');
             }
             if ($academicYear !== '') {
@@ -315,12 +326,15 @@ function cliniq_patient_profile_update(int $personId, array $data, ?int $actorPe
             $departmentId = (int) ($data['department_id'] ?? 0);
             $employmentType = trim((string) ($data['employment_type'] ?? ''));
             $positionTitle = trim((string) ($data['position_title'] ?? ''));
-            if ($departmentId < 1 || !in_array($employmentType, ['Full-time', 'Part-time'], true)) {
+            $currentDepartmentId = (int) ($profile['employee_department_id'] ?? 0);
+            $currentEmploymentType = trim((string) ($profile['employment_type'] ?? ''));
+            $employmentTypeIsCurrentInactiveValue = $employmentType !== '' && $employmentType === $currentEmploymentType;
+            if ($departmentId < 1 || (!in_array($employmentType, dropdown_options('employment_type'), true) && !$employmentTypeIsCurrentInactiveValue)) {
                 throw new InvalidArgumentException('Select a valid department and employment type.');
             }
             $departmentStmt = $db->prepare('SELECT 1 FROM departments WHERE id = ? AND is_active = 1 LIMIT 1');
             $departmentStmt->execute([$departmentId]);
-            if (!$departmentStmt->fetchColumn()) {
+            if (!$departmentStmt->fetchColumn() && $departmentId !== $currentDepartmentId) {
                 throw new InvalidArgumentException('The selected department is not active.');
             }
             $db->prepare('
@@ -425,11 +439,13 @@ function cliniq_patient_profile_history(int $personId, int $limit = 100): array
         SELECT
             v.*,
             v.visit_id AS id,
-            TRIM(CONCAT_WS(' ', rp.first_name, rp.middle_name, rp.last_name)) AS recorded_by_name,
-            TRIM(CONCAT_WS(' ', ap.first_name, ap.middle_name, ap.last_name)) AS attended_by_name
+            TRIM(CONCAT_WS(' ', NULLIF(recorded_staff.honorific, ''), rp.first_name, rp.middle_name, rp.last_name)) AS recorded_by_name,
+            TRIM(CONCAT_WS(' ', NULLIF(attended_staff.honorific, ''), ap.first_name, ap.middle_name, ap.last_name)) AS attended_by_name
         FROM visits v
         LEFT JOIN people rp ON rp.id = v.recorded_by_person_id
         LEFT JOIN people ap ON ap.id = v.attended_by_person_id
+        LEFT JOIN clinic_staff recorded_staff ON recorded_staff.person_id = rp.id
+        LEFT JOIN clinic_staff attended_staff ON attended_staff.person_id = ap.id
         WHERE v.patient_person_id = ?
         ORDER BY v.visit_datetime DESC, v.visit_id DESC
         LIMIT {$limit}
@@ -445,9 +461,10 @@ function cliniq_patient_profile_history(int $personId, int $limit = 100): array
 
     $entryStmt = $db->prepare("
         SELECT ve.*,
-               TRIM(CONCAT_WS(' ', pe.first_name, pe.middle_name, pe.last_name)) AS addressed_by_name
+               TRIM(CONCAT_WS(' ', NULLIF(addressed_staff.honorific, ''), pe.first_name, pe.middle_name, pe.last_name)) AS addressed_by_name
         FROM visit_entries ve
         LEFT JOIN people pe ON pe.id = ve.addressed_by_person_id
+        LEFT JOIN clinic_staff addressed_staff ON addressed_staff.person_id = pe.id
         WHERE ve.visit_id IN ({$visitPlaceholders})
         ORDER BY ve.created_at DESC, ve.entry_id DESC
     ");
@@ -457,9 +474,10 @@ function cliniq_patient_profile_history(int $personId, int $limit = 100): array
 
     $vitalStmt = $db->prepare("
         SELECT vs.*,
-               TRIM(CONCAT_WS(' ', pe.first_name, pe.middle_name, pe.last_name)) AS measured_by_name
+               TRIM(CONCAT_WS(' ', NULLIF(measured_staff.honorific, ''), pe.first_name, pe.middle_name, pe.last_name)) AS measured_by_name
         FROM vital_signs vs
         LEFT JOIN people pe ON pe.id = vs.measured_by_person_id
+        LEFT JOIN clinic_staff measured_staff ON measured_staff.person_id = pe.id
         WHERE vs.visit_id IN ({$visitPlaceholders})
         ORDER BY vs.measured_at DESC, vs.vital_id DESC
     ");
@@ -471,10 +489,11 @@ function cliniq_patient_profile_history(int $personId, int $limit = 100): array
         $entryPlaceholders = implode(',', array_fill(0, count($entryIds), '?'));
         $dispensingStmt = $db->prepare("
             SELECT md.*, i.item_name, i.unit,
-                   TRIM(CONCAT_WS(' ', pe.first_name, pe.middle_name, pe.last_name)) AS dispensed_by_name
+                   TRIM(CONCAT_WS(' ', NULLIF(dispensed_staff.honorific, ''), pe.first_name, pe.middle_name, pe.last_name)) AS dispensed_by_name
             FROM medicine_dispensings md
             JOIN inventory_items i ON i.item_id = md.item_id
             LEFT JOIN people pe ON pe.id = md.dispensed_by_person_id
+            LEFT JOIN clinic_staff dispensed_staff ON dispensed_staff.person_id = pe.id
             WHERE md.entry_id IN ({$entryPlaceholders})
             ORDER BY md.dispensed_at DESC, md.dispensing_id DESC
         ");

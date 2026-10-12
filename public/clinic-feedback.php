@@ -284,9 +284,9 @@ $feedbackSteps = [1 => ['label' => 'Find visit', 'description' => 'Enter your st
                 </label>
                 <p class="feedback-anonymous-status" id="feedback-privacy-mode" data-feedback-privacy-mode>Feedback is confidential and linked to the selected visit for clinic follow-up.</p>
                 <input type="hidden" name="participate" value="1">
-                <label class="feedback-consent"><input type="checkbox" name="consent" value="1" required><span>I have read the RA 10173 privacy notice and consent to the collection and use of my feedback.</span></label>
+                <label class="feedback-consent"><input type="checkbox" name="consent" value="1" required><span>I have read the Data Privacy Act of 2012 (RA 10173) notice and consent to the collection and use of my feedback.</span></label>
                 <div class="feedback-privacy">
-                    <p><strong>Data privacy notice — RA 10173</strong></p>
+                    <p><strong>Data privacy notice — Data Privacy Act of 2012 (RA 10173)</strong></p>
                     <p>Your feedback is collected under the Data Privacy Act of 2012 (Republic Act No. 10173) to evaluate and improve clinic services.</p>
                     <details><summary>Read the privacy notice and your rights</summary><div><p>We collect your visit details, ratings, comments, and consent record for service quality improvement and clinic reporting. Your response is confidential but linked to this visit for follow-up.</p><p>Access is limited to authorized clinic personnel who need it for evaluation, support, or reporting.</p></div></details>
                 </div>

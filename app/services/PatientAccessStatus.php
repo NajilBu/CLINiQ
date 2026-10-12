@@ -68,16 +68,16 @@ function patient_access_status_set(
         $personId,
         $actorPersonId,
         'account',
-        $isOfficial ? 'Official portal access unlocked' : 'Portal access changed to Applicant',
+        $isOfficial ? 'Clinic services enabled' : 'Clinic access pending APE completion',
         $isOfficial
             ? 'Your Health Passport and appointment booking are now available.'
-            : 'Health Passport and appointment booking are unavailable while your account is under Applicant access.',
+            : 'Your Health Passport and appointment booking will be available after the clinic completes your APE clearance.',
         '/dashboard',
         'patient_access',
         $personId
     );
     if ($status === 'Applicant') {
-        patient_email_queue_notification($personId, 'patient_access_restricted', 'access_restrictions', 'Your patient portal access changed', 'Your patient portal access is currently restricted while your clinic account is under Applicant review. Please contact the clinic if you need assistance.', 'patient_access', $personId, $actorPersonId, null, $status);
+        patient_email_queue_notification($personId, 'patient_access_restricted', 'access_restrictions', 'Clinic access pending APE completion', 'Your Health Passport and appointment booking will be available after the clinic completes your APE clearance. Please contact the clinic if you need assistance.', 'patient_access', $personId, $actorPersonId, null, $status);
     }
     audit_log_event(
         'accounts',
