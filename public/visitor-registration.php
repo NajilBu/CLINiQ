@@ -5,6 +5,7 @@ require_once __DIR__ . '/../app/services/CliniqVisitWorkflow.php';
 require_once __DIR__ . '/../app/services/CliniqInventoryWorkflow.php';
 
 const VISITOR_REASON_BORROW_EQUIPMENT = 'Borrow Equipment';
+const VISITOR_REGISTERED_ONLY_REASONS = [VISITOR_REASON_BORROW_EQUIPMENT, 'APE'];
 
 $errors = [];
 $success = null;
@@ -25,9 +26,8 @@ $form = [
     'department' => '',
     'reason' => '',
     'chief_complaint' => '',
-    'borrow_item_id' => '',
-    'borrowed_quantity' => '1',
 ];
+$borrowRows = [['item_id' => '', 'quantity' => '1']];
 
 function split_visitor_name(string $fullName): array
 {
@@ -69,7 +69,7 @@ if (isset($_GET['lookup_identifier'])) {
         'found' => true,
         'name' => trim($patient['first_name'] . ' ' . $patient['last_name']),
         'course' => $patient['course_section'] ?: '',
-        'category' => $patientCategory,
+            'category' => patient_category_label($patientCategory),
     ]);
     exit;
 }
@@ -82,6 +82,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $form['identifier'] = normalize_id_number($form['identifier']);
     $form['subject_type'] = ($form['subject_type'] ?? 'registered') === 'guest' ? 'guest' : 'registered';
     $isGuest = $form['subject_type'] === 'guest';
+    $borrowItemIds = (array) ($_POST['borrow_item_id'] ?? []);
+    $borrowedQuantities = (array) ($_POST['borrowed_quantity'] ?? []);
+    $borrowRows = [];
+    foreach ($borrowItemIds as $index => $itemId) {
+        $itemId = (int) $itemId;
+        $quantity = trim((string) ($borrowedQuantities[$index] ?? ''));
+        if ($itemId < 1 && $quantity === '') continue;
+        $borrowRows[] = ['item_id' => (string) $itemId, 'quantity' => $quantity];
+    }
+    if (!$borrowRows) $borrowRows = [['item_id' => '', 'quantity' => '1']];
 
     $isBorrowingEquipment = $form['reason'] === VISITOR_REASON_BORROW_EQUIPMENT;
     $requiredFields = $isGuest ? ['full_name', 'reason'] : ['full_name', 'identifier', 'category', 'department', 'reason'];
@@ -124,28 +134,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($isGuest) {
-        $form['category'] = 'Visitor / Guest';
+        $form['category'] = 'Guest';
         $form['department'] = '';
-        if ($isBorrowingEquipment) {
-            $errors['reason'] = 'Guest equipment loans require a registered patient ID.';
+        if (in_array($form['reason'], VISITOR_REGISTERED_ONLY_REASONS, true)) {
+            $errors['reason'] = 'Borrowing equipment and APE require a registered patient ID.';
         }
     }
 
     if ($isBorrowingEquipment) {
-        $borrowItemId = (int) $form['borrow_item_id'];
-        $borrowedQuantity = max(1, (int) $form['borrowed_quantity']);
-        if ($borrowItemId <= 0) {
-            $errors['borrow_item_id'] = 'Required';
-        }
-        if ($borrowedQuantity <= 0) {
-            $errors['borrowed_quantity'] = 'Required';
+        $borrowItemIds = [];
+        foreach ($borrowRows as $row) {
+            $itemId = (int) $row['item_id'];
+            $quantity = (int) $row['quantity'];
+            if ($itemId < 1 || $quantity < 1) {
+                $errors['borrow_items'] = 'Select each equipment item and enter a quantity greater than zero.';
+                break;
+            }
+            if (isset($borrowItemIds[$itemId])) {
+                $errors['borrow_items'] = 'Select each equipment item only once.';
+                break;
+            }
+            $borrowItemIds[$itemId] = $quantity;
         }
     }
 
     if (!$errors) {
         if ($isBorrowingEquipment) {
             $db = cliniq_inventory_db();
-            $borrowedQuantity = max(1, (int) $form['borrowed_quantity']);
 
             try {
                 $db->beginTransaction();
@@ -156,42 +171,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     WHERE item_id = ? AND is_active = 1 AND item_type = 'Equipment'
                     FOR UPDATE
                 ");
-                $itemStmt->execute([(int) $form['borrow_item_id']]);
-                $item = $itemStmt->fetch();
-
-                if (!$item) {
-                    throw new RuntimeException('Selected equipment is no longer available.');
+                $lockedItems = [];
+                ksort($borrowItemIds);
+                foreach ($borrowItemIds as $itemId => $quantity) {
+                    $itemStmt->execute([$itemId]);
+                    $item = $itemStmt->fetch();
+                    if (!$item) throw new RuntimeException('Selected equipment is no longer available.');
+                    if ((int) $item['quantity'] < $quantity) {
+                        throw new RuntimeException('Not enough ' . $item['item_name'] . ' available. Available: ' . (int) $item['quantity'] . ' ' . ($item['unit'] ?: 'unit') . '.');
+                    }
+                    $lockedItems[] = ['item' => $item, 'quantity' => $quantity];
                 }
 
-                if ((int) $item['quantity'] < $borrowedQuantity) {
-                    throw new RuntimeException('Not enough available equipment to lend. Available: ' . (int) $item['quantity'] . ' ' . ($item['unit'] ?: 'unit') . '.');
-                }
-
-                $newBalance = (int) $item['quantity'] - $borrowedQuantity;
-                $db->prepare('UPDATE inventory_items SET quantity = ? WHERE item_id = ?')
-                    ->execute([$newBalance, (int) $item['id']]);
-                $db->prepare('
+                $loanStmt = $db->prepare('
                     INSERT INTO equipment_loans (
                         item_id, borrower_person_id, quantity, remarks
                     ) VALUES (?, ?, ?, ?)
-                ')->execute([
-                    (int) $item['id'],
-                    (int) $matchedPatient['person_id'],
-                    $borrowedQuantity,
-                    trim((string) $form['chief_complaint']) ?: null,
-                ]);
-                $loanId = (int) $db->lastInsertId();
-                cliniq_inventory_record_transaction(
-                    $db,
-                    (int) $item['id'],
-                    'Loaned',
-                    -$borrowedQuantity,
-                    $newBalance,
-                    null,
-                    null,
-                    $loanId,
-                    'Self-service equipment loan by ' . $form['full_name'] . ' (' . $form['identifier'] . ')'
-                );
+                ');
+                $loanItems = [];
+                foreach ($lockedItems as $locked) {
+                    $item = $locked['item'];
+                    $quantity = $locked['quantity'];
+                    $newBalance = (int) $item['quantity'] - $quantity;
+                    $db->prepare('UPDATE inventory_items SET quantity = ? WHERE item_id = ?')->execute([$newBalance, (int) $item['id']]);
+                    $loanStmt->execute([(int) $item['id'], (int) $matchedPatient['person_id'], $quantity, trim((string) $form['chief_complaint']) ?: null]);
+                    $loanId = (int) $db->lastInsertId();
+                    cliniq_inventory_record_transaction($db, (int) $item['id'], 'Loaned', -$quantity, $newBalance, null, null, $loanId, 'Self-service equipment loan by ' . $form['full_name'] . ' (' . $form['identifier'] . ')');
+                    $loanItems[] = $quantity . ' ' . ($item['unit'] ?: 'unit') . ' of ' . $item['item_name'];
+                }
 
                 $db->commit();
                 $success = [
@@ -199,17 +206,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'name' => $form['full_name'],
                     'identifier' => $form['identifier'],
                     'time' => date('h:i A'),
-                    'item' => $item['item_name'],
-                    'quantity' => $borrowedQuantity,
-                    'unit' => $item['unit'] ?: 'unit',
+                    'items' => $loanItems,
                 ];
 
-                $form = array_merge(array_map(fn () => '', $form), ['borrowed_quantity' => '1']);
+                $form = array_map(fn () => '', $form);
+                $borrowRows = [['item_id' => '', 'quantity' => '1']];
             } catch (Throwable $exception) {
                 if ($db->inTransaction()) {
                     $db->rollBack();
                 }
-                $errors['borrow_item_id'] = $exception->getMessage();
+                $errors['borrow_items'] = $exception->getMessage();
             }
         }
     }
@@ -235,7 +241,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'time' => date('h:i A'),
         ];
 
-        $form = array_merge(array_map(fn () => '', $form), ['borrowed_quantity' => '1']);
+        $form = array_map(fn () => '', $form);
     }
 }
 
@@ -418,6 +424,13 @@ $theme = active_cliniq_theme();
             padding: 0.85rem 1rem;
         }
 
+        #borrowEquipmentRows {
+            max-height: 7rem;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            padding-right: 0.35rem;
+        }
+
         .visit-notes {
             min-height: 3.15rem;
             max-height: 4.25rem;
@@ -569,7 +582,7 @@ $theme = active_cliniq_theme();
                     <h2 class="font-headline text-2xl font-extrabold text-[#17261d] mb-2"><?= ($success['type'] ?? 'visit') === 'borrow' ? 'Equipment loan recorded' : 'Visit log recorded' ?></h2>
                     <p class="text-sm text-slate-500 mb-4 max-w-xl mx-auto leading-relaxed">
                         <?php if (($success['type'] ?? 'visit') === 'borrow'): ?>
-                            Thank you, <?= e($success['name']) ?>. <?= e($success['quantity'] . ' ' . $success['unit'] . ' of ' . $success['item']) ?> was recorded as borrowed at <?= e($success['time']) ?>.
+                            Thank you, <?= e($success['name']) ?>. <?= e(implode(', ', $success['items'])) ?> <?= count($success['items']) === 1 ? 'was' : 'were' ?> recorded as borrowed at <?= e($success['time']) ?>.
                             Please return the item to the clinic when finished.
                         <?php else: ?>
                             <?= $success['name'] !== '' ? 'Thank you, ' . e($success['name']) . '. ' : 'Thank you. ' ?>Your clinic visit was recorded at <?= e($success['time']) ?>.
@@ -578,7 +591,7 @@ $theme = active_cliniq_theme();
                     </p>
                     <div class="inline-flex items-center gap-2 rounded-xl bg-slate-50 border border-slate-100 px-4 py-3 text-xs font-black text-slate-500 uppercase tracking-widest">
                         <span class="material-symbols-outlined text-primary text-[16px]">badge</span>
-                        <?= $success['identifier'] !== '' ? e($success['identifier']) : 'Guest / Visitor' ?>
+                        <?= $success['identifier'] !== '' ? e($success['identifier']) : 'Guest' ?>
                     </div>
                     <p class="text-xs text-slate-400 mt-5 mb-0">
                         Your submission is saved. Use Back to form at the top right to register another visit.
@@ -600,7 +613,7 @@ $theme = active_cliniq_theme();
 
                     <div class="visit-form-grid grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-5">
                         <div>
-                            <div class="flex items-center justify-between gap-2"><label class="visit-label mb-0" for="identifier">ID Number</label><button type="button" class="btn btn-ghost text-xs min-h-0 px-3 py-1.5" id="guestVisitorButton"><span class="material-symbols-outlined text-[16px]">person_pin</span>Guest / Visitor</button></div>
+                            <div class="flex items-center justify-between gap-2"><label class="visit-label mb-0" for="identifier">ID Number</label><button type="button" class="btn btn-ghost text-xs min-h-0 px-3 py-1.5" id="guestVisitorButton"><span class="material-symbols-outlined text-[16px]">person_pin</span>Guest</button></div>
                             <div class="visit-field">
                                 <span class="material-symbols-outlined">badge</span>
                                 <input class="visit-input <?= isset($errors['identifier']) ? 'input-error' : '' ?>" id="identifier" name="identifier" value="<?= e($form['identifier']) ?>" placeholder="Enter ID number" data-id-number-format autocomplete="off" <?= $form['subject_type'] === 'guest' ? 'disabled' : 'required' ?>>
@@ -620,7 +633,7 @@ $theme = active_cliniq_theme();
                             <label class="visit-label" for="category">Patient Type</label>
                             <div class="visit-field">
                                 <span class="material-symbols-outlined">group</span>
-                                <input class="visit-input <?= isset($errors['category']) ? 'input-error' : '' ?>" id="category" name="category" value="<?= e($form['category']) ?>" placeholder="Loaded from your ID number" readonly>
+                                <input class="visit-input <?= isset($errors['category']) ? 'input-error' : '' ?>" id="category" name="category" value="<?= e($form['category'] === '' ? '' : patient_category_label($form['category'])) ?>" placeholder="Loaded from your ID number" readonly>
                             </div>
                         </div>
 
@@ -644,7 +657,7 @@ $theme = active_cliniq_theme();
                                 <select class="visit-input <?= isset($errors['reason']) ? 'input-error' : '' ?>" id="reason" name="reason" required>
                                     <option value="">Select Reason</option>
                                     <?php foreach ($reasonOptions as $reason): ?>
-                                        <option <?= $form['reason'] === $reason ? 'selected' : '' ?>><?= e($reason) ?></option>
+                                        <option data-registered-only="<?= in_array($reason, VISITOR_REGISTERED_ONLY_REASONS, true) ? '1' : '0' ?>" <?= $form['reason'] === $reason ? 'selected' : '' ?>><?= e($reason) ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
@@ -652,33 +665,43 @@ $theme = active_cliniq_theme();
                     </div>
 
                     <div id="borrow-equipment-wrap" class="<?= $form['reason'] === VISITOR_REASON_BORROW_EQUIPMENT ? '' : 'hidden' ?>">
-                        <div class="borrow-equipment-panel grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_10rem] gap-x-6 gap-y-5 rounded-xl border border-emerald-100 bg-emerald-50/30">
-                            <div>
-                                <label class="visit-label" for="borrow_item_id">Equipment to Borrow</label>
-                                <div class="visit-field bg-white">
-                                    <span class="material-symbols-outlined">medical_services</span>
-                                    <select class="visit-input <?= isset($errors['borrow_item_id']) ? 'input-error' : '' ?>" id="borrow_item_id" name="borrow_item_id">
+                        <div class="borrow-equipment-panel rounded-xl border border-emerald-100 bg-emerald-50/30">
+                            <div class="flex items-center justify-between gap-3 mb-3">
+                                <label class="visit-label mb-0">Equipment to Borrow</label>
+                                <button type="button" id="addBorrowItem" class="btn btn-ghost text-xs min-h-0 px-3 py-1.5"><span class="material-symbols-outlined text-[16px]">add</span>Add another item</button>
+                            </div>
+                            <?php if (isset($errors['borrow_items'])): ?><p class="text-xs font-bold text-red-700 mb-3"><?= e($errors['borrow_items']) ?></p><?php endif; ?>
+                            <div id="borrowEquipmentRows" class="space-y-3">
+                                <?php foreach ($borrowRows as $row): ?>
+                                <div class="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_8rem_auto] gap-3 items-end" data-borrow-row>
+                                    <div>
+                                        <label class="visit-label">Equipment</label>
+                                        <div class="visit-field bg-white">
+                                            <span class="material-symbols-outlined">medical_services</span>
+                                            <select class="visit-input" name="borrow_item_id[]" data-borrow-item>
                                         <option value="">Select Equipment</option>
                                         <?php foreach ($equipmentItems as $item): ?>
                                             <option
                                                 value="<?= (int) $item['id'] ?>"
                                                 data-available="<?= (int) $item['quantity'] ?>"
                                                 data-unit="<?= e($item['unit'] ?: 'unit') ?>"
-                                                <?= (int) $form['borrow_item_id'] === (int) $item['id'] ? 'selected' : '' ?>
+                                                <?= (int) $row['item_id'] === (int) $item['id'] ? 'selected' : '' ?>
                                                 <?= (int) $item['quantity'] <= 0 ? 'disabled' : '' ?>
                                             >
                                                 <?= e($item['item_name']) ?> - <?= (int) $item['quantity'] ?> <?= e($item['unit'] ?: 'unit') ?> available
                                             </option>
                                         <?php endforeach; ?>
-                                    </select>
+                                            </select>
+                                        </div>
+                                        <div class="visit-lookup-status mt-2" data-borrow-status>Select the item being borrowed.</div>
+                                    </div>
+                                    <div>
+                                        <label class="visit-label">Qty</label>
+                                        <div class="visit-field bg-white"><input class="visit-input" name="borrowed_quantity[]" data-borrow-quantity type="number" min="1" value="<?= e($row['quantity']) ?>"></div>
+                                    </div>
+                                    <button type="button" class="btn btn-ghost min-h-[2.85rem] px-3" data-remove-borrow-row aria-label="Remove equipment item"><span class="material-symbols-outlined text-[18px]">close</span></button>
                                 </div>
-                                <div id="borrowEquipmentStatus" class="visit-lookup-status mt-2">Select the item being borrowed.</div>
-                            </div>
-                            <div>
-                                <label class="visit-label" for="borrowed_quantity">Qty</label>
-                                <div class="visit-field bg-white">
-                                    <input class="visit-input <?= isset($errors['borrowed_quantity']) ? 'input-error' : '' ?>" id="borrowed_quantity" name="borrowed_quantity" type="number" min="1" value="<?= e($form['borrowed_quantity']) ?>">
-                                </div>
+                                <?php endforeach; ?>
                             </div>
                         </div>
                     </div>
@@ -749,9 +772,8 @@ $theme = active_cliniq_theme();
     const chiefComplaint = document.getElementById('chief_complaint');
     const chiefComplaintLabel = document.getElementById('chiefComplaintLabel');
     const borrowEquipmentWrap = document.getElementById('borrow-equipment-wrap');
-    const borrowItem = document.getElementById('borrow_item_id');
-    const borrowedQuantity = document.getElementById('borrowed_quantity');
-    const borrowEquipmentStatus = document.getElementById('borrowEquipmentStatus');
+    const borrowEquipmentRows = document.getElementById('borrowEquipmentRows');
+    const addBorrowItem = document.getElementById('addBorrowItem');
     const visitorSubmitButton = document.getElementById('visitorSubmitButton');
     const visitorSubmitLabel = document.getElementById('visitorSubmitLabel');
     const lookupStatus = document.getElementById('visitorLookupStatus');
@@ -767,20 +789,26 @@ $theme = active_cliniq_theme();
         }
         if (fullName) {
             fullName.required = true;
-            fullName.placeholder = isGuest ? 'Enter visitor / guest name' : 'e.g. Juan dela Cruz';
+            fullName.placeholder = isGuest ? 'Enter guest name' : 'e.g. Juan dela Cruz';
         }
-        if (category) category.value = isGuest ? 'Visitor / Guest' : '';
+        if (category) category.value = isGuest ? 'Guest' : '';
         if (department) {
             department.required = !isGuest;
             department.disabled = isGuest;
             department.value = isGuest ? '' : department.value;
         }
         if (guestVisitorButton) {
-            guestVisitorButton.textContent = isGuest ? 'Registered Patient' : 'Guest / Visitor';
+            guestVisitorButton.textContent = isGuest ? 'Registered Patient' : 'Guest';
             guestVisitorButton.classList.toggle('btn-primary', isGuest);
             guestVisitorButton.classList.toggle('btn-ghost', !isGuest);
         }
-        if (lookupStatus) setVisitorLookupStatus(isGuest ? 'Guest / Visitor mode: ID number is not required.' : 'Type your ID number to load your registered details.');
+        reason?.querySelectorAll('option[data-registered-only="1"]').forEach((option) => {
+            option.hidden = isGuest;
+        });
+        if (isGuest && reason?.selectedOptions?.[0]?.dataset.registeredOnly === '1') {
+            reason.value = '';
+        }
+        if (lookupStatus) setVisitorLookupStatus(isGuest ? 'Guest mode: ID number is not required.' : 'Type your ID number to load your registered details.');
     }
 
     function setVisitorLookupStatus(message, state = '') {
@@ -792,7 +820,7 @@ $theme = active_cliniq_theme();
     }
 
     function syncStudentDetail() {
-        const isStudent = category && category.value === 'Student';
+        const isStudent = category && category.value === 'Students';
         if (studentDetailLabel) {
             studentDetailLabel.textContent = isStudent ? 'Section' : 'Department';
         }
@@ -801,7 +829,10 @@ $theme = active_cliniq_theme();
         }
     }
 
-    function syncBorrowEquipmentStatus() {
+    function syncBorrowEquipmentStatus(row) {
+        const borrowItem = row?.querySelector('[data-borrow-item]');
+        const borrowedQuantity = row?.querySelector('[data-borrow-quantity]');
+        const borrowEquipmentStatus = row?.querySelector('[data-borrow-status]');
         if (!borrowItem || !borrowEquipmentStatus || !borrowedQuantity) return;
 
         const selected = borrowItem.selectedOptions?.[0];
@@ -827,8 +858,7 @@ $theme = active_cliniq_theme();
 
         visitMain?.classList.toggle('is-borrowing', isBorrowing);
         borrowEquipmentWrap?.classList.toggle('hidden', !isBorrowing);
-        if (borrowItem) borrowItem.required = isBorrowing;
-        if (borrowedQuantity) borrowedQuantity.required = isBorrowing;
+        borrowEquipmentRows?.querySelectorAll('[data-borrow-item], [data-borrow-quantity]').forEach((input) => input.required = isBorrowing);
 
         if (chiefComplaint) {
             chiefComplaint.required = !isBorrowing;
@@ -850,7 +880,7 @@ $theme = active_cliniq_theme();
             visitorSubmitButton.dataset.confirmToast = isBorrowing ? 'Recording equipment loan...' : 'Registering visit...';
         }
 
-        syncBorrowEquipmentStatus();
+        borrowEquipmentRows?.querySelectorAll('[data-borrow-row]').forEach(syncBorrowEquipmentStatus);
     }
 
     async function syncVisitorPatientLookup() {
@@ -925,8 +955,33 @@ $theme = active_cliniq_theme();
         syncStudentDetail();
     });
     reason?.addEventListener('change', syncBorrowFlow);
-    borrowItem?.addEventListener('change', syncBorrowEquipmentStatus);
-    borrowedQuantity?.addEventListener('input', syncBorrowEquipmentStatus);
+    borrowEquipmentRows?.addEventListener('change', (event) => {
+        if (event.target.matches('[data-borrow-item]')) syncBorrowEquipmentStatus(event.target.closest('[data-borrow-row]'));
+    });
+    borrowEquipmentRows?.addEventListener('input', (event) => {
+        if (event.target.matches('[data-borrow-quantity]')) syncBorrowEquipmentStatus(event.target.closest('[data-borrow-row]'));
+    });
+    addBorrowItem?.addEventListener('click', () => {
+        const firstRow = borrowEquipmentRows?.querySelector('[data-borrow-row]');
+        if (!firstRow) return;
+        const row = firstRow.cloneNode(true);
+        row.querySelector('[data-borrow-item]').value = '';
+        row.querySelector('[data-borrow-quantity]').value = '1';
+        borrowEquipmentRows.append(row);
+        syncBorrowEquipmentStatus(row);
+    });
+    borrowEquipmentRows?.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-remove-borrow-row]');
+        if (!button) return;
+        const rows = borrowEquipmentRows.querySelectorAll('[data-borrow-row]');
+        const row = button.closest('[data-borrow-row]');
+        if (rows.length > 1) row.remove();
+        else {
+            row.querySelector('[data-borrow-item]').value = '';
+            row.querySelector('[data-borrow-quantity]').value = '1';
+            syncBorrowEquipmentStatus(row);
+        }
+    });
     identifier?.addEventListener('input', scheduleVisitorPatientLookup);
     identifier?.addEventListener('change', syncVisitorPatientLookup);
     guestVisitorButton?.addEventListener('click', () => {
@@ -939,6 +994,7 @@ $theme = active_cliniq_theme();
             department.value = '';
         }
         syncGuestVisitorMode();
+        syncBorrowFlow();
     });
     syncGuestVisitorMode();
     syncStudentDetail();
