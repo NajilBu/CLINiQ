@@ -33,9 +33,10 @@ foreach (['Student Visitors by Recorded Gender', 'Student Visitors by Year Level
 }
 
 if (!str_contains($visitsSource, "system_report_chart('Visitor Affiliation'")
-    || !str_contains($visitsSource, "WHEN v.patient_person_id IS NULL THEN 'Guest / walk-in'")
-    || !str_contains($visitsSource, "WHEN cs.person_id IS NOT NULL THEN 'Clinic staff'")) {
-    throw new RuntimeException('Visits analytics must include visitor affiliation for the selected period.');
+    || !str_contains($visitsSource, "WHEN v.patient_person_id IS NULL THEN 'Guest'")
+    || !str_contains($visitsSource, "WHEN cs.person_id IS NOT NULL THEN 'Clinic Staff'")
+    || !str_contains($visitsSource, "WHEN s.person_id IS NOT NULL THEN 'Students'")) {
+    throw new RuntimeException('Visits analytics must use the shared visitor categories for the selected period.');
 }
 
 if (!str_contains($source, 'function system_report_visit_volume')
@@ -111,7 +112,7 @@ $appointmentStatusChart = system_report_chart('Appointment Status', [
     ['label' => 'For Approval', 'value' => 1], ['label' => 'Approved', 'value' => 0], ['label' => 'For Completion', 'value' => 0], ['label' => 'Completed', 'value' => 0], ['label' => 'Declined', 'value' => 0], ['label' => 'Cancelled', 'value' => 0], ['label' => 'No Show', 'value' => 0],
 ], 'No appointments.', 0, 'bar', true, '', ['visual_rows' => [['label' => 'For Approval', 'value' => 1]], 'force_diagram' => true]);
 $hourlyChart = system_report_chart('Visits by Hour', array_map(static fn(int $hour): array => ['label' => $hour . ':00', 'value' => $hour === 9 ? 4 : 0], range(0, 23)), 'No visits.', 0, 'column', true, '', ['hide_zero_rows' => true]);
-$singleCategoryBreakdown = system_report_chart('Visitor Affiliation', [['label' => 'Student', 'value' => 12]], 'No visits.', 0, 'bar', true, '', ['force_diagram' => true]);
+$singleCategoryBreakdown = system_report_chart('Visitor Affiliation', [['label' => 'Students', 'value' => 12]], 'No visits.', 0, 'bar', true, '', ['force_diagram' => true]);
 if ($flat['presentation'] !== 'diagram' || $varied['presentation'] !== 'diagram' || $empty['presentation'] !== 'empty' || $flat['detail_in_pdf'] !== false) {
     throw new RuntimeException('Report charts must render every non-empty multi-category distribution.');
 }

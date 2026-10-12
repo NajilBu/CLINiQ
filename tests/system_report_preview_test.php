@@ -8,27 +8,79 @@ $reportPage = file_get_contents(__DIR__ . '/../public/reports/index.php');
 $exportPayload = file_get_contents(__DIR__ . '/../public/reports/export-data.php');
 $exportScript = file_get_contents(__DIR__ . '/../public/assets/js/system-report-export.js');
 $chartScript = file_get_contents(__DIR__ . '/../public/assets/js/system-report-charts.js');
+$renderer = file_get_contents(__DIR__ . '/../app/services/SystemReportRenderer.php');
+$reportStyles = file_get_contents(__DIR__ . '/../public/assets/css/reports.css');
 
-if ($source === false || $preview === false || $reportPage === false || $exportPayload === false || $exportScript === false || $chartScript === false) {
+if ($source === false || $preview === false || $reportPage === false || $exportPayload === false || $exportScript === false || $chartScript === false || $renderer === false || $reportStyles === false) {
     throw new RuntimeException('Unable to read the report preview source.');
 }
 
 $checks = [
     'preview loads the shared view helper before rendering page chrome' => str_contains($preview, "require_once __DIR__ . '/../../app/helpers/view.php';")
         && str_contains($preview, 'set_page_back_link(')
-        && str_contains($preview, "render_header('Report Preview')"),
-    'PDF preview renders the generated printable document as separated A4 pages' => str_contains($source, 'id="reportExportForm"')
+        && str_contains($preview, "render_header('Report Preview')")
+        && !str_contains($preview, 'clinic-command.css'),
+    'analytics and Preview Report share the scoped minimalist typography' => str_contains($renderer, '.report-document-dashboard:not(.report-document-paper-preview) .report-section h2 { color: var(--cliniq-foreground, #17261d); font-family: Manrope, ui-sans-serif, system-ui, sans-serif; font-size: 1.3rem; font-weight: 700; letter-spacing: 0;')
+        && str_contains($renderer, '.report-document-dashboard:not(.report-document-paper-preview) .report-metric-value { color: var(--cliniq-primary, #205f3d); font-family: Inter, ui-sans-serif, system-ui, sans-serif;')
+        && str_contains($renderer, '.report-document-dashboard:not(.report-document-paper-preview) .report-chart h3 { margin-bottom: 1.125rem; color: var(--cliniq-foreground, #334155); font-family: Manrope, ui-sans-serif, system-ui, sans-serif;')
+        && str_contains($renderer, '.report-document-dashboard:not(.report-document-paper-preview) .report-data-table,')
+        && str_contains($reportStyles, '.report-preview-guidance h2 { margin: 0 0 .35rem; color: var(--cliniq-foreground, #17261d); font-family: var(--cliniq-font-display); font-size: 1.125rem; font-weight: 700; letter-spacing: 0; }')
+        && str_contains($reportStyles, '.reports-page .report-section-navigation-name { min-width: 0; font-family: var(--cliniq-font-display); font-size: .75rem; font-weight: 700; letter-spacing: 0; line-height: 1.3; }'),
+    'report preview opens through a full page navigation in the desktop app' => str_contains($reportPage, 'id="reportHeaderPreviewLink"')
+        && str_contains($reportPage, 'data-no-ajax="true"'),
+    'PDF preview renders shared dashboard markup as separated A4 pages' => str_contains($source, 'id="reportExportForm"')
+        && str_contains($source, "require_once __DIR__ . '/../../app/services/SystemReportRenderer.php';")
         && str_contains($source, 'grid-template-columns: repeat(2, minmax(0, 1fr));')
         && str_contains($source, 'width: min(210mm, 100%);')
-        && str_contains($source, 'aspect-ratio: 210 / 297;')
-        && str_contains($source, 'assets/vendor/pdfjs/pdf.min.js')
-        && str_contains($source, 'previewPdf(form, pages)')
-        && str_contains($source, 'onclick="window.print()"'),
+        && str_contains($source, 'height: 297mm;')
+        && str_contains($source, "'presentation' => 'paper-preview'")
+        && str_contains($source, 'paginatePaperPreview(report, gallery)')
+        && str_contains($source, '.report-preview-page.report-document-dashboard .report-charts { grid-template-columns: repeat(3, minmax(0, 1fr)); }')
+        && str_contains($source, '.report-preview-page.report-document-dashboard .report-charts--one-chart { grid-template-columns: 1fr; }')
+        && str_contains($source, '.report-preview-page.report-document-dashboard .report-charts--two-charts { grid-template-columns: repeat(2, minmax(0, 1fr)); }')
+        && str_contains($source, '.report-preview-page.report-document-dashboard .report-charts--visits { grid-template-columns: repeat(6, minmax(0, 1fr)); }')
+        && str_contains($source, '.report-preview-page .report-data-table-scroll { max-height: none; overflow: visible; }')
+        && str_contains($source, '.report-preview-page .report-chart > details.report-data-table { display: none; }')
+        && str_contains($source, "assets/vendor/fonts/inter-manrope.css?v=offline-1")
+        && str_contains($source, '.report-preview-page .report-section h2,')
+        && str_contains($source, 'font-family: Manrope, Arial, sans-serif; font-weight: 700; letter-spacing: 0;')
+        && str_contains($source, 'font-family: Inter, Arial, sans-serif;')
+        && str_contains($source, '.report-preview-page .report-chart h3 { font-size: .8rem; line-height: 1.35; }')
+        && str_contains($source, '.report-preview-page .report-data-table td { font-weight: 600; }')
+        && str_contains($exportScript, 'const chartRows = (charts) =>')
+        && str_contains($exportScript, 'chartRows(child).forEach((row) => {')
+        && str_contains($exportScript, 'report-charts--two-charts-one-table')
+        && str_contains($exportScript, 'report-charts--two-charts-three-tables')
+        && str_contains($exportScript, 'report-charts--visits')
+        && str_contains($exportScript, 'report-charts--one-chart')
+        && !str_contains($source, 'assets/vendor/pdfjs/pdf.min.js')
+        && !str_contains($source, 'previewPdf(form, pages)')
+        && !str_contains($source, 'window.print()'),
+    'A4 pagination preserves every Preview Report row and full-width table span' => str_contains($renderer, "elseif (\$chartCardCount === 2 && \$tableCardCount === 1) \$analysisLayoutClass = ' report-charts--two-charts-one-table';")
+        && str_contains($renderer, "elseif (\$chartCardCount === 2 && \$tableCardCount === 3) \$analysisLayoutClass = ' report-charts--two-charts-three-tables';")
+        && str_contains($renderer, "elseif (\$chartCardCount === 3 && \$tableCardCount === 1) \$analysisLayoutClass = ' report-charts--three-charts-one-table';")
+        && str_contains($renderer, "elseif (\$sectionKey === 'visits' && \$chartCardCount === 8 && \$tableCardCount === 1) \$analysisLayoutClass = ' report-charts--visits';")
+        && str_contains($renderer, "elseif (\$analysisCardCount === 5) \$analysisLayoutClass = ' report-charts--five-cards';")
+        && str_contains($exportScript, 'if (charts.classList.contains("report-charts--two-charts-one-table")) return [row(0, 2, "report-charts--two-charts"), row(2, 3, "report-charts--one-chart")];')
+        && str_contains($exportScript, 'if (charts.classList.contains("report-charts--two-charts-three-tables")) return [row(0, 2, "report-charts--two-charts"), row(2, 5)];')
+        && str_contains($exportScript, 'if (charts.classList.contains("report-charts--three-charts-one-table")) return [row(0, 3), row(3, 4, "report-charts--one-chart")];')
+        && str_contains($exportScript, 'if (charts.classList.contains("report-charts--visits")) return [row(0, 3), row(3, 6), row(6, 8, "report-charts--two-charts"), row(8, 9, "report-charts--one-chart")];')
+        && str_contains($exportScript, 'if (charts.classList.contains("report-charts--five-cards")) return [row(0, 3), row(3, 5, "report-charts--two-charts")];'),
+    'A4 table fragments expand without scrolling and move each complete row exactly once' => str_contains($renderer, '.report-data-table-scroll { max-height: 280px; overflow: auto; }')
+        && str_contains($exportScript, 'const isSplittableTableRow = (row) =>')
+        && str_contains($exportScript, 'const appendTableRow = (section, row) =>')
+        && str_contains($exportScript, 'rows: Array.from(card.querySelector(".report-data-table-static tbody").children)')
+        && str_contains($exportScript, 'tbody.replaceChildren();')
+        && str_contains($exportScript, 'state.fragmentBody.append(tableRow);')
+        && str_contains($exportScript, 'state.next += 1;')
+        && str_contains($exportScript, '`${title.textContent} (continued)`')
+        && str_contains($exportScript, 'if (isSplittableTableRow(row)) appendTableRow(section, row);'),
     'generated PDF keeps the formal school-year letterhead' => str_contains($exportScript, 'SCHOOL YEAR ${schoolYearStart}-${schoolYearStart + 1}')
         && str_contains($exportScript, 'String(branding.institution_name || "").toUpperCase()'),
-    'preview and PDF use canonical report data while preserving editable preview remarks' => str_contains($preview, "'presentation' => 'preview'")
+    'preview and paper view use shared report markup while preserving editable preview remarks' => str_contains($preview, "'presentation' => 'preview'")
         && str_contains($preview, "'remarks_mode' => 'input'")
-        && str_contains($source, 'previewPdf(form, pages)')
+        && str_contains($source, "'remarks_mode' => 'print'")
+        && str_contains($source, 'render_system_report_document($report, false')
         && str_contains($preview, 'Print / Save PDF'),
     'preview and browser exports honor matching transaction content' => str_contains($preview, 'name="modules[]"')
         && str_contains($preview, 'All selected clinic transaction groups are included in this report.')
@@ -43,15 +95,17 @@ $checks = [
         && str_contains($preview, 'assets/vendor/apexcharts/apexcharts.min.js')
         && str_contains($preview, 'assets/js/system-report-charts.js')
         && str_contains($preview, 'assets/js/system-report-export.js'),
-    'PDF preview loads the PDF and chart runtimes before rendering the generated document' => str_contains($source, 'assets/vendor/apexcharts/apexcharts.min.js')
+    'PDF preview loads the chart runtime before paginating shared dashboard markup' => str_contains($source, 'assets/vendor/apexcharts/apexcharts.min.js')
         && str_contains($source, 'assets/js/system-report-charts.js')
-        && str_contains($source, 'assets/vendor/pdfjs/pdf.min.js')
+        && str_contains($source, 'assets/js/system-report-export.js')
+        && !str_contains($source, 'assets/vendor/jspdf/jspdf.umd.min.js')
+        && !str_contains($source, 'assets/vendor/pdfjs/pdf.min.js')
         && strpos($source, 'assets/js/system-report-charts.js') < strpos($source, 'assets/js/system-report-export.js'),
     'browser report charts mount through the ApexCharts adapter and preserve their fallback on failure' => str_contains($reportPage, 'cliniqSystemReportCharts?.mount(visual, chartData')
         && str_contains($preview, "cliniqSystemReportCharts?.mount(card.querySelector('.report-chart-visual'), chart")
         && str_contains($chartScript, 'host.replaceChildren(canvas);')
         && str_contains($chartScript, 'host.replaceChildren(...fallback);')
-        && str_contains($chartScript, 'new window.ApexCharts(canvas, optionFor(chart, { dark }))')
+        && str_contains($chartScript, 'new window.ApexCharts(canvas, optionFor(chart, { dark, pdf }))')
         && str_contains($reportPage, 'if (!window.ApexCharts) return;')
         && str_contains($chartScript, 'window.cliniqSystemReportCharts = { optionFor, imageFor, mount };')
         && str_contains($exportScript, 'window.cliniqSystemReportCharts.imageFor'),
@@ -61,7 +115,7 @@ $checks = [
     'donut charts keep category labels and values visible with external connector callouts' => str_contains($chartScript, 'external: {')
         && str_contains($chartScript, 'connector: { show: true, length: 12, width: 1 }')
         && str_contains($chartScript, 'formatter: (name, options) => [name, String(values[options.seriesIndex] ?? 0)]')
-        && str_contains($chartScript, 'if (rows.length > 4) return horizontalBarOptions(rows, dark, { axisMax, decimals, colors });')
+        && str_contains($chartScript, 'if (rows.length > 4) return horizontalBarOptions(rows, dark, { axisMax, decimals, colors, pdf });')
         && str_contains($chartScript, 'expandOnClick: false'),
     'export payload is protected and canonical' => str_contains($exportPayload, 'require_report_access();')
         && str_contains($exportPayload, '$_SERVER[\'REQUEST_METHOD\'] !== \'POST\'')
@@ -69,11 +123,18 @@ $checks = [
     'browser exports use the protected canonical payload and chart source' => str_contains($exportScript, 'const data = await payload(form)')
         && str_contains($exportScript, 'await xlsxExport(data)')
         && str_contains($exportScript, 'const chartImage = (chart, compact = false) => window.cliniqSystemReportCharts.imageFor')
-        && str_contains($chartScript, 'const imageFor = async (chart, { width = 960, height = 360 } = {}) =>')
+        && str_contains($chartScript, 'const imageFor = async (chart, { width = 960, height = 360, pdf = false } = {}) =>')
         && str_contains($chartScript, 'const image = await instance.dataURI({ scale: 2 });'),
-    'PDF preview prints and downloads the same generated report document' => str_contains($source, 'onclick="window.print()"')
-        && str_contains($source, 'Print / Save PDF')
-        && str_contains($source, 'data-report-export-format="pdf"')
+    'printable PDF preview uses square bar and column corners without changing its layout' => str_contains($source, 'mount(card.querySelector(\'.report-chart-visual\'), chart, { dark, pdf: true })')
+        && str_contains($chartScript, 'borderRadius: pdf ? 0 : 6')
+        && !str_contains($renderer, 'system_report_paper_chart_is_figure')
+        && str_contains($exportScript, 'charts.classList.contains("report-charts--visits")')
+        && str_contains($exportScript, 'child.classList.contains("visit-metric-groups")'),
+    'PDF toolbar uses the protected direct-download fallback without opening the printer' => str_contains($source, 'action="download.php"')
+        && str_contains($source, '>Download PDF</button>')
+        && !str_contains($source, 'Print / Save PDF')
+        && !str_contains($source, 'window.print()')
+        && !str_contains($source, 'data-report-export-format="pdf"')
         && str_contains($preview, 'Print / Save PDF'),
     'toolbar downloads include selected modules' => str_contains($preview, 'name="modules[]"')
         && str_contains($exportScript, 'if (form.__systemReportPayload) return form.__systemReportPayload;'),

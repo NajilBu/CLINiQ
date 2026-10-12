@@ -30,7 +30,6 @@ render_clinic_command_header(
 );
 ?>
 <link rel="stylesheet" href="<?= e(app_url('assets/css/reports.css?v=' . filemtime(__DIR__ . '/../assets/css/reports.css'))) ?>">
-<link rel="stylesheet" href="<?= e(app_url('assets/css/clinic-command.css?v=' . filemtime(__DIR__ . '/../assets/css/clinic-command.css'))) ?>">
 
 <section class="report-preview-guidance clinic-card" role="status">
     <span class="material-symbols-outlined" aria-hidden="true">fact_check</span>

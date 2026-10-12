@@ -62,14 +62,14 @@ $checks = [
         && str_contains($exporter, 'chartRows(chart)')
         && str_contains($exporter, 'autoTable(doc')
         && str_contains($exporter, 'window.cliniqSystemReportCharts.imageFor')
-        && str_contains($chartRenderer, 'const optionFor = (chart, { dark = false } = {}) =>'),
+        && str_contains($chartRenderer, 'const optionFor = (chart, { dark = false, pdf = false } = {}) =>'),
     'horizontal charts honor bounded decimal scales when supplied' => str_contains($chartRenderer, 'const configuredMax = Number(axisMax);')
         && str_contains($chartRenderer, 'const horizontalAxisMax = horizontalMax + Math.max(1, horizontalMax * 0.16);')
         && str_contains($chartRenderer, 'max: horizontalAxisMax,')
         && str_contains($chartRenderer, 'decimalsInFloat: valueDecimals,')
         && str_contains($builder, "'axis_max' => isset(\$options['axis_max'])")
         && str_contains($builder, "['axis_max' => 7]"),
-    'bar values remain outside full bars without clipping' => str_contains($chartRenderer, 'padding: { left: 4, right: 56, top: -4, bottom: -8 }')
+    'screen bar values remain outside full bars without clipping while PDF bars use square corners' => str_contains($chartRenderer, 'padding: { left: 4, right: 56, top: -4, bottom: -8 }')
         && str_contains($chartRenderer, 'textAnchor: "start",')
         && str_contains($chartRenderer, 'const placeHorizontalBarLabels = (host, horizontal) =>')
         && str_contains($chartRenderer, 'if (!horizontal) return;')
@@ -125,6 +125,7 @@ $checks = [
         && str_contains($exporter, 'image: await chartImage(chart, true)')
         && str_contains($exporter, 'const startX = 14 + (180 - rowWidth) / 2;')
         && str_contains($exporter, 'doc.roundedRect(x, y, chartPanel.width, chartPanel.height, 1.5, 1.5, "S")')
+        && str_contains($chartRenderer, 'borderRadius: pdf ? 0 : 6')
         && str_contains($exporter, 'for (let start = 0; start < chartDetails.length; start += 3)'),
     'xlsx keeps numeric values and filters' => str_contains($exporter, 'Number(metric.value) || 0')
         && str_contains($exporter, 'sheet.autoFilter'),

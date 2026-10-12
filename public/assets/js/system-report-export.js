@@ -249,6 +249,175 @@
     const buffer = await workbook.xlsx.writeBuffer(); const url = URL.createObjectURL(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })); const anchor = document.createElement("a"); anchor.href = url; anchor.download = `${fileStem(report)}.xlsx`; anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 1500);
   }
 
+  function paginatePaperPreview(source, host) {
+    if (!source || !host) throw new Error("The report preview is unavailable.");
+    const headingTemplate = source.querySelector(".report-paper-letterhead");
+    const footerTemplate = source.querySelector(".report-footer");
+    const sections = Array.from(source.querySelectorAll(".report-section"));
+    if (!headingTemplate || !sections.length) throw new Error("The report preview has no printable sections.");
+
+    const pages = [];
+    const createPage = () => {
+      const page = document.createElement("article");
+      page.className = "report-preview-page report-document report-document-dashboard report-document-paper-preview";
+      page.append(headingTemplate.cloneNode(true));
+      const body = document.createElement("main");
+      body.className = "report-body";
+      page.append(body);
+      if (footerTemplate) page.append(footerTemplate.cloneNode(true));
+      pages.push({ page, body, section: null });
+      host.append(page);
+      return pages.at(-1);
+    };
+    const fits = (entry) => entry.body.scrollHeight <= entry.body.clientHeight + 1;
+    const sectionCopy = (section, continued) => {
+      const copy = section.cloneNode(false);
+      if (continued) {
+        copy.removeAttribute("id");
+        const heading = section.querySelector(":scope > .report-section-heading")?.cloneNode(true);
+        const title = heading?.querySelector("h2");
+        if (title) title.textContent = `${title.textContent} (continued)`;
+        if (heading) copy.append(heading);
+      } else {
+        const heading = section.querySelector(":scope > .report-section-heading")?.cloneNode(true);
+        if (heading) copy.append(heading);
+      }
+      return copy;
+    };
+
+    let entry = null;
+    let currentSection = null;
+    const startSection = (section, continued) => {
+      entry = createPage();
+      currentSection = sectionCopy(section, continued);
+      entry.section = currentSection;
+      entry.body.append(currentSection);
+    };
+    const appendBlock = (section, block, continued = true) => {
+      currentSection.append(block);
+      if (fits(entry)) return;
+      currentSection.removeChild(block);
+      if (currentSection.children.length <= 1) {
+        currentSection.append(block);
+        return;
+      }
+      startSection(section, continued);
+      currentSection.append(block);
+    };
+    const chartRows = (charts) => {
+      const cards = Array.from(charts.children);
+      const row = (from, to, layout = "") => ({ cards: cards.slice(from, to), layout });
+      if (charts.classList.contains("report-charts--one-chart")) return [row(0, 1, "report-charts--one-chart")];
+      if (charts.classList.contains("report-charts--five-cards")) return [row(0, 3), row(3, 5, "report-charts--two-charts")];
+      if (charts.classList.contains("report-charts--two-charts-three-tables")) return [row(0, 2, "report-charts--two-charts"), row(2, 5)];
+      if (charts.classList.contains("report-charts--two-charts-one-table")) return [row(0, 2, "report-charts--two-charts"), row(2, 3, "report-charts--one-chart")];
+      if (charts.classList.contains("report-charts--feedback")) return [row(0, 2, "report-charts--feedback-top"), row(2, 3, "report-charts--one-chart")];
+      if (charts.classList.contains("report-charts--three-charts-one-table")) return [row(0, 3), row(3, 4, "report-charts--one-chart")];
+      if (charts.classList.contains("report-charts--visits")) return [row(0, 3), row(3, 6), row(6, 8, "report-charts--two-charts"), row(8, 9, "report-charts--one-chart")];
+      if (charts.classList.contains("report-charts--two-charts")) return [row(0, 2, "report-charts--two-charts")];
+      return Array.from({ length: Math.ceil(cards.length / 3) }, (_, index) => row(index * 3, index * 3 + 3));
+    };
+    const appendChartRow = (section, row) => {
+      if (!row.cards.length) return;
+      const target = document.createElement("div");
+      target.className = `report-charts${row.layout ? ` ${row.layout}` : ""}`;
+      target.append(...row.cards);
+      currentSection.append(target);
+      if (fits(entry)) return;
+      target.remove();
+      if (currentSection.children.length <= 1) {
+        currentSection.append(target);
+        return;
+      }
+      startSection(section, true);
+      const nextTarget = document.createElement("div");
+      nextTarget.className = `report-charts${row.layout ? ` ${row.layout}` : ""}`;
+      currentSection.append(nextTarget);
+      nextTarget.append(...row.cards);
+    };
+    const isSplittableTableRow = (row) => row.cards.length > 0 && row.cards.every((card) => card.querySelector(".report-data-table-static tbody"));
+    const appendTableRow = (section, row) => {
+      const states = row.cards.map((card) => ({ card, rows: Array.from(card.querySelector(".report-data-table-static tbody").children), next: 0 }));
+      const remaining = () => states.some((state) => state.next < state.rows.length);
+      const createFragment = () => {
+        const target = document.createElement("div");
+        target.className = `report-charts${row.layout ? ` ${row.layout}` : ""}`;
+        states.forEach((state) => {
+          const fragment = state.card.cloneNode(true);
+          const tbody = fragment.querySelector(".report-data-table-static tbody");
+          tbody.replaceChildren();
+          if (state.next > 0) {
+            const title = fragment.querySelector("h3");
+            if (title) title.textContent = `${title.textContent} (continued)`;
+          }
+          state.fragmentBody = tbody;
+          target.append(fragment);
+        });
+        return target;
+      };
+      const fillCurrentPage = () => {
+        const target = createFragment();
+        currentSection.append(target);
+        let added = false;
+        let progressed = true;
+        while (progressed) {
+          progressed = false;
+          states.forEach((state) => {
+            if (state.next >= state.rows.length) return;
+            const tableRow = state.rows[state.next];
+            state.fragmentBody.append(tableRow);
+            if (fits(entry)) {
+              state.next += 1;
+              added = true;
+              progressed = true;
+            } else {
+              tableRow.remove();
+            }
+          });
+        }
+        if (!added) target.remove();
+        return added;
+      };
+
+      while (remaining()) {
+        if (!fillCurrentPage()) {
+          if (currentSection.children.length <= 1) throw new Error("A report table row is too tall to fit on an A4 page.");
+          startSection(section, true);
+          continue;
+        }
+        if (remaining()) startSection(section, true);
+      }
+    };
+
+    sections.forEach((section) => {
+      startSection(section, false);
+      Array.from(section.children).forEach((child) => {
+        if (child.classList.contains("report-section-heading")) return;
+        if (child.classList.contains("report-charts")) {
+          chartRows(child).forEach((row) => {
+            if (isSplittableTableRow(row)) appendTableRow(section, row);
+            else appendChartRow(section, row);
+          });
+          return;
+        }
+        if (child.classList.contains("visit-metric-groups")) {
+          Array.from(child.children).forEach((group) => {
+            const groups = child.cloneNode(false);
+            groups.append(group);
+            appendBlock(section, groups);
+          });
+          return;
+        }
+        appendBlock(section, child);
+      });
+    });
+
+    const status = host.querySelector(".report-preview-status");
+    source.closest(".report-paper-source")?.remove();
+    if (status) status.remove();
+    return { pages: pages.length };
+  }
+
   document.addEventListener("click", async (event) => {
     const button = event.target.closest("[data-report-export-format]"); if (!button) return;
     const form = button.closest("form"); if (!form) return;
@@ -257,5 +426,5 @@
     try { const data = await payload(form); if (button.dataset.reportExportFormat === "xlsx") await xlsxExport(data); else await pdfExport(data, form.__systemReportPdf); } catch (error) { window.alert(error instanceof Error ? error.message : "Unable to export the report."); } finally { button.disabled = false; button.textContent = original; }
   });
 
-  window.cliniqSystemReportExport = { previewPdf };
+  window.cliniqSystemReportExport = { previewPdf, paginatePaperPreview };
 })();

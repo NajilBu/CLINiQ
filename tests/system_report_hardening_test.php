@@ -87,7 +87,8 @@ $checks = [
     'live action summary is aggregate-only' => str_contains($builder, 'function system_report_action_summary')
         && str_contains($builder, 'Low-stock medicine')
         && str_contains($builder, 'Incomplete referrals'),
-    'live action summary remains visible when clear' => str_contains($renderer, 'There are no current operational exceptions needing attention.'),
+    'live action summary disappears when clear' => str_contains($renderer, 'if (!$actions) {')
+        && str_contains($renderer, "return '';"),
     'chart and table views switch in place' => str_contains($index, "'include_tables' => false")
         && str_contains($index, "reportView = (\$_GET['view'] ?? '') === 'tables'")
         && str_contains($index, "tablesLink?.addEventListener('click'")
@@ -114,9 +115,14 @@ $checks = [
         && str_contains($serverPdf, 'Transaction Summary')
         && str_contains($pdf, 'require_report_access();')
         && str_contains($pdf, 'csrf_enforce_request();')
-        && str_contains($pdf, 'previewPdf(form, pages)')
-        && str_contains($pdf, 'assets/vendor/pdfjs/pdf.min.js')
-        && str_contains($pdf, 'onclick="window.print()"')
+        && str_contains($pdf, "'presentation' => 'paper-preview'")
+        && str_contains($pdf, 'paginatePaperPreview(report, gallery)')
+        && !str_contains($pdf, 'assets/vendor/pdfjs/pdf.min.js')
+        && !str_contains($pdf, 'previewPdf(form, pages)')
+        && str_contains($pdf, 'action="download.php"')
+        && !str_contains($pdf, 'window.print()')
+        && str_contains($pdf, '>Download PDF</button>')
+        && !str_contains($pdf, 'Print / Save PDF')
         && str_contains($pdf, 'assets/vendor/apexcharts/apexcharts.min.js')
         && str_contains($pdf, 'assets/js/system-report-charts.js')
         && str_contains($exportPayload, 'build_system_report($dateFrom, $dateTo, $modules)')

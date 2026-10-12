@@ -60,7 +60,7 @@ render_header('Clinic Transaction Summary');
     'Reports',
     'Clinic Transaction Summary',
     'Review and export the clinic activity totals and follow-up queues for a selected period.',
-    '<a class="btn btn-outline text-decoration-none" id="reportHeaderTablesLink" href="index.php?view=' . ($reportView === 'tables' ? 'charts' : 'tables') . '&from=' . e($dateFrom) . '&to=' . e($dateTo) . '&period=' . e($period) . '&semester=' . e((string) $semester) . '"><span class="material-symbols-outlined text-[20px]">' . ($reportView === 'tables' ? 'bar_chart' : 'table_chart') . '</span>' . ($reportView === 'tables' ? 'View charts' : 'Data tables') . '</a><a class="btn btn-primary text-decoration-none" id="reportHeaderPreviewLink" href="preview.php?from=' . e($dateFrom) . '&to=' . e($dateTo) . '&period=' . e($period) . '&semester=' . e((string) $semester) . '"><span class="material-symbols-outlined text-[20px]">preview</span>Preview Report</a>'
+    '<a class="btn btn-outline text-decoration-none" id="reportHeaderTablesLink" href="index.php?view=' . ($reportView === 'tables' ? 'charts' : 'tables') . '&from=' . e($dateFrom) . '&to=' . e($dateTo) . '&period=' . e($period) . '&semester=' . e((string) $semester) . '"><span class="material-symbols-outlined text-[20px]">' . ($reportView === 'tables' ? 'bar_chart' : 'table_chart') . '</span>' . ($reportView === 'tables' ? 'View charts' : 'Data tables') . '</a><a class="btn btn-primary text-decoration-none" id="reportHeaderPreviewLink" href="preview.php?from=' . e($dateFrom) . '&to=' . e($dateTo) . '&period=' . e($period) . '&semester=' . e((string) $semester) . '" data-no-ajax="true"><span class="material-symbols-outlined text-[20px]">preview</span>Preview Report</a>'
 ); ?>
 
 <div class="reports-page">

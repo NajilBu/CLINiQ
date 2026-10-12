@@ -45,7 +45,7 @@
     tooltip: { theme: dark ? "dark" : "light" },
   });
 
-  const horizontalBarOptions = (rows, dark, { stacked = false, axisMax = null, decimals = 0, colors = [] } = {}) => {
+  const horizontalBarOptions = (rows, dark, { stacked = false, axisMax = null, decimals = 0, colors = [], pdf = false } = {}) => {
     const theme = themeFor(dark);
     const configuredMax = Number(axisMax);
     const horizontalMax = Number.isFinite(configuredMax) && configuredMax > 0 ? configuredMax : Math.max(1, ...valuesFor(rows));
@@ -67,7 +67,7 @@
       },
       yaxis: { labels: { style: { colors: theme.text, fontSize: "11px", fontWeight: 600 }, maxWidth: 116 } },
       grid: { borderColor: theme.grid, padding: { left: 4, right: 56, top: -4, bottom: -8 } },
-      plotOptions: { bar: { horizontal: true, distributed: colors.length > 1, borderRadius: 6, barHeight: "58%", dataLabels: { position: "top" } } },
+      plotOptions: { bar: { horizontal: true, distributed: colors.length > 1, borderRadius: pdf ? 0 : 6, barHeight: "58%", dataLabels: { position: "top" } } },
       dataLabels: {
         enabled: true,
         formatter: (value) => Number(value).toFixed(valueDecimals),
@@ -78,7 +78,7 @@
     };
   };
 
-  const optionFor = (chart, { dark = false } = {}) => {
+  const optionFor = (chart, { dark = false, pdf = false } = {}) => {
     const rows = rowsFor(chart);
     const type = String(chart?.type || chart?.render_type || "bar");
     const values = valuesFor(rows);
@@ -89,7 +89,7 @@
     const colors = Array.isArray(chart?.colors) ? chart.colors : [];
 
     if (type === "donut") {
-      if (rows.length > 4) return horizontalBarOptions(rows, dark, { axisMax, decimals, colors });
+      if (rows.length > 4) return horizontalBarOptions(rows, dark, { axisMax, decimals, colors, pdf });
       const total = values.reduce((sum, value) => sum + value, 0);
       return {
         ...baseOptions(dark),
@@ -148,7 +148,7 @@
       legend: { show: false },
     };
 
-    if (type === "progress") return horizontalBarOptions(rows, dark, { stacked: true, axisMax, decimals, colors });
+    if (type === "progress") return horizontalBarOptions(rows, dark, { stacked: true, axisMax, decimals, colors, pdf });
 
     if (type === "column") return {
       ...baseOptions(dark),
@@ -157,22 +157,22 @@
       xaxis: { categories: labels, labels: { rotate: labels.length > 5 ? -24 : 0, style: { colors: theme.text, fontSize: "10px", fontWeight: 600 } }, axisBorder: { color: theme.axis } },
       yaxis: { min: 0, labels: { style: { colors: theme.text, fontSize: "11px", fontWeight: 600 } } },
       grid: { borderColor: theme.grid, padding: { left: 2, right: 8, top: 42, bottom: 4 } },
-      plotOptions: { bar: { borderRadius: 6, columnWidth: "48%", dataLabels: { position: "top" } } },
+      plotOptions: { bar: { borderRadius: pdf ? 0 : 6, columnWidth: "48%", dataLabels: { position: "top" } } },
       dataLabels: { enabled: true, offsetY: -18, style: { colors: [theme.value], fontSize: "11px", fontWeight: 800 } },
       legend: { show: false },
     };
 
-    return horizontalBarOptions(rows, dark, { axisMax, decimals, colors });
+    return horizontalBarOptions(rows, dark, { axisMax, decimals, colors, pdf });
   };
 
-  const imageFor = async (chart, { width = 960, height = 360 } = {}) => {
+  const imageFor = async (chart, { width = 960, height = 360, pdf = false } = {}) => {
     if (!window.ApexCharts) throw new Error("The report chart renderer is unavailable.");
     const host = document.createElement("div");
     host.style.cssText = `position:fixed;left:-10000px;top:-10000px;width:${width}px;height:${height}px;pointer-events:none;`;
     document.body.append(host);
     let instance;
     try {
-      instance = new window.ApexCharts(host, optionFor(chart));
+      instance = new window.ApexCharts(host, optionFor(chart, { pdf }));
       await instance.render();
       placeHorizontalBarLabels(host, instance.w?.config?.plotOptions?.bar?.horizontal);
       const image = await instance.dataURI({ scale: 2 });
@@ -183,7 +183,7 @@
     }
   };
 
-  const mount = (host, chart, { dark = false } = {}) => {
+  const mount = (host, chart, { dark = false, pdf = false } = {}) => {
     if (!window.ApexCharts || !host) return null;
     const fallback = Array.from(host.childNodes);
     const canvas = document.createElement("div");
@@ -191,7 +191,7 @@
     let instance;
     try {
       host.replaceChildren(canvas);
-      instance = new window.ApexCharts(canvas, optionFor(chart, { dark }));
+      instance = new window.ApexCharts(canvas, optionFor(chart, { dark, pdf }));
       instance.render().then(() => {
         placeHorizontalBarLabels(canvas, instance.w?.config?.plotOptions?.bar?.horizontal);
       }).catch(() => {

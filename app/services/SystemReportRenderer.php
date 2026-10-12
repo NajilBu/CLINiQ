@@ -207,7 +207,7 @@ function render_system_report_data_table(array $chart, bool $open = false, bool 
 function render_system_report_action_summary(array $actions): string
 {
     if (!$actions) {
-        return '<section class="report-action-summary" aria-labelledby="reportActionSummaryTitle"><p class="report-action-summary-eyebrow">Live now</p><h2 id="reportActionSummaryTitle">All clear</h2><p>There are no current operational exceptions needing attention.</p></section>';
+        return '';
     }
     ob_start(); ?>
     <section class="report-action-summary" aria-labelledby="reportActionSummaryTitle">
@@ -256,9 +256,9 @@ function system_report_styles(): string
 .report-section h2 { margin: 0 0 4px; color: #17261d; font-size: 20px; letter-spacing: -.3px; }
 .report-section-description { margin: 0; color: #64748b; font-size: 11px; font-weight: 600; line-height: 1.5; }
 .report-document-dashboard .report-section-heading { gap: 1rem; margin-bottom: 1.5rem; }
-.report-document-dashboard .report-section-number { flex-basis: 2.5rem; height: 2.5rem; border-radius: .75rem; background: var(--cliniq-primary-fixed, #e6f4eb); color: var(--cliniq-primary, #287548); font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: .875rem; font-weight: 800; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cliniq-primary, #287548) 10%, transparent); }
-.report-document-dashboard .report-section h2 { color: var(--cliniq-foreground, #17261d); font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 1.5rem; font-weight: 800; letter-spacing: -.025em; line-height: 1.2; }
-.report-document-dashboard .report-section-description { color: #64748b; font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: .9375rem; font-weight: 600; line-height: 1.55; }
+.report-document-dashboard:not(.report-document-paper-preview) .report-section-number { flex-basis: 2.5rem; height: 2.5rem; border-radius: .75rem; background: var(--cliniq-primary-fixed, #e6f4eb); color: var(--cliniq-primary, #287548); font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: .75rem; font-weight: 700; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cliniq-primary, #287548) 10%, transparent); }
+.report-document-dashboard:not(.report-document-paper-preview) .report-section h2 { color: var(--cliniq-foreground, #17261d); font-family: Manrope, ui-sans-serif, system-ui, sans-serif; font-size: 1.3rem; font-weight: 700; letter-spacing: 0; line-height: 1.25; }
+.report-document-dashboard:not(.report-document-paper-preview) .report-section-description { color: #64748b; font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: .875rem; font-weight: 400; line-height: 1.55; }
 .report-document-dashboard .report-body { padding: 0; }
 .report-document-paper-preview .report-body { padding: 28px 40px 42px; }
 .report-document.report-document-dashboard.report-document-paper-preview .report-section { margin: 0 0 2rem; padding: 0 0 2rem; border: 0; border-bottom: 1px solid #dfe9e2; border-radius: 0; background: transparent; box-shadow: none; }
@@ -272,16 +272,16 @@ function system_report_styles(): string
 .report-document-dashboard .report-section:last-child { margin-bottom: 0; padding-bottom: 1.75rem; border-bottom: 1px solid oklch(92% .01 230 / .8); }
 .report-document-dashboard .report-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
 .report-document-dashboard .report-metric { min-height: 6rem; padding: .875rem 1rem; border-color: oklch(92% .01 230 / .8); border-radius: .875rem; background: linear-gradient(145deg, #fff, var(--cliniq-surface-low, #fbfdfb)); box-shadow: 0 1px 2px rgba(23,38,29,.025); }
-.report-document-dashboard .report-metric-label { min-height: 1.125rem; margin-bottom: .375rem; font-size: .6875rem; font-weight: 800; letter-spacing: .06em; }
-.report-document-dashboard .report-metric-value { color: var(--cliniq-primary, #205f3d); font-size: clamp(1.75rem, 2.25vw, 2.125rem); font-weight: 800; letter-spacing: -.04em; line-height: 1; }
-.report-document-dashboard .report-metric-note { margin-top: .375rem; font-size: .6875rem; font-weight: 650; }
+.report-document-dashboard:not(.report-document-paper-preview) .report-metric-label { min-height: 1.125rem; margin-bottom: .375rem; font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: .625rem; font-weight: 700; letter-spacing: .03em; }
+.report-document-dashboard:not(.report-document-paper-preview) .report-metric-value { color: var(--cliniq-primary, #205f3d); font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: clamp(1.5rem, 2vw, 1.875rem); font-weight: 700; letter-spacing: 0; line-height: 1; }
+.report-document-dashboard:not(.report-document-paper-preview) .report-metric-note { margin-top: .375rem; font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: .625rem; font-weight: 500; }
 .report-document-dashboard .visit-metric-groups { display: grid; grid-template-columns: 1fr; gap: 1rem; margin-bottom: 1.5rem; }
 .report-document-dashboard .visit-metric-group { padding: 1rem; border: 1px solid oklch(92% .01 230 / .8); border-radius: .875rem; background: var(--cliniq-surface-low, #fbfdfb); }
-.report-document-dashboard .visit-metric-group-title { margin: 0 0 .75rem; color: var(--cliniq-foreground, #17261d); font-size: .8125rem; font-weight: 800; letter-spacing: -.01em; }
+.report-document-dashboard:not(.report-document-paper-preview) .visit-metric-group-title { margin: 0 0 .75rem; color: var(--cliniq-foreground, #17261d); font-family: Manrope, ui-sans-serif, system-ui, sans-serif; font-size: .75rem; font-weight: 700; letter-spacing: 0; }
 .report-document-dashboard .visit-metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .625rem; }
 .report-document-dashboard .visit-metric-grid .report-metric { min-height: 5.5rem; padding: .75rem; border-radius: .75rem; background: #fff; }
 .report-document-dashboard .visit-metric-grid .report-metric-label { font-size: .625rem; line-height: 1.35; }
-.report-document-dashboard .visit-metric-grid .report-metric-value { font-size: 1.625rem; }
+.report-document-dashboard:not(.report-document-paper-preview) .visit-metric-grid .report-metric-value { font-size: 1.4rem; }
 .report-document-dashboard .report-charts { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
 .report-document-dashboard .report-charts--five-cards { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 .report-document-dashboard .report-charts--five-cards > .report-chart { grid-column: span 2; }
@@ -308,8 +308,8 @@ function system_report_styles(): string
 .report-document-dashboard .report-charts--visits > .report-chart:nth-last-child(2) { grid-column: span 3; }
 .report-document-dashboard .report-charts--visits > .report-chart:last-child { grid-column: 1 / -1; }
 .report-document-dashboard .report-chart { min-height: 15rem; padding: 1.25rem; border-color: oklch(92% .01 230 / .8); border-radius: .875rem; background: #fff; box-shadow: 0 1px 2px rgba(23,38,29,.025); }
- .report-document-dashboard .report-chart h3 { margin-bottom: 1.125rem; color: var(--cliniq-foreground, #334155); font-size: 1rem; font-weight: 800; line-height: 1.35; }
-.report-document-dashboard .report-chart-kind { font-size: .625rem; }
+ .report-document-dashboard:not(.report-document-paper-preview) .report-chart h3 { margin-bottom: 1.125rem; color: var(--cliniq-foreground, #334155); font-family: Manrope, ui-sans-serif, system-ui, sans-serif; font-size: .875rem; font-weight: 700; letter-spacing: 0; line-height: 1.35; }
+.report-document-dashboard:not(.report-document-paper-preview) .report-chart-kind { font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: .5625rem; font-weight: 700; letter-spacing: .03em; }
 .report-document-dashboard .report-chart-visual { min-height: 12.5rem; }
 .report-document-dashboard .report-apexcharts-canvas { width: 100%; height: 13.5rem; }
 .report-metrics { display: grid; grid-template-columns: repeat(var(--report-metric-columns, 4), minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
@@ -394,7 +394,19 @@ function system_report_styles(): string
 .report-document-dashboard .report-column-track div { background: var(--cliniq-primary, #3b8b5d); }
 .report-document-dashboard .report-chart-track,
 .report-document-dashboard .report-progress-track { background: var(--cliniq-surface-low, #edf3ef); }
-.report-document-dashboard .report-remarks textarea { border-color: var(--cliniq-outline, #cfded3); background: var(--cliniq-surface-low, #fbfdfb); color: var(--cliniq-foreground, #334155); font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+.report-document-dashboard:not(.report-document-paper-preview) .report-data-table,
+.report-document-dashboard:not(.report-document-paper-preview) .report-data-table summary,
+.report-document-dashboard:not(.report-document-paper-preview) .report-data-table table,
+.report-document-dashboard:not(.report-document-paper-preview) .report-remarks,
+.report-document-dashboard:not(.report-document-paper-preview) .report-footer { font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+.report-document-dashboard:not(.report-document-paper-preview) .report-data-table summary { font-size: .75rem; font-weight: 700; }
+.report-document-dashboard:not(.report-document-paper-preview) .report-data-table table { font-size: .75rem; }
+.report-document-dashboard:not(.report-document-paper-preview) .report-data-table th { font-weight: 700; }
+.report-document-dashboard:not(.report-document-paper-preview) .report-data-table td { font-weight: 600; }
+.report-document-dashboard:not(.report-document-paper-preview) .report-remarks label,
+.report-document-dashboard:not(.report-document-paper-preview) .report-remarks-title { font-size: .625rem; font-weight: 700; letter-spacing: .03em; }
+.report-document-dashboard:not(.report-document-paper-preview) .report-remarks textarea { border-color: var(--cliniq-outline, #cfded3); background: var(--cliniq-surface-low, #fbfdfb); color: var(--cliniq-foreground, #334155); font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: .8125rem; font-weight: 400; }
+.report-document-dashboard:not(.report-document-paper-preview) .report-footer { font-size: .625rem; font-weight: 500; }
 html.cliniq-dark .report-document-dashboard { color: #dcebe0; }
 html.cliniq-dark .report-document-dashboard .report-section { border-color: #3b5945; background: #14271b; box-shadow: 0 12px 28px rgba(0,0,0,.16); }
 html.cliniq-dark .report-document-dashboard .report-section-number { background: #1d4934; color: #9be3ae; box-shadow: inset 0 0 0 1px #4d9b68; }
