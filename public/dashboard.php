@@ -115,10 +115,12 @@ $activeAlerts = auth_db()->query("
 
 // --- 3. Today's Appointments (Scheduled) ---
 $appointmentsStmt = appointment_db()->query("
-    SELECT a.*, p.first_name, p.last_name, p.id_number
+    SELECT a.*, p.first_name, p.last_name, p.id_number,
+           v.visit_id AS linked_visit_id, v.status AS linked_visit_status
     FROM appointments a
     JOIN patients pt ON pt.person_id = a.patient_id
     JOIN people p ON p.id = pt.person_id
+    LEFT JOIN visits v ON v.appointment_id = a.appointment_id
     WHERE DATE(a.appointment_datetime) = CURDATE()
       AND a.status IN ('Scheduled', 'For Confirmation')
     ORDER BY a.appointment_datetime ASC
@@ -128,6 +130,7 @@ $appointments = $appointmentsStmt ? $appointmentsStmt->fetchAll() : [];
 // --- 3b. Appointments requiring clinic action ---
 $pendingAppointmentsStmt = appointment_db()->query("
     SELECT a.*, p.first_name, p.last_name, p.id_number,
+           v.visit_id AS linked_visit_id, v.status AS linked_visit_status,
            COALESCE(
                NULLIF(TRIM(CONCAT(pr.program_code, '-', s.year_level, UPPER(s.section))), ''),
                ed.department_code,
@@ -140,6 +143,7 @@ $pendingAppointmentsStmt = appointment_db()->query("
     LEFT JOIN programs pr ON pr.id = s.program_id
     LEFT JOIN school_employees se ON se.person_id = p.id
     LEFT JOIN departments ed ON ed.id = se.department_id
+    LEFT JOIN visits v ON v.appointment_id = a.appointment_id
     WHERE a.status IN ('Pending', 'For Confirmation')
     ORDER BY CASE WHEN a.status = 'For Confirmation' THEN 0 ELSE 1 END, a.appointment_datetime ASC
     LIMIT 10
@@ -598,7 +602,7 @@ render_header('Main Dashboard');
                             <span class="material-symbols-outlined text-[26px]">event_available</span>
                         </div>
                         <p class="text-sm font-bold text-slate-500 mb-0">No appointments need action</p>
-                        <p class="text-xs text-slate-400 mt-1">New requests and appointments awaiting completion will appear here.</p>
+                        <p class="text-xs text-slate-400 mt-1">New requests and unfinished clinical documentation will appear here.</p>
                     </div>
                 <?php else: ?>
                     <?php foreach ($pendingAppointments as $pa):
@@ -607,6 +611,8 @@ render_header('Main Dashboard');
                         $paTime = date('g:i A', strtotime($pa['appointment_datetime']));
                         $paId = (int) $pa['appointment_id'];
                         $isConfirmation = ($pa['status'] ?? '') === 'For Confirmation';
+                        $paVisitId = (int) ($pa['linked_visit_id'] ?? 0);
+                        $paIsLegacyReview = $isConfirmation && $paVisitId === 0;
                         $paHistory = $dashboardLatestAppointments[(int) $pa['patient_id']] ?? [];
                         $paLatest = $paHistory[0] ?? null;
                         $paHadCancellation = count(array_filter($paHistory, static fn(array $history): bool => in_array($history['status'], ['Declined', 'Cancelled'], true))) > 0;
@@ -622,7 +628,7 @@ render_header('Main Dashboard');
                                             <p class="text-sm font-bold text-slate-800 mb-0 truncate"><?= e($paName) ?></p>
                                             <p class="text-[11px] font-bold text-slate-400 mb-1"><?= e($pa['id_number']) ?> · <?= e($pa['course_section'] ?? 'Patient') ?></p>
                                         </div>
-                                        <span class="text-[10px] font-bold text-amber-600 bg-amber-50 rounded-full px-2 py-0.5 whitespace-nowrap shrink-0"><?= $isConfirmation ? 'Confirm Completion' : 'For Approval' ?></span>
+                                        <span class="text-[10px] font-bold text-amber-600 bg-amber-50 rounded-full px-2 py-0.5 whitespace-nowrap shrink-0"><?= $isConfirmation ? ($paIsLegacyReview ? 'Legacy Attendance Review' : 'Visit record being completed') : 'For Approval' ?></span>
                                     </div>
                                     <div class="flex items-center gap-1 text-xs font-bold text-slate-500 mb-2">
                                         <span class="material-symbols-outlined text-[13px] text-indigo-400">event</span>
@@ -636,22 +642,30 @@ render_header('Main Dashboard');
                                     <p class="text-[11px] font-bold text-slate-400 mb-3">Latest appointment: <?= $paLatest ? e(date('M d, Y · g:i A', strtotime($paLatest['appointment_datetime'])) . ' · ' . $paLatest['purpose'] . ' · ' . appointment_status_display_label((string) $paLatest['status'])) : 'None' ?></p>
                                     <?php if ($paHadCancellation): ?><p class="text-[11px] font-extrabold text-red-600 mb-3">Declined or cancelled appointment in the last three records.</p><?php endif; ?>
                                     <div class="flex items-center gap-2">
-                                        <form method="post" action="<?= app_url('appointments/update.php') ?>" class="flex-1">
-                                            <input type="hidden" name="id" value="<?= $paId ?>">
-                                            <input type="hidden" name="status" value="<?= $isConfirmation ? 'Completed' : 'Scheduled' ?>">
-                                            <input type="hidden" name="redirect" value="../dashboard.php">
-                                            <button type="submit" class="btn btn-sm btn-primary w-full justify-center"
-                                                data-confirm-submit
-                                                data-confirm-type="primary"
-                                                data-confirm-title="<?= $isConfirmation ? 'Confirm this appointment was completed?' : 'Approve this appointment?' ?>"
-                                                data-confirm-message="<?= $isConfirmation ? 'This will mark the appointment for ' . e($paName) . ' as completed.' : 'This will schedule the appointment for ' . e($paName) . ' on ' . e($paDate . ' at ' . $paTime) . '.' ?>"
-                                                data-confirm-toast="<?= $isConfirmation ? 'Confirming completion...' : 'Approving appointment...' ?>">
-                                                <span class="material-symbols-outlined text-[14px]"><?= $isConfirmation ? 'task_alt' : 'event_available' ?></span>
-                                                <?= $isConfirmation ? 'Completed' : 'Approve' ?>
-                                            </button>
-                                        </form>
                                         <?php if ($isConfirmation): ?>
-                                            <form method="post" action="<?= app_url('appointments/update.php') ?>">
+                                            <?php if ($paVisitId > 0): ?>
+                                                <a href="<?= e(app_url('visits/view.php?id=' . $paVisitId . '&from=logbook')) ?>" class="btn btn-sm btn-primary flex-1 justify-center text-decoration-none"><span class="material-symbols-outlined text-[14px]">clinical_notes</span>Open Visit</a>
+                                            <?php else: ?>
+                                                <a href="<?= e(app_url('appointments/index.php?status=For%20Confirmation')) ?>" class="btn btn-sm btn-outline flex-1 justify-center text-decoration-none"><span class="material-symbols-outlined text-[14px]">fact_check</span>Review Attendance</a>
+                                            <?php endif; ?>
+                                        <?php else: ?>
+                                            <form method="post" action="<?= app_url('appointments/update.php') ?>" class="flex-1">
+                                                <input type="hidden" name="id" value="<?= $paId ?>">
+                                                <input type="hidden" name="status" value="Scheduled">
+                                                <input type="hidden" name="redirect" value="../dashboard.php">
+                                                <button type="submit" class="btn btn-sm btn-primary w-full justify-center"
+                                                    data-confirm-submit
+                                                    data-confirm-type="primary"
+                                                    data-confirm-title="Approve this appointment?"
+                                                    data-confirm-message="This will schedule the appointment for <?= e($paName) ?> on <?= e($paDate . ' at ' . $paTime) ?>."
+                                                    data-confirm-toast="Approving appointment...">
+                                                    <span class="material-symbols-outlined text-[14px]">event_available</span>
+                                                    Approve
+                                                </button>
+                                            </form>
+                                        <?php endif; ?>
+                                        <?php if ($isConfirmation): ?>
+                                            <?php if ($paVisitId === 0): ?><form method="post" action="<?= app_url('appointments/update.php') ?>">
                                                 <input type="hidden" name="id" value="<?= $paId ?>">
                                                 <input type="hidden" name="status" value="No Show">
                                                 <input type="hidden" name="redirect" value="../dashboard.php">
@@ -665,7 +679,7 @@ render_header('Main Dashboard');
                                                     data-confirm-toast="Marking no-show...">
                                                     <span class="material-symbols-outlined text-[16px]">person_off</span>
                                                 </button>
-                                            </form>
+                                            </form><?php endif; ?>
                                         <?php else: ?>
                                             <a href="<?= e(app_url('appointments/index.php?status=Pending')) ?>" class="btn btn-sm btn-ghost btn-cancel-icon" title="Review or decline request" aria-label="Review or decline appointment request">
                                                 <span class="material-symbols-outlined text-[16px]">rate_review</span>
@@ -766,9 +780,14 @@ render_header('Main Dashboard');
                                                 <strong><?= e($fullName) ?></strong>
                                                 <span><?= e($apt['id_number']) ?> &bull; <?= e($apt['purpose']) ?></span>
                                             </div>
-                                            <?php if (($apt['status'] ?? '') === 'For Confirmation'): ?>
-                                                <span class="dashboard-calendar-event-status badge badge-pending">For Completion</span>
+                                     <?php if (($apt['status'] ?? '') === 'For Confirmation'): ?>
+                                                <span class="dashboard-calendar-event-status badge badge-pending">Visit record being completed</span>
                                             <?php endif; ?>
+                                              <?php if (!$isApe && empty($apt['linked_visit_id']) && appointment_can_check_in($apt)): ?>
+                                                 <a href="<?= e(app_url('appointments/check-in.php?id=' . (int) $apt['appointment_id'])) ?>" class="btn btn-sm btn-primary text-decoration-none mt-2"><span class="material-symbols-outlined text-[14px]">how_to_reg</span>Check In</a>
+                                             <?php elseif (!empty($apt['linked_visit_id'])): ?>
+                                                 <a href="<?= e(app_url('visits/view.php?id=' . (int) $apt['linked_visit_id'] . '&from=logbook')) ?>" class="btn btn-sm btn-outline text-decoration-none mt-2"><span class="material-symbols-outlined text-[14px]">clinical_notes</span>Open Visit</a>
+                                             <?php endif; ?>
                                         </div>
                                     </article>
                                 <?php endforeach; ?>

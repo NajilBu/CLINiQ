@@ -47,10 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $management = trim($_POST['management_treatment'] ?? '');
-    $referralType = trim($_POST['referral_type'] ?? '');
-    if ($referralType === 'None') {
-        $referralType = '';
-    }
+    $referralType = normalize_visit_referral_type($_POST['referral_type'] ?? null);
 
     $staffPersonId = cliniq_visit_staff_person_id($user);
     $visitId = cliniq_visit_create([

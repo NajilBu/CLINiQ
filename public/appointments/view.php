@@ -18,7 +18,8 @@ $stmt = appointment_db()->prepare("
                ed.department_code,
                'Patient'
            ) AS course_section,
-           TRIM(CONCAT_WS(' ', reviewer.first_name, reviewer.middle_name, reviewer.last_name)) AS reviewer_name
+             TRIM(CONCAT_WS(' ', NULLIF(reviewer_staff.honorific, ''), reviewer.first_name, reviewer.middle_name, reviewer.last_name)) AS reviewer_name,
+            v.visit_id AS linked_visit_id, v.status AS linked_visit_status
     FROM appointments a
     JOIN patients pt ON pt.person_id = a.patient_id
     JOIN people p ON p.id = pt.person_id
@@ -27,6 +28,8 @@ $stmt = appointment_db()->prepare("
     LEFT JOIN school_employees se ON se.person_id = p.id
     LEFT JOIN departments ed ON ed.id = se.department_id
     LEFT JOIN people reviewer ON reviewer.id = a.reviewed_by_person_id
+    LEFT JOIN clinic_staff reviewer_staff ON reviewer_staff.person_id = reviewer.id
+    LEFT JOIN visits v ON v.appointment_id = a.appointment_id
     WHERE a.appointment_id = ?
     LIMIT 1
 ");
@@ -50,6 +53,24 @@ $patientName = trim(implode(' ', array_filter([
 $notes = trim((string) ($appointment['notes'] ?? ''));
 $cancellationReason = trim((string) ($appointment['cancellation_reason'] ?? ''));
 $reviewerName = trim((string) ($appointment['reviewer_name'] ?? ''));
+$appointmentStatus = (string) ($appointment['status'] ?? '');
+$resolutionAction = match ($appointmentStatus) {
+    'Pending' => [
+        'label' => 'Review Pending Request',
+        'instruction' => 'Open the pending queue to approve or decline this student request.',
+        'url' => app_url('appointments/index.php?status=Pending'),
+    ],
+    'For Confirmation' => [
+        'label' => !empty($appointment['linked_visit_id']) ? 'Open Clinical Visit' : 'Legacy Attendance Review',
+        'instruction' => !empty($appointment['linked_visit_id'])
+            ? 'Complete or cancel the linked clinical visit. Its terminal outcome automatically updates the appointment.'
+            : 'This historical appointment has no verified clinical visit. Review its attendance from the appointment queue.',
+        'url' => !empty($appointment['linked_visit_id'])
+            ? app_url('visits/view.php?id=' . (int) $appointment['linked_visit_id'] . '&from=logbook')
+            : app_url('appointments/index.php?status=For%20Confirmation'),
+    ],
+    default => null,
+};
 
 set_page_back_link(app_url('appointments/index.php?status=' . rawurlencode($returnStatus)), 'Back to Appointments');
 render_header('Appointment Record');
@@ -72,6 +93,19 @@ render_clinic_command_header(
             <p class="text-xs font-semibold text-slate-500 mt-2 mb-0">Appointment #<?= (int) $appointment['appointment_id'] ?></p>
         </div>
     </div>
+
+    <?php if ($resolutionAction): ?>
+        <div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+            <div>
+                <p class="clinic-label text-amber-800 mb-1">Next step</p>
+                <p class="text-sm font-bold text-amber-900 mb-0"><?= e($resolutionAction['instruction']) ?></p>
+            </div>
+            <a href="<?= e($resolutionAction['url']) ?>" class="btn btn-primary text-decoration-none shrink-0">
+                <?= e($resolutionAction['label']) ?>
+                <span class="material-symbols-outlined text-[18px]" aria-hidden="true">arrow_forward</span>
+            </a>
+        </div>
+    <?php endif; ?>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
         <div class="rounded-2xl border border-slate-100 bg-slate-50 p-5">

@@ -37,6 +37,7 @@ if ($dateTo !== '') {
 
 $stmt = appointment_db()->prepare("
     SELECT a.*, p.first_name, p.last_name, p.id_number,
+           v.visit_id AS linked_visit_id, v.status AS linked_visit_status,
            COALESCE(
                NULLIF(TRIM(CONCAT(pr.program_code, '-', s.year_level, UPPER(s.section))), ''),
                ed.department_code,
@@ -49,6 +50,7 @@ $stmt = appointment_db()->prepare("
     LEFT JOIN programs pr ON pr.id = s.program_id
     LEFT JOIN school_employees se ON se.person_id = p.id
     LEFT JOIN departments ed ON ed.id = se.department_id
+    LEFT JOIN visits v ON v.appointment_id = a.appointment_id
     WHERE {$where}
     ORDER BY
         CASE a.status WHEN 'Pending' THEN 0 WHEN 'Scheduled' THEN 1 WHEN 'For Confirmation' THEN 2 WHEN 'Completed' THEN 3 WHEN 'Declined' THEN 4 WHEN 'Cancelled' THEN 5 WHEN 'No Show' THEN 6 ELSE 7 END,
@@ -115,6 +117,10 @@ foreach ($appointments as $appointment) {
     }
     $historyHtml .= '</div>';
     $status = $appointment['status'];
+    $linkedVisitId = (int) ($appointment['linked_visit_id'] ?? 0);
+    $linkedVisitStatus = (string) ($appointment['linked_visit_status'] ?? '');
+    $openVisitUrl = $linkedVisitId > 0 ? app_url('visits/view.php?id=' . $linkedVisitId . '&from=logbook') : '';
+    $canCheckIn = appointment_can_check_in($appointment) && $linkedVisitId === 0;
     $patientNote = trim((string) ($appointment['notes'] ?? ''));
     $portalNotePrefix = 'Patient requested this appointment through the patient portal. Awaiting clinic approval.';
     if (str_starts_with($patientNote, $portalNotePrefix)) {
@@ -128,18 +134,31 @@ foreach ($appointments as $appointment) {
         $recordUrl = app_url('appointments/view.php?id=' . (int) $appointment['appointment_id'] . '&status=' . rawurlencode($filterStatus));
         $actions .= '<a href="' . e($recordUrl) . '" class="btn btn-sm btn-outline text-decoration-none" title="View read-only appointment record"><span class="material-symbols-outlined text-[14px]">description</span> View Record</a>';
     }
+    if ($linkedVisitId > 0) {
+        $actions .= '<a href="' . e($openVisitUrl) . '" class="btn btn-sm btn-outline text-decoration-none" title="Open linked clinical visit"><span class="material-symbols-outlined text-[14px]">clinical_notes</span> Open Visit</a>';
+    }
 
     if ($status === 'Pending') {
         $actions .= '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['appointment_id'] . '"><input type="hidden" name="status" value="Scheduled"><button class="btn btn-sm btn-primary" title="Approve appointment" data-confirm-submit data-confirm-type="primary" data-confirm-title="Approve this appointment?" data-confirm-message="This will schedule the appointment request." data-confirm-toast="Approving appointment..."><span class="material-symbols-outlined text-[14px]">event_available</span> Approve</button></form>'
             . '<button type="button" class="btn btn-sm btn-ghost" title="Decline request" aria-label="Decline request" data-appointment-decision data-decision-id="' . (int)$appointment['appointment_id'] . '" data-decision-status="Declined" data-decision-title="Decline appointment request" data-decision-reason-label="Reason for declining" data-decision-submit-label="Decline Request"><span class="material-symbols-outlined text-[14px]">block</span> Decline</button>';
     } elseif ($status === 'Scheduled') {
-        $actions .= '<button type="button" class="btn btn-sm btn-ghost" title="Cancel appointment" aria-label="Cancel appointment" data-appointment-decision data-decision-id="' . (int)$appointment['appointment_id'] . '" data-decision-status="Cancelled" data-decision-title="Cancel scheduled appointment" data-decision-reason-label="Cancellation Reason" data-decision-submit-label="Cancel Appointment"><span class="material-symbols-outlined text-[14px]">cancel</span> Cancel</button>';
-        if ($canMarkNoShow && appointment_can_mark_no_show($appointment)) {
-            $actions .= '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['appointment_id'] . '"><input type="hidden" name="status" value="No Show"><button class="btn btn-sm btn-ghost" title="Mark no-show" data-confirm-submit data-confirm-type="danger" data-confirm-title="Mark as no-show?" data-confirm-message="This confirms the patient did not attend the appointment." data-confirm-toast="Marking no-show..."><span class="material-symbols-outlined text-[14px]">person_cancel</span> No Show</button></form>';
+        if ($canCheckIn) {
+            $actions .= '<a href="' . e(app_url('appointments/check-in.php?id=' . (int) $appointment['appointment_id'])) . '" class="btn btn-sm btn-primary text-decoration-none" title="Check in and open clinical visit"><span class="material-symbols-outlined text-[14px]">how_to_reg</span> Check In</a>';
         }
-    } elseif ($status === 'For Confirmation') {
-        $actions .= '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['appointment_id'] . '"><input type="hidden" name="status" value="Completed"><button class="btn btn-sm btn-outline" title="Confirm completed" data-confirm-submit data-confirm-type="primary" data-confirm-title="Confirm appointment completed?" data-confirm-message="This confirms the patient attended and the passed appointment is completed." data-confirm-toast="Completing appointment..."><span class="material-symbols-outlined text-[14px]">check</span> Confirm Completed</button></form>'
-            . ($canMarkNoShow ? '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['appointment_id'] . '"><input type="hidden" name="status" value="No Show"><button class="btn btn-sm btn-ghost" title="Mark no-show" data-confirm-submit data-confirm-type="danger" data-confirm-title="Mark as no-show?" data-confirm-message="This confirms the patient did not attend the appointment." data-confirm-toast="Marking no-show..."><span class="material-symbols-outlined text-[14px]">person_cancel</span> No Show</button></form>' : '');
+        if ($linkedVisitId === 0) {
+            $actions .= '<button type="button" class="btn btn-sm btn-ghost" title="Cancel appointment" aria-label="Cancel appointment" data-appointment-decision data-decision-id="' . (int)$appointment['appointment_id'] . '" data-decision-status="Cancelled" data-decision-title="Cancel scheduled appointment" data-decision-reason-label="Cancellation Reason" data-decision-submit-label="Cancel Appointment"><span class="material-symbols-outlined text-[14px]">cancel</span> Cancel</button>';
+        }
+        if ($linkedVisitId === 0 && $canMarkNoShow && appointment_can_mark_no_show($appointment)) {
+        $actions .= '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['appointment_id'] . '"><input type="hidden" name="status" value="No Show"><button class="btn btn-sm btn-ghost" title="Mark as missed" data-confirm-submit data-confirm-type="danger" data-confirm-title="Mark appointment as missed?" data-confirm-message="This confirms the patient did not attend the appointment." data-confirm-toast="Marking appointment as missed..."><span class="material-symbols-outlined text-[14px]">person_cancel</span> Missed appointment</button></form>';
+        }
+    } elseif ($status === 'For Confirmation' && $linkedVisitId === 0) {
+        $actions .= '<span class="text-xs font-bold text-amber-700">Legacy attendance review</span>';
+        if ($linkedVisitId === 0) {
+            $actions .= '<button type="button" class="btn btn-sm btn-ghost" title="Cancel legacy appointment" aria-label="Cancel legacy appointment" data-appointment-decision data-decision-id="' . (int)$appointment['appointment_id'] . '" data-decision-status="Cancelled" data-decision-title="Cancel legacy appointment" data-decision-reason-label="Cancellation Reason" data-decision-submit-label="Cancel Appointment"><span class="material-symbols-outlined text-[14px]">cancel</span> Cancel</button>';
+        }
+        if ($linkedVisitId === 0 && $canMarkNoShow) {
+        $actions .= '<form method="post" action="update.php"><input type="hidden" name="id" value="' . (int)$appointment['appointment_id'] . '"><input type="hidden" name="status" value="No Show"><button class="btn btn-sm btn-ghost" title="Mark as missed" data-confirm-submit data-confirm-type="danger" data-confirm-title="Mark appointment as missed?" data-confirm-message="This confirms the patient did not attend the appointment." data-confirm-toast="Marking appointment as missed..."><span class="material-symbols-outlined text-[14px]">person_cancel</span> Missed appointment</button></form>';
+        }
     }
     $actions .= '</div>';
 
@@ -195,21 +214,24 @@ render_clinic_command_header(
             $tabs = [
                 'Pending' => 'For Approval',
                 'Scheduled' => 'Approved',
-                'For Confirmation' => 'For Completion',
+                'For Confirmation' => 'Visit record being completed',
                 'Completed' => 'Completed',
                 'Declined' => 'Declined',
                 'Cancelled' => 'Cancelled',
-                'No Show' => 'No Show',
+                'No Show' => 'Missed appointment',
                 'all' => 'All',
             ];
             foreach ($tabs as $key => $label):
                 $isActive = $filterStatus === $key;
                 $count = $statusCounts[$key] ?? 0;
+                if ($key === 'For Confirmation' && $count === 0) continue;
                 $href = '?status=' . urlencode($key);
             ?>
                 <a href="<?= e($href) ?>" class="status-tab <?= $isActive ? 'active' : '' ?> text-decoration-none whitespace-nowrap">
                     <?= e($label) ?>
-                    <span class="ml-1.5 px-2 py-0.5 rounded-full <?= $isActive ? 'bg-blue-100 text-primary' : 'bg-slate-100 text-slate-500' ?> text-[10px]"><?= (int)$count ?></span>
+                    <?php if ($count > 0): ?>
+                        <span class="ml-1.5 px-2 py-0.5 rounded-full <?= $isActive ? 'bg-blue-100 text-primary' : 'bg-slate-100 text-slate-500' ?> text-[10px]"><?= (int)$count ?></span>
+                    <?php endif; ?>
                 </a>
             <?php endforeach; ?>
         </div>

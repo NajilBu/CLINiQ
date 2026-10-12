@@ -18,7 +18,7 @@ $stmt = auth_db()->prepare("
             cd.department_code,
             'Patient'
         ) AS course_section,
-        TRIM(CONCAT_WS(' ', rb.first_name, rb.middle_name, rb.last_name)) AS resolved_by_name
+        TRIM(CONCAT_WS(' ', NULLIF(resolver_staff.honorific, ''), rb.first_name, rb.middle_name, rb.last_name)) AS resolved_by_name
     FROM nurse_alerts a
     LEFT JOIN patients pt ON pt.person_id = a.patient_id
     LEFT JOIN people pe ON pe.id = pt.person_id
@@ -29,6 +29,7 @@ $stmt = auth_db()->prepare("
     LEFT JOIN clinic_staff cs ON cs.person_id = pe.id
     LEFT JOIN departments cd ON cd.id = cs.department_id
     LEFT JOIN people rb ON rb.id = a.resolved_by
+    LEFT JOIN clinic_staff resolver_staff ON resolver_staff.person_id = rb.id
     WHERE a.id = ?
     LIMIT 1
 ");

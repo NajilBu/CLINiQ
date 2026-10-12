@@ -14,7 +14,7 @@ foreach ([
     'Active bookings',
     'Recent history',
     'Awaiting clinic approval. Please do not visit the clinic until your request is confirmed.',
-    'Clinic staff are recording the visit outcome.',
+    'Clinic staff are completing the visit documentation for this appointment.',
     '<details class="student-appointment-cancel">',
     'Confirm cancellation',
 ] as $expected) {

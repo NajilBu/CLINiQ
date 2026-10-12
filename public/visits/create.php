@@ -48,10 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $actionTaken = trim($_POST['action_taken'] ?? '');
         $purpose = normalize_visit_purpose($_POST['visit_purpose'] ?? null);
-        $referralType = trim($_POST['referral_type'] ?? '');
-        if ($referralType === 'None') {
-            $referralType = '';
-        }
+        $referralType = normalize_visit_referral_type($_POST['referral_type'] ?? null);
         $staffPersonId = cliniq_visit_staff_person_id();
         $attendingPersonId = cliniq_visit_attending_clinician_id((int) ($_POST['attended_by_person_id'] ?? 0));
         $dispensings = cliniq_inventory_dispensing_rows($_POST);

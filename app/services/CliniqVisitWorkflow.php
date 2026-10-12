@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../helpers/patient_category.php';
+require_once __DIR__ . '/SystemSettings.php';
 require_once __DIR__ . '/CliniqInventoryWorkflow.php';
 require_once __DIR__ . '/AuditLog.php';
 require_once __DIR__ . '/PatientNotification.php';
@@ -141,7 +142,7 @@ function cliniq_visit_staff_members(): array
 {
     return cliniq_visit_db()->query("
         SELECT cs.person_id AS id,
-               TRIM(CONCAT_WS(' ', pe.first_name, pe.middle_name, pe.last_name)) AS name
+               TRIM(CONCAT_WS(' ', NULLIF(cs.honorific, ''), pe.first_name, pe.middle_name, pe.last_name)) AS name
         FROM clinic_staff cs
         JOIN people pe ON pe.id = cs.person_id
         ORDER BY pe.last_name, pe.first_name
@@ -153,7 +154,7 @@ function cliniq_visit_attending_clinicians(): array
 {
     return cliniq_visit_db()->query("
         SELECT cs.person_id AS id,
-               TRIM(CONCAT_WS(' ', pe.first_name, pe.middle_name, pe.last_name)) AS name,
+               TRIM(CONCAT_WS(' ', NULLIF(cs.honorific, ''), pe.first_name, pe.middle_name, pe.last_name)) AS name,
                cs.staff_role AS role
         FROM clinic_staff cs
         JOIN people pe ON pe.id = cs.person_id
@@ -341,9 +342,10 @@ function cliniq_visit_insert_vitals(
     return (int) $db->lastInsertId();
 }
 
-function cliniq_visit_create(array $visit, array $entry = [], array $vitals = [], array $dispensings = []): int
+function cliniq_visit_create(array $visit, array $entry = [], array $vitals = [], array $dispensings = [], ?PDO $db = null): int
 {
-    $db = cliniq_visit_db();
+    $db ??= cliniq_visit_db();
+    $startsTransaction = !$db->inTransaction();
     $patientPersonId = (int) ($visit['patient_person_id'] ?? 0);
     $patientPersonId = $patientPersonId > 0 ? $patientPersonId : null;
     $guestName = trim((string) ($visit['guest_name'] ?? '')) ?: null;
@@ -366,21 +368,38 @@ function cliniq_visit_create(array $visit, array $entry = [], array $vitals = []
         throw new InvalidArgumentException('Chief complaint is required.');
     }
 
+    $appointmentId = (int) ($visit['appointment_id'] ?? 0);
+    $appointmentId = $appointmentId > 0 ? $appointmentId : null;
+    $visitSource = trim((string) ($visit['visit_source'] ?? '')) ?: 'Staff Recorded';
+    if (($appointmentId !== null) !== ($visitSource === 'Appointment')) {
+        throw new InvalidArgumentException('Appointment-linked visits must use the Appointment source.');
+    }
+    if ($appointmentId !== null) {
+        $appointmentStmt = $db->prepare('SELECT patient_id FROM appointments WHERE appointment_id = ?');
+        $appointmentStmt->execute([$appointmentId]);
+        if ((int) $appointmentStmt->fetchColumn() !== $patientPersonId) {
+            throw new InvalidArgumentException('The selected appointment does not belong to this patient.');
+        }
+    }
+
     $status = cliniq_visit_status((string) ($visit['status'] ?? 'Unaddressed'), 'Unaddressed');
     $markAddressed = !empty($visit['mark_addressed']) || in_array($status, ['Active', 'Completed'], true);
     $markCompleted = !empty($visit['mark_completed']) || $status === 'Completed';
 
     try {
-        $db->beginTransaction();
+        if ($startsTransaction) {
+            $db->beginTransaction();
+        }
         $stmt = $db->prepare('
             INSERT INTO visits (
-                patient_person_id, guest_name, visit_datetime, addressed_at, completed_at,
+                appointment_id, patient_person_id, guest_name, visit_datetime, addressed_at, completed_at,
                 chief_complaint, status,
                 visit_purpose, visit_source, action_taken,
                 recorded_by_person_id, attended_by_person_id
-            ) VALUES (?, ?, COALESCE(?, NOW()), IF(?, NOW(), NULL), IF(?, NOW(), NULL), ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, COALESCE(?, NOW()), IF(?, NOW(), NULL), IF(?, NOW(), NULL), ?, ?, ?, ?, ?, ?, ?)
         ');
         $stmt->execute([
+            $appointmentId,
             $patientPersonId,
             $guestName,
             ($visit['visit_datetime'] ?? null) ?: null,
@@ -389,7 +408,7 @@ function cliniq_visit_create(array $visit, array $entry = [], array $vitals = []
             $chiefComplaint,
             $status,
             $visitPurpose ?: null,
-            trim((string) ($visit['visit_source'] ?? '')) ?: 'Staff Recorded',
+            $visitSource,
             trim((string) ($visit['action_taken'] ?? '')) ?: null,
             !empty($visit['recorded_by_person_id']) ? (int) $visit['recorded_by_person_id'] : null,
             !empty($visit['attended_by_person_id']) ? (int) $visit['attended_by_person_id'] : null,
@@ -406,7 +425,12 @@ function cliniq_visit_create(array $visit, array $entry = [], array $vitals = []
         }
         cliniq_visit_insert_vitals($db, $visitId, $entryId, $vitals, $staffId);
         cliniq_inventory_dispense_medicines($db, (int) $entryId, $dispensings, $staffId);
-        $db->commit();
+        if (in_array($status, ['Completed', 'Cancelled'], true)) {
+            cliniq_visit_sync_linked_appointment_outcome($db, $visitId, $staffId);
+        }
+        if ($startsTransaction) {
+            $db->commit();
+        }
         if ($status === 'Completed') {
             try {
                 if ($patientPersonId !== null) {
@@ -425,8 +449,103 @@ function cliniq_visit_create(array $visit, array $entry = [], array $vitals = []
             'patient_person_id' => $patientPersonId,
             'guest_name' => $guestName,
             'attended_by_person_id' => $staffId,
-            'source' => $visit['visit_source'] ?? 'Staff Recorded',
+            'source' => $visitSource,
+            'appointment_id' => $appointmentId,
         ]);
+        return $visitId;
+    } catch (Throwable $e) {
+        if ($startsTransaction && $db->inTransaction()) {
+            $db->rollBack();
+        }
+        throw $e;
+    }
+}
+
+function cliniq_visit_sync_linked_appointment_outcome(PDO $db, int $visitId, ?int $staffPersonId = null): void
+{
+    $stmt = $db->prepare('
+        SELECT a.appointment_id, a.patient_id, a.appointment_datetime, a.purpose, a.status,
+               v.status AS visit_status, v.action_taken
+        FROM visits v
+        INNER JOIN appointments a ON a.appointment_id = v.appointment_id
+        WHERE v.visit_id = ?
+        FOR UPDATE
+    ');
+    $stmt->execute([$visitId]);
+    $appointment = $stmt->fetch();
+    if (!$appointment || !in_array((string) $appointment['status'], ['Scheduled', 'For Confirmation'], true)) {
+        return;
+    }
+
+    $nextStatus = match ((string) $appointment['visit_status']) {
+        'Completed' => 'Completed',
+        'Cancelled' => 'Cancelled',
+        default => null,
+    };
+    if ($nextStatus === null) {
+        return;
+    }
+
+    $reason = $nextStatus === 'Cancelled'
+        ? trim((string) ($appointment['action_taken'] ?? ''))
+        : null;
+    $update = $db->prepare('
+        UPDATE appointments
+        SET status = ?, cancellation_reason = ?, cancelled_by = ?, reviewed_by_person_id = ?
+        WHERE appointment_id = ?
+    ');
+    $update->execute([
+        $nextStatus,
+        $reason ?: null,
+        $nextStatus === 'Cancelled' ? 'Clinic' : null,
+        $staffPersonId,
+        (int) $appointment['appointment_id'],
+    ]);
+
+    $appointment['cancellation_reason'] = $reason ?: null;
+    patient_notification_for_appointment($db, $appointment, $nextStatus, $staffPersonId);
+    audit_log_event('appointments', 'appointment_' . strtolower($nextStatus) . '_from_visit', $staffPersonId, 'staff', 'appointment', (int) $appointment['appointment_id'], [
+        'visit_id' => $visitId,
+        'visit_status' => $appointment['visit_status'],
+    ]);
+}
+
+function cliniq_visit_create_from_appointment(int $appointmentId, string $chiefComplaint, int $staffPersonId): int
+{
+    $db = cliniq_visit_db();
+    $db->beginTransaction();
+
+    try {
+        $stmt = $db->prepare('
+            SELECT a.appointment_id, a.patient_id, a.appointment_datetime, a.purpose, a.status,
+                   v.visit_id AS linked_visit_id
+            FROM appointments a
+            LEFT JOIN visits v ON v.appointment_id = a.appointment_id
+            WHERE a.appointment_id = ?
+            FOR UPDATE
+        ');
+        $stmt->execute([$appointmentId]);
+        $appointment = $stmt->fetch();
+        if (!$appointment || !appointment_can_check_in($appointment)) {
+            throw new InvalidArgumentException('Only same-day appointments awaiting clinical check-in can be checked in.');
+        }
+        if (!empty($appointment['linked_visit_id'])) {
+            throw new InvalidArgumentException('This appointment already has a linked clinical visit.');
+        }
+
+        $visitId = cliniq_visit_create([
+            'appointment_id' => (int) $appointment['appointment_id'],
+            'patient_person_id' => (int) $appointment['patient_id'],
+            'visit_datetime' => (string) $appointment['appointment_datetime'],
+            'chief_complaint' => $chiefComplaint,
+            'status' => 'Active',
+            'visit_purpose' => (string) $appointment['purpose'],
+            'visit_source' => 'Appointment',
+            'action_taken' => 'Appointment check-in. Clinical documentation in progress.',
+            'recorded_by_person_id' => $staffPersonId,
+        ], [], [], [], $db);
+        $db->commit();
+
         return $visitId;
     } catch (Throwable $e) {
         if ($db->inTransaction()) {
@@ -476,8 +595,8 @@ function cliniq_visit_fetch(int $visitId): ?array
             NULL AS existing_conditions,
             pt.guardian_or_contact_name AS guardian_name,
             pt.guardian_or_contact_number AS guardian_contact,
-            TRIM(CONCAT_WS(' ', rp.first_name, rp.middle_name, rp.last_name)) AS recorded_by_name,
-            TRIM(CONCAT_WS(' ', ap.first_name, ap.middle_name, ap.last_name)) AS attended_by_name
+            TRIM(CONCAT_WS(' ', NULLIF(recorded_staff.honorific, ''), rp.first_name, rp.middle_name, rp.last_name)) AS recorded_by_name,
+            TRIM(CONCAT_WS(' ', NULLIF(attended_staff.honorific, ''), ap.first_name, ap.middle_name, ap.last_name)) AS attended_by_name
         FROM visits v
         LEFT JOIN patients pt ON pt.person_id = v.patient_person_id
         LEFT JOIN people pe ON pe.id = pt.person_id
@@ -489,6 +608,8 @@ function cliniq_visit_fetch(int $visitId): ?array
         LEFT JOIN departments cd ON cd.id = cs.department_id
         LEFT JOIN people rp ON rp.id = v.recorded_by_person_id
         LEFT JOIN people ap ON ap.id = v.attended_by_person_id
+        LEFT JOIN clinic_staff recorded_staff ON recorded_staff.person_id = rp.id
+        LEFT JOIN clinic_staff attended_staff ON attended_staff.person_id = ap.id
         LEFT JOIN visit_entries le ON le.entry_id = (
             SELECT le2.entry_id FROM visit_entries le2
             WHERE le2.visit_id = v.visit_id
@@ -524,9 +645,10 @@ function cliniq_visit_entries(int $visitId): array
             NULL AS dispensed_quantity,
             ve.addressed_by_person_id AS created_by,
             ve.created_at,
-            TRIM(CONCAT_WS(' ', pe.first_name, pe.middle_name, pe.last_name)) AS created_by_name
+            TRIM(CONCAT_WS(' ', NULLIF(creator_staff.honorific, ''), pe.first_name, pe.middle_name, pe.last_name)) AS created_by_name
         FROM visit_entries ve
         LEFT JOIN people pe ON pe.id = ve.addressed_by_person_id
+        LEFT JOIN clinic_staff creator_staff ON creator_staff.person_id = pe.id
         WHERE ve.visit_id = ?
         ORDER BY ve.created_at DESC, ve.entry_id DESC
     ");
@@ -553,11 +675,13 @@ function cliniq_visit_timeline(int $patientPersonId, int $limit = 50): array
             v.visit_purpose,
             v.visit_source,
             v.action_taken,
-            TRIM(CONCAT_WS(' ', rp.first_name, rp.middle_name, rp.last_name)) AS recorded_by_name,
-            TRIM(CONCAT_WS(' ', ap.first_name, ap.middle_name, ap.last_name)) AS attended_by_name
+            TRIM(CONCAT_WS(' ', NULLIF(recorded_staff.honorific, ''), rp.first_name, rp.middle_name, rp.last_name)) AS recorded_by_name,
+            TRIM(CONCAT_WS(' ', NULLIF(attended_staff.honorific, ''), ap.first_name, ap.middle_name, ap.last_name)) AS attended_by_name
         FROM visits v
         LEFT JOIN people rp ON rp.id = v.recorded_by_person_id
         LEFT JOIN people ap ON ap.id = v.attended_by_person_id
+        LEFT JOIN clinic_staff recorded_staff ON recorded_staff.person_id = rp.id
+        LEFT JOIN clinic_staff attended_staff ON attended_staff.person_id = ap.id
         LEFT JOIN visit_entries le ON le.entry_id = (
             SELECT le2.entry_id FROM visit_entries le2
             WHERE le2.visit_id = v.visit_id
@@ -579,7 +703,7 @@ function cliniq_visit_timeline(int $patientPersonId, int $limit = 50): array
 if (!function_exists('visit_statuses')) {
     function visit_statuses(): array
     {
-        return dropdown_options('visit_status');
+        return ['Unaddressed', 'Active', 'Completed', 'Cancelled'];
     }
 }
 
@@ -593,7 +717,7 @@ if (!function_exists('visit_purposes')) {
 if (!function_exists('visit_sources')) {
     function visit_sources(): array
     {
-        return dropdown_options('visit_source');
+        return ['Self Logbook', 'Staff Recorded', 'Nurse Emergency', 'Appointment'];
     }
 }
 
@@ -605,10 +729,26 @@ if (!function_exists('visit_referral_options')) {
 }
 
 if (!function_exists('normalize_visit_purpose')) {
-    function normalize_visit_purpose(?string $purpose): ?string
+    function normalize_visit_purpose(?string $purpose, array $additionalAllowed = []): ?string
     {
         $purpose = trim((string) $purpose);
-        return $purpose !== '' ? mb_substr($purpose, 0, 80) : null;
+        if ($purpose === '') return null;
+        if (!in_array($purpose, array_merge(visit_purposes(), $additionalAllowed), true)) {
+            throw new InvalidArgumentException('Select an active visit purpose.');
+        }
+        return $purpose;
+    }
+}
+
+if (!function_exists('normalize_visit_referral_type')) {
+    function normalize_visit_referral_type(?string $referralType): string
+    {
+        $referralType = trim((string) $referralType);
+        if ($referralType === '' || $referralType === 'None') return '';
+        if (!in_array($referralType, visit_referral_options(), true)) {
+            throw new InvalidArgumentException('Select an active referral type.');
+        }
+        return $referralType;
     }
 }
 
@@ -637,6 +777,7 @@ if (!function_exists('visit_source_badge')) {
         return match ($source) {
             'Self Logbook' => '<span class="badge badge-completed">Self Logbook</span>',
             'Nurse Emergency' => '<span class="badge badge-critical">Nurse Emergency</span>',
+            'Appointment' => '<span class="badge badge-in-progress">Appointment</span>',
             default => '<span class="badge badge-in-progress">Staff Recorded</span>',
         };
     }

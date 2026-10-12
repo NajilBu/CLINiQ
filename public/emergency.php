@@ -95,24 +95,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patient && ($_POST['action'] ?? ''
     if (!in_array($reporterRiskRating, ['Low', 'Moderate', 'High', 'Critical'], true)) {
         $reporterRiskRating = null;
     }
-    $answers = collect_incident_report_answers([
-        'incident_type' => $_POST['incident_type'] ?? '',
-        'observed_condition' => $_POST['observed_condition'] ?? '',
-        'breathing_status' => $_POST['breathing_status'] ?? '',
-        'bleeding_status' => $_POST['bleeding_status'] ?? '',
-        'pain_level' => $_POST['pain_level'] ?? '',
-        'mobility_status' => $_POST['mobility_status'] ?? '',
-        'notes' => $notes,
-        'concern' => 'Possible accident reported from ID number',
-    ]);
-    $reportAnswers = incident_report_answers_text($answers);
-    $classification = classify_reported_incident($answers);
-    $riskReasons = incident_risk_reasons_text($classification);
-    $photoPath = isset($_FILES['photo']) ? save_alert_photo_upload($_FILES['photo']) : null;
+    try {
+        $answers = collect_incident_report_answers([
+            'incident_type' => $_POST['incident_type'] ?? '',
+            'observed_condition' => $_POST['observed_condition'] ?? '',
+            'breathing_status' => $_POST['breathing_status'] ?? '',
+            'bleeding_status' => $_POST['bleeding_status'] ?? '',
+            'pain_level' => $_POST['pain_level'] ?? '',
+            'mobility_status' => $_POST['mobility_status'] ?? '',
+            'notes' => $notes,
+            'concern' => 'Possible accident reported from ID number',
+        ]);
+        $reportAnswers = incident_report_answers_text($answers);
+        $classification = classify_reported_incident($answers);
+        $riskReasons = incident_risk_reasons_text($classification);
+        $photoPath = isset($_FILES['photo']) ? save_alert_photo_upload($_FILES['photo']) : null;
+    } catch (InvalidArgumentException $e) {
+        $error = $e->getMessage();
+    }
 
-    if ($location === '') {
+    if ($error === null && $location === '') {
         $error = 'Please enter the reported location so the clinic knows where to respond.';
-    } else {
+    } elseif ($error === null) {
         $rate = auth_db()->prepare("
             SELECT COUNT(*) AS total
             FROM incident_reports
@@ -126,7 +130,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patient && ($_POST['action'] ?? ''
         if ($recentReports >= 3) {
             $error = 'Too many reports were sent recently for this tag. Please call the clinic directly if this is urgent.';
         } else {
-            $incident = auth_db()->prepare("
+            $db = auth_db();
+            $db->beginTransaction();
+            try {
+            $incident = $db->prepare("
                 INSERT INTO incident_reports
                     (patient_id, emergency_token, reporter_name, reporter_contact, location, notes, reporter_risk_rating, ip_address, user_agent)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -142,6 +149,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patient && ($_POST['action'] ?? ''
                 $ipAddress,
                 substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255),
             ]);
+            $incidentId = (int) $db->lastInsertId();
 
             $details = trim(implode("\n", array_filter([
                 'Reported from QR/NFC emergency tag.',
@@ -151,13 +159,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patient && ($_POST['action'] ?? ''
                 $reportAnswers,
             ])));
 
-            $alert = auth_db()->prepare("
+            $alert = $db->prepare("
                 INSERT INTO nurse_alerts
-                    (patient_id, reporter_name, reporter_role, location, concern, incident_type, details, report_answers, reporter_risk_rating,
+                    (incident_report_id, patient_id, reporter_name, reporter_role, location, concern, incident_type, details, report_answers, reporter_risk_rating,
                      risk_level, risk_score, risk_reasons, response_guidance, photo_path, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')
             ");
             $alert->execute([
+                $incidentId,
                 $patient['id'],
                 $reporterName ?: 'QR/NFC scanner',
                 'Emergency passport scanner',
@@ -173,10 +182,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patient && ($_POST['action'] ?? ''
                 $classification['guidance'],
                 $photoPath,
             ]);
+            $db->commit();
+            } catch (Throwable $e) {
+                if ($db->inTransaction()) {
+                    $db->rollBack();
+                }
+                throw $e;
+            }
 
             $message = $classification['level'] === 'Not assessed'
                 ? ($reporterRiskRating
-                    ? 'The clinic has been notified. The report was forwarded without risk-metric answers and marked ' . $reporterRiskRating . ' by the reporter for clinic triage.'
+            ? 'The clinic has been notified. The report was forwarded without risk-metric answers and marked ' . $reporterRiskRating . ' by the reporter for clinic triage.'
                     : 'The clinic has been notified. This report was forwarded without risk-metric answers, so clinic staff will assess urgency promptly.')
                 : 'The clinic has been notified. Please stay with the student and call the clinic directly if the situation is urgent.';
             audit_log_event('incident', 'incident_report_submitted', $viewerPersonId ?: null, $viewerPersonId ? 'student' : 'guest', 'patient', (int) $patient['id'], ['location' => $location, 'risk_level' => $classification['level'], 'reporter_risk_rating' => $reporterRiskRating]);

@@ -11,7 +11,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $id = (int)($_POST['id'] ?? 0);
     $status = $_POST['status'] ?? '';
     $cancellationReason = trim($_POST['cancellation_reason'] ?? '');
-    $allowed = ['Pending', 'Scheduled', 'For Confirmation', 'Completed', 'Declined', 'Cancelled', 'No Show'];
+    $allowed = ['Pending', 'Scheduled', 'Declined', 'Cancelled', 'No Show'];
     $redirect = $_POST['redirect'] ?? 'index.php';
     $allowedRedirects = ['index.php', '../dashboard.php'];
     $reviewedByPersonId = (int) (current_user()['person_id'] ?? 0) ?: null;
@@ -33,18 +33,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('Appointment not found.');
             }
 
+            $linkedVisitStmt = $db->prepare('SELECT visit_id, status FROM visits WHERE appointment_id = ? LIMIT 1');
+            $linkedVisitStmt->execute([$id]);
+            $linkedVisit = $linkedVisitStmt->fetch() ?: null;
+
             if ((string) $appointment['status'] !== $status
                 && !appointment_status_transition_is_allowed((string) $appointment['status'], $status)) {
                 throw new InvalidArgumentException('This appointment cannot be moved from ' . $appointment['status'] . ' to ' . $status . '.');
             }
 
             if ($status === 'No Show') {
+                if ($linkedVisit !== null) {
+                    throw new InvalidArgumentException('A checked-in appointment cannot be marked as no-show. Complete or cancel its clinical visit instead.');
+                }
                 if (!appointment_user_can_mark_no_show()) {
                     throw new InvalidArgumentException('Only clinic nurses, doctors, and administrators can mark an appointment as no-show.');
                 }
                 if (!appointment_can_mark_no_show($appointment)) {
                     throw new InvalidArgumentException('An appointment can be marked as no-show only after its scheduled start time.');
                 }
+            }
+
+            if ($status === 'Cancelled' && $linkedVisit !== null) {
+                throw new InvalidArgumentException('A checked-in appointment cannot be cancelled. Complete its linked clinical visit instead.');
             }
 
             if ($status === 'Scheduled') {
@@ -87,8 +98,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 patient_notification_for_appointment($db, $appointment, $status, $reviewedByPersonId);
                 $patientId = (int) ($appointment['patient_id'] ?? 0);
                 $when = date('F j, Y \a\t g:i A', strtotime((string) $appointment['appointment_datetime']));
-                if ($patientId > 0 && in_array($status, ['Scheduled', 'For Confirmation'], true)) {
-                    patient_email_queue_notification($patientId, $status === 'Scheduled' ? 'appointment_confirmed' : 'appointment_confirmation_required', 'appointment_reminders', $status === 'Scheduled' ? 'Appointment confirmed' : 'Appointment awaiting completion', $status === 'Scheduled' ? "Your clinic appointment for {$when} has been confirmed." : "Your clinic appointment for {$when} has passed and is awaiting clinic completion review.", 'appointment', (int) $appointment['appointment_id'], $reviewedByPersonId, null, $status);
+                if ($patientId > 0 && $status === 'Scheduled') {
+                    patient_email_queue_notification($patientId, 'appointment_confirmed', 'appointment_reminders', 'Appointment confirmed', "Your clinic appointment for {$when} has been confirmed.", 'appointment', (int) $appointment['appointment_id'], $reviewedByPersonId, null, $status);
                 }
                 if ($patientId > 0 && in_array($status, ['Declined', 'Cancelled', 'No Show'], true)) {
                     $reason = trim((string) ($appointment['cancellation_reason'] ?? ''));
@@ -101,9 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = match ($status) {
                 'Scheduled' => 'Appointment request approved and added to the clinic schedule.',
                 'Declined' => 'Appointment request declined.',
-                'For Confirmation' => 'Appointment is awaiting completion review.',
                 'Cancelled' => 'Appointment request cancelled.',
-                'Completed' => 'Appointment marked as completed.',
                 'No Show' => 'Appointment marked as no-show.',
                 default => 'Appointment status updated.',
             };

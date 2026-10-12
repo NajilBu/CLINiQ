@@ -38,33 +38,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         flash_message('success', 'Treatment session started.');
     } elseif ($existingVisit && $mode === 'no_show' && ($existingVisit['status'] ?? 'Unaddressed') === 'Unaddressed') {
-        $update = $visitDb->prepare("
-            UPDATE visits
-            SET status = 'Cancelled',
-                action_taken = ?,
-                recorded_by_person_id = COALESCE(recorded_by_person_id, ?)
-            WHERE visit_id = ?
-        ");
-        $update->execute([
-            trim($_POST['no_show_reason'] ?? '') ?: 'No show / patient did not proceed to nurse assessment.',
-            $staffPersonId,
-            $id,
-        ]);
-
-        flash_message('success', 'Visit marked as no show.');
+        try {
+            $visitDb->beginTransaction();
+            $update = $visitDb->prepare("
+                UPDATE visits
+                SET status = 'Cancelled',
+                    action_taken = ?,
+                    recorded_by_person_id = COALESCE(recorded_by_person_id, ?)
+                WHERE visit_id = ?
+            ");
+            $update->execute([
+                trim($_POST['no_show_reason'] ?? '') ?: 'No show / patient did not proceed to nurse assessment.',
+                $staffPersonId,
+                $id,
+            ]);
+            cliniq_visit_sync_linked_appointment_outcome($visitDb, $id, $staffPersonId);
+            $visitDb->commit();
+            flash_message('success', 'Visit marked as no show.');
+        } catch (Throwable $e) {
+            if ($visitDb->inTransaction()) $visitDb->rollBack();
+            flash_message('error', $e->getMessage());
+        }
     } elseif ($existingVisit && $mode === 'cancel_treatment' && ($existingVisit['status'] ?? '') === 'Active') {
-        $update = $visitDb->prepare("
-            UPDATE visits
-            SET status = 'Cancelled',
-                action_taken = ?
-            WHERE visit_id = ?
-        ");
-        $update->execute([
-            trim($_POST['cancel_reason'] ?? '') ?: 'Treatment cancelled by attending staff.',
-            $id,
-        ]);
-
-        flash_message('success', 'Treatment cancelled.');
+        try {
+            $visitDb->beginTransaction();
+            $update = $visitDb->prepare("
+                UPDATE visits
+                SET status = 'Cancelled',
+                    action_taken = ?
+                WHERE visit_id = ?
+            ");
+            $update->execute([
+                trim($_POST['cancel_reason'] ?? '') ?: 'Treatment cancelled by attending staff.',
+                $id,
+            ]);
+            cliniq_visit_sync_linked_appointment_outcome($visitDb, $id, $staffPersonId);
+            $visitDb->commit();
+            flash_message('success', 'Treatment cancelled.');
+        } catch (Throwable $e) {
+            if ($visitDb->inTransaction()) $visitDb->rollBack();
+            flash_message('error', $e->getMessage());
+        }
     } elseif ($existingVisit && in_array($mode, ['intake', 'save_treatment'], true) && in_array(($existingVisit['status'] ?? 'Unaddressed'), ['Unaddressed', 'Active'], true)) {
         $postedSymptoms = trim($_POST['symptoms'] ?? '');
         $symptoms = $postedSymptoms !== '' ? $postedSymptoms : trim((string) ($existingVisit['symptoms'] ?? ''));
@@ -98,10 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $id,
             ]);
 
-            $referralType = trim($_POST['referral_type'] ?? '');
-            if ($referralType === 'None') {
-                $referralType = '';
-            }
+            $referralType = normalize_visit_referral_type($_POST['referral_type'] ?? null);
             $remarks = trim($_POST['remarks'] ?? '');
             $entry = [
                 'symptoms' => trim($_POST['follow_up_note'] ?? '') ?: $symptoms,
@@ -120,6 +131,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'pulse_rate' => $pulseRate,
             ], $attendingPersonId);
             cliniq_inventory_dispense_medicines($visitDb, (int) $entryId, $dispensings, $attendingPersonId);
+            if ($newStatus === 'Completed') {
+                cliniq_visit_sync_linked_appointment_outcome($visitDb, $id, $staffPersonId);
+            }
 
             $visitDb->commit();
             if ($newStatus === 'Completed') {
@@ -140,10 +154,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $e->getMessage());
         }
     } elseif ($existingVisit && $mode === 'append' && $returnFrom === 'profile') {
-        $referralType = trim($_POST['referral_type'] ?? '');
-        if ($referralType === 'None') {
-            $referralType = '';
-        }
+        $referralType = normalize_visit_referral_type($_POST['referral_type'] ?? null);
 
         try {
             $entry = [
@@ -171,6 +182,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 cliniq_inventory_dispense_medicines($visitDb, (int) $entryId, $dispensings, $attendingPersonId);
                 $update = $visitDb->prepare("\n                    UPDATE visits\n                    SET status = ?,\n                        addressed_at = CASE WHEN ? = 1 THEN COALESCE(addressed_at, NOW()) ELSE addressed_at END,\n                        completed_at = CASE WHEN ? = 1 THEN COALESCE(completed_at, NOW()) ELSE completed_at END,\n                        attended_by_person_id = ?\n                    WHERE visit_id = ?\n                ");
                 $update->execute([$newStatus, $markAddressed ? 1 : 0, $markCompleted ? 1 : 0, $attendingPersonId, $id]);
+                if (in_array($newStatus, ['Completed', 'Cancelled'], true)) {
+                    cliniq_visit_sync_linked_appointment_outcome($visitDb, $id, $staffPersonId);
+                }
                 $visitDb->commit();
                 if ($markCompleted && ($existingVisit['status'] ?? '') !== 'Completed') {
                     try {

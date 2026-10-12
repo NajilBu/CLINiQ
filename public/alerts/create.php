@@ -6,16 +6,22 @@ ensure_alert_workflow_schema();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $photoPath = isset($_FILES['photo']) ? save_alert_photo_upload($_FILES['photo']) : null;
-    $answers = collect_incident_report_answers([
-        'incident_type' => $_POST['incident_type'] ?? '',
-        'observed_condition' => $_POST['observed_condition'] ?? '',
-        'breathing_status' => $_POST['breathing_status'] ?? '',
-        'bleeding_status' => $_POST['bleeding_status'] ?? '',
-        'pain_level' => $_POST['pain_level'] ?? '',
-        'mobility_status' => $_POST['mobility_status'] ?? '',
-        'notes' => $_POST['details'] ?? '',
-        'concern' => $_POST['concern'] ?? '',
-    ]);
+    try {
+        $answers = collect_incident_report_answers([
+            'incident_type' => $_POST['incident_type'] ?? '',
+            'observed_condition' => $_POST['observed_condition'] ?? '',
+            'breathing_status' => $_POST['breathing_status'] ?? '',
+            'bleeding_status' => $_POST['bleeding_status'] ?? '',
+            'pain_level' => $_POST['pain_level'] ?? '',
+            'mobility_status' => $_POST['mobility_status'] ?? '',
+            'notes' => $_POST['details'] ?? '',
+            'concern' => $_POST['concern'] ?? '',
+        ]);
+    } catch (InvalidArgumentException $e) {
+        flash_message('warning', $e->getMessage());
+        header('Location: create.php');
+        exit;
+    }
     $reportAnswers = incident_report_answers_text($answers);
     $classification = classify_reported_incident($answers);
     $riskReasons = incident_risk_reasons_text($classification);

@@ -51,6 +51,7 @@ function ensure_alert_workflow_schema(): void
     $db->exec("
         CREATE TABLE IF NOT EXISTS nurse_alerts (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            incident_report_id BIGINT UNSIGNED NULL UNIQUE,
             patient_id BIGINT UNSIGNED NULL,
             reporter_name VARCHAR(120) NOT NULL,
             reporter_role VARCHAR(80) NULL,
@@ -73,6 +74,8 @@ function ensure_alert_workflow_schema(): void
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             CONSTRAINT fk_cliniq_nurse_alerts_patient
                 FOREIGN KEY (patient_id) REFERENCES patients(person_id) ON DELETE SET NULL,
+            CONSTRAINT fk_cliniq_nurse_alerts_incident_report
+                FOREIGN KEY (incident_report_id) REFERENCES incident_reports(id) ON DELETE SET NULL,
             CONSTRAINT fk_cliniq_nurse_alerts_resolved_by
                 FOREIGN KEY (resolved_by) REFERENCES people(id) ON DELETE SET NULL,
             INDEX idx_nurse_alerts_status_created (status, created_at),
@@ -115,6 +118,7 @@ function ensure_alert_workflow_schema(): void
         }
     };
 
+    $addColumn('incident_report_id', 'BIGINT UNSIGNED NULL AFTER id');
     $addColumn('photo_path', 'VARCHAR(255) NULL AFTER details');
     $addColumn('incident_type', 'VARCHAR(120) NULL AFTER concern');
     $addColumn('report_answers', 'MEDIUMTEXT NULL AFTER details');
@@ -225,7 +229,7 @@ function incident_pain_level_options(): array
 
 function collect_incident_report_answers(array $source): array
 {
-    return [
+    $answers = [
         'incident_type' => trim((string) ($source['incident_type'] ?? '')),
         'observed_condition' => trim((string) ($source['observed_condition'] ?? '')),
         'breathing_status' => trim((string) ($source['breathing_status'] ?? '')),
@@ -235,6 +239,21 @@ function collect_incident_report_answers(array $source): array
         'notes' => trim((string) ($source['notes'] ?? $source['incident_notes'] ?? $source['details'] ?? '')),
         'concern' => trim((string) ($source['concern'] ?? '')),
     ];
+
+    foreach ([
+        'incident_type' => 'incident_type',
+        'observed_condition' => 'incident_condition',
+        'breathing_status' => 'incident_breathing',
+        'bleeding_status' => 'incident_bleeding',
+        'pain_level' => 'incident_pain_level',
+        'mobility_status' => 'incident_mobility',
+    ] as $field => $groupKey) {
+        if ($answers[$field] !== '' && !in_array($answers[$field], dropdown_options($groupKey), true)) {
+            throw new InvalidArgumentException('Select an active incident option.');
+        }
+    }
+
+    return $answers;
 }
 
 function incident_report_answers_text(array $answers): string

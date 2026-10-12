@@ -28,7 +28,11 @@ function appointment_actionable_statuses(): array
 
 function appointment_status_display_label(string $status): string
 {
-    return $status === 'For Confirmation' ? 'For Completion' : $status;
+    return match ($status) {
+        'For Confirmation' => 'Visit record being completed by the clinic',
+        'No Show' => 'Missed appointment',
+        default => $status,
+    };
 }
 
 function appointment_status_badge_class(string $status): string
@@ -71,11 +75,18 @@ function appointment_block_applies_to(array $block, string $purpose): bool
 
 function appointment_active_doctors(): array
 {
-    return auth_db()->query("SELECT cs.person_id AS id, TRIM(CONCAT_WS(' ', p.first_name, p.middle_name, p.last_name)) AS name
+    $doctors = auth_db()->query("SELECT cs.person_id AS id, TRIM(CONCAT_WS(' ', p.first_name, p.middle_name, p.last_name)) AS name, cs.honorific
         FROM clinic_staff cs JOIN people p ON p.id = cs.person_id
         JOIN accounts a ON a.person_id = cs.person_id
         WHERE cs.staff_role = 'doctor' AND a.account_status = 'active'
         ORDER BY p.last_name, p.first_name, p.id_number")->fetchAll();
+
+    foreach ($doctors as &$doctor) {
+        $doctor['name'] = staff_display_name((string) $doctor['name'], $doctor['honorific'] ?? null);
+    }
+    unset($doctor);
+
+    return $doctors;
 }
 
 function appointment_doctor_schedule(): array
@@ -200,10 +211,22 @@ function appointment_confirmation_cutoff_sql(): string
 function appointment_sync_overdue_confirmations(): int
 {
     $stmt = appointment_db()->prepare("
-        UPDATE appointments
-        SET status = 'For Confirmation'
-        WHERE status = 'Scheduled'
+        UPDATE appointments a
+        INNER JOIN visits v ON v.appointment_id = a.appointment_id
+        SET a.status = CASE v.status
+                WHEN 'Completed' THEN 'Completed'
+                WHEN 'Cancelled' THEN 'Cancelled'
+                ELSE 'For Confirmation'
+            END,
+            a.cancellation_reason = CASE
+                WHEN v.status = 'Cancelled' THEN COALESCE(NULLIF(v.action_taken, ''), a.cancellation_reason)
+                WHEN v.status = 'Completed' THEN NULL
+                ELSE a.cancellation_reason
+            END,
+            a.cancelled_by = CASE WHEN v.status = 'Cancelled' THEN 'Clinic' ELSE NULL END
+        WHERE a.status IN ('Scheduled', 'For Confirmation')
           AND " . appointment_confirmation_cutoff_sql() . " <= NOW()
+          AND v.status IN ('Active', 'Unaddressed', 'Completed', 'Cancelled')
     ");
     $stmt->execute();
 
@@ -235,9 +258,10 @@ function appointment_blocks_for_month(DateTimeImmutable $month): array
 {
     [$start, $end] = appointment_month_bounds($month);
     $stmt = appointment_db()->prepare("
-        SELECT b.*, TRIM(CONCAT_WS(' ', creator.first_name, creator.middle_name, creator.last_name)) AS created_by_name
+        SELECT b.*, TRIM(CONCAT_WS(' ', NULLIF(creator_staff.honorific, ''), creator.first_name, creator.middle_name, creator.last_name)) AS created_by_name
         FROM appointment_availability_blocks b
         LEFT JOIN people creator ON creator.id = b.created_by_person_id
+        LEFT JOIN clinic_staff creator_staff ON creator_staff.person_id = creator.id
         WHERE b.block_date BETWEEN ? AND ?
         ORDER BY b.block_date ASC, b.start_time IS NULL DESC, b.start_time ASC
     ");
@@ -524,9 +548,10 @@ function appointment_blocks_for_week(DateTimeImmutable $week): array
 {
     [$start, $end] = appointment_week_bounds($week);
     $stmt = appointment_db()->prepare("
-        SELECT b.*, TRIM(CONCAT_WS(' ', creator.first_name, creator.middle_name, creator.last_name)) AS created_by_name
+        SELECT b.*, TRIM(CONCAT_WS(' ', NULLIF(creator_staff.honorific, ''), creator.first_name, creator.middle_name, creator.last_name)) AS created_by_name
         FROM appointment_availability_blocks b
         LEFT JOIN people creator ON creator.id = b.created_by_person_id
+        LEFT JOIN clinic_staff creator_staff ON creator_staff.person_id = creator.id
         WHERE b.block_date BETWEEN ? AND ?
         ORDER BY b.block_date ASC, b.start_time IS NULL DESC, b.start_time ASC
     ");
@@ -636,7 +661,7 @@ function appointment_status_transition_is_allowed(string $currentStatus, string 
     return in_array($nextStatus, match ($currentStatus) {
         'Pending' => ['Scheduled', 'Declined', 'Cancelled'],
         'Scheduled' => ['For Confirmation', 'No Show', 'Cancelled'],
-        'For Confirmation' => ['Completed', 'No Show'],
+        'For Confirmation' => ['No Show', 'Cancelled'],
         default => [],
     }, true);
 }
@@ -660,6 +685,18 @@ function appointment_can_mark_no_show(array $appointment, ?DateTimeImmutable $no
     return $scheduledAt !== false && $scheduledAt <= ($now ?? new DateTimeImmutable('now'));
 }
 
+function appointment_can_check_in(array $appointment, ?DateTimeImmutable $now = null): bool
+{
+    if ((string) ($appointment['status'] ?? '') !== 'Scheduled') {
+        return false;
+    }
+
+    $scheduledAt = DateTimeImmutable::createFromFormat('Y-m-d H:i:s', (string) ($appointment['appointment_datetime'] ?? ''));
+    $now ??= new DateTimeImmutable('now');
+
+    return $scheduledAt !== false && $scheduledAt->format('Y-m-d') === $now->format('Y-m-d');
+}
+
 /** @return array<string,array{state:string,message:string,icon:string}> */
 function appointment_live_service_statuses(?DateTimeImmutable $now = null): array
 {
@@ -670,12 +707,12 @@ function appointment_live_service_statuses(?DateTimeImmutable $now = null): arra
     $blocks = appointment_blocks_for_month(appointment_month_from_request($now->format('Y-m')));
     $apeBatches = appointment_ape_batches_for_range($date, $date);
     $db = appointment_db();
-    $appointmentStmt = $db->prepare("SELECT 1 FROM appointments WHERE purpose = ? AND status IN ('Scheduled', 'For Confirmation') AND appointment_datetime <= ? LIMIT 1");
+    $appointmentStmt = $db->prepare("SELECT 1 FROM appointments WHERE purpose = ? AND status = 'Scheduled' AND appointment_datetime <= ? AND DATE_ADD(appointment_datetime, INTERVAL " . appointment_duration_minutes() . " MINUTE) > ? LIMIT 1");
     $visitStmt = $db->prepare("SELECT 1 FROM visits WHERE status = 'Active' AND ((? = 'Dental' AND visit_purpose = 'Dental Consult') OR (? = 'Medical Consult' AND (visit_purpose IS NULL OR visit_purpose <> 'Dental Consult'))) LIMIT 1");
     $statuses = [];
 
     foreach (appointment_consult_purposes() as $purpose) {
-        $appointmentStmt->execute([$purpose, $now->format('Y-m-d H:i:s')]);
+        $appointmentStmt->execute([$purpose, $now->format('Y-m-d H:i:s'), $now->format('Y-m-d H:i:s')]);
         $visitStmt->execute([$purpose, $purpose]);
         $state = appointment_live_service_state(
             (bool) $appointmentStmt->fetchColumn() || (bool) $visitStmt->fetchColumn(),
