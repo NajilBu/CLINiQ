@@ -3,7 +3,7 @@ require_once __DIR__ . '/includes/patient-layout.php';
 
 if (isset($_GET['logout'])) {
     student_logout();
-    header('Location: patient-login.php?logged_out=1');
+    header('Location: ' . student_portal_url('login', ['logged_out' => 1]));
     exit;
 }
 
@@ -11,14 +11,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'forge
     csrf_enforce_request();
     student_forget_device();
     $destination = ($_POST['return_to'] ?? '') === 'dashboard'
-        ? 'patient-dashboard.php?device_forgotten=1'
-        : 'patient-login.php?device_forgotten=1';
+        ? student_portal_url('dashboard', ['device_forgotten' => 1])
+        : student_portal_url('login', ['device_forgotten' => 1]);
     header('Location: ' . $destination);
     exit;
 }
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST' && ($_GET['logged_out'] ?? '') !== '1' && ($_GET['device_forgotten'] ?? '') !== '1' && student_restore_remembered_session()) {
-    header('Location: patient-dashboard.php');
+    header('Location: ' . student_portal_url('dashboard'));
     exit;
 }
 
@@ -62,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 if ($error === '') {
                     csrf_rotate_token();
-                    header('Location: patient-dashboard.php');
+                    header('Location: ' . student_portal_url('dashboard'));
                     exit;
                 }
             } else {
@@ -77,7 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 audit_log_event('auth', 'student_login_success', (int) $patient['person_id'], 'student', 'person', (int) $patient['person_id']);
                 csrf_rotate_token();
-                header('Location: patient-dashboard.php');
+                header('Location: ' . student_portal_url('dashboard'));
                 exit;
             }
         }
@@ -90,7 +90,7 @@ render_student_auth_header('Patient Login');
 ?>
 
 <?php render_cliniq_entry_header([
-    'homeUrl' => '../public/index.php',
+    'homeUrl' => student_portal_url('welcome'),
     'logoUrl' => $clinicLogoSrc,
     'showBack' => false,
     'class' => 'cliniq-entry-header-mobile-hidden',
@@ -100,7 +100,7 @@ render_student_auth_header('Patient Login');
     <section class="student-auth-shell">
         <aside class="student-auth-side">
             <div>
-                <a href="../public/index.php" class="student-brand-mark text-decoration-none" aria-label="Go to CLINiQ access portal">
+                <a href="<?= student_e(student_portal_url('welcome')) ?>" class="student-brand-mark text-decoration-none" aria-label="Go to CLINiQ access portal">
                     <img src="<?= student_e($clinicLogoSrc) ?>" alt="<?= student_e($clinicProfile['department']) ?> logo">
                 </a>
                 <p class="student-auth-brand-line"><?= student_e($clinicProfile['system_name']) ?></p>
@@ -158,7 +158,7 @@ render_student_auth_header('Patient Login');
                 <div class="student-field">
                     <div class="flex items-center justify-between gap-3 mb-1">
                         <label class="student-label mb-0" for="password">Password</label>
-                        <a href="patient-forgot-password.php" class="student-auth-link text-[11px] text-decoration-none">Forgot password?</a>
+                        <a href="<?= student_e(student_portal_url('forgot-password')) ?>" class="student-auth-link text-[11px] text-decoration-none">Forgot password?</a>
                     </div>
                     <div class="relative">
                         <input type="password" id="password" name="password" class="student-input pr-14" placeholder="Enter password" autocomplete="current-password" required>
@@ -179,7 +179,7 @@ render_student_auth_header('Patient Login');
 
             <hr class="student-auth-divider">
             <p class="text-center text-xs font-bold text-slate-500">
-                New student? <a href="patient-register.php?start=1" class="student-auth-link text-decoration-none">Create an Applicant account.</a>
+                New student? <a href="<?= student_e(student_portal_url('signup', ['start' => 1])) ?>" class="student-auth-link text-decoration-none">Create an Applicant account.</a>
             </p>
         </div>
     </section>

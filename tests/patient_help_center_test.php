@@ -23,8 +23,8 @@ if (substr_count($page, '<details class="patient-help-accordion">') < 15) {
     throw new RuntimeException('Help Center must provide independently expandable FAQ answers for every category.');
 }
 
-foreach (['patient-register.php', 'patient-forgot-password.php', 'patient-ape-status.php', 'patient-appointment.php', 'patient-passport.php'] as $link) {
-    if (!str_contains($page, 'href="' . $link . '"')) {
+foreach (['signup', 'forgot-password', 'ape-status', 'appointments', 'health-passport'] as $route) {
+    if (!str_contains($page, "student_portal_url('{$route}')")) {
         throw new RuntimeException("Help Center is missing verified portal link: {$link}");
     }
 }

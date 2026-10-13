@@ -6,13 +6,13 @@ require_once __DIR__ . '/includes/patient-layout.php';
 
 student_start_session();
 if (student_current_profile() !== null) {
-    header('Location: patient-dashboard.php');
+    header('Location: ' . student_portal_url('dashboard'));
     exit;
 }
 if (isset($_GET['start']) || isset($_GET['restart'])) {
     unset($_SESSION['patient_registration'], $_SESSION['patient_onboarding']);
     csrf_rotate_token();
-    header('Location: patient-register.php');
+    header('Location: ' . student_portal_url('signup'));
     exit;
 }
 student_redirect_pending_onboarding();
@@ -36,12 +36,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($action === 'verify_code' && !empty($context['verification_id'])) {
             $verified = verify_patient_registration_code((int) $context['verification_id'], (string) ($_POST['verification_code'] ?? ''));
             student_begin_verified_onboarding($verified);
-            header('Location: patient-onboarding.php');
+            header('Location: ' . student_portal_url('onboarding'));
             exit;
         } else {
             throw new RuntimeException('Registration session expired. Start again.');
         }
-        header('Location: patient-register.php');
+        header('Location: ' . student_portal_url('signup'));
         exit;
     } catch (Throwable $exception) {
         $error = $exception instanceof PDOException
@@ -57,13 +57,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 render_student_auth_header('Create Student Account');
 render_cliniq_entry_header([
-    'homeUrl' => 'patient-login.php',
+    'homeUrl' => student_portal_url('login'),
     'logoUrl' => $clinicLogoSrc,
     'class' => 'cliniq-entry-header-mobile-hidden cliniq-entry-header-registration',
 ]);
 ?>
 <main class="student-auth-wrap student-register-wrap"><section class="student-auth-shell student-registration-shell">
-<aside class="student-auth-side"><div><a href="patient-login.php" class="student-brand-mark text-decoration-none" aria-label="Return to patient login"><img src="<?= student_e($clinicLogoSrc) ?>" alt="<?= student_e($clinicProfile['department']) ?> logo"></a><p class="student-auth-brand-line"><?= student_e($clinicProfile['system_name']) ?></p><h1 class="student-auth-side-title">Student<br>Registration</h1><p class="student-auth-side-copy">Verify your email, create your profile, and begin your APE requirements.</p><svg class="student-auth-pulse" viewBox="0 0 320 40" preserveAspectRatio="none" aria-hidden="true"><path d="M0 20 H100 L112 20 L120 4 L132 36 L142 20 L154 20 L162 12 L170 28 L178 20 L320 20"/></svg></div><p class="student-auth-side-footnote">New accounts begin with Applicant access</p></aside>
+<aside class="student-auth-side"><div><a href="<?= student_e(student_portal_url('login')) ?>" class="student-brand-mark text-decoration-none" aria-label="Return to patient login"><img src="<?= student_e($clinicLogoSrc) ?>" alt="<?= student_e($clinicProfile['department']) ?> logo"></a><p class="student-auth-brand-line"><?= student_e($clinicProfile['system_name']) ?></p><h1 class="student-auth-side-title">Student<br>Registration</h1><p class="student-auth-side-copy">Verify your email, create your profile, and begin your APE requirements.</p><svg class="student-auth-pulse" viewBox="0 0 320 40" preserveAspectRatio="none" aria-hidden="true"><path d="M0 20 H100 L112 20 L120 4 L132 36 L142 20 L154 20 L162 12 L170 28 L178 20 L320 20"/></svg></div><p class="student-auth-side-footnote">New accounts begin with Applicant access</p></aside>
 <div class="student-auth-form-side">
 <p class="student-eyebrow">Step <?= $step === 'identity' ? '1' : '2' ?> of 3</p>
 <h2 class="student-card-title text-xl"><?= $step === 'identity' ? 'Verify your student identity' : 'Confirm your email' ?></h2>
@@ -77,9 +77,9 @@ render_cliniq_entry_header([
 <button class="student-button w-full" type="submit">Send Verification Code <span class="material-symbols-outlined">mail</span></button></form>
 <?php else: ?>
 <form method="post" class="space-y-4"><input type="hidden" name="_csrf" value="<?= student_e(csrf_token()) ?>"><input type="hidden" name="action" value="verify_code"><div class="student-field"><label class="student-label" for="verification_code">Verification Code</label><input class="student-input text-center tracking-[0.35em] text-xl" id="verification_code" name="verification_code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="000000" required></div><button class="student-button w-full" type="submit">Verify Email <span class="material-symbols-outlined">verified</span></button></form>
-<div class="flex items-center justify-between gap-3 mt-4 text-xs font-bold"><form method="post"><input type="hidden" name="_csrf" value="<?= student_e(csrf_token()) ?>"><input type="hidden" name="action" value="resend_code"><button class="student-auth-link" type="submit">Resend code</button></form><a class="student-auth-link text-decoration-none" href="patient-register.php?restart=1">Use another email</a></div>
+<div class="flex items-center justify-between gap-3 mt-4 text-xs font-bold"><form method="post"><input type="hidden" name="_csrf" value="<?= student_e(csrf_token()) ?>"><input type="hidden" name="action" value="resend_code"><button class="student-auth-link" type="submit">Resend code</button></form><a class="student-auth-link text-decoration-none" href="<?= student_e(student_portal_url('signup', ['restart' => 1])) ?>">Use another email</a></div>
 <?php endif; ?>
-<hr class="student-auth-divider"><p class="text-center text-xs font-bold text-slate-500">Already registered? <a href="patient-login.php" class="student-auth-link text-decoration-none">Back to login.</a></p>
+<hr class="student-auth-divider"><p class="text-center text-xs font-bold text-slate-500">Already registered? <a href="<?= student_e(student_portal_url('login')) ?>" class="student-auth-link text-decoration-none">Back to login.</a></p>
 </div></section></main>
 <script>
 document.getElementById('verification_code')?.addEventListener('input',(event)=>{event.target.value=event.target.value.replace(/\D/g,'').slice(0,6);});

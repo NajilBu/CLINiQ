@@ -30,7 +30,7 @@ foreach ($activeAppointments as $activeRow) {
 }
 $pendingFeedbackVisits = clinic_feedback_pending_completed_visits($db, $patientId);
 $feedbackRequired = $pendingFeedbackVisits !== [];
-$feedbackPortalUrl = 'patient-feedback.php';
+$feedbackPortalUrl = student_portal_url('feedback');
 
 $timeSlots = [];
 for ($hour = 7; $hour < 21; $hour++) {
@@ -162,7 +162,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!$hasAppointmentPatientProfile || 
 if ($success) {
     student_start_session();
     $_SESSION['student_flash_success'] = 'Appointment updated. ' . $successMessage;
-    header('Location: patient-appointment.php?month=' . urlencode($month->format('Y-m')));
+    header('Location: ' . student_portal_url('appointments', ['month' => $month->format('Y-m')]));
     exit;
 }
 

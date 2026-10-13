@@ -28,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             error_log('[CLINiQ Password Reset] Request failed: ' . $exception->getMessage());
         }
         $_SESSION['patient_password_recovery_success'] = true;
-        header('Location: patient-forgot-password.php');
+        header('Location: ' . student_portal_url('forgot-password'));
         exit;
     }
 }
@@ -36,7 +36,7 @@ render_student_auth_header('Recover Password');
 ?>
 
 <?php render_cliniq_entry_header([
-    'homeUrl' => '../public/index.php',
+    'homeUrl' => student_portal_url('welcome'),
     'logoUrl' => $clinicLogoSrc,
     'class' => 'cliniq-entry-header-mobile-hidden',
 ]); ?>
@@ -45,7 +45,7 @@ render_student_auth_header('Recover Password');
     <section class="student-auth-shell">
         <aside class="student-auth-side">
             <div>
-                <a href="../public/index.php" class="student-brand-mark text-decoration-none" aria-label="Go to CLINiQ access portal">
+                <a href="<?= student_e(student_portal_url('welcome')) ?>" class="student-brand-mark text-decoration-none" aria-label="Go to CLINiQ access portal">
                     <img src="<?= student_e($clinicLogoSrc) ?>" alt="<?= student_e($clinicProfile['department']) ?> logo">
                 </a>
                 <p class="student-auth-brand-line"><?= student_e($clinicProfile['system_name']) ?></p>
@@ -95,7 +95,7 @@ render_student_auth_header('Recover Password');
             <hr class="student-auth-divider">
             <p class="text-center text-xs font-bold text-slate-500">
                 Remembered your password?
-                <a href="patient-login.php" class="student-auth-link text-decoration-none">Back to login.</a>
+                <a href="<?= student_e(student_portal_url('login')) ?>" class="student-auth-link text-decoration-none">Back to login.</a>
             </p>
         </div>
     </section>

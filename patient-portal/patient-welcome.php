@@ -5,7 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/includes/patient-layout.php';
 
 if (student_current_profile() !== null) {
-    header('Location: patient-dashboard.php');
+    header('Location: ' . student_portal_url('dashboard'));
     exit;
 }
 
@@ -21,7 +21,7 @@ render_student_auth_header('Welcome');
     <section class="student-welcome-shell" aria-labelledby="welcome-title">
         <header class="student-welcome-header">
             <div class="student-welcome-brand">
-                <a href="patient-welcome.php" class="student-brand-mark text-decoration-none" aria-label="<?= student_e($clinicProfile['system_name']) ?> home">
+                <a href="<?= student_e(student_portal_url('welcome')) ?>" class="student-brand-mark text-decoration-none" aria-label="<?= student_e($clinicProfile['system_name']) ?> home">
                     <img src="<?= student_e($clinicLogoSrc) ?>" alt="<?= student_e($clinicProfile['department']) ?> logo">
                 </a>
                 <div>
@@ -44,7 +44,7 @@ render_student_auth_header('Welcome');
             <aside class="student-welcome-access" aria-labelledby="welcome-access-title">
                 <p class="student-eyebrow" id="welcome-access-title">Portal access</p>
                 <p class="student-welcome-access-title">Sign in to your clinic record.</p>
-                <a href="patient-login.php" class="student-button student-welcome-primary-action">
+                <a href="<?= student_e(student_portal_url('login')) ?>" class="student-button student-welcome-primary-action">
                     <span>Sign in to the portal</span>
                     <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span>
                 </a>

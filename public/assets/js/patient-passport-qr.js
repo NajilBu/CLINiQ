@@ -145,7 +145,7 @@
                 checkingPassword = true;
                 overwriteConfirm.disabled = overwriteCancel.disabled = true;
                 try {
-                    var response = await fetch('patient-nfc-authorize.php', {
+                    var response = await fetch('/nfc-authorize', {
                         method: 'POST',
                         credentials: 'same-origin',
                         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

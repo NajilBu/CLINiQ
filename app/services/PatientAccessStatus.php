@@ -72,7 +72,7 @@ function patient_access_status_set(
         $isOfficial
             ? 'Your Health Passport and appointment booking are now available.'
             : 'Health Passport and appointment booking are unavailable while your account is under Applicant access.',
-        'patient-dashboard.php',
+        '/dashboard',
         'patient_access',
         $personId
     );

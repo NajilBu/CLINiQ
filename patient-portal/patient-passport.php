@@ -99,7 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $passport['last_updated'] = date('F j, Y');
         student_start_session();
         $_SESSION['student_flash_success'] = 'Passport settings saved. Your Emergency Health Passport has been updated.';
-        header('Location: patient-passport.php');
+        header('Location: ' . student_portal_url('health-passport'));
         exit;
     } catch (InvalidArgumentException $e) {
         $saved = false;

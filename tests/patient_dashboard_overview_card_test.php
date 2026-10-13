@@ -29,7 +29,7 @@ if (strpos($source, 'if ($requiredActionCount > 0):') === false
     || strpos($source, 'clinic_feedback_pending_completed_visits') === false) {
     throw new RuntimeException('Dashboard must hide the redundant ready panel and use completed feedback requirements.');
 }
-if (strpos($source, 'patient-passport.php') === false || strpos($source, 'patient-ape-status.php') === false || strpos($source, 'patient-appointment.php') === false || strpos($source, '$feedbackPortalUrl') === false) {
+if (strpos($source, "student_portal_url('health-passport'") === false || strpos($source, "student_portal_url('ape-status'") === false || strpos($source, "student_portal_url('appointments'") === false || strpos($source, '$feedbackPortalUrl') === false) {
     throw new RuntimeException('Dashboard task destinations must remain available.');
 }
 if (strpos($source, "ORDER BY CASE status\n        WHEN 'Scheduled' THEN 1\n        WHEN 'Pending' THEN 2") === false

@@ -27,7 +27,7 @@ try {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST' && !$feedbackStarted && !$success) {
         $requestedVisitId = filter_var($_GET['visit_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: 0;
         $consentQuery = $requestedVisitId > 0 ? '?visit_id=' . $requestedVisitId : '';
-        header('Location: patient-feedback-consent.php' . $consentQuery);
+        header('Location: ' . student_portal_url('feedback-consent') . $consentQuery);
         exit;
     }
     if ($feedbackStarted && $selectedId > 0) {
@@ -59,7 +59,7 @@ try {
         }
         $_SESSION['student_feedback_success'] = true;
         unset($_SESSION['student_feedback_started'], $_SESSION['student_feedback_consented'], $_SESSION['student_feedback_anonymous'], $_SESSION['student_feedback_selected_visit_id'], $_SESSION['student_feedback_start_token']);
-        header('Location: patient-feedback.php');
+        header('Location: ' . student_portal_url('feedback'));
         exit;
     }
 } catch (InvalidArgumentException $exception) {
@@ -93,13 +93,13 @@ render_student_header('Give Feedback', 'dashboard');
             <span class="material-symbols-outlined" aria-hidden="true">check_circle</span>
             <h2>Feedback submitted</h2>
             <p>Thank you. Your clinic feedback has been recorded.</p>
-            <a class="student-button cliniq-floating-back cliniq-floating-back--patient" href="patient-dashboard.php">Back to dashboard</a>
+            <a class="student-button cliniq-floating-back cliniq-floating-back--patient" href="<?= student_e(student_portal_url('dashboard')) ?>">Back to dashboard</a>
         </section>
     <?php elseif (!$feedbackStarted): ?>
         <section class="student-card student-card-pad student-feedback-visit-summary">
             <div class="student-card-header"><div><p class="student-feedback-eyebrow">Before you begin</p><h2>Consent is required before the survey</h2></div></div>
             <p>Choose a completed visit, then confirm participation and privacy consent.</p>
-            <a class="student-button text-decoration-none" href="patient-feedback-consent.php">Go to consent page</a>
+            <a class="student-button text-decoration-none" href="<?= student_e(student_portal_url('feedback-consent')) ?>">Go to consent page</a>
         </section>
     <?php else: ?>
         <?php if ($selectedVisit): ?>
@@ -160,8 +160,8 @@ render_student_header('Give Feedback', 'dashboard');
     const resetMarker = 'cliniqPatientFeedbackResetPending';
     const resetFeedback = () => {
         const body = new URLSearchParams({ _csrf: csrf, mode: 'reset_feedback' });
-        if (!navigator.sendBeacon?.('patient-feedback.php', body)) {
-            fetch('patient-feedback.php', { method: 'POST', body, keepalive: true, credentials: 'same-origin' }).catch(() => {});
+        if (!navigator.sendBeacon?.('<?= student_e(student_portal_url('feedback')) ?>', body)) {
+            fetch('<?= student_e(student_portal_url('feedback')) ?>', { method: 'POST', body, keepalive: true, credentials: 'same-origin' }).catch(() => {});
         }
     };
     window.addEventListener('beforeunload', (event) => {
@@ -193,7 +193,7 @@ render_student_header('Give Feedback', 'dashboard');
         leaveButton.textContent = 'Resetting…';
         leaveError.hidden = true;
         try {
-            const response = await fetch('patient-feedback.php', {
+            const response = await fetch('<?= student_e(student_portal_url('feedback')) ?>', {
                 method: 'POST', credentials: 'same-origin',
                 body: new URLSearchParams({ _csrf: csrf, mode: 'reset_feedback' })
             });
@@ -260,16 +260,16 @@ render_student_header('Give Feedback', 'dashboard');
         if (resettingPending || sessionStorage.getItem(resetMarker) !== '1') return;
         resettingPending = true;
         if (surveyForm) surveyForm.hidden = true;
-        fetch('patient-feedback.php', { method: 'POST', credentials: 'same-origin', body: new URLSearchParams({ _csrf: csrf, mode: 'reset_feedback' }) })
+        fetch('<?= student_e(student_portal_url('feedback')) ?>', { method: 'POST', credentials: 'same-origin', body: new URLSearchParams({ _csrf: csrf, mode: 'reset_feedback' }) })
             .then(response => {
                 if (response.status !== 204) throw new Error('Reset failed');
                 sessionStorage.removeItem(resetMarker);
                 leaving = true;
-                window.location.replace('patient-feedback-consent.php');
+                window.location.replace('<?= student_e(student_portal_url('feedback-consent')) ?>');
             }).catch(() => {
                 resettingPending = false;
                 if (surveyForm) surveyForm.hidden = false;
-                destination = 'patient-feedback-consent.php';
+                destination = '<?= student_e(student_portal_url('feedback-consent')) ?>';
                 leaveError.hidden = false;
                 if (!leaveDialog.open) leaveDialog.showModal();
             });

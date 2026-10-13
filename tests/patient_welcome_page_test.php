@@ -19,8 +19,15 @@ foreach (["student_e(\$clinicProfile['system_name']) ?> Patient Portal", 'studen
     }
 }
 
-if (substr_count($gateway, 'return 302 /patient-portal/patient-welcome.php;') !== 3) {
-    throw new RuntimeException('All public entry routes must resolve to the welcome page.');
+foreach ([
+    'location = / {',
+    'proxy_pass http://$cliniq_app_upstream/patient-portal/patient-welcome.php;',
+    'location = /login',
+    'location = /signup',
+] as $marker) {
+    if (!str_contains($gateway, $marker)) {
+        throw new RuntimeException('Welcome route configuration is missing: ' . $marker);
+    }
 }
 
 foreach (['.student-welcome-header', '.student-welcome-hero', '.student-welcome-access', '.student-welcome-services', '.student-welcome-checklist', '@media (max-width: 640px)'] as $marker) {

@@ -18,7 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 (string) ($_POST['password'] ?? ''),
                 (string) ($_POST['password_confirmation'] ?? '')
             );
-            header('Location: patient-login.php?password_reset=1');
+            header('Location: ' . student_portal_url('login', ['password_reset' => 1]));
             exit;
         } catch (Throwable $exception) {
             $error = $exception->getMessage();
@@ -31,7 +31,7 @@ render_student_auth_header('Reset Password');
 ?>
 
 <?php render_cliniq_entry_header([
-    'homeUrl' => '../public/index.php',
+    'homeUrl' => student_portal_url('welcome'),
     'logoUrl' => $clinicLogoSrc,
     'class' => 'cliniq-entry-header-mobile-hidden',
 ]); ?>
@@ -84,7 +84,7 @@ render_student_auth_header('Reset Password');
                     <span class="material-symbols-outlined">link_off</span>
                     <div>This password reset link is invalid, expired, or already used.</div>
                 </div>
-                <a href="patient-forgot-password.php" class="student-button w-full text-decoration-none">
+                <a href="<?= student_e(student_portal_url('forgot-password')) ?>" class="student-button w-full text-decoration-none">
                     Request a New Link
                     <span class="material-symbols-outlined">mail</span>
                 </a>
@@ -92,7 +92,7 @@ render_student_auth_header('Reset Password');
 
             <hr class="student-auth-divider">
             <p class="text-center text-xs font-bold text-slate-500">
-                <a href="patient-login.php" class="student-auth-link text-decoration-none">Back to login</a>
+                <a href="<?= student_e(student_portal_url('login')) ?>" class="student-auth-link text-decoration-none">Back to login</a>
             </p>
         </div>
     </section>

@@ -7,7 +7,7 @@ $profile = student_require_login();
 $personId = (int) ($profile['person_id'] ?? 0);
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    header('Location: patient-dashboard.php');
+    header('Location: ' . student_portal_url('dashboard'));
     exit;
 }
 
@@ -20,7 +20,7 @@ try {
     $_SESSION['student_flash_error'] = $e->getMessage();
 }
 
-$returnTo = basename((string) ($_POST['return_to'] ?? 'patient-dashboard.php'));
-$allowed = ['patient-dashboard.php', 'patient-passport.php', 'patient-ape-status.php', 'patient-appointment.php'];
-header('Location: ' . (in_array($returnTo, $allowed, true) ? $returnTo : 'patient-dashboard.php'));
+$returnTo = (string) ($_POST['return_to'] ?? 'dashboard');
+$allowed = ['dashboard', 'health-passport', 'ape-status', 'appointments'];
+header('Location: ' . student_portal_url(in_array($returnTo, $allowed, true) ? $returnTo : 'dashboard'));
 exit;

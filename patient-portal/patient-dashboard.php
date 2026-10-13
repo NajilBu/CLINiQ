@@ -20,7 +20,7 @@ if (!empty($profile['first_registration'])) {
                 (string) ($_POST['confirm_password'] ?? ''),
                 ($_POST['legal_acknowledgement'] ?? '') === '1'
             );
-            header('Location: patient-dashboard.php?activated=1');
+            header('Location: ' . student_portal_url('dashboard', ['activated' => 1]));
             exit;
         } catch (Throwable $e) {
             $firstRegistrationError = $e->getMessage();
@@ -87,7 +87,7 @@ if (re_enrollment_pending()) {
     $reCtx = re_enrollment_context();
     if ((string) ($reCtx['type'] ?? '') !== 'student') {
         unset($_SESSION['re_enrollment']);
-        header('Location: patient-login.php');
+        header('Location: ' . student_portal_url('login'));
         exit;
     }
     $reEnrollError = '';
@@ -101,7 +101,7 @@ if (re_enrollment_pending()) {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'complete_re_enrollment') {
         try {
             complete_re_enrollment($selectedEnrollmentStatus, $selectedNonEnrollmentReason, $contactNumber, $contactConfirmed, $yearLevel, $section);
-            header('Location: patient-dashboard.php?re_enrolled=1');
+            header('Location: ' . student_portal_url('dashboard', ['re_enrolled' => 1]));
             exit;
         } catch (Throwable $e) {
             $reEnrollError = $e->getMessage();
@@ -203,7 +203,7 @@ $patientId = (int) $profile['patient_id'];
 $appointmentPatientId = (int) $profile['person_id'];
 $pendingFeedbackVisits = clinic_feedback_pending_completed_visits(auth_db(), $appointmentPatientId);
 $feedbackRequired = count($pendingFeedbackVisits) > 0;
-$feedbackPortalUrl = 'patient-feedback.php';
+$feedbackPortalUrl = student_portal_url('feedback');
 
 $appointmentStmt = appointment_db()->prepare("
     SELECT *
@@ -451,7 +451,7 @@ if ($passportRequired) {
     $dashboardTasks[] = [
         'key' => 'passport', 'icon' => 'emergency', 'tone' => 'danger',
         'kicker' => 'Emergency profile incomplete', 'title' => 'Complete your Emergency Health Passport',
-        'short_copy' => 'Complete your missing emergency details.', 'href' => 'patient-passport.php?focus=emergency', 'button' => 'Complete Passport',
+        'short_copy' => 'Complete your missing emergency details.', 'href' => student_portal_url('health-passport', ['focus' => 'emergency']), 'button' => 'Complete Passport',
     ];
 }
 if ($apeNeedsAction) {
@@ -464,7 +464,7 @@ if ($apeNeedsAction) {
             str_contains($apeActionTitle, 'follow-up') => 'Complete the clinic follow-up.',
             default => 'Continue your APE requirements.',
         },
-        'href' => 'patient-ape-status.php', 'button' => 'Continue APE',
+        'href' => student_portal_url('ape-status'), 'button' => 'Continue APE',
     ];
 }
 if ($feedbackRequired) {
@@ -547,7 +547,7 @@ render_student_header('Dashboard', 'dashboard');
     <p class="student-dashboard-applicant-hint">APE clearance unlocks Passport and appointments.</p>
 <?php endif; ?>
 <?php if ($hasScheduledApeBatch): ?>
-    <a href="patient-ape-status.php" class="student-dashboard-batch-summary text-decoration-none">
+    <a href="<?= student_e(student_portal_url('ape-status')) ?>" class="student-dashboard-batch-summary text-decoration-none">
         <span class="student-icon-box"><span class="material-symbols-outlined" aria-hidden="true">event_available</span></span>
                     <strong>Scheduled physical examination</strong>
         <span class="student-dashboard-batch-time"><?= student_e($scheduledApeBatchLabel) ?></span>
@@ -590,7 +590,7 @@ render_student_header('Dashboard', 'dashboard');
                         <p>Add <?= student_e(implode(', ', $passportMissing)) ?> before an incident happens.</p>
                     </div>
                 </div>
-                <a href="patient-passport.php?focus=emergency" class="student-button-danger text-decoration-none">
+                <a href="<?= student_e(student_portal_url('health-passport', ['focus' => 'emergency'])) ?>" class="student-button-danger text-decoration-none">
                     Complete Passport
                     <span class="material-symbols-outlined">arrow_forward</span>
                 </a>
@@ -613,7 +613,7 @@ render_student_header('Dashboard', 'dashboard');
                         <?php endif; ?>
                     </div>
                 </div>
-                <a href="patient-ape-status.php" class="student-button text-decoration-none">
+                <a href="<?= student_e(student_portal_url('ape-status')) ?>" class="student-button text-decoration-none">
                     Continue APE
                     <span class="material-symbols-outlined">arrow_forward</span>
                 </a>
@@ -701,7 +701,7 @@ render_student_header('Dashboard', 'dashboard');
 <?php endif; ?>
 
 <section class="student-dashboard-mobile-overview" aria-label="Dashboard summaries">
-    <a href="patient-ape-status.php" class="student-dashboard-summary-row text-decoration-none" aria-label="View APE Status">
+    <a href="<?= student_e(student_portal_url('ape-status')) ?>" class="student-dashboard-summary-row text-decoration-none" aria-label="View APE Status">
         <span class="student-icon-box"><span class="material-symbols-outlined">task_alt</span></span>
         <span class="student-dashboard-summary-copy">
             <strong>APE Status</strong>
@@ -712,7 +712,7 @@ render_student_header('Dashboard', 'dashboard');
     </a>
 
     <?php if ($isOfficialAccess): ?>
-    <a href="patient-appointment.php" class="student-dashboard-summary-row text-decoration-none" aria-label="View Appointments">
+    <a href="<?= student_e(student_portal_url('appointments')) ?>" class="student-dashboard-summary-row text-decoration-none" aria-label="View Appointments">
         <span class="student-icon-box"><span class="material-symbols-outlined">calendar_month</span></span>
         <span class="student-dashboard-summary-copy">
             <strong>Appointments</strong>
@@ -734,12 +734,12 @@ render_student_header('Dashboard', 'dashboard');
     <div class="student-dashboard-profile-slot">
     <details class="student-mobile-more dashboard-profile-more" open>
         <summary>Profile details</summary>
-    <section class="student-card student-card-pad student-span-4<?= $isOfficialAccess ? ' student-clickable-card' : '' ?>"<?= $isOfficialAccess ? ' data-href="patient-passport.php" role="link" tabindex="0" aria-label="Open Health Passport profile"' : ' aria-label="Patient profile"' ?>>
+    <section class="student-card student-card-pad student-span-4<?= $isOfficialAccess ? ' student-clickable-card' : '' ?>"<?= $isOfficialAccess ? ' data-href="' . student_e(student_portal_url('health-passport')) . '" role="link" tabindex="0" aria-label="Open Health Passport profile"' : ' aria-label="Patient profile"' ?>>
         <div class="flex items-center gap-3 mb-5">
             <?php $dashboardPhotoPath = profile_photo_normalize_path($profile['profile_photo_path'] ?? null); ?>
             <span class="student-dashboard-profile-photo">
                 <?php if ($dashboardPhotoPath !== null): ?>
-                    <img src="<?= student_e('../public/' . $dashboardPhotoPath) ?>" alt="<?= student_e($profile['name']) ?> profile picture">
+                    <img src="<?= student_e('/public/' . $dashboardPhotoPath) ?>" alt="<?= student_e($profile['name']) ?> profile picture">
                 <?php else: ?>
                     <span><?= student_e(student_initials($profile['name'])) ?></span>
                 <?php endif; ?>
@@ -773,7 +773,7 @@ render_student_header('Dashboard', 'dashboard');
     </details>
     </div>
 
-    <section class="student-card student-span-4 student-clickable-card student-dashboard-duplicate student-dashboard-actionable" data-href="patient-ape-status.php" role="link" tabindex="0" aria-label="Open APE status">
+    <section class="student-card student-span-4 student-clickable-card student-dashboard-duplicate student-dashboard-actionable" data-href="<?= student_e(student_portal_url('ape-status')) ?>" role="link" tabindex="0" aria-label="Open APE status">
         <div class="student-card-header">
             <div>
                 <h2 class="student-card-title">APE Progress</h2>
@@ -810,7 +810,7 @@ render_student_header('Dashboard', 'dashboard');
         </div>
     </section>
 
-    <section class="student-card student-span-4<?= $isOfficialAccess ? ' student-clickable-card' : '' ?> student-dashboard-duplicate student-dashboard-appointment-card"<?= $isOfficialAccess ? ' data-href="patient-appointment.php" role="link" tabindex="0" aria-label="Open appointment page"' : ' aria-label="Appointments locked for Applicant access"' ?>>
+    <section class="student-card student-span-4<?= $isOfficialAccess ? ' student-clickable-card' : '' ?> student-dashboard-duplicate student-dashboard-appointment-card"<?= $isOfficialAccess ? ' data-href="' . student_e(student_portal_url('appointments')) . '" role="link" tabindex="0" aria-label="Open appointment page"' : ' aria-label="Appointments locked for Applicant access"' ?>>
         <div class="student-card-header">
             <div>
                 <h2 class="student-card-title">Appointment</h2>
@@ -848,7 +848,7 @@ render_student_header('Dashboard', 'dashboard');
                 </div>
             <?php endif; ?>
             <?php if ($isOfficialAccess): ?>
-                <a href="patient-appointment.php" class="student-button-secondary w-full text-decoration-none">
+                <a href="<?= student_e(student_portal_url('appointments')) ?>" class="student-button-secondary w-full text-decoration-none">
                     Manage Appointment
                     <span class="material-symbols-outlined">schedule</span>
                 </a>
@@ -864,7 +864,7 @@ render_student_header('Dashboard', 'dashboard');
             <h2 id="clinic-service-status-title" class="student-card-title">Clinic service status</h2>
             <p class="student-card-copy">Current walk-in availability. Check with reception before coming in.</p>
         </div>
-        <form method="get" action="patient-dashboard.php">
+        <form method="get" action="<?= student_e(student_portal_url('dashboard')) ?>">
             <button type="submit" class="student-button-secondary text-sm">Refresh service status</button>
         </form>
     </div>
@@ -907,7 +907,7 @@ render_student_header('Dashboard', 'dashboard');
             <h2 id="student-dashboard-help-title" class="student-card-title">Need help?</h2>
             <p class="student-card-copy">Find answers about access, APE requirements, appointments, your Health Passport, and clinic support.</p>
         </div>
-        <a href="patient-help.php" class="student-button-secondary text-decoration-none">
+        <a href="<?= student_e(student_portal_url('help')) ?>" class="student-button-secondary text-decoration-none">
             Open Help &amp; FAQs
             <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span>
         </a>

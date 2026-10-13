@@ -58,7 +58,7 @@ function patient_password_reset_url(string $token): string
         $appBase = rtrim((string) env_value('APP_URL', 'http://localhost/CLINiQ'), '/');
         $portalBase = $appBase . '/patient-portal';
     }
-    return $portalBase . '/patient-reset-password.php?token=' . rawurlencode($token);
+    return $portalBase . '/reset-password?token=' . rawurlencode($token);
 }
 
 /**

@@ -383,7 +383,7 @@ function patient_email_queue_notification(
             'category' => 'email',
             'title' => $subject,
             'message' => $message,
-            'target_url' => $sourceType === 'ape' ? 'patient-ape-status.php' : 'patient-appointment.php',
+            'target_url' => $sourceType === 'ape' ? '/ape-status' : '/appointments',
         ] : [],
     ]);
 }
@@ -416,7 +416,7 @@ function patient_email_dispatch_event(array $event): int
                 (string) ($notification['category'] ?? 'email'),
                 (string) ($notification['title'] ?? $eventType),
                 (string) ($notification['message'] ?? $event['message'] ?? ''),
-                (string) ($notification['target_url'] ?? 'patient-dashboard.php'),
+                (string) ($notification['target_url'] ?? '/dashboard'),
                 (string) ($event['source_type'] ?? 'email'),
                 $sourceId
             );
@@ -435,9 +435,9 @@ function patient_email_dispatch_event(array $event): int
     if ($templateKey !== '') {
         $portalBase = rtrim((string) env_value('PATIENT_PORTAL_URL', 'http://localhost/CLINiQ/patient-portal'), '/');
         $actionUrl = (string) ($event['action_url'] ?? ($portalBase . '/' . match ((string) ($event['source_type'] ?? '')) {
-            'appointment' => 'patient-appointment.php',
-            'patient_access' => 'patient-dashboard.php',
-            default => 'patient-ape-status.php',
+            'appointment' => 'appointments',
+            'patient_access' => 'dashboard',
+            default => 'ape-status',
         }));
         $templateContext = array_merge([
             'patient_name' => $recipientName,

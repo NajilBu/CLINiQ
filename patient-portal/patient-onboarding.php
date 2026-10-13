@@ -6,7 +6,7 @@ require_once __DIR__ . '/includes/patient-layout.php';
 
 student_start_session();
 if (student_current_profile() !== null) {
-    header('Location: patient-dashboard.php');
+    header('Location: ' . student_portal_url('dashboard'));
     exit;
 }
 
@@ -14,7 +14,7 @@ $context = student_verified_onboarding_context();
 if ($context === null) {
     unset($_SESSION['patient_onboarding'], $_SESSION['patient_registration']);
     csrf_rotate_token();
-    header('Location: patient-register.php?start=1');
+    header('Location: ' . student_portal_url('signup', ['start' => 1]));
     exit;
 }
 
@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $registration = complete_patient_registration((int) $context['verification_id'], $values);
             student_upgrade_verified_onboarding_session($registration);
             audit_log_event('auth', 'patient_self_registration_auto_login', (int) $registration['person_id'], 'student', 'person', (int) $registration['person_id']);
-            header('Location: patient-dashboard.php?activated=1', true, 303);
+            header('Location: ' . student_portal_url('dashboard', ['activated' => 1]), true, 303);
             exit;
         } catch (Throwable $exception) {
             $error = $exception->getMessage();
@@ -50,11 +50,11 @@ render_student_auth_header('Complete Profile');
 ?>
 <div class="student-shell">
     <header class="student-topbar student-onboarding-topbar">
-        <a href="patient-onboarding.php" class="student-brand text-decoration-none" aria-label="Profile setup">
+        <a href="<?= student_e(student_portal_url('onboarding')) ?>" class="student-brand text-decoration-none" aria-label="Profile setup">
             <span class="student-brand-mark"><img src="<?= student_e($clinicLogoSrc) ?>" alt="<?= student_e($clinicProfile['department']) ?> logo"></span>
             <span class="student-brand-copy"><span class="student-brand-title"><?= student_e($clinicProfile['system_name']) ?></span><span class="student-brand-subtitle">Patient Health Portal</span></span>
         </a>
-        <a class="student-onboarding-start-over text-decoration-none" href="patient-register.php?restart=1">
+        <a class="student-onboarding-start-over text-decoration-none" href="<?= student_e(student_portal_url('signup', ['restart' => 1])) ?>">
             <span class="material-symbols-outlined" aria-hidden="true">restart_alt</span>
             <span>Start over</span>
         </a>

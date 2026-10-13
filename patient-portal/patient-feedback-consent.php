@@ -38,7 +38,7 @@ try {
             $_SESSION['student_feedback_selected_visit_id'] = $selectedId;
             $_SESSION['student_feedback_anonymous'] = ($_POST['private_identity'] ?? '') === '1';
             $_SESSION['student_feedback_start_token'] = bin2hex(random_bytes(32));
-            header('Location: patient-feedback.php?start=' . rawurlencode($_SESSION['student_feedback_start_token']));
+            header('Location: ' . student_portal_url('feedback', ['start' => $_SESSION['student_feedback_start_token']]));
             exit;
         }
     }
@@ -82,7 +82,7 @@ render_student_header('Give Feedback', 'dashboard');
             </div>
             <div class="flex flex-wrap gap-3 mt-4">
                 <button type="submit" class="student-button"><span class="material-symbols-outlined" aria-hidden="true">check</span>Submit</button>
-                <a href="patient-dashboard.php" class="student-button student-button-secondary text-decoration-none">Not now</a>
+                <a href="<?= student_e(student_portal_url('dashboard')) ?>" class="student-button student-button-secondary text-decoration-none">Not now</a>
             </div>
         </form>
     </section>

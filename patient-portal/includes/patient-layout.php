@@ -35,7 +35,40 @@ function student_initials(string $name): string
 function student_public_logo_src(?array $clinicProfile = null): string
 {
     $profile = $clinicProfile ?? clinic_profile_settings();
-    return '../public/' . ltrim(clinic_profile_logo_path($profile), '/');
+    return '/public/' . ltrim(clinic_profile_logo_path($profile), '/');
+}
+
+function student_portal_url(string $route, array $query = []): string
+{
+    $routes = [
+        'welcome' => '/', 'login' => '/login', 'signup' => '/signup', 'forgot-password' => '/forgot-password',
+        'reset-password' => '/reset-password', 'onboarding' => '/onboarding', 'dashboard' => '/dashboard',
+        'ape-status' => '/ape-status', 'ape-document' => '/ape-document', 'appointments' => '/appointments',
+        'health-passport' => '/health-passport', 'help' => '/help', 'feedback' => '/feedback',
+        'feedback-consent' => '/feedback/consent', 'nfc-authorize' => '/nfc-authorize',
+        'notifications' => '/notifications', 'profile-photo' => '/profile-photo',
+    ];
+    if (!isset($routes[$route])) {
+        throw new InvalidArgumentException('Unknown student portal route.');
+    }
+
+    return $routes[$route] . ($query === [] ? '' : '?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986));
+}
+
+function student_portal_route_for_script(?string $script = null): string
+{
+    $routes = [
+        'patient-welcome.php' => 'welcome', 'patient-login.php' => 'login', 'patient-register.php' => 'signup',
+        'patient-forgot-password.php' => 'forgot-password', 'patient-reset-password.php' => 'reset-password',
+        'patient-onboarding.php' => 'onboarding', 'patient-dashboard.php' => 'dashboard',
+        'patient-ape-status.php' => 'ape-status', 'patient-ape-document.php' => 'ape-document',
+        'patient-appointment.php' => 'appointments', 'patient-passport.php' => 'health-passport',
+        'patient-help.php' => 'help', 'patient-feedback.php' => 'feedback',
+        'patient-feedback-consent.php' => 'feedback-consent', 'patient-nfc-authorize.php' => 'nfc-authorize',
+        'patient-notifications.php' => 'notifications', 'update-profile-photo.php' => 'profile-photo',
+    ];
+
+    return $routes[basename($script ?? (string) ($_SERVER['SCRIPT_NAME'] ?? ''))] ?? 'dashboard';
 }
 
 function student_nav_items(): array
@@ -43,24 +76,24 @@ function student_nav_items(): array
     $items = [
         'dashboard' => [
             'label' => 'Dashboard',
-            'url' => 'patient-dashboard.php',
+            'url' => student_portal_url('dashboard'),
             'icon' => 'dashboard',
         ],
         'appointment' => [
             'label' => 'Appointments',
-            'url' => 'patient-appointment.php',
+            'url' => student_portal_url('appointments'),
             'icon' => 'event_available',
         ],
         'passport' => [
             'label' => 'Health Passport',
-            'url' => 'patient-passport.php',
+            'url' => student_portal_url('health-passport'),
             'icon' => 'id_card',
         ],
     ];
     $profile = student_current_profile();
     if (($profile['account_type'] ?? '') === 'student') {
         $items = array_slice($items, 0, 1, true) + ['ape' => [
-            'label' => 'APE Status', 'url' => 'patient-ape-status.php', 'icon' => 'fact_check',
+            'label' => 'APE Status', 'url' => student_portal_url('ape-status'), 'icon' => 'fact_check',
         ]] + array_slice($items, 1, null, true);
     }
     if (!patient_has_official_access($profile)) {
@@ -310,14 +343,14 @@ function student_redirect_pending_onboarding(): void
         return;
     }
 
-    header('Location: patient-onboarding.php');
+    header('Location: ' . student_portal_url('onboarding'));
     exit;
 }
 
 function student_require_login(): array
 {
     if (student_verified_onboarding_context() !== null) {
-        header('Location: patient-onboarding.php');
+        header('Location: ' . student_portal_url('onboarding'));
         exit;
     }
     $profile = student_current_profile();
@@ -338,14 +371,14 @@ function student_require_login(): array
                 'account_type'     => (string) (re_enrollment_context()['type'] ?? 'patient'),
             ];
         }
-        header('Location: patient-login.php');
+        header('Location: ' . student_portal_url('login'));
         exit;
     }
 
     if (!empty($profile['first_registration'])) {
         $script = basename((string) ($_SERVER['SCRIPT_NAME'] ?? ''));
         if (!in_array($script, ['patient-dashboard.php', 'patient-help.php', 'patient-login.php'], true)) {
-            header('Location: patient-dashboard.php');
+            header('Location: ' . student_portal_url('dashboard'));
             exit;
         }
     }
@@ -353,7 +386,7 @@ function student_require_login(): array
     if (re_enrollment_pending()) {
         $script = basename((string) ($_SERVER['SCRIPT_NAME'] ?? ''));
         if (!in_array($script, ['patient-dashboard.php', 'patient-help.php', 'patient-login.php'], true)) {
-            header('Location: patient-dashboard.php');
+            header('Location: ' . student_portal_url('dashboard'));
             exit;
         }
     }
@@ -370,7 +403,7 @@ function student_require_official_access(string $feature): array
 
     student_start_session();
     $_SESSION['student_flash_error'] = $feature . ' becomes available when your account is Official. Complete your APE clearance or contact the clinic.';
-    header('Location: patient-dashboard.php?access=applicant');
+    header('Location: ' . student_portal_url('dashboard', ['access' => 'applicant']));
     exit;
 }
 
@@ -564,7 +597,7 @@ function render_student_header(string $title, string $active = ''): void
         } catch (Throwable $e) {
             $_SESSION['student_flash_error'] = $e->getMessage();
         }
-        header('Location: ' . ($_SERVER['REQUEST_URI'] ?? 'patient-dashboard.php'));
+        header('Location: ' . student_portal_url(student_portal_route_for_script(), $_GET));
         exit;
     }
 
@@ -580,15 +613,15 @@ function render_student_header(string $title, string $active = ''): void
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title><?= student_e($title) ?> | <?= student_e($clinicProfile['system_name']) ?> Patient Portal</title>
         <meta name="csrf-token" content="<?= student_e(csrf_token()) ?>">
-        <script src="../public/assets/js/csrf.js?v=2" defer></script>
+        <script src="/public/assets/js/csrf.js?v=2" defer></script>
         <link rel="icon" href="<?= student_e($clinicLogoSrc) ?>">
         <link rel="apple-touch-icon" href="<?= student_e($clinicLogoSrc) ?>">
-        <link href="../public/assets/vendor/fonts/inter-manrope.css?v=offline-1" rel="stylesheet">
-        <link href="../public/assets/vendor/fonts/material-symbols.css?v=offline-1" rel="stylesheet">
+        <link href="/public/assets/vendor/fonts/inter-manrope.css?v=offline-1" rel="stylesheet">
+        <link href="/public/assets/vendor/fonts/material-symbols.css?v=offline-1" rel="stylesheet">
         <script>
             try { if (localStorage.getItem('cliniq-student-dark-mode') === '1') document.documentElement.classList.add('student-dark'); } catch (error) {}
         </script>
-        <script src="../public/assets/vendor/tailwind/tailwind-cdn.js?v=offline-1"></script>
+        <script src="/public/assets/vendor/tailwind/tailwind-cdn.js?v=offline-1"></script>
         <script>
             tailwind.config = {
                 theme: {
@@ -613,8 +646,8 @@ function render_student_header(string $title, string $active = ''): void
                 }
             };
         </script>
-        <link href="../public/assets/css/app.css?v=<?= filemtime(__DIR__ . '/../../public/assets/css/app.css') ?>" rel="stylesheet">
-        <link href="assets/css/patient.css?v=<?= filemtime(__DIR__ . '/../assets/css/patient.css') ?>" rel="stylesheet">
+        <link href="/public/assets/css/app.css?v=<?= filemtime(__DIR__ . '/../../public/assets/css/app.css') ?>" rel="stylesheet">
+        <link href="/patient-portal/assets/css/patient.css?v=<?= filemtime(__DIR__ . '/../assets/css/patient.css') ?>" rel="stylesheet">
         <style>
             :root {
                 --cliniq-primary: <?= student_e($theme['primary']) ?>;
@@ -639,7 +672,7 @@ function render_student_header(string $title, string $active = ''): void
     <body class="student-body">
         <div class="student-shell">
             <header class="student-topbar">
-                <a href="patient-dashboard.php" class="student-brand text-decoration-none">
+                <a href="<?= student_e(student_portal_url('dashboard')) ?>" class="student-brand text-decoration-none">
                     <span class="student-brand-mark">
                         <img src="<?= student_e($clinicLogoSrc) ?>" alt="<?= student_e($clinicProfile['department']) ?> logo">
                     </span>
@@ -664,7 +697,7 @@ function render_student_header(string $title, string $active = ''): void
                 </nav>
 
                 <?php if (empty($profile['first_registration'])): ?>
-                    <div class="student-notifications" data-patient-notifications data-endpoint="patient-notifications.php">
+                    <div class="student-notifications" data-patient-notifications data-endpoint="<?= student_e(student_portal_url('notifications')) ?>">
                         <button type="button" class="student-notification-toggle" data-notification-toggle aria-label="Notifications" aria-expanded="false" aria-controls="patient-notification-panel">
                             <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
                             <span class="student-notification-badge" data-notification-badge <?= $notificationUnreadCount > 0 ? '' : 'hidden' ?>><?= min(99, $notificationUnreadCount) ?></span>
@@ -705,7 +738,7 @@ function render_student_header(string $title, string $active = ''): void
                                 <span class="material-symbols-outlined">key</span>
                             </button>
                         <?php endif; ?>
-                        <a href="patient-login.php?logout=1" onclick="localStorage.clear();" class="student-logout text-decoration-none" title="Logout">
+                        <a href="<?= student_e(student_portal_url('login', ['logout' => 1])) ?>" onclick="localStorage.clear();" class="student-logout text-decoration-none" title="Logout">
                             <span class="material-symbols-outlined">logout</span>
                         </a>
                     </div>
@@ -741,7 +774,7 @@ function render_student_header(string $title, string $active = ''): void
                                 <span class="material-symbols-outlined" aria-hidden="true">key</span>
                                 Change password
                             </button>
-                            <form method="POST" action="patient-login.php" class="student-mobile-account-form">
+                            <form method="POST" action="<?= student_e(student_portal_url('login')) ?>" class="student-mobile-account-form">
                                 <input type="hidden" name="_csrf" value="<?= student_e(csrf_token()) ?>">
                                 <input type="hidden" name="action" value="forget_device">
                                 <input type="hidden" name="return_to" value="dashboard">
@@ -755,7 +788,7 @@ function render_student_header(string $title, string $active = ''): void
                                 <span data-student-theme-label>Dark mode</span>
                                 <span class="student-theme-switch" aria-hidden="true"><span class="student-theme-switch-thumb"></span></span>
                             </button>
-                            <a href="patient-login.php?logout=1" onclick="localStorage.clear();" class="student-mobile-account-action is-danger text-decoration-none">
+                            <a href="<?= student_e(student_portal_url('login', ['logout' => 1])) ?>" onclick="localStorage.clear();" class="student-mobile-account-action is-danger text-decoration-none">
                                 <span class="material-symbols-outlined" aria-hidden="true">logout</span>
                                 Sign out
                             </a>
@@ -802,8 +835,8 @@ function render_student_footer(): void
 {
     $profile = student_require_login();
     $photoPath = profile_photo_normalize_path($profile['profile_photo_path'] ?? null);
-    $photoSrc = $photoPath !== null ? '../public/' . $photoPath : null;
-    $returnTo = basename((string) ($_SERVER['SCRIPT_NAME'] ?? 'patient-dashboard.php'));
+    $photoSrc = $photoPath !== null ? '/public/' . $photoPath : null;
+    $returnTo = student_portal_route_for_script();
     $navItems = student_nav_items();
     if (!empty($profile['first_registration'])) {
         $navItems = array_intersect_key($navItems, ['dashboard' => true]);
@@ -812,7 +845,7 @@ function render_student_footer(): void
             </main>
             <nav class="student-mobile-bottom-nav" aria-label="Patient navigation">
                 <?php foreach ($navItems as $item): ?>
-                    <?php $isActive = basename($item['url']) === $returnTo; ?>
+                    <?php $isActive = $item['url'] === student_portal_url($returnTo); ?>
                     <a href="<?= student_e($item['url']) ?>" class="student-mobile-bottom-nav-link <?= $isActive ? 'active' : '' ?> text-decoration-none" <?= $isActive ? 'aria-current="page"' : '' ?>>
                         <span class="material-symbols-outlined" aria-hidden="true"><?= student_e($item['icon']) ?></span>
                         <span><?= student_e($item['label']) ?></span>
@@ -835,7 +868,7 @@ function render_student_footer(): void
                         <span class="material-symbols-outlined">close</span>
                     </button>
                 </div>
-                <form action="update-profile-photo.php" method="post" enctype="multipart/form-data" class="profile-photo-preview-form" data-profile-photo-form data-no-loading>
+                <form action="<?= student_e(student_portal_url('profile-photo')) ?>" method="post" enctype="multipart/form-data" class="profile-photo-preview-form" data-profile-photo-form data-no-loading>
                     <input type="hidden" name="_csrf" value="<?= student_e(csrf_token()) ?>">
                     <input type="hidden" name="return_to" value="<?= student_e($returnTo) ?>">
                     <div class="profile-photo-stage is-active" data-profile-photo-editor>
@@ -941,8 +974,8 @@ function render_student_footer(): void
             </div>
         </div>
 
-        <script src="../public/assets/js/unsaved-changes.js?v=<?= filemtime(__DIR__ . '/../../public/assets/js/unsaved-changes.js') ?>"></script>
-        <script src="../public/assets/js/student-overlays.js?v=<?= filemtime(__DIR__ . '/../../public/assets/js/student-overlays.js') ?>"></script>
+        <script src="/public/assets/js/unsaved-changes.js?v=<?= filemtime(__DIR__ . '/../../public/assets/js/unsaved-changes.js') ?>"></script>
+        <script src="/public/assets/js/student-overlays.js?v=<?= filemtime(__DIR__ . '/../../public/assets/js/student-overlays.js') ?>"></script>
         <script>
             (() => {
                 const root = document.querySelector('[data-patient-notifications]');
@@ -1397,15 +1430,15 @@ function render_student_auth_header(string $title): void
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title><?= student_e($title) ?> | <?= student_e($clinicProfile['system_name']) ?> Patient Portal</title>
         <meta name="csrf-token" content="<?= student_e(csrf_token()) ?>">
-        <script src="../public/assets/js/csrf.js?v=2" defer></script>
+        <script src="/public/assets/js/csrf.js?v=2" defer></script>
         <link rel="icon" href="<?= student_e($clinicLogoSrc) ?>">
         <link rel="apple-touch-icon" href="<?= student_e($clinicLogoSrc) ?>">
-        <link href="../public/assets/vendor/fonts/inter-manrope.css?v=offline-1" rel="stylesheet">
-        <link href="../public/assets/vendor/fonts/material-symbols.css?v=offline-1" rel="stylesheet">
+        <link href="/public/assets/vendor/fonts/inter-manrope.css?v=offline-1" rel="stylesheet">
+        <link href="/public/assets/vendor/fonts/material-symbols.css?v=offline-1" rel="stylesheet">
         <script>
             try { if (localStorage.getItem('cliniq-student-dark-mode') === '1') document.documentElement.classList.add('student-dark'); } catch (error) {}
         </script>
-        <script src="../public/assets/vendor/tailwind/tailwind-cdn.js?v=offline-1"></script>
+        <script src="/public/assets/vendor/tailwind/tailwind-cdn.js?v=offline-1"></script>
         <script>
             tailwind.config = {
                 theme: {
@@ -1428,8 +1461,8 @@ function render_student_auth_header(string $title): void
                 }
             };
         </script>
-        <link href="../public/assets/css/app.css?v=<?= filemtime(__DIR__ . '/../../public/assets/css/app.css') ?>" rel="stylesheet">
-        <link href="assets/css/patient.css?v=<?= filemtime(__DIR__ . '/../assets/css/patient.css') ?>" rel="stylesheet">
+        <link href="/public/assets/css/app.css?v=<?= filemtime(__DIR__ . '/../../public/assets/css/app.css') ?>" rel="stylesheet">
+        <link href="/patient-portal/assets/css/patient.css?v=<?= filemtime(__DIR__ . '/../assets/css/patient.css') ?>" rel="stylesheet">
         <style>
             :root {
                 --cliniq-primary: <?= student_e($theme['primary']) ?>;
@@ -1450,9 +1483,9 @@ function render_student_auth_header(string $title): void
                 --student-muted-soft: <?= student_e($theme['surface_container_low']) ?>;
             }
         </style>
-    <script src="../public/assets/js/id-number-format.js?v=<?= filemtime(__DIR__ . '/../../public/assets/js/id-number-format.js') ?>"></script>
-    <script src="../public/assets/js/submission-loading.js?v=<?= filemtime(__DIR__ . '/../../public/assets/js/submission-loading.js') ?>"></script>
-    <script src="../public/assets/js/unsaved-changes.js?v=<?= filemtime(__DIR__ . '/../../public/assets/js/unsaved-changes.js') ?>"></script>
+    <script src="/public/assets/js/id-number-format.js?v=<?= filemtime(__DIR__ . '/../../public/assets/js/id-number-format.js') ?>"></script>
+    <script src="/public/assets/js/submission-loading.js?v=<?= filemtime(__DIR__ . '/../../public/assets/js/submission-loading.js') ?>"></script>
+    <script src="/public/assets/js/unsaved-changes.js?v=<?= filemtime(__DIR__ . '/../../public/assets/js/unsaved-changes.js') ?>"></script>
     </head>
     <body class="student-body student-auth-page">
     <?php

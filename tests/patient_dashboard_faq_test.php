@@ -12,7 +12,7 @@ if ($dashboard === false || $styles === false) {
 $requiredDashboardFragments = [
     'aria-labelledby="student-dashboard-help-title"',
     'Need help?',
-    'patient-help.php',
+    "student_portal_url('help')",
     'Open Help &amp; FAQs',
 ];
 

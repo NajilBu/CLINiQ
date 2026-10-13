@@ -139,7 +139,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
         );
         $apeDb->commit();
         $filesCommitted = true;
-        header('Location: patient-ape-status.php?uploaded=' . count($storedFiles));
+        header('Location: ' . student_portal_url('ape-status', ['uploaded' => count($storedFiles)]));
         exit;
     } catch (Throwable $e) {
         if (isset($apeDb) && $apeDb->inTransaction()) {
@@ -419,7 +419,7 @@ foreach ($requirements as $requirement) {
             'name' => $name,
             'key' => $documentKey,
             'document_id' => (int) ($uploadedDocument['document_id'] ?? 0),
-            'preview_url' => 'patient-ape-document.php?id=' . (int) ($uploadedDocument['document_id'] ?? 0),
+            'preview_url' => student_portal_url('ape-document', ['id' => (int) ($uploadedDocument['document_id'] ?? 0)]),
             'preview_type' => $previewType,
             'icon' => $icon,
             'status' => $verification,
@@ -548,7 +548,7 @@ render_student_header('APE Status', 'ape');
         </span>
     <?php endif; ?>
     <?php if ($apeIsInactive): ?>
-        <a class="student-button-secondary" href="patient-help.php"><span class="material-symbols-outlined">support_agent</span> Need help continuing?</a>
+        <a class="student-button-secondary" href="<?= student_e(student_portal_url('help')) ?>"><span class="material-symbols-outlined">support_agent</span> Need help continuing?</a>
     <?php endif; ?>
 </section>
 

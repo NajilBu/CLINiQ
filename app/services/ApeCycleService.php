@@ -764,7 +764,7 @@ function create_ape_schedule_batch(array $input, ?int $actorPersonId): array
                 'ape',
                 'APE schedule assigned',
                 "Your APE schedule is {$scheduleLabel}. Batch: {$batchName}.",
-                'patient-ape-status.php',
+                '/ape-status',
                 'ape_batch',
                 $batchId
             );
@@ -828,7 +828,7 @@ function cancel_ape_schedule_batch(int $batchId, int $cycleId, ?int $actorPerson
                 'ape',
                 'APE schedule cancelled',
                 "Your APE schedule in batch {$batchName} was cancelled. The clinic will assign a new schedule.",
-                'patient-ape-status.php',
+                '/ape-status',
                 'ape_batch',
                 $batchId
             );
@@ -884,7 +884,7 @@ function reschedule_ape_record(int $apeId, int $targetBatchId, ?int $actorPerson
             . date('g:i A', strtotime((string) $batch['end_time']));
         $db->prepare("INSERT INTO ape_activity_logs (ape_id, performed_by_person_id, action, notes) VALUES (?, ?, 'Rescheduled APE examination', ?)")
             ->execute([$apeId, $actorPersonId, $batch['batch_name'] . ': ' . $scheduleLabel]);
-        patient_notification_create($db, (int) $record['patient_id'], $actorPersonId, 'ape', 'APE schedule updated', "Your APE schedule is now {$scheduleLabel}. Batch: {$batch['batch_name']}.", 'patient-ape-status.php', 'ape_batch', $targetBatchId);
+        patient_notification_create($db, (int) $record['patient_id'], $actorPersonId, 'ape', 'APE schedule updated', "Your APE schedule is now {$scheduleLabel}. Batch: {$batch['batch_name']}.", '/ape-status', 'ape_batch', $targetBatchId);
         patient_email_queue_notification((int) $record['patient_id'], 'ape_schedule_updated', 'ape_schedule_updates', 'APE schedule updated', "Your APE schedule is now {$scheduleLabel}. Batch: {$batch['batch_name']}.", 'ape', $targetBatchId, $actorPersonId, null, 'rescheduled');
         $db->commit();
 
@@ -1021,7 +1021,7 @@ function reset_school_year_accounts(string $academicYear = '', array $submittedP
     require_once __DIR__ . '/../services/SystemSettings.php';
     $clinicProfile = clinic_profile_settings();
     $clinicName    = $clinicProfile['system_name'] ?? 'CLINiQ Clinic';
-    $loginUrl      = rtrim(env_value('PATIENT_PORTAL_URL', 'http://localhost/CLINiQ/patient-portal'), '/') . '/patient-login.php';
+    $loginUrl      = rtrim(env_value('PATIENT_PORTAL_URL', 'http://localhost/CLINiQ/patient-portal'), '/') . '/login';
 
     $queueKey = 'school_year_' . $academicYear . '_' . bin2hex(random_bytes(6));
     $queued = 0;
@@ -1051,7 +1051,7 @@ function reset_school_year_accounts(string $academicYear = '', array $submittedP
                 'category' => 'enrollment',
                 'title' => $notification['subject'],
                 'message' => 'Please confirm your enrollment for the new school year.',
-                'target_url' => 'patient-dashboard.php',
+                'target_url' => '/dashboard',
             ],
         ]);
         if ($emailId > 0) {

@@ -26,9 +26,9 @@ render_student_header('Help & FAQs', 'help');
             <span class="patient-help-category-icon material-symbols-outlined" aria-hidden="true">login</span>
         </div>
         <div class="patient-help-accordion-list">
-            <details class="patient-help-accordion"><summary>How do I create my portal account?</summary><div class="patient-help-answer">Start from the student registration page, verify your identity and email, then complete the required profile details.<a href="patient-register.php">Open student registration <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></a></div></details>
+            <details class="patient-help-accordion"><summary>How do I create my portal account?</summary><div class="patient-help-answer">Start from the student registration page, verify your identity and email, then complete the required profile details.<a href="<?= student_e(student_portal_url('signup')) ?>">Open student registration <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></a></div></details>
             <details class="patient-help-accordion"><summary>What is the difference between Applicant and Official access?</summary><div class="patient-help-answer">Applicant access lets you complete required APE steps. Appointment booking and the Health Passport become available after the clinic marks your account as Official.</div></details>
-            <details class="patient-help-accordion"><summary>What if I cannot sign in or forgot my password?</summary><div class="patient-help-answer">Use the password recovery page to request a reset link for your portal account.<a href="patient-forgot-password.php">Recover portal access <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></a></div></details>
+            <details class="patient-help-accordion"><summary>What if I cannot sign in or forgot my password?</summary><div class="patient-help-answer">Use the password recovery page to request a reset link for your portal account.<a href="<?= student_e(student_portal_url('forgot-password')) ?>">Recover portal access <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></a></div></details>
         </div>
     </section>
 
@@ -41,8 +41,8 @@ render_student_header('Help & FAQs', 'help');
             <span class="patient-help-category-icon material-symbols-outlined" aria-hidden="true">fact_check</span>
         </div>
         <div class="patient-help-accordion-list">
-            <details class="patient-help-accordion"><summary>How do I check my APE progress?</summary><div class="patient-help-answer">Your APE Status page shows your current stage, document requirements, clinic instructions, and the next action for your record.<a href="patient-ape-status.php">Open APE Status <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></a></div></details>
-            <details class="patient-help-accordion"><summary>How do I submit required APE documents?</summary><div class="patient-help-answer">Open APE Status and upload each required document using the instructions shown for your assigned batch. The clinic reviews submitted files before moving your record forward.<a href="patient-ape-status.php">Review required documents <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></a></div></details>
+            <details class="patient-help-accordion"><summary>How do I check my APE progress?</summary><div class="patient-help-answer">Your APE Status page shows your current stage, document requirements, clinic instructions, and the next action for your record.<a href="<?= student_e(student_portal_url('ape-status')) ?>">Open APE Status <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></a></div></details>
+            <details class="patient-help-accordion"><summary>How do I submit required APE documents?</summary><div class="patient-help-answer">Open APE Status and upload each required document using the instructions shown for your assigned batch. The clinic reviews submitted files before moving your record forward.<a href="<?= student_e(student_portal_url('ape-status')) ?>">Review required documents <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></a></div></details>
             <details class="patient-help-accordion"><summary>What happens after the clinic reviews my APE?</summary><div class="patient-help-answer">The clinic may schedule your examination, request follow-up, or record your clearance. Check your APE Status and notification bell for updates.</div></details>
         </div>
     </section>
@@ -57,7 +57,7 @@ render_student_header('Help & FAQs', 'help');
         </div>
         <div class="patient-help-accordion-list">
             <details class="patient-help-accordion"><summary>When can I request an appointment?</summary><div class="patient-help-answer">Appointment booking is available to Official accounts. If you have Applicant access, complete your APE requirements or contact the clinic for assistance.</div></details>
-            <details class="patient-help-accordion"><summary>How do I request or check a clinic visit?</summary><div class="patient-help-answer">Use the Appointments page to choose an available schedule and review your recent appointment requests and their status.<a href="patient-appointment.php">Open Appointments <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></a></div></details>
+            <details class="patient-help-accordion"><summary>How do I request or check a clinic visit?</summary><div class="patient-help-answer">Use the Appointments page to choose an available schedule and review your recent appointment requests and their status.<a href="<?= student_e(student_portal_url('appointments')) ?>">Open Appointments <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></a></div></details>
             <details class="patient-help-accordion"><summary>Can I change or cancel an appointment?</summary><div class="patient-help-answer">Open the Appointments page and use the available actions on your request. If there is no action available, contact or visit the clinic.</div></details>
         </div>
     </section>
@@ -71,7 +71,7 @@ render_student_header('Help & FAQs', 'help');
             <span class="patient-help-category-icon material-symbols-outlined" aria-hidden="true">id_card</span>
         </div>
         <div class="patient-help-accordion-list">
-            <details class="patient-help-accordion"><summary>Where can I update my emergency information?</summary><div class="patient-help-answer">Use the Health Passport to review and update your personal, medical, and emergency contact information.<a href="patient-passport.php">Open Health Passport <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></a></div></details>
+            <details class="patient-help-accordion"><summary>Where can I update my emergency information?</summary><div class="patient-help-answer">Use the Health Passport to review and update your personal, medical, and emergency contact information.<a href="<?= student_e(student_portal_url('health-passport')) ?>">Open Health Passport <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></a></div></details>
             <details class="patient-help-accordion"><summary>What are the QR and NFC options for?</summary><div class="patient-help-answer">The Health Passport provides QR and NFC access options for the emergency passport view. Review the sharing settings before using them.</div></details>
             <details class="patient-help-accordion"><summary>What information is visible in an emergency passport?</summary><div class="patient-help-answer">The emergency passport is designed to present the health and contact details you allow for emergency access. Use the preview and visibility settings in your Health Passport to review it.</div></details>
         </div>

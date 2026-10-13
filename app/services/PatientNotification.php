@@ -123,7 +123,7 @@ function patient_notification_for_appointment(PDO $db, array $appointment, strin
         default => ['Appointment updated', "Your clinic appointment for {$when} was updated to {$status}."],
     };
 
-    return patient_notification_create($db, $patientId, $actorPersonId, 'appointment', $title, $message, 'patient-appointment.php', 'appointment', $appointmentId);
+    return patient_notification_create($db, $patientId, $actorPersonId, 'appointment', $title, $message, '/appointments', 'appointment', $appointmentId);
 }
 
 function patient_notification_for_ape_action(PDO $db, array $record, string $action, ?int $actorPersonId): ?int
@@ -160,7 +160,7 @@ function patient_notification_for_ape_action(PDO $db, array $record, string $act
         return null;
     }
 
-    return patient_notification_create($db, $patientId, $actorPersonId, 'ape', $notification[0], $notification[1], 'patient-ape-status.php', 'ape', $apeId);
+    return patient_notification_create($db, $patientId, $actorPersonId, 'ape', $notification[0], $notification[1], '/ape-status', 'ape', $apeId);
 }
 
 function patient_notification_for_feedback_required(PDO $db, array $visit, ?int $actorPersonId): ?int
@@ -192,7 +192,7 @@ function patient_notification_for_feedback_required(PDO $db, array $visit, ?int 
         'feedback',
         'Feedback required for your completed visit',
         "Your {$purpose} was completed. Please complete the clinic feedback before requesting another appointment.",
-        'patient-feedback.php',
+        '/feedback',
         'clinic_feedback',
         $visitId
     );
