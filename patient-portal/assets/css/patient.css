@@ -2247,7 +2247,11 @@ html.student-dark .student-cookie-banner { background: #122219; border-color: va
     color: var(--student-primary-dark);
 }
 
-.student-welcome-primary-action:hover { background: var(--student-primary-fixed); }
+.student-welcome-primary-action:hover,
+.student-welcome-primary-action:focus-visible {
+    color: var(--student-primary-dark);
+    background: var(--student-primary-soft);
+}
 
 .student-welcome-access-note {
     margin: 1rem 0 0;
