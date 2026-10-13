@@ -15,6 +15,7 @@ vendor/
 !public/assets/vendor/ag-grid/ag-grid.css
 !public/assets/vendor/ag-grid/ag-theme-quartz.css
 node_modules/
+.playwright-cli/
 electron/node_modules/
 electron/dist/
 .DS_Store
