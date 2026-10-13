@@ -19,7 +19,7 @@ foreach ([
     '.student-ape-step {',
     'min-height: 40px !important',
     'passport-error-action',
-    '.student-ape-mobile-batch > .material-symbols-outlined',
+    '.student-ape-mobile-batch > .student-icon',
     'grid-template-columns: minmax(0, 1fr) !important',
     '.student-ape-mobile-batch > .student-badge',
     'align-self: center',
@@ -33,6 +33,8 @@ foreach ([
     '.student-dashboard-mobile-overview { grid-template-columns:repeat(2, minmax(0, 1fr)); }',
     '.student-dashboard-summary-row { position:relative; grid-template-columns:1fr;',
     '.student-dashboard-summary-arrow { position:absolute; right:14px; bottom:14px; display:block; }',
+    'white-space: normal;',
+    'overflow-wrap: anywhere;',
 ] as $marker) {
     if (!str_contains($css, $marker)) {
         throw new RuntimeException('Shared mobile layout rule missing: ' . $marker);

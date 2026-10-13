@@ -85,12 +85,12 @@ render_student_header('Give Feedback', 'dashboard');
     <?php if ($feedbackStarted && !$success): ?><nav class="student-feedback-flow-progress" aria-label="Feedback progress"><span class="is-complete"><strong>1 · Required feedback</strong><small>Visit and privacy option confirmed</small></span><span class="is-current"><strong>2 · Give feedback</strong><small>Share your experience</small></span></nav><?php endif; ?>
 
     <?php if ($error): ?>
-        <div class="student-note student-note-danger student-feedback-notice" role="alert"><span class="material-symbols-outlined" aria-hidden="true">error</span><span><?= student_e($error) ?></span></div>
+        <div class="student-note student-note-danger student-feedback-notice" role="alert"><?= student_icon_svg('error', '', true) ?><span><?= student_e($error) ?></span></div>
     <?php endif; ?>
 
     <?php if ($success): ?>
         <section class="student-card student-card-pad student-feedback-success" role="status">
-            <span class="material-symbols-outlined" aria-hidden="true">check_circle</span>
+            <?= student_icon_svg('check_circle', '', true) ?>
             <h2>Feedback submitted</h2>
             <p>Thank you. Your clinic feedback has been recorded.</p>
             <a class="student-button cliniq-floating-back cliniq-floating-back--patient" href="<?= student_e(student_portal_url('dashboard')) ?>">Back to dashboard</a>
@@ -118,18 +118,18 @@ render_student_header('Give Feedback', 'dashboard');
                 <section class="student-card student-card-pad">
                     <div class="student-feedback-step-heading"><span>1</span><div><h2>Rate your visit</h2><p>Choose one answer for each statement.</p></div></div>
                     <?php foreach (clinic_feedback_sections() as $section => $questions): ?>
-                        <details class="student-feedback-rating-group" <?= $section === 'Tangibles' ? 'open' : '' ?>><summary><?= student_e($section) ?><span class="material-symbols-outlined" aria-hidden="true">expand_more</span></summary>
+                        <details class="student-feedback-rating-group" <?= $section === 'Tangibles' ? 'open' : '' ?>><summary><?= student_e($section) ?><?= student_icon_svg('expand_more', '', true) ?></summary>
                             <?php foreach ($questions as $code => $question): ?><fieldset class="student-feedback-question"><legend><?= student_e($question) ?> <span aria-label="required">*</span></legend><div class="student-feedback-scale"><?php for ($rating = 1; $rating <= 7; $rating++): ?><label><input type="radio" name="ratings[<?= student_e($code) ?>]" value="<?= $rating ?>" required <?= is_array($values['ratings'] ?? null) && (string) ($values['ratings'][$code] ?? '') === (string) $rating ? 'checked' : '' ?>><span><?= $rating ?></span></label><?php endfor; ?></div><div class="student-feedback-scale-labels"><span>Strongly disagree</span><span>Strongly agree</span></div></fieldset><?php endforeach; ?>
                         </details>
                     <?php endforeach; ?>
-                    <div class="student-feedback-step-actions"><button type="button" class="student-button" data-feedback-next>Continue to comments <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></button></div>
+                    <div class="student-feedback-step-actions"><button type="button" class="student-button" data-feedback-next>Continue to comments <?= student_icon_svg('arrow_forward', '', true) ?></button></div>
                 </section>
                 </div>
                 <div class="student-feedback-survey-step" data-feedback-step="2" hidden>
                 <section class="student-card student-card-pad">
                     <div class="student-feedback-step-heading"><span>2</span><div><h2>Anything else?</h2><p>Optional comments help us understand your experience.</p></div></div>
                     <label class="student-field">Comments<textarea class="student-input student-feedback-textarea" name="comments" maxlength="5000" rows="4" placeholder="Share a suggestion, compliment, or concern"><?= student_e(student_feedback_value($values, 'comments')) ?></textarea></label>
-                    <div class="student-feedback-step-actions"><button type="button" class="student-button student-button-secondary" data-feedback-back>Back to ratings</button><button type="submit" class="student-button student-feedback-submit"><span class="material-symbols-outlined" aria-hidden="true">send</span>Submit feedback</button></div>
+                    <div class="student-feedback-step-actions"><button type="button" class="student-button student-button-secondary" data-feedback-back>Back to ratings</button><button type="submit" class="student-button student-feedback-submit"><?= student_icon_svg('send', '', true) ?>Submit feedback</button></div>
                 </section>
                 </div>
             </form>
@@ -236,7 +236,8 @@ render_student_header('Give Feedback', 'dashboard');
         if (invalid) {
             const group = invalid.closest('details');
             if (group) group.open = true;
-            invalid.reportValidity();
+            if (window.CliniqFormValidation) window.CliniqFormValidation.validate(invalid, true);
+            invalid.focus();
             return;
         }
         showStep(2);

@@ -3,9 +3,68 @@ require_once __DIR__ . '/includes/patient-layout.php';
 require_once __DIR__ . '/../app/services/ApeWorkflow.php';
 
 $profile = student_require_login();
-if (($profile['account_type'] ?? '') !== 'student') {
+$accountType = (string) ($profile['account_type'] ?? '');
+if (in_array($accountType, ['faculty', 'school_personnel'], true)) {
+    $staffPatientId = (int) $profile['person_id'];
+    ensure_ape_workflow_schema();
+    $staffApeRecord = ape_fetch_patient_record($staffPatientId);
+    $staffApeIsManaged = $staffApeRecord !== null && ape_is_staff_managed_record($staffApeRecord);
+    $staffCertificate = null;
+    if ($staffApeIsManaged) {
+        foreach (ape_documents_for_record((int) $staffApeRecord['ape_id']) as $document) {
+            if (($document['document_type'] ?? '') === 'Medical Certificate') {
+                $staffCertificate = $document;
+                break;
+            }
+        }
+    }
+    $staffApeSubmitted = $staffApeIsManaged && ($staffApeRecord['workflow_status'] ?? '') === 'Submitted' && $staffCertificate !== null;
+    render_student_header('APE Status', 'ape');
+    ?>
+    <section class="student-page-header">
+        <div>
+            <p class="student-eyebrow">Clinic-Controlled APE</p>
+            <h1 class="student-title">APE Status</h1>
+            <p class="student-subtitle">Your APE is handled by the clinic. You do not need to schedule, upload, or complete follow-up actions here.</p>
+        </div>
+    </section>
+    <section class="student-card student-card-pad max-w-3xl mx-auto">
+        <?php if (!$staffApeIsManaged): ?>
+            <div class="student-note student-note-info">
+                <?= student_icon_svg('info', '', false) ?>
+                <div><strong>No staff APE has been opened.</strong><br>The clinic has not opened an APE record for the current cycle.</div>
+            </div>
+        <?php else: ?>
+            <div class="flex items-start justify-between gap-4 mb-6">
+                <div>
+                    <h2 class="student-card-title"><?= student_e((string) $staffApeRecord['academic_year']) ?> Staff APE</h2>
+                    <p class="student-card-copy">Faculty and NTP APEs require one clinic-submitted medical certificate.</p>
+                </div>
+                <span class="student-badge <?= $staffApeSubmitted ? 'student-badge-success' : 'student-badge-warning' ?>"><?= $staffApeSubmitted ? 'Submitted' : 'Awaiting Medical Certificate' ?></span>
+            </div>
+            <?php if ($staffApeSubmitted): ?>
+                <div class="student-note student-note-success mb-5">
+                    <?= student_icon_svg('task_alt', '', false) ?>
+                    <div><strong>Your staff APE is submitted.</strong><br>Submitted by the clinic on <?= student_e(date('F j, Y', strtotime((string) $staffCertificate['uploaded_at']))) ?>.</div>
+                </div>
+                <a class="student-button-secondary text-decoration-none" href="<?= student_e(student_portal_url('ape-document', ['id' => (int) $staffCertificate['document_id']])) ?>" data-file-preview data-preview-type="<?= student_e(strtolower(pathinfo((string) $staffCertificate['original_filename'], PATHINFO_EXTENSION)) === 'pdf' ? 'pdf' : 'file') ?>" data-preview-title="Medical Certificate">
+                    <?= student_icon_svg('visibility', '', false) ?> View Medical Certificate
+                </a>
+            <?php else: ?>
+                <div class="student-note student-note-info">
+                    <?= student_icon_svg('hourglass_top', '', false) ?>
+                    <div><strong>Awaiting medical certificate.</strong><br>The clinic will submit your certificate. No action is needed from you.</div>
+                </div>
+            <?php endif; ?>
+        <?php endif; ?>
+    </section>
+    <?php
+    render_student_footer();
+    return;
+}
+if ($accountType !== 'student') {
     http_response_code(403);
-    exit('APE self-service is available to students only. Faculty and Non-Teaching Personnel APEs are completed by clinic staff.');
+    exit('APE Status is available to students, Faculty, and Non-Teaching Personnel with a clinic account.');
 }
 $patientId = (int) $profile['person_id'];
 ensure_ape_workflow_schema();
@@ -512,7 +571,7 @@ render_student_header('APE Status', 'ape');
         <p class="student-subtitle">Track your requirements, documents, and clinic updates.</p>
     </div>
     <span class="student-badge <?= student_e($headerBadge) ?>">
-        <span class="material-symbols-outlined text-[14px]">pending_actions</span>
+        <?= student_icon_svg('pending_actions', 'text-[14px]', false) ?>
         <?= student_e($clearanceStatus) ?>
     </span>
 </section>
@@ -533,13 +592,13 @@ render_student_header('APE Status', 'ape');
 
 <?php if (isset($_GET['uploaded'])): ?>
     <div class="student-note student-note-success student-toast" data-student-toast role="status" aria-live="polite">
-        <span class="material-symbols-outlined">check_circle</span>
+        <?= student_icon_svg('check_circle', '', false) ?>
         <div><?= (int) $_GET['uploaded'] ?> APE document(s) were uploaded together and are waiting for clinic verification.</div>
-        <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+        <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><?= student_icon_svg('close', '', true) ?></button>
     </div>
 <?php elseif ($uploadError !== ''): ?>
     <div class="student-note student-note-danger mb-4">
-        <span class="material-symbols-outlined">error</span>
+        <?= student_icon_svg('error', '', false) ?>
         <div><?= student_e($uploadError) ?></div>
     </div>
 <?php endif; ?>
@@ -548,7 +607,7 @@ render_student_header('APE Status', 'ape');
     <section class="student-action-card student-ape-batch-card mb-4">
         <div class="flex items-start gap-4">
             <span class="student-icon-box">
-                <span class="material-symbols-outlined">event_available</span>
+                <?= student_icon_svg('event_available', '', false) ?>
             </span>
             <div>
                 <p class="student-eyebrow mb-1">Scheduled physical examination</p>
@@ -563,7 +622,7 @@ render_student_header('APE Status', 'ape');
 <section class="student-action-card student-ape-next-action mb-4">
     <div class="flex items-start gap-4">
         <span class="student-icon-box">
-            <span class="material-symbols-outlined"><?= student_e($nextActionIcon) ?></span>
+            <?= student_icon_svg((string) (student_e($nextActionIcon)), '', false) ?>
         </span>
         <div>
             <h2><?= student_e($nextActionHeading) ?>: <?= student_e($nextActionTitle) ?></h2>
@@ -576,7 +635,7 @@ render_student_header('APE Status', 'ape');
         </span>
     <?php endif; ?>
     <?php if ($apeIsInactive): ?>
-        <a class="student-button-secondary" href="<?= student_e(student_portal_url('help')) ?>"><span class="material-symbols-outlined">support_agent</span> Need help continuing?</a>
+        <a class="student-button-secondary" href="<?= student_e(student_portal_url('help')) ?>"><?= student_icon_svg('support_agent', '', false) ?> Need help continuing?</a>
     <?php endif; ?>
 </section>
 
@@ -610,7 +669,7 @@ render_student_header('APE Status', 'ape');
         </div>
         <?php if ($hasScheduledBatch): ?>
             <div class="student-ape-mobile-batch">
-                <span class="material-symbols-outlined">event_available</span>
+                <?= student_icon_svg('event_available', '', false) ?>
                 <div>
             <span class="student-eyebrow">Scheduled examination group</span>
                     <strong><?= student_e($apeRecord['batch_name']) ?></strong>
@@ -649,7 +708,7 @@ render_student_header('APE Status', 'ape');
                     <div class="student-ape-step <?= student_e($stepClass) ?>">
                         <span class="student-ape-step-rail" aria-hidden="true"></span>
                         <span class="student-ape-step-index">
-                            <span class="material-symbols-outlined"><?= student_e($isDone ? 'check' : (($isActive || $isInProgress) ? 'pending_actions' : $step['icon'])) ?></span>
+                            <?= student_icon_svg((string) (student_e($isDone ? 'check' : (($isActive || $isInProgress) ? 'pending_actions' : $step['icon']))), '', false) ?>
                         </span>
                         <div class="student-ape-step-body" data-mobile-step-label="<?= student_e($step['title']) ?>">
                             <div class="student-ape-step-top">
@@ -659,10 +718,10 @@ render_student_header('APE Status', 'ape');
                             <strong><?= student_e($stepTitle) ?></strong>
                             <span><?= student_e($stepCopy) ?></span>
                             <?php if ($isActive && $stepNumber === 1 && $canUploadDocuments): ?>
-                                <a class="student-ape-step-action" data-mobile-open-panel="ape-documents-panel" href="#ape-documents-panel">Upload APE documents <span class="material-symbols-outlined">arrow_downward</span></a>
+                                <a class="student-ape-step-action" data-mobile-open-panel="ape-documents-panel" href="#ape-documents-panel">Upload APE documents <?= student_icon_svg('arrow_downward', '', false) ?></a>
                             <?php endif; ?>
                             <?php if ($isActive && $stepNumber === 3 && $stepThreeDocumentUploadRequired): ?>
-                                <a class="student-ape-step-action" data-mobile-open-panel="ape-documents-panel" href="#ape-documents-panel">Submit required documents <span class="material-symbols-outlined">arrow_downward</span></a>
+                                <a class="student-ape-step-action" data-mobile-open-panel="ape-documents-panel" href="#ape-documents-panel">Submit required documents <?= student_icon_svg('arrow_downward', '', false) ?></a>
                             <?php endif; ?>
                         </div>
                     </div>
@@ -687,10 +746,10 @@ render_student_header('APE Status', 'ape');
             <form method="post" enctype="multipart/form-data" id="ape-batch-upload-form" data-no-loading>
                 <input type="hidden" name="action" value="upload_ape_documents">
                 <input type="hidden" name="_csrf" value="<?= student_e(csrf_token()) ?>">
-                <p class="ape-document-guidance"><span class="material-symbols-outlined" aria-hidden="true">lock</span><span>Upload clinic-requested files only. <a href="<?= student_e(student_legal_url('privacy')) ?>" target="_blank" rel="noopener" class="student-auth-link">Privacy Notice</a></span></p>
+                <p class="ape-document-guidance"><?= student_icon_svg('lock', '', true) ?><span>Upload clinic-requested files only. <a href="<?= student_e(student_legal_url('privacy')) ?>" target="_blank" rel="noopener" class="student-auth-link">Privacy Notice</a></span></p>
             <?php if ($missingDocumentCount > 0): ?>
                 <details class="ape-missing-documents mb-4">
-                    <summary><span class="material-symbols-outlined" aria-hidden="true">info</span><span><?= student_e((string) $missingDocumentCount) ?> document<?= $missingDocumentCount === 1 ? '' : 's' ?> still needed</span><span class="material-symbols-outlined ape-missing-documents-chevron" aria-hidden="true">expand_more</span></summary>
+                    <summary><?= student_icon_svg('info', '', true) ?><span><?= student_e((string) $missingDocumentCount) ?> document<?= $missingDocumentCount === 1 ? '' : 's' ?> still needed</span><?= student_icon_svg('expand_more', 'ape-missing-documents-chevron', true) ?></summary>
                     <p><?= student_e($missingItemsForDisplay) ?></p>
                 </details>
             <?php endif; ?>
@@ -698,22 +757,22 @@ render_student_header('APE Status', 'ape');
                 <?php foreach ($documents as $doc): ?>
                     <details class="student-document-mobile-row">
                         <summary>
-                            <span class="student-icon-box"><span class="material-symbols-outlined"><?= student_e($doc['icon']) ?></span></span>
+                            <span class="student-icon-box"><?= student_icon_svg((string) (student_e($doc['icon'])), '', false) ?></span>
                             <span class="student-document-mobile-copy">
                                 <strong><?= student_e($doc['name']) ?></strong>
                                 <span id="ape-mobile-row-state-<?= student_e($doc['key']) ?>" data-default-label="<?= student_e($doc['upload_due_date'] ? 'Due ' . date('M j, Y', strtotime($doc['upload_due_date'])) : '') ?>"<?= $doc['upload_due_date'] ? '' : ' class="hidden"' ?>><?= $doc['upload_due_date'] ? 'Due ' . student_e(date('M j, Y', strtotime($doc['upload_due_date']))) : '' ?></span>
                             </span>
                             <span class="student-badge <?= student_e($doc['badge']) ?>" id="ape-mobile-status-<?= student_e($doc['key']) ?>" data-default-status="<?= student_e($doc['status']) ?>" data-default-badge="<?= student_e($doc['badge']) ?>"><?= student_e($doc['status']) ?></span>
-                            <span class="material-symbols-outlined student-document-mobile-chevron" aria-hidden="true">expand_more</span>
+                            <?= student_icon_svg('expand_more', 'student-document-mobile-chevron', true) ?>
                         </summary>
                         <div class="student-document-mobile-detail">
                             <p><?= student_e($doc['detail']) ?></p>
                             <?php if (!$doc['disabled']): ?><p class="student-document-mobile-staged hidden" id="ape-mobile-file-name-<?= student_e($doc['key']) ?>"></p><?php endif; ?>
                             <?php if ($doc['disabled']): ?>
-                                <?php if (!empty($doc['document_id'])): ?><a class="student-button-secondary text-decoration-none" href="<?= student_e($doc['preview_url']) ?>" data-file-preview data-preview-type="<?= student_e($doc['preview_type']) ?>" data-preview-title="<?= student_e($doc['name']) ?>"><span class="material-symbols-outlined">visibility</span> View document</a><?php endif; ?>
+                                <?php if (!empty($doc['document_id'])): ?><a class="student-button-secondary text-decoration-none" href="<?= student_e($doc['preview_url']) ?>" data-file-preview data-preview-type="<?= student_e($doc['preview_type']) ?>" data-preview-title="<?= student_e($doc['name']) ?>"><?= student_icon_svg('visibility', '', false) ?> View document</a><?php endif; ?>
                              <?php else: ?>
-                                 <button class="<?= student_e($doc['button']) ?>" type="button" onclick="selectApeFile('<?= student_e($doc['key']) ?>')"><span class="material-symbols-outlined">upload</span> Choose file</button>
-                                 <button class="student-button-secondary ape-mobile-remove-file hidden" id="ape-mobile-remove-<?= student_e($doc['key']) ?>" type="button" onclick="removeApeFile('<?= student_e($doc['key']) ?>')"><span class="material-symbols-outlined">delete</span> Remove selected file(s)</button>
+                                 <button class="<?= student_e($doc['button']) ?>" type="button" onclick="selectApeFile('<?= student_e($doc['key']) ?>')"><?= student_icon_svg('upload', '', false) ?> Choose file</button>
+                                 <button class="student-button-secondary ape-mobile-remove-file hidden" id="ape-mobile-remove-<?= student_e($doc['key']) ?>" type="button" onclick="removeApeFile('<?= student_e($doc['key']) ?>')"><?= student_icon_svg('delete', '', false) ?> Remove selected file(s)</button>
                              <?php endif; ?>
                         </div>
                     </details>
@@ -723,7 +782,7 @@ render_student_header('APE Status', 'ape');
                 <?php foreach ($documents as $doc): ?>
                     <div class="student-document-card">
                         <span class="student-icon-box">
-                            <span class="material-symbols-outlined"><?= student_e($doc['icon']) ?></span>
+                            <?= student_icon_svg((string) (student_e($doc['icon'])), '', false) ?>
                         </span>
                         <div class="student-document-meta">
                             <div class="flex flex-wrap items-center gap-2">
@@ -742,11 +801,11 @@ render_student_header('APE Status', 'ape');
                             <div class="student-appointment-actions">
                                 <?php if (!empty($doc['document_id'])): ?>
                                     <a class="student-button-secondary text-decoration-none" href="<?= student_e($doc['preview_url']) ?>" data-file-preview data-preview-type="<?= student_e($doc['preview_type']) ?>" data-preview-title="<?= student_e($doc['name']) ?>">
-                                        <span class="material-symbols-outlined">visibility</span> Preview
+                                        <?= student_icon_svg('visibility', '', false) ?> Preview
                                     </a>
                                 <?php endif; ?>
                                 <button class="<?= student_e($doc['button']) ?>" type="button" disabled>
-                                    <span class="material-symbols-outlined">lock</span>
+                                    <?= student_icon_svg('lock', '', false) ?>
                                     <?= student_e($doc['action']) ?>
                                 </button>
                             </div>
@@ -754,11 +813,11 @@ render_student_header('APE Status', 'ape');
                             <div class="student-appointment-actions ape-document-actions" data-document-key="<?= student_e($doc['key']) ?>">
                                 <input class="hidden ape-document-input" type="file" name="documents[<?= student_e($doc['key']) ?>][]" id="ape-file-<?= student_e($doc['key']) ?>" accept=".pdf,.png,.jpg,.jpeg" data-document-name="<?= student_e($doc['name']) ?>" onchange="handleApeFileSelected(this)" multiple>
                                 <button class="<?= student_e($doc['button']) ?> ape-select-file" type="button" onclick="selectApeFile('<?= student_e($doc['key']) ?>')">
-                                    <span class="material-symbols-outlined">upload</span>
+                                    <?= student_icon_svg('upload', '', false) ?>
                                     <span><?= $doc['action'] === 'Replace' ? 'Select Replacement Files' : 'Select Files' ?></span>
                                 </button>
                                 <button class="student-button-secondary ape-remove-file hidden" type="button" onclick="removeApeFile('<?= student_e($doc['key']) ?>')">
-                                    <span class="material-symbols-outlined">delete</span>
+                                    <?= student_icon_svg('delete', '', false) ?>
                                     Remove
                                 </button>
                             </div>
@@ -767,7 +826,7 @@ render_student_header('APE Status', 'ape');
                 <?php endforeach; ?>
                 <?php if (!$documents): ?>
                     <div class="student-note student-note-warning">
-                        <span class="material-symbols-outlined">info</span>
+                        <?= student_icon_svg('info', '', false) ?>
                         <div>No APE requirements have been listed by the clinic yet.</div>
                     </div>
                 <?php endif; ?>
@@ -779,7 +838,7 @@ render_student_header('APE Status', 'ape');
                         <span>Select up to 3 files per requirement. Images are optimized in your browser before upload; PDFs must be 2 MB or smaller.</span>
                     </div>
                     <button class="student-button" id="ape-submit-all" type="submit" disabled>
-                        <span class="material-symbols-outlined">cloud_upload</span>
+                        <?= student_icon_svg('cloud_upload', '', false) ?>
                         Submit All Documents <span id="ape-selected-count"></span>
                     </button>
                     <div id="ape-upload-progress" class="hidden w-full" aria-live="polite">
@@ -800,7 +859,7 @@ render_student_header('APE Status', 'ape');
     <div class="student-card w-full max-w-md p-6 shadow-xl">
         <div class="flex items-start gap-4 mb-6">
             <span class="student-icon-box">
-                <span class="material-symbols-outlined">cloud_upload</span>
+                <?= student_icon_svg('cloud_upload', '', false) ?>
             </span>
             <div>
                 <h2 id="ape-upload-confirm-title" class="font-headline text-xl font-extrabold text-[#17261d] mb-2">Submit selected APE documents?</h2>
@@ -810,7 +869,7 @@ render_student_header('APE Status', 'ape');
         <div class="flex flex-col sm:flex-row justify-end gap-3">
             <button type="button" class="student-button-secondary justify-center" id="ape-cancel-upload-confirm">Cancel</button>
             <button type="button" class="student-button justify-center" id="ape-confirm-upload-submit">
-                <span class="material-symbols-outlined">check</span>
+                <?= student_icon_svg('check', '', false) ?>
                 Confirm Upload
             </button>
         </div>
@@ -831,7 +890,7 @@ render_student_header('APE Status', 'ape');
         <?php if ($showFindings): ?>
             <?php foreach ($findings as $finding): ?>
                 <article class="student-document-card ape-timeline-clinical-entry <?= $finding['follow_up_required'] ? 'is-follow-up' : 'is-normal' ?>">
-                    <span class="student-icon-box"><span class="material-symbols-outlined"><?= $finding['follow_up_required'] ? 'medical_information' : 'check_circle' ?></span></span>
+                    <span class="student-icon-box"><?= student_icon_svg((string) ($finding['follow_up_required'] ? 'medical_information' : 'check_circle'), '', false) ?></span>
                     <div class="student-document-meta">
                         <div class="ape-timeline-entry-heading">
                             <?php $findingDisplayResult = in_array($finding['result_status'], ['Normal', 'With Finding'], true) ? 'Examined' : $finding['result_status']; ?>
@@ -844,7 +903,7 @@ render_student_header('APE Status', 'ape');
             <?php endforeach; ?>
             <?php if (!$findings): ?>
                 <article class="student-document-card ape-timeline-clinical-entry is-normal">
-                    <span class="student-icon-box"><span class="material-symbols-outlined">check_circle</span></span>
+                    <span class="student-icon-box"><?= student_icon_svg('check_circle', '', false) ?></span>
                     <div class="student-document-meta"><h3>No active finding recorded</h3><p><?= student_e($studentNote ?: 'No additional patient instruction has been recorded.') ?></p></div>
                 </article>
             <?php endif; ?>
@@ -852,7 +911,7 @@ render_student_header('APE Status', 'ape');
         <?php foreach ($activities as $activity): ?>
             <?php [$activityLabel, $activityIcon] = $studentActivityLabels[(string) $activity['action_label']] ?? ['Clinic updated your APE record', 'info']; ?>
             <div class="student-document-card">
-                <span class="student-icon-box"><span class="material-symbols-outlined"><?= student_e($activityIcon) ?></span></span>
+                <span class="student-icon-box"><?= student_icon_svg((string) (student_e($activityIcon)), '', false) ?></span>
                 <div class="student-document-meta">
                     <h3><?= student_e($activityLabel) ?></h3>
                     <p><?= student_e(date('M d, Y g:i A', strtotime($activity['created_at']))) ?></p>
@@ -860,7 +919,7 @@ render_student_header('APE Status', 'ape');
             </div>
         <?php endforeach; ?>
         <?php if (!$activities): ?>
-            <div class="student-note student-note-warning"><span class="material-symbols-outlined">history</span><div>No APE activity has been recorded.</div></div>
+            <div class="student-note student-note-warning"><?= student_icon_svg('history', '', false) ?><div>No APE activity has been recorded.</div></div>
         <?php endif; ?>
         <?php if ($historyTotalPages > 1): ?>
             <nav class="student-pagination" aria-label="APE activity pages">
@@ -870,10 +929,10 @@ render_student_header('APE Status', 'ape');
                         href="?ape_history_page=<?= (int) ($historyPage - 1) ?>#ape-activity-timeline"
                         data-ape-history-page="<?= (int) ($historyPage - 1) ?>"
                         aria-label="Previous activity page"
-                    ><span class="material-symbols-outlined" aria-hidden="true">chevron_left</span></a>
+                    ><?= student_icon_svg('chevron_left', '', true) ?></a>
                 <?php else: ?>
                     <span class="student-pagination-link student-pagination-arrow is-disabled" aria-disabled="true">
-                        <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
+                        <?= student_icon_svg('chevron_left', '', true) ?>
                     </span>
                 <?php endif; ?>
                 <?php for ($page = 1; $page <= $historyTotalPages; $page++): ?>
@@ -890,10 +949,10 @@ render_student_header('APE Status', 'ape');
                         href="?ape_history_page=<?= (int) ($historyPage + 1) ?>#ape-activity-timeline"
                         data-ape-history-page="<?= (int) ($historyPage + 1) ?>"
                         aria-label="Next activity page"
-                    ><span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></a>
+                    ><?= student_icon_svg('chevron_right', '', true) ?></a>
                 <?php else: ?>
                     <span class="student-pagination-link student-pagination-arrow is-disabled" aria-disabled="true">
-                        <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                        <?= student_icon_svg('chevron_right', '', true) ?>
                     </span>
                 <?php endif; ?>
             </nav>
@@ -1182,7 +1241,7 @@ render_student_header('APE Status', 'ape');
         }
         event.preventDefault();
         submitButton.disabled = true;
-        submitButton.innerHTML = '<span class="material-symbols-outlined">progress_activity</span> Uploading Documents...';
+        submitButton.replaceChildren(window.studentIcon('progress_activity', '', true), document.createTextNode(' Uploading Documents...'));
         try {
             if (!window.XMLHttpRequest || !window.FormData) {
                 apeUploadForm.submit();
@@ -1220,7 +1279,7 @@ render_student_header('APE Status', 'ape');
         } catch (error) {
             apeUploadForm.dataset.uploadConfirmed = '0';
             submitButton.disabled = false;
-            submitButton.innerHTML = '<span class="material-symbols-outlined">cloud_upload</span> Try Upload Again';
+            submitButton.replaceChildren(window.studentIcon('cloud_upload', '', true), document.createTextNode(' Try Upload Again'));
             setApeUploadProgress(0, '');
             window.studentNotify?.(error?.message || 'The upload could not be completed. Please try again.');
         }

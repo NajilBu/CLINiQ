@@ -245,16 +245,16 @@ render_student_header('Appointments', 'appointment');
 
 <?php if ($success): ?>
     <div class="student-note student-note-success student-toast" data-student-toast role="status" aria-live="polite">
-        <span class="material-symbols-outlined">check_circle</span>
+        <?= student_icon_svg('check_circle', '', false) ?>
         <div>
             <strong>Appointment updated.</strong>
             <?= student_e($successMessage) ?>
         </div>
-        <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+        <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><?= student_icon_svg('close', '', true) ?></button>
     </div>
 <?php elseif ($error !== ''): ?>
     <div class="student-note student-note-danger mb-4">
-        <span class="material-symbols-outlined">error</span>
+        <?= student_icon_svg('error', '', false) ?>
         <div>
             <strong>Appointment not sent.</strong>
             <?= student_e($error) ?>
@@ -274,23 +274,23 @@ render_student_header('Appointments', 'appointment');
         <div class="student-card-pad">
             <?php if (!$enrollmentConfirmed): ?>
                 <div class="student-note student-note-warning student-appointment-feedback-note">
-                    <span class="material-symbols-outlined">school</span>
+                    <?= student_icon_svg('school', '', false) ?>
                     <div><strong>Confirm enrollment before booking.</strong><br>Your appointment history and cancellation controls remain available. <a href="<?= student_e(student_portal_url('dashboard')) ?>" class="student-auth-link">Confirm your enrollment on the dashboard</a> to request a new appointment.</div>
                 </div>
             <?php elseif ($feedbackRequired): ?>
                 <div class="student-note student-note-danger student-appointment-feedback-note">
-                    <span class="material-symbols-outlined">rate_review</span>
+                    <?= student_icon_svg('rate_review', '', false) ?>
                     <div>
                         <strong>Feedback required before another appointment.</strong><br>
                         <?= count($pendingFeedbackVisits) === 1 ? 'One active visit needs your feedback.' : count($pendingFeedbackVisits) . ' active visits need your feedback.' ?> You cannot request another clinic appointment until this required feedback is completed.
-                        <p class="mt-3 mb-0"><a href="<?= student_e($feedbackPortalUrl) ?>" class="student-button-danger text-decoration-none">Complete Required Feedback <span class="material-symbols-outlined">arrow_forward</span></a></p>
+                        <p class="mt-3 mb-0"><a href="<?= student_e($feedbackPortalUrl) ?>" class="student-button-danger text-decoration-none">Complete Required Feedback <?= student_icon_svg('arrow_forward', '', false) ?></a></p>
                     </div>
                 </div>
             <?php else: ?>
             <form id="booking-form" method="POST" action="?month=<?= student_e($month->format('Y-m')) ?>">
                 <input type="hidden" name="appt_date" id="appt-date-input" value="">
                 <input type="hidden" name="appt_time" id="appt-time-input" value="">
-                <p class="appointment-privacy-note"><span class="material-symbols-outlined" aria-hidden="true">privacy_tip</span><span>Your appointment details are added to your clinic record. <a href="<?= student_e(student_legal_url('privacy')) ?>" target="_blank" rel="noopener" class="student-auth-link">Privacy Notice</a></span></p>
+                <p class="appointment-privacy-note"><?= student_icon_svg('privacy_tip', '', true) ?><span>Your appointment details are added to your clinic record. <a href="<?= student_e(student_legal_url('privacy')) ?>" target="_blank" rel="noopener" class="student-auth-link">Privacy Notice</a></span></p>
                 <p class="student-card-copy mt-2">Appointments may begin up to 15 minutes late while the clinic prepares for the next patient.</p>
 
                 <div class="student-field mb-5">
@@ -312,11 +312,11 @@ render_student_header('Appointments', 'appointment');
                         <label class="student-label mb-0">2. Preferred Date</label>
                         <div class="student-month-nav">
                             <a href="?month=<?= student_e($prevMonth) ?>" aria-label="Previous month" data-appointment-month-link>
-                                <span class="material-symbols-outlined">chevron_left</span>
+                                <?= student_icon_svg('chevron_left', '', false) ?>
                             </a>
                             <strong><?= student_e($month->format('F Y')) ?></strong>
                             <a href="?month=<?= student_e($nextMonth) ?>" aria-label="Next month" data-appointment-month-link>
-                                <span class="material-symbols-outlined">chevron_right</span>
+                                <?= student_icon_svg('chevron_right', '', false) ?>
                             </a>
                         </div>
                     </div>
@@ -363,7 +363,7 @@ render_student_header('Appointments', 'appointment');
                         <?php endfor; ?>
                     </div>
                     <p class="student-calendar-action-hint">
-                        <span class="material-symbols-outlined" aria-hidden="true">touch_app</span>
+                        <?= student_icon_svg('touch_app', '', true) ?>
                         <span class="student-calendar-desktop-hint">Select an available date to choose a time.</span>
                         <span class="student-calendar-mobile-hint">Tap a date to select a time.</span>
                     </p>
@@ -373,11 +373,11 @@ render_student_header('Appointments', 'appointment');
                 <div class="student-appointment-booking-sheet" id="appointment-booking-sheet" aria-hidden="true">
                     <div class="student-appointment-booking-sheet-head">
                         <div><p>Appointment details</p><strong>Finish your request</strong></div>
-                        <button type="button" data-close-booking-sheet aria-label="Close appointment details"><span class="material-symbols-outlined">close</span></button>
+                        <button type="button" data-close-booking-sheet aria-label="Close appointment details"><?= student_icon_svg('close', '', false) ?></button>
                     </div>
                 <div class="student-field student-selected-schedule" id="selected-schedule-summary" hidden aria-live="polite">
                     <span class="student-icon-box">
-                        <span class="material-symbols-outlined">event_available</span>
+                        <?= student_icon_svg('event_available', '', false) ?>
                     </span>
                     <div>
                         <span>Selected Schedule</span>
@@ -392,7 +392,7 @@ render_student_header('Appointments', 'appointment');
 
                 <button type="submit" class="student-button w-full" id="appointment-submit" disabled>
                     Send Appointment Request
-                    <span class="material-symbols-outlined">send</span>
+                    <?= student_icon_svg('send', '', false) ?>
                 </button>
                 </div>
             </form>
@@ -413,7 +413,7 @@ render_student_header('Appointments', 'appointment');
         <div class="student-card-pad">
             <div class="student-progress-list mb-4">
                 <div class="student-progress-step">
-                    <span class="student-progress-step-icon material-symbols-outlined">event_available</span>
+                    <?= student_icon_svg('event_available', 'student-progress-step-icon', false) ?>
                     <div>
                         <strong>Available dates</strong>
                         <span>You can request any open time slot.</span>
@@ -421,7 +421,7 @@ render_student_header('Appointments', 'appointment');
                     <span class="student-badge student-badge-success">Open</span>
                 </div>
                 <div class="student-progress-step">
-                    <span class="student-progress-step-icon material-symbols-outlined">schedule</span>
+                    <?= student_icon_svg('schedule', 'student-progress-step-icon', false) ?>
                     <div>
                         <strong>Limited hours</strong>
                         <span>Some time slots are blocked by the clinic.</span>
@@ -429,7 +429,7 @@ render_student_header('Appointments', 'appointment');
                     <span class="student-badge student-badge-warning">Limited</span>
                 </div>
                 <div class="student-progress-step">
-                    <span class="student-progress-step-icon material-symbols-outlined">event_busy</span>
+                    <?= student_icon_svg('event_busy', 'student-progress-step-icon', false) ?>
                     <div>
                         <strong>Unavailable dates</strong>
                         <span>The clinic cannot accept appointment requests.</span>
@@ -437,7 +437,7 @@ render_student_header('Appointments', 'appointment');
                     <span class="student-badge student-badge-danger">Closed</span>
                 </div>
                 <div class="student-progress-step">
-                    <span class="student-progress-step-icon material-symbols-outlined">pending_actions</span>
+                    <?= student_icon_svg('pending_actions', 'student-progress-step-icon', false) ?>
                     <div>
                         <strong>Orange dates</strong>
                         <span>You already have a pending or scheduled appointment.</span>
@@ -447,7 +447,7 @@ render_student_header('Appointments', 'appointment');
             </div>
 
             <div class="student-note student-note-warning">
-                <span class="material-symbols-outlined">info</span>
+                <?= student_icon_svg('info', '', false) ?>
                 <div><strong>Pending is not confirmed.</strong> Wait for the clinic to approve your request before visiting.</div>
             </div>
         </div>
@@ -464,7 +464,7 @@ render_student_header('Appointments', 'appointment');
                 <span id="selected-date-label"></span>
             </div>
             <button type="button" class="student-calendar-time-close" data-close-time-modal aria-label="Close time selection">
-                <span class="material-symbols-outlined">close</span>
+                <?= student_icon_svg('close', '', false) ?>
             </button>
         </div>
 
@@ -505,7 +505,7 @@ render_student_header('Appointments', 'appointment');
     <div class="student-card-pad appointment-active-list">
         <?php if ($activeAppointments === []): ?>
             <div class="student-note student-note-warning">
-                <span class="material-symbols-outlined">event_busy</span>
+                <?= student_icon_svg('event_busy', '', false) ?>
                 <div><strong>No active bookings.</strong> Your current appointment requests will appear here.</div>
             </div>
         <?php else: ?>
@@ -532,14 +532,14 @@ render_student_header('Appointments', 'appointment');
                 ?>
                 <article class="student-appointment-active student-appointment-active--<?= student_e(strtolower(str_replace(' ', '-', $status))) ?>">
                     <span class="student-icon-box">
-                        <span class="material-symbols-outlined"><?= $status === 'Scheduled' ? 'event_available' : 'pending_actions' ?></span>
+                        <?= student_icon_svg((string) ($status === 'Scheduled' ? 'event_available' : 'pending_actions'), '', false) ?>
                     </span>
                     <div class="student-appointment-active-copy">
                         <div class="flex flex-wrap items-center gap-2">
                             <h3><?= student_e($appointment['purpose']) ?></h3>
                             <span class="student-badge <?= student_e($badge) ?>"><?= student_e($displayStatus) ?></span>
                         </div>
-                        <p class="student-appointment-date"><span class="material-symbols-outlined" aria-hidden="true">schedule</span><?= student_e(date('F j, Y \a\t g:i A', strtotime($appointment['appointment_datetime']))) ?></p>
+                        <p class="student-appointment-date"><?= student_icon_svg('schedule', '', true) ?><?= student_e(date('F j, Y \a\t g:i A', strtotime($appointment['appointment_datetime']))) ?></p>
                         <p class="student-appointment-status-copy"><?= student_e($statusCopy) ?></p>
                     </div>
                     <?php if ($canCancel): ?>
@@ -552,7 +552,7 @@ render_student_header('Appointments', 'appointment');
                                 <input id="cancellation-reason-<?= (int) $appointment['appointment_id'] ?>" class="student-input student-cancel-input" type="text" name="cancellation_reason" placeholder="Tell the clinic why you need to cancel" required maxlength="500">
                                 <button type="submit" class="student-button-danger">
                                     Confirm cancellation
-                                    <span class="material-symbols-outlined">cancel</span>
+                                    <?= student_icon_svg('cancel', '', false) ?>
                                 </button>
                             </form>
                         </details>
@@ -576,7 +576,7 @@ render_student_header('Appointments', 'appointment');
     <div class="student-card-pad appointment-history-list">
         <?php if ($appointmentHistory === []): ?>
             <div class="student-note student-note-warning">
-                <span class="material-symbols-outlined">history</span>
+                <?= student_icon_svg('history', '', false) ?>
                 <div><strong>No appointment history yet.</strong> Completed and closed requests will appear here.</div>
             </div>
         <?php else: ?>
@@ -590,7 +590,7 @@ render_student_header('Appointments', 'appointment');
                 };
                 ?>
                 <article class="student-appointment-history-item">
-                    <span class="student-icon-box"><span class="material-symbols-outlined" aria-hidden="true">event_note</span></span>
+                    <span class="student-icon-box"><?= student_icon_svg('event_note', '', true) ?></span>
                     <div>
                         <div class="flex flex-wrap items-center gap-2">
                             <h3><?= student_e($appointment['purpose']) ?></h3>

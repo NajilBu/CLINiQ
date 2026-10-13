@@ -22,6 +22,27 @@ function student_e(?string $value): string
     return htmlspecialchars($value ?? '', ENT_QUOTES, 'UTF-8');
 }
 
+function student_icon_sprite(): string
+{
+    static $sprite = null;
+    if ($sprite === null) {
+        $sprite = file_get_contents(__DIR__ . '/../assets/icons/student-icons.svg') ?: '';
+    }
+    return $sprite;
+}
+
+function student_icon_svg(string $name, string $class = '', bool $ariaHidden = false): string
+{
+    static $available = null;
+    if ($available === null) {
+        preg_match_all('/id="student-icon-([a-z_]+)"/', student_icon_sprite(), $matches);
+        $available = array_fill_keys($matches[1], true);
+    }
+    $name = isset($available[$name]) ? $name : 'info';
+    $class = trim(preg_replace('/[^a-zA-Z0-9_\-\s]/', '', $class) ?? '');
+    return '<svg class="student-icon' . ($class !== '' ? ' ' . student_e($class) : '') . '" focusable="false"' . ($ariaHidden ? ' aria-hidden="true"' : '') . '><use href="#student-icon-' . student_e($name) . '"></use></svg>';
+}
+
 function student_initials(string $name): string
 {
     $parts = preg_split('/\s+/', trim($name)) ?: [];
@@ -91,7 +112,7 @@ function student_nav_items(): array
         ],
     ];
     $profile = student_current_profile();
-    if (($profile['account_type'] ?? '') === 'student') {
+    if (in_array(($profile['account_type'] ?? ''), ['student', 'faculty', 'school_personnel'], true)) {
         $items = array_slice($items, 0, 1, true) + ['ape' => [
             'label' => 'APE Status', 'url' => student_portal_url('ape-status'), 'icon' => 'fact_check',
         ]] + array_slice($items, 1, null, true);
@@ -419,7 +440,7 @@ function render_student_cookie_banner(): void
     ?>
     <aside class="student-cookie-banner" data-student-cookie-banner role="status" aria-label="Cookie notice" hidden>
         <div class="student-cookie-copy">
-            <span class="material-symbols-outlined" aria-hidden="true">cookie</span>
+            <?= student_icon_svg('cookie', '', true) ?>
             <p><strong>Essential cookies</strong><br>CLINiQ uses necessary cookies for secure login, sessions, and device preferences. By continuing, you acknowledge this use. See our <a href="<?= student_e(student_legal_url('privacy')) ?>" class="student-auth-link">Privacy Notice</a>.</p>
         </div>
         <button type="button" class="student-button student-cookie-dismiss" data-student-cookie-dismiss>Got it</button>
@@ -602,7 +623,6 @@ function render_student_header(string $title, string $active = ''): void
         <link rel="icon" href="<?= student_e($clinicLogoSrc) ?>">
         <link rel="apple-touch-icon" href="<?= student_e($clinicLogoSrc) ?>">
         <link href="/public/assets/vendor/fonts/inter-manrope.css?v=offline-1" rel="stylesheet">
-        <link href="/public/assets/vendor/fonts/material-symbols.css?v=offline-1" rel="stylesheet">
         <script>
             try { if (localStorage.getItem('cliniq-student-dark-mode') === '1') document.documentElement.classList.add('student-dark'); } catch (error) {}
         </script>
@@ -655,6 +675,25 @@ function render_student_header(string $title, string $active = ''): void
         </style>
     </head>
     <body class="student-body">
+        <?= student_icon_sprite() ?>
+        <script>
+            window.studentIcon = (name, className = '', ariaHidden = false) => {
+                const resolved = document.getElementById(`student-icon-${name}`) ? name : 'info';
+                const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                icon.setAttribute('class', `student-icon${className ? ` ${className}` : ''}`);
+                icon.setAttribute('focusable', 'false');
+                if (ariaHidden) icon.setAttribute('aria-hidden', 'true');
+                const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+                use.setAttribute('href', `#student-icon-${resolved}`);
+                icon.append(use);
+                return icon;
+            };
+            window.studentSetIcon = (icon, name) => {
+                if (!icon) return;
+                const resolved = document.getElementById(`student-icon-${name}`) ? name : 'info';
+                icon.querySelector('use')?.setAttribute('href', `#student-icon-${resolved}`);
+            };
+        </script>
         <div class="student-shell">
             <header class="student-topbar">
                 <a href="<?= student_e(student_portal_url('dashboard')) ?>" class="student-brand text-decoration-none">
@@ -668,14 +707,14 @@ function render_student_header(string $title, string $active = ''): void
                 </a>
 
                 <button type="button" class="student-nav-toggle" aria-expanded="false" aria-controls="student-navigation">
-                    <span class="material-symbols-outlined" aria-hidden="true">menu</span>
+                    <?= student_icon_svg('menu', '', true) ?>
                     <span class="student-nav-toggle-label">Menu</span>
                 </button>
 
                 <nav id="student-navigation" class="student-nav" aria-label="Patient navigation">
                     <?php foreach ($navItems as $key => $item): ?>
                         <a href="<?= student_e($item['url']) ?>" class="student-nav-link <?= $active === $key ? 'active' : '' ?> text-decoration-none">
-                            <span class="material-symbols-outlined"><?= student_e($item['icon']) ?></span>
+                            <?= student_icon_svg((string) (student_e($item['icon'])), '', false) ?>
                             <?= student_e($item['label']) ?>
                         </a>
                     <?php endforeach; ?>
@@ -684,7 +723,7 @@ function render_student_header(string $title, string $active = ''): void
                 <?php if (empty($profile['first_registration'])): ?>
                     <div class="student-notifications" data-patient-notifications data-endpoint="<?= student_e(student_portal_url('notifications')) ?>">
                         <button type="button" class="student-notification-toggle" data-notification-toggle aria-label="Notifications" aria-expanded="false" aria-controls="patient-notification-panel">
-                            <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
+                            <?= student_icon_svg('notifications', '', true) ?>
                             <span class="student-notification-badge" data-notification-badge <?= $notificationUnreadCount > 0 ? '' : 'hidden' ?>><?= min(99, $notificationUnreadCount) ?></span>
                         </button>
                         <section id="patient-notification-panel" class="student-notification-panel" data-notification-panel hidden aria-label="Patient notifications">
@@ -710,7 +749,7 @@ function render_student_header(string $title, string $active = ''): void
                             <?php else: ?>
                                 <span class="student-profile-photo-fallback"><?= student_e(student_initials($profile['name'])) ?></span>
                             <?php endif; ?>
-                            <span class="profile-photo-camera material-symbols-outlined" aria-hidden="true">photo_camera</span>
+                            <?= student_icon_svg('photo_camera', 'profile-photo-camera', true) ?>
                         </button>
                     <?php endif; ?>
                     <div class="student-profile-text student-profile-identity">
@@ -720,11 +759,11 @@ function render_student_header(string $title, string $active = ''): void
                     <div class="student-profile-actions">
                         <?php if (empty($profile['first_registration'])): ?>
                             <button type="button" onclick="document.getElementById('change-password-modal').classList.remove('hidden')" class="student-logout text-decoration-none" title="Change Password">
-                                <span class="material-symbols-outlined">key</span>
+                                <?= student_icon_svg('key', '', false) ?>
                             </button>
                         <?php endif; ?>
                         <a href="<?= student_e(student_portal_url('login', ['logout' => 1])) ?>" onclick="localStorage.clear();" class="student-logout text-decoration-none" title="Logout">
-                            <span class="material-symbols-outlined">logout</span>
+                            <?= student_icon_svg('logout', '', false) ?>
                         </a>
                     </div>
                 </div>
@@ -752,11 +791,11 @@ function render_student_header(string $title, string $active = ''): void
                                 </div>
                             </div>
                             <button type="button" class="student-mobile-account-action" data-profile-photo-open="patient-profile-photo-modal">
-                                <span class="material-symbols-outlined" aria-hidden="true">photo_camera</span>
+                                <?= student_icon_svg('photo_camera', '', true) ?>
                                 Change profile picture
                             </button>
                             <button type="button" class="student-mobile-account-action" onclick="document.getElementById('change-password-modal').classList.remove('hidden')">
-                                <span class="material-symbols-outlined" aria-hidden="true">key</span>
+                                <?= student_icon_svg('key', '', true) ?>
                                 Change password
                             </button>
                             <form method="POST" action="<?= student_e(student_portal_url('login')) ?>" class="student-mobile-account-form">
@@ -764,17 +803,17 @@ function render_student_header(string $title, string $active = ''): void
                                 <input type="hidden" name="action" value="forget_device">
                                 <input type="hidden" name="return_to" value="dashboard">
                                 <button type="submit" class="student-mobile-account-action">
-                                    <span class="material-symbols-outlined" aria-hidden="true">phonelink_erase</span>
+                                    <?= student_icon_svg('phonelink_erase', '', true) ?>
                                     Forget this device
                                 </button>
                             </form>
                             <button type="button" class="student-mobile-account-action" data-student-theme-toggle aria-pressed="false">
-                                <span class="material-symbols-outlined" aria-hidden="true">dark_mode</span>
+                                <?= student_icon_svg('dark_mode', '', true) ?>
                                 <span data-student-theme-label>Dark mode</span>
                                 <span class="student-theme-switch" aria-hidden="true"><span class="student-theme-switch-thumb"></span></span>
                             </button>
                             <a href="<?= student_e(student_portal_url('login', ['logout' => 1])) ?>" onclick="localStorage.clear();" class="student-mobile-account-action is-danger text-decoration-none">
-                                <span class="material-symbols-outlined" aria-hidden="true">logout</span>
+                                <?= student_icon_svg('logout', '', true) ?>
                                 Sign out
                             </a>
                         </div>
@@ -787,26 +826,26 @@ function render_student_header(string $title, string $active = ''): void
                     <?php if ($flashSuccess): ?>
                         <div class="student-note student-note-success student-toast flex items-center justify-between" data-student-toast data-auto-dismiss="true" role="status" aria-atomic="true">
                             <div class="flex items-center gap-2">
-                                <span class="material-symbols-outlined" aria-hidden="true">check_circle</span>
+                                <?= student_icon_svg('check_circle', '', true) ?>
                                 <div><?= student_e($flashSuccess) ?></div>
                             </div>
-                            <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+                            <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><?= student_icon_svg('close', '', true) ?></button>
                         </div>
                     <?php endif; ?>
                     <?php if ($flashError): ?>
                         <div class="student-note student-note-danger student-toast flex items-center justify-between" data-student-toast role="alert" aria-atomic="true">
                             <div class="flex items-center gap-2">
-                                <span class="material-symbols-outlined" aria-hidden="true">error</span>
+                                <?= student_icon_svg('error', '', true) ?>
                                 <div><?= student_e($flashError) ?></div>
                             </div>
-                            <button type="button" class="student-toast-dismiss" aria-label="Dismiss error"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+                            <button type="button" class="student-toast-dismiss" aria-label="Dismiss error"><?= student_icon_svg('close', '', true) ?></button>
                         </div>
                     <?php endif; ?>
                 </div>
 
                 <?php if (empty($profile['has_clinical_record'])): ?>
                     <div class="student-note student-note-warning mb-4">
-                        <span class="material-symbols-outlined">info</span>
+                        <?= student_icon_svg('info', '', false) ?>
                         <div>
                             <strong>No clinical patient record yet.</strong>
                             Ask the clinic to create your patient record before using appointments, APE, or health-passport features.
@@ -832,7 +871,7 @@ function render_student_footer(): void
                 <?php foreach ($navItems as $item): ?>
                     <?php $isActive = $item['url'] === student_portal_url($returnTo); ?>
                     <a href="<?= student_e($item['url']) ?>" class="student-mobile-bottom-nav-link <?= $isActive ? 'active' : '' ?> text-decoration-none" <?= $isActive ? 'aria-current="page"' : '' ?>>
-                        <span class="material-symbols-outlined" aria-hidden="true"><?= student_e($item['icon']) ?></span>
+                        <?= student_icon_svg((string) (student_e($item['icon'])), '', true) ?>
                         <span><?= student_e($item['label']) ?></span>
                     </a>
                 <?php endforeach; ?>
@@ -850,7 +889,7 @@ function render_student_footer(): void
                         <p class="profile-photo-dialog-subtitle">Update the photo shown on your student profile and portal.</p>
                     </div>
                     <button type="button" class="profile-photo-close" data-profile-photo-close aria-label="Close profile-picture dialog">
-                        <span class="material-symbols-outlined">close</span>
+                        <?= student_icon_svg('close', '', false) ?>
                     </button>
                 </div>
                 <form action="<?= student_e(student_portal_url('profile-photo')) ?>" method="post" enctype="multipart/form-data" class="profile-photo-preview-form" data-profile-photo-form data-no-loading>
@@ -868,19 +907,19 @@ function render_student_footer(): void
                             </div>
                             <div class="profile-photo-upload-panel">
                                 <div class="profile-photo-upload-card">
-                                    <span class="material-symbols-outlined profile-photo-upload-icon" aria-hidden="true">add_a_photo</span>
+                                    <?= student_icon_svg('add_a_photo', 'profile-photo-upload-icon', true) ?>
                                     <div>
                                         <h4>Choose a new photo</h4>
                                         <p>Select a clear headshot. You can review it before saving.</p>
                                     </div>
                                     <label for="patient-profile-photo-input" class="student-button profile-photo-choose">
-                                        <span class="material-symbols-outlined" aria-hidden="true">image</span>
+                                        <?= student_icon_svg('image', '', true) ?>
                                         Choose photo
                                     </label>
                                     <p class="profile-photo-selected-file" data-profile-photo-selected>No new photo selected</p>
                                 </div>
                                 <div class="profile-photo-rules" aria-label="Photo requirements">
-                                    <span class="material-symbols-outlined" aria-hidden="true">info</span>
+                                    <?= student_icon_svg('info', '', true) ?>
                                     <p>JPG, PNG, or WebP · maximum 5 MB</p>
                                 </div>
                             </div>
@@ -888,7 +927,7 @@ function render_student_footer(): void
                         <input id="patient-profile-photo-input" class="profile-photo-input" type="file" name="profile_photo" accept="image/jpeg,image/png,image/webp" required data-profile-photo-input>
                         <div class="profile-photo-dialog-actions">
                             <button type="button" class="student-button profile-photo-cancel" data-profile-photo-close>Cancel</button>
-                            <button type="submit" class="student-button" data-profile-photo-save><span class="material-symbols-outlined" aria-hidden="true">visibility</span> Review photo</button>
+                            <button type="submit" class="student-button" data-profile-photo-save><?= student_icon_svg('visibility', '', true) ?> Review photo</button>
                         </div>
                     </div>
                     <div class="profile-photo-stage profile-photo-confirmation" data-profile-photo-confirmation aria-hidden="true">
@@ -911,11 +950,11 @@ function render_student_footer(): void
             <div class="student-card student-password-dialog w-full max-w-md p-6 shadow-xl relative animate-in fade-in zoom-in duration-150">
                 <div class="flex items-center justify-between pb-4 mb-4 border-b border-slate-100">
                     <div class="flex items-center gap-2">
-                        <span class="material-symbols-outlined text-primary">key</span>
+                        <?= student_icon_svg('key', 'text-primary', false) ?>
                         <h3 id="change-password-title" class="font-headline text-lg font-extrabold text-on-surface">Change Password</h3>
                     </div>
                     <button type="button" data-discard-close="change-password-modal" class="text-slate-400 hover:text-slate-600">
-                        <span class="material-symbols-outlined">close</span>
+                        <?= student_icon_svg('close', '', false) ?>
                     </button>
                 </div>
 
@@ -934,7 +973,7 @@ function render_student_footer(): void
                     <div class="student-field">
                         <label class="student-label" for="modal_new_password">New Password</label>
                         <div class="relative">
-                            <input id="modal_new_password" name="new_password" class="student-input pr-10" type="password" minlength="8" required placeholder="Enter new password (min. 8 chars)">
+                            <input id="modal_new_password" name="new_password" class="student-input pr-10" type="password" minlength="8" maxlength="128" autocomplete="new-password" data-password-strength data-password-confirm="#modal_confirm_password" required placeholder="8–128 chars: upper, lower, number, symbol">
                             <button type="button" onclick="toggleModalPwVisibility('modal_new_password', this)" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold hover:text-slate-600">Show</button>
                         </div>
                     </div>
@@ -942,7 +981,7 @@ function render_student_footer(): void
                     <div class="student-field">
                         <label class="student-label" for="modal_confirm_password">Confirm New Password</label>
                         <div class="relative">
-                            <input id="modal_confirm_password" name="confirm_password" class="student-input pr-10" type="password" minlength="8" required placeholder="Confirm new password">
+                            <input id="modal_confirm_password" name="confirm_password" class="student-input pr-10" type="password" minlength="8" maxlength="128" autocomplete="new-password" data-password-for="#modal_new_password" required placeholder="Confirm new password">
                             <button type="button" onclick="toggleModalPwVisibility('modal_confirm_password', this)" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold hover:text-slate-600">Show</button>
                         </div>
                     </div>
@@ -959,6 +998,7 @@ function render_student_footer(): void
             </div>
         </div>
 
+        <script src="/public/assets/js/form-validation.js?v=<?= filemtime(__DIR__ . '/../../public/assets/js/form-validation.js') ?>"></script>
         <script src="/public/assets/js/unsaved-changes.js?v=<?= filemtime(__DIR__ . '/../../public/assets/js/unsaved-changes.js') ?>"></script>
         <script src="/public/assets/js/student-overlays.js?v=<?= filemtime(__DIR__ . '/../../public/assets/js/student-overlays.js') ?>"></script>
         <script>
@@ -1019,9 +1059,7 @@ function render_student_footer(): void
                         button.type = 'button';
                         button.className = `student-notification-item${item.read_at ? '' : ' is-unread'}`;
 
-                        const icon = document.createElement('span');
-                        icon.className = 'student-notification-icon material-symbols-outlined';
-                        icon.textContent = iconFor(item.category);
+                        const icon = window.studentIcon(iconFor(item.category), 'student-notification-icon', true);
 
                         const content = document.createElement('span');
                         content.className = 'student-notification-content';
@@ -1113,14 +1151,14 @@ function render_student_footer(): void
                 toggle.addEventListener('click', () => {
                     const isOpen = topbar.classList.toggle('nav-open');
                     toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-                    toggle.querySelector('.material-symbols-outlined').textContent = isOpen ? 'close' : 'menu';
+                    window.studentSetIcon(toggle.querySelector('.student-icon'), isOpen ? 'close' : 'menu');
                 });
 
                 navigation.querySelectorAll('a').forEach((link) => {
                     link.addEventListener('click', () => {
                         topbar.classList.remove('nav-open');
                         toggle.setAttribute('aria-expanded', 'false');
-                        toggle.querySelector('.material-symbols-outlined').textContent = 'menu';
+                        window.studentSetIcon(toggle.querySelector('.student-icon'), 'menu');
                     });
                 });
             })();
@@ -1159,8 +1197,8 @@ function render_student_footer(): void
                     button.setAttribute('aria-pressed', enabled ? 'true' : 'false');
                     const label = button.querySelector('[data-student-theme-label]');
                     if (label) label.textContent = enabled ? 'Light mode' : 'Dark mode';
-                    const icon = button.querySelector('.material-symbols-outlined');
-                    if (icon) icon.textContent = enabled ? 'light_mode' : 'dark_mode';
+                    const icon = button.querySelector('.student-icon');
+                    if (icon) window.studentSetIcon(icon, enabled ? 'light_mode' : 'dark_mode');
                 });
             };
             studentThemeButtons.forEach((button) => button.addEventListener('click', () => {
@@ -1374,17 +1412,14 @@ function render_student_footer(): void
                     toast.setAttribute('aria-atomic', 'true');
                     const content = document.createElement('div');
                     content.className = 'flex items-center gap-2';
-                    const icon = document.createElement('span');
-                    icon.className = 'material-symbols-outlined';
-                    icon.setAttribute('aria-hidden', 'true');
-                    icon.textContent = icons[type] || icons.danger;
+                    const icon = window.studentIcon(icons[type] || icons.danger, '', true);
                     const text = document.createElement('div');
                     text.textContent = message;
                     const close = document.createElement('button');
                     close.type = 'button';
                     close.className = 'student-toast-dismiss';
                     close.setAttribute('aria-label', isError ? 'Dismiss error' : 'Dismiss notification');
-                    close.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">close</span>';
+                    close.append(window.studentIcon('close', '', true));
                     content.append(icon, text);
                     toast.append(content, close);
                     region.append(toast);
@@ -1419,7 +1454,6 @@ function render_student_auth_header(string $title): void
         <link rel="icon" href="<?= student_e($clinicLogoSrc) ?>">
         <link rel="apple-touch-icon" href="<?= student_e($clinicLogoSrc) ?>">
         <link href="/public/assets/vendor/fonts/inter-manrope.css?v=offline-1" rel="stylesheet">
-        <link href="/public/assets/vendor/fonts/material-symbols.css?v=offline-1" rel="stylesheet">
         <script>
             try { if (localStorage.getItem('cliniq-student-dark-mode') === '1') document.documentElement.classList.add('student-dark'); } catch (error) {}
         </script>
@@ -1471,8 +1505,17 @@ function render_student_auth_header(string $title): void
     <script src="/public/assets/js/id-number-format.js?v=<?= filemtime(__DIR__ . '/../../public/assets/js/id-number-format.js') ?>"></script>
     <script src="/public/assets/js/submission-loading.js?v=<?= filemtime(__DIR__ . '/../../public/assets/js/submission-loading.js') ?>"></script>
     <script src="/public/assets/js/unsaved-changes.js?v=<?= filemtime(__DIR__ . '/../../public/assets/js/unsaved-changes.js') ?>"></script>
+    <script src="/public/assets/js/form-validation.js?v=<?= filemtime(__DIR__ . '/../../public/assets/js/form-validation.js') ?>"></script>
     </head>
     <body class="student-body student-auth-page">
+        <?= student_icon_sprite() ?>
+        <script>
+            window.studentSetIcon = (icon, name) => {
+                if (!icon) return;
+                const resolved = document.getElementById(`student-icon-${name}`) ? name : 'info';
+                icon.querySelector('use')?.setAttribute('href', `#student-icon-${resolved}`);
+            };
+        </script>
     <?php
 }
 

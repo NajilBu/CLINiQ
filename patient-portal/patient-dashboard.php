@@ -75,7 +75,7 @@ if (!empty($profile['first_registration'])) {
             <p class="student-subtitle">Set your password to activate secure access to your clinic portal.</p>
         </div>
         <span class="student-badge student-badge-warning">
-            <span class="material-symbols-outlined text-[14px]">lock</span>
+            <?= student_icon_svg('lock', 'text-[14px]', false) ?>
             Activation Required
         </span>
     </section>
@@ -83,7 +83,7 @@ if (!empty($profile['first_registration'])) {
     <section class="student-card student-card-pad max-w-2xl mx-auto">
         <div class="flex items-start gap-4 mb-5">
             <span class="student-icon-box">
-                <span class="material-symbols-outlined">password</span>
+                <?= student_icon_svg('password', '', false) ?>
             </span>
             <div>
                 <h2 class="student-card-title">Create your password</h2>
@@ -93,7 +93,7 @@ if (!empty($profile['first_registration'])) {
 
         <?php if ($firstRegistrationError !== ''): ?>
             <div class="student-note student-note-danger mb-4">
-                <span class="material-symbols-outlined">error</span>
+                <?= student_icon_svg('error', '', false) ?>
                 <div><?= student_e($firstRegistrationError) ?></div>
             </div>
         <?php endif; ?>
@@ -102,17 +102,17 @@ if (!empty($profile['first_registration'])) {
             <input type="hidden" name="action" value="complete_first_registration">
             <div class="student-field">
                 <label class="student-label" for="password">Create Password</label>
-                <input id="password" name="password" class="student-input" type="password" minlength="8" autocomplete="new-password" required>
+                <input id="password" name="password" class="student-input" type="password" minlength="8" maxlength="128" autocomplete="new-password" data-password-strength data-password-confirm="#confirm-password" required>
             </div>
             <div class="student-field">
                 <label class="student-label" for="confirm-password">Confirm Password</label>
-                <input id="confirm-password" name="confirm_password" class="student-input" type="password" minlength="8" autocomplete="new-password" required>
+                <input id="confirm-password" name="confirm_password" class="student-input" type="password" minlength="8" maxlength="128" autocomplete="new-password" data-password-for="#password" required>
             </div>
-            <p class="student-card-copy text-[11px]">Use at least 8 characters with at least one number.</p>
+            <p class="student-card-copy text-[11px]">Use 8–128 characters with uppercase, lowercase, a number, and a special character.</p>
             <label class="flex items-start gap-3 text-xs font-bold text-slate-600"><input class="mt-0.5" type="checkbox" name="legal_acknowledgement" value="1" required><span>I have read and acknowledge the <a href="<?= student_e(student_legal_url('terms')) ?>" target="_blank" rel="noopener" class="student-auth-link">Terms of Use</a> and <a href="<?= student_e(student_legal_url('privacy')) ?>" target="_blank" rel="noopener" class="student-auth-link">Privacy Notice</a>, including how CLINiQ processes health information.</span></label>
             <button type="submit" class="student-button w-full">
                 Activate Account
-                <span class="material-symbols-outlined">verified_user</span>
+                <?= student_icon_svg('verified_user', '', false) ?>
             </button>
         </form>
     </section>
@@ -122,6 +122,7 @@ if (!empty($profile['first_registration'])) {
 }
 
 $patientId = (int) $profile['patient_id'];
+$isStudentApeAccount = ($profile['account_type'] ?? '') === 'student';
 ensure_appointment_schema();
 ensure_ape_workflow_schema();
 appointment_sync_overdue_confirmations();
@@ -348,6 +349,20 @@ $apeActionBadgeClass = match ($apeActionStatus) {
     'Submitted — waiting for clinic review', 'Scheduled' => 'student-badge-info',
     default => 'student-badge-warning',
 };
+if (!$isStudentApeAccount) {
+    $staffApeSubmitted = $latestApe && ape_is_staff_managed_record($latestApe)
+        && ($latestApe['workflow_status'] ?? '') === 'Submitted';
+    $apePhaseLabel = $staffApeSubmitted ? 'Submitted' : ($latestApe ? 'Awaiting Medical Certificate' : 'Not Opened');
+    $apePhaseStatus = $apePhaseLabel;
+    $apeActionTitle = $apePhaseLabel;
+    $apeActionStatus = $apePhaseLabel;
+    $apeActionCopy = $staffApeSubmitted
+        ? 'The clinic submitted your medical certificate. No action is needed from you.'
+        : 'The clinic will submit your medical certificate. No action is needed from you.';
+    $apeBadgeClass = $staffApeSubmitted ? 'student-badge-success' : 'student-badge-warning';
+    $apePhaseBadgeClass = $apeBadgeClass;
+    $apeActionBadgeClass = $apeBadgeClass;
+}
 $passportMissing = [];
 if (empty($profile['allergies'])) {
     $passportMissing[] = 'allergy notes';
@@ -360,7 +375,8 @@ if (empty($profile['emergency_instructions'])) {
 }
 $passportComplete = empty($passportMissing);
 $applicantApePending = !$isOfficialAccess;
-$apeNeedsAction = $latestApe
+$apeNeedsAction = $isStudentApeAccount
+    && $latestApe
     && ($latestApe['clearance_status'] ?? 'Pending') !== 'Cleared'
     && !$apeDocumentsAwaitingClinicReview
     && (
@@ -454,9 +470,9 @@ render_student_header('Dashboard', 'dashboard');
             <div><span class="student-label">Section</span><div><?= student_e((string) ($profile['section'] ?? 'Not assigned')) ?></div></div>
         </div>
         <?php if ($enrollmentCorrection && ($enrollmentCorrection['status'] ?? '') === 'Pending'): ?>
-            <div class="student-note student-note-warning mb-4"><span class="material-symbols-outlined">hourglass_top</span><div>Your placement correction request is awaiting clinic review. You may still confirm enrollment once the placement shown above is correct.</div></div>
+            <div class="student-note student-note-warning mb-4"><?= student_icon_svg('hourglass_top', '', false) ?><div>Your placement correction request is awaiting clinic review. You may still confirm enrollment once the placement shown above is correct.</div></div>
         <?php elseif ($enrollmentCorrection && ($enrollmentCorrection['status'] ?? '') !== 'Pending'): ?>
-            <div class="student-note <?= ($enrollmentCorrection['status'] ?? '') === 'Approved' ? 'student-note-success' : 'student-note-warning' ?> mb-4"><span class="material-symbols-outlined">info</span><div>Placement correction <?= student_e(strtolower((string) $enrollmentCorrection['status'])) ?><?= !empty($enrollmentCorrection['review_note']) ? ': ' . student_e((string) $enrollmentCorrection['review_note']) : '' ?>.</div></div>
+            <div class="student-note <?= ($enrollmentCorrection['status'] ?? '') === 'Approved' ? 'student-note-success' : 'student-note-warning' ?> mb-4"><?= student_icon_svg('info', '', false) ?><div>Placement correction <?= student_e(strtolower((string) $enrollmentCorrection['status'])) ?><?= !empty($enrollmentCorrection['review_note']) ? ': ' . student_e((string) $enrollmentCorrection['review_note']) : '' ?>.</div></div>
         <?php endif; ?>
         <form method="post" class="grid gap-4">
             <input type="hidden" name="_csrf" value="<?= student_e(csrf_token()) ?>">
@@ -495,17 +511,17 @@ render_student_header('Dashboard', 'dashboard');
 
 <?php if (isset($_GET['activated'])): ?>
     <div class="student-note student-note-success student-toast" data-student-toast role="status" aria-live="polite">
-        <span class="material-symbols-outlined">check_circle</span>
+        <?= student_icon_svg('check_circle', '', false) ?>
         <div>Your sign-in is now active. Your available portal features are shown on the dashboard.</div>
-        <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+        <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><?= student_icon_svg('close', '', true) ?></button>
     </div>
 <?php endif; ?>
 
 <?php if (isset($_GET['device_forgotten'])): ?>
     <div class="student-note student-note-success student-toast" data-student-toast role="status" aria-live="polite">
-        <span class="material-symbols-outlined">verified_user</span>
+        <?= student_icon_svg('verified_user', '', false) ?>
         <div>This device has been forgotten. You will stay signed in here, but future visits will require your password.</div>
-        <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+        <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><?= student_icon_svg('close', '', true) ?></button>
     </div>
 <?php endif; ?>
 
@@ -517,7 +533,7 @@ render_student_header('Dashboard', 'dashboard');
         <p class="student-subtitle">View your clinic tasks, updates, and records in one place.</p>
     </div>
     <span class="student-badge <?= $isOfficialAccess ? 'student-badge-success' : 'student-badge-warning' ?>">
-        <span class="material-symbols-outlined text-[14px]"><?= $isOfficialAccess ? 'verified' : 'hourglass_top' ?></span>
+        <?= student_icon_svg((string) ($isOfficialAccess ? 'verified' : 'hourglass_top'), 'text-[14px]', false) ?>
         <?= student_e($accountBadgeLabel) ?>
     </span>
 </div>
@@ -526,7 +542,7 @@ render_student_header('Dashboard', 'dashboard');
 <?php endif; ?>
 <?php if ($hasScheduledApeBatch): ?>
     <a href="<?= student_e(student_portal_url('ape-status')) ?>" class="student-dashboard-batch-summary text-decoration-none">
-        <span class="student-icon-box"><span class="material-symbols-outlined" aria-hidden="true">event_available</span></span>
+        <span class="student-icon-box"><?= student_icon_svg('event_available', '', true) ?></span>
                     <strong>Scheduled physical examination</strong>
         <span class="student-dashboard-batch-time"><?= student_e($scheduledApeBatchLabel) ?></span>
     </a>
@@ -535,7 +551,7 @@ render_student_header('Dashboard', 'dashboard');
 
 <?php if (!$isOfficialAccess): ?>
     <div class="student-note student-note-warning student-dashboard-applicant-warning mb-4" role="status">
-        <span class="material-symbols-outlined">lock_clock</span>
+        <?= student_icon_svg('lock_clock', '', false) ?>
         <div><strong>Clinic access pending APE completion</strong><br>Complete your APE requirements. The clinic will enable your Health Passport and appointment booking after clearance.</div>
     </div>
 <?php endif; ?>
@@ -560,7 +576,7 @@ render_student_header('Dashboard', 'dashboard');
                 <div class="flex items-start gap-4">
                     <span class="student-action-step student-action-step-danger">1</span>
                     <span class="student-icon-box student-icon-box-danger">
-                        <span class="material-symbols-outlined">emergency</span>
+                        <?= student_icon_svg('emergency', '', false) ?>
                     </span>
                     <div>
                         <p class="student-action-kicker">Emergency profile incomplete</p>
@@ -570,7 +586,7 @@ render_student_header('Dashboard', 'dashboard');
                 </div>
                 <a href="<?= student_e(student_portal_url('health-passport', ['focus' => 'emergency'])) ?>" class="student-button-danger text-decoration-none">
                     Complete Passport
-                    <span class="material-symbols-outlined">arrow_forward</span>
+                    <?= student_icon_svg('arrow_forward', '', false) ?>
                 </a>
             </article>
         <?php endif; ?>
@@ -580,7 +596,7 @@ render_student_header('Dashboard', 'dashboard');
                 <div class="flex items-start gap-4">
                     <span class="student-action-step"><?= $passportRequired ? 2 : 1 ?></span>
                     <span class="student-icon-box">
-                        <span class="material-symbols-outlined">upload_file</span>
+                        <?= student_icon_svg('upload_file', '', false) ?>
                     </span>
                     <div>
                         <p class="student-action-kicker student-action-kicker-primary">APE requirement</p>
@@ -593,7 +609,7 @@ render_student_header('Dashboard', 'dashboard');
                 </div>
                 <a href="<?= student_e(student_portal_url('ape-status')) ?>" class="student-button text-decoration-none">
                     Continue APE
-                    <span class="material-symbols-outlined">arrow_forward</span>
+                    <?= student_icon_svg('arrow_forward', '', false) ?>
                 </a>
             </article>
         <?php endif; ?>
@@ -603,7 +619,7 @@ render_student_header('Dashboard', 'dashboard');
                 <div class="flex items-start gap-4">
                     <span class="student-action-step student-action-step-danger"><?= (int) (($passportRequired ? 1 : 0) + ($apeNeedsAction ? 1 : 0) + 1) ?></span>
                     <span class="student-icon-box student-icon-box-danger">
-                        <span class="material-symbols-outlined">rate_review</span>
+                        <?= student_icon_svg('rate_review', '', false) ?>
                     </span>
                     <div>
                         <p class="student-action-kicker">Required clinic feedback</p>
@@ -613,7 +629,7 @@ render_student_header('Dashboard', 'dashboard');
                 </div>
                 <a href="<?= student_e($feedbackPortalUrl) ?>" class="student-button-danger text-decoration-none">
                     Complete Required Feedback
-                    <span class="material-symbols-outlined">arrow_forward</span>
+                    <?= student_icon_svg('arrow_forward', '', false) ?>
                 </a>
             </article>
         <?php endif; ?>
@@ -625,7 +641,7 @@ render_student_header('Dashboard', 'dashboard');
         <article class="student-action-card student-dashboard-mobile-primary-task<?= $primaryTask['tone'] === 'danger' ? ' student-action-card-danger' : '' ?>">
             <div class="student-dashboard-mobile-task-main">
                 <span class="student-icon-box<?= $primaryTask['tone'] === 'danger' ? ' student-icon-box-danger' : '' ?>">
-                    <span class="material-symbols-outlined"><?= student_e($primaryTask['icon']) ?></span>
+                    <?= student_icon_svg((string) (student_e($primaryTask['icon'])), '', false) ?>
                 </span>
                 <div>
                     <p class="student-action-kicker<?= $primaryTask['tone'] === 'primary' ? ' student-action-kicker-primary' : '' ?>"><?= student_e($primaryTask['kicker']) ?></p>
@@ -636,7 +652,7 @@ render_student_header('Dashboard', 'dashboard');
             <?php if ($primaryTask['href']): ?>
                 <a href="<?= student_e($primaryTask['href']) ?>" class="<?= $primaryTask['tone'] === 'danger' ? 'student-button-danger' : 'student-button' ?> text-decoration-none">
                     <?= student_e($primaryTask['button']) ?>
-                    <span class="material-symbols-outlined">arrow_forward</span>
+                    <?= student_icon_svg('arrow_forward', '', false) ?>
                 </a>
             <?php endif; ?>
         </article>
@@ -646,14 +662,14 @@ render_student_header('Dashboard', 'dashboard');
                 <summary>
                     <span>More tasks</span>
                     <span class="student-badge student-badge-info"><?= count($secondaryTasks) ?></span>
-                    <span class="material-symbols-outlined" aria-hidden="true">expand_more</span>
+                    <?= student_icon_svg('expand_more', '', true) ?>
                 </summary>
                 <div class="student-dashboard-more-task-list">
                     <?php foreach ($secondaryTasks as $task): ?>
                         <a href="<?= student_e((string) $task['href']) ?>" class="student-dashboard-more-task text-decoration-none">
-                            <span class="student-icon-box<?= $task['tone'] === 'danger' ? ' student-icon-box-danger' : '' ?>"><span class="material-symbols-outlined"><?= student_e($task['icon']) ?></span></span>
+                            <span class="student-icon-box<?= $task['tone'] === 'danger' ? ' student-icon-box-danger' : '' ?>"><?= student_icon_svg((string) (student_e($task['icon'])), '', false) ?></span>
                             <span><strong><?= student_e($task['title']) ?></strong><small><?= student_e($task['short_copy']) ?></small></span>
-                            <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                            <?= student_icon_svg('chevron_right', '', true) ?>
                         </a>
                     <?php endforeach; ?>
                 </div>
@@ -667,7 +683,7 @@ render_student_header('Dashboard', 'dashboard');
 <section class="student-required-action-list student-dashboard-ready-action-list mb-4" aria-label="APE review status">
     <article class="student-action-card">
         <div class="flex items-start gap-4">
-            <span class="student-icon-box"><span class="material-symbols-outlined">hourglass_top</span></span>
+            <span class="student-icon-box"><?= student_icon_svg('hourglass_top', '', false) ?></span>
             <div>
                 <p class="student-action-kicker student-action-kicker-primary">APE status</p>
                 <h2><?= student_e($apeReviewStatusTitle) ?></h2>
@@ -680,28 +696,28 @@ render_student_header('Dashboard', 'dashboard');
 
 <section class="student-dashboard-mobile-overview" aria-label="Dashboard summaries">
     <a href="<?= student_e(student_portal_url('ape-status')) ?>" class="student-dashboard-summary-row text-decoration-none" aria-label="View APE Status">
-        <span class="student-icon-box"><span class="material-symbols-outlined">task_alt</span></span>
+        <span class="student-icon-box"><?= student_icon_svg('task_alt', '', false) ?></span>
         <span class="student-dashboard-summary-copy">
             <strong>APE Status</strong>
             <span><?= student_e($latestApe ? ape_record_stage_label($latestApe) : $apeStatus) ?> · <?= (int) $apePercent ?>% complete</span>
         </span>
         <span class="student-badge <?= student_e($apeBadgeClass) ?>"><?= student_e($latestApe['clearance_status'] ?? 'Pending') ?></span>
-        <span class="material-symbols-outlined student-dashboard-summary-arrow" aria-hidden="true">chevron_right</span>
+        <?= student_icon_svg('chevron_right', 'student-dashboard-summary-arrow', true) ?>
     </a>
 
     <?php if ($isOfficialAccess): ?>
     <a href="<?= student_e(student_portal_url('appointments')) ?>" class="student-dashboard-summary-row text-decoration-none" aria-label="View Appointments">
-        <span class="student-icon-box"><span class="material-symbols-outlined">calendar_month</span></span>
+        <span class="student-icon-box"><?= student_icon_svg('calendar_month', '', false) ?></span>
         <span class="student-dashboard-summary-copy">
             <strong>Appointments</strong>
             <span><?php if ($latestAppointment): ?><?= student_e(date('M j, Y · g:i A', strtotime($latestAppointment['appointment_datetime']))) ?><?php else: ?>No appointment scheduled<?php endif; ?></span>
         </span>
         <span class="student-badge <?= student_e($appointmentBadgeClass) ?>"><?= student_e($appointmentDisplayStatus) ?></span>
-        <span class="material-symbols-outlined student-dashboard-summary-arrow" aria-hidden="true">chevron_right</span>
+        <?= student_icon_svg('chevron_right', 'student-dashboard-summary-arrow', true) ?>
     </a>
     <?php else: ?>
     <div class="student-dashboard-summary-row" aria-label="Appointments unavailable until APE clearance">
-        <span class="student-icon-box"><span class="material-symbols-outlined">lock</span></span>
+        <span class="student-icon-box"><?= student_icon_svg('lock', '', false) ?></span>
         <span class="student-dashboard-summary-copy"><strong>Appointments</strong><span>Available after final APE clearance</span></span>
         <span class="student-badge student-badge-warning">Locked</span>
     </div>
@@ -754,8 +770,8 @@ render_student_header('Dashboard', 'dashboard');
     <section class="student-card student-span-4 student-clickable-card student-dashboard-duplicate student-dashboard-actionable" data-href="<?= student_e(student_portal_url('ape-status')) ?>" role="link" tabindex="0" aria-label="Open APE status">
         <div class="student-card-header">
             <div>
-                <h2 class="student-card-title">APE Progress</h2>
-                <p class="student-card-copy">Your current clearance path</p>
+                <h2 class="student-card-title"><?= $isStudentApeAccount ? 'APE Progress' : 'Staff APE Status' ?></h2>
+                <p class="student-card-copy"><?= $isStudentApeAccount ? 'Your current clearance path' : 'Clinic-controlled medical certificate status' ?></p>
             </div>
             <span class="student-badge <?= student_e($apeBadgeClass) ?>"><?= student_e($apePhaseLabel) ?></span>
         </div>
@@ -769,15 +785,15 @@ render_student_header('Dashboard', 'dashboard');
             </div>
             <div class="student-progress-list">
                 <div class="student-progress-step">
-                    <span class="student-progress-step-icon material-symbols-outlined">task_alt</span>
+                    <?= student_icon_svg('task_alt', 'student-progress-step-icon', false) ?>
                     <div>
                         <strong><?= student_e($apePhaseLabel) ?></strong>
                     </div>
                     <span class="student-badge <?= student_e($apePhaseBadgeClass) ?>"><?= student_e($apePhaseStatus) ?></span>
                 </div>
-                <?php if (($latestApe['clearance_status'] ?? '') !== 'Cleared'): ?>
+                <?php if ($isStudentApeAccount && ($latestApe['clearance_status'] ?? '') !== 'Cleared'): ?>
                 <div class="student-progress-step">
-                    <span class="student-progress-step-icon material-symbols-outlined">cloud_upload</span>
+                    <?= student_icon_svg('cloud_upload', 'student-progress-step-icon', false) ?>
                     <div>
                         <strong><?= student_e($apeActionTitle) ?></strong>
                     </div>
@@ -799,12 +815,12 @@ render_student_header('Dashboard', 'dashboard');
         <div class="student-card-pad">
             <?php if (!$isOfficialAccess): ?>
                 <div class="student-note student-note-warning mb-4">
-                    <span class="material-symbols-outlined">lock</span>
+                    <?= student_icon_svg('lock', '', false) ?>
                     <div><strong>Clinic access pending APE completion</strong><br>Appointment booking becomes available after the clinic completes your APE clearance.</div>
                 </div>
             <?php elseif ($latestAppointment): ?>
                 <div class="student-note <?= student_e($appointmentNoteClass) ?> mb-4">
-                    <span class="material-symbols-outlined"><?= student_e($appointmentIcon) ?></span>
+                    <?= student_icon_svg((string) (student_e($appointmentIcon)), '', false) ?>
                     <div>
                         <strong><?= student_e($latestAppointment['purpose']) ?></strong><br>
                         <?= student_e(date('F j, Y \a\t g:i A', strtotime($latestAppointment['appointment_datetime']))) ?>
@@ -818,7 +834,7 @@ render_student_header('Dashboard', 'dashboard');
                 </p>
             <?php else: ?>
                 <div class="student-note student-note-warning mb-4">
-                    <span class="material-symbols-outlined">event_busy</span>
+                    <?= student_icon_svg('event_busy', '', false) ?>
                     <div>
                         <strong>No appointment request yet</strong><br>
                         Book a visit and wait for clinic approval.
@@ -828,7 +844,7 @@ render_student_header('Dashboard', 'dashboard');
             <?php if ($isOfficialAccess): ?>
                 <a href="<?= student_e(student_portal_url('appointments')) ?>" class="student-button-secondary w-full text-decoration-none">
                     Manage Appointment
-                    <span class="material-symbols-outlined">schedule</span>
+                    <?= student_icon_svg('schedule', '', false) ?>
                 </a>
             <?php endif; ?>
         </div>
@@ -851,14 +867,14 @@ render_student_header('Dashboard', 'dashboard');
     <div class="student-card-pad grid gap-3 sm:grid-cols-2">
         <?php if (!$isOfficialAccess): ?>
             <div class="student-note student-note-warning mb-0 sm:col-span-2" role="status">
-                <span class="material-symbols-outlined" aria-hidden="true">lock</span>
+                <?= student_icon_svg('lock', '', true) ?>
                 <div><strong>Clinic access pending APE completion</strong><br>Clinic services become available after the clinic completes your APE clearance.</div>
             </div>
         <?php else: ?>
         <?php foreach ($liveServiceStatuses as $service => $serviceStatus): ?>
             <?php $serviceTone = $serviceStatus['state'] === 'walk_in' ? 'student-note-success' : ($serviceStatus['state'] === 'busy' ? 'student-note-warning' : 'student-note-danger'); ?>
             <div class="student-note <?= student_e($serviceTone) ?> mb-0">
-                <span class="material-symbols-outlined" aria-hidden="true"><?= student_e($serviceStatus['icon']) ?></span>
+                <?= student_icon_svg((string) (student_e($serviceStatus['icon'])), '', true) ?>
                 <div><strong><?= student_e($service) ?></strong><br><?= student_e($serviceStatus['message']) ?></div>
             </div>
         <?php endforeach; ?>
@@ -879,7 +895,7 @@ render_student_header('Dashboard', 'dashboard');
     <div class="student-card-pad grid gap-3">
         <?php foreach ($clinicNotes as $clinicNote): ?>
             <div class="student-note <?= student_e($clinicNoteClass($clinicNote['type'])) ?>">
-                <span class="material-symbols-outlined"><?= student_e($clinicNote['icon']) ?></span>
+                <?= student_icon_svg((string) (student_e($clinicNote['icon'])), '', false) ?>
                 <div><?= student_e($clinicNote['text']) ?></div>
             </div>
         <?php endforeach; ?>
@@ -889,14 +905,14 @@ render_student_header('Dashboard', 'dashboard');
 
 <section class="student-card student-dashboard-help mt-4" aria-labelledby="student-dashboard-help-title">
     <div class="student-card-pad student-dashboard-help-content">
-        <span class="student-dashboard-help-icon material-symbols-outlined" aria-hidden="true">help</span>
+        <?= student_icon_svg('help', 'student-dashboard-help-icon', true) ?>
         <div>
             <h2 id="student-dashboard-help-title" class="student-card-title">Need help?</h2>
             <p class="student-card-copy">Find answers about access, APE requirements, appointments, your Health Passport, and clinic support.</p>
         </div>
         <a href="<?= student_e(student_portal_url('help')) ?>" class="student-button-secondary text-decoration-none">
             Open Help &amp; FAQs
-            <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span>
+            <?= student_icon_svg('arrow_forward', '', true) ?>
         </a>
     </div>
 </section>

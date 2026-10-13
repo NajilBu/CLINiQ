@@ -13,7 +13,7 @@ render_student_header('Help & FAQs', 'help');
         <h1 id="patient-help-title" class="student-title">Help &amp; FAQs</h1>
         <p class="student-subtitle">Find clear answers about using your clinic portal and completing your next steps.</p>
     </div>
-    <span class="patient-help-header-icon material-symbols-outlined" aria-hidden="true">help</span>
+    <?= student_icon_svg('help', 'patient-help-header-icon', true) ?>
 </section>
 
 <div class="patient-help-grid" aria-label="Frequently asked questions">
@@ -23,12 +23,12 @@ render_student_header('Help & FAQs', 'help');
                 <p class="student-eyebrow">Access</p>
                 <h2 id="help-access-title" class="student-card-title">Getting started and access</h2>
             </div>
-            <span class="patient-help-category-icon material-symbols-outlined" aria-hidden="true">login</span>
+            <?= student_icon_svg('login', 'patient-help-category-icon', true) ?>
         </div>
         <div class="patient-help-accordion-list">
-            <details class="patient-help-accordion"><summary>How do I create my portal account?</summary><div class="patient-help-answer">Start from the student registration page, verify your identity and email, then complete the required profile details.<a href="<?= student_e(student_portal_url('signup')) ?>">Open student registration <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></a></div></details>
+            <details class="patient-help-accordion"><summary>How do I create my portal account?</summary><div class="patient-help-answer">Start from the student registration page, verify your identity and email, then complete the required profile details.<a href="<?= student_e(student_portal_url('signup')) ?>">Open student registration <?= student_icon_svg('arrow_forward', '', true) ?></a></div></details>
             <details class="patient-help-accordion"><summary>When are clinic services available?</summary><div class="patient-help-answer">While your APE is being completed, you can finish its required steps. The Health Passport and appointment booking become available after the clinic completes your APE clearance.</div></details>
-            <details class="patient-help-accordion"><summary>What if I cannot sign in or forgot my password?</summary><div class="patient-help-answer">Use the password recovery page to request a reset link for your portal account.<a href="<?= student_e(student_portal_url('forgot-password')) ?>">Recover portal access <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></a></div></details>
+            <details class="patient-help-accordion"><summary>What if I cannot sign in or forgot my password?</summary><div class="patient-help-answer">Use the password recovery page to request a reset link for your portal account.<a href="<?= student_e(student_portal_url('forgot-password')) ?>">Recover portal access <?= student_icon_svg('arrow_forward', '', true) ?></a></div></details>
         </div>
     </section>
 
@@ -38,11 +38,11 @@ render_student_header('Help & FAQs', 'help');
                 <p class="student-eyebrow">Annual Physical Examination</p>
                 <h2 id="help-ape-title" class="student-card-title">APE requirements</h2>
             </div>
-            <span class="patient-help-category-icon material-symbols-outlined" aria-hidden="true">fact_check</span>
+            <?= student_icon_svg('fact_check', 'patient-help-category-icon', true) ?>
         </div>
         <div class="patient-help-accordion-list">
-            <details class="patient-help-accordion"><summary>How do I check my APE progress?</summary><div class="patient-help-answer">Your APE Status page shows your current stage, document requirements, clinic instructions, and the next action for your record.<a href="<?= student_e(student_portal_url('ape-status')) ?>">Open APE Status <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></a></div></details>
-            <details class="patient-help-accordion"><summary>How do I submit required APE documents?</summary><div class="patient-help-answer">Open APE Status and upload each required document using the instructions shown for your assigned batch. The clinic reviews submitted files before moving your record forward.<a href="<?= student_e(student_portal_url('ape-status')) ?>">Review required documents <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></a></div></details>
+            <details class="patient-help-accordion"><summary>How do I check my APE progress?</summary><div class="patient-help-answer">Your APE Status page shows your current stage, document requirements, clinic instructions, and the next action for your record.<a href="<?= student_e(student_portal_url('ape-status')) ?>">Open APE Status <?= student_icon_svg('arrow_forward', '', true) ?></a></div></details>
+            <details class="patient-help-accordion"><summary>How do I submit required APE documents?</summary><div class="patient-help-answer">Open APE Status and upload each required document using the instructions shown for your assigned batch. The clinic reviews submitted files before moving your record forward.<a href="<?= student_e(student_portal_url('ape-status')) ?>">Review required documents <?= student_icon_svg('arrow_forward', '', true) ?></a></div></details>
             <details class="patient-help-accordion"><summary>What happens after the clinic reviews my APE?</summary><div class="patient-help-answer">The clinic may schedule your examination, request follow-up, or record your clearance. Check your APE Status and notification bell for updates.</div></details>
         </div>
     </section>
@@ -53,11 +53,11 @@ render_student_header('Help & FAQs', 'help');
                 <p class="student-eyebrow">Clinic visits</p>
                 <h2 id="help-appointments-title" class="student-card-title">Appointments</h2>
             </div>
-            <span class="patient-help-category-icon material-symbols-outlined" aria-hidden="true">event_available</span>
+            <?= student_icon_svg('event_available', 'patient-help-category-icon', true) ?>
         </div>
         <div class="patient-help-accordion-list">
             <details class="patient-help-accordion"><summary>When can I request an appointment?</summary><div class="patient-help-answer">Appointment booking becomes available after the clinic completes your APE clearance. Until then, complete your APE requirements or contact the clinic for assistance.</div></details>
-            <details class="patient-help-accordion"><summary>How do I request or check a clinic visit?</summary><div class="patient-help-answer">Use the Appointments page to choose an available schedule and review your recent appointment requests and their status.<a href="<?= student_e(student_portal_url('appointments')) ?>">Open Appointments <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></a></div></details>
+            <details class="patient-help-accordion"><summary>How do I request or check a clinic visit?</summary><div class="patient-help-answer">Use the Appointments page to choose an available schedule and review your recent appointment requests and their status.<a href="<?= student_e(student_portal_url('appointments')) ?>">Open Appointments <?= student_icon_svg('arrow_forward', '', true) ?></a></div></details>
             <details class="patient-help-accordion"><summary>Can I change or cancel an appointment?</summary><div class="patient-help-answer">Open the Appointments page and use the available actions on your request. If there is no action available, contact or visit the clinic.</div></details>
         </div>
     </section>
@@ -68,10 +68,10 @@ render_student_header('Help & FAQs', 'help');
                 <p class="student-eyebrow">Emergency information</p>
                 <h2 id="help-passport-title" class="student-card-title">Health Passport</h2>
             </div>
-            <span class="patient-help-category-icon material-symbols-outlined" aria-hidden="true">id_card</span>
+            <?= student_icon_svg('id_card', 'patient-help-category-icon', true) ?>
         </div>
         <div class="patient-help-accordion-list">
-            <details class="patient-help-accordion"><summary>Where can I update my emergency information?</summary><div class="patient-help-answer">Use the Health Passport to review and update your personal, medical, and emergency contact information.<a href="<?= student_e(student_portal_url('health-passport')) ?>">Open Health Passport <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></a></div></details>
+            <details class="patient-help-accordion"><summary>Where can I update my emergency information?</summary><div class="patient-help-answer">Use the Health Passport to review and update your personal, medical, and emergency contact information.<a href="<?= student_e(student_portal_url('health-passport')) ?>">Open Health Passport <?= student_icon_svg('arrow_forward', '', true) ?></a></div></details>
             <details class="patient-help-accordion"><summary>What are the QR and NFC options for?</summary><div class="patient-help-answer">The Health Passport provides QR and NFC access options for the emergency passport view. Review the sharing settings before using them.</div></details>
             <details class="patient-help-accordion"><summary>What information is visible in an emergency passport?</summary><div class="patient-help-answer">The emergency passport is designed to present the health and contact details you allow for emergency access. Use the preview and visibility settings in your Health Passport to review it.</div></details>
         </div>
@@ -83,7 +83,7 @@ render_student_header('Help & FAQs', 'help');
                 <p class="student-eyebrow">Updates and assistance</p>
                 <h2 id="help-support-title" class="student-card-title">Notifications and clinic support</h2>
             </div>
-            <span class="patient-help-category-icon material-symbols-outlined" aria-hidden="true">notifications</span>
+            <?= student_icon_svg('notifications', 'patient-help-category-icon', true) ?>
         </div>
         <div class="patient-help-accordion-list">
             <details class="patient-help-accordion"><summary>Where do I find clinic updates?</summary><div class="patient-help-answer">Use the notification bell in the page header to review updates about your APE and appointment requests. It is the portal’s notification center.</div></details>
@@ -94,7 +94,7 @@ render_student_header('Help & FAQs', 'help');
 </div>
 
 <aside class="student-note student-note-info patient-help-contact" aria-label="Clinic support">
-    <span class="material-symbols-outlined" aria-hidden="true">support_agent</span>
+    <?= student_icon_svg('support_agent', '', true) ?>
     <div><strong>Need more help?</strong><br>Contact or visit the clinic for concerns that need staff review.</div>
 </aside>
 

@@ -132,30 +132,30 @@ render_student_auth_header('Patient Login');
 
             <?php if (($_GET['password_reset'] ?? '') === '1'): ?>
                 <div class="student-note student-note-success student-toast" data-student-toast role="status" aria-live="polite">
-                    <span class="material-symbols-outlined">check_circle</span>
+                    <?= student_icon_svg('check_circle', '', false) ?>
                     <div>Password updated. You can now sign in with your new password.</div>
-                    <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+                    <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><?= student_icon_svg('close', '', true) ?></button>
                 </div>
             <?php endif; ?>
 
             <?php if (($_GET['registered'] ?? '') === '1'): ?>
                 <div class="student-note student-note-success student-toast" data-student-toast role="status" aria-live="polite">
-                    <span class="material-symbols-outlined">check_circle</span>
+                    <?= student_icon_svg('check_circle', '', false) ?>
                     <div>Your Applicant account was created. Sign in with your student number and password.</div>
-                    <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+                    <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><?= student_icon_svg('close', '', true) ?></button>
                 </div>
             <?php endif; ?>
 
             <?php if (($_GET['device_forgotten'] ?? '') === '1'): ?>
                 <div class="student-note student-note-success student-toast" data-student-toast role="status" aria-live="polite">
-                    <span class="material-symbols-outlined">shield</span>
+                    <?= student_icon_svg('shield', '', false) ?>
                     <div>This device has been forgotten. You will need to sign in again.</div>
-                    <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+                    <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><?= student_icon_svg('close', '', true) ?></button>
                 </div>
             <?php endif; ?>
 
             <div id="error-alert" class="student-note student-note-danger mb-4 <?= $error === '' ? 'hidden' : '' ?>">
-                <span class="material-symbols-outlined">error</span>
+                <?= student_icon_svg('error', '', false) ?>
                 <div id="error-msg"><?= student_e($error !== '' ? $error : 'Invalid ID Number or password. Please try again.') ?></div>
             </div>
 
@@ -163,7 +163,7 @@ render_student_auth_header('Patient Login');
                 <input type="hidden" name="_csrf" value="<?= student_e(csrf_token()) ?>">
                 <div class="student-field">
                     <label class="student-label" for="id-number">ID Number</label>
-                    <input type="text" id="id-number" name="student_id" class="student-input" placeholder="Enter ID number" autocomplete="username" data-id-number-format value="<?= student_e($studentIdValue) ?>" required>
+                    <input type="text" id="id-number" name="student_id" class="student-input" placeholder="23-00262 or 0000002" autocomplete="username" data-id-number-format value="<?= student_e($studentIdValue) ?>" required>
                 </div>
 
                 <div class="student-field">
@@ -184,7 +184,7 @@ render_student_auth_header('Patient Login');
 
                 <button type="submit" class="student-button w-full">
                     Sign in
-                    <span class="material-symbols-outlined">login</span>
+                    <?= student_icon_svg('login', '', false) ?>
                 </button>
             </form>
 

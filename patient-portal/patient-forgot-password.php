@@ -64,13 +64,13 @@ render_student_auth_header('Recover Password');
             <p class="student-card-copy mb-5">Enter your ID number and school email. The clinic system will send recovery instructions.</p>
 
             <div class="student-note student-note-success student-toast <?= $submitted ? '' : 'hidden' ?>" data-student-toast role="status" aria-live="polite">
-                <span class="material-symbols-outlined">mark_email_read</span>
+                <?= student_icon_svg('mark_email_read', '', false) ?>
                 <div>If the ID number and email match an active patient account, recovery instructions will arrive shortly. Check the spam folder as well.</div>
-                <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+                <button type="button" class="student-toast-dismiss" aria-label="Dismiss confirmation"><?= student_icon_svg('close', '', true) ?></button>
             </div>
 
             <div class="student-note student-note-danger mb-4 <?= $error === '' ? 'hidden' : '' ?>">
-                <span class="material-symbols-outlined">error</span>
+                <?= student_icon_svg('error', '', false) ?>
                 <div><?= student_e($error) ?></div>
             </div>
 
@@ -78,7 +78,7 @@ render_student_auth_header('Recover Password');
                 <input type="hidden" name="csrf_token" value="<?= student_e(patient_password_reset_csrf_token('request')) ?>">
                 <div class="student-field">
                     <label class="student-label" for="id-number">ID Number</label>
-                    <input id="id-number" name="id_number" class="student-input" type="text" placeholder="Enter ID number" autocomplete="username" data-id-number-format value="<?= student_e($idNumber) ?>" required>
+                    <input id="id-number" name="id_number" class="student-input" type="text" placeholder="23-00262 or 0000002" autocomplete="username" data-id-number-format value="<?= student_e($idNumber) ?>" required>
                 </div>
 
                 <div class="student-field">
@@ -88,7 +88,7 @@ render_student_auth_header('Recover Password');
 
                 <button type="submit" class="student-button w-full" id="passwordRecoverySubmit">
                     <span data-recovery-button-label>Send Recovery Instructions</span>
-                    <span class="material-symbols-outlined" data-recovery-button-icon>mail</span>
+                    <span data-recovery-button-icon><?= student_icon_svg('mail', '', true) ?></span>
                 </button>
             </form>
 
@@ -108,7 +108,7 @@ document.getElementById('passwordRecoveryForm')?.addEventListener('submit', () =
     button.disabled = true;
     button.setAttribute('aria-busy', 'true');
     button.querySelector('[data-recovery-button-label]').textContent = 'Sending…';
-    button.querySelector('[data-recovery-button-icon]').textContent = 'hourglass_top';
+    window.studentSetIcon(button.querySelector('[data-recovery-button-icon] .student-icon'), 'hourglass_top');
 });
 </script>
 

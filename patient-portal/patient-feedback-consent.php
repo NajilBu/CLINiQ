@@ -59,7 +59,7 @@ render_student_header('Give Feedback', 'dashboard');
     </section>
     <nav class="student-feedback-flow-progress" aria-label="Feedback progress"><span class="is-current"><strong>1 · Required feedback</strong><small>Choose a completed visit and privacy option</small></span><span><strong>2 · Give feedback</strong><small>Share your experience</small></span></nav>
 
-    <?php if ($error): ?><div class="student-note student-note-danger student-feedback-notice" role="alert"><span class="material-symbols-outlined" aria-hidden="true">error</span><span><?= student_e($error) ?></span></div><?php endif; ?>
+    <?php if ($error): ?><div class="student-note student-note-danger student-feedback-notice" role="alert"><?= student_icon_svg('error', '', true) ?><span><?= student_e($error) ?></span></div><?php endif; ?>
     <section class="student-card student-card-pad student-feedback-visit-summary">
         <div class="student-card-header"><div><p class="student-feedback-eyebrow">Required clinic feedback</p><h2>Complete feedback to remain eligible for future appointments</h2></div></div>
         <p class="student-feedback-muted">Select a completed visit, then continue to the survey. Anonymous feedback still clears this requirement.</p>
@@ -81,7 +81,7 @@ render_student_header('Give Feedback', 'dashboard');
                 <details><summary>Read the privacy notice and your rights</summary><div><p>We collect your ratings, comments, and consent record for service quality improvement and clinic reporting. Visit-linked feedback is confidential and may be used for visit-specific follow-up.</p><p>Access is limited to authorized clinic personnel who need it for evaluation, support, or reporting.</p></div></details>
             </div>
             <div class="flex flex-wrap gap-3 mt-4">
-                <button type="submit" class="student-button"><span class="material-symbols-outlined" aria-hidden="true">check</span>Continue to feedback</button>
+                <button type="submit" class="student-button"><?= student_icon_svg('check', '', true) ?>Continue to feedback</button>
                 <a href="<?= student_e(student_portal_url('dashboard')) ?>" class="student-button student-button-secondary text-decoration-none">Not now</a>
             </div>
         </form>

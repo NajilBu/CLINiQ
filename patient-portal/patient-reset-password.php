@@ -47,11 +47,11 @@ render_student_auth_header('Reset Password');
         <div class="student-auth-form-side">
             <p class="student-eyebrow">Account Help</p>
             <h2 class="student-card-title text-xl">Create a new password</h2>
-            <p class="student-card-copy mb-5">Use at least 8 characters and include at least one number.</p>
+            <p class="student-card-copy mb-5">Use 8–128 characters with uppercase, lowercase, a number, and a special character.</p>
 
             <?php if ($error !== ''): ?>
                 <div class="student-note student-note-danger mb-4">
-                    <span class="material-symbols-outlined">error</span>
+                    <?= student_icon_svg('error', '', false) ?>
                     <div><?= student_e($error) ?></div>
                 </div>
             <?php endif; ?>
@@ -63,30 +63,30 @@ render_student_auth_header('Reset Password');
                     <div class="student-field">
                         <label class="student-label" for="password">New Password</label>
                         <div class="relative">
-                            <input id="password" name="password" class="student-input pr-14" type="password" minlength="8" autocomplete="new-password" required>
+                            <input id="password" name="password" class="student-input pr-14" type="password" minlength="8" maxlength="128" autocomplete="new-password" required>
                             <button type="button" class="student-toggle-pw" data-target="password">Show</button>
                         </div>
                     </div>
                     <div class="student-field">
                         <label class="student-label" for="password-confirmation">Confirm New Password</label>
                         <div class="relative">
-                            <input id="password-confirmation" name="password_confirmation" class="student-input pr-14" type="password" minlength="8" autocomplete="new-password" required>
+                            <input id="password-confirmation" name="password_confirmation" class="student-input pr-14" type="password" minlength="8" maxlength="128" autocomplete="new-password" required>
                             <button type="button" class="student-toggle-pw" data-target="password-confirmation">Show</button>
                         </div>
                     </div>
                     <button type="submit" class="student-button w-full">
                         Update Password
-                        <span class="material-symbols-outlined">lock_reset</span>
+                        <?= student_icon_svg('lock_reset', '', false) ?>
                     </button>
                 </form>
             <?php else: ?>
                 <div class="student-note student-note-danger mb-4">
-                    <span class="material-symbols-outlined">link_off</span>
+                    <?= student_icon_svg('link_off', '', false) ?>
                     <div>This password reset link is invalid, expired, or already used.</div>
                 </div>
                 <a href="<?= student_e(student_portal_url('forgot-password')) ?>" class="student-button w-full text-decoration-none">
                     Request a New Link
-                    <span class="material-symbols-outlined">mail</span>
+                    <?= student_icon_svg('mail', '', false) ?>
                 </a>
             <?php endif; ?>
 

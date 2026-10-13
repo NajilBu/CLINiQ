@@ -46,7 +46,7 @@ render_student_auth_header('Welcome');
                 <p class="student-welcome-access-title">Sign in to your clinic record.</p>
                 <a href="<?= student_e(student_portal_url('login')) ?>" class="student-button student-welcome-primary-action">
                     <span>Sign in to the portal</span>
-                    <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span>
+                    <?= student_icon_svg('arrow_forward', '', true) ?>
                 </a>
                 <p class="student-welcome-access-note">For students, faculty, and school personnel with a clinic account.</p>
             </aside>
