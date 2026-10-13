@@ -1173,57 +1173,18 @@ function ape_initial_upload_phase_is_open(array $record): bool
         || (!empty($record['schedule_batch_id']) && ($record['batch_status'] ?? '') === 'Scheduled'));
 }
 
-function ape_default_scheduled_batch(array $batches, ?DateTimeImmutable $now = null): ?array
-{
-    $upcoming = ape_earliest_upcoming_batch($batches, $now);
-    if ($upcoming !== null) {
-        return $upcoming;
-    }
-
-    $scheduled = array_values(array_filter($batches, static fn (array $batch): bool => ($batch['status'] ?? '') === 'Scheduled'));
-    usort($scheduled, static function (array $left, array $right): int {
-        $leftSchedule = (string) ($left['schedule_date'] ?? '') . ' ' . (string) ($left['start_time'] ?? '');
-        $rightSchedule = (string) ($right['schedule_date'] ?? '') . ' ' . (string) ($right['start_time'] ?? '');
-        return strcmp($rightSchedule, $leftSchedule) ?: ((int) ($right['batch_id'] ?? 0) <=> (int) ($left['batch_id'] ?? 0));
-    });
-
-    return $scheduled[0] ?? null;
-}
-
-function ape_overall_view_requested(array $query): bool
-{
-    return strtolower(trim((string) ($query['scope'] ?? ''))) === 'overall'
-        && strtolower(trim((string) ($query['selection'] ?? ''))) === 'overall';
-}
-
 /**
  * @return array{batch_id: ?int, overall_selected: bool}
  */
 function ape_resolve_batch_selection(
     array $scheduledBatchesById,
-    ?array $defaultBatch,
-    ?int $requestedBatchId,
-    bool $overallRequested,
-    ?array $savedSelection
+    ?int $requestedBatchId
 ): array {
-    if ($overallRequested) {
-        return ['batch_id' => null, 'overall_selected' => true];
-    }
     if ($requestedBatchId !== null && isset($scheduledBatchesById[$requestedBatchId])) {
         return ['batch_id' => $requestedBatchId, 'overall_selected' => false];
     }
-    if (($savedSelection['type'] ?? null) === 'overall') {
-        return ['batch_id' => null, 'overall_selected' => true];
-    }
-    $savedBatchId = (int) ($savedSelection['batch_id'] ?? 0);
-    if (($savedSelection['type'] ?? null) === 'batch' && $savedBatchId > 0 && isset($scheduledBatchesById[$savedBatchId])) {
-        return ['batch_id' => $savedBatchId, 'overall_selected' => false];
-    }
 
-    return [
-        'batch_id' => $defaultBatch !== null ? (int) $defaultBatch['batch_id'] : null,
-        'overall_selected' => false,
-    ];
+    return ['batch_id' => null, 'overall_selected' => true];
 }
 
 function ape_waiting_days(array $record): int

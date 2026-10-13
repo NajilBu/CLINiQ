@@ -94,6 +94,7 @@ foreach ($alerts as $alert) {
     $usesReporterUrgency = $reporterUrgency !== ''
         && $riskLevel === $reporterUrgency
         && str_contains((string) ($alert['risk_reasons'] ?? ''), 'Reporter selected ' . $reporterUrgency . ' urgency');
+    $recordSource = trim((string) ($alert['record_source'] ?? '')) ?: 'Legacy / unknown';
     $actions = '';
     if ($alert['status'] === 'Pending') {
         $actions = '<div class="row-actions-list">'
@@ -117,7 +118,7 @@ foreach ($alerts as $alert) {
         'riskHtml' => '<span class="badge ' . e(risk_badge_class($riskLevel)) . '">' . e($riskLevel) . '</span><p class="text-[10px] font-bold text-slate-400 mb-0 mt-1">' . ($usesReporterUrgency ? 'Reported urgency' : 'Score ' . $riskScore) . '</p>',
         'patient' => $patientName !== '' ? $patientName : 'Unlisted',
         'reporterSort' => $alert['reporter_name'],
-        'reporterHtml' => '<p class="text-sm font-bold text-slate-600 mb-0">' . e($alert['reporter_name']) . '</p>' . ($alert['reporter_role'] ? '<p class="text-xs font-bold text-slate-400 mb-0">' . e($alert['reporter_role']) . '</p>' : ''),
+        'reporterHtml' => '<p class="text-sm font-bold text-slate-600 mb-0">' . e($alert['reporter_name']) . '</p>' . ($alert['reporter_role'] ? '<p class="text-xs font-bold text-slate-400 mb-0">' . e($alert['reporter_role']) . '</p>' : '') . '<p class="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1 mb-0">' . e($recordSource) . '</p>',
         'location' => $alert['location'],
         'concernSort' => $alert['concern'],
         'concernHtml' => '<a href="view.php?id=' . (int)$alert['id'] . '" class="block text-decoration-none"><p class="text-sm font-bold text-slate-800 mb-0">' . e($alert['concern']) . '</p>' . (!empty($alert['incident_type']) ? '<p class="text-[10px] font-black text-red-500 uppercase tracking-widest mt-0.5 mb-0">' . e($alert['incident_type']) . '</p>' : '') . ($alert['report_answers'] ? '<p class="text-xs font-bold text-slate-400 mt-0.5 mb-0 truncate">' . e($alert['report_answers']) . '</p>' : ($alert['details'] ? '<p class="text-xs font-bold text-slate-400 mt-0.5 mb-0 truncate">' . e($alert['details']) . '</p>' : '')) . '</a>',
@@ -133,7 +134,7 @@ render_clinic_command_header(
     'Emergency',
     'Nurse Alerts',
     'Live emergency reports from staff and QR/NFC scans.',
-    '<div class="flex items-center gap-2 text-xs font-semibold text-slate-400 bg-slate-100/50 px-3 py-1.5 rounded-full border border-slate-200/50"><span class="material-symbols-outlined text-[14px]">sync</span>Auto-refreshing every 5s</div>'
+    '<div class="flex flex-wrap items-center gap-2"><a href="create.php" class="btn btn-primary text-decoration-none"><span class="material-symbols-outlined text-[18px]">note_add</span>Document Incident</a><div class="flex items-center gap-2 text-xs font-semibold text-slate-400 bg-slate-100/50 px-3 py-1.5 rounded-full border border-slate-200/50"><span class="material-symbols-outlined text-[14px]">sync</span>Auto-refreshing every 5s</div></div>'
 );
 ?>
 

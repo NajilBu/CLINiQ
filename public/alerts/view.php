@@ -58,6 +58,8 @@ $riskReasons = trim((string) ($alert['risk_reasons'] ?? ''));
 $responseGuidance = trim((string) ($alert['response_guidance'] ?? ''));
 $reportAnswers = trim((string) ($alert['report_answers'] ?? ''));
 $reporterUrgency = trim((string) ($alert['reporter_risk_rating'] ?? ''));
+$recordSource = trim((string) ($alert['record_source'] ?? '')) ?: 'Legacy / unknown';
+$isStaffDocumentation = $recordSource === 'Staff documentation';
 $usesReporterUrgency = $reporterUrgency !== ''
     && $riskLevel === $reporterUrgency
     && str_contains($riskReasons, 'Reporter selected ' . $reporterUrgency . ' urgency');
@@ -72,7 +74,7 @@ render_header('Alert Report');
             <span class="material-symbols-outlined text-[28px]">notification_important</span>
         </div>
         <div>
-            <p class="text-[11px] font-black text-red-600 uppercase tracking-widest mb-2">Emergency Alert Report</p>
+            <p class="text-[11px] font-black <?= $isStaffDocumentation ? 'text-primary' : 'text-red-600' ?> uppercase tracking-widest mb-2"><?= $isStaffDocumentation ? 'Staff Documented Incident' : 'Emergency Alert Report' ?></p>
             <h1 class="font-headline text-3xl md:text-4xl font-extrabold text-[#17261d]"><?= e($alert['concern']) ?></h1>
             <p class="text-sm font-bold text-slate-500 mt-1">
                 Submitted <?= e(date('M d, Y g:i A', strtotime($alert['created_at']))) ?> from <?= e($alert['location']) ?>
@@ -81,6 +83,7 @@ render_header('Alert Report');
     </div>
     <div class="flex flex-wrap items-center gap-3">
         <span class="badge <?= e(risk_badge_class($riskLevel)) ?>"><?= e($riskLevel) ?><?= $usesReporterUrgency ? ' Reported Urgency' : ' Risk' ?></span>
+        <span class="badge badge-active"><?= e($recordSource) ?></span>
         <span class="badge <?= e(status_badge_class($alert['status'])) ?>"><?= e($alert['status']) ?></span>
     </div>
 </div>
@@ -97,6 +100,10 @@ render_header('Alert Report');
             </div>
         </div>
         <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="alert-report-field">
+                <span class="clinic-label">Record Source</span>
+                <strong><?= e($recordSource) ?></strong>
+            </div>
             <div class="alert-report-field">
                 <span class="clinic-label">Reporter</span>
                 <strong><?= e($alert['reporter_name']) ?></strong>

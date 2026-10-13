@@ -921,6 +921,7 @@ render_header($fullName . ' - Patient Profile');
                     $alertRecordId = (int) ($alert['id'] ?? $alert['alert_id'] ?? 0);
                     $isEmergencyPassportAlert = !empty($alert['linked_incident_report_id']) || !empty($alert['incident_report_id']) || ($alert['reporter_role'] ?? '') === 'Emergency Passport';
                     $isUnlinkedIncident = !empty($alert['is_unlinked_incident']);
+                    $recordSource = trim((string) ($alert['record_source'] ?? '')) ?: ($isEmergencyPassportAlert ? 'Passport' : 'Legacy / unknown');
                     $alertStatus = trim((string) ($alert['status'] ?? 'Pending')) ?: 'Pending';
                     $alertRisk = trim((string) ($alert['risk_level'] ?? 'Not assessed')) ?: 'Not assessed';
                     $alertDate = (string) ($alert['created_at'] ?? '');
@@ -939,6 +940,8 @@ render_header($fullName . ' - Patient Profile');
                                         <span class="badge <?= $alertRisk === 'Critical' || $alertRisk === 'High' ? 'badge-critical' : 'badge-pending' ?>"><?= e($alertRisk) ?> risk</span>
                                         <?php if ($isEmergencyPassportAlert): ?>
                                             <span class="text-[11px] font-black uppercase tracking-widest text-slate-400">Emergency Passport</span>
+                                        <?php elseif ($recordSource === 'Staff documentation'): ?>
+                                            <span class="text-[11px] font-black uppercase tracking-widest text-primary">Staff documentation</span>
                                         <?php endif; ?>
                                         <?php if (trim((string) ($alert['incident_type'] ?? '')) !== ''): ?>
                                             <span class="text-[11px] font-black uppercase tracking-widest text-slate-400"><?= e($alert['incident_type']) ?></span>

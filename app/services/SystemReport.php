@@ -464,17 +464,18 @@ function build_system_report(string $dateFrom, string $dateTo, array $modules): 
             'title' => 'Alerts and Incidents',
             'description' => 'Alerts, incidents, emergency risk, passport access, and resolution status.',
             'metrics' => [
-                system_report_metric('Alerts', system_report_scalar($newDb, 'SELECT COUNT(*) FROM nurse_alerts WHERE created_at >= ? AND created_at < ?', $range)),
+                system_report_metric('Emergency Alerts', system_report_scalar($newDb, "SELECT COUNT(*) FROM nurse_alerts WHERE record_source <> 'Staff documentation' AND created_at >= ? AND created_at < ?", $range)),
+                system_report_metric('Staff Documentation', system_report_scalar($newDb, "SELECT COUNT(*) FROM nurse_alerts WHERE record_source = 'Staff documentation' AND created_at >= ? AND created_at < ?", $range)),
                 system_report_metric('Incident Reports', system_report_scalar($newDb, 'SELECT COUNT(*) FROM incident_reports WHERE reported_at >= ? AND reported_at < ?', $range)),
                 system_report_metric('Passport Accesses', system_report_scalar($newDb, 'SELECT COUNT(*) FROM passport_access_logs WHERE accessed_at >= ? AND accessed_at < ?', $range)),
-                system_report_metric('Resolved', system_report_scalar($newDb, "SELECT COUNT(*) FROM nurse_alerts WHERE status = 'Resolved' AND created_at >= ? AND created_at < ?", $range)),
+                system_report_metric('Resolved Emergency Alerts', system_report_scalar($newDb, "SELECT COUNT(*) FROM nurse_alerts WHERE record_source <> 'Staff documentation' AND status = 'Resolved' AND created_at >= ? AND created_at < ?", $range)),
             ],
             'attention_metrics' => [
                 system_report_metric('Pending Alerts', system_report_scalar($newDb, "SELECT COUNT(*) FROM nurse_alerts WHERE status = 'Pending' AND created_at >= ? AND created_at < ?", $range)),
-                system_report_metric('High or Critical Risk', system_report_scalar($newDb, "SELECT COUNT(*) FROM nurse_alerts WHERE risk_level IN ('High', 'Critical') AND created_at >= ? AND created_at < ?", $range)),
+                system_report_metric('High or Critical Risk', system_report_scalar($newDb, "SELECT COUNT(*) FROM nurse_alerts WHERE status = 'Pending' AND risk_level IN ('High', 'Critical') AND created_at >= ? AND created_at < ?", $range)),
             ],
             'charts' => [
-                system_report_chart('Alert Risk Level', system_report_rows($newDb, "SELECT COALESCE(NULLIF(risk_level, ''), 'Not assessed') label, COUNT(*) value FROM nurse_alerts WHERE created_at >= ? AND created_at < ? GROUP BY label ORDER BY FIELD(label, 'Critical', 'High', 'Moderate', 'Low', 'Not assessed')", $range), 'No alerts were recorded for this period.', 0, 'bar', true, '', ['colors' => ['#b42318', '#d97706', '#d4a72c', '#58a978', '#64748b']]),
+                system_report_chart('Emergency Alert Risk Level', system_report_rows($newDb, "SELECT COALESCE(NULLIF(risk_level, ''), 'Not assessed') label, COUNT(*) value FROM nurse_alerts WHERE record_source <> 'Staff documentation' AND created_at >= ? AND created_at < ? GROUP BY label ORDER BY FIELD(label, 'Critical', 'High', 'Moderate', 'Low', 'Not assessed')", $range), 'No emergency alerts were recorded for this period.', 0, 'bar', true, '', ['colors' => ['#b42318', '#d97706', '#d4a72c', '#58a978', '#64748b']]),
                 (static function () use ($newDb, $dateFrom, $dateTo): array {
                     $passportAccess = system_report_passport_access_by_day($newDb, $dateFrom, $dateTo);
                     return system_report_chart($passportAccess['title'], $passportAccess['rows'], 'No passport accesses were recorded for this period.', 0, 'line', true, $passportAccess['insight'], ['visual_rows' => $passportAccess['visual_rows']]);

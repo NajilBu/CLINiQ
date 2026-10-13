@@ -511,7 +511,8 @@ function ape_schedule_candidates(int $cycleId): array
               FROM ape_schedule_batch_cohorts c
               JOIN ape_schedule_batches b ON b.batch_id = c.batch_id
               WHERE c.ape_cycle_id = ? AND c.program_id = s.program_id
-                AND c.year_level = s.year_level AND c.section = s.section
+                AND c.year_level COLLATE utf8mb4_unicode_ci = s.year_level COLLATE utf8mb4_unicode_ci
+                AND c.section COLLATE utf8mb4_unicode_ci = s.section COLLATE utf8mb4_unicode_ci
                 AND b.status <> 'Cancelled'
           )
         ORDER BY p.last_name, p.first_name, pt.person_id

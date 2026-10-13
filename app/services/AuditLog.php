@@ -95,6 +95,7 @@ function audit_log_action_label(string $action): string
 {
     $labels = [
         'alert_resolved' => 'Resolved an emergency alert',
+        'incident_documented_resolved' => 'Documented a resolved incident',
         'alert_status_updated' => 'Updated an emergency alert',
         'ape_required_documents_updated' => 'Updated required APE documents',
         'backup_completed' => 'Completed a system backup',

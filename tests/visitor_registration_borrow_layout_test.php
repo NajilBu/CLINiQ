@@ -9,6 +9,11 @@ foreach (['Borrow Equipment', 'borrow-equipment-wrap', 'syncBorrowFlow', 'name="
     }
 }
 
+if (!str_contains($source, 'gap-3 items-start" data-borrow-row')
+    || !str_contains($source, 'data-remove-borrow-row aria-label="Remove equipment item"')) {
+    throw new RuntimeException('Equipment quantity and selection controls must share their top alignment.');
+}
+
 if (str_contains($source, '.visit-main.is-borrowing {')) {
     throw new RuntimeException('Borrowing must not change the visitor form alignment.');
 }

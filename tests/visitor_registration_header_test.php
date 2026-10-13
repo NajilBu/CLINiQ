@@ -30,6 +30,12 @@ if (!str_contains($visitor, 'href="visitor-registration.php"')) {
     throw new RuntimeException('Back to form must use a same-origin relative registration URL.');
 }
 
+if (!str_contains($visitor, 'id="guestVisitorButtonLabel"')
+    || !str_contains($visitor, 'Guest visit')
+    || !str_contains($visitor, 'class="flex items-center justify-between gap-2"')) {
+    throw new RuntimeException('Guest mode must be a compact action aligned with the ID label.');
+}
+
 if (!str_contains($visitor, 'Give feedback about a clinic visit')
     || !str_contains($visitor, "app_url('clinic-feedback.php')")
     || !str_contains($visitor, 'rounded-full border border-primary/25')) {

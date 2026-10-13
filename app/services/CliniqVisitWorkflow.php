@@ -92,10 +92,10 @@ function cliniq_visit_patients(string $search = '', int $limit = 500): array
     }, $stmt->fetchAll());
 }
 
-function cliniq_visit_patient_by_id_number(string $idNumber): ?array
+function cliniq_visit_patient_by_id_number(string $idNumber, bool $allowCompactStudentFallback = false): ?array
 {
     require_once __DIR__ . '/../helpers/student_id.php';
-    [$preferredId, $alternateId] = visit_id_number_candidates($idNumber);
+    [$preferredId, $alternateId] = visit_id_number_candidates($idNumber, $allowCompactStudentFallback);
     $stmt = cliniq_visit_db()->prepare("
         SELECT pe.id AS person_id, pe.id_number, pe.first_name, pe.middle_name, pe.last_name,
                CASE

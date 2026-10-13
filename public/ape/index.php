@@ -67,32 +67,18 @@ usort($schoolYearBatches, static function (array $left, array $right): int {
     $rightSchedule = (string) $right['schedule_date'] . ' ' . (string) $right['start_time'];
     return strcmp($leftSchedule, $rightSchedule) ?: ((int) $left['batch_id'] <=> (int) $right['batch_id']);
 });
-$defaultScheduledBatch = ape_default_scheduled_batch($schoolYearBatches);
-$overallRequested = ape_overall_view_requested($_GET);
 $requestedBatchId = filter_var($_GET['batch'] ?? null, FILTER_VALIDATE_INT, [
     'options' => ['min_range' => 1],
 ]);
 $selectedBatchId = null;
 if ($populationScope === 'students') {
-    $savedBatchSelection = is_array($_SESSION['ape_batch_selection_v2'] ?? null)
-        ? $_SESSION['ape_batch_selection_v2']
-        : null;
     $resolvedBatchSelection = ape_resolve_batch_selection(
         $scheduledBatchesById,
-        $defaultScheduledBatch,
-        $requestedBatchId ? (int) $requestedBatchId : null,
-        $overallRequested,
-        $savedBatchSelection
+        $requestedBatchId ? (int) $requestedBatchId : null
     );
     $selectedBatchId = $resolvedBatchSelection['batch_id'];
-    if ($selectedBatchId !== null) {
-        $_SESSION['ape_batch_selection_v2'] = ['type' => 'batch', 'batch_id' => $selectedBatchId];
-    } elseif ($resolvedBatchSelection['overall_selected']) {
-        $_SESSION['ape_batch_selection_v2'] = ['type' => 'overall'];
-    } else {
-        unset($_SESSION['ape_batch_selection_v2']);
-    }
 }
+unset($_SESSION['ape_batch_selection_v2']);
 $selectedBatch = $selectedBatchId !== null ? $scheduledBatchesById[$selectedBatchId] : null;
 $isOverallView = $selectedBatch === null;
 
@@ -469,7 +455,7 @@ render_clinic_command_header(
                         $studentScopeQuery = ['queue' => $activeQueue, 'population' => 'students'];
                         if ($search !== '') $studentScopeQuery['q'] = $search;
                         if ($selectedBatchId !== null) $studentScopeQuery['batch'] = $selectedBatchId;
-                        elseif ($populationScope === 'students' && $overallRequested) {
+                        else {
                             $studentScopeQuery['scope'] = 'overall';
                             $studentScopeQuery['selection'] = 'overall';
                         }

@@ -162,9 +162,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patient && ($_POST['action'] ?? ''
 
             $alert = $db->prepare("
                 INSERT INTO nurse_alerts
-                    (incident_report_id, patient_id, reporter_name, reporter_role, location, concern, incident_type, details, report_answers, reporter_risk_rating,
+                    (incident_report_id, record_source, patient_id, reporter_name, reporter_role, location, concern, incident_type, details, report_answers, reporter_risk_rating,
                      risk_level, risk_score, risk_reasons, response_guidance, photo_path, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')
+                VALUES (?, 'Passport', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')
             ");
             $alert->execute([
                 $incidentId,

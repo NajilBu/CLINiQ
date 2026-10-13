@@ -120,6 +120,7 @@ function ensure_alert_workflow_schema(): void
     };
 
     $addColumn('incident_report_id', 'BIGINT UNSIGNED NULL AFTER id');
+    $addColumn('record_source', "VARCHAR(40) NOT NULL DEFAULT 'Legacy / unknown' AFTER incident_report_id");
     $addColumn('photo_path', 'VARCHAR(255) NULL AFTER details');
     $addColumn('incident_type', 'VARCHAR(120) NULL AFTER concern');
     $addColumn('report_answers', 'MEDIUMTEXT NULL AFTER details');

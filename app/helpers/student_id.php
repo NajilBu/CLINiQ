@@ -44,10 +44,14 @@ function is_valid_student_id_number(?string $idNumber): bool
     return preg_match(STUDENT_ID_NUMBER_REGEX, normalize_student_id_number($idNumber)) === 1;
 }
 
-function visit_id_number_candidates(string $idNumber): array
+function visit_id_number_candidates(string $idNumber, bool $allowCompactStudentFallback = false): array
 {
     $normalized = normalize_id_number($idNumber);
-    return [$normalized, $normalized];
+    if (!$allowCompactStudentFallback || preg_match('/^\d{7}$/', $normalized) !== 1 || str_starts_with($normalized, '00')) {
+        return [$normalized, $normalized];
+    }
+
+    return [$normalized, normalize_student_id_number($normalized)];
 }
 
 function id_number_validation_message(string $subject = 'ID Number'): string

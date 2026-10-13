@@ -265,20 +265,10 @@ $batches = [
 ];
 expect_four_step((ape_earliest_upcoming_batch($batches, $batchNow)['batch_id'] ?? 0) === 2, 'Default APE scope must select the earliest non-ended scheduled batch.');
 expect_four_step(ape_earliest_upcoming_batch([$batches[0]], $batchNow) === null, 'No upcoming batch must allow the page to fall back to Overall.');
-expect_four_step((ape_default_scheduled_batch($batches, $batchNow)['batch_id'] ?? 0) === 2, 'APE must default to the next upcoming scheduled batch.');
-expect_four_step((ape_default_scheduled_batch([$batches[0], ['batch_id' => 5, 'status' => 'Scheduled', 'schedule_date' => '2026-09-13', 'start_time' => '09:00:00', 'end_time' => '10:00:00']], $batchNow)['batch_id'] ?? 0) === 1, 'APE must default to the most recent scheduled batch when none are upcoming.');
-expect_four_step(ape_default_scheduled_batch([$batches[3]], $batchNow) === null, 'Cancelled batches must not become the default.');
-expect_four_step(!ape_overall_view_requested(['scope' => 'overall']), 'An old Overall URL must not override the default scheduled batch.');
-expect_four_step(ape_overall_view_requested(['scope' => 'overall', 'selection' => 'overall']), 'Choosing Overall in the batch picker must remain available.');
 $scheduledById = [1 => $batches[0], 2 => $batches[2], 3 => $batches[1]];
-$nextBatch = $batches[2];
-expect_four_step(ape_resolve_batch_selection($scheduledById, $nextBatch, null, false, null)['batch_id'] === 2, 'A first visit must use the next upcoming batch.');
-expect_four_step(ape_resolve_batch_selection($scheduledById, $nextBatch, null, false, ['type' => 'batch', 'batch_id' => 3])['batch_id'] === 3, 'A manually selected batch must survive a return visit.');
-expect_four_step(ape_resolve_batch_selection($scheduledById, $nextBatch, 1, false, ['type' => 'batch', 'batch_id' => 3])['batch_id'] === 1, 'A new batch choice must replace the saved one.');
-expect_four_step(ape_resolve_batch_selection($scheduledById, $nextBatch, null, false, ['type' => 'overall'])['overall_selected'], 'A manually selected Overall view must survive a return visit.');
-expect_four_step(ape_resolve_batch_selection($scheduledById, $nextBatch, null, true, ['type' => 'batch', 'batch_id' => 3])['overall_selected'], 'Choosing Overall must replace a saved batch.');
-expect_four_step(ape_resolve_batch_selection($scheduledById, $nextBatch, 3, false, ['type' => 'overall'])['batch_id'] === 3, 'Choosing a batch must replace saved Overall.');
-expect_four_step(ape_resolve_batch_selection($scheduledById, $nextBatch, null, false, ['type' => 'batch', 'batch_id' => 4])['batch_id'] === 2, 'A cancelled saved batch must fall back to the scheduled default.');
+expect_four_step(ape_resolve_batch_selection($scheduledById, null)['overall_selected'], 'APE must default to Overall on entry and refresh.');
+expect_four_step(ape_resolve_batch_selection($scheduledById, 1)['batch_id'] === 1, 'An explicit valid batch link must still open that batch.');
+expect_four_step(ape_resolve_batch_selection($scheduledById, 4)['overall_selected'], 'An unavailable batch link must fall back to Overall.');
 
 $indexSource = file_get_contents(__DIR__ . '/../public/ape/index.php');
 expect_four_step(str_contains($indexSource, "['queue' => \$activeQueue, 'scope' => 'overall', 'selection' => 'overall', 'population' => \$populationScope]"), 'Overall selection must remain explicit in its population-aware link.');

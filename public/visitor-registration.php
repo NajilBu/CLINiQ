@@ -43,13 +43,14 @@ function split_visitor_name(string $fullName): array
 if (isset($_GET['lookup_identifier'])) {
     $identifier = normalize_id_number((string) $_GET['lookup_identifier']);
     header('Content-Type: application/json');
+    header('Cache-Control: no-store');
 
     if (!is_valid_id_number($identifier)) {
         echo json_encode(['found' => false]);
         exit;
     }
 
-    $patient = cliniq_visit_patient_by_id_number($identifier);
+    $patient = cliniq_visit_patient_by_id_number($identifier, true);
 
     if (!$patient) {
         echo json_encode(['found' => false]);
@@ -67,9 +68,10 @@ if (isset($_GET['lookup_identifier'])) {
 
     echo json_encode([
         'found' => true,
+        'id_number' => $patient['id_number'],
         'name' => trim($patient['first_name'] . ' ' . $patient['last_name']),
         'course' => $patient['course_section'] ?: '',
-            'category' => patient_category_label($patientCategory),
+        'category' => patient_category_label($patientCategory),
     ]);
     exit;
 }
@@ -107,8 +109,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $matchedPatient = null;
     if (!$isGuest && $form['identifier'] !== '') {
-        $matchedPatient = cliniq_visit_patient_by_id_number($form['identifier']);
+        $matchedPatient = cliniq_visit_patient_by_id_number($form['identifier'], true);
         if ($matchedPatient) {
+            $form['identifier'] = (string) $matchedPatient['id_number'];
             $form['full_name'] = trim($matchedPatient['first_name'] . ' ' . $matchedPatient['last_name']);
             $matchedCategory = (string) ($matchedPatient['patient_type'] ?? '');
             if (in_array($matchedCategory, $categoryOptions, true)) {
@@ -613,7 +616,13 @@ $theme = active_cliniq_theme();
 
                     <div class="visit-form-grid grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-5">
                         <div>
-                            <div class="flex items-center justify-between gap-2"><label class="visit-label mb-0" for="identifier">ID Number</label><button type="button" class="btn btn-ghost text-xs min-h-0 px-3 py-1.5" id="guestVisitorButton"><span class="material-symbols-outlined text-[16px]">person_pin</span>Guest</button></div>
+                            <div class="flex items-center justify-between gap-2">
+                                <label class="visit-label mb-0" for="identifier">ID Number</label>
+                                <button type="button" class="btn btn-ghost text-xs min-h-0 px-1.5 py-1" id="guestVisitorButton">
+                                    <span class="material-symbols-outlined text-[15px]" aria-hidden="true">person_pin</span>
+                                    <span id="guestVisitorButtonLabel">Guest visit</span>
+                                </button>
+                            </div>
                             <div class="visit-field">
                                 <span class="material-symbols-outlined">badge</span>
                                 <input class="visit-input <?= isset($errors['identifier']) ? 'input-error' : '' ?>" id="identifier" name="identifier" value="<?= e($form['identifier']) ?>" placeholder="Enter ID number" data-id-number-format autocomplete="off" <?= $form['subject_type'] === 'guest' ? 'disabled' : 'required' ?>>
@@ -668,7 +677,7 @@ $theme = active_cliniq_theme();
                             <?php if (isset($errors['borrow_items'])): ?><p class="text-xs font-bold text-red-700 mb-3"><?= e($errors['borrow_items']) ?></p><?php endif; ?>
                             <div id="borrowEquipmentRows" class="space-y-3">
                                 <?php foreach ($borrowRows as $row): ?>
-                                <div class="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_8rem_auto] gap-3 items-end" data-borrow-row>
+                                <div class="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_8rem_auto] gap-3 items-start" data-borrow-row>
                                     <div>
                                         <label class="visit-label">Equipment</label>
                                         <div class="visit-field bg-white">
@@ -694,7 +703,7 @@ $theme = active_cliniq_theme();
                                         <label class="visit-label">Qty</label>
                                         <div class="visit-field bg-white"><input class="visit-input" name="borrowed_quantity[]" data-borrow-quantity type="number" min="1" value="<?= e($row['quantity']) ?>"></div>
                                     </div>
-                                    <button type="button" class="btn btn-ghost min-h-[2.85rem] px-3" data-remove-borrow-row aria-label="Remove equipment item"><span class="material-symbols-outlined text-[18px]">close</span></button>
+                                    <button type="button" class="btn btn-ghost min-h-[2.85rem] px-3 md:mt-[1.75rem]" data-remove-borrow-row aria-label="Remove equipment item"><span class="material-symbols-outlined text-[18px]">close</span></button>
                                 </div>
                                 <?php endforeach; ?>
                             </div>
@@ -759,6 +768,7 @@ $theme = active_cliniq_theme();
     const identifier = document.getElementById('identifier');
     const subjectType = document.getElementById('subjectType');
     const guestVisitorButton = document.getElementById('guestVisitorButton');
+    const guestVisitorButtonLabel = document.getElementById('guestVisitorButtonLabel');
     const fullName = document.getElementById('full_name');
     const category = document.getElementById('category');
     const reason = document.getElementById('reason');
@@ -794,10 +804,10 @@ $theme = active_cliniq_theme();
             department.value = isGuest ? '' : department.value;
         }
         if (guestVisitorButton) {
-            guestVisitorButton.textContent = isGuest ? 'Registered Patient' : 'Guest';
             guestVisitorButton.classList.toggle('btn-primary', isGuest);
             guestVisitorButton.classList.toggle('btn-ghost', !isGuest);
         }
+        if (guestVisitorButtonLabel) guestVisitorButtonLabel.textContent = isGuest ? 'Use registered ID' : 'Guest visit';
         reason?.querySelectorAll('option[data-registered-only="1"]').forEach((option) => {
             option.hidden = isGuest;
         });
@@ -924,6 +934,7 @@ $theme = active_cliniq_theme();
             }
 
             identifier.dataset.autofilled = '1';
+            identifier.value = patient.id_number || formatted;
             fullName.value = patient.name || '';
             category.value = patient.category || '';
             department.value = patient.course || '';

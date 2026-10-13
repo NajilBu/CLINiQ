@@ -316,6 +316,7 @@ CREATE TABLE audit_logs (
 CREATE TABLE nurse_alerts (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   incident_report_id BIGINT UNSIGNED NULL UNIQUE,
+  record_source VARCHAR(40) NOT NULL DEFAULT 'Legacy / unknown',
   patient_id BIGINT UNSIGNED NULL,
   reporter_name VARCHAR(120) NOT NULL,
   reporter_role VARCHAR(80) NULL,
@@ -341,6 +342,7 @@ CREATE TABLE nurse_alerts (
   CONSTRAINT fk_nurse_alerts_resolved_by
     FOREIGN KEY (resolved_by) REFERENCES people(id) ON DELETE SET NULL,
   INDEX idx_nurse_alerts_status_created (status, created_at),
+  INDEX idx_nurse_alerts_source_created (record_source, created_at),
   INDEX idx_nurse_alerts_risk_created (risk_level, risk_score, created_at),
   INDEX idx_nurse_alerts_patient (patient_id)
 );

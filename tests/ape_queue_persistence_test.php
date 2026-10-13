@@ -8,7 +8,7 @@ $grid = file_get_contents(__DIR__ . '/../public/assets/js/ag-grid-tables.js');
 
 $checks = [
     'restores queue and search without retaining an old batch choice' => str_contains($page, "array_flip(['queue', 'q', 'population'])"),
-    'stores deliberate batch selections separately from legacy queue state' => str_contains($page, "\$_SESSION['ape_batch_selection_v2']")
+    'defaults batch selection to Overall instead of restoring a saved batch' => !str_contains($page, "\$_SESSION['ape_batch_selection_v2'] =")
         && str_contains($page, 'ape_resolve_batch_selection('),
     'keeps overall as an explicit selection' => str_contains($page, "['queue' => \$activeQueue, 'scope' => 'overall', 'selection' => 'overall', 'population' => \$populationScope]"),
     'shows only the selected batch name in the picker button' => str_contains($page, "? (string) \$selectedBatch['batch_name']")

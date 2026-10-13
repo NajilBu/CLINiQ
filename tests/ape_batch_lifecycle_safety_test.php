@@ -40,6 +40,8 @@ $checks = [
     'cohorts require complete official placements' => str_contains($service, 'AND s.program_id IS NOT NULL')
         && str_contains($service, "AND TRIM(COALESCE(s.year_level, '')) <> ''")
         && str_contains($service, "AND TRIM(COALESCE(s.section, '')) <> ''"),
+    'candidate cohorts compare mixed-collation student fields safely' => str_contains($service, 'c.year_level COLLATE utf8mb4_unicode_ci = s.year_level COLLATE utf8mb4_unicode_ci')
+        && str_contains($service, 'c.section COLLATE utf8mb4_unicode_ci = s.section COLLATE utf8mb4_unicode_ci'),
     'legacy records adopted at cycle start remain applicant-only' => str_contains($service, "pt.access_status = 'Applicant'"),
 ];
 
