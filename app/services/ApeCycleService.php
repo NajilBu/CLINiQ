@@ -420,56 +420,6 @@ function ape_schedule_batch_categories(): array
     return ['Student'];
 }
 
-function populate_manual_ape_records_for_staff(int $cycleId, ?int $actorPersonId): int
-{
-    ensure_ape_cycle_schema();
-    $cycle = ape_cycle_fetch($cycleId);
-    if (($cycle['status'] ?? '') !== 'Active') {
-        throw new InvalidArgumentException('Faculty and NTP records can be populated only for an active APE cycle.');
-    }
-
-    $db = auth_db();
-    $db->beginTransaction();
-    try {
-        $candidates = $db->prepare("
-            SELECT pt.person_id
-            FROM patients pt
-            JOIN accounts a ON a.person_id = pt.person_id AND a.account_status = 'active'
-            JOIN school_employees se ON se.person_id = pt.person_id
-            LEFT JOIN ape_records ar ON ar.patient_id = pt.person_id AND ar.academic_year = ?
-            WHERE se.role_classification IN ('Faculty', 'Non-Teaching Personnel')
-              AND ar.ape_id IS NULL
-            FOR UPDATE
-        ");
-        $candidates->execute([(string) $cycle['academic_year']]);
-        $personIds = array_map(static fn(array $row): int => (int) $row['person_id'], $candidates->fetchAll());
-
-        $insert = $db->prepare("
-            INSERT INTO ape_records (ape_cycle_id, patient_id, academic_year, entry_mode, workflow_status, requirement_status)
-            VALUES (?, ?, ?, 'Clinic Manual', 'Registered', 'Not Checked')
-        ");
-        $seedRequirement = $db->prepare("INSERT IGNORE INTO ape_requirements (ape_id, requirement_name, status, upload_group) VALUES (?, ?, 'Missing', 'initial')");
-        $log = $db->prepare("INSERT INTO ape_activity_logs (ape_id, performed_by_person_id, action, notes) VALUES (?, ?, 'Faculty/NTP APE record populated', ?)");
-        $created = 0;
-        foreach ($personIds as $personId) {
-            $insert->execute([$cycleId, $personId, (string) $cycle['academic_year']]);
-            $apeId = (int) $db->lastInsertId();
-            foreach (ape_default_requirements() as $requirement) {
-                $seedRequirement->execute([$apeId, $requirement]);
-            }
-            $log->execute([$apeId, $actorPersonId, 'Clinic-manual record created for the active APE cycle.']);
-            $created++;
-        }
-        $db->commit();
-        return $created;
-    } catch (Throwable $exception) {
-        if ($db->inTransaction()) {
-            $db->rollBack();
-        }
-        throw $exception;
-    }
-}
-
 function normalize_ape_batch_time(string $value, string $label): string
 {
     $value = preg_replace('/\s+/', ' ', strtoupper(trim($value))) ?? '';

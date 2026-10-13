@@ -1422,8 +1422,8 @@ function initPatientAccountTypeFields(root = document) {
                 sectionHint: 'Choose A to E. Program, year level, and section are stored separately.'
             },
             faculty: {
-                idPlaceholder: 'FAC-0001',
-                idHint: 'Faculty example: FAC-0001',
+                idPlaceholder: '0000002',
+                idHint: 'Faculty ID: exactly seven digits, for example 0000002.',
                 programLabel: 'Department',
                 programPlaceholder: 'Select department',
                 programHint: 'Select an active department.',
@@ -1435,8 +1435,8 @@ function initPatientAccountTypeFields(root = document) {
                 sectionHint: 'Example: DIT or MIT'
             },
             school_personnel: {
-                idPlaceholder: 'SP-0001',
-                idHint: 'School personnel example: SP-0001',
+                idPlaceholder: '0000002',
+                idHint: 'School personnel ID: exactly seven digits, for example 0000002.',
                 programLabel: 'Department',
                 programPlaceholder: 'Select department',
                 programHint: 'Select an active department.',
@@ -1482,6 +1482,12 @@ function initPatientAccountTypeFields(root = document) {
             const isFaculty = type === 'faculty';
 
             if (idNumberInput) idNumberInput.placeholder = hints.idPlaceholder;
+            if (idNumberInput) {
+                idNumberInput.dataset.idNumberKind = isStudent ? 'student' : 'employee';
+                window.CliniqIdNumber?.applyConstraints(idNumberInput);
+                idNumberInput.value = window.CliniqIdNumber?.format(idNumberInput.value, idNumberInput.dataset.idNumberKind) || idNumberInput.value;
+                idNumberInput.title = isStudent ? 'Use the student ID format 23-00262.' : 'Enter exactly seven digits.';
+            }
             setText('id_number_hint', hints.idHint);
             setText('program_or_department_label', hints.programLabel);
             setText('program_or_department_hint', hints.programHint);
@@ -1601,59 +1607,6 @@ function initConfirmedPasswordForms(root = document) {
         });
     });
 
-    const forms = [];
-    if (root instanceof Element && root.matches('[data-password-confirm-form]')) forms.push(root);
-    forms.push(...root.querySelectorAll('[data-password-confirm-form]'));
-
-    forms.forEach((form) => {
-        if (form.dataset.passwordConfirmationReady === 'true') return;
-        form.dataset.passwordConfirmationReady = 'true';
-        const password = form.querySelector('[name="password"]');
-        const confirmation = form.querySelector('[name="password_confirmation"]');
-        const namePattern = /^[\p{L} .'-]+$/u;
-        form.querySelectorAll('[data-person-name]').forEach((input) => {
-            input.addEventListener('input', () => {
-                input.setCustomValidity(input.value && !namePattern.test(input.value)
-                    ? 'Use only letters, spaces, apostrophes, periods, and hyphens.'
-                    : '');
-            });
-        });
-        if (!password || !confirmation) return;
-
-        const validateMatch = () => {
-            const strongPassword = password.value.length >= 8
-                && password.value.length <= 128
-                && /[a-z]/.test(password.value)
-                && /[A-Z]/.test(password.value)
-                && /\d/.test(password.value)
-                && /[^A-Za-z0-9]/.test(password.value);
-            password.setCustomValidity('');
-            confirmation.setCustomValidity('');
-            if (password.value !== '' && !strongPassword) {
-                password.setCustomValidity('Use 8–128 characters with uppercase, lowercase, number, and special character.');
-                return false;
-            }
-            if (confirmation.value !== '' && password.value !== confirmation.value) {
-                confirmation.setCustomValidity('Passwords do not match.');
-                return false;
-            }
-            return strongPassword && password.value === confirmation.value;
-        };
-
-        password.addEventListener('input', validateMatch);
-        confirmation.addEventListener('input', validateMatch);
-        form.addEventListener('click', (event) => {
-            const submitButton = event.target.closest('button:not([type]), button[type="submit"], input[type="submit"]');
-            if (submitButton) validateMatch();
-        }, true);
-        form.addEventListener('submit', (event) => {
-            if (!validateMatch()) {
-                event.preventDefault();
-                if (!password.checkValidity()) password.reportValidity();
-                else confirmation.reportValidity();
-            }
-        });
-    });
 }
 
 function initRequirementStatusColors(root = document) {
@@ -1707,6 +1660,33 @@ function initApeExamResultFields(root = document) {
     result.addEventListener('change', () => syncExamResultFields(true));
 }
 
+function initApeReadyFollowUpHighlight(root = document) {
+    if (new URLSearchParams(window.location.search).get('ape_follow_up_ready') !== '1') return;
+
+    const scope = root?.querySelectorAll ? root : document;
+    const rows = [...scope.querySelectorAll('[data-ape-ready-follow-up]:not([data-ape-ready-follow-up-highlighted])')];
+    if (!rows.length) return;
+    rows.forEach((row) => { row.dataset.apeReadyFollowUpHighlighted = '1'; });
+
+    window.requestAnimationFrame(() => {
+        const content = document.querySelector('.app-content');
+        const firstRow = rows[0];
+        if (content) {
+            const contentBounds = content.getBoundingClientRect();
+            const rowBounds = firstRow.getBoundingClientRect();
+            const top = contentBounds.top + 20;
+            const bottom = contentBounds.bottom - 20;
+            if (rowBounds.bottom > bottom) content.scrollBy({ top: rowBounds.bottom - bottom, behavior: 'smooth' });
+            else if (rowBounds.top < top) content.scrollBy({ top: rowBounds.top - top, behavior: 'smooth' });
+        }
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        window.setTimeout(() => {
+            rows.forEach((row) => row.classList.add('inventory-row-attention'));
+            window.setTimeout(() => rows.forEach((row) => row.classList.remove('inventory-row-attention')), 2400);
+        }, 450);
+    });
+}
+
 function cliniqAfterContentSwap(root) {
     if (typeof window.cliniqInitAgGrids === 'function') {
         window.cliniqInitAgGrids(root || document);
@@ -1719,6 +1699,7 @@ function cliniqAfterContentSwap(root) {
     initConfirmedPasswordForms(root || document);
     initRequirementStatusColors(root || document);
     initApeExamResultFields(root || document);
+    initApeReadyFollowUpHighlight(root || document);
     if (typeof window.initRecentPatientAccountPagination === 'function') {
         window.initRecentPatientAccountPagination();
     }
@@ -2096,6 +2077,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Same-page links/forms update content without a full browser reload
     initSamePageAjax();
+
+    initApeReadyFollowUpHighlight();
 
     // ID Numbers use Enter ID number format.
     initStudentIdFormatting();

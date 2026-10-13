@@ -35,6 +35,12 @@ foreach (["'Email Center' => 0", 'clinic_work_center_summary(', "['email_issues'
     }
 }
 
+foreach (['clinic_work_center_reminder_candidates()', "empty(\$reminderItem['can_send_reminder'])", "(\$record['entry_mode'] ?? '') === 'Clinic Manual'", '$studentApeRecordsById', '$studentApeRecordIds'] as $marker) {
+    if (!str_contains($view, $marker)) {
+        throw new RuntimeException("APE sidebar badge must include only ready student follow-ups: {$marker}");
+    }
+}
+
 if (!str_contains($css, '.app-nav-group-title') || !str_contains($css, 'display: none;')) {
     throw new RuntimeException('Collapsed sidebar group-label behavior is missing.');
 }

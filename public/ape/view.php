@@ -137,6 +137,103 @@ if (!$record) {
     exit;
 }
 
+if (ape_is_staff_managed_record($record)) {
+    $staffCycleReadOnly = !ape_record_mutation_allowed($record);
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $storedCertificate = null;
+        try {
+            if (($_POST['action'] ?? '') !== 'submit_staff_medical_certificate') {
+                throw new RuntimeException('Staff APE records only accept a clinic-submitted medical certificate.');
+            }
+            if (!$canUploadApeDocument) {
+                throw new RuntimeException('Only authorized clinic staff can submit a staff medical certificate.');
+            }
+            ape_assert_record_mutation_allowed($record);
+            $staffPersonId = (int) ($apeUser['person_id'] ?? 0);
+            if ($staffPersonId <= 0) {
+                throw new RuntimeException('Your staff account is not ready to submit this certificate.');
+            }
+            $storedCertificate = ape_store_uploaded_file($_FILES['medical_certificate'] ?? [], (string) $record['id_number'], 'Medical Certificate');
+            $apeDb = auth_db();
+            $apeDb->beginTransaction();
+            $latest = $apeDb->prepare("SELECT document_id FROM ape_documents WHERE ape_id = ? AND document_type = 'Medical Certificate' ORDER BY document_id DESC LIMIT 1");
+            $latest->execute([$id]);
+            $replacing = (int) $latest->fetchColumn() > 0;
+            $document = $apeDb->prepare("\n                INSERT INTO ape_documents (ape_id, document_type, original_filename, file_path, verification_status, uploaded_by_person_id, verified_by_person_id, verified_at)\n                VALUES (?, 'Medical Certificate', ?, ?, 'Verified', ?, ?, NOW())\n            ");
+            $document->execute([$id, $storedCertificate['original_filename'], $storedCertificate['file_path'], $staffPersonId, $staffPersonId]);
+            $apeDb->prepare("\n                UPDATE ape_requirements\n                SET status = 'Verified', remarks = NULL, checked_by_person_id = ?, checked_at = NOW()\n                WHERE ape_id = ? AND requirement_name = 'Medical Certificate'\n            ")->execute([$staffPersonId, $id]);
+            $apeDb->prepare("\n                UPDATE ape_records\n                SET requirement_status = 'Checked', workflow_status = 'Submitted', clearance_status = 'Pending',\n                    follow_up_required = 0, follow_up_due_date = NULL, follow_up_due_time = NULL, reviewed_by_person_id = ?\n                WHERE ape_id = ?\n            ")->execute([$staffPersonId, $id]);
+            $activity = $replacing ? 'Replaced staff medical certificate' : 'Submitted staff medical certificate';
+            ape_log_activity($id, $staffPersonId, $activity, $storedCertificate['original_filename']);
+            patient_notification_create(
+                $apeDb,
+                (int) $record['patient_id'],
+                $staffPersonId,
+                'ape',
+                $replacing ? 'APE medical certificate replaced' : 'APE medical certificate submitted',
+                $replacing ? 'The clinic replaced your APE medical certificate. Open APE Status to view the latest file.' : 'The clinic submitted your APE medical certificate. Open APE Status to view it.',
+                '/ape-status',
+                'ape',
+                $id
+            );
+            $apeDb->commit();
+            flash_message('success', $replacing ? 'Medical certificate replaced. The staff APE remains submitted.' : 'Medical certificate submitted. The staff APE is complete.');
+        } catch (Throwable $e) {
+            if (isset($apeDb) && $apeDb->inTransaction()) $apeDb->rollBack();
+            if ($storedCertificate && is_file($storedCertificate['absolute_path'])) unlink($storedCertificate['absolute_path']);
+            flash_message($e instanceof InvalidArgumentException || $e instanceof RuntimeException ? 'warning' : 'error', $e->getMessage());
+        }
+        header('Location: view.php?id=' . $id);
+        exit;
+    }
+
+    $staffCertificates = array_values(array_filter(
+        ape_documents_for_record($id),
+        static fn(array $document): bool => ($document['document_type'] ?? '') === 'Medical Certificate'
+    ));
+    $latestCertificate = $staffCertificates[0] ?? null;
+    $submitted = ($record['workflow_status'] ?? '') === 'Submitted' && $latestCertificate !== null;
+    set_page_back_link('index.php?population=faculty_ntp', 'Faculty & NTP queue');
+    render_header('Faculty & NTP APE Record');
+    render_clinic_command_header(
+        'APE Workflow',
+        'Faculty / NTP APE',
+        'Clinic-controlled staff APE. No scheduling, examination, follow-up, or clearance decision applies.'
+    );
+    ?>
+    <main class="max-w-4xl mx-auto space-y-6">
+        <section class="clinic-card p-6 md:p-8">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div>
+                    <p class="clinic-label mb-1"><?= e((string) $record['employee_role_classification']) ?> · <?= e((string) $record['academic_year']) ?></p>
+                    <h1 class="font-headline text-2xl font-extrabold text-[#17261d] mb-1"><?= e(trim($record['first_name'] . ' ' . $record['last_name'])) ?></h1>
+                    <p class="text-sm font-bold text-slate-500 mb-0"><?= e((string) $record['id_number']) ?></p>
+                </div>
+                <span class="badge <?= $submitted ? 'badge-completed' : 'badge-pending' ?>"><?= $submitted ? 'Submitted' : 'Awaiting Medical Certificate' ?></span>
+            </div>
+        </section>
+        <section class="clinic-card p-6 md:p-8">
+            <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-2">Medical Certificate</h2>
+            <?php if ($latestCertificate): ?>
+                <p class="text-sm font-bold text-slate-600">Latest certificate: <?= e((string) $latestCertificate['original_filename']) ?> · submitted <?= e(date('M j, Y g:i A', strtotime((string) $latestCertificate['uploaded_at']))) ?></p>
+                <a class="btn btn-outline text-decoration-none mt-3" href="<?= e(app_url('ape/document.php?id=' . (int) $latestCertificate['document_id'])) ?>"><span class="material-symbols-outlined text-[18px]">visibility</span> View latest certificate</a>
+            <?php else: ?>
+                <p class="text-sm font-bold text-slate-500">No certificate has been submitted yet.</p>
+            <?php endif; ?>
+            <?php if (!$staffCycleReadOnly): ?>
+                <form method="post" enctype="multipart/form-data" class="mt-6 pt-6 border-t border-slate-100">
+                    <input type="hidden" name="action" value="submit_staff_medical_certificate">
+                    <label class="clinic-label" for="staffMedicalCertificate"><?= $latestCertificate ? 'Replace medical certificate' : 'Submit medical certificate' ?></label>
+                    <input class="clinic-input" id="staffMedicalCertificate" name="medical_certificate" type="file" accept=".pdf,.jpg,.jpeg,.png" required>
+                    <p class="text-xs font-bold text-slate-500 mt-2">The latest verified certificate is shown to the staff member. Earlier files remain in the audit history.</p>
+                    <button class="btn btn-primary mt-4" data-confirm-submit data-confirm-type="primary" data-confirm-title="<?= $latestCertificate ? 'Replace medical certificate?' : 'Submit medical certificate?' ?>" data-confirm-message="This keeps the staff APE submitted and records the clinic action." data-confirm-toast="Saving certificate..."><span class="material-symbols-outlined text-[18px]">upload_file</span> <?= $latestCertificate ? 'Replace Certificate' : 'Submit Certificate' ?></button>
+                </form>
+            <?php endif; ?>
+        </section>
+    </main>
+    <?php render_footer(); exit; ?>
+<?php }
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_ape_amendment') {
     try {
         if (!in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor'], true)) {
@@ -738,7 +835,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         );
     }
 
-    header('Location: view.php?id=' . $id);
+    header('Location: ' . ($action === 'mark_ape_inactive' && (string) ($_POST['return_to'] ?? '') === 'ape_queue' ? 'index.php' : 'view.php?id=' . $id));
     exit;
 }
 

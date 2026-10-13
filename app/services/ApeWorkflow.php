@@ -124,6 +124,18 @@ function ape_validate_clinical_information(array $input, array $current = []): a
 function ape_work_queues(): array
 {
     return [
+        'staff_awaiting_certificate' => [
+            'title' => 'Awaiting Medical Certificate',
+            'short_title' => 'Awaiting Certificate',
+            'description' => 'Clinic staff must attach the Faculty or NTP medical certificate for this active APE cycle.',
+            'icon' => 'upload_file',
+        ],
+        'staff_submitted' => [
+            'title' => 'Submitted Staff APEs',
+            'short_title' => 'Submitted',
+            'description' => 'Faculty and NTP APEs with a clinic-verified medical certificate.',
+            'icon' => 'task_alt',
+        ],
         'digital_submission' => [
             'title' => 'Document submission',
             'short_title' => 'Document submission',
@@ -334,10 +346,22 @@ function ape_record_is_inactive(array $record): bool
     return ($record['workflow_status'] ?? '') === 'Inactive';
 }
 
+/** Faculty and NTP APEs are clinic-controlled, never student workflow records. */
+function ape_is_staff_managed_record(array $record): bool
+{
+    return ($record['entry_mode'] ?? '') === 'Clinic Manual'
+        && in_array((string) ($record['employee_role_classification'] ?? ''), ['Faculty', 'Non-Teaching Personnel'], true);
+}
+
 function ape_record_queue(array $record): string
 {
     if (ape_record_is_inactive($record)) {
         return 'inactive';
+    }
+    if (ape_is_staff_managed_record($record)) {
+        return ($record['workflow_status'] ?? '') === 'Submitted'
+            ? 'staff_submitted'
+            : 'staff_awaiting_certificate';
     }
     if (($record['workflow_status'] ?? '') === 'Cleared' || ($record['clearance_status'] ?? '') === 'Cleared') {
         return 'completed';
@@ -428,6 +452,8 @@ function ape_batch_progress(array $records): array
 function ape_next_action(array $record): array
 {
     return match (ape_record_queue($record)) {
+        'staff_awaiting_certificate' => ['label' => 'Submit Medical Certificate', 'icon' => 'upload_file'],
+        'staff_submitted' => ['label' => 'Submitted', 'icon' => 'task_alt'],
         'examination' => ape_examination_is_available($record)
             ? ['label' => 'Record Examination', 'icon' => 'stethoscope']
             : (!empty($record['schedule_batch_id'])
@@ -991,6 +1017,20 @@ function ape_staff_progress(array $record): array
  */
 function ape_student_progress(array $record): array
 {
+    if (ape_is_staff_managed_record($record)) {
+        $submitted = ($record['workflow_status'] ?? '') === 'Submitted';
+        $steps = [];
+        for ($step = 1; $step <= 4; $step++) {
+            $steps[$step] = ['number' => $step, 'key' => 'staff_medical_certificate', 'done' => $submitted, 'submitted' => $submitted, 'active' => !$submitted && $step === 1];
+        }
+        return [
+            'steps' => $steps,
+            'completed_count' => $submitted ? 4 : 0,
+            'percent' => $submitted ? 100 : 0,
+            'active_step' => $submitted ? 4 : 1,
+            'stage_label' => $submitted ? 'Submitted' : 'Awaiting Medical Certificate',
+        ];
+    }
     $isCleared = in_array('Cleared', [
         $record['workflow_status'] ?? '',
         $record['clearance_status'] ?? '',
@@ -1295,6 +1335,12 @@ function ape_deadline_status(array $record, ?DateTimeImmutable $today = null, ?a
 function ape_priority_badge(array $record): array
 {
     $queueKey = ape_record_queue($record);
+    if ($queueKey === 'staff_submitted') {
+        return ['label' => 'Done', 'class' => 'badge-completed'];
+    }
+    if ($queueKey === 'staff_awaiting_certificate') {
+        return ['label' => 'Waiting', 'class' => 'badge-pending'];
+    }
     if ($queueKey === 'completed') {
         return ['label' => 'Done', 'class' => 'badge-completed'];
     }
@@ -1339,6 +1385,11 @@ function ape_waiting_label(array $record): string
 
 function ape_next_action_card(array $record): array
 {
+    if (ape_is_staff_managed_record($record)) {
+        return ape_record_queue($record) === 'staff_submitted'
+            ? ['title' => 'Staff APE submitted', 'body' => 'The latest clinic-verified medical certificate is available to the staff member.']
+            : ['title' => 'Submit medical certificate', 'body' => 'Attach the clinic-held medical certificate to complete this staff APE.'];
+    }
     if (!ape_initial_upload_phase_is_open($record)) {
         return [
             'title' => 'Assign an examination schedule',
@@ -1399,6 +1450,8 @@ function ape_next_action_card(array $record): array
 function ape_missing_item(array $record): string
 {
     $queue = ape_record_queue($record);
+    if ($queue === 'staff_awaiting_certificate') return 'Medical certificate still needed';
+    if ($queue === 'staff_submitted') return 'None';
     if ($queue === 'digital_submission') {
         if (!ape_initial_uploads_present($record)) {
             return empty($record['exam_date']) ? 'Early digital uploads incomplete' : 'Regular uploads due within seven days of examination';
@@ -1577,6 +1630,7 @@ function ape_record_select_sql(): string
             p.id_number,
             p.sex,
             p.birthdate,
+            se.role_classification AS employee_role_classification,
             patient_profile.blood_type AS patient_blood_type,
             patient_profile.allergies AS patient_allergies,
             patient_profile.existing_conditions AS patient_existing_conditions,

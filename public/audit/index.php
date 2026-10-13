@@ -31,6 +31,8 @@ if ($tab === 'email') {
     $canManageEmailOperations = in_array($emailRole, $emailRoles, true);
     $canManageEmailSettings = $emailRole === 'admin';
     $apeReminderBatchId = filter_var($_GET['ape_batch'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: null;
+    $apeFollowUpApeId = filter_var($_GET['ape_follow_up_ape_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: null;
+    $highlightReadyApeFollowUps = $emailView === 'work' && (string) ($_GET['ape_follow_up_ready'] ?? '') === '1';
     $emailOpsActions = ['process', 'process_now', 'retry', 'retry_blocked', 'cancel', 'resend', 'follow_up', 'resolve_follow_up', 'add_note', 'automation', 'custom_send', 'pause_queue', 'resume_queue', 'reschedule', 'edit_pending', 'assign_follow_up', 'send_clinic_reminders'];
     $adminEmailActions = ['process', 'process_now', 'automation', 'pause_queue', 'resume_queue'];
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -164,6 +166,7 @@ if ($tab === 'email') {
     $deliveryReminderItems = array_values(array_filter($reminderCandidates, static fn(array $item): bool => in_array((string) ($item['reminder_state'] ?? ''), ['delivery_pending', 'delivery_attention', 'initial_delivery_required', 'recipient_unavailable'], true)));
     $limitedReminderItems = array_values(array_filter($reminderCandidates, static fn(array $item): bool => ($item['reminder_state'] ?? '') === 'limit_reached'));
     $workItemKey = static fn(array $item): string => clinic_work_center_email_key($item);
+    $readyReminderKeys = array_fill_keys(array_map($workItemKey, $needsReminderItems), true);
     $existingWorkKeys = array_fill_keys(array_map($workItemKey, $allWorkItems), true);
     foreach ($needsReminderItems as $reminderItem) {
         $key = $workItemKey($reminderItem);
@@ -414,8 +417,8 @@ if ($tab === 'email') {
                     <table class="w-full text-sm" aria-label="Clinic work actions">
                         <thead class="bg-slate-50 text-left text-[10px] uppercase tracking-widest text-slate-500"><tr><th class="px-5 py-3 font-black">Priority</th><th class="px-5 py-3 font-black">Patient</th><th class="px-5 py-3 font-black">What needs attention</th><th class="px-5 py-3 font-black">Category / source</th><th class="px-5 py-3 font-black">When</th><th class="sticky right-0 z-10 bg-slate-50 px-5 py-3 font-black text-right min-w-[170px]">Action</th></tr></thead>
                         <tbody class="divide-y divide-slate-100">
-                            <?php foreach ($displayWorkItems as $item): ?>
-                                <tr class="align-top hover:bg-slate-50/70">
+                            <?php foreach ($displayWorkItems as $item): $isReadyApeFollowUp = $highlightReadyApeFollowUps && isset($readyReminderKeys[$workItemKey($item)]) && ($apeFollowUpApeId === null || (int) ($item['email_source_id'] ?? $item['source_id'] ?? 0) === $apeFollowUpApeId); ?>
+                                <tr class="align-top hover:bg-slate-50/70"<?= $isReadyApeFollowUp ? ' data-ape-ready-follow-up' : '' ?>>
                                     <td class="px-5 py-4 whitespace-nowrap"><span class="badge <?= e($workBadge((string) $item['priority'])) ?>"><?= e($workLabel((string) $item['priority'])) ?></span></td>
                                     <td class="px-5 py-4 min-w-[180px]"><strong class="block text-[#17261d]"><?= e($item['patient_name']) ?></strong><?php if ((int) $item['patient_person_id'] > 0): ?><a class="text-xs text-primary font-bold text-decoration-none" href="../patients/view.php?id=<?= (int) $item['patient_person_id'] ?>">Open patient</a><?php endif; ?><?php if (($item['patient_email'] ?? '') !== ''): ?><span class="block text-xs text-slate-500 mt-1"><?= e($item['patient_email']) ?></span><?php endif; ?></td>
                                     <td class="px-5 py-4 min-w-[260px]"><strong class="block text-[#17261d]"><?= e($item['title']) ?></strong><span class="block text-xs text-slate-600 mt-1"><?= e($item['explanation']) ?></span><?php if ((int) ($item['collapsed_count'] ?? 1) > 1): ?><span class="block text-xs font-bold text-slate-500 mt-2">One warning for this issue type; details remain in the source record.</span><?php endif; ?></td>

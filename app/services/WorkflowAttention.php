@@ -126,7 +126,7 @@ function workflow_attention_items(array $filters = [], int $limit = 500): array
             'title' => 'Emergency alert requires response',
             'explanation' => trim((string) $row['concern'] . ' ' . (string) $row['incident_type']),
             'patient_name' => (string) ($row['patient_name'] ?: 'Patient alert'),
-            'priority' => strtolower((string) $row['risk_level']) === 'critical' ? 'urgent' : 'clinic_action',
+            'priority' => in_array(strtolower((string) $row['risk_level']), ['critical', 'high'], true) ? 'urgent' : 'clinic_action',
             'status' => (string) $row['status'],
             'area' => 'Emergency',
             'created_at' => (string) $row['created_at'],

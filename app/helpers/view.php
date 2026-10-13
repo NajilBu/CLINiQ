@@ -67,18 +67,36 @@ function staff_sidebar_action_counts(int $activeAlertCount = 0): array
 
     try {
         $apeRecords = ape_fetch_records();
+        $studentApeRecordIds = [];
+        $studentApeRecordsById = [];
         $missedExamEmailSent = $db->query("SELECT DISTINCT source_id FROM email_queue
             WHERE source_type = 'ape' AND event_type = 'ape_exam_missed'
               AND origin = 'automatic' AND status = 'sent'")->fetchAll(PDO::FETCH_COLUMN);
         $missedExamEmailSent = array_fill_keys(array_map('intval', $missedExamEmailSent), true);
         foreach ($apeRecords as $record) {
+            $apeId = (int) ($record['ape_id'] ?? $record['id'] ?? 0);
+            if ($apeId < 1 || ($record['entry_mode'] ?? '') === 'Clinic Manual') {
+                continue;
+            }
+            $studentApeRecordsById[$apeId] = true;
             // Routine clinic work remains visible in APE, but only immediate
             // corrections, overdue work, or missed examinations get a badge.
-            $apeId = (int) ($record['ape_id'] ?? $record['id'] ?? 0);
             if (ape_show_immediate_attention_warning($record, isset($missedExamEmailSent[$apeId]))) {
-                $counts['APE']++;
+                $studentApeRecordIds[$apeId] = true;
             }
         }
+        try {
+            foreach (clinic_work_center_reminder_candidates() as $reminderItem) {
+                $apeId = (int) ($reminderItem['email_source_id'] ?? $reminderItem['source_id'] ?? 0);
+                if ($apeId < 1 || !isset($studentApeRecordsById[$apeId]) || empty($reminderItem['can_send_reminder'])) {
+                    continue;
+                }
+                $studentApeRecordIds[$apeId] = true;
+            }
+        } catch (Throwable $e) {
+            // Keep immediate clinical work visible if optional reminder lookup fails.
+        }
+        $counts['APE'] = count($studentApeRecordIds);
     } catch (Throwable $e) {
         $counts['APE'] = 0;
     }
@@ -576,6 +594,7 @@ function render_footer(): void
         <?php endif; ?>
     <?php render_flash_toasts(); ?>
     <script src="<?= app_url('assets/js/app.js?v=' . filemtime(__DIR__ . '/../../public/assets/js/app.js')) ?>"></script>
+    <script src="<?= app_url('assets/js/form-validation.js?v=' . filemtime(__DIR__ . '/../../public/assets/js/form-validation.js')) ?>"></script>
     <script src="<?= app_url('assets/js/table-filters.js?v=' . filemtime(__DIR__ . '/../../public/assets/js/table-filters.js')) ?>"></script>
     <script src="<?= app_url('assets/js/ag-grid-tables.js?v=' . filemtime(__DIR__ . '/../../public/assets/js/ag-grid-tables.js')) ?>"></script>
     <script src="<?= app_url('assets/js/file-preview.js?v=ape-popup-9') ?>"></script>

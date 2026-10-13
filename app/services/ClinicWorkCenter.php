@@ -380,13 +380,20 @@ function clinic_work_center_reminder_candidates(?int $batchId = null): array
     // workflow query stops returning their original overdue action.
     try {
         $manualRows = auth_db()->query("SELECT DISTINCT q.patient_person_id, q.source_id, q.event_type,
-                q.created_at, p.first_name, p.middle_name, p.last_name
+                q.created_at, p.first_name, p.middle_name, p.last_name,
+                ar.entry_mode, se.role_classification
             FROM email_queue q INNER JOIN people p ON p.id = q.patient_person_id
+            INNER JOIN ape_records ar ON ar.ape_id = q.source_id
+            LEFT JOIN school_employees se ON se.person_id = ar.patient_id
             WHERE q.origin = 'manual' AND q.source_type = 'ape' AND q.status <> 'cancelled'
               AND q.event_type IN ('ape_documents_overdue', 'ape_document_correction_required',
                 'ape_hard_copy_correction_required', 'ape_follow_up_required', 'ape_follow_up_overdue')
             ORDER BY q.id DESC")->fetchAll();
         foreach ($manualRows as $row) {
+            if (($row['entry_mode'] ?? '') === 'Clinic Manual'
+                && in_array((string) ($row['role_classification'] ?? ''), ['Faculty', 'Non-Teaching Personnel'], true)) {
+                continue;
+            }
             $patientId = (int) $row['patient_person_id'];
             $sourceId = (int) $row['source_id'];
             $eventType = (string) $row['event_type'];

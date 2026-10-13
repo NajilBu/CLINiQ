@@ -105,17 +105,65 @@ if ($search !== '') {
 }
 $_SESSION['ape_work_queue_state'] = $persistedApeState;
 
+$apeQueueReturnParams = ['queue' => $activeQueue, 'population' => $populationScope];
+if ($search !== '') $apeQueueReturnParams['q'] = $search;
+if ($selectedCycleId > 0) $apeQueueReturnParams['cycle'] = $selectedCycleId;
+if ($selectedBatchId !== null) $apeQueueReturnParams['batch'] = $selectedBatchId;
+elseif ($populationScope === 'students') $apeQueueReturnParams['scope'] = 'overall';
+$apeQueueReturnUrl = 'index.php?' . http_build_query($apeQueueReturnParams);
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'send_ape_follow_up') {
+    try {
+        if ($populationScope !== 'students' || !in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor', 'nurse'], true)) {
+            throw new RuntimeException('Only authorized clinic staff can send an APE follow-up.');
+        }
+        $sourceId = filter_var($_POST['source_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: 0;
+        $patientPersonId = filter_var($_POST['patient_person_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: 0;
+        $eventType = trim((string) ($_POST['event_type'] ?? ''));
+        $candidate = null;
+        foreach (clinic_work_center_reminder_candidates($selectedBatchId) as $item) {
+            if (empty($item['can_send_reminder'])) continue;
+            if ((int) ($item['patient_person_id'] ?? 0) !== $patientPersonId
+                || (int) ($item['email_source_id'] ?? $item['source_id'] ?? 0) !== $sourceId
+                || (string) ($item['email_event_type'] ?? '') !== $eventType) continue;
+            $candidate = $item;
+            break;
+        }
+        if ($candidate === null) {
+            throw new RuntimeException('This follow-up is no longer ready to send. Refresh the queue to review its current status.');
+        }
+        $result = clinic_work_center_send_reminders((int) ($apeUser['person_id'] ?? 0), [[
+            'patient_person_id' => $patientPersonId,
+            'source_type' => 'ape',
+            'source_id' => $sourceId,
+            'event_type' => $eventType,
+            'follow_up_number' => (int) ($candidate['follow_up_number'] ?? 0),
+            'subject' => (string) ($_POST['subject'] ?? ''),
+            'message' => (string) ($_POST['message'] ?? ''),
+        ]], $selectedBatchId);
+        if ((int) ($result['sent'] ?? 0) > 0) flash_message('success', 'APE follow-up email sent.');
+        elseif ((int) ($result['queued'] ?? 0) > 0) flash_message('success', 'APE follow-up email queued for delivery.');
+        else throw new RuntimeException('The follow-up was not sent. Refresh the queue and review the current delivery status.');
+    } catch (Throwable $e) {
+        flash_message($e instanceof InvalidArgumentException || $e instanceof RuntimeException ? 'warning' : 'error', $e->getMessage());
+    }
+    header('Location: ' . $apeQueueReturnUrl);
+    exit;
+}
+
 $overallRecords = ape_fetch_records('', null, null, null, $selectedCycleId);
 $scopeRecords = ape_fetch_records($search, null, null, $historicalCycleView ? null : $selectedBatchId, $selectedCycleId);
 $scopeRecords = array_values(array_filter($scopeRecords, static function (array $record) use ($populationScope): bool {
-    $isClinicManual = ($record['entry_mode'] ?? '') === 'Clinic Manual';
-    return $populationScope === 'faculty_ntp' ? $isClinicManual : !$isClinicManual;
+    $isStaffApe = ape_is_staff_managed_record($record);
+    return $populationScope === 'faculty_ntp'
+        ? $isStaffApe
+        : (($record['entry_mode'] ?? '') !== 'Clinic Manual');
 }));
 $batchProgress = ape_batch_progress($schoolYearBatches === [] ? [] : $overallRecords);
 $allRecords = $scopeRecords;
 $clearanceComplianceCompleted = count(array_filter(
     $allRecords,
-    static fn(array $record): bool => ape_staff_queue_stage($record) === 'completed'
+    static fn(array $record): bool => in_array(ape_staff_queue_stage($record), ['completed', 'staff_submitted'], true)
 ));
 $clearanceComplianceTotal = count($allRecords);
 $clearanceComplianceRate = $clearanceComplianceTotal > 0
@@ -131,7 +179,7 @@ $scopeDescription = $selectedBatch !== null
     : ($populationScope === 'faculty_ntp'
         ? 'All queues and totals show clinic-manual Faculty and NTP records only.'
         : 'All queues and totals show student records from every batch.'));
-$scopeCountLabel = $populationScope === 'faculty_ntp' ? 'Faculty & NTP records' : ($selectedBatch !== null ? 'Selected batch' : 'Student records');
+$scopeCountLabel = 'Records in scope';
 $batchQuerySuffix = $populationScope === 'faculty_ntp'
     ? '&scope=overall&population=faculty_ntp'
     : ($selectedBatchId !== null ? '&batch=' . $selectedBatchId : '&scope=overall&selection=overall');
@@ -142,25 +190,30 @@ foreach ($allRecords as $record) {
     $recordsByQueue[ape_staff_queue_stage($record)][] = $record;
 }
 
-$flowQueues = [
-    'digital_submission' => $queues['digital_submission'],
-    'examination' => $queues['examination'],
-    $combinedFinalDecisionQueue => [
-        'title' => 'Final Decision or Follow-up',
-        'short_title' => 'Final Decision or Follow-up',
-        'description' => 'Review completed examinations, archive documents, or manage any required follow-up.',
-        'icon' => 'clinical_notes',
-        'source_queues' => ['final_decision', 'follow_up'],
-    ],
-    'completed' => $queues['completed'],
-];
+$flowQueues = $populationScope === 'faculty_ntp'
+    ? [
+        'staff_awaiting_certificate' => $queues['staff_awaiting_certificate'],
+        'staff_submitted' => $queues['staff_submitted'],
+    ]
+    : [
+        'digital_submission' => $queues['digital_submission'],
+        'examination' => $queues['examination'],
+        $combinedFinalDecisionQueue => [
+            'title' => 'Final Decision or Follow-up',
+            'short_title' => 'Final Decision or Follow-up',
+            'description' => 'Review completed examinations, archive documents, or manage any required follow-up.',
+            'icon' => 'clinical_notes',
+            'source_queues' => ['final_decision', 'follow_up'],
+        ],
+        'completed' => $queues['completed'],
+    ];
 
 $visibleQueues = $activeQueue === 'all'
     ? array_keys($flowQueues)
     : (isset($flowQueues[$activeQueue]) ? [$activeQueue] : array_keys($flowQueues));
 
 $needsAction = 0;
-foreach (['examination', 'digital_submission', 'final_decision', 'follow_up'] as $key) {
+foreach ($populationScope === 'faculty_ntp' ? ['staff_awaiting_certificate'] : ['examination', 'digital_submission', 'final_decision', 'follow_up'] as $key) {
     $needsAction += count($recordsByQueue[$key]);
 }
 
@@ -169,7 +222,7 @@ $metrics = [
     'clinic_action' => $needsAction,
     'digitized' => count(array_filter($allRecords, static fn(array $record): bool => !empty($record['document_path']))),
     'follow_up' => count($recordsByQueue['follow_up']),
-    'completed' => count($recordsByQueue['completed']),
+    'completed' => $populationScope === 'faculty_ntp' ? count($recordsByQueue['staff_submitted']) : count($recordsByQueue['completed']),
 ];
 $clearanceRate = $metrics['total'] > 0 ? round(($metrics['completed'] / $metrics['total']) * 100) : 0;
 
@@ -178,29 +231,102 @@ $activePatients = $metrics['total'] - $metrics['completed'];
 $appointmentsStmt = appointment_db()->query("SELECT COUNT(*) AS total FROM appointments WHERE DATE(appointment_datetime) = CURDATE()");
 $appointmentsToday = (int)($appointmentsStmt->fetch()['total'] ?? 0);
 
-$apeReminderByRecordId = [];
+$apeReminderCandidatesByRecordId = [];
+$apeMissedExamEmailSentByRecordId = [];
 foreach (clinic_work_center_reminder_candidates($selectedBatchId) as $reminderItem) {
     if ((string) ($reminderItem['email_source_type'] ?? $reminderItem['source_type'] ?? '') !== 'ape') continue;
-    $apeReminderByRecordId[(int) ($reminderItem['email_source_id'] ?? $reminderItem['source_id'] ?? 0)] = $reminderItem;
+    $apeId = (int) ($reminderItem['email_source_id'] ?? $reminderItem['source_id'] ?? 0);
+    if ($apeId < 1) continue;
+    $apeReminderCandidatesByRecordId[$apeId][] = $reminderItem;
+    if ((string) ($reminderItem['email_event_type'] ?? '') === 'ape_exam_missed'
+        && (int) ($reminderItem['automatic_sent_count'] ?? 0) > 0) {
+        $apeMissedExamEmailSentByRecordId[$apeId] = true;
+    }
 }
+$apeReminderByRecordId = [];
+foreach ($apeReminderCandidatesByRecordId as $apeId => $reminderItems) {
+    foreach ($reminderItems as $reminderItem) {
+        if (empty($reminderItem['can_send_reminder'])) continue;
+        $apeReminderByRecordId[$apeId] = $reminderItem;
+        break;
+    }
+    $apeReminderByRecordId[$apeId] ??= $reminderItems[0];
+}
+$recordsByApeId = [];
 $overdueRecords = [];
 foreach ($allRecords as $rec) {
     $apeId = (int) ($rec['ape_id'] ?? $rec['id'] ?? 0);
-    $missedExamEmailSent = (int) ($apeReminderByRecordId[$apeId]['automatic_sent_count'] ?? 0) > 0;
+    if ($apeId < 1) continue;
+    $recordsByApeId[$apeId] = $rec;
+    $missedExamEmailSent = !empty($apeMissedExamEmailSentByRecordId[$apeId]);
     if (!ape_show_immediate_attention_warning($rec, $missedExamEmailSent)) continue;
 
     $priority = ape_priority_badge($rec);
     if ($priority['label'] === 'Missed' && ape_record_queue($rec) === 'examination') {
-        $overdueRecords[] = ['record' => $rec, 'attention' => ['kind' => 'missed']];
+        $overdueRecords[$apeId] = ['record' => $rec, 'attention' => ['kind' => 'missed']];
         continue;
     }
     foreach (ape_patient_document_action_summaries($rec) as $action) {
         if (($action['priority'] ?? '') !== 'overdue') continue;
-        $overdueRecords[] = ['record' => $rec, 'attention' => ['kind' => 'overdue', 'action' => $action]];
+        $overdueRecords[$apeId] = ['record' => $rec, 'attention' => ['kind' => 'overdue', 'action' => $action]];
         break;
     }
 }
 $apeReadyFollowUpCount = count(array_filter($apeReminderByRecordId, static fn(array $item): bool => !empty($item['can_send_reminder'])));
+$canReviewApeFollowUps = $populationScope === 'students'
+    && $apeReadyFollowUpCount > 0
+    && in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor', 'nurse'], true);
+if ($canReviewApeFollowUps) {
+    foreach ($apeReminderByRecordId as $apeId => $reminderItem) {
+        if (empty($reminderItem['can_send_reminder']) || !isset($recordsByApeId[$apeId])) continue;
+        if (!isset($overdueRecords[$apeId])) {
+            $overdueRecords[$apeId] = ['record' => $recordsByApeId[$apeId], 'attention' => ['kind' => 'follow_up_ready']];
+        }
+        $overdueRecords[$apeId]['attention']['follow_up_ready'] = true;
+        $overdueRecords[$apeId]['attention']['reminder'] = $reminderItem;
+    }
+}
+$apeFollowUpReviewItems = [];
+if ($canReviewApeFollowUps) {
+    foreach ($overdueRecords as $apeId => $urgentItem) {
+        $attention = $urgentItem['attention'] ?? [];
+        if (empty($attention['follow_up_ready'])) continue;
+        $record = $urgentItem['record'];
+        $reminder = $attention['reminder'] ?? ($apeReminderByRecordId[$apeId] ?? null);
+        if (!$reminder) continue;
+        $apeFollowUpReviewItems[(int) $apeId] = [
+            'record' => $record,
+            'reminder' => $reminder,
+            'history' => [],
+        ];
+    }
+}
+if ($apeFollowUpReviewItems !== []) {
+    $reviewApeIds = array_keys($apeFollowUpReviewItems);
+    $placeholders = implode(',', array_fill(0, count($reviewApeIds), '?'));
+    $emailHistory = auth_db()->prepare("SELECT source_id, origin, status, subject, COALESCE(sent_at, created_at) AS occurred_at
+        FROM email_queue WHERE source_type = 'ape' AND source_id IN ({$placeholders}) AND status <> 'cancelled'
+        ORDER BY COALESCE(sent_at, created_at) DESC, id DESC");
+    $emailHistory->execute($reviewApeIds);
+    foreach ($emailHistory->fetchAll() as $entry) {
+        $apeId = (int) ($entry['source_id'] ?? 0);
+        if (!isset($apeFollowUpReviewItems[$apeId])) continue;
+        $apeFollowUpReviewItems[$apeId]['history'][] = ['kind' => 'email', 'title' => (string) ($entry['subject'] ?? 'APE email'), 'detail' => ucfirst((string) ($entry['origin'] ?? 'system')) . ' email ' . (string) ($entry['status'] ?? 'recorded'), 'occurred_at' => (string) ($entry['occurred_at'] ?? '')];
+    }
+    $notificationHistory = auth_db()->prepare("SELECT source_id, title, message, created_at
+        FROM patient_notifications WHERE category = 'ape' AND source_type = 'ape' AND source_id IN ({$placeholders})
+        ORDER BY created_at DESC, notification_id DESC");
+    $notificationHistory->execute($reviewApeIds);
+    foreach ($notificationHistory->fetchAll() as $entry) {
+        $apeId = (int) ($entry['source_id'] ?? 0);
+        if (!isset($apeFollowUpReviewItems[$apeId])) continue;
+        $apeFollowUpReviewItems[$apeId]['history'][] = ['kind' => 'notification', 'title' => (string) ($entry['title'] ?? 'APE update'), 'detail' => (string) ($entry['message'] ?? ''), 'occurred_at' => (string) ($entry['created_at'] ?? '')];
+    }
+    foreach ($apeFollowUpReviewItems as &$reviewItem) {
+        usort($reviewItem['history'], static fn(array $left, array $right): int => strcmp((string) ($right['occurred_at'] ?? ''), (string) ($left['occurred_at'] ?? '')));
+    }
+    unset($reviewItem);
+}
 
 $apeQueueColumns = [
     ['headerName' => 'Priority', 'field' => 'priorityHtml', 'cellRenderer' => 'html', 'sortField' => 'prioritySort', 'sortType' => 'number', 'width' => 145],
@@ -218,7 +344,6 @@ if ($populationScope === 'students') {
 
 render_header('APE Work Queues');
 
-$apeDisplayName = trim((string) ($apeUser['name'] ?? '')) ?: 'Nurse';
 $apeHeaderActions = '<div class="bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-4 min-w-[140px]">'
     . '<span class="material-symbols-outlined text-slate-400 text-[28px]">group</span>'
     . '<div><p class="font-headline text-2xl font-extrabold text-[#17261d] leading-none mb-1">' . (int) $activePatients . '</p>'
@@ -234,8 +359,10 @@ $apeHeaderActions = '<div class="bg-white border border-slate-200 rounded-2xl p-
 
 render_clinic_command_header(
     'APE Work Queues',
-    'Good day, ' . $apeDisplayName,
-    $selectedBatch !== null ? 'Reviewing the selected scheduled APE batch.' : "Here's what needs your attention today. Start at the top.",
+    'APE Work Queues',
+    $populationScope === 'faculty_ntp'
+        ? 'Clinic-managed Faculty and NTP records. No scheduling is required.'
+        : ($selectedBatch !== null ? 'Reviewing the selected scheduled APE batch.' : 'Reviewing student APE records for the active school year.'),
     $apeHeaderActions
 );
 ?>
@@ -244,32 +371,30 @@ render_clinic_command_header(
 <details class="bg-red-50 border border-red-200 rounded-2xl mb-8 group" data-ape-persistent-details="attention">
     <summary class="px-5 py-4 text-red-700 flex items-center justify-between gap-3 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
         <span class="flex items-center gap-2"><span class="material-symbols-outlined text-[18px]">error</span><h2 class="font-headline font-extrabold text-sm m-0"><?= count($overdueRecords) ?> patient(s) need immediate attention</h2></span>
-        <span class="flex items-center gap-3">
-            <?php if (in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor', 'nurse'], true)): ?>
-                <a href="../audit/index.php?<?= e(http_build_query(array_filter(['tab' => 'email', 'ape_batch' => $selectedBatchId]))) ?>#needs-attention" class="inline-flex items-center gap-2 rounded-lg bg-[#3f8155] px-3 py-2 text-xs font-extrabold text-white no-underline shadow-sm hover:bg-[#347047]" onclick="event.stopPropagation();">
-                    <span class="material-symbols-outlined text-[16px]">mail</span>
-                    Review APE follow-ups <span class="rounded-full bg-white/20 px-2 py-0.5 text-[10px]"><?= $apeReadyFollowUpCount ?> ready</span>
-                </a>
-            <?php endif; ?>
-            <span class="material-symbols-outlined text-[20px] transition-transform group-open:rotate-180">expand_more</span>
-        </span>
+        <span class="material-symbols-outlined text-[20px] transition-transform group-open:rotate-180">expand_more</span>
     </summary>
     <div class="divide-y divide-red-100/50">
-        <?php foreach (array_slice($overdueRecords, 0, 5) as $urgentItem): $rec = $urgentItem['record']; $attention = $urgentItem['attention'];
+        <?php foreach ($overdueRecords as $urgentItem): $rec = $urgentItem['record']; $attention = $urgentItem['attention'];
             $fullName = trim($rec['first_name'] . ' ' . $rec['last_name']);
             $next = ape_next_action($rec);
             $isMissed = ($attention['kind'] ?? '') === 'missed';
+            $isFollowUpReady = !empty($attention['follow_up_ready']);
             $dueDate = (string) ($attention['action']['due_at'] ?? '');
             $days = $dueDate === '' ? 0 : max(0, (int) ((new DateTimeImmutable('today'))->diff(new DateTimeImmutable($dueDate))->format('%r%a') * -1));
             $warningClass = 'text-red-600';
-            $badgeIcon = $isMissed ? 'event_busy' : 'error';
-            $deadlineText = $isMissed ? 'Assigned batch was missed' : 'Overdue - ' . $days . 'd';
+            $badgeIcon = $isFollowUpReady ? 'mail' : ($isMissed ? 'event_busy' : 'error');
+            $deadlineText = $isFollowUpReady ? 'Follow-up email ready' : ($isMissed ? 'Assigned batch was missed' : 'Overdue - ' . $days . 'd');
             $canExamineNow = empty($rec['exam_date']) && ape_examination_is_available($rec);
-            $reminderItem = $apeReminderByRecordId[(int) ($rec['id'] ?? 0)] ?? null;
+            $apeId = (int) ($rec['ape_id'] ?? $rec['id'] ?? 0);
+            $reminderItem = $attention['reminder'] ?? ($apeReminderByRecordId[$apeId] ?? null);
             $emailStatus = '';
             if ($reminderItem) {
-                $emailStatus = (int) ($reminderItem['sent_count'] ?? 0) . ' email' . ((int) ($reminderItem['sent_count'] ?? 0) === 1 ? '' : 's') . ' sent to email service';
-                $emailStatus .= ' · ' . (string) ($reminderItem['reminder_reason'] ?? '');
+                $sentCount = (int) ($reminderItem['sent_count'] ?? 0);
+                $staffFollowUpCount = (int) ($reminderItem['manual_follow_up_count'] ?? 0);
+                $emailStatus = $sentCount . ' email' . ($sentCount === 1 ? '' : 's') . ' sent to email service · '
+                    . $staffFollowUpCount . ' of 2 staff follow-ups';
+                if ($isFollowUpReady) $emailStatus .= ' · Follow-up email ready for staff review.';
+                else $emailStatus .= ' · ' . (string) ($reminderItem['reminder_reason'] ?? '');
                 if (($reminderItem['reminder_state'] ?? '') === 'cooldown' && !empty($reminderItem['next_eligible_at'])) $emailStatus .= ' Available ' . date('M j, g:i A', strtotime((string) $reminderItem['next_eligible_at'])) . '.';
             }
         ?>
@@ -281,19 +406,37 @@ render_clinic_command_header(
                     </p>
                     <?php if ($emailStatus !== ''): ?><p class="text-xs text-slate-500 mt-2 mb-0"><span class="material-symbols-outlined text-[14px] align-bottom">mail</span> <?= e($emailStatus) ?></p><?php endif; ?>
                 </div>
-                <div class="flex items-center gap-6 shrink-0">
+                <div class="flex flex-wrap items-center gap-3 shrink-0">
                     <span class="text-xs font-bold <?= $warningClass ?> flex items-center gap-1">
                         <span class="material-symbols-outlined text-[14px]"><?= $badgeIcon ?></span>
                         <?= e($deadlineText) ?>
                     </span>
-                    <a href="view.php?id=<?= (int)$rec['id'] ?>" class="text-xs font-bold text-red-700 hover:text-red-800 text-decoration-none flex items-center gap-1">
-                        <?= $canExamineNow ? 'Examine Patient' : 'Resolve' ?> <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
-                    </a>
+                    <?php if ($isFollowUpReady): ?><button type="button" class="btn btn-sm btn-primary" onclick="showModal('apeFollowUpDecisionModal<?= $apeId ?>')"><span class="material-symbols-outlined text-[16px]" aria-hidden="true">mail</span>Review email follow-up</button><?php endif; ?>
+                    <?php if (($attention['kind'] ?? '') !== 'follow_up_ready'): ?><a href="view.php?id=<?= $apeId ?>" class="text-xs font-bold text-red-700 hover:text-red-800 text-decoration-none flex items-center gap-1"><?= $canExamineNow ? 'Examine Patient' : 'Resolve' ?> <span class="material-symbols-outlined text-[14px]">arrow_forward</span></a><?php endif; ?>
                 </div>
             </div>
         <?php endforeach; ?>
     </div>
 </details>
+
+<?php foreach ($apeFollowUpReviewItems as $reviewApeId => $reviewItem):
+    $reviewRecord = $reviewItem['record'];
+    $reviewReminder = $reviewItem['reminder'];
+    $reviewSubject = (string) ($reviewReminder['email_subject'] ?? 'APE reminder — action needed');
+    $reviewMessage = (string) ($reviewReminder['email_message'] ?? 'Please log in to your student portal and complete the outstanding APE action, or contact the clinic if you need assistance.');
+    if (!str_contains($reviewMessage, 'https://plpuhs.dpdns.org')) $reviewMessage .= ' Student portal: https://plpuhs.dpdns.org';
+    $canMakeReviewRecordInactive = ape_record_mutation_allowed($reviewRecord)
+        && in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor'], true);
+?>
+    <div id="apeFollowUpDecisionModal<?= $reviewApeId ?>" class="modal-backdrop" style="display:none" role="dialog" aria-modal="true" aria-labelledby="apeFollowUpDecisionTitle<?= $reviewApeId ?>">
+        <div class="modal-content bg-white rounded-[2rem] p-6 md:p-8 w-full max-w-3xl shadow-2xl max-h-[92vh] overflow-y-auto">
+            <div class="flex items-start justify-between gap-4 mb-6"><div><p class="text-[11px] font-black uppercase tracking-widest text-red-700 mb-2">Needs attention</p><h2 id="apeFollowUpDecisionTitle<?= $reviewApeId ?>" class="font-headline text-2xl font-extrabold text-[#17261d] mb-1">APE follow-up decision</h2><p class="text-sm text-slate-500 mb-0"><?= e(trim((string) $reviewRecord['first_name'] . ' ' . (string) $reviewRecord['last_name'])) ?> · <?= e((string) $reviewRecord['id_number']) ?> · Follow-up <?= (int) ($reviewReminder['follow_up_number'] ?? 1) ?> of 2</p></div><button type="button" class="btn btn-sm btn-ghost" onclick="closeModal('apeFollowUpDecisionModal<?= $reviewApeId ?>')">Close</button></div>
+            <section class="rounded-2xl border border-slate-200 bg-slate-50 p-4 mb-5" aria-label="Student contact history"><h3 class="font-headline text-base font-extrabold text-[#17261d] mb-3">Updates sent to this student</h3><?php if (!$reviewItem['history']): ?><p class="text-sm text-slate-500 mb-0">No student-contact updates have been recorded for this APE record.</p><?php else: ?><ol class="space-y-3 list-none p-0 m-0"><?php foreach (array_slice($reviewItem['history'], 0, 12) as $history): ?><li class="border-l-2 <?= ($history['kind'] ?? '') === 'email' ? 'border-primary' : 'border-slate-300' ?> pl-3"><p class="text-sm font-bold text-slate-800 mb-0"><?= e((string) $history['title']) ?></p><p class="text-xs text-slate-600 mt-1 mb-1"><?= e((string) $history['detail']) ?></p><time class="text-[11px] font-bold text-slate-400"><?= !empty($history['occurred_at']) ? e(date('M j, Y g:i A', strtotime((string) $history['occurred_at']))) : 'Date unavailable' ?></time></li><?php endforeach; ?></ol><?php endif; ?></section>
+            <form method="post" class="space-y-3"><input type="hidden" name="action" value="send_ape_follow_up"><input type="hidden" name="patient_person_id" value="<?= (int) ($reviewReminder['patient_person_id'] ?? 0) ?>"><input type="hidden" name="source_id" value="<?= $reviewApeId ?>"><input type="hidden" name="event_type" value="<?= e((string) ($reviewReminder['email_event_type'] ?? '')) ?>"><label class="clinic-label">Email subject<input class="clinic-input mt-2" name="subject" maxlength="180" required value="<?= e($reviewSubject) ?>"></label><label class="clinic-label">Email message<textarea class="clinic-textarea mt-2" name="message" maxlength="10000" rows="5" required><?= e($reviewMessage) ?></textarea></label><div class="flex justify-end"><button class="btn btn-primary" data-confirm-submit data-confirm-title="Send this APE follow-up?" data-confirm-message="The reviewed email will be sent to this student and count toward the two-follow-up limit."><span class="material-symbols-outlined text-[18px]" aria-hidden="true">send</span>Send follow-up email</button></div></form>
+            <?php if ($canMakeReviewRecordInactive): ?><details class="mt-6 rounded-2xl border border-rose-200 bg-rose-50/50 p-4"><summary class="cursor-pointer font-extrabold text-rose-900">Make this APE record inactive</summary><p class="text-sm text-rose-800 mt-3">Use only when the student withdrew, transferred, declined APE, is no longer enrolled, or has a duplicate record. Documents and history are retained.</p><form method="post" action="view.php?id=<?= $reviewApeId ?>" class="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3 items-end"><input type="hidden" name="action" value="mark_ape_inactive"><input type="hidden" name="return_to" value="ape_queue"><label class="clinic-label">Reason<select class="clinic-select mt-2" name="inactive_reason" required><option value="">Select a reason</option><?php foreach (dropdown_options('ape_inactive_reason') as $reason): ?><option value="<?= e($reason) ?>"><?= e($reason) ?></option><?php endforeach; ?></select></label><label class="clinic-label">Details for Other<input class="clinic-input mt-2" name="inactive_details" maxlength="500" placeholder="Required only for Other"></label><button class="btn btn-outline" data-confirm-submit data-confirm-type="danger" data-confirm-title="Make this APE record inactive?" data-confirm-message="This stops APE work and reminders. Documents and history remain retained."><span class="material-symbols-outlined text-[18px]" aria-hidden="true">block</span>Make inactive</button></form></details><?php endif; ?>
+        </div>
+    </div>
+<?php endforeach; ?>
 <?php endif; ?>
 
 <section class="clinic-card p-6" data-filter-region="ape-work-queue" aria-live="polite">
@@ -330,13 +473,14 @@ render_clinic_command_header(
                             $studentScopeQuery['scope'] = 'overall';
                             $studentScopeQuery['selection'] = 'overall';
                         }
-                        $employeeScopeQuery = ['queue' => 'examination', 'scope' => 'overall', 'population' => 'faculty_ntp'];
+                        $employeeScopeQuery = ['queue' => 'staff_awaiting_certificate', 'scope' => 'overall', 'population' => 'faculty_ntp'];
                         if ($search !== '') $employeeScopeQuery['q'] = $search;
                         ?>
                         <a href="?<?= e(http_build_query($studentScopeQuery)) ?>" class="px-4 py-3 text-sm font-extrabold text-decoration-none whitespace-nowrap <?= $populationScope === 'students' ? 'bg-primary text-white' : 'bg-white text-slate-700 hover:bg-slate-50' ?>">Students</a>
                         <a href="?<?= e(http_build_query($employeeScopeQuery)) ?>" class="px-4 py-3 text-sm font-extrabold text-decoration-none whitespace-nowrap border-l border-outline-variant <?= $populationScope === 'faculty_ntp' ? 'bg-primary text-white' : 'bg-white text-slate-700 hover:bg-slate-50' ?>">Faculty &amp; NTP</a>
                     </div>
                 </div>
+                <?php if ($populationScope === 'students'): ?>
                 <div class="ape-work-queue-filter ape-work-queue-batch-filter">
                     <span>Scheduled batch</span>
                     <button type="button" onclick="showModal('apeBatchPickerModal')" class="ape-work-queue-batch min-h-12 px-4 py-2 rounded-xl border border-outline-variant bg-primary-fixed flex items-center gap-3 text-left hover:border-primary transition-colors" title="<?= e($selectedBatch !== null ? 'All queues are filtered to this batch. Choose another batch or Overall.' : 'Overall view includes records from every batch.') ?>">
@@ -345,11 +489,15 @@ render_clinic_command_header(
                         <span class="material-symbols-outlined text-primary text-[18px] ml-auto">expand_more</span>
                     </button>
                 </div>
-                <?php if (in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor'], true)): ?>
-                    <a href="scheduling.php" class="btn btn-outline ape-work-queue-scheduling text-decoration-none">
+                <?php endif; ?>
+                <?php if ($populationScope === 'students' && in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor'], true)): ?>
+                    <a href="scheduling.php" class="btn btn-outline ape-work-queue-scheduling ape-work-queue-primary-action text-decoration-none">
                         <span class="material-symbols-outlined text-[18px]">settings</span>
                         Manage Scheduling
                     </a>
+                <?php endif; ?>
+                <?php if ($populationScope === 'faculty_ntp' && in_array((string) ($apeUser['role'] ?? ''), ['admin', 'doctor', 'nurse'], true)): ?>
+                    <a href="create.php" class="btn btn-outline ape-work-queue-primary-action ape-work-queue-primary-action--staff text-decoration-none"><span class="material-symbols-outlined text-[18px]">settings</span> Open Staff APE</a>
                 <?php endif; ?>
             </div>
             <p class="ape-work-queue-scope mb-0">
@@ -385,7 +533,7 @@ render_clinic_command_header(
     </div>
     <div class="mt-5 border-t border-slate-100 pt-5" aria-label="Overall active APE cycle clearance compliance">
         <div class="mb-2 flex flex-wrap items-center justify-between gap-2 text-sm font-bold text-slate-700">
-            <span>Clearance compliance</span>
+            <span><?= $populationScope === 'faculty_ntp' ? 'Certificate submission' : 'Clearance compliance' ?></span>
             <span><?= $clearanceComplianceRate ?>% &bull; <?= $clearanceComplianceCompleted ?> of <?= $clearanceComplianceTotal ?> patient(s)</span>
         </div>
         <div class="h-3 overflow-hidden rounded-full bg-slate-200" role="progressbar" aria-label="Clearance compliance" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<?= $clearanceComplianceRate ?>">
