@@ -1619,7 +1619,7 @@ html.student-dark .student-feedback-visit-details div { background:rgba(255,255,
 .student-toast-region {
     position: fixed;
     z-index: 120;
-    top: max(16px, env(safe-area-inset-top));
+    top: max(16px, calc(env(safe-area-inset-top) + 5.75rem));
     right: 16px;
     width: min(28rem, calc(100vw - 32px));
     pointer-events: none;
