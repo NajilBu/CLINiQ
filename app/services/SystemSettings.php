@@ -253,6 +253,9 @@ function update_staff_profile(array $input): void
     if ($name === '') {
         throw new InvalidArgumentException('Enter the staff member name.');
     }
+    if (!account_valid_person_name($name)) {
+        throw new InvalidArgumentException('Staff name may contain only letters, spaces, apostrophes, periods, or hyphens.');
+    }
     if (!preg_match('/^[0-9]{7}$/', $idNumber)) {
         throw new InvalidArgumentException('Staff login ID must contain exactly seven continuous digits, for example 0000002.');
     }
@@ -302,12 +305,7 @@ function reset_staff_profile_password(array $input): void
     if ($id <= 0) {
         throw new InvalidArgumentException('Select a staff profile before resetting the password.');
     }
-    if (strlen($password) < 8) {
-        throw new InvalidArgumentException('New password must be at least 8 characters.');
-    }
-    if ($password !== $passwordConfirmation) {
-        throw new InvalidArgumentException('New password and confirmation password must match.');
-    }
+    account_assert_strong_password($password, $passwordConfirmation, 'New password');
 
     $stmt = auth_db()->prepare('UPDATE accounts SET password_hash = ? WHERE person_id = ?');
     $stmt->execute([password_hash($password, PASSWORD_DEFAULT), $id]);

@@ -754,6 +754,7 @@ $theme = active_cliniq_theme();
 </div>
 
 <script src="<?= app_url('assets/js/id-number-format.js?v=' . filemtime(__DIR__ . '/assets/js/id-number-format.js')) ?>"></script>
+<script src="<?= app_url('assets/js/form-validation.js?v=' . filemtime(__DIR__ . '/assets/js/form-validation.js')) ?>"></script>
 <script>
     const identifier = document.getElementById('identifier');
     const subjectType = document.getElementById('subjectType');

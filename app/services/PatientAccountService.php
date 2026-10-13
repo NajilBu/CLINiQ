@@ -230,7 +230,7 @@ function normalize_faculty_employment_type(string $value): string
 function patient_account_normalize_id_number(string $idNumber, string $type): string
 {
     if ($type === 'student') {
-        return normalize_id_number($idNumber);
+        return normalize_student_id_number($idNumber);
     }
 
     return preg_replace('/\D+/', '', trim($idNumber)) ?? '';
@@ -239,7 +239,7 @@ function patient_account_normalize_id_number(string $idNumber, string $type): st
 function patient_account_id_number_is_valid(string $idNumber, string $type): bool
 {
     return $type === 'student'
-        ? is_valid_id_number($idNumber)
+        ? is_valid_student_id_number($idNumber)
         : preg_match('/^\d{7}$/', $idNumber) === 1;
 }
 

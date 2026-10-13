@@ -2,49 +2,56 @@
 (function () {
     'use strict';
 
-    const COMPLETE_PATTERN = /^(?:\d{7}|\d{2}-\d{5}|[A-Z]{3,10}-\d{4})$/;
+    const patterns = {
+        student: /^(?:0[1-9]|[1-9]\d)-\d{5}$/,
+        employee: /^\d{7}$/,
+        mixed: /^(?:\d{7}|\d{2}-\d{5})$/
+    };
 
-    function format(value) {
-        const compact = String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-        if (!compact) return '';
-
-        if (/^\d/.test(compact)) {
-            const digits = compact.replace(/\D/g, '').slice(0, 7);
-            // Student IDs use a two-digit year prefix; employee IDs remain seven digits.
-            if (/^2\d{6}$/.test(digits)) {
-                return `${digits.slice(0, 2)}-${digits.slice(2)}`;
-            }
-            if (!String(value).includes('-')) return digits;
-            return digits.length <= 2 ? digits : `${digits.slice(0, 2)}-${digits.slice(2)}`;
-        }
-
-        const match = compact.match(/^([A-Z]{0,10})(\d*)$/);
-        if (!match) return compact;
-        const prefix = match[1];
-        const digits = match[2].slice(0, 4);
-        return digits ? `${prefix}-${digits}` : prefix;
+    function kindFor(input) {
+        return input?.dataset.idNumberKind === 'student' || input?.dataset.idNumberKind === 'employee'
+            ? input.dataset.idNumberKind
+            : 'mixed';
     }
 
-    function validationMessage(value) {
-        if (!value || COMPLETE_PATTERN.test(value)) return '';
-        return 'Use 23-00262 for a student, a seven-digit employee ID, or a prefixed ID such as FAC-0001.';
+    function format(value, kind = 'mixed') {
+        const raw = String(value || '').toUpperCase();
+        const digits = raw.replace(/\D/g, '').slice(0, 7);
+        const hasStudentHyphen = /^\d{0,2}-\d*$/.test(raw);
+        if (raw.includes('-') && !hasStudentHyphen) return raw;
+        if (kind === 'student') return digits.length > 2 && !digits.startsWith('00') ? `${digits.slice(0, 2)}-${digits.slice(2)}` : digits;
+        if (kind === 'mixed' && hasStudentHyphen) return digits.length > 2 ? `${digits.slice(0, 2)}-${digits.slice(2)}` : digits;
+        return digits;
     }
 
     function prepare(input) {
         if (!(input instanceof HTMLInputElement) || input.dataset.idNumberFormatterReady === '1') return;
         input.dataset.idNumberFormatterReady = '1';
-        input.maxLength = 15;
         input.autocapitalize = 'characters';
-        input.pattern = '(?:[0-9]{7}|[0-9]{2}-[0-9]{5}|[A-Za-z]{3,10}-[0-9]{4})';
-        input.title = 'Use 23-00262, a seven-digit employee ID, or FAC-0001 format.';
 
         const sync = () => {
-            input.value = format(input.value);
-            input.setCustomValidity(validationMessage(input.value));
+            applyConstraints(input);
+            input.value = format(input.value, kindFor(input));
+            input.setCustomValidity('');
         };
         input.addEventListener('input', sync);
         input.addEventListener('change', sync);
         sync();
+    }
+
+    function applyConstraints(input) {
+        const kind = kindFor(input);
+        input.maxLength = kind === 'employee' ? 7 : 8;
+        input.pattern = kind === 'student'
+            ? '(?:0[1-9]|[1-9][0-9])-[0-9]{5}'
+            : kind === 'employee'
+                ? '[0-9]{7}'
+                : '(?:[0-9]{7}|[0-9]{2}-[0-9]{5})';
+        input.title = kind === 'student'
+            ? 'Use the student ID format 23-00262.'
+            : kind === 'employee'
+                ? 'Enter exactly seven digits.'
+                : 'Use 23-00262 for a student or exactly seven digits.';
     }
 
     function init(root) {
@@ -52,7 +59,13 @@
         scope.querySelectorAll('[data-id-number-format]').forEach(prepare);
     }
 
-    window.CliniqIdNumber = { format, isValid: (value) => COMPLETE_PATTERN.test(format(value)), init };
+    window.CliniqIdNumber = {
+        applyConstraints,
+        format,
+        isValid: (value, kind = 'mixed') => patterns[kind]?.test(format(value, kind)) ?? false,
+        kindFor,
+        init
+    };
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => init());
     else init();
 })();

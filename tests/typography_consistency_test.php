@@ -41,8 +41,8 @@ foreach ([$appCss, $patientCss, $feedbackCss] as $css) {
 if (substr_count($staffLayout, 'inter-manrope.css') < 1
     || substr_count($patientLayout, 'inter-manrope.css') < 1
     || !str_contains($staffLayout, 'material-symbols.css')
-    || !str_contains($patientLayout, 'material-symbols.css')) {
-    throw new RuntimeException('Shared layouts are not loading the bundled font and icon assets.');
+    || str_contains($patientLayout, 'material-symbols.css')) {
+    throw new RuntimeException('Staff must retain the bundled icon font while the student layout uses local SVG icons.');
 }
 
 echo "Typography consistency structural test passed.\n";

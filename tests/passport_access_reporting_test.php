@@ -33,8 +33,13 @@ $assertions = [
     'reporter urgency is only offered when classifiers are omitted' => str_contains($public, 'id="emergency-urgency-choice"') && str_contains($public, 'id="missing-risk-dialog"') && str_contains($public, 'id="report-urgency-instead"'),
     'unclassified reports require an explicit decision before sending' => str_contains($public, 'send-without-risk-details') && str_contains($public, 'No risk classifier answers will be saved') && str_contains($public, 'data-risk-classifiers'),
     'emergency submission has an owned loading state' => str_contains($public, 'function setSubmitting') && str_contains($public, "'Sending report…'") && str_contains($public, "classList.add('is-loading')"),
-    'incomplete reports support not assessed' => str_contains($classifier, "\$level = 'Not assessed'"),
-    'workflow stores reporter urgency' => str_contains($workflow, 'reporter_risk_rating'),
+    'incomplete reports support not assessed when no urgency is reported' => str_contains($classifier, "\$level = 'Not assessed'"),
+    'reported urgency becomes the alert level when classifiers are omitted' => str_contains($classifier, "in_array(\$reportedUrgency, ['Low', 'Moderate', 'High', 'Critical'], true)") && str_contains($classifier, "\$level = \$reportedUrgency") && str_contains($public, "\$answers['reporter_risk_rating'] = \$reporterRiskRating"),
+    'reported urgency is visibly distinguished from classifier answers' => str_contains($classifier, 'no clinical classifier answers were submitted') && str_contains(file_get_contents($root . '/public/alerts/view.php'), 'incident answers or reported urgency'),
+    'clinic UI does not show a classifier score for reporter-selected urgency' => str_contains(file_get_contents($root . '/public/alerts/view.php'), '$usesReporterUrgency') && str_contains(file_get_contents($root . '/public/alerts/index.php'), "'Reported urgency'") && str_contains(file_get_contents($root . '/public/api/alerts.php'), 'reporter_risk_rating'),
+    'clinic alert queue sorts by priority before recency' => str_contains(file_get_contents($root . '/public/alerts/index.php'), "CASE COALESCE(a.risk_level, 'Not assessed')") && str_contains(file_get_contents($root . '/public/alerts/index.php'), 'Highest urgency appears first'),
+    'work queue treats high and critical alerts as urgent' => str_contains(file_get_contents($root . '/app/services/WorkflowAttention.php'), "['critical', 'high']"),
+    'audit metadata uses the formatter risk-rating key' => str_contains($public, "'risk_rating' => \$reporterRiskRating"),
     'central audit service exists' => str_contains($audit, 'CREATE TABLE IF NOT EXISTS audit_logs'),
 ];
 
@@ -47,6 +52,26 @@ foreach ($assertions as $label => $passed) {
 
 if ($failures !== []) {
     fwrite(STDERR, "Passport access/reporting test failed:\n- " . implode("\n- ", $failures) . "\n");
+    exit(1);
+}
+
+require_once $root . '/app/services/AlertWorkflow.php';
+$reportedModerate = classify_reported_incident(['reporter_risk_rating' => 'Moderate']);
+$unassessed = classify_reported_incident([]);
+$clinicalModerate = classify_reported_incident(['pain_level' => '7']);
+if (
+    $reportedModerate['level'] !== 'Moderate'
+    || $reportedModerate['score'] !== 0
+    || !str_contains(implode(' ', $reportedModerate['reasons']), 'Reporter selected Moderate urgency')
+    || $unassessed['level'] !== 'Not assessed'
+    || $clinicalModerate['level'] !== 'Moderate'
+) {
+    fwrite(STDERR, "Passport alert classification behavior failed.\n");
+    exit(1);
+}
+
+if (!str_contains(audit_log_metadata_summary(json_encode(['risk_rating' => 'Moderate'])), 'Reported urgency: Moderate')) {
+    fwrite(STDERR, "Passport alert audit detail failed.\n");
     exit(1);
 }
 

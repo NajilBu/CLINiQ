@@ -100,7 +100,6 @@
             if (!valid) {
                 event.preventDefault();
                 form.querySelector(':invalid')?.focus();
-                form.reportValidity();
             }
         });
 

@@ -22,7 +22,7 @@ $db = auth_db();
 
 $createStudent = static function (string $suffix, string $accessStatus, ?string $enrollmentStatus) use ($db): array {
     $personId = random_int(900000000, 999999999);
-    $studentId = normalize_id_number('9' . str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT));
+    $studentId = normalize_student_id_number('26' . str_pad((string) random_int(0, 99999), 5, '0', STR_PAD_LEFT));
     $db->prepare('INSERT INTO people (id, id_number, first_name, last_name) VALUES (?, ?, ?, ?)')
         ->execute([$personId, $studentId, 'Proof', $suffix]);
     $db->prepare("UPDATE accounts SET password_hash = ?, email = ?, account_status = 'active', activated_at = NOW() WHERE person_id = ?")

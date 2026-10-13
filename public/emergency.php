@@ -106,6 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patient && ($_POST['action'] ?? ''
             'notes' => $notes,
             'concern' => 'Possible accident reported from ID number',
         ]);
+        $answers['reporter_risk_rating'] = $reporterRiskRating;
         $reportAnswers = incident_report_answers_text($answers);
         $classification = classify_reported_incident($answers);
         $riskReasons = incident_risk_reasons_text($classification);
@@ -195,7 +196,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patient && ($_POST['action'] ?? ''
             ? 'The clinic has been notified. The report was forwarded without risk-metric answers and marked ' . $reporterRiskRating . ' by the reporter for clinic triage.'
                     : 'The clinic has been notified. This report was forwarded without risk-metric answers, so clinic staff will assess urgency promptly.')
                 : 'The clinic has been notified. Please stay with the student and call the clinic directly if the situation is urgent.';
-            audit_log_event('incident', 'incident_report_submitted', $viewerPersonId ?: null, $viewerPersonId ? 'student' : 'guest', 'patient', (int) $patient['id'], ['location' => $location, 'risk_level' => $classification['level'], 'reporter_risk_rating' => $reporterRiskRating]);
+            audit_log_event('incident', 'incident_report_submitted', $viewerPersonId ?: null, $viewerPersonId ? 'student' : 'guest', 'patient', (int) $patient['id'], ['location' => $location, 'risk_level' => $classification['level'], 'risk_rating' => $reporterRiskRating]);
         }
     }
 }
@@ -612,7 +613,13 @@ render_header('Emergency Health Passport');
     form.addEventListener('submit', function (event) {
         if (form.dataset.reportApproved === '1') return;
         event.preventDefault();
-        if (typeof form.reportValidity === 'function' && !form.reportValidity()) return;
+        var invalidField = Array.prototype.slice.call(form.elements).find(function (field) {
+            return field.willValidate && window.CliniqFormValidation && !window.CliniqFormValidation.validate(field, true);
+        });
+        if (invalidField) {
+            invalidField.focus();
+            return;
+        }
 
         var classifiers = Array.prototype.slice.call(form.querySelectorAll('[data-risk-classifiers] select'));
         var classifiersAnswered = classifiers.some(function (field) { return field.value.trim() !== ''; });

@@ -1,7 +1,9 @@
 <?php
 
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../helpers/data_normalization.php';
 require_once __DIR__ . '/../helpers/patient_category.php';
+require_once __DIR__ . '/AccountValidation.php';
 require_once __DIR__ . '/SystemSettings.php';
 require_once __DIR__ . '/CliniqInventoryWorkflow.php';
 require_once __DIR__ . '/AuditLog.php';
@@ -348,19 +350,22 @@ function cliniq_visit_create(array $visit, array $entry = [], array $vitals = []
     $startsTransaction = !$db->inTransaction();
     $patientPersonId = (int) ($visit['patient_person_id'] ?? 0);
     $patientPersonId = $patientPersonId > 0 ? $patientPersonId : null;
-    $guestName = trim((string) ($visit['guest_name'] ?? '')) ?: null;
+    $guestName = cliniq_normalize_person_name($visit['guest_name'] ?? '') ?: null;
     if ($patientPersonId === null && !array_key_exists('guest_name', $visit)) {
         throw new InvalidArgumentException('Select a patient that exists in Cliniq_db.');
     }
     if ($patientPersonId === null && $guestName === null) {
         throw new InvalidArgumentException('Visitor / guest name is required.');
     }
+    if ($guestName !== null && !account_valid_person_name($guestName)) {
+        throw new InvalidArgumentException('Visitor / guest name may contain only letters, spaces, apostrophes, periods, or hyphens.');
+    }
     if ($patientPersonId !== null && !cliniq_visit_patient_exists($patientPersonId)) {
         throw new InvalidArgumentException('Select a patient that exists in Cliniq_db.');
     }
 
     $visitPurpose = trim((string) ($visit['visit_purpose'] ?? ''));
-    $chiefComplaint = trim((string) ($visit['chief_complaint'] ?? ''));
+    $chiefComplaint = cliniq_assert_bounded_text($visit['chief_complaint'] ?? '', 'Chief complaint', 255, true);
     if ($visitPurpose !== '' && str_starts_with(strtolower($chiefComplaint), strtolower($visitPurpose . ' - '))) {
         $chiefComplaint = trim(mb_substr($chiefComplaint, mb_strlen($visitPurpose . ' - ')));
     }
@@ -370,7 +375,8 @@ function cliniq_visit_create(array $visit, array $entry = [], array $vitals = []
 
     $appointmentId = (int) ($visit['appointment_id'] ?? 0);
     $appointmentId = $appointmentId > 0 ? $appointmentId : null;
-    $visitSource = trim((string) ($visit['visit_source'] ?? '')) ?: 'Staff Recorded';
+    $visitSource = cliniq_assert_bounded_text($visit['visit_source'] ?? '', 'Visit source', 80) ?: 'Staff Recorded';
+    $actionTaken = cliniq_assert_bounded_text($visit['action_taken'] ?? '', 'Action taken', 5000);
     if (($appointmentId !== null) !== ($visitSource === 'Appointment')) {
         throw new InvalidArgumentException('Appointment-linked visits must use the Appointment source.');
     }
@@ -409,7 +415,7 @@ function cliniq_visit_create(array $visit, array $entry = [], array $vitals = []
             $status,
             $visitPurpose ?: null,
             $visitSource,
-            trim((string) ($visit['action_taken'] ?? '')) ?: null,
+            $actionTaken ?: null,
             !empty($visit['recorded_by_person_id']) ? (int) $visit['recorded_by_person_id'] : null,
             !empty($visit['attended_by_person_id']) ? (int) $visit['attended_by_person_id'] : null,
         ]);

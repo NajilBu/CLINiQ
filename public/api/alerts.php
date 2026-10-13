@@ -14,7 +14,7 @@ if (current_user() === null) {
 }
 
 $alerts = auth_db()->query("
-    SELECT id, reporter_name, location, concern, incident_type, risk_level, risk_score, response_guidance, status, created_at
+    SELECT id, reporter_name, location, concern, incident_type, reporter_risk_rating, risk_level, risk_score, risk_reasons, response_guidance, status, created_at
     FROM nurse_alerts
     WHERE status = 'Pending'
     ORDER BY

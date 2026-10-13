@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 $dashboard = file_get_contents(__DIR__ . '/../public/dashboard.php');
-$styles = file_get_contents(__DIR__ . '/../public/assets/css/app.css');
+$styles = str_replace("\r\n", "\n", file_get_contents(__DIR__ . '/../public/assets/css/app.css'));
 
 function expect_dashboard_unavailable(bool $condition, string $message): void
 {
@@ -27,8 +27,10 @@ expect_dashboard_unavailable(
     'Unavailable periods must be clipped to the visible schedule.'
 );
 expect_dashboard_unavailable(
-    str_contains($dashboard, 'count($scheduleUnavailableItems) ?> unavailable'),
-    'The schedule header must report the unavailable-period count.'
+    str_contains($dashboard, "\$scheduleSummary = array_filter(")
+        && str_contains($dashboard, "static fn(array \$item): bool => \$item['count'] > 0")
+        && str_contains($dashboard, 'if ($scheduleSummary !== []):'),
+    'The schedule header must omit zero-count items and hide when all counts are zero.'
 );
 expect_dashboard_unavailable(
     str_contains($dashboard, 'dashboard-calendar-unavailable-layer')
@@ -40,6 +42,11 @@ expect_dashboard_unavailable(
         && str_contains($styles, 'repeating-linear-gradient')
         && str_contains($styles, '.dashboard-calendar-events'),
     'Unavailable periods need a distinct layer while appointment cards remain visible.'
+);
+expect_dashboard_unavailable(
+    str_contains($styles, ".dashboard-day-schedule-header {\n    gap: 1rem;\n    flex-wrap: nowrap;")
+        && str_contains($styles, ".dashboard-day-schedule-actions {\n        width: auto;"),
+    'The schedule action must remain on the header row instead of wrapping below it.'
 );
 
 echo "Dashboard unavailable schedule test passed.\n";

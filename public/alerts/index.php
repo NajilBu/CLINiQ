@@ -52,7 +52,17 @@ $alerts = auth_db()->prepare("
     LEFT JOIN patients pt ON pt.person_id = a.patient_id
     LEFT JOIN people pe ON pe.id = pt.person_id
     WHERE {$where}
-    ORDER BY a.created_at DESC
+    ORDER BY
+        CASE COALESCE(a.risk_level, 'Not assessed')
+            WHEN 'Critical' THEN 4
+            WHEN 'High' THEN 3
+            WHEN 'Moderate' THEN 2
+            WHEN 'Low' THEN 1
+            ELSE 0
+        END DESC,
+        COALESCE(a.risk_score, 0) DESC,
+        a.created_at DESC,
+        a.id DESC
 ");
 $alerts->execute($params);
 $alerts = $alerts->fetchAll();
@@ -80,6 +90,10 @@ foreach ($alerts as $alert) {
     $patientName = trim(($alert['first_name'] ?? '') . ' ' . ($alert['last_name'] ?? ''));
     $riskLevel = $alert['risk_level'] ?? 'Low';
     $riskScore = (int) ($alert['risk_score'] ?? 0);
+    $reporterUrgency = trim((string) ($alert['reporter_risk_rating'] ?? ''));
+    $usesReporterUrgency = $reporterUrgency !== ''
+        && $riskLevel === $reporterUrgency
+        && str_contains((string) ($alert['risk_reasons'] ?? ''), 'Reporter selected ' . $reporterUrgency . ' urgency');
     $actions = '';
     if ($alert['status'] === 'Pending') {
         $actions = '<div class="row-actions-list">'
@@ -100,7 +114,7 @@ foreach ($alerts as $alert) {
         'statusSort' => array_search($alert['status'], ['Pending', 'In Progress', 'Resolved', 'Cancelled'], true),
         'statusHtml' => '<span class="badge ' . e(status_badge_class($alert['status'])) . '">' . e($alert['status']) . '</span>',
         'riskSort' => array_search($riskLevel, ['Critical', 'High', 'Moderate', 'Low', 'Not assessed'], true),
-        'riskHtml' => '<span class="badge ' . e(risk_badge_class($riskLevel)) . '">' . e($riskLevel) . '</span><p class="text-[10px] font-bold text-slate-400 mb-0 mt-1">Score ' . $riskScore . '</p>',
+        'riskHtml' => '<span class="badge ' . e(risk_badge_class($riskLevel)) . '">' . e($riskLevel) . '</span><p class="text-[10px] font-bold text-slate-400 mb-0 mt-1">' . ($usesReporterUrgency ? 'Reported urgency' : 'Score ' . $riskScore) . '</p>',
         'patient' => $patientName !== '' ? $patientName : 'Unlisted',
         'reporterSort' => $alert['reporter_name'],
         'reporterHtml' => '<p class="text-sm font-bold text-slate-600 mb-0">' . e($alert['reporter_name']) . '</p>' . ($alert['reporter_role'] ? '<p class="text-xs font-bold text-slate-400 mb-0">' . e($alert['reporter_role']) . '</p>' : ''),
@@ -130,7 +144,7 @@ render_clinic_command_header(
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
                 <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-1">Alert Queue</h2>
-                <p class="text-xs font-bold text-slate-500 mb-0">Newest reports appear first.</p>
+                <p class="text-xs font-bold text-slate-500 mb-0">Highest urgency appears first, then newest reports.</p>
             </div>
             <div class="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
                 <div class="search-input-wrap w-full sm:w-80">

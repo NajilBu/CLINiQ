@@ -1166,7 +1166,7 @@ Tracking.</p>
 <script>
 document.querySelector('[data-begin-assessment]')?.addEventListener('click', () => {
     const clinician = document.querySelector('[data-attending-clinician]');
-    if (!clinician || !clinician.reportValidity()) return;
+    if (!clinician || (window.CliniqFormValidation ? !window.CliniqFormValidation.validate(clinician, true) : !clinician.checkValidity())) return;
     const hidden = document.querySelector('[data-begin-attending-clinician]');
     if (hidden) hidden.value = clinician.value;
     document.getElementById('beginTreatmentForm')?.requestSubmit();

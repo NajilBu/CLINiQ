@@ -18,6 +18,19 @@ function cliniq_normalize_free_text(?string $value): string
     return cliniq_normalize_whitespace($value, true);
 }
 
+function cliniq_assert_bounded_text(?string $value, string $label, int $maximumLength, bool $required = false): string
+{
+    $value = cliniq_normalize_free_text($value);
+    if ($required && $value === '') {
+        throw new InvalidArgumentException($label . ' is required.');
+    }
+    if (mb_strlen($value) > $maximumLength) {
+        throw new InvalidArgumentException($label . ' must not exceed ' . $maximumLength . ' characters.');
+    }
+
+    return $value;
+}
+
 function cliniq_normalize_person_name(?string $value): string
 {
     $value = cliniq_normalize_whitespace($value);

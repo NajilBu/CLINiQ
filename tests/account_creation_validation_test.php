@@ -23,6 +23,7 @@ $throws = static function (callable $callback) use ($assert): void {
 $assert(account_assert_institutional_email(' Student.Name@PLPASIG.EDU.PH ') === 'student.name@plpasig.edu.ph', 'Institutional email should be normalized.');
 $throws(static fn() => account_assert_institutional_email('student@example.com'));
 $assert(account_valid_person_name("María Dela-Cruz"), 'Unicode person names should be accepted.');
+$assert(!account_valid_person_name('Jane3 Doe'), 'Person names with digits must be rejected.');
 $assert(!account_valid_person_name('Maria <script>'), 'Markup must not be accepted as a person name.');
 account_assert_strong_password('Strong#123', 'Strong#123');
 $assert(true, 'A strong matching password should be accepted.');

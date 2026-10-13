@@ -57,6 +57,10 @@ $riskScore = (int) ($alert['risk_score'] ?? 0);
 $riskReasons = trim((string) ($alert['risk_reasons'] ?? ''));
 $responseGuidance = trim((string) ($alert['response_guidance'] ?? ''));
 $reportAnswers = trim((string) ($alert['report_answers'] ?? ''));
+$reporterUrgency = trim((string) ($alert['reporter_risk_rating'] ?? ''));
+$usesReporterUrgency = $reporterUrgency !== ''
+    && $riskLevel === $reporterUrgency
+    && str_contains($riskReasons, 'Reporter selected ' . $reporterUrgency . ' urgency');
 
 set_page_back_link('index.php', 'Alert Queue');
 render_header('Alert Report');
@@ -76,7 +80,7 @@ render_header('Alert Report');
         </div>
     </div>
     <div class="flex flex-wrap items-center gap-3">
-        <span class="badge <?= e(risk_badge_class($riskLevel)) ?>"><?= e($riskLevel) ?> Risk</span>
+        <span class="badge <?= e(risk_badge_class($riskLevel)) ?>"><?= e($riskLevel) ?><?= $usesReporterUrgency ? ' Reported Urgency' : ' Risk' ?></span>
         <span class="badge <?= e(status_badge_class($alert['status'])) ?>"><?= e($alert['status']) ?></span>
     </div>
 </div>
@@ -155,13 +159,15 @@ render_header('Alert Report');
             </div>
             <div>
                 <h2 class="font-headline text-xl font-extrabold text-[#17261d] m-0">Risk Classification</h2>
-                <p class="text-xs font-bold text-slate-500 m-0">System guidance based on submitted incident answers.</p>
+                <p class="text-xs font-bold text-slate-500 m-0">System guidance based on incident answers or reported urgency.</p>
             </div>
         </div>
         <div class="p-6 space-y-4">
             <div class="flex flex-wrap items-center gap-3">
-                <span class="badge <?= e(risk_badge_class($riskLevel)) ?>"><?= e($riskLevel) ?> Risk</span>
-                <span class="text-xs font-black text-slate-400 uppercase tracking-widest">Score <?= e((string) $riskScore) ?></span>
+                <span class="badge <?= e(risk_badge_class($riskLevel)) ?>"><?= e($riskLevel) ?><?= $usesReporterUrgency ? ' Reported Urgency' : ' Risk' ?></span>
+                <?php if (!$usesReporterUrgency): ?>
+                    <span class="text-xs font-black text-slate-400 uppercase tracking-widest">Score <?= e((string) $riskScore) ?></span>
+                <?php endif; ?>
             </div>
             <div>
                 <span class="clinic-label">Suggested Response</span>

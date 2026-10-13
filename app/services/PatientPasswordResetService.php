@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/env.php';
 require_once __DIR__ . '/../helpers/mail.php';
+require_once __DIR__ . '/AccountValidation.php';
 require_once __DIR__ . '/PatientEmail.php';
 
 const CLINIQ_PATIENT_RESET_EXPIRY_MINUTES = 60;
@@ -164,15 +165,7 @@ function complete_patient_password_reset(string $token, string $password, string
     if (!preg_match('/^[a-f0-9]{64}$/', $token)) {
         throw new InvalidArgumentException('This password reset link is invalid or has expired.');
     }
-    if (strlen($password) < 8) {
-        throw new InvalidArgumentException('Password must be at least 8 characters.');
-    }
-    if (!preg_match('/\d/', $password)) {
-        throw new InvalidArgumentException('Password must contain at least one number.');
-    }
-    if ($password !== $confirmation) {
-        throw new InvalidArgumentException('Passwords do not match.');
-    }
+    account_assert_strong_password($password, $confirmation);
 
     ensure_patient_password_reset_schema();
     $db = auth_db();

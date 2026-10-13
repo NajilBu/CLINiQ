@@ -54,13 +54,13 @@ if (first_registration_pending('staff')) {
                 <input type="hidden" name="action" value="complete_first_registration">
                 <div>
                     <label class="clinic-label" for="password">Create Password</label>
-                    <input class="clinic-input" id="password" name="password" type="password" minlength="8" autocomplete="new-password" required>
+                    <input class="clinic-input" id="password" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" data-password-strength data-password-confirm="#confirm-password" required>
                 </div>
                 <div>
                     <label class="clinic-label" for="confirm-password">Confirm Password</label>
-                    <input class="clinic-input" id="confirm-password" name="confirm_password" type="password" minlength="8" autocomplete="new-password" required>
+                    <input class="clinic-input" id="confirm-password" name="confirm_password" type="password" minlength="8" maxlength="128" autocomplete="new-password" data-password-for="#password" required>
                 </div>
-                <p class="text-xs font-bold text-slate-500">Use at least 8 characters with at least one number.</p>
+                <p class="text-xs font-bold text-slate-500">Use 8–128 characters with uppercase, lowercase, a number, and a special character.</p>
                 <button type="submit" class="btn btn-primary w-full justify-center">
                     <span class="material-symbols-outlined">verified_user</span>
                     Activate Account
@@ -707,7 +707,16 @@ render_header('Main Dashboard');
                     </div>
                 </div>
                 <div class="dashboard-day-schedule-actions flex items-center gap-2 shrink-0">
-                    <span class="badge badge-in-progress text-[9px]"><?= count($appointments) ?> appointment(s) &bull; <?= count($todayApeBatches) ?> APE batch(es) &bull; <?= count($scheduleUnavailableItems) ?> unavailable</span>
+                    <?php
+                    $scheduleSummary = array_filter([
+                        ['count' => count($appointments), 'label' => 'appointment(s)'],
+                        ['count' => count($todayApeBatches), 'label' => 'APE batch(es)'],
+                        ['count' => count($scheduleUnavailableItems), 'label' => 'unavailable'],
+                    ], static fn(array $item): bool => $item['count'] > 0);
+                    ?>
+                    <?php if ($scheduleSummary !== []): ?>
+                        <span class="badge badge-in-progress text-[9px]"><?php foreach ($scheduleSummary as $index => $item): ?><?= $index > 0 ? ' &bull; ' : '' ?><?= $item['count'] ?> <?= $item['label'] ?><?php endforeach; ?></span>
+                    <?php endif; ?>
                     <a href="<?= app_url('appointments/index.php') ?>"
                         class="btn btn-sm btn-ghost text-slate-400 hover:text-primary text-decoration-none">
                         <span class="material-symbols-outlined text-[18px]">calendar_month</span>

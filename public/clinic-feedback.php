@@ -191,6 +191,7 @@ $feedbackSteps = [1 => ['label' => 'Find visit', 'description' => 'Enter your st
     <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
     <script src="<?= app_url('assets/js/csrf.js?v=' . filemtime(__DIR__ . '/assets/js/csrf.js')) ?>" defer></script>
     <script src="<?= app_url('assets/js/id-number-format.js?v=' . filemtime(__DIR__ . '/assets/js/id-number-format.js')) ?>" defer></script>
+    <script src="<?= app_url('assets/js/form-validation.js?v=' . filemtime(__DIR__ . '/assets/js/form-validation.js')) ?>" defer></script>
     <title>Give Clinic Feedback | CLINiQ</title>
     <link rel="stylesheet" href="<?= e(app_url('assets/vendor/fonts/inter-manrope.css?v=offline-1')) ?>">
     <link rel="stylesheet" href="<?= e(app_url('assets/vendor/fonts/material-symbols.css?v=offline-1')) ?>">
@@ -261,7 +262,7 @@ $feedbackSteps = [1 => ['label' => 'Find visit', 'description' => 'Enter your st
             <p class="feedback-muted" id="feedback-id-help">Visit-linked feedback is available once your visit is Completed. Each visit accepts one response.</p>
             <input type="hidden" name="csrf" value="<?= e($_SESSION['feedback_csrf']) ?>">
             <input type="hidden" name="action" value="lookup">
-            <label class="feedback-field">Student ID<input class="clinic-input<?= $error ? ' input-error' : '' ?>" name="identifier" value="<?= e($identifier) ?>" placeholder="23-00262" data-id-number-format autocomplete="off" aria-describedby="feedback-id-help<?= $error ? ' feedback-error' : '' ?>" <?= $error ? 'aria-invalid="true"' : '' ?> required></label>
+            <label class="feedback-field">Student ID<input class="clinic-input<?= $error ? ' input-error' : '' ?>" name="identifier" value="<?= e($identifier) ?>" placeholder="23-00262" data-id-number-format data-id-number-kind="student" autocomplete="off" aria-describedby="feedback-id-help<?= $error ? ' feedback-error' : '' ?>" <?= $error ? 'aria-invalid="true"' : '' ?> required></label>
             <button class="btn btn-primary" type="submit">Find my visits</button>
         </form>
     <?php elseif (!$feedbackSurveyRoute): ?>
@@ -398,7 +399,8 @@ if (feedbackSurvey) {
         if (invalid) {
             const group = invalid.closest('.feedback-rating-group');
             if (group) group.open = true;
-            invalid.reportValidity();
+            if (window.CliniqFormValidation) window.CliniqFormValidation.validate(invalid, true);
+            invalid.focus();
             return false;
         }
         return true;

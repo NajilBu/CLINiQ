@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/env.php';
 require_once __DIR__ . '/../services/AuditLog.php';
+require_once __DIR__ . '/../services/AccountValidation.php';
 require_once __DIR__ . '/../services/ProfilePhoto.php';
 require_once __DIR__ . '/../services/SystemSettings.php';
 require_once __DIR__ . '/../helpers/mail.php';
@@ -107,15 +108,7 @@ function complete_first_registration(string $password, string $confirmPassword, 
     if ($context === null) {
         throw new RuntimeException('The first-registration session has expired. Start registration again.');
     }
-    if (strlen($password) < 8) {
-        throw new InvalidArgumentException('Password must be at least 8 characters.');
-    }
-    if (!preg_match('/\d/', $password)) {
-        throw new InvalidArgumentException('Password must contain at least one number.');
-    }
-    if ($password !== $confirmPassword) {
-        throw new InvalidArgumentException('Passwords do not match.');
-    }
+    account_assert_strong_password($password, $confirmPassword);
     if (!$legalAcknowledgement) {
         throw new InvalidArgumentException('You must review and acknowledge the Terms of Use and Privacy Notice before activating your account.');
     }
@@ -553,12 +546,7 @@ function change_patient_password(int $accountId, string $currentPassword, string
     if ($currentPassword === '') {
         throw new InvalidArgumentException('Please enter your current password.');
     }
-    if (strlen($newPassword) < 8) {
-        throw new InvalidArgumentException('New password must be at least 8 characters long.');
-    }
-    if ($newPassword !== $confirmPassword) {
-        throw new InvalidArgumentException('New password and confirmation password do not match.');
-    }
+    account_assert_strong_password($newPassword, $confirmPassword, 'New password');
 
     $db = auth_db();
     $stmt = $db->prepare('SELECT password_hash FROM accounts WHERE id = ? LIMIT 1');

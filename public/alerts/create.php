@@ -2,11 +2,18 @@
 
 require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/AlertWorkflow.php';
+require_once __DIR__ . '/../../app/services/AccountValidation.php';
 ensure_alert_workflow_schema();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $photoPath = isset($_FILES['photo']) ? save_alert_photo_upload($_FILES['photo']) : null;
     try {
+        $reporterName = cliniq_normalize_person_name($_POST['reporter_name'] ?? '');
+        if (!account_valid_person_name($reporterName)) {
+            throw new InvalidArgumentException('Reporter name may contain only letters, spaces, apostrophes, periods, or hyphens.');
+        }
+        $reporterRole = cliniq_assert_bounded_text($_POST['reporter_role'] ?? '', 'Reporter role', 80);
+        $location = cliniq_assert_bounded_text($_POST['location'] ?? '', 'Location', 160, true);
+        $concern = cliniq_assert_bounded_text($_POST['concern'] ?? '', 'Concern', 255, true);
         $answers = collect_incident_report_answers([
             'incident_type' => $_POST['incident_type'] ?? '',
             'observed_condition' => $_POST['observed_condition'] ?? '',
@@ -15,8 +22,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'pain_level' => $_POST['pain_level'] ?? '',
             'mobility_status' => $_POST['mobility_status'] ?? '',
             'notes' => $_POST['details'] ?? '',
-            'concern' => $_POST['concern'] ?? '',
+            'concern' => $concern,
         ]);
+        $photoPath = isset($_FILES['photo']) ? save_alert_photo_upload($_FILES['photo']) : null;
     } catch (InvalidArgumentException $e) {
         flash_message('warning', $e->getMessage());
         header('Location: create.php');
@@ -25,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $reportAnswers = incident_report_answers_text($answers);
     $classification = classify_reported_incident($answers);
     $riskReasons = incident_risk_reasons_text($classification);
-    $details = trim((string) ($_POST['details'] ?? ''));
+    $details = $answers['notes'];
     $details = trim($details . ($details !== '' ? "\n\n" : '') . $reportAnswers);
     $stmt = auth_db()->prepare(
         'INSERT INTO nurse_alerts (
@@ -34,10 +42,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
     $stmt->execute([
-        trim($_POST['reporter_name'] ?? ''),
-        trim($_POST['reporter_role'] ?? ''),
-        trim($_POST['location'] ?? ''),
-        trim($_POST['concern'] ?? ''),
+        $reporterName,
+        $reporterRole,
+        $location,
+        $concern,
         $answers['incident_type'] ?: null,
         $details,
         $reportAnswers,

@@ -22,9 +22,11 @@ if (graduation_default_promotion('4', false) !== '4'
 
 $root = dirname(__DIR__);
 $list = file_get_contents($root . '/public/patients/graduates.php');
+$registry = file_get_contents($root . '/public/patients/index.php');
 $profile = file_get_contents($root . '/public/patients/view.php');
 $reset = file_get_contents($root . '/app/services/ApeCycleService.php');
 if (!str_contains($list, 'Batch year') || !str_contains($list, 'graduation_list($batchYear)')
+    || !str_contains($registry, 'patients/graduates.php') || !str_contains($registry, '> Alumni</a>')
     || !str_contains($profile, 'graduation_set_clearance')
     || !str_contains($profile, 'graduation_student_batch_year')
     || !str_contains($reset, 'if ($target === \'graduated\' && (!$graduationCleared')) {

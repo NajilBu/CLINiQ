@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/RiskSettings.php';
 require_once __DIR__ . '/AuditLog.php';
+require_once __DIR__ . '/../helpers/data_normalization.php';
 
 function ensure_alert_workflow_schema(): void
 {
@@ -236,8 +237,8 @@ function collect_incident_report_answers(array $source): array
         'bleeding_status' => trim((string) ($source['bleeding_status'] ?? '')),
         'pain_level' => trim((string) ($source['pain_level'] ?? '')),
         'mobility_status' => trim((string) ($source['mobility_status'] ?? '')),
-        'notes' => trim((string) ($source['notes'] ?? $source['incident_notes'] ?? $source['details'] ?? '')),
-        'concern' => trim((string) ($source['concern'] ?? '')),
+        'notes' => cliniq_assert_bounded_text($source['notes'] ?? $source['incident_notes'] ?? $source['details'] ?? '', 'Incident details', 5000),
+        'concern' => cliniq_assert_bounded_text($source['concern'] ?? '', 'Concern', 255),
     ];
 
     foreach ([
@@ -382,8 +383,14 @@ function classify_reported_incident(array $answers): array
     }
 
     if (!$hasAssessmentInput) {
-        $level = 'Not assessed';
-        $reasons[] = 'No clinical details were provided for risk classification';
+        $reportedUrgency = trim((string) ($answers['reporter_risk_rating'] ?? ''));
+        if (in_array($reportedUrgency, ['Low', 'Moderate', 'High', 'Critical'], true)) {
+            $level = $reportedUrgency;
+            $reasons[] = 'Reporter selected ' . $reportedUrgency . ' urgency; no clinical classifier answers were submitted';
+        } else {
+            $level = 'Not assessed';
+            $reasons[] = 'No clinical details were provided for risk classification';
+        }
     } elseif ($score >= (int) $settings['critical_min']) {
         $level = 'Critical';
     } elseif ($score >= (int) $settings['high_min']) {

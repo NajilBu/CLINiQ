@@ -69,6 +69,11 @@ function migration_checksum_is_known_compatible(string $name, string $stored, st
             '9aa273ebb9766dccfc5eeb5974685b5ad6b2ba9f7143b348a2f4a9f7a2ce4642',
             '752df0d243d5f109f293ce3fc5803f33659fb8c4c64b564d6c3313491ea730b9',
         ],
+        // The original ID migration incorrectly limited student IDs to 2Y-#####.
+        '20261013_normalize_all_prefixed_person_ids.sql' => [
+            '84b2b18cb6437bf22d2f781109d155888c1c8472e33aeedaceee6af20f6ba7ba',
+            '7abb9afcdacc8eb8266a37be20a01f985bdb705e13ed20b53534cfcf819baa7b',
+        ],
     ];
 
     if (isset($knownHistoricalPairs[$name])) {

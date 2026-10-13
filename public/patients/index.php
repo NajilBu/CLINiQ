@@ -132,7 +132,7 @@ render_header('Patients');
     (($user['role'] ?? '') === 'admin'
         ? '<a href="' . e(app_url('patient-accounts/index.php')) . '" class="btn btn-primary text-decoration-none"><span class="material-symbols-outlined">manage_accounts</span> Patient Accounts</a>'
         : '')
-    . ' <a href="' . e(app_url('patients/graduates.php')) . '" class="btn btn-outline text-decoration-none"><span class="material-symbols-outlined">school</span> Graduates</a>'
+    . ' <a href="' . e(app_url('patients/graduates.php')) . '" class="btn btn-outline text-decoration-none"><span class="material-symbols-outlined">school</span> Alumni</a>'
 ); ?>
 
 <?php if ($pendingPlacementCorrections): ?>

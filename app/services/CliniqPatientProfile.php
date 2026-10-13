@@ -4,6 +4,7 @@ require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../helpers/data_normalization.php';
 require_once __DIR__ . '/../helpers/emergency_contact.php';
 require_once __DIR__ . '/../helpers/patient_category.php';
+require_once __DIR__ . '/AccountValidation.php';
 require_once __DIR__ . '/AuditLog.php';
 require_once __DIR__ . '/SystemSettings.php';
 
@@ -207,6 +208,11 @@ function cliniq_patient_profile_update(int $personId, array $data, ?int $actorPe
 
     if ($idNumber === '' || $firstName === '' || $lastName === '') {
         throw new InvalidArgumentException('ID number, first name, and last name are required.');
+    }
+    if (!account_valid_person_name($firstName)
+        || !account_valid_person_name($lastName)
+        || ($middleName !== '' && !account_valid_person_name($middleName))) {
+        throw new InvalidArgumentException('Enter valid first, middle, and last names using letters, spaces, apostrophes, periods, or hyphens.');
     }
     if (!preg_match('/^[A-Z0-9][A-Z0-9 _\/-]{0,49}$/', $idNumber)) {
         throw new InvalidArgumentException('Enter a valid ID number.');

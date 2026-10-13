@@ -181,15 +181,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $newPassword = (string) ($_POST['password'] ?? '');
         $confirmPassword = (string) ($_POST['password_confirmation'] ?? '');
 
-        if (strlen($newPassword) < 8) {
-            flash_message('error', 'New password must be at least 8 characters.');
-        } elseif ($newPassword !== $confirmPassword) {
-            flash_message('error', 'New password confirmation does not match.');
-        } else {
+        try {
+            account_assert_strong_password($newPassword, $confirmPassword, 'New password');
             $update = auth_db()->prepare('UPDATE accounts SET password_hash = ? WHERE person_id = ?');
             $update->execute([password_hash($newPassword, PASSWORD_DEFAULT), (int) $user['id']]);
             audit_log_event('auth', 'staff_password_changed', (int) $user['id'], 'staff', 'person', (int) $user['id']);
             flash_message('success', 'Your password has been updated.');
+        } catch (InvalidArgumentException $e) {
+            flash_message('error', $e->getMessage());
         }
 
         header('Location: index.php?tab=account');

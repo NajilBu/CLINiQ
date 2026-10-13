@@ -18,11 +18,15 @@ function render_cliniq_entry_header(array $options = []): void
     $department = $options['department'] ?? $clinicProfile['department'];
     $brandLabel = $options['brandLabel'] ?? 'Go to ' . $systemName . ' access portal';
     $showBack = (bool) ($options['showBack'] ?? true);
+    $studentIcon = function_exists('student_icon_svg')
+        && str_contains((string) ($_SERVER['SCRIPT_NAME'] ?? ''), '/patient-portal/')
+        ? student_icon_svg('arrow_back', '', true)
+        : '<span class="material-symbols-outlined">arrow_back</span>';
     ?>
     <header class="<?= cliniq_brand_e($class) ?>" aria-label="CLINiQ navigation">
         <?php if ($showBack): ?>
             <a href="<?= cliniq_brand_e($homeUrl) ?>" class="cliniq-entry-back cliniq-floating-back cliniq-floating-back--entry">
-                <span class="material-symbols-outlined">arrow_back</span>
+                <?= $studentIcon ?>
                 Back
             </a>
             <span class="cliniq-entry-divider" aria-hidden="true"></span>
