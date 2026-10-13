@@ -569,7 +569,7 @@ render_student_header('Emergency Health Passport', 'passport');
 </div><!-- /student-grid -->
 </form>
 
-<dialog id="passport-nfc-overwrite-dialog" class="passport-nfc-dialog" aria-labelledby="passport-nfc-overwrite-title" aria-describedby="passport-nfc-overwrite-description">
+<dialog id="passport-nfc-overwrite-dialog" class="passport-nfc-dialog" data-student-overlay aria-labelledby="passport-nfc-overwrite-title" aria-describedby="passport-nfc-overwrite-description">
     <h2 id="passport-nfc-overwrite-title">Overwrite this NFC tag?</h2>
     <p id="passport-nfc-overwrite-description">This tag already contains data. Replacing it will remove its current contents. Confirm with your current account password, then tap the same tag again.</p>
     <label class="student-label" id="passport-nfc-password-label" for="passport-nfc-password">Current password</label>

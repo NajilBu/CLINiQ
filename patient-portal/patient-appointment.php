@@ -447,7 +447,7 @@ render_student_header('Appointments', 'appointment');
     </details>
 </div>
 
-<div class="student-calendar-time-modal" id="appointment-time-modal" aria-hidden="true">
+<div class="student-calendar-time-modal" id="appointment-time-modal" data-student-overlay aria-hidden="true">
     <div class="student-calendar-time-dialog" role="dialog" aria-modal="true" aria-labelledby="appointment-time-title">
         <div class="student-calendar-time-header">
             <div>

@@ -143,7 +143,7 @@ render_student_header('Give Feedback', 'dashboard');
     #feedback-leave-dialog h2 { margin: 0 0 12px; }
     #feedback-leave-dialog .feedback-leave-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; margin-top: 24px; }
 </style>
-<dialog id="feedback-leave-dialog" class="student-card" aria-labelledby="feedback-leave-title" aria-describedby="feedback-leave-description">
+<dialog id="feedback-leave-dialog" class="student-card" data-student-overlay aria-labelledby="feedback-leave-title" aria-describedby="feedback-leave-description">
     <h2 id="feedback-leave-title">Leave feedback?</h2>
     <p id="feedback-leave-description">Leaving will reset this feedback form and discard your answers and consent. Continue?</p>
     <p id="feedback-leave-error" role="alert" hidden>Unable to reset the survey. Please try again.</p>

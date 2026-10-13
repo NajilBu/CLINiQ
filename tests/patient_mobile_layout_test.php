@@ -29,6 +29,10 @@ foreach ([
     'grid-template-columns: minmax(0, 1fr) auto',
     'flex: 0 0 auto',
     'max-width: 45%',
+    '.student-dashboard-profile-slot { display: none !important; }',
+    '.student-dashboard-mobile-overview { grid-template-columns:repeat(2, minmax(0, 1fr)); }',
+    '.student-dashboard-summary-row { position:relative; grid-template-columns:1fr;',
+    '.student-dashboard-summary-arrow { position:absolute; right:14px; bottom:14px; display:block; }',
 ] as $marker) {
     if (!str_contains($css, $marker)) {
         throw new RuntimeException('Shared mobile layout rule missing: ' . $marker);

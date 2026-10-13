@@ -767,14 +767,14 @@ render_student_header('APE Status', 'ape');
     </div>
 </div>
 
-<div id="ape-upload-confirm-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+<div id="ape-upload-confirm-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm" data-student-overlay role="dialog" aria-modal="true" aria-labelledby="ape-upload-confirm-title" aria-hidden="true">
     <div class="student-card w-full max-w-md p-6 shadow-xl">
         <div class="flex items-start gap-4 mb-6">
             <span class="student-icon-box">
                 <span class="material-symbols-outlined">cloud_upload</span>
             </span>
             <div>
-                <h2 class="font-headline text-xl font-extrabold text-[#17261d] mb-2">Submit selected APE documents?</h2>
+                <h2 id="ape-upload-confirm-title" class="font-headline text-xl font-extrabold text-[#17261d] mb-2">Submit selected APE documents?</h2>
                 <p class="text-sm font-bold text-slate-500 mb-0">The selected PDF/image files will be uploaded together and sent to the clinic for review.</p>
             </div>
         </div>

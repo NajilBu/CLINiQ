@@ -554,6 +554,7 @@ function render_student_header(string $title, string $active = ''): void
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'change_patient_password') {
         student_start_session();
         try {
+            csrf_enforce_request();
             $accountId = (int) ($profile['account_id'] ?? 0);
             $currPw = (string) ($_POST['current_password'] ?? '');
             $newPw  = (string) ($_POST['new_password'] ?? '');
@@ -764,7 +765,7 @@ function render_student_header(string $title, string $active = ''): void
             </header>
 
             <main class="student-main">
-                <div class="student-toast-region" data-student-toast-region>
+                <div class="student-toast-region" data-student-toast-region aria-live="polite" aria-relevant="additions">
                     <?php if ($flashSuccess): ?>
                         <div class="student-note student-note-success student-toast flex items-center justify-between" data-student-toast data-auto-dismiss="true" role="status" aria-atomic="true">
                             <div class="flex items-center gap-2">
@@ -822,7 +823,7 @@ function render_student_footer(): void
         </div>
         <?php render_student_cookie_banner(); ?>
 
-        <div id="patient-profile-photo-modal" class="profile-photo-modal" role="dialog" aria-modal="true" aria-labelledby="patient-profile-photo-title" hidden>
+        <div id="patient-profile-photo-modal" class="profile-photo-modal" data-student-overlay role="dialog" aria-modal="true" aria-labelledby="patient-profile-photo-title" hidden>
             <div class="profile-photo-dialog">
                 <div class="profile-photo-dialog-header">
                     <div>
@@ -888,12 +889,12 @@ function render_student_footer(): void
         </div>
 
         <!-- Change Password Modal -->
-        <div id="change-password-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs hidden">
-            <div class="student-card w-full max-w-md p-6 shadow-xl relative animate-in fade-in zoom-in duration-150">
+        <div id="change-password-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs hidden" data-student-overlay role="dialog" aria-modal="true" aria-labelledby="change-password-title">
+            <div class="student-card student-password-dialog w-full max-w-md p-6 shadow-xl relative animate-in fade-in zoom-in duration-150">
                 <div class="flex items-center justify-between pb-4 mb-4 border-b border-slate-100">
                     <div class="flex items-center gap-2">
                         <span class="material-symbols-outlined text-primary">key</span>
-                        <h3 class="font-headline text-lg font-extrabold text-on-surface">Change Password</h3>
+                        <h3 id="change-password-title" class="font-headline text-lg font-extrabold text-on-surface">Change Password</h3>
                     </div>
                     <button type="button" data-discard-close="change-password-modal" class="text-slate-400 hover:text-slate-600">
                         <span class="material-symbols-outlined">close</span>
@@ -901,6 +902,7 @@ function render_student_footer(): void
                 </div>
 
                 <form method="post" autocomplete="off" class="space-y-4">
+                    <input type="hidden" name="_csrf" value="<?= student_e(csrf_token()) ?>">
                     <input type="hidden" name="action" value="change_patient_password">
 
                     <div class="student-field">
@@ -940,6 +942,7 @@ function render_student_footer(): void
         </div>
 
         <script src="../public/assets/js/unsaved-changes.js?v=<?= filemtime(__DIR__ . '/../../public/assets/js/unsaved-changes.js') ?>"></script>
+        <script src="../public/assets/js/student-overlays.js?v=<?= filemtime(__DIR__ . '/../../public/assets/js/student-overlays.js') ?>"></script>
         <script>
             (() => {
                 const root = document.querySelector('[data-patient-notifications]');

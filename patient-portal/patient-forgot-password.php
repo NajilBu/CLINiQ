@@ -49,7 +49,7 @@ render_student_auth_header('Recover Password');
                     <img src="<?= student_e($clinicLogoSrc) ?>" alt="<?= student_e($clinicProfile['department']) ?> logo">
                 </a>
                 <p class="student-auth-brand-line"><?= student_e($clinicProfile['system_name']) ?></p>
-                <h1 class="student-auth-side-title">Recover Access</h1>
+                <h1 class="student-auth-side-title">Recover<br class="student-recovery-title-break">Access</h1>
                 <p class="student-auth-side-copy">Request recovery instructions for your patient portal account.</p>
                 <svg class="student-auth-pulse" viewBox="0 0 320 40" preserveAspectRatio="none" aria-hidden="true">
                     <path d="M0 20 H100 L112 20 L120 4 L132 36 L142 20 L154 20 L162 12 L170 28 L178 20 L320 20"/>

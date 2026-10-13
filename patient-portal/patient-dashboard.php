@@ -474,13 +474,6 @@ if ($feedbackRequired) {
         'short_copy' => 'Complete feedback before requesting another appointment.', 'href' => $feedbackPortalUrl, 'button' => 'Complete Required Feedback',
     ];
 }
-if (!$dashboardTasks) {
-    $dashboardTasks[] = [
-        'key' => 'ready', 'icon' => 'verified', 'tone' => 'primary',
-        'kicker' => 'Ready', 'title' => 'Your clinic profile is complete',
-        'short_copy' => 'Your clinic profile is up to date.', 'href' => null, 'button' => null,
-    ];
-}
 $profileDetailLabel = match ($profile['account_type'] ?? 'patient') {
     'student' => 'Program',
     'faculty', 'school_personnel' => 'Department',
@@ -690,21 +683,6 @@ render_student_header('Dashboard', 'dashboard');
         <?php endif; ?>
     </div>
 </section>
-<?php elseif (!$apeDocumentsAwaitingClinicReview): ?>
-<div class="student-required-action-list student-dashboard-ready-action-list mb-4" aria-label="Student profile status">
-    <article class="student-action-card">
-        <div class="flex items-start gap-4">
-            <span class="student-icon-box">
-                <span class="material-symbols-outlined">verified</span>
-            </span>
-            <div>
-                <p class="student-action-kicker student-action-kicker-primary">Ready</p>
-                <h2><?= $applicantApePending ? 'Your Applicant account is set up' : 'Your clinic profile is complete' ?></h2>
-                <p><?= $applicantApePending ? 'Check APE Status for clinic updates. Passport and appointments unlock after final APE clearance.' : 'Your passport and APE clearance records are up to date.' ?></p>
-            </div>
-        </div>
-    </article>
-</div>
 <?php endif; ?>
 
 <?php if ($apeDocumentsAwaitingClinicReview && !$apeNeedsAction): ?>

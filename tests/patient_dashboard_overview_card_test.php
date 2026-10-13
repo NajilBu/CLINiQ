@@ -7,14 +7,14 @@ $welcomeCard = strpos($source, 'aria-label="Patient dashboard overview"');
 $welcome = strpos($source, 'Welcome back,', $welcomeCard);
 $welcomeCardEnd = strpos($source, '</section>', $welcome);
 $requiredActions = strpos($source, 'aria-label="Required student actions"', $welcomeCardEnd);
-$readyCard = strpos($source, 'student-action-card', $requiredActions);
-$dashboardGrid = strpos($source, '<div class="student-grid', $readyCard);
+$dashboardSummaries = strpos($source, 'aria-label="Dashboard summaries"', $requiredActions);
+$dashboardGrid = strpos($source, '<div class="student-grid', $dashboardSummaries);
 
-if ($welcomeCard === false || $welcome === false || $welcomeCardEnd === false || $requiredActions === false || $readyCard === false || $dashboardGrid === false) {
-    throw new RuntimeException('The welcome and Ready areas must render as separate dashboard sections.');
+if ($welcomeCard === false || $welcome === false || $welcomeCardEnd === false || $requiredActions === false || $dashboardSummaries === false || $dashboardGrid === false) {
+    throw new RuntimeException('The welcome, required actions, and mobile summary areas must remain separate dashboard sections.');
 }
-if (!($welcomeCard < $welcome && $welcome < $welcomeCardEnd && $welcomeCardEnd < $requiredActions && $requiredActions < $readyCard && $readyCard < $dashboardGrid)) {
-    throw new RuntimeException('The Ready card must appear after, not inside, the welcome card.');
+if (!($welcomeCard < $welcome && $welcome < $welcomeCardEnd && $welcomeCardEnd < $requiredActions && $requiredActions < $dashboardSummaries && $dashboardSummaries < $dashboardGrid)) {
+    throw new RuntimeException('Dashboard sections must retain their intended action-first order.');
 }
 
 foreach (['$dashboardTasks = [];', 'student-dashboard-mobile-task-list', 'student-dashboard-more-tasks', 'student-dashboard-applicant-hint'] as $requiredMarker) {
@@ -23,11 +23,13 @@ foreach (['$dashboardTasks = [];', 'student-dashboard-mobile-task-list', 'studen
     }
 }
 if (strpos($source, 'if ($requiredActionCount > 0):') === false
-    || strpos($source, 'student-dashboard-ready-action-list') === false
+    || strpos($source, 'aria-label="Student profile status"') !== false
+    || strpos($source, 'Your clinic profile is complete') !== false
+    || strpos($source, "'key' => 'ready'") !== false
     || strpos($source, 'clinic_feedback_pending_completed_visits') === false) {
-    throw new RuntimeException('Dashboard must hide the outer next-step panel when ready and use completed feedback requirements.');
+    throw new RuntimeException('Dashboard must hide the redundant ready panel and use completed feedback requirements.');
 }
-if (strpos($source, 'patient-passport.php') === false || strpos($source, 'patient-ape-status.php') === false || strpos($source, '$feedbackPortalUrl') === false) {
+if (strpos($source, 'patient-passport.php') === false || strpos($source, 'patient-ape-status.php') === false || strpos($source, 'patient-appointment.php') === false || strpos($source, '$feedbackPortalUrl') === false) {
     throw new RuntimeException('Dashboard task destinations must remain available.');
 }
 if (strpos($source, "ORDER BY CASE status\n        WHEN 'Scheduled' THEN 1\n        WHEN 'Pending' THEN 2") === false
@@ -47,4 +49,4 @@ if (strpos($source, 'Scheduled physical examination') === false
     throw new RuntimeException('Dashboard must keep a scheduled physical examination visible after document submission.');
 }
 
-echo "Patient dashboard separate Ready card test passed.\n";
+echo "Patient dashboard action-first summary test passed.\n";

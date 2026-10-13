@@ -350,29 +350,49 @@ function cliniq_legal_document_fields(string $document): array
 {
     return $document === 'terms'
         ? ['effective_date' => 'Effective date', 'system_owner' => 'System owner', 'contact_office' => 'Contact office', 'contact_email' => 'Contact email', 'contact_phone' => 'Contact phone']
-        : ['effective_date' => 'Effective date', 'controller' => 'Personal information controller', 'clinic_address' => 'Clinic address', 'privacy_contact' => 'Data Protection Officer / privacy contact'];
+        : ['effective_date' => 'Effective date', 'controller' => 'Personal information controller', 'clinic_address' => 'Clinic address', 'privacy_contact' => 'Data Protection Officer / privacy office', 'privacy_email' => 'Privacy email (from Clinic Profile)', 'privacy_phone' => 'Privacy telephone'];
 }
 
 function cliniq_legal_markdown_html(string $markdown): string
 {
     $escape = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
-    $html = ''; $paragraph = []; $list = null;
+    $html = ''; $paragraph = []; $list = null; $table = null;
+    $closeTable = static function () use (&$html, &$table): void { if ($table !== null) { $html .= '</tbody></table>'; $table = null; } };
     $flush = static function () use (&$html, &$paragraph, $escape): void { if ($paragraph !== []) { $html .= '<p>' . $escape(implode(' ', array_map('trim', $paragraph))) . '</p>'; $paragraph = []; } };
     foreach (preg_split('/\R/', $markdown) ?: [] as $line) {
         $line = trim($line);
-        if ($line === '') { $flush(); if ($list !== null) { $html .= '</' . $list . '>'; $list = null; } continue; }
+        if ($line === '') { $flush(); if ($list !== null) { $html .= '</' . $list . '>'; $list = null; } $closeTable(); continue; }
+        if (preg_match('/^\|(.+)\|$/', $line, $match)) {
+            $cells = array_map('trim', explode('|', $match[1]));
+            $isSeparator = $cells !== [] && count(array_filter($cells, static fn (string $cell): bool => preg_match('/^:?-{3,}:?$/', $cell) === 1)) === count($cells);
+            if ($isSeparator) { continue; }
+            $flush();
+            if ($list !== null) { $html .= '</' . $list . '>'; $list = null; }
+            if ($table === null) {
+                $table = 'open';
+                $html .= '<table><thead><tr>';
+                foreach ($cells as $cell) { $html .= '<th>' . $escape($cell) . '</th>'; }
+                $html .= '</tr></thead><tbody>';
+            } else {
+                $html .= '<tr>';
+                foreach ($cells as $cell) { $html .= '<td>' . $escape($cell) . '</td>'; }
+                $html .= '</tr>';
+            }
+            continue;
+        }
+        $closeTable();
         if (preg_match('/^(#{1,3})\s+(.+)$/', $line, $match)) { $flush(); if ($list !== null) { $html .= '</' . $list . '>'; $list = null; } $html .= '<h' . strlen($match[1]) . '>' . $escape($match[2]) . '</h' . strlen($match[1]) . '>'; continue; }
         if (preg_match('/^[-*]\s+(.+)$/', $line, $match)) { $flush(); if ($list !== 'ul') { if ($list !== null) { $html .= '</' . $list . '>'; } $list = 'ul'; $html .= '<ul>'; } $html .= '<li>' . $escape($match[1]) . '</li>'; continue; }
         $paragraph[] = $line;
     }
-    $flush(); if ($list !== null) { $html .= '</' . $list . '>'; }
+    $flush(); if ($list !== null) { $html .= '</' . $list . '>'; } $closeTable();
     return $html;
 }
 
 function cliniq_sanitize_legal_html(string $html): string
 {
-    $html = strip_tags($html, '<h1><h2><h3><p><ul><ol><li><strong><em><br><a>');
-    $html = preg_replace('/<(h[1-3]|p|ul|ol|li|strong|em|br)\b[^>]*>/i', '<$1>', $html) ?? $html;
+    $html = strip_tags($html, '<h1><h2><h3><p><ul><ol><li><strong><em><br><a><table><thead><tbody><tr><th><td>');
+    $html = preg_replace('/<(h[1-3]|p|ul|ol|li|strong|em|br|table|thead|tbody|tr|th|td)\b[^>]*>/i', '<$1>', $html) ?? $html;
     return preg_replace_callback('/<a\b([^>]*)>/i', static function (array $match): string {
         if (!preg_match('/href\s*=\s*(["\'])(.*?)\1/i', $match[1], $href)) { return '<a>'; }
         $url = trim(html_entity_decode($href[2], ENT_QUOTES, 'UTF-8'));
@@ -417,6 +437,11 @@ function cliniq_legal_documents(): array
     foreach (['terms', 'privacy'] as $document) {
         $saved[$document] = cliniq_legal_document_normalize($document, $saved[$document] ?? $defaults[$document]);
     }
+    $profileEmail = trim((string) (clinic_profile_settings()['contact_email'] ?? ''));
+    if ($profileEmail !== '') {
+        $saved['terms']['details']['contact_email'] = $profileEmail;
+        $saved['privacy']['details']['privacy_email'] = $profileEmail;
+    }
     $saved['version'] = trim((string) ($saved['version'] ?? $defaults['version'])) ?: $defaults['version'];
     $saved['updated_at'] = $saved['updated_at'] ?? null;
     return $saved;
@@ -427,6 +452,11 @@ function save_cliniq_legal_documents(array $input, ?int $updatedBy = null): arra
     $current = cliniq_legal_documents();
     $terms = cliniq_legal_document_normalize('terms', $input['terms'] ?? []);
     $privacy = cliniq_legal_document_normalize('privacy', $input['privacy'] ?? []);
+    $profileEmail = trim((string) (clinic_profile_settings()['contact_email'] ?? ''));
+    if ($profileEmail !== '') {
+        $terms['details']['contact_email'] = $profileEmail;
+        $privacy['details']['privacy_email'] = $profileEmail;
+    }
     if ($terms['title'] === '' || $privacy['title'] === '' || $terms['body_html'] === '' || $privacy['body_html'] === '') {
         throw new InvalidArgumentException('Both the Terms of Use and Privacy Notice are required.');
     }
