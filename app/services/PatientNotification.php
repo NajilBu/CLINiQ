@@ -4,6 +4,47 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../config/database.php';
 
+function patient_notification_target_url(?string $targetUrl): ?string
+{
+    $targetUrl = trim((string) $targetUrl);
+    if ($targetUrl === '') {
+        return null;
+    }
+
+    $parts = parse_url($targetUrl);
+    if ($parts === false || array_intersect(array_keys($parts), ['scheme', 'host', 'user', 'pass', 'port', 'fragment']) !== []) {
+        return null;
+    }
+
+    $routes = [
+        'patient-welcome.php' => '/',
+        'patient-login.php' => '/login',
+        'patient-register.php' => '/signup',
+        'patient-forgot-password.php' => '/forgot-password',
+        'patient-reset-password.php' => '/reset-password',
+        'patient-onboarding.php' => '/onboarding',
+        'patient-dashboard.php' => '/dashboard',
+        'patient-ape-status.php' => '/ape-status',
+        'patient-ape-document.php' => '/ape-document',
+        'patient-appointment.php' => '/appointments',
+        'patient-passport.php' => '/health-passport',
+        'patient-help.php' => '/help',
+        'patient-feedback.php' => '/feedback',
+        'patient-feedback-consent.php' => '/feedback/consent',
+    ];
+    $path = ltrim((string) ($parts['path'] ?? ''), '/');
+    $canonical = $routes[$path] ?? null;
+    if ($canonical === null && in_array('/' . $path, $routes, true)) {
+        $canonical = '/' . $path;
+    }
+    if ($canonical === null) {
+        return null;
+    }
+
+    $query = (string) ($parts['query'] ?? '');
+    return $canonical . ($query === '' ? '' : '?' . $query);
+}
+
 function patient_notification_create(
     PDO $db,
     int $patientPersonId,
@@ -18,7 +59,8 @@ function patient_notification_create(
     $category = trim($category);
     $title = trim($title);
     $message = trim($message);
-    $targetUrl = trim((string) $targetUrl) ?: null;
+    $rawTargetUrl = trim((string) $targetUrl);
+    $targetUrl = patient_notification_target_url($rawTargetUrl);
     $sourceType = trim((string) $sourceType) ?: null;
 
     if ($patientPersonId < 1 || $category === '' || $title === '' || $message === '') {
@@ -27,7 +69,7 @@ function patient_notification_create(
     if (mb_strlen($category) > 40 || mb_strlen($title) > 160 || mb_strlen((string) $targetUrl) > 255 || mb_strlen((string) $sourceType) > 50) {
         throw new InvalidArgumentException('Notification metadata is too long.');
     }
-    if ($targetUrl !== null && !preg_match('/^patient-[a-z0-9-]+\.php(?:\?[a-z0-9_=&%-]+)?$/i', $targetUrl)) {
+    if ($targetUrl === null && $rawTargetUrl !== '') {
         throw new InvalidArgumentException('Notification links must stay inside the patient portal.');
     }
 
@@ -55,7 +97,13 @@ function patient_notification_recent(PDO $db, int $patientPersonId, int $limit =
     $limit = max(1, min(50, $limit));
     $stmt = $db->prepare("\n        SELECT notification_id, category, title, message, target_url, read_at, created_at\n        FROM patient_notifications\n        WHERE patient_person_id = ?\n        ORDER BY created_at DESC, notification_id DESC\n        LIMIT {$limit}\n    ");
     $stmt->execute([$patientPersonId]);
-    return $stmt->fetchAll();
+    $notifications = $stmt->fetchAll();
+    foreach ($notifications as &$notification) {
+        $notification['target_url'] = patient_notification_target_url($notification['target_url'] ?? null);
+    }
+    unset($notification);
+
+    return $notifications;
 }
 
 function patient_notification_unread_count(PDO $db, int $patientPersonId): int
