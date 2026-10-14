@@ -14,12 +14,13 @@
             : 'mixed';
     }
 
-    function format(value, kind = 'mixed') {
+    function format(value, kind = 'mixed', autoStudentFormat = false) {
         const raw = String(value || '').toUpperCase();
         const digits = raw.replace(/\D/g, '').slice(0, 7);
         const hasStudentHyphen = /^\d{0,2}-\d*$/.test(raw);
         if (raw.includes('-') && !hasStudentHyphen) return raw;
         if (kind === 'student') return digits.length > 2 && !digits.startsWith('00') ? `${digits.slice(0, 2)}-${digits.slice(2)}` : digits;
+        if (kind === 'mixed' && autoStudentFormat && /^2\d{0,6}$/.test(digits)) return digits.length > 2 ? `${digits.slice(0, 2)}-${digits.slice(2)}` : digits;
         if (kind === 'mixed' && hasStudentHyphen) return digits.length > 2 ? `${digits.slice(0, 2)}-${digits.slice(2)}` : digits;
         return digits;
     }
@@ -31,7 +32,14 @@
 
         const sync = () => {
             applyConstraints(input);
-            input.value = format(input.value, kindFor(input));
+            const compactValue = input.value.replace(/\D/g, '').slice(0, 7);
+            const autoStudentFormat = input.dataset.idNumberAutoStudent === '1';
+            input.value = format(input.value, kindFor(input), autoStudentFormat);
+            const compactTarget = input.dataset.idNumberCompactTarget;
+            const compactInput = compactTarget ? document.getElementById(compactTarget) : null;
+            if (compactInput instanceof HTMLInputElement) {
+                compactInput.value = autoStudentFormat && /^2\d{6}$/.test(compactValue) ? compactValue : '';
+            }
             input.setCustomValidity('');
         };
         input.addEventListener('input', sync);

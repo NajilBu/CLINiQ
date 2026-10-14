@@ -515,6 +515,7 @@ function student_restore_remembered_session(): bool
 
 function student_find_patient_by_number(string $studentNumber): ?array
 {
+    [$preferredId, $alternateId] = visit_id_number_candidates($studentNumber, true);
     $stmt = auth_db()->prepare('
         SELECT
             a.id AS account_id,
@@ -537,15 +538,16 @@ function student_find_patient_by_number(string $studentNumber): ?array
         JOIN people p ON p.id = a.person_id
         LEFT JOIN students s ON s.person_id = p.id
         LEFT JOIN school_employees se ON se.person_id = p.id
-        WHERE p.id_number = ?
+        WHERE p.id_number IN (?, ?)
           AND (
             EXISTS (SELECT 1 FROM students s WHERE s.person_id = p.id)
             OR EXISTS (SELECT 1 FROM school_employees se WHERE se.person_id = p.id)
             OR EXISTS (SELECT 1 FROM patients pt WHERE pt.person_id = p.id)
           )
+        ORDER BY CASE WHEN p.id_number = ? THEN 0 ELSE 1 END, p.id
         LIMIT 1
     ');
-    $stmt->execute([$studentNumber]);
+    $stmt->execute([$preferredId, $alternateId, $preferredId]);
     $account = $stmt->fetch();
     if (!$account || $account['account_status'] === 'suspended') {
         return null;

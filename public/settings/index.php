@@ -1751,20 +1751,20 @@ render_clinic_command_header(
 
                     <section class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div class="settings-section">
-                            <p class="clinic-label mb-2">Patients Included</p>
+                            <p class="clinic-label mb-2">Automatically Included</p>
                             <div class="flex items-end gap-2">
                                 <strong class="font-headline text-3xl text-[#17261d]" id="apeActivePatientCount"><?= number_format($activeApePatientCount) ?></strong>
-                                <span class="text-xs font-bold text-slate-500 pb-1">active patient(s)</span>
+                                <span class="text-xs font-bold text-slate-500 pb-1">active Student Applicant(s)</span>
                             </div>
                             <p class="settings-help mt-3 mb-0">Starting a cycle creates APE records for active Student Applicants. Schedule Official students by program, year, and section from APE Scheduling.</p>
                         </div>
                         <div class="settings-section">
-                            <p class="clinic-label mb-2">Patients Excluded</p>
+                            <p class="clinic-label mb-2">Not Automatically Included</p>
                             <div class="flex items-end gap-2">
                                 <strong class="font-headline text-3xl text-slate-500"><?= number_format($excludedApePatientCount) ?></strong>
-                                <span class="text-xs font-bold text-slate-500 pb-1">inactive or suspended</span>
+                                <span class="text-xs font-bold text-slate-500 pb-1">not eligible for automatic student APE creation</span>
                             </div>
-                            <p class="settings-help mt-3 mb-0">These accounts are not included until their account status becomes active.</p>
+                            <p class="settings-help mt-3 mb-0">Includes inactive applicants, Official students, and non-student patient accounts. Official students are scheduled through APE Scheduling; Faculty/NTP records are opened by the clinic.</p>
                         </div>
                     </section>
 
@@ -1773,7 +1773,7 @@ render_clinic_command_header(
                             <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">School Year and Compliance Period</h3>
                             <p class="settings-help mb-0">The compliance period tells patients when this school year's APE requirements must be completed.</p>
                         </div>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                        <div class="grid grid-cols-1 md:grid-cols-3 items-start gap-5">
                             <div class="settings-field">
                                 <label class="clinic-label" for="apeSchoolYear">School Year</label>
                                 <input class="settings-input" id="apeSchoolYear" value="<?= e($defaultApeSchoolYear) ?>" inputmode="numeric" maxlength="9" placeholder="2026-2027" aria-describedby="apeSchoolYearHelp" <?= $hasActiveApeCycle ? 'disabled' : '' ?>>

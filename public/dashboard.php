@@ -80,8 +80,8 @@ appointment_sync_overdue_confirmations();
 
 // --- 1. Metrics & Analytics ---
 $metrics = [
-    'visits_today' => (int) (cliniq_visit_db()->query("SELECT COUNT(*) AS total FROM visits WHERE DATE(visit_datetime) = CURDATE() AND TIME(visit_datetime) BETWEEN '08:00:00' AND '17:00:00'")->fetch()['total'] ?? 0),
-    'patients_in_clinic' => (int) (cliniq_visit_db()->query("SELECT COUNT(*) AS total FROM visits WHERE DATE(visit_datetime) = CURDATE() AND TIME(visit_datetime) BETWEEN '08:00:00' AND '17:00:00' AND status IN ('Unaddressed', 'Active')")->fetch()['total'] ?? 0),
+    'visits_today' => (int) (cliniq_visit_db()->query("SELECT COUNT(*) AS total FROM visits WHERE DATE(visit_datetime) = CURDATE()")->fetch()['total'] ?? 0),
+    'patients_in_clinic' => (int) (cliniq_visit_db()->query("SELECT COUNT(*) AS total FROM visits WHERE DATE(visit_datetime) = CURDATE() AND status IN ('Unaddressed', 'Active')")->fetch()['total'] ?? 0),
     'pending_alerts' => (int) (auth_db()->query("SELECT COUNT(*) AS total FROM nurse_alerts WHERE status = 'Pending'")->fetch()['total'] ?? 0),
     'low_stock' => (int) (cliniq_inventory_db()->query('SELECT COUNT(*) AS total FROM inventory_items WHERE is_active = 1 AND quantity <= reorder_level')->fetch()['total'] ?? 0),
     'appointment_requests' => (int) (appointment_db()->query("SELECT COUNT(*) AS total FROM appointments WHERE status IN ('Pending', 'For Confirmation')")->fetch()['total'] ?? 0),

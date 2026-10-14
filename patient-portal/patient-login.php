@@ -33,7 +33,13 @@ $clinicProfile = clinic_profile_settings();
 $clinicLogoSrc = student_public_logo_src($clinicProfile);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrf_enforce_request();
     $studentIdValue = normalize_id_number(trim($_POST['student_id'] ?? ''));
+    $compactStudentId = normalize_id_number(trim($_POST['student_id_compact'] ?? ''));
+    $lookupIdValue = preg_match('/^2\d{6}$/', $compactStudentId) === 1
+        && normalize_student_id_number($compactStudentId) === $studentIdValue
+        ? $compactStudentId
+        : $studentIdValue;
     $password = (string) ($_POST['password'] ?? '');
 
     try {
@@ -44,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             auth_throttle_record_failure($db, 'patient', $studentIdValue);
             $error = id_number_validation_message();
         } else {
-            $patient = student_find_patient_by_number($studentIdValue);
+            $patient = student_find_patient_by_number($lookupIdValue);
             if ($patient === null) {
                 auth_throttle_record_failure($db, 'patient', $studentIdValue);
                 $error = 'Invalid ID number or password. Please try again.';
@@ -161,9 +167,10 @@ render_student_auth_header('Patient Login');
 
             <form method="POST" action="">
                 <input type="hidden" name="_csrf" value="<?= student_e(csrf_token()) ?>">
+                <input type="hidden" id="student-id-compact" name="student_id_compact" value="">
                 <div class="student-field">
                     <label class="student-label" for="id-number">ID Number</label>
-                    <input type="text" id="id-number" name="student_id" class="student-input" placeholder="23-00262 or 0000002" autocomplete="username" data-id-number-format value="<?= student_e($studentIdValue) ?>" required>
+                    <input type="text" id="id-number" name="student_id" class="student-input" placeholder="23-00262 or 0000002" autocomplete="username" data-id-number-format data-id-number-auto-student="1" data-id-number-compact-target="student-id-compact" value="<?= student_e($studentIdValue) ?>" required>
                 </div>
 
                 <div class="student-field">
