@@ -1409,8 +1409,8 @@ function initPatientAccountTypeFields(root = document) {
         let pendingProgramValue = String(programInput?.dataset.selectedValue || '').toUpperCase();
         const hintsByType = {
             student: {
-                idPlaceholder: '23-00262',
-                idHint: 'Student example: 23-00262',
+                idPlaceholder: '01-00000',
+                idHint: 'Student ID format: 01-00000',
                 programLabel: 'Program Code',
                 programPlaceholder: 'Select program',
                 programHint: 'Select an active program.',
@@ -1422,8 +1422,8 @@ function initPatientAccountTypeFields(root = document) {
                 sectionHint: 'Choose A to E. Program, year level, and section are stored separately.'
             },
             faculty: {
-                idPlaceholder: '0000002',
-                idHint: 'Faculty ID: exactly seven digits, for example 0000002.',
+                idPlaceholder: '0000000',
+                idHint: 'Faculty ID: exactly seven digits, for example 0000000.',
                 programLabel: 'Department',
                 programPlaceholder: 'Select department',
                 programHint: 'Select an active department.',
@@ -1435,8 +1435,8 @@ function initPatientAccountTypeFields(root = document) {
                 sectionHint: 'Example: DIT or MIT'
             },
             school_personnel: {
-                idPlaceholder: '0000002',
-                idHint: 'School personnel ID: exactly seven digits, for example 0000002.',
+                idPlaceholder: '0000000',
+                idHint: 'School personnel ID: exactly seven digits, for example 0000000.',
                 programLabel: 'Department',
                 programPlaceholder: 'Select department',
                 programHint: 'Select an active department.',
@@ -1486,7 +1486,7 @@ function initPatientAccountTypeFields(root = document) {
                 idNumberInput.dataset.idNumberKind = isStudent ? 'student' : 'employee';
                 window.CliniqIdNumber?.applyConstraints(idNumberInput);
                 idNumberInput.value = window.CliniqIdNumber?.format(idNumberInput.value, idNumberInput.dataset.idNumberKind) || idNumberInput.value;
-                idNumberInput.title = isStudent ? 'Use the student ID format 23-00262.' : 'Enter exactly seven digits.';
+                idNumberInput.title = isStudent ? 'Use the student ID format 01-00000.' : 'Enter exactly seven digits.';
             }
             setText('id_number_hint', hints.idHint);
             setText('program_or_department_label', hints.programLabel);

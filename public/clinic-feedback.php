@@ -90,7 +90,7 @@ try {
             $raw = $_POST['identifier'] ?? '';
             if (!is_string($raw) || strlen($raw) > 30) throw new InvalidArgumentException('Enter a valid student ID.');
             $identifier = normalize_id_number($raw);
-            if (!preg_match('/^\d{2}-\d{5}$/D', $identifier)) throw new InvalidArgumentException('Enter a student ID such as 23-00262.');
+            if (!preg_match('/^\d{2}-\d{5}$/D', $identifier)) throw new InvalidArgumentException('Enter a student ID such as 01-00000.');
             $found = clinic_feedback_visits($db, $identifier);
             if (!$found) throw new InvalidArgumentException('No Completed clinic visits were found for this student ID. Check your ID or ask the clinic staff.');
             $_SESSION['feedback_context'] = [
@@ -262,7 +262,7 @@ $feedbackSteps = [1 => ['label' => 'Find visit', 'description' => 'Enter your st
             <p class="feedback-muted" id="feedback-id-help">Visit-linked feedback is available once your visit is Completed. Each visit accepts one response.</p>
             <input type="hidden" name="csrf" value="<?= e($_SESSION['feedback_csrf']) ?>">
             <input type="hidden" name="action" value="lookup">
-            <label class="feedback-field">Student ID<input class="clinic-input<?= $error ? ' input-error' : '' ?>" name="identifier" value="<?= e($identifier) ?>" placeholder="23-00262" data-id-number-format data-id-number-kind="student" autocomplete="off" aria-describedby="feedback-id-help<?= $error ? ' feedback-error' : '' ?>" <?= $error ? 'aria-invalid="true"' : '' ?> required></label>
+            <label class="feedback-field">Student ID<input class="clinic-input<?= $error ? ' input-error' : '' ?>" name="identifier" value="<?= e($identifier) ?>" placeholder="01-00000" data-id-number-format data-id-number-kind="student" autocomplete="off" aria-describedby="feedback-id-help<?= $error ? ' feedback-error' : '' ?>" <?= $error ? 'aria-invalid="true"' : '' ?> required></label>
             <button class="btn btn-primary" type="submit">Find my visits</button>
         </form>
     <?php elseif (!$feedbackSurveyRoute): ?>

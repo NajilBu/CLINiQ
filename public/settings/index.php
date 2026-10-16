@@ -1145,7 +1145,7 @@ render_clinic_command_header(
                                     </div>
                                     <div class="settings-field">
                                         <label class="clinic-label" for="new_staff_id_number">Login ID Number</label>
-                                        <input class="settings-input" id="new_staff_id_number" name="id_number" placeholder="0000002" pattern="[0-9]{7}" inputmode="numeric" maxlength="7" title="Enter exactly seven continuous digits.">
+                                        <input class="settings-input" id="new_staff_id_number" name="id_number" placeholder="0000000" pattern="[0-9]{7}" inputmode="numeric" maxlength="7" title="Enter exactly seven continuous digits.">
                                     </div>
                                     <div class="settings-field">
                                         <label class="clinic-label" for="new_staff_role">Role</label>

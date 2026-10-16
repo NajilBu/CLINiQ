@@ -78,7 +78,7 @@ render_student_auth_header('Recover Password');
                 <input type="hidden" name="csrf_token" value="<?= student_e(patient_password_reset_csrf_token('request')) ?>">
                 <div class="student-field">
                     <label class="student-label" for="id-number">ID Number</label>
-                    <input id="id-number" name="id_number" class="student-input" type="text" placeholder="23-00262 or 0000002" autocomplete="username" data-id-number-format value="<?= student_e($idNumber) ?>" required>
+                    <input id="id-number" name="id_number" class="student-input" type="text" placeholder="01-00000 or 0000000" autocomplete="username" data-id-number-format value="<?= student_e($idNumber) ?>" required>
                 </div>
 
                 <div class="student-field">

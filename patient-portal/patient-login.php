@@ -170,7 +170,7 @@ render_student_auth_header('Patient Login');
                 <input type="hidden" id="student-id-compact" name="student_id_compact" value="">
                 <div class="student-field">
                     <label class="student-label" for="id-number">ID Number</label>
-                    <input type="text" id="id-number" name="student_id" class="student-input" placeholder="23-00262 or 0000002" autocomplete="username" data-id-number-format data-id-number-auto-student="1" data-id-number-compact-target="student-id-compact" value="<?= student_e($studentIdValue) ?>" required>
+                    <input type="text" id="id-number" name="student_id" class="student-input" placeholder="01-00000 or 0000000" autocomplete="username" data-id-number-format data-id-number-auto-student="1" data-id-number-compact-target="student-id-compact" value="<?= student_e($studentIdValue) ?>" required>
                 </div>
 
                 <div class="student-field">

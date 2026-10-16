@@ -178,7 +178,7 @@ function create_staff_profile(array $input): void
         $idNumber = next_staff_profile_id_number();
     }
     if (!preg_match('/^[0-9]{7}$/', $idNumber)) {
-        throw new InvalidArgumentException('Staff login ID must contain exactly seven continuous digits, for example 0000002.');
+        throw new InvalidArgumentException('Staff login ID must contain exactly seven continuous digits, for example 0000000.');
     }
     account_assert_strong_password($password, $passwordConfirmation);
 
@@ -257,7 +257,7 @@ function update_staff_profile(array $input): void
         throw new InvalidArgumentException('Staff name may contain only letters, spaces, apostrophes, periods, or hyphens.');
     }
     if (!preg_match('/^[0-9]{7}$/', $idNumber)) {
-        throw new InvalidArgumentException('Staff login ID must contain exactly seven continuous digits, for example 0000002.');
+        throw new InvalidArgumentException('Staff login ID must contain exactly seven continuous digits, for example 0000000.');
     }
 
     [$firstName, $middleName, $lastName] = split_staff_profile_name($name);

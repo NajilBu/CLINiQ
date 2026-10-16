@@ -1,6 +1,6 @@
 <?php
 
-const ID_NUMBER_FORMAT_LABEL = 'a student ID such as 23-00262 or an exactly seven-digit ID such as 0000002';
+const ID_NUMBER_FORMAT_LABEL = 'a student ID such as 01-00000 or an exactly seven-digit ID such as 0000000';
 const ID_NUMBER_REGEX = '/^(?:\d{7}|\d{2}-\d{5})$/';
 const STUDENT_ID_NUMBER_REGEX = '/^(?:0[1-9]|[1-9]\d)-\d{5}$/';
 const ID_NUMBER_HTML_PATTERN = '(?:[0-9]{7}|[0-9]{2}-[0-9]{5})';

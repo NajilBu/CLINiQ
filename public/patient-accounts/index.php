@@ -250,8 +250,8 @@ render_clinic_command_header(
                 </div>
                 <div>
                     <label class="clinic-label" for="id_number">ID Number</label>
-                    <input class="clinic-input uppercase" id="id_number" name="id_number" value="<?= e((string) ($individualValues['id_number'] ?? '')) ?>" placeholder="23-00262" aria-describedby="id_number_hint" autocapitalize="characters" pattern="<?= e(ID_NUMBER_HTML_PATTERN) ?>" maxlength="8" data-id-number-format data-id-number-kind="student" data-required-message="Enter the patient's ID number." required>
-                    <p class="text-[11px] font-bold text-slate-500 mt-1" id="id_number_hint">Student example: 23-00262</p>
+                    <input class="clinic-input uppercase" id="id_number" name="id_number" value="<?= e((string) ($individualValues['id_number'] ?? '')) ?>" placeholder="01-00000" aria-describedby="id_number_hint" autocapitalize="characters" pattern="<?= e(ID_NUMBER_HTML_PATTERN) ?>" maxlength="8" data-id-number-format data-id-number-kind="student" data-required-message="Enter the patient's ID number." required>
+                    <p class="text-[11px] font-bold text-slate-500 mt-1" id="id_number_hint">Student ID format: 01-00000</p>
                 </div>
                 <div>
                     <label class="clinic-label" for="first_name">First Name</label>
@@ -317,7 +317,7 @@ render_clinic_command_header(
                 </div>
             </div>
             <div class="rounded-xl bg-slate-50 border border-slate-100 px-4 py-3 text-xs font-bold text-slate-600">
-                Password = last three ID digits repeated twice. Example: <code>23-00262 → 262262</code>.
+                Password = last three ID digits repeated twice. Example: <code>01-00000 → 000000</code>.
             </div>
             <button class="btn btn-primary w-full" data-confirm-submit data-confirm-type="primary"
                 data-confirm-title="Create inactive patient account?"
@@ -891,8 +891,8 @@ const activePrograms = <?= json_encode($programOptions, JSON_UNESCAPED_SLASHES |
 const activeDepartments = <?= json_encode($departmentOptions, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
 const accountFieldHints = {
     student: {
-        idPlaceholder: '23-00262',
-        idHint: 'Student example: 23-00262',
+        idPlaceholder: '01-00000',
+        idHint: 'Student ID format: 01-00000',
         idPattern: '<?= e(ID_NUMBER_HTML_PATTERN) ?>',
         idMaxLength: 15,
         idInputMode: 'text',
@@ -907,8 +907,8 @@ const accountFieldHints = {
         sectionHint: 'Choose A to E. Program, year level, and section are stored separately.',
     },
     faculty: {
-        idPlaceholder: '0000001',
-        idHint: 'Faculty ID: exactly seven digits, for example 0000001.',
+        idPlaceholder: '0000000',
+        idHint: 'Faculty ID: exactly seven digits, for example 0000000.',
         idPattern: '[0-9]{7}',
         idMaxLength: 7,
         idInputMode: 'numeric',
@@ -923,8 +923,8 @@ const accountFieldHints = {
         sectionHint: 'Example: DIT or MIT',
     },
     school_personnel: {
-        idPlaceholder: '0000001',
-        idHint: 'NTP ID: exactly seven digits, for example 0000001.',
+        idPlaceholder: '0000000',
+        idHint: 'NTP ID: exactly seven digits, for example 0000000.',
         idPattern: '[0-9]{7}',
         idMaxLength: 7,
         idInputMode: 'numeric',

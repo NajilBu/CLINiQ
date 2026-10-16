@@ -56,10 +56,10 @@
                 ? '[0-9]{7}'
                 : '(?:[0-9]{7}|[0-9]{2}-[0-9]{5})';
         input.title = kind === 'student'
-            ? 'Use the student ID format 23-00262.'
+            ? 'Use the student ID format 01-00000.'
             : kind === 'employee'
                 ? 'Enter exactly seven digits.'
-                : 'Use 23-00262 for a student or exactly seven digits.';
+                : 'Use 01-00000 for a student or exactly seven digits.';
     }
 
     function init(root) {
