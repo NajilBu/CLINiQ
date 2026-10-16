@@ -108,7 +108,7 @@ run relevant tests, and open a review before merging. Do not commit:
    restore test. After pulling, the host operator checks Compose, rebuilds and
    recreates only the required services, then verifies local clinic access,
    the permanent patient hostname, private-route `404` responses, email links,
-   and a phone QR/NFC scan. See `DEPLOYMENT.md` for the host commands.
+   and a phone QR/NFC scan. See `docs/DEPLOYMENT.md` for the host commands.
 
 Removing a sensitive file in a new commit does not erase it from earlier Git
 commits. If patient data or credentials were pushed, stop sharing that history

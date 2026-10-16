@@ -67,7 +67,7 @@ Put here:
 
 This prevents private or unnecessary files from being committed.
 
-### `PROJECT_STRUCTURE.md`
+### `docs/PROJECT_STRUCTURE.md`
 
 This documentation file.
 
