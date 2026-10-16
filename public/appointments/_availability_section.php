@@ -190,11 +190,6 @@ $availabilityUrlForWeek = static function (string $week) use ($availabilityPurpo
 
     <div class="appointment-availability-layout">
         <div class="appointment-availability-calendar-panel">
-            <div class="appointment-week-range">
-                <strong>Step 2 — Select time in <?= e($availabilityWeek->format('M j')) ?>–<?= e($availabilityWeekEnd->format('M j, Y')) ?></strong>
-                <span>Choose a day header for a full-day block, or click and drag open hours. Unavailable periods are red; APE examinations are green.</span>
-            </div>
-
             <div class="appointment-week-scroll">
                 <div class="appointment-week-calendar" style="grid-template-columns: 4.75rem repeat(<?= $availabilityCalendarDayCount ?>, minmax(8.5rem, 1fr)); min-width: <?= number_format(4.75 + $availabilityCalendarDayCount * 8.5, 2, '.', '') ?>rem; --availability-calendar-height: <?= number_format($availabilityCalendarHeightRem, 2, '.', '') ?>rem;">
                     <div class="appointment-week-header appointment-week-time-heading">Time</div>
@@ -288,7 +283,7 @@ $availabilityUrlForWeek = static function (string $week) use ($availabilityPurpo
             <section class="appointment-availability-form-card appointment-availability-flow-card">
                 <p class="appointment-availability-eyebrow">One-time change</p>
                 <h3 class="font-headline text-lg font-extrabold text-[#17261d] mb-1">Block clinic time</h3>
-                <p class="text-xs font-bold text-slate-500 mb-4">Choose the block type, then select its date or hours in the calendar.</p>
+                <p class="text-xs font-bold text-slate-500 mb-4">Choose the block type, then click a day header or drag across open hours in the calendar.</p>
 
                 <form method="POST" action="availability.php" class="grid gap-4" id="availabilityForm" data-no-ajax="true">
                     <input type="hidden" name="action" value="add">
