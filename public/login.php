@@ -303,13 +303,13 @@ render_header('Login');
                 <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
                 <div class="staff-field">
                     <label for="id_number">ID Number</label>
-                    <input class="staff-login-input" id="id_number" name="id_number" type="text" value="<?= e($_POST['id_number'] ?? '') ?>" placeholder="0000002" inputmode="numeric" pattern="[0-9]{7}" maxlength="7" title="Enter exactly seven continuous digits." autocomplete="username" required>
+                    <input class="staff-login-input" id="id_number" name="id_number" type="text" value="<?= e($_POST['id_number'] ?? '') ?>" placeholder="0000000" inputmode="numeric" pattern="[0-9]{7}" maxlength="7" title="Enter exactly seven continuous digits." autocomplete="username" required>
                 </div>
 
                 <div class="staff-field">
                     <label for="password">Password</label>
                     <div class="staff-input-wrap">
-                        <input class="staff-login-input pr-14" id="password" name="password" type="password" value="<?= e($_POST['password'] ?? 'password') ?>" placeholder="Enter password" autocomplete="current-password" required>
+                        <input class="staff-login-input pr-14" id="password" name="password" type="password" value="<?= e($_POST['password'] ?? '') ?>" placeholder="Enter password" autocomplete="current-password" required>
                         <button type="button" class="staff-toggle-pw" id="togglePassword">Show</button>
                     </div>
                 </div>

@@ -99,7 +99,7 @@ register_shutdown_function(function () use ($db, $case): void {
         if ($case === 'forbidden') check_feedback(http_response_code() !== 403 && str_contains($html, 'Feedback Filters'), 'Nurses remain authorized to review clinic feedback.');
         if ($case === 'anonymous') check_feedback(!str_contains($html, 'Student responses'), 'Anonymous report access denied.');
         if (($GLOBALS['argv'][2] ?? '') === '--preview' && in_array($case, ['render', 'picker', 'admin'], true)) {
-            $directory = __DIR__ . '/../.codex-work/feedback-design';
+            $directory = sys_get_temp_dir() . '/cliniq-feedback-design';
             if (!is_dir($directory)) mkdir($directory, 0777, true);
             foreach (['green', 'blue'] as $themeName) {
                 $previewTheme = cliniq_theme_presets()[$themeName];
