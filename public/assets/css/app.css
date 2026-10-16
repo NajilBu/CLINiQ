@@ -2833,6 +2833,8 @@ html.cliniq-dark .app-profile-photo:focus-visible {
 }
 
 .search-input-wrap .search-icon {
+    display: grid;
+    place-items: center;
     position: absolute;
     left: 1rem;
     top: 50%;
