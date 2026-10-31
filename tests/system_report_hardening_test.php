@@ -81,12 +81,16 @@ $checks = [
     'date filters work without JavaScript' => str_contains($index, 'type="submit">Apply period</button>'),
     'filters replace only report analytics' => str_contains($index, 'const refreshAnalytics = async () =>')
         && str_contains($index, "nextDocument.querySelector('.report-analytics-layout')")
-        && str_contains($index, 'layout.replaceWith(nextLayout)'),
-    'live action summary is aggregate-only' => str_contains($builder, 'function system_report_action_summary')
-        && str_contains($builder, 'Low-stock medicine')
-        && str_contains($builder, 'Incomplete referrals'),
-    'live action summary disappears when clear' => str_contains($renderer, 'if (!$actions) {')
-        && str_contains($renderer, "return '';"),
+        && str_contains($index, 'layout.replaceWith(nextLayout)')
+        && str_contains($index, 'if (!nextRange || !nextLayout || !currentRange)')
+        && !str_contains($index, 'nextActions')
+        && !str_contains($index, 'currentActions'),
+    'retired live panel has no query collector or payload entry' => !str_contains($builder, 'system_report_action_summary')
+        && !str_contains($builder, "'action_summary'"),
+    'retired live panel has no renderer or page wrapper' => !str_contains($renderer, 'render_system_report_action_summary')
+        && !str_contains($index, 'render_system_report_action_summary')
+        && !str_contains($index, 'report-live-actions')
+        && !str_contains($renderer, 'Needs attention'),
     'chart and table views switch in place' => str_contains($index, "'include_tables' => false")
         && str_contains($index, "reportView = (\$_GET['view'] ?? '') === 'tables'")
         && str_contains($index, "tablesLink?.addEventListener('click'")
@@ -133,9 +137,9 @@ $checks = [
         && !str_contains($builder, 'DATE(created_at) BETWEEN'),
     'browser period presets use the same reporting-date anchor as the server' => str_contains($index, 'const reportAnchor = new Date(')
         && str_contains($index, 'const anchor = new Date(reportAnchor);'),
-    'dark mode styles the action summary as an intentional surface' => str_contains($renderer, 'html.cliniq-dark .report-action-summary')
-        && str_contains($renderer, 'html.cliniq-dark .report-action-card--red'),
-    'action queues have matching filters' => str_contains($alerts, "'high-critical'")
+    'retired live panel has no light or dark styles' => !str_contains($renderer, 'report-action-summary')
+        && !str_contains($renderer, 'report-action-card'),
+    'operational alert and referral filters remain supported' => str_contains($alerts, "'high-critical'")
         && str_contains($referrals, "['all', 'incomplete', 'completed']"),
 ];
 

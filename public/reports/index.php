@@ -65,10 +65,6 @@ render_header('Clinic Transaction Summary');
 
 <div class="reports-page">
 
-<div class="report-live-actions">
-    <?= render_system_report_action_summary($mainSystemReport['action_summary'] ?? []) ?>
-</div>
-
 <!-- ═══ Date Range Filter ═══ -->
 <form method="get" class="clinic-card overflow-hidden" data-no-ajax="true" id="reportDateForm">
     <div class="p-6 border-b border-slate-100">
@@ -326,12 +322,9 @@ render_header('Clinic Transaction Summary');
             const nextRange = nextDocument.querySelector('.report-analytics-range');
             const nextLayout = nextDocument.querySelector('.report-analytics-layout');
             const currentRange = document.querySelector('.report-analytics-range');
-            const nextActions = nextDocument.querySelector('.report-live-actions');
-            const currentActions = document.querySelector('.report-live-actions');
-            if (!nextRange || !nextLayout || !currentRange || !nextActions || !currentActions) throw new Error('Report response did not contain analytics.');
+            if (!nextRange || !nextLayout || !currentRange) throw new Error('Report response did not contain analytics.');
 
             disposeReportCharts();
-            currentActions.replaceWith(nextActions);
             currentRange.replaceWith(nextRange);
             layout.replaceWith(nextLayout);
             window.history.replaceState({ reportFilter: true }, '', nextUrl.href);

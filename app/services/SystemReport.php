@@ -308,29 +308,6 @@ function system_report_visit_volume(PDO $db, string $dateFrom, string $dateTo): 
     return ['title' => 'Visits by ' . ucfirst($bucket), 'rows' => $rows, 'insight' => $insight];
 }
 
-function system_report_action_summary(PDO $db): array
-{
-    $actions = [
-        ['label' => 'Low-stock medicine', 'detail' => 'medicine item(s) are at or below reorder level.', 'icon' => 'inventory_2', 'tone' => 'amber', 'href' => '../inventory/index.php?tab=medicine&highlight=low-stock', 'sql' => "SELECT COUNT(*) FROM inventory_items WHERE is_active = 1 AND item_type = 'Medicine' AND quantity <= reorder_level"],
-        ['label' => 'Overdue equipment loans', 'detail' => 'equipment loan(s) are overdue.', 'icon' => 'assignment_late', 'tone' => 'red', 'href' => '../inventory/index.php?tab=equipment&highlight=active-loans', 'sql' => 'SELECT COUNT(*) FROM equipment_loans WHERE returned_at IS NULL AND due_at < NOW()'],
-        ['label' => 'High-risk pending alerts', 'detail' => 'pending alert(s) need urgent review.', 'icon' => 'warning', 'tone' => 'red', 'href' => '../alerts/index.php?status=active&risk=high-critical', 'sql' => "SELECT COUNT(*) FROM nurse_alerts WHERE status = 'Pending' AND risk_level IN ('High', 'Critical')"],
-        ['label' => 'Clinical documentation required', 'detail' => 'linked appointment visit(s) are still unfinished.', 'icon' => 'clinical_notes', 'tone' => 'amber', 'href' => '../appointments/index.php?status=For%20Confirmation', 'sql' => "SELECT COUNT(*) FROM appointments a INNER JOIN visits v ON v.appointment_id = a.appointment_id WHERE a.status = 'For Confirmation' AND v.status IN ('Active', 'Unaddressed')"],
-        ['label' => 'Incomplete referrals', 'detail' => 'referral(s) are not completed.', 'icon' => 'send', 'tone' => 'amber', 'href' => '../referrals/index.php?status=incomplete', 'sql' => "SELECT COUNT(*) FROM referrals WHERE COALESCE(status, '') <> 'Completed'"],
-    ];
-
-    foreach ($actions as $index => $action) {
-        $count = (int) system_report_scalar($db, $action['sql']);
-        if ($count === 0) {
-            unset($actions[$index]);
-            continue;
-        }
-        $actions[$index]['count'] = $count;
-        unset($actions[$index]['sql']);
-    }
-
-    return array_values($actions);
-}
-
 function build_system_report(string $dateFrom, string $dateTo, array $modules): array
 {
     $newDb = auth_db();
@@ -546,7 +523,6 @@ function build_system_report(string $dateFrom, string $dateTo, array $modules): 
         'date_to' => $dateTo,
         'generated_at' => date('Y-m-d H:i:s'),
         'modules' => $modules,
-        'action_summary' => system_report_action_summary($newDb),
         'transaction_summary' => $transactionSummary,
         'attention_summary' => $attentionSummary,
         'sections' => $sections,

@@ -224,28 +224,6 @@ function render_system_report_data_table(array $chart, bool $open = false, bool 
     <?php return (string) ob_get_clean();
 }
 
-function render_system_report_action_summary(array $actions): string
-{
-    if (!$actions) {
-        return '';
-    }
-    ob_start(); ?>
-    <section class="report-action-summary" aria-labelledby="reportActionSummaryTitle">
-        <div><p class="report-action-summary-eyebrow">Live now</p><h2 id="reportActionSummaryTitle">Needs attention</h2><p>Current operational exceptions. These do not change with the report period.</p></div>
-        <div class="report-action-summary-grid">
-            <?php foreach ($actions as $action): ?>
-                <a class="report-action-card report-action-card--<?= system_report_escape((string) ($action['tone'] ?? 'amber')) ?>" href="<?= system_report_escape((string) ($action['href'] ?? '#')) ?>">
-                    <span class="material-symbols-outlined" aria-hidden="true"><?= system_report_escape((string) ($action['icon'] ?? 'warning')) ?></span>
-                    <strong><?= system_report_format_number((int) ($action['count'] ?? 0)) ?></strong>
-                    <span><?= system_report_escape((string) ($action['label'] ?? 'Action needed')) ?></span>
-                    <small><?= system_report_escape((string) ($action['detail'] ?? '')) ?></small>
-                </a>
-            <?php endforeach; ?>
-        </div>
-    </section>
-    <?php return (string) ob_get_clean();
-}
-
 function system_report_styles(): string
 {
     return <<<'CSS'
@@ -360,17 +338,6 @@ function system_report_styles(): string
 .report-preview-summary-stat { padding: .875rem; border: 1px solid oklch(92% .01 230 / .8); border-radius: .75rem; background: rgba(255,255,255,.84); }
 .report-preview-summary-stat span { display: block; margin-bottom: .375rem; color: #64748b; font-size: .625rem; font-weight: 900; letter-spacing: .07em; text-transform: uppercase; }
 .report-preview-summary-stat strong { display: block; color: var(--cliniq-foreground, #17261d); font-size: .875rem; font-weight: 800; line-height: 1.35; }
-.report-action-summary { margin: 0 0 24px; padding: 20px; border: 1px solid #dfe9e2; border-radius: 16px; background: #f8fcf9; }
-.report-action-summary-eyebrow { margin: 0 0 4px; color: #205f3d; font-size: 10px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
-.report-action-summary h2 { margin: 0; color: #17261d; font-size: 20px; }
-.report-action-summary > div > p:last-child { margin: 4px 0 16px; color: #64748b; font-size: 11px; font-weight: 600; }
-.report-action-summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
-.report-action-card { display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; padding: 12px; border: 1px solid #f1d18a; border-radius: 10px; background: #fffdf6; color: #713f12; text-decoration: none; }
-.report-action-card--red { border-color: #fecaca; background: #fff8f8; color: #991b1b; }
-.report-action-card .material-symbols-outlined { grid-row: span 2; font-size: 20px; }
-.report-action-card strong { font-size: 20px; line-height: 1; }
-.report-action-card span:not(.material-symbols-outlined) { font-size: 10px; font-weight: 800; }
-.report-action-card small { grid-column: 1 / -1; color: #64748b; font-size: 9px; font-weight: 600; line-height: 1.35; }
 .report-chart h3 { margin: 0 0 13px; color: #334155; font-size: 12px; }
 .report-chart-kind { float: right; color: #94a3b8; font-size: 8px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }
 .report-chart-row { display: grid; grid-template-columns: minmax(82px, 34%) minmax(80px, 1fr) 35px; align-items: center; gap: 8px; margin: 7px 0; }
@@ -457,13 +424,6 @@ html.cliniq-dark .report-document-dashboard .report-donut-caption,
 html.cliniq-dark .report-document-dashboard .report-axis-label { fill: #a9c0b0; }
 html.cliniq-dark .report-document-dashboard .report-empty { border-color: #4b6d55; color: #a9c0b0; }
 html.cliniq-dark .report-document-dashboard .report-remarks textarea { border-color: #4b6d55; background: #0d1b13; color: #e7f4ea; }
-html.cliniq-dark .report-action-summary { border-color: #3b5945; background: #14271b; }
-html.cliniq-dark .report-action-summary-eyebrow { color: #9be3ae; }
-html.cliniq-dark .report-action-summary h2 { color: #e7f4ea; }
-html.cliniq-dark .report-action-summary > div > p:last-child,
-html.cliniq-dark .report-action-card small { color: #b3c9ba; }
-html.cliniq-dark .report-action-card { border-color: #785a24; background: #33270f; color: #fde68a; }
-html.cliniq-dark .report-action-card--red { border-color: #7f3d3d; background: #321719; color: #fecaca; }
 html.cliniq-dark .report-preview-summary { border-color: #3b5945; background: linear-gradient(135deg, #183524, #14271b); }
 html.cliniq-dark .report-preview-summary h2, html.cliniq-dark .report-preview-summary-stat strong { color: #e7f4ea; }
 html.cliniq-dark .report-preview-summary p:last-child, html.cliniq-dark .report-preview-summary-stat span { color: #b3c9ba; }
