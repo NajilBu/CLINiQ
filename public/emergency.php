@@ -5,6 +5,26 @@ require_once __DIR__ . '/../app/services/AlertWorkflow.php';
 require_once __DIR__ . '/../app/services/PassportAccess.php';
 ensure_alert_workflow_schema();
 
+function emergency_passport_icon_sprite(): string
+{
+    static $sprite = null;
+    if ($sprite === null) {
+        $sprite = file_get_contents(__DIR__ . '/../patient-portal/assets/icons/student-icons.svg') ?: '';
+    }
+    return $sprite;
+}
+
+function emergency_passport_icon(string $name, string $class = '', bool $ariaHidden = true): string
+{
+    static $available = null;
+    if ($available === null) {
+        preg_match_all('/id="student-icon-([a-z_]+)"/', emergency_passport_icon_sprite(), $matches);
+        $available = array_fill_keys($matches[1], true);
+    }
+    $resolved = isset($available[$name]) ? $name : 'info';
+    return '<svg class="passport-icon' . ($class !== '' ? ' ' . e($class) : '') . '" focusable="false"' . ($ariaHidden ? ' aria-hidden="true"' : '') . '><use href="#student-icon-' . e($resolved) . '"></use></svg>';
+}
+
 $token = $_GET['token'] ?? '';
 $stmt = auth_db()->prepare("
     SELECT
@@ -241,6 +261,7 @@ render_header('Emergency Health Passport');
 ?>
 <link rel="stylesheet" href="<?= app_url('assets/css/emergency-passport.css?v=' . filemtime(__DIR__ . '/assets/css/emergency-passport.css') . '&layout=2') ?>">
 <div class="passport-page">
+    <?= emergency_passport_icon_sprite() ?>
     <?php if (!$patient): ?>
         <div class="passport-access-alert is-danger">Emergency tag not found or
             disabled.</div>
@@ -250,7 +271,7 @@ render_header('Emergency Health Passport');
             <div class="passport-access-header">
                 <p class="passport-access-kicker">CLINiQ</p>
                 <div class="passport-access-heading">
-                    <span class="material-symbols-outlined text-3xl" aria-hidden="true">medical_information</span>
+                    <?= emergency_passport_icon('medical_information', 'passport-access-heading-icon') ?>
                     <div>
                         <h1 class="font-headline text-2xl md:text-3xl font-extrabold leading-tight">Emergency Health Passport</h1>
                         <p class="text-sm font-bold text-emerald-100 mt-1 mb-0">Essential health information for emergency response</p>
@@ -266,7 +287,7 @@ render_header('Emergency Health Passport');
                 <?php if (!$viewer): ?>
                     <div class="passport-access-notice">
                         <div class="flex items-start gap-3">
-                            <span class="material-symbols-outlined text-amber-700" aria-hidden="true">shield_lock</span>
+                            <?= emergency_passport_icon('shield', 'passport-access-notice-icon') ?>
                             <div>
                                 <p class="font-black text-amber-900 mb-1">Protected emergency passport</p>
                                 <p class="text-sm font-bold text-amber-800 mb-0">Sign in with your active CLINiQ account to view this patient's approved emergency essentials.</p>
@@ -293,7 +314,7 @@ render_header('Emergency Health Passport');
                                     <?php if ($emergencyPhotoPath !== null): ?>
                                         <img src="<?= e(app_url($emergencyPhotoPath)) ?>" alt="<?= e($passportHolderName ?: 'Patient') ?> profile picture">
                                     <?php else: ?>
-                                        <span class="material-symbols-outlined" aria-hidden="true">person</span>
+                                        <?= emergency_passport_icon('person') ?>
                                     <?php endif; ?>
                                 </div>
                                 <div class="passport-modern-identity">
@@ -303,7 +324,7 @@ render_header('Emergency Health Passport');
                                         <span><?= e($patient['id_number'] ?: 'ID not recorded') ?></span>
                                     </div>
                                 </div>
-                                <span class="passport-modern-status <?= $hasActiveIncident ? 'is-active' : '' ?>"><span class="material-symbols-outlined"><?= $hasActiveIncident ? 'warning' : 'check_circle' ?></span><?= $hasActiveIncident ? 'Active Incident' : 'No Active Incident' ?></span>
+                                <span class="passport-modern-status <?= $hasActiveIncident ? 'is-active' : '' ?>"><?= emergency_passport_icon($hasActiveIncident ? 'warning' : 'check_circle') ?><?= $hasActiveIncident ? 'Active Incident' : 'No Active Incident' ?></span>
                                 <div class="passport-modern-blood" role="img" aria-label="Blood type <?= e($patient['blood_type'] ?: 'unknown') ?>">
                                     <span>Blood type</span>
                                     <strong><?= e($patient['blood_type'] ?: '—') ?></strong>
@@ -313,7 +334,7 @@ render_header('Emergency Health Passport');
                             <div class="passport-modern-content">
                                 <div class="passport-modern-info-grid">
                                     <article class="passport-modern-info passport-modern-info-allergy">
-                                        <div class="passport-modern-info-heading"><span class="material-symbols-outlined">allergy</span><span>Allergies</span></div>
+                                        <div class="passport-modern-info-heading"><?= emergency_passport_icon('allergy') ?><span>Allergies</span></div>
                                         <div class="passport-modern-tags">
                                             <?php foreach (array_filter(array_map('trim', preg_split('/[,;\r\n]+/', (string) ($patient['allergies'] ?: 'None')) ?: [])) as $allergy): ?>
                                                 <span class="passport-modern-tag"><?= e($allergy) ?></span>
@@ -322,23 +343,23 @@ render_header('Emergency Health Passport');
                                     </article>
 
                                     <article class="passport-modern-info passport-modern-info-condition">
-                                        <div class="passport-modern-info-heading"><span class="material-symbols-outlined">cardiology</span><span>Medical Conditions</span></div>
+                                        <div class="passport-modern-info-heading"><?= emergency_passport_icon('cardiology') ?><span>Medical Conditions</span></div>
                                         <div class="passport-modern-value"><?= nl2br(e($patient['existing_conditions'] ?: 'None reported.')) ?></div>
                                     </article>
 
                                     <article class="passport-modern-info passport-modern-info-medication">
-                                        <div class="passport-modern-info-heading"><span class="material-symbols-outlined">medication</span><span>Current Medications</span></div>
+                                        <div class="passport-modern-info-heading"><?= emergency_passport_icon('medication') ?><span>Current Medications</span></div>
                                         <div class="passport-modern-value"><?= nl2br(e($patient['medications'] ?: 'No current medications recorded.')) ?></div>
                                     </article>
 
                                     <article class="passport-modern-info passport-modern-info-instructions">
-                                        <div class="passport-modern-info-heading"><span class="material-symbols-outlined">emergency_home</span><span>Emergency Instructions</span></div>
+                                        <div class="passport-modern-info-heading"><?= emergency_passport_icon('emergency_home') ?><span>Emergency Instructions</span></div>
                                         <div class="passport-modern-instructions"><?= nl2br(e($patient['emergency_instructions'] ?: 'Notify the clinic immediately.')) ?></div>
                                     </article>
 
                                     <?php if ($latestVitals && (int) ($patient['show_bmi_on_passport'] ?? 1) === 1): ?>
                                         <article class="passport-modern-info passport-modern-info-bmi">
-                                            <div class="passport-modern-info-heading"><span class="material-symbols-outlined">monitor_weight</span><span>Body Measurements</span></div>
+                                            <div class="passport-modern-info-heading"><?= emergency_passport_icon('monitor_weight') ?><span>Body Measurements</span></div>
                                             <div class="passport-modern-metrics">
                                                 <span><strong><?= e((string) ($latestVitals['patient_height_cm'] ?: '—')) ?></strong><small>Height (cm)</small></span>
                                                 <span><strong><?= e((string) ($latestVitals['patient_weight_kg'] ?: '—')) ?></strong><small>Weight (kg)</small></span>
@@ -353,17 +374,17 @@ render_header('Emergency Health Passport');
                                     This page displays only the emergency information selected for this passport. Access is logged. Use the information only to help the identified person; do not copy, publish, or use it for another purpose. See the <a href="legal/privacy-notice.php" target="_blank" rel="noopener" class="underline font-bold">CLINiQ Privacy Notice</a>.
                                 </div>
                                 <div class="passport-modern-contact">
-                                    <div class="passport-modern-contact-icon" aria-hidden="true"><span class="material-symbols-outlined">phone_in_talk</span></div>
+                                    <div class="passport-modern-contact-icon" aria-hidden="true"><?= emergency_passport_icon('phone_in_talk') ?></div>
                                     <div class="passport-modern-contact-details">
                                         <span>Emergency Contact</span>
                                         <strong><?= e($patient['guardian_name'] ?: 'Not provided') ?></strong>
                                         <small><?= e($patient['guardian_relationship'] ?: 'Guardian') ?> &bull; <?= e($patient['guardian_contact'] ?: 'No phone number') ?></small>
                                     </div>
                                     <?php if (!empty($patient['guardian_contact'])): ?>
-                                        <a class="passport-modern-call" href="tel:<?= e($patient['guardian_contact']) ?>"><span class="material-symbols-outlined">call</span>Call Now</a>
+                                        <a class="passport-modern-call" href="tel:<?= e($patient['guardian_contact']) ?>"><?= emergency_passport_icon('call') ?>Call Now</a>
                                     <?php endif; ?>
                                 </div>
-                                <div class="passport-modern-updated"><span class="material-symbols-outlined">schedule</span> Last updated: <strong><?= e($passportUpdatedAt) ?></strong></div>
+                                <div class="passport-modern-updated"><?= emergency_passport_icon('schedule') ?> Last updated: <strong><?= e($passportUpdatedAt) ?></strong></div>
                             </div>
                         </div>
                     <div class="passport-emergency-action">
@@ -409,7 +430,7 @@ render_header('Emergency Health Passport');
                         <div class="emergency-report-optional-content">
                     <section class="emergency-report-section">
                         <div class="emergency-report-section-heading">
-                            <span class="material-symbols-outlined" aria-hidden="true">person</span>
+                            <?= emergency_passport_icon('person') ?>
                             <div><h2>How can the clinic reach you?</h2><p>These details are optional.</p></div>
                         </div>
                         <div class="emergency-report-grid">
@@ -518,7 +539,7 @@ render_header('Emergency Health Passport');
                         <input id="alert-photo" class="clinic-input emergency-photo-input" name="photo" type="file" accept="image/png,image/jpeg,image/webp" aria-hidden="true" tabindex="-1">
                         <div class="emergency-photo-stage">
                             <div id="alert-photo-empty" class="emergency-photo-empty" aria-hidden="true">
-                                <span class="material-symbols-outlined">image</span>
+                                <?= emergency_passport_icon('image') ?>
                             </div>
                             <div id="alert-camera-panel" class="emergency-camera-panel" hidden>
                                 <video id="alert-camera-preview" playsinline autoplay muted aria-label="Live camera preview"></video>
@@ -533,7 +554,7 @@ render_header('Emergency Health Passport');
                             <span id="alert-photo-status" class="emergency-photo-status">Ready to capture</span>
                             <div class="emergency-photo-action-buttons">
                             <button type="button" id="open-alert-camera" class="emergency-camera-launch">
-                                <span class="material-symbols-outlined" aria-hidden="true">photo_camera</span>
+                                <?= emergency_passport_icon('photo_camera') ?>
                                 <span id="alert-camera-action-label">Take live photo</span>
                             </button>
                             <button type="button" id="close-alert-camera" class="emergency-camera-button emergency-camera-button-secondary" hidden>Cancel</button>
@@ -556,7 +577,7 @@ render_header('Emergency Health Passport');
                         Report emergency
                     </button>
                     <button type="submit" form="emergency-report-form" id="submit-emergency-report" class="emergency-dock-button" <?= $reportFormOpen ? '' : 'disabled' ?>>
-                        <span class="material-symbols-outlined" aria-hidden="true">send</span><span data-action-label>Send to clinic</span>
+                        <span data-action-icon><?= emergency_passport_icon('send') ?></span><span data-action-label>Send to clinic</span>
                     </button>
                 </div>
                 <?php endif; ?>
@@ -604,7 +625,7 @@ render_header('Emergency Health Passport');
         submitButton.setAttribute('aria-busy', 'true');
         submitButton.classList.add('is-loading');
         submitButton.querySelector('[data-action-label]').textContent = 'Sending report…';
-        submitButton.querySelector('.material-symbols-outlined').textContent = 'progress_activity';
+        submitButton.querySelector('[data-action-icon] use')?.setAttribute('href', '#student-icon-progress_activity');
     }
 
     function submitReport() {

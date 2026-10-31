@@ -1384,7 +1384,7 @@ function render_student_footer(): void
                 }
             }
         </script>
-        <script src="../public/assets/js/file-preview.js?v=ape-popup-9"></script>
+        <script src="/public/assets/js/file-preview.js?v=<?= filemtime(__DIR__ . '/../../public/assets/js/file-preview.js') ?>"></script>
         <script src="../public/assets/js/submission-loading.js?v=<?= filemtime(__DIR__ . '/../../public/assets/js/submission-loading.js') ?>"></script>
         <script>
             (() => {

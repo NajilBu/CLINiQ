@@ -3421,11 +3421,20 @@ body.file-preview-open {
     flex: 0 0 auto;
 }
 
-.file-preview-heading>.material-symbols-outlined {
+.file-preview-icon {
+    display: block;
+    width: 1.25rem;
+    height: 1.25rem;
+    flex: 0 0 auto;
+    fill: currentColor;
+}
+
+.file-preview-heading>.file-preview-icon {
     display: grid;
     flex: 0 0 auto;
     width: 2.5rem;
     height: 2.5rem;
+    padding: 0.5rem;
     place-items: center;
     border-radius: 0.75rem;
     background: var(--cliniq-surface-low, #edf8f0);
@@ -3497,12 +3506,6 @@ body.file-preview-open {
     background: var(--cliniq-surface-low);
 }
 
-.file-preview-download .material-symbols-outlined,
-.file-preview-close .material-symbols-outlined,
-.file-preview-zoom-control .material-symbols-outlined {
-    font-size: 1.15rem;
-}
-
 .file-preview-body {
     display: grid;
     flex: 1 1 auto;
@@ -3558,7 +3561,7 @@ body.file-preview-open {
         padding: 0.75rem;
     }
 
-    .file-preview-heading>.material-symbols-outlined,
+    .file-preview-heading>.file-preview-icon,
     .file-preview-eyebrow {
         display: none;
     }
@@ -3577,13 +3580,6 @@ body.file-preview-open {
     .file-preview-download::after {
         display: none;
         content: none;
-    }
-
-    .file-preview-download .material-symbols-outlined {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.2rem;
     }
 
     .file-preview-header h2 {
