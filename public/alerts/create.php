@@ -19,7 +19,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $location = cliniq_assert_bounded_text($_POST['location'] ?? '', 'Location', 160, true);
         $concern = cliniq_assert_bounded_text($_POST['concern'] ?? '', 'Concern', 255, true);
         $patientIdNumber = cliniq_assert_bounded_text($_POST['patient_id_number'] ?? '', 'Patient ID number', 80);
-        $patient = $patientIdNumber === '' ? null : cliniq_visit_patient_by_id_number($patientIdNumber, true);
+        $compactStudentId = normalize_id_number(trim((string) ($_POST['patient_id_number_compact'] ?? '')));
+        $lookupPatientIdNumber = preg_match('/^2\d{6}$/', $compactStudentId) === 1
+            && normalize_student_id_number($compactStudentId) === normalize_id_number($patientIdNumber)
+            ? $compactStudentId
+            : $patientIdNumber;
+        $patient = $patientIdNumber === '' ? null : cliniq_visit_patient_by_id_number($lookupPatientIdNumber, true);
         if ($patientIdNumber !== '' && !$patient) {
             throw new InvalidArgumentException('No registered patient matches that ID number. Clear the field to save an unlinked record.');
         }
@@ -90,10 +95,11 @@ render_clinic_command_header(
 
 <form class="clinic-card p-6 md:p-8" method="post" enctype="multipart/form-data">
     <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
+    <input type="hidden" id="patient-id-number-compact" name="patient_id_number_compact" value="">
     <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
         <div>
             <label class="clinic-label">Patient ID Number <span class="text-slate-400">(Optional)</span></label>
-            <input class="clinic-input uppercase" name="patient_id_number" placeholder="Leave blank if no registered patient is involved" data-id-number-format>
+            <input class="clinic-input uppercase" name="patient_id_number" placeholder="Leave blank if no registered patient is involved" data-id-number-format data-id-number-auto-student="1" data-id-number-compact-target="patient-id-number-compact">
             <p class="text-xs font-bold text-slate-400 mt-2 mb-0">A supplied ID must match a registered patient.</p>
         </div>
         <div>

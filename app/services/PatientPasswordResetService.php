@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/env.php';
 require_once __DIR__ . '/../helpers/mail.php';
+require_once __DIR__ . '/../helpers/student_id.php';
 require_once __DIR__ . '/AccountValidation.php';
 require_once __DIR__ . '/PatientEmail.php';
 
@@ -73,6 +74,7 @@ function request_patient_password_reset(string $idNumber, string $email, ?string
     if ($idNumber === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         return;
     }
+    [$preferredIdNumber, $alternateIdNumber] = visit_id_number_candidates($idNumber, true);
 
     $db = auth_db();
     $stmt = $db->prepare(<<<'SQL'
@@ -85,12 +87,13 @@ SELECT
 FROM accounts a
 INNER JOIN people p ON p.id = a.person_id
 INNER JOIN patients pt ON pt.person_id = p.id
-WHERE p.id_number = ?
+WHERE p.id_number IN (?, ?)
   AND LOWER(a.email) = ?
   AND a.account_status = 'active'
+ORDER BY CASE WHEN p.id_number = ? THEN 0 ELSE 1 END, p.id
 LIMIT 1
 SQL);
-    $stmt->execute([$idNumber, $email]);
+    $stmt->execute([$preferredIdNumber, $alternateIdNumber, $email, $preferredIdNumber]);
     $account = $stmt->fetch();
     if (!$account) {
         return;

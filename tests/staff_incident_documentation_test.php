@@ -26,7 +26,7 @@ $checks = [
     'staff documentation route is restricted and CSRF protected' => str_contains($create, 'require_report_access();')
         && str_contains($create, 'name="_csrf"')
         && !str_contains($create, "status, resolution_report, resolved_by, resolved_at\n        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending'"),
-    'documentation uses the existing patient resolver and rejects unmatched supplied IDs' => str_contains($create, 'cliniq_visit_patient_by_id_number($patientIdNumber, true)')
+    'documentation uses the existing patient resolver and rejects unmatched supplied IDs' => str_contains($create, 'cliniq_visit_patient_by_id_number($lookupPatientIdNumber, true)')
         && str_contains($create, 'No registered patient matches that ID number'),
     'documentation stores a completed resolved record with a required outcome' => str_contains($create, "record_source, patient_id")
         && str_contains($create, "'Staff documentation'")

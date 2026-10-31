@@ -19,6 +19,7 @@
         const digits = raw.replace(/\D/g, '').slice(0, 7);
         const hasStudentHyphen = /^\d{0,2}-\d*$/.test(raw);
         if (raw.includes('-') && !hasStudentHyphen) return raw;
+        if (kind !== 'employee' && /^\d{2}-$/.test(raw)) return raw;
         if (kind === 'student') return digits.length > 2 && !digits.startsWith('00') ? `${digits.slice(0, 2)}-${digits.slice(2)}` : digits;
         if (kind === 'mixed' && autoStudentFormat && /^2\d{0,6}$/.test(digits)) return digits.length > 2 ? `${digits.slice(0, 2)}-${digits.slice(2)}` : digits;
         if (kind === 'mixed' && hasStudentHyphen) return digits.length > 2 ? `${digits.slice(0, 2)}-${digits.slice(2)}` : digits;
@@ -29,16 +30,27 @@
         if (!(input instanceof HTMLInputElement) || input.dataset.idNumberFormatterReady === '1') return;
         input.dataset.idNumberFormatterReady = '1';
         input.autocapitalize = 'characters';
+        let autoStudentCompact = false;
 
-        const sync = () => {
+        const sync = (event) => {
             applyConstraints(input);
-            const compactValue = input.value.replace(/\D/g, '').slice(0, 7);
+            const rawValue = input.value;
+            const compactValue = rawValue.replace(/\D/g, '').slice(0, 7);
             const autoStudentFormat = input.dataset.idNumberAutoStudent === '1';
-            input.value = format(input.value, kindFor(input), autoStudentFormat);
+            const formattedValue = format(rawValue, kindFor(input), autoStudentFormat);
+            const hasStudentHyphen = /^\d{0,2}-\d*$/.test(rawValue);
+            if (!autoStudentFormat || compactValue === '') {
+                autoStudentCompact = false;
+            } else if (((event?.data?.includes('-') || event?.inputType === 'insertFromPaste' || event?.inputType === 'insertReplacementText') && rawValue.includes('-')) || (rawValue.includes('-') && !hasStudentHyphen)) {
+                autoStudentCompact = false;
+            } else if (!rawValue.includes('-') && formattedValue.includes('-')) {
+                autoStudentCompact = true;
+            }
+            input.value = formattedValue;
             const compactTarget = input.dataset.idNumberCompactTarget;
             const compactInput = compactTarget ? document.getElementById(compactTarget) : null;
             if (compactInput instanceof HTMLInputElement) {
-                compactInput.value = autoStudentFormat && /^2\d{6}$/.test(compactValue) ? compactValue : '';
+                compactInput.value = autoStudentFormat && autoStudentCompact && /^2\d{6}$/.test(compactValue) ? compactValue : '';
             }
             input.setCustomValidity('');
         };

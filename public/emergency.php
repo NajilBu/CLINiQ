@@ -52,13 +52,20 @@ $patient = $stmt->fetch();
 $message = null;
 $error = null;
 $authError = null;
+$passportViewerIdValue = '';
 $explicitPassportViewerId = (int) ($_SESSION['passport_viewer_person_id'] ?? 0);
 $viewer = $explicitPassportViewerId > 0
     ? passport_viewer_from_person_id($explicitPassportViewerId)
     : passport_current_viewer();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'passport_auth' && $patient) {
-    $viewer = passport_authenticate_viewer((string) ($_POST['student_number'] ?? ''), (string) ($_POST['password'] ?? ''));
+    $passportViewerIdValue = normalize_id_number(trim((string) ($_POST['student_number'] ?? '')));
+    $compactStudentId = normalize_id_number(trim((string) ($_POST['student_number_compact'] ?? '')));
+    $passportViewerLookupId = preg_match('/^2\d{6}$/', $compactStudentId) === 1
+        && normalize_student_id_number($compactStudentId) === $passportViewerIdValue
+        ? $compactStudentId
+        : $passportViewerIdValue;
+    $viewer = passport_authenticate_viewer($passportViewerLookupId, (string) ($_POST['password'] ?? ''));
     if (!$viewer) {
         $authError = 'The ID number or password is incorrect.';
         audit_log_event('passport', 'viewer_authentication_failed', null, 'guest', 'patient', (int) $patient['id'], [], 'failure');
@@ -268,10 +275,11 @@ render_header('Emergency Health Passport');
                     </div>
                     <form method="post" class="passport-access-form">
                         <input type="hidden" name="action" value="passport_auth">
+                        <input type="hidden" id="passport-viewer-id-compact" name="student_number_compact" value="">
                         <p class="font-black text-slate-800 mb-1">View passport</p>
                         <p class="text-xs font-bold text-slate-500 mb-4">For privacy and accountability, enter your own account credentials. Access will be recorded in the audit log.</p>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <input class="clinic-input" name="student_number" required placeholder="Your ID number" autocomplete="username" data-id-number-format>
+                            <input class="clinic-input" id="passport-viewer-id" name="student_number" value="<?= e($passportViewerIdValue) ?>" required placeholder="Your ID number" autocomplete="username" data-id-number-format data-id-number-auto-student="1" data-id-number-compact-target="passport-viewer-id-compact">
                             <input class="clinic-input" name="password" type="password" required placeholder="Password" autocomplete="current-password">
                         </div>
                         <button class="passport-access-submit" type="submit">Unlock Emergency Passport</button>

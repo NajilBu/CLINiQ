@@ -14,6 +14,11 @@ unset($_SESSION['patient_password_recovery_success']);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $idNumber = normalize_id_number(trim((string) ($_POST['id_number'] ?? '')));
+    $compactStudentId = normalize_id_number(trim((string) ($_POST['id_number_compact'] ?? '')));
+    $lookupIdNumber = preg_match('/^2\d{6}$/', $compactStudentId) === 1
+        && normalize_student_id_number($compactStudentId) === $idNumber
+        ? $compactStudentId
+        : $idNumber;
     $email = trim((string) ($_POST['email'] ?? ''));
     if (!patient_password_reset_verify_csrf('request', (string) ($_POST['csrf_token'] ?? ''))) {
         $error = 'The form expired. Refresh the page and try again.';
@@ -23,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Enter a valid school email address.';
     } else {
         try {
-            request_patient_password_reset($idNumber, $email, $_SERVER['REMOTE_ADDR'] ?? null);
+            request_patient_password_reset($lookupIdNumber, $email, $_SERVER['REMOTE_ADDR'] ?? null);
         } catch (Throwable $exception) {
             error_log('[CLINiQ Password Reset] Request failed: ' . $exception->getMessage());
         }
@@ -76,9 +81,10 @@ render_student_auth_header('Recover Password');
 
             <form method="post" id="passwordRecoveryForm">
                 <input type="hidden" name="csrf_token" value="<?= student_e(patient_password_reset_csrf_token('request')) ?>">
+                <input type="hidden" id="id-number-compact" name="id_number_compact" value="">
                 <div class="student-field">
                     <label class="student-label" for="id-number">ID Number</label>
-                    <input id="id-number" name="id_number" class="student-input" type="text" placeholder="01-00000 or 0000000" autocomplete="username" data-id-number-format value="<?= student_e($idNumber) ?>" required>
+                    <input id="id-number" name="id_number" class="student-input" type="text" placeholder="01-00000 or 0000000" autocomplete="username" data-id-number-format data-id-number-auto-student="1" data-id-number-compact-target="id-number-compact" value="<?= student_e($idNumber) ?>" required>
                 </div>
 
                 <div class="student-field">

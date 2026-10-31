@@ -11,6 +11,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 $itemId = (int) ($_POST['item_id'] ?? 0);
 $borrowerIdentifier = strtoupper(trim((string) ($_POST['borrower_identifier'] ?? '')));
+$compactStudentId = normalize_id_number(trim((string) ($_POST['borrower_identifier_compact'] ?? '')));
 $quantity = max(1, (int) ($_POST['borrowed_quantity'] ?? 1));
 $dueAt = trim((string) ($_POST['due_at'] ?? ''));
 if (isset($_POST['return_date']) || isset($_POST['return_time'])) {
@@ -24,15 +25,22 @@ try {
         throw new InvalidArgumentException('Equipment and ' . id_number_validation_message('an existing patient ID'));
     }
     $borrowerIdentifier = normalize_id_number($borrowerIdentifier);
+    $lookupIdentifier = preg_match('/^2\d{6}$/', $compactStudentId) === 1
+        && normalize_student_id_number($compactStudentId) === $borrowerIdentifier
+        ? $compactStudentId
+        : $borrowerIdentifier;
+    [$preferredId, $alternateId] = visit_id_number_candidates($lookupIdentifier, true);
     $staffId = cliniq_inventory_staff_person_id();
     $db->beginTransaction();
 
     $patientStmt = $db->prepare('
         SELECT p.person_id, TRIM(CONCAT_WS(" ", pe.first_name, pe.middle_name, pe.last_name)) AS name
         FROM patients p JOIN people pe ON pe.id = p.person_id
-        WHERE pe.id_number = ? LIMIT 1
+        WHERE pe.id_number IN (?, ?)
+        ORDER BY CASE WHEN pe.id_number = ? THEN 0 ELSE 1 END, pe.id
+        LIMIT 1
     ');
-    $patientStmt->execute([$borrowerIdentifier]);
+    $patientStmt->execute([$preferredId, $alternateId, $preferredId]);
     $patient = $patientStmt->fetch();
     if (!$patient) {
         throw new RuntimeException('No patient account matches that ID.');

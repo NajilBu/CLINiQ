@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../helpers/auth.php';
+require_once __DIR__ . '/../helpers/student_id.php';
 require_once __DIR__ . '/AuditLog.php';
 require_once __DIR__ . '/PatientAccessStatus.php';
 
@@ -47,6 +48,7 @@ function passport_authenticate_viewer(string $studentNumber, string $password): 
 {
     $db = auth_db();
     $studentNumber = trim($studentNumber);
+    [$preferredIdNumber, $alternateIdNumber] = visit_id_number_candidates($studentNumber, true);
     try {
         auth_throttle_assert_allowed($db, 'passport', $studentNumber);
     } catch (LoginThrottleException $e) {
@@ -59,10 +61,11 @@ function passport_authenticate_viewer(string $studentNumber, string $password): 
         FROM accounts a
         JOIN people p ON p.id = a.person_id
         JOIN patients pt ON pt.person_id = p.id
-        WHERE p.id_number = ? AND pt.access_status = \'Official\'
+        WHERE p.id_number IN (?, ?) AND pt.access_status = \'Official\'
+        ORDER BY CASE WHEN p.id_number = ? THEN 0 ELSE 1 END, p.id
         LIMIT 1
     ');
-    $stmt->execute([$studentNumber]);
+    $stmt->execute([$preferredIdNumber, $alternateIdNumber, $preferredIdNumber]);
     $account = $stmt->fetch();
     if (!$account || $account['account_status'] !== 'active' || !password_verify($password, (string) $account['password_hash'])) {
         auth_throttle_record_failure($db, 'passport', $studentNumber);

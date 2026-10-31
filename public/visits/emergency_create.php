@@ -24,6 +24,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!$patientId) {
         $identifier = normalize_id_number(trim($_POST['identifier'] ?? ''));
+        $compactStudentId = normalize_id_number(trim($_POST['identifier_compact'] ?? ''));
+        $lookupIdentifier = preg_match('/^2\d{6}$/', $compactStudentId) === 1
+            && normalize_student_id_number($compactStudentId) === $identifier
+            ? $compactStudentId
+            : $identifier;
         if ($identifier === '') {
             flash_message('error', 'Select an existing patient or enter the ID of an existing patient account.');
             header('Location: emergency_create.php');
@@ -36,7 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
 
-        $existing = cliniq_visit_patient_by_id_number($identifier);
+        $existing = cliniq_visit_patient_by_id_number($lookupIdentifier, true);
         $patientId = (int) ($existing['person_id'] ?? 0);
 
         if (!$patientId) {
@@ -99,6 +104,7 @@ render_header('Emergency Visit');
     </form>
 
     <form method="post" class="space-y-6">
+        <input type="hidden" id="emergency-identifier-compact" name="identifier_compact" value="">
         <div>
             <h2 class="font-headline text-xl font-extrabold text-[#1c2a59] mb-4">Patient</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -117,7 +123,7 @@ render_header('Emergency Visit');
                 </div>
                 <div class="md:col-span-2">
                     <label class="clinic-label">Existing Student / Faculty / Personnel ID</label>
-                    <input class="clinic-input" name="identifier" value="<?= e($search) ?>" placeholder="Enter ID number" data-id-number-format>
+                    <input class="clinic-input" name="identifier" value="<?= e($search) ?>" placeholder="Enter ID number" data-id-number-format data-id-number-auto-student="1" data-id-number-compact-target="emergency-identifier-compact">
                 </div>
             </div>
         </div>

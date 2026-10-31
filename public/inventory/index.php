@@ -1122,10 +1122,11 @@ render_clinic_command_header(
         </div>
         <form method="post" action="borrow.php" data-inventory-form>
             <input type="hidden" name="item_id" id="borrowItemId">
+            <input type="hidden" id="borrower-identifier-compact" name="borrower_identifier_compact" value="">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="md:col-span-2">
                     <label class="clinic-label">Existing Patient ID</label>
-                    <input class="clinic-input uppercase" name="borrower_identifier" data-id-number-format required placeholder="Student, faculty, or personnel ID">
+                    <input class="clinic-input uppercase" name="borrower_identifier" data-id-number-format data-id-number-auto-student="1" data-id-number-compact-target="borrower-identifier-compact" required placeholder="Student, faculty, or personnel ID">
                     <p class="settings-help mt-2 mb-0">Enter the ID of an existing patient account.</p>
                 </div>
                 <div>

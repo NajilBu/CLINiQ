@@ -25,7 +25,7 @@ $assertions = [
     'report sheet supports focus return and escape dismissal' => str_contains($public, 'function setReportOpen') && str_contains($public, "event.key === 'Escape'") && str_contains($public, 'locationInput.focus()'),
     'incident reporting requires an authenticated viewer' => str_contains($public, "(\$_POST['action'] ?? '') === 'incident_report'") && str_contains($public, 'value="incident_report"') && str_contains($public, '$viewerPersonId > 0'),
     'passport authentication supports every active account type' => !str_contains(file_get_contents($root . '/app/services/PassportAccess.php'), 'JOIN students'),
-    'passport login formats viewer ID numbers' => str_contains($public, 'name="student_number" required placeholder="Your ID number" autocomplete="username" data-id-number-format'),
+    'passport login formats viewer ID numbers' => str_contains($public, 'name="student_number" value="<?= e($passportViewerIdValue) ?>" required placeholder="Your ID number" autocomplete="username" data-id-number-format data-id-number-auto-student="1" data-id-number-compact-target="passport-viewer-id-compact"') && str_contains($public, 'name="student_number_compact"'),
     'passport includes the complete emergency profile' => str_contains($public, 'passport-modern-info-allergy') && str_contains($public, 'passport-modern-info-bmi') && str_contains($public, 'passport-modern-contact'),
     'public passport respects body measurements visibility preference' => str_contains($public, "if (\$latestVitals && (int) (\$patient['show_bmi_on_passport'] ?? 1) === 1)") && substr_count($public, "show_bmi_on_passport'] ?? 1") === 1,
     'only location is required' => substr_count($public, 'name="location" required') === 1,
