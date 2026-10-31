@@ -5462,8 +5462,15 @@ textarea.record-sheet-field {
     min-height: 340px;
 }
 
-.cliniq-ag-grid-content {
-    min-height: 120px;
+.cliniq-ag-grid-content,
+.cliniq-ag-grid-patient-registry,
+.cliniq-ag-grid-fill {
+    min-height: calc(var(--cliniq-grid-header-height, 48px) + 222px);
+}
+
+.cliniq-ag-grid .ag-body.ag-layout-auto-height .ag-center-cols-viewport,
+.cliniq-ag-grid .ag-body.ag-layout-auto-height .ag-center-cols-container {
+    min-height: 220px;
 }
 
 .inventory-notice-grid {
@@ -5474,12 +5481,10 @@ textarea.record-sheet-field {
 
 .cliniq-ag-grid-patient-registry {
     height: auto;
-    min-height: 0;
 }
 
 .cliniq-ag-grid-fill {
     height: 100%;
-    min-height: 0;
 }
 
 .cliniq-ag-grid .ag-root-wrapper {
@@ -5576,13 +5581,21 @@ textarea.record-sheet-field {
     font-weight: 700;
 }
 
+.cliniq-ag-grid .ag-overlay-panel .ag-overlay-wrapper.ag-overlay-no-rows-wrapper {
+    box-sizing: border-box;
+    padding-top: var(--cliniq-grid-header-height, 48px);
+}
+
 .cliniq-grid-empty {
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 0.4rem;
     min-height: 220px;
+    max-width: 100%;
+    margin-block: auto;
     color: #94a3b8;
     text-align: center;
     padding: 2rem;

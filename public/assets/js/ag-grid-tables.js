@@ -296,9 +296,11 @@
         }
 
         function fitContentHeight(api) {
+            const headerHeight = grid.querySelector('.ag-header')?.offsetHeight || 48;
+            grid.style.setProperty('--cliniq-grid-header-height', `${headerHeight}px`);
             if (!contentHeight || !api || !api.getDisplayedRowCount) return;
             const rows = Math.min(pageSize, Math.max(1, api.getDisplayedRowCount()));
-            grid.style.height = `${48 + (rows * rowHeight) + 2}px`;
+            grid.style.height = `${headerHeight + Math.max(220, rows * rowHeight) + 2}px`;
         }
 
         function persistGridState(api) {
@@ -336,6 +338,10 @@
             rowHeight,
             headerHeight: 48,
             overlayNoRowsTemplate: makeEmptyOverlay(grid.dataset.emptyTitle, grid.dataset.emptyText),
+            onGridSizeChanged: (params) => {
+                fitColumns(params.api);
+                fitContentHeight(params.api);
+            },
             getRowClass: (params) => {
                 const classes = [];
                 if (params.data && (params.data.rowUrl || params.data.rowModalId || params.data.rowActionsHtml)) classes.push('ag-row-clickable');
@@ -383,7 +389,6 @@
         if (shouldFitColumns) {
             gridOptions.suppressHorizontalScroll = true;
             gridOptions.onGridReady = (params) => window.requestAnimationFrame(() => fitColumns(params.api));
-            gridOptions.onGridSizeChanged = (params) => fitColumns(params.api);
             gridOptions.onFirstDataRendered = (params) => {
                 fitColumns(params.api);
                 announceGridReady(params);
