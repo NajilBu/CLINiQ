@@ -4,18 +4,41 @@ require_once __DIR__ . '/../../app/helpers/view.php';
 require_once __DIR__ . '/../../app/services/CliniqVisitWorkflow.php';
 require_login();
 
+if (isset($_GET['lookup_identifier'])) {
+    $identifier = normalize_id_number((string) $_GET['lookup_identifier']);
+    header('Content-Type: application/json; charset=UTF-8');
+    header('Cache-Control: no-store, private');
+    if (!is_valid_id_number($identifier)) {
+        echo json_encode(['found' => false]);
+        exit;
+    }
+
+    $patient = cliniq_visit_patient_by_id_number($identifier, true);
+    if (!$patient) {
+        echo json_encode(['found' => false]);
+        exit;
+    }
+
+    echo json_encode([
+        'found' => true,
+        'person_id' => (int) $patient['person_id'],
+        'id_number' => $patient['id_number'],
+        'name' => trim($patient['first_name'] . ' ' . $patient['last_name']),
+        'course' => $patient['course_section'] ?: 'Not specified',
+        'sex' => $patient['sex'] ?: 'Not specified',
+        'type' => $patient['patient_type_display'],
+    ]);
+    exit;
+}
+
 $patients = cliniq_visit_patients();
 $attendingClinicians = cliniq_visit_attending_clinicians();
 $medicineInventory = cliniq_inventory_available_medicines();
 $equipmentInventory = cliniq_inventory_db()->query("SELECT item_id AS id, item_name, quantity, unit FROM inventory_items WHERE item_type = 'Equipment' AND is_active = 1 ORDER BY item_name")->fetchAll();
 $preselectedPatientId = (int) ($_GET['patient_id'] ?? 0);
-$preselectedPatient = null;
-foreach ($patients as $patient) {
-    if ($preselectedPatientId === (int) $patient['id']) {
-        $preselectedPatient = $patient;
-        break;
-    }
-}
+$preselectedPatient = $preselectedPatientId > 0
+    ? (cliniq_visit_patients('', 1, $preselectedPatientId)[0] ?? null)
+    : null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
@@ -33,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new InvalidArgumentException(id_number_validation_message());
             }
 
-            $patient = cliniq_visit_patient_by_id_number($postedStudentNumber);
+            $patient = cliniq_visit_patient_by_id_number($postedStudentNumber, true);
             $patientId = (int) ($patient['person_id'] ?? 0);
         } else {
             $patientId = (int) ($_POST['patient_id'] ?? 0);
@@ -74,8 +97,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'pulse_rate' => $_POST['pulse_rate'] ?? '',
         ], $dispensings);
 
-        flash_message('success', 'Manual visit recorded.');
-        header('Location: view.php?id=' . $visitId . '&from=logbook');
+        flash_message('success', 'Manual visit recorded as completed.');
+        header('Location: index.php?status=Completed');
     } catch (Throwable $e) {
         flash_message($e instanceof InvalidArgumentException ? 'warning' : 'error', $e->getMessage());
         header('Location: create.php' . ((int) ($_POST['patient_id'] ?? 0) > 0 ? '?patient_id=' . (int) $_POST['patient_id'] : ''));
@@ -115,7 +138,7 @@ render_clinic_command_header(
     }
 </style>
 
-<form method="post" id="visitForm" class="space-y-6">
+<form method="post" id="visitForm" class="space-y-6" data-no-ajax="true" data-loading-after-confirm="true">
     <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <section class="clinic-card p-6 space-y-5">
@@ -343,7 +366,7 @@ render_clinic_command_header(
                     <span class="material-symbols-outlined">cancel</span>
                     Cancel
                 </a>
-                <button class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save this manual visit?" data-confirm-message="This will create the visit, dispense selected medicines, and loan selected equipment to this patient until the expected return date and time." data-confirm-toast="Saving visit...">
+                <button class="btn btn-primary" data-confirm-submit data-confirm-type="primary" data-confirm-title="Save this manual visit?" data-confirm-message="This will create the visit, dispense selected medicines, and loan selected equipment to this patient until the expected return date and time." data-confirm-toast="Saving visit..." data-loading-label="Saving…">
                     <span class="material-symbols-outlined text-[18px]">save</span>
                     Save Visit
                 </button>
@@ -362,17 +385,6 @@ document.querySelectorAll('[data-collapsible-section]').forEach((section) => {
     syncIcon();
 });
 
-const visitPatients = <?= json_encode(array_map(static function (array $patient): array {
-    return [
-        'id' => (int) $patient['id'],
-        'studentNumber' => $patient['id_number'],
-        'name' => trim($patient['first_name'] . ' ' . $patient['last_name']),
-        'course' => $patient['course_section'] ?: 'Not specified',
-        'sex' => $patient['sex'] ?: 'Not specified',
-        'type' => $patient['patient_type_display'] ?? patient_category_label($patient['patient_type'] ?? ''),
-    ];
-}, $patients), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
-const visitPatientsByStudentNumber = new Map(visitPatients.map((patient) => [patient.studentNumber, patient]));
 const studentIdLookup = document.getElementById('studentIdLookup');
 const patientIdInput = document.getElementById('patientIdInput');
 const patientNameDisplay = document.getElementById('patientNameDisplay');
@@ -383,6 +395,8 @@ const patientLookupStatus = document.getElementById('patientLookupStatus');
 const visitSubjectType = document.getElementById('visitSubjectType');
 const guestNameInput = document.getElementById('guestNameInput');
 const idField = document.getElementById('studentIdLookup');
+let patientLookupSequence = 0;
+let patientLookupTimer;
 
 function normalizePatientId(value) {
     return window.CliniqIdNumber.format(value);
@@ -404,6 +418,8 @@ function clearPatientLookup(message = 'Enter a ID number to load patient details
 }
 
 function updatePatientLookup() {
+    const lookupSequence = ++patientLookupSequence;
+    window.clearTimeout(patientLookupTimer);
     if (visitSubjectType?.value === 'guest') {
         patientIdInput.value = '';
         patientNameDisplay.readOnly = false;
@@ -425,22 +441,35 @@ function updatePatientLookup() {
         return;
     }
 
-    const digits = formatted.replace(/-/g, '');
-    const candidates = /^\d{7}$/.test(digits)
-        ? [`${digits.slice(0, 2)}-${digits.slice(2)}`, digits]
-        : [formatted];
-    const patient = candidates.map(id => visitPatientsByStudentNumber.get(id)).find(Boolean);
-    if (!patient) {
-        clearPatientLookup(window.CliniqIdNumber.isValid(formatted) ? 'No patient found for this ID number.' : 'Continue typing the ID number.', window.CliniqIdNumber.isValid(formatted) ? 'missing' : '');
+    if (!window.CliniqIdNumber.isValid(formatted)) {
+        clearPatientLookup('Continue typing the ID number.');
         return;
     }
 
-    patientIdInput.value = patient.id;
-    patientNameDisplay.value = patient.name;
-    patientCourseDisplay.value = patient.course;
-    patientSexDisplay.value = patient.sex;
-    patientTypeDisplay.value = patient.type;
-    setLookupStatus('Patient details loaded.', 'found');
+    clearPatientLookup('Checking ID number...');
+    patientLookupTimer = window.setTimeout(async () => {
+        try {
+            const response = await fetch(`create.php?lookup_identifier=${encodeURIComponent(formatted)}`, { credentials: 'same-origin' });
+            const patient = await response.json();
+            if (lookupSequence !== patientLookupSequence || visitSubjectType?.value === 'guest') return;
+            if (!patient.found) {
+                clearPatientLookup('No patient found for this ID number.', 'missing');
+                return;
+            }
+
+            patientIdInput.value = patient.person_id;
+            studentIdLookup.value = patient.id_number;
+            patientNameDisplay.value = patient.name;
+            patientCourseDisplay.value = patient.course;
+            patientSexDisplay.value = patient.sex;
+            patientTypeDisplay.value = patient.type;
+            setLookupStatus('Patient details loaded.', 'found');
+        } catch (error) {
+            if (lookupSequence === patientLookupSequence && visitSubjectType?.value !== 'guest') {
+                clearPatientLookup('Could not look up this ID number. Try again.', 'missing');
+            }
+        }
+    }, 200);
 }
 
 function syncVisitSubjectType() {
@@ -471,7 +500,6 @@ updatePatientLookup();
 syncVisitSubjectType();
 
 document.getElementById('visitForm')?.addEventListener('submit', (event) => {
-    updatePatientLookup();
     if (visitSubjectType?.value === 'guest') {
         guestNameInput.value = patientNameDisplay.value.trim();
         if (!guestNameInput.value) {

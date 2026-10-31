@@ -40,12 +40,15 @@ function cliniq_visit_status(string $value, string $fallback = 'Active'): string
 }
 
 /** @return array<int,array<string,mixed>> */
-function cliniq_visit_patients(string $search = '', int $limit = 500): array
+function cliniq_visit_patients(string $search = '', int $limit = 500, int $personId = 0): array
 {
     $limit = max(1, min(1000, $limit));
     $where = '';
     $params = [];
-    if ($search !== '') {
+    if ($personId > 0) {
+        $where = 'WHERE pe.id = ?';
+        $params = [$personId];
+    } elseif ($search !== '') {
         $where = 'WHERE pe.id_number LIKE ? OR pe.first_name LIKE ? OR pe.last_name LIKE ?';
         $like = '%' . trim($search) . '%';
         $params = [$like, $like, $like];
@@ -97,7 +100,7 @@ function cliniq_visit_patient_by_id_number(string $idNumber, bool $allowCompactS
     require_once __DIR__ . '/../helpers/student_id.php';
     [$preferredId, $alternateId] = visit_id_number_candidates($idNumber, $allowCompactStudentFallback);
     $stmt = cliniq_visit_db()->prepare("
-        SELECT pe.id AS person_id, pe.id_number, pe.first_name, pe.middle_name, pe.last_name,
+        SELECT pe.id AS person_id, pe.id_number, pe.first_name, pe.middle_name, pe.last_name, pe.sex,
                CASE
                    WHEN s.person_id IS NOT NULL THEN 'Student'
                    WHEN se.person_id IS NOT NULL THEN se.role_classification
