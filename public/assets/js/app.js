@@ -968,7 +968,7 @@ function cliniqCreateAlertLoopBuffer(context, soundId = 'urgent-pulse') {
             const localTime = time - tone.start;
             if (localTime < 0 || localTime > tone.duration) continue;
             const envelope = Math.sin(Math.PI * (localTime / tone.duration));
-            samples[index] = Math.sin(2 * Math.PI * tone.frequency * localTime) * envelope * 0.11;
+            samples[index] = Math.sin(2 * Math.PI * tone.frequency * localTime) * envelope * 0.18;
             break;
         }
     }
@@ -1000,7 +1000,7 @@ function cliniqStartAlertAlarm() {
         const audio = new Audio(cliniqAlertMonitor.soundUrl);
         audio.loop = true;
         audio.preload = 'auto';
-        audio.volume = 0.85;
+        audio.volume = 1;
         cliniqAlertMonitor.alarmAudio = audio;
         const playback = audio.play();
         if (playback && typeof playback.catch === 'function') {
@@ -1044,7 +1044,7 @@ async function cliniqPreviewAlertSound(soundId, customUrl = '') {
     if (cliniqNormalizeAlertSound(soundId) === 'custom' && customUrl) {
         const audio = new Audio(customUrl);
         audio.preload = 'auto';
-        audio.volume = 0.85;
+        audio.volume = 1;
         audio.addEventListener('ended', () => {
             if (cliniqAlertMonitor.previewAudio === audio) cliniqAlertMonitor.previewAudio = null;
         }, { once: true });

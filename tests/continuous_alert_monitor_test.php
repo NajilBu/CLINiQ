@@ -61,6 +61,8 @@ foreach ([
     'function initCustomAlertSoundUpload()',
     'new Audio(cliniqAlertMonitor.soundUrl)',
     "audio.loop = true",
+    'envelope * 0.18',
+    'audio.volume = 1',
     'URL.createObjectURL(file)',
     "'double-chime'",
     "'rapid-siren'",
