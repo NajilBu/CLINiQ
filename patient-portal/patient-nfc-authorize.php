@@ -46,9 +46,12 @@ if (!is_string($password) || $password === '') {
 
 try {
     $db = auth_db();
-    $identity = (string) ($profile['id_number'] ?? '');
+    $identity = (string) ($profile['student_id'] ?? '');
     auth_throttle_assert_allowed($db, 'patient_nfc', $identity);
-    if (!student_password_is_valid($profile, $password)) {
+    $account = $db->prepare('SELECT password_hash FROM accounts WHERE id = ? AND person_id = ? AND account_status = "active" LIMIT 1');
+    $account->execute([(int) $profile['account_id'], (int) $profile['person_id']]);
+    $passwordHash = (string) $account->fetchColumn();
+    if ($passwordHash === '' || !password_verify($password, $passwordHash)) {
         auth_throttle_record_failure($db, 'patient_nfc', $identity);
         http_response_code(401);
         echo json_encode(['error' => 'Incorrect password. The NFC tag was not changed.']);
